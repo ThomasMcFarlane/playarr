@@ -56,6 +56,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in the 48px triggers; circular Back is always visible and returns to Who’s
   watching (remote Back included), matching web LoginShell.
 
+- Roku profiles page matches web `/profiles`: rose-wash stage, TvStageChrome
+  theme/language triggers, gear + Sign out pills under the focused avatar
+  (not a text LabelList), Clients pill, WATCHING NOW / READY status lines.
+
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),

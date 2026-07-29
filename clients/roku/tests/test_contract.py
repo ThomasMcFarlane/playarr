@@ -80,6 +80,15 @@ class NavigationContractTests(unittest.TestCase):
         self.assertIn("sub buildProfileAvatarContent(profiles as Object)", MAIN)
         self.assertIn("function profileAvatarPresetId(id as String) as String", MAIN)
         self.assertIn("function profileAvatarInitial(name as String) as String", MAIN)
+        # Web profile-actions: circular gear + Sign out pill (not LabelList text).
+        self.assertIn('id="profilesSettingsHit"', SCENE)
+        self.assertIn('id="profilesSignOutHit"', SCENE)
+        self.assertIn('id="profileActionsGroup"', SCENE)
+        self.assertIn("profiles-gear.png", SCENE)
+        self.assertIn("profiles-signout.png", SCENE)
+        self.assertIn("sub applyProfilesChrome(", MAIN)
+        self.assertIn("sub updateProfileActionsLayout(", MAIN)
+        self.assertNotIn('id="profileActions"', SCENE)
         # rowItemSelected is a [row, col] position, unlike the old plain
         # itemSelected index -- regression guard against reintroducing the
         # old LabelList event shape.

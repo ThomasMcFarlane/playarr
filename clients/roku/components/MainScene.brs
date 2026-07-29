@@ -42,7 +42,27 @@ sub init()
     m.hostedLinkTimer = m.top.findNode("hostedLinkTimer")
     m.profilesGroup = m.top.findNode("profilesGroup")
     m.profilesRow = m.top.findNode("profilesRow")
-    m.profileActions = m.top.findNode("profileActions")
+    m.profilesAuthBg = m.top.findNode("profilesAuthBg")
+    m.profilesThemeHit = m.top.findNode("profilesThemeHit")
+    m.profilesLangHit = m.top.findNode("profilesLangHit")
+    m.profilesThemePill = m.top.findNode("profilesThemePill")
+    m.profilesLangPill = m.top.findNode("profilesLangPill")
+    m.profilesThemeIcon = m.top.findNode("profilesThemeIcon")
+    m.profilesLangIcon = m.top.findNode("profilesLangIcon")
+    m.profilesThemeChevron = m.top.findNode("profilesThemeChevron")
+    m.profilesLangChevron = m.top.findNode("profilesLangChevron")
+    m.profilesThemeLabel = m.top.findNode("profilesThemeLabel")
+    m.profilesLangLabel = m.top.findNode("profilesLangLabel")
+    m.profilesKicker = m.top.findNode("profilesKicker")
+    m.profilesTitle = m.top.findNode("profilesTitle")
+    m.profileActionsGroup = m.top.findNode("profileActionsGroup")
+    m.profilesSettingsBtn = m.top.findNode("profilesSettingsBtn")
+    m.profilesSignOutBtn = m.top.findNode("profilesSignOutBtn")
+    m.profilesSettingsHit = m.top.findNode("profilesSettingsHit")
+    m.profilesSignOutHit = m.top.findNode("profilesSignOutHit")
+    m.profilesClientsBtn = m.top.findNode("profilesClientsBtn")
+    m.profilesClientsHit = m.top.findNode("profilesClientsHit")
+    m.profilesFocusIndex = 0
     m.settingsGroup = m.top.findNode("settingsGroup")
     m.settingsSectionList = m.top.findNode("settingsSectionList")
     m.settingsDetail = m.top.findNode("settingsDetail")
@@ -164,7 +184,7 @@ sub init()
     m.browseKeyArtTimer = m.top.findNode("browseKeyArtTimer")
 
     m.profilesRow.ObserveField("rowItemSelected", "onProfileSelected")
-    m.profileActions.ObserveField("itemSelected", "onProfileActionSelected")
+    m.profilesRow.ObserveField("rowItemFocused", "onProfilesRowFocused")
     m.settingsSectionList.ObserveField("itemFocused", "onSettingsSectionFocused")
     m.settingsActionList.ObserveField("itemSelected", "onSettingsActionSelected")
     m.library.ObserveField("rowItemSelected", "onLibraryItemSelected")
@@ -294,7 +314,6 @@ sub init()
     m.deviceId = m.session.deviceId
     publishArtAuthHeaders()
     m.profileLabel.text = m.session.profileName
-    setListContent(m.profileActions, ["Settings", "Sign out"])
     setListContent(m.detailActions, ["Play"])
 
     updateClock()
@@ -1117,7 +1136,13 @@ sub onPairingThemeDialogButton(event as Object)
     m.themePreference = PairingThemePreferenceFromIndex(index)
     SavePairingThemePreference(m.themePreference)
     applyPairingChrome()
-    if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+    applyProfilesChrome()
+    if m.top.screenState = "profiles"
+        if m.profilesThemeHit <> invalid then m.profilesThemeHit.SetFocus(true)
+        applyProfilesChromeFocus()
+    else if m.pairingThemeHit <> invalid
+        m.pairingThemeHit.SetFocus(true)
+    end if
 end sub
 
 sub onPairingLanguageDialogButton(event as Object)
@@ -1126,7 +1151,13 @@ sub onPairingLanguageDialogButton(event as Object)
     m.languagePreference = PairingLanguagePreferenceFromIndex(index)
     SavePairingLanguagePreference(m.languagePreference)
     refreshPairingCopy()
-    if m.pairingLangHit <> invalid then m.pairingLangHit.SetFocus(true)
+    applyProfilesChrome()
+    if m.top.screenState = "profiles"
+        if m.profilesLangHit <> invalid then m.profilesLangHit.SetFocus(true)
+        applyProfilesChromeFocus()
+    else if m.pairingLangHit <> invalid
+        m.pairingLangHit.SetFocus(true)
+    end if
 end sub
 
 sub hidePairingQr()
@@ -1253,9 +1284,11 @@ sub loadProfiles()
     ' In-shell profiles chrome while the list loads (no fullscreen Loading wall).
     if m.profiles = invalid then m.profiles = []
     buildProfileAvatarContent(m.profiles)
+    applyProfilesChrome()
     showOnly("profiles")
     m.top.screenState = "profiles"
     m.profilesRow.SetFocus(true)
+    updateProfileActionsLayout()
     sendApi("profiles", "GET", "/api/v1/users/profiles", invalid, true)
 end sub
 
@@ -1287,9 +1320,134 @@ sub showProfiles(data as Dynamic)
     if data = invalid then data = []
     m.profiles = data
     buildProfileAvatarContent(data)
+    applyProfilesChrome()
     showOnly("profiles")
     m.top.screenState = "profiles"
     m.profilesRow.SetFocus(true)
+    updateProfileActionsLayout()
+end sub
+
+' Web TvStageChrome + profile-actions under the focused avatar.
+sub applyProfilesChrome()
+    theme = ResolvePairingTheme(m.themePreference)
+    lang = ResolvePairingLanguage(m.languagePreference)
+    isLight = theme = "light"
+    if m.profilesAuthBg <> invalid
+        if isLight
+            m.profilesAuthBg.uri = "pkg:/images/pairing-auth-bg-light.png"
+        else
+            m.profilesAuthBg.uri = "pkg:/images/pairing-auth-bg.png"
+        end if
+    end if
+    ink = &hF4F0F1FF
+    inkSoft = &hC5B8BDFF
+    if isLight
+        ink = &h382621FF
+        inkSoft = &h675961FF
+    end if
+    if m.profilesThemeLabel <> invalid
+        m.profilesThemeLabel.color = ink
+        m.profilesThemeLabel.text = PairingThemeChromeLabel(m.themePreference, lang)
+    end if
+    if m.profilesLangLabel <> invalid
+        m.profilesLangLabel.color = ink
+        m.profilesLangLabel.text = PairingLanguageChromeLabel(m.languagePreference)
+    end if
+    if m.profilesTitle <> invalid then m.profilesTitle.color = ink
+    if m.profilesThemeIcon <> invalid
+        if isLight
+            m.profilesThemeIcon.uri = "pkg:/images/pairing-icon-theme-light.png"
+            m.profilesLangIcon.uri = "pkg:/images/pairing-icon-lang-light.png"
+            m.profilesThemeChevron.uri = "pkg:/images/pairing-icon-chevron-light.png"
+            m.profilesLangChevron.uri = "pkg:/images/pairing-icon-chevron-light.png"
+        else
+            m.profilesThemeIcon.uri = "pkg:/images/pairing-icon-theme.png"
+            m.profilesLangIcon.uri = "pkg:/images/pairing-icon-lang.png"
+            m.profilesThemeChevron.uri = "pkg:/images/pairing-icon-chevron.png"
+            m.profilesLangChevron.uri = "pkg:/images/pairing-icon-chevron.png"
+        end if
+    end if
+    m.pairingChromeIsLight = isLight
+    applyProfilesChromeFocus()
+    updateProfileActionsLayout()
+end sub
+
+sub applyProfilesChromeFocus()
+    themeF = m.profilesThemeHit <> invalid and m.profilesThemeHit.IsInFocusChain()
+    langF = m.profilesLangHit <> invalid and m.profilesLangHit.IsInFocusChain()
+    settingsF = m.profilesSettingsHit <> invalid and m.profilesSettingsHit.IsInFocusChain()
+    signOutF = m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain()
+    clientsF = m.profilesClientsHit <> invalid and m.profilesClientsHit.IsInFocusChain()
+    if m.profilesThemePill <> invalid then m.profilesThemePill.uri = pairingChromeUri("theme", themeF)
+    if m.profilesLangPill <> invalid then m.profilesLangPill.uri = pairingChromeUri("lang", langF)
+    if m.profilesSettingsBtn <> invalid
+        if settingsF
+            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear-focus.png"
+        else
+            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear.png"
+        end if
+    end if
+    if m.profilesSignOutBtn <> invalid
+        if signOutF
+            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout-focus.png"
+        else
+            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout.png"
+        end if
+    end if
+    if m.profilesClientsBtn <> invalid
+        if clientsF
+            m.profilesClientsBtn.uri = "pkg:/images/profiles-clients-focus.png"
+        else
+            m.profilesClientsBtn.uri = "pkg:/images/profiles-clients.png"
+        end if
+    end if
+end sub
+
+' Centre gear + Sign out under the focused profile (web .profile-actions).
+' Hide when focus is on the synthetic Sign in (+) avatar.
+sub updateProfileActionsLayout()
+    if m.profileActionsGroup = invalid then return
+    if m.profiles = invalid then m.profiles = []
+    focusIndex = m.profilesFocusIndex
+    if focusIndex = invalid then focusIndex = 0
+    ' Hide under Sign in / add avatar (web only shows actions on a real profile).
+    if focusIndex < 0 or focusIndex >= m.profiles.Count()
+        m.profileActionsGroup.visible = false
+        return
+    end if
+    m.profileActionsGroup.visible = true
+    itemWidth = 260
+    spacing = 25
+    rowX = 0
+    if m.profilesRow <> invalid and m.profilesRow.translation <> invalid
+        rowX = m.profilesRow.translation[0]
+    end if
+    centerX = rowX + focusIndex * (itemWidth + spacing) + Int(itemWidth / 2)
+    ' Group width ≈ 44 + 12 gap + 160 = 216
+    actionsW = 216
+    x = centerX - Int(actionsW / 2)
+    if x < 40 then x = 40
+    if x > 1920 - actionsW - 40 then x = 1920 - actionsW - 40
+    ' Under name/status band (avatar y≈320 + 340 item).
+    m.profileActionsGroup.translation = [x, 680]
+end sub
+
+sub onProfilesRowFocused(event as Object)
+    position = event.GetData()
+    if position = invalid or position.Count() < 2 then return
+    m.profilesFocusIndex = position[1]
+    updateProfileActionsLayout()
+end sub
+
+sub signOutFromProfiles()
+    ClearSession(true)
+    m.accessToken = ""
+    m.refreshToken = ""
+    m.deviceId = ""
+    m.profiles = []
+    publishArtAuthHeaders()
+    if m.profileLabel <> invalid then m.profileLabel.text = ""
+    beginPairing()
 end sub
 
 ' Builds profilesRow's flat-per-row ContentNode content (single row, one
@@ -1322,13 +1480,10 @@ sub buildProfileAvatarContent(profiles as Object)
     for each profile in list
         name = profile.display_name
         if name = invalid or name = "" then name = "Viewer"
-        ' Match tv-web Profiles.tsx statusCurrent ("WATCHING NOW") / pin copy.
-        suffix = ""
+        ' Web statusCurrent / statusReady / statusPinRequired (uppercase small).
+        suffix = "READY"
         if profile.is_current then suffix = "WATCHING NOW"
-        if profile.pin_locked
-            if suffix <> "" then suffix += "  •  "
-            suffix += "PIN locked"
-        end if
+        if profile.pin_locked and not profile.is_current then suffix = "PIN REQUIRED"
         item = rowNode.CreateChild("ContentNode")
         item.title = name
         item.AddField("presetId", "string", false)
@@ -1367,12 +1522,22 @@ sub buildProfileAvatarContent(profiles as Object)
     rowWidth = count * itemWidth + (count - 1) * spacing
     x = 960 - Int(rowWidth / 2)
     if x < 40 then x = 40
-    m.profilesRow.translation = [x, 350]
+    m.profilesRow.translation = [x, 320]
     m.profilesRow.rowItemSize = [[itemWidth, 340]]
     m.profilesRow.rowItemSpacing = [[spacing, 0]]
     m.profilesRow.rowHeights = [340]
     m.profilesRow.itemSize = [1800, 340]
     m.profilesRow.content = root
+    ' Prefer current profile for under-avatar actions on first paint.
+    m.profilesFocusIndex = 0
+    for i = 0 to list.Count() - 1
+        p = list[i]
+        if type(p) = "roAssociativeArray" and p.is_current = true
+            m.profilesFocusIndex = i
+            exit for
+        end if
+    end for
+    updateProfileActionsLayout()
 end sub
 
 ' Reimplements tv-web's defaultProfileAvatarPreset() hash (profileAvatar.ts:
@@ -1449,29 +1614,8 @@ sub onProfileSelected(event as Object)
     end if
 end sub
 
-' Matches the real Profiles page exactly (confirmed live: just a small gear
-' icon (Settings) and a "Sign out" button under the active avatar, not a
-' vertical text menu) -- "Link another profile" is now the row's own "+"
-' avatar (see onProfileSelected), and "Change server" was never its own
-' top-level action there at all, it lives inside Settings' existing "Server
-' connection" section (openSettings, index 0 there).
-sub onProfileActionSelected(event as Object)
-    index = event.GetData()
-    if index = 0
-        openSettings()
-    else if index = 1
-        ClearSession(true)
-        m.accessToken = ""
-        m.refreshToken = ""
-        m.deviceId = ""
-        m.profiles = []
-        publishArtAuthHeaders()
-        m.profileLabel.text = ""
-        beginPairing()
-    else if index = 3
-        openSettings()
-    end if
-end sub
+' Web profile-actions: gear → settings; Sign out pill → logout + pairing.
+' Clients pill is visual parity (no native Clients screen on Roku yet).
 
 ' ---------------------------------------------------------------------------
 ' Settings (phase 7, v1 stub)
@@ -5207,18 +5351,90 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.settingsSectionList.SetFocus(true)
             return true
         end if
-    else if state = "profiles"
-        ' profilesRow is now a horizontal avatar row (see MainScene.xml's
-        ' profilesGroup comment), and profileActions now sits stacked below
-        ' it rather than beside it as a right-hand column -- so switching
-        ' focus between the two is Down/Up here, not Left/Right (Left/Right
-        ' stay native RowList column navigation within the avatar row
-        ' itself).
-        if key = "down" and m.profilesRow.HasFocus()
-            m.profileActions.SetFocus(true)
+    else if state = "profiles" and key = "OK"
+        if m.profilesThemeHit <> invalid and m.profilesThemeHit.IsInFocusChain()
+            openPairingThemePicker()
             return true
-        else if key = "up" and m.profileActions.HasFocus()
-            m.profilesRow.SetFocus(true)
+        else if m.profilesLangHit <> invalid and m.profilesLangHit.IsInFocusChain()
+            openPairingLanguagePicker()
+            return true
+        else if m.profilesSettingsHit <> invalid and m.profilesSettingsHit.IsInFocusChain()
+            openSettings()
+            return true
+        else if m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain()
+            signOutFromProfiles()
+            return true
+        else if m.profilesClientsHit <> invalid and m.profilesClientsHit.IsInFocusChain()
+            ' Visual parity only until a native Clients screen exists.
+            return true
+        end if
+    else if state = "profiles" and key = "right"
+        if m.profilesThemeHit <> invalid and m.profilesThemeHit.IsInFocusChain()
+            if m.profilesLangHit <> invalid then m.profilesLangHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesSettingsHit <> invalid and m.profilesSettingsHit.IsInFocusChain()
+            if m.profilesSignOutHit <> invalid then m.profilesSignOutHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain()
+            if m.profilesClientsHit <> invalid then m.profilesClientsHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        end if
+    else if state = "profiles" and key = "left"
+        if m.profilesLangHit <> invalid and m.profilesLangHit.IsInFocusChain()
+            if m.profilesThemeHit <> invalid then m.profilesThemeHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain()
+            if m.profilesSettingsHit <> invalid then m.profilesSettingsHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesClientsHit <> invalid and m.profilesClientsHit.IsInFocusChain()
+            if m.profileActionsGroup <> invalid and m.profileActionsGroup.visible
+                if m.profilesSignOutHit <> invalid then m.profilesSignOutHit.SetFocus(true)
+            else if m.profilesRow <> invalid
+                m.profilesRow.SetFocus(true)
+            end if
+            applyProfilesChromeFocus()
+            return true
+        end if
+    else if state = "profiles" and key = "down"
+        if m.profilesThemeHit <> invalid and m.profilesThemeHit.IsInFocusChain() or (m.profilesLangHit <> invalid and m.profilesLangHit.IsInFocusChain())
+            if m.profilesRow <> invalid then m.profilesRow.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesRow.HasFocus()
+            if m.profileActionsGroup <> invalid and m.profileActionsGroup.visible
+                if m.profilesSettingsHit <> invalid then m.profilesSettingsHit.SetFocus(true)
+                applyProfilesChromeFocus()
+                return true
+            end if
+            if m.profilesClientsHit <> invalid then m.profilesClientsHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesSettingsHit <> invalid and m.profilesSettingsHit.IsInFocusChain() or (m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain())
+            if m.profilesClientsHit <> invalid then m.profilesClientsHit.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        end if
+    else if state = "profiles" and key = "up"
+        if m.profilesClientsHit <> invalid and m.profilesClientsHit.IsInFocusChain()
+            if m.profileActionsGroup <> invalid and m.profileActionsGroup.visible
+                if m.profilesSignOutHit <> invalid then m.profilesSignOutHit.SetFocus(true)
+            else if m.profilesRow <> invalid
+                m.profilesRow.SetFocus(true)
+            end if
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesSettingsHit <> invalid and m.profilesSettingsHit.IsInFocusChain() or (m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain())
+            if m.profilesRow <> invalid then m.profilesRow.SetFocus(true)
+            applyProfilesChromeFocus()
+            return true
+        else if m.profilesRow.HasFocus()
+            if m.profilesThemeHit <> invalid then m.profilesThemeHit.SetFocus(true)
+            applyProfilesChromeFocus()
             return true
         end if
     else if state = "status" and key = "OK" and not m.requestBusy
