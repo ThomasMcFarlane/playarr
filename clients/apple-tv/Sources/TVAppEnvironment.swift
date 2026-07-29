@@ -142,6 +142,21 @@ final class TVAppEnvironment {
                 clientPlatform: .ios
             )
         )
+
+        // Restore prior device-link session so relaunch stays signed in.
+        // (After every stored property is initialised.)
+        if launchToken == nil, hasConfiguredServer {
+            Task { await self.restoreSessionIfPossible() }
+        }
+    }
+
+    /// If UserDefaults still holds a non-expired device session, open the
+    /// signed-in shell without another QR pass.
+    private func restoreSessionIfPossible() async {
+        guard case .signedOut = pairingState else { return }
+        guard let session = await tokenStore.currentSession() else { return }
+        guard session.expiresAt > Date().addingTimeInterval(30) else { return }
+        pairingState = .signedIn
     }
 
     /// First launch (no stored/launch server URL) uses playarr.app hosted
