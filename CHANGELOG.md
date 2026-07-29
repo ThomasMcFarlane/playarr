@@ -10,6 +10,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Apple TV parity `detail-*` screens now open the SPA library directory
+
+- Apple TV library directory uses measured SPA card origins (775×162,
+  330×186 art, pitch 348×240), absolute parity grid, chrome-stripped
+  key-art heroes, and hides the settings nav group on non-settings
+  parity captures to match SPA library frames.
   (movies / series / music) instead of work-detail chrome, with a left
   preview + 3-column title grid matching `.tv-library` CSS geometry and
   fixture artwork cropped from suite reference frames.

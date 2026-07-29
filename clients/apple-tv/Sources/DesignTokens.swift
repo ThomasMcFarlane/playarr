@@ -187,6 +187,8 @@ enum DesignTokens {
         static let searchRailWidthFraction: CGFloat = 0.62
 
         // MARK: Library directory (`.tv-library` / `.tv-directory` @ 1920×1080)
+        // Card geometry measured from SPA suite reference frames (pink unwatched
+        // dots + content edges on detail-track / detail-episode).
 
         /// Heading left matches search: `clamp(102px, 8vw, 160px)` → 154
         static let libraryHeadingLeft: CGFloat = 154
@@ -196,17 +198,29 @@ enum DesignTokens {
         static let libraryCountSize: CGFloat = 11
         /// Grid panel width 65% (`.tv-library-grid-panel`)
         static let libraryGridWidthFraction: CGFloat = 0.65
+        /// First card art top-left (measured @ 1920×1080 SPA frame).
+        static let libraryCardOriginX: CGFloat = 775
+        static let libraryCardOriginY: CGFloat = 162
+        /// Art tile size (16:9) measured from SPA first card.
+        static let libraryCardArtWidth: CGFloat = 330
+        static let libraryCardArtHeight: CGFloat = 186
+        /// Centre-to-centre pitch of unwatched dots / cards.
+        static let libraryCardPitchX: CGFloat = 348
+        static let libraryCardPitchY: CGFloat = 240
+        /// Title under art.
+        static let libraryCardTitleHeight: CGFloat = 28
         /// `--library-rail-top: clamp(128px, 15vh, 174px)` → 162
         static let libraryRailTop: CGFloat = 162
         /// `--library-rail-bottom: clamp(48px, 6vh, 78px)` → 65
         static let libraryRailBottom: CGFloat = 65
-        /// `--library-rail-left: clamp(28px, 2.8vw, 54px)` → 54
+        /// `--library-rail-left: clamp(28px, 2.8vw, 54px)` → 54 (CSS)
+        /// Measured pad from 65% panel edge is larger; use origin X above.
         static let libraryRailLeft: CGFloat = 54
         /// Right pad for alphabet/filters: edge 14 + control 62 + gap 30 ≈ 106
         static let libraryRailRight: CGFloat = 106
-        /// Grid gap: row ~27, col ~26
-        static let libraryGridRowGap: CGFloat = 27
-        static let libraryGridColGap: CGFloat = 26
+        /// Derived gaps from pitch − art size.
+        static let libraryGridColGap: CGFloat = 18
+        static let libraryGridRowGap: CGFloat = 26
         /// 3-column screen-medium default
         static let libraryGridColumns: Int = 3
         /// Alphabet rail width

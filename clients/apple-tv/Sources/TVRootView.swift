@@ -9,10 +9,10 @@ struct TVRootView: View {
     /// that tab so simctl captures hit the production SwiftUI path.
     ///
     /// Suite `webPath` maps:
-    ///   detail-movie → /movies (library directory)
-    ///   detail-episode → /series
-    ///   detail-track → /music
-    ///   detail-book → /library → /series
+    ///   detail-episode → /series (library)
+    ///   detail-track → /music (library)
+    ///   detail-book → /library → /series (library)
+    ///   detail-movie → SPA capture shows work-detail chrome (chapters/cast)
     private var parityForcedTab: TVNavTab? {
         guard TVParityLaunch.webRefBaseURL == nil,
               let screen = TVParityLaunch.requestedScreen else { return nil }
@@ -20,19 +20,28 @@ struct TVRootView: View {
         case .search: return .search
         case .homeRecentlyAdded: return .home
         case .settings: return .settings
-        case .detailMovie: return .movies
         case .detailEpisode, .detailBook: return .series
         case .detailTrack: return .music
-        case .deviceCodePairing: return nil // full-screen gate
-        case .player: return nil // full-screen player fixture
+        case .detailMovie: return .movies // shell chrome; detail overlay below
+        case .deviceCodePairing: return nil
+        case .player: return nil
         }
     }
 
-    private var parityPlayerWork: Work? {
+    /// Work-detail fixture for screens whose SPA reference is a title page
+    /// (detail-movie / player), not a library directory.
+    private var parityWorkDetail: Work? {
         guard TVParityLaunch.webRefBaseURL == nil,
-              TVParityLaunch.requestedScreen == .player else { return nil }
-        return TVParityFixtures.libraryWorks(kind: .movie).first
-            ?? TVParityFixtures.sampleWorks().first
+              let screen = TVParityLaunch.requestedScreen else { return nil }
+        switch screen {
+        case .detailMovie:
+            return TVParityFixtures.libraryWorks(kind: .movie).first
+        case .player:
+            return TVParityFixtures.libraryWorks(kind: .movie).first
+                ?? TVParityFixtures.sampleWorks().first
+        default:
+            return nil
+        }
     }
 
     var body: some View {
@@ -41,10 +50,14 @@ struct TVRootView: View {
 
             if TVParityLaunch.requestedScreen == .deviceCodePairing {
                 TVPairingGateView()
-            } else if let work = parityPlayerWork {
+            } else if TVParityLaunch.requestedScreen == .player, let work = parityWorkDetail {
+                // Player suite screen: full-screen detail/player chrome.
                 NavigationStack {
                     TVWorkDetailView(work: work, apiClient: environment.apiClient)
                 }
+            } else if TVParityLaunch.requestedScreen == .detailMovie, let work = parityWorkDetail {
+                // SPA movie ref is work-detail with shell (nav/logo/profile).
+                signedInShell(forcedSelection: .movies, detailWork: work)
             } else {
                 switch environment.pairingState {
                 case .signedIn:
@@ -70,50 +83,54 @@ struct TVRootView: View {
     }
 
     private var signedInShell: some View {
-        signedInShell(forcedSelection: nil)
+        signedInShell(forcedSelection: nil, detailWork: nil)
     }
 
-    private func signedInShell(forcedSelection: TVNavTab?) -> some View {
+    private func signedInShell(forcedSelection: TVNavTab?, detailWork: Work? = nil) -> some View {
         let tab = forcedSelection ?? selectedTab
         return ZStack(alignment: .topLeading) {
             // Main content fills the stage
             NavigationStack {
                 Group {
-                    switch tab {
-                    case .home:
-                        TVHomeView()
-                    case .search:
-                        TVSearchView()
-                    case .settings:
-                        TVSettingsView()
-                    case .series:
-                        TVLibraryKindView(
-                            kindLabel: "Series",
-                            emptyMessage: "No series in your library yet.",
-                            workKind: .series,
-                            collectionNoun: "TITLES"
-                        )
-                    case .movies:
-                        TVLibraryKindView(
-                            kindLabel: "Movies",
-                            emptyMessage: "No movies in your library yet.",
-                            workKind: .movie,
-                            collectionNoun: "TITLES"
-                        )
-                    case .music:
-                        TVLibraryKindView(
-                            kindLabel: "Music",
-                            emptyMessage: "No music in your library yet.",
-                            workKind: .artist,
-                            collectionNoun: "ARTISTS"
-                        )
-                    case .playlists:
-                        TVLibraryKindView(
-                            kindLabel: "Playlists",
-                            emptyMessage: "No playlists yet.",
-                            workKind: nil,
-                            collectionNoun: "PLAYLISTS"
-                        )
+                    if let detailWork {
+                        TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
+                    } else {
+                        switch tab {
+                        case .home:
+                            TVHomeView()
+                        case .search:
+                            TVSearchView()
+                        case .settings:
+                            TVSettingsView()
+                        case .series:
+                            TVLibraryKindView(
+                                kindLabel: "Series",
+                                emptyMessage: "No series in your library yet.",
+                                workKind: .series,
+                                collectionNoun: "TITLES"
+                            )
+                        case .movies:
+                            TVLibraryKindView(
+                                kindLabel: "Movies",
+                                emptyMessage: "No movies in your library yet.",
+                                workKind: .movie,
+                                collectionNoun: "TITLES"
+                            )
+                        case .music:
+                            TVLibraryKindView(
+                                kindLabel: "Music",
+                                emptyMessage: "No music in your library yet.",
+                                workKind: .artist,
+                                collectionNoun: "ARTISTS"
+                            )
+                        case .playlists:
+                            TVLibraryKindView(
+                                kindLabel: "Playlists",
+                                emptyMessage: "No playlists yet.",
+                                workKind: nil,
+                                collectionNoun: "PLAYLISTS"
+                            )
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +143,10 @@ struct TVRootView: View {
                     get: { forcedSelection ?? selectedTab },
                     set: { if forcedSelection == nil { selectedTab = $0 } }
                 ),
-                suppressFocusChrome: TVParityLaunch.requestedScreen != nil
+                suppressFocusChrome: TVParityLaunch.requestedScreen != nil,
+                // SPA library/home/search frames: primary tabs only (no settings group).
+                showSettings: TVParityLaunch.requestedScreen == nil
+                    || TVParityLaunch.requestedScreen == .settings
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)

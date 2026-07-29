@@ -159,6 +159,8 @@ struct TVFloatingNav: View {
     @Binding var selection: TVNavTab
     /// When true, suppress tvOS focus lift so parity captures match web chrome.
     var suppressFocusChrome: Bool = false
+    /// SPA library/home frames omit the settings group from the left rail.
+    var showSettings: Bool = true
 
     private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
@@ -167,7 +169,9 @@ struct TVFloatingNav: View {
         // Settings sits just under the primary group, not pinned to the footer.
         VStack(spacing: 14) {
             navGroup(tabs: primaryTabs)
-            navGroup(tabs: [.settings])
+            if showSettings {
+                navGroup(tabs: [.settings])
+            }
         }
         .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
     }

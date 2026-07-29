@@ -710,20 +710,16 @@ struct TVLibraryKindView: View {
                 .font(TVTheme.font(size: 12, weight: .heavy))
                 .tracking(1.2)
                 .foregroundStyle(DesignTokens.Color.brandPrimary)
+            // SPA `.tv-library-preview h2`: weight ~560, tracking -0.072em.
             Text(work.title)
-                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
-                .tracking(-4.5)
+                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                .tracking(-5.0)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(3)
                 .padding(.top, 10)
-            HStack(spacing: 10) {
-                Text(yearString(for: work))
-                Text(work.genres.prefix(2).joined(separator: " · ").nilIfEmpty ?? kindLabel)
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-            }
-            .font(TVTheme.font(size: 13, weight: .medium))
-            .foregroundStyle(DesignTokens.Color.textSecondary)
-            .padding(.top, 22)
+            // SPA `.tv-preview-meta`: year then genres with soft separator.
+            previewMeta(work)
+                .padding(.top, 22)
             if let overview = work.overview, !overview.isEmpty {
                 Text(overview)
                     .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
@@ -736,8 +732,64 @@ struct TVLibraryKindView: View {
         .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
     }
 
+    private func previewMeta(_ work: Work) -> some View {
+        let genreLine = work.genres.prefix(2).joined(separator: " · ")
+        return HStack(spacing: 0) {
+            Text(yearString(for: work))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            if !genreLine.isEmpty {
+                Text("  \(genreLine)")
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+        }
+        .font(TVTheme.font(size: 13, weight: .medium))
+    }
+
     @ViewBuilder
     private func titleGrid(size: CGSize) -> some View {
+        // Parity: absolute SPA-measured positions (no ScrollView focus lift).
+        // Production: adaptive LazyVGrid inside the 65% rail panel.
+        if parityMode {
+            parityTitleGrid(size: size)
+        } else {
+            productionTitleGrid(size: size)
+        }
+    }
+
+    /// Fixed 3×N grid at SPA-measured origins for honest suite captures.
+    private func parityTitleGrid(size: CGSize) -> some View {
+        let originX = DesignTokens.Shell.libraryCardOriginX
+        let originY = DesignTokens.Shell.libraryCardOriginY
+        let artW = DesignTokens.Shell.libraryCardArtWidth
+        let artH = DesignTokens.Shell.libraryCardArtHeight
+        let pitchX = DesignTokens.Shell.libraryCardPitchX
+        let pitchY = DesignTokens.Shell.libraryCardPitchY
+        let cols = DesignTokens.Shell.libraryGridColumns
+
+        // Title block sits under art; total cell height ≈ pitchY.
+        let titleBlock = DesignTokens.Shell.libraryCardTitleHeight
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, work in
+                let row = index / cols
+                let col = index % cols
+                let cellTop = originY + CGFloat(row) * pitchY
+                let cellLeft = originX + CGFloat(col) * pitchX
+                libraryCard(
+                    work: work,
+                    width: artW,
+                    artHeight: artH,
+                    showTitle: true,
+                    artIncludesDot: true
+                )
+                // Top-leading placement (not centre) so art top matches SPA y.
+                .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
+                .offset(x: cellLeft, y: cellTop)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func productionTitleGrid(size: CGSize) -> some View {
         let gridWidth = size.width * DesignTokens.Shell.libraryGridWidthFraction
         let padL = DesignTokens.Shell.libraryRailLeft
         let padR = DesignTokens.Shell.libraryRailRight
@@ -747,7 +799,7 @@ struct TVLibraryKindView: View {
         let cardW = (inner - gap * CGFloat(cols - 1)) / CGFloat(cols)
         let artH = cardW * 9 / 16
 
-        ScrollView(.vertical, showsIndicators: false) {
+        return ScrollView(.vertical, showsIndicators: false) {
             LazyVGrid(
                 columns: Array(
                     repeating: GridItem(.fixed(cardW), spacing: gap),
@@ -757,7 +809,7 @@ struct TVLibraryKindView: View {
                 spacing: DesignTokens.Shell.libraryGridRowGap
             ) {
                 ForEach(items) { work in
-                    libraryCard(work: work, width: cardW, artHeight: artH)
+                    libraryCard(work: work, width: cardW, artHeight: artH, showTitle: true, artIncludesDot: false)
                 }
             }
             .padding(.top, DesignTokens.Shell.libraryRailTop)
@@ -769,7 +821,13 @@ struct TVLibraryKindView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 
-    private func libraryCard(work: Work, width: CGFloat, artHeight: CGFloat) -> some View {
+    private func libraryCard(
+        work: Work,
+        width: CGFloat,
+        artHeight: CGFloat,
+        showTitle: Bool,
+        artIncludesDot: Bool
+    ) -> some View {
         let isSelected = selected?.id == work.id
         return Button {
             selectedID = work.id
@@ -778,7 +836,13 @@ struct TVLibraryKindView: View {
                 ZStack(alignment: .topTrailing) {
                     Group {
                         if let fixture = TVParityArtwork.cardImage(forTitle: work.title) {
-                            fixture.resizable().scaledToFill()
+                            // Fixture crops are exact SPA art tiles (incl. pink
+                            // unwatched dot). Do not re-apply scaledToFill
+                            // distortion — size the frame to the art bounds.
+                            fixture
+                                .resizable()
+                                .interpolation(.high)
+                                .frame(width: width, height: artHeight)
                         } else {
                             DesignTokens.Color.backgroundRaised
                                 .overlay {
@@ -788,17 +852,18 @@ struct TVLibraryKindView: View {
                                         .padding(8)
                                         .multilineTextAlignment(.center)
                                 }
+                                .frame(width: width, height: artHeight)
                         }
                     }
-                    .frame(width: width, height: artHeight)
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
-                    Circle()
-                        .fill(DesignTokens.Color.brandPrimary)
-                        .frame(width: 12, height: 12)
-                        .padding(10)
+                    // SPA fixture crops already include the pink unwatched disc.
+                    if !artIncludesDot {
+                        Circle()
+                            .fill(DesignTokens.Color.brandPrimary)
+                            .frame(width: 12, height: 12)
+                            .padding(10)
+                    }
                 }
-                // SPA selected card uses soft lift, not a thick pink frame.
-                // Keep a 1pt brand ring only in interactive (non-parity) mode.
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         .stroke(
@@ -808,11 +873,14 @@ struct TVLibraryKindView: View {
                             lineWidth: 2
                         )
                 )
-                Text(work.title)
-                    .font(TVTheme.font(size: 12, weight: .semibold))
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .lineLimit(1)
-                    .frame(width: width, alignment: .leading)
+                if showTitle {
+                    // Fixture SPA crops do not include the title line; draw it.
+                    Text(work.title)
+                        .font(TVTheme.font(size: 12, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(1)
+                        .frame(width: width, alignment: .leading)
+                }
             }
             .frame(width: width, alignment: .leading)
             .opacity(isSelected || parityMode ? 1 : 0.92)
@@ -866,37 +934,23 @@ struct TVLibraryKindView: View {
         let kind = workKind ?? .series
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
+            // Hero fills left ~47% (to grid origin); SPA key-art is greyscale.
+            let heroW = DesignTokens.Shell.libraryCardOriginX - 20
             if let fixture = TVParityArtwork.libraryHero(kind: kind) {
                 fixture
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.width * 0.42, height: size.height)
+                    .frame(width: heroW, height: size.height)
                     .clipped()
-                    // Photo-only crops; fade into stage before the grid (65%).
-                    .mask(
-                        LinearGradient(
-                            colors: [.black, .black, .black.opacity(0.7), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .opacity(0.92)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             } else if let hero = TVParityArtwork.heroImage {
                 hero
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.width * 0.42, height: size.height)
+                    .frame(width: heroW, height: size.height)
                     .clipped()
                     .saturation(0)
-                    .opacity(0.8)
-                    .mask(
-                        LinearGradient(
-                            colors: [.black, .black, .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .opacity(0.85)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
             LinearGradient(
