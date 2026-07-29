@@ -28,9 +28,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Roku pairing matches web `/login/qr` chrome: dark stage by default, centered
-  copy + QR, top-right Theme (System/Light/Dark) and Language (Auto/en/ja/th)
-  pickers. Light theme remains available via the selector.
+- Roku pairing chrome is 1:1 with web `/login/qr` TvStageChrome + DeviceLogin:
+  dark stage by default, square theme (144) and language (168) dropdown
+  triggers with icon + label + chevron, circular back, and full-width
+  “Sign in manually” pill (opens server entry). Focus uses accent borders.
+  Light theme remains available via the selector.
 
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language

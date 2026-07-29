@@ -108,7 +108,7 @@ function PairingUiStrings(lang as String) as Object
             waiting: "承認をお待ちください…"
             refreshesPrefix: "コードの更新まで "
             creating: "安全なサインインコードを作成しています…"
-            manual: "サーバーを手動入力するには * を押します"
+            manualBtn: "手動でサインイン"
             failed: "続行できませんでした"
             unavailable: "Playarrのリンクを利用できません。"
         }
@@ -122,7 +122,7 @@ function PairingUiStrings(lang as String) as Object
             waiting: "กำลังรอการอนุมัติ…"
             refreshesPrefix: "รหัสจะรีเฟรชใน "
             creating: "กำลังสร้างรหัสเข้าสู่ระบบที่ปลอดภัย…"
-            manual: "กด * เพื่อป้อนที่อยู่เซิร์ฟเวอร์เอง"
+            manualBtn: "เข้าสู่ระบบด้วยตนเอง"
             failed: "ดำเนินการต่อไม่ได้"
             unavailable: "การลิงก์ Playarr ใช้ไม่ได้ในตอนนี้"
         }
@@ -136,7 +136,7 @@ function PairingUiStrings(lang as String) as Object
         waiting: "Waiting for approval…"
         refreshesPrefix: "Code refreshes in "
         creating: "Creating a secure sign-in code…"
-        manual: "Press * for manual server entry"
+        manualBtn: "Sign in manually"
         failed: "Couldn’t continue"
         unavailable: "Playarr linking is unavailable right now."
     }

@@ -210,7 +210,12 @@ class SecretSafetyTests(unittest.TestCase):
             "pairingQr",
             "pairingCode",
             "pairingStatus",
-            "pairingManualHint",
+            "pairingManualHit",
+            "pairingManualLabel",
+            "pairingManualPill",
+            "pairingThemeHit",
+            "pairingLangHit",
+            "pairingBackHit",
             "pairingKicker",
             "pairingTitle",
             "pairingDescription",
@@ -219,6 +224,12 @@ class SecretSafetyTests(unittest.TestCase):
         ):
             with self.subTest(pairing_id=pairing_id):
                 self.assertIn(f'id="{pairing_id}"', SCENE)
+        # 1:1 web chrome: square dropdown triggers + Sign in manually pill.
+        self.assertIn("pairing-chrome-dd-theme.png", SCENE)
+        self.assertIn("pairing-manual-pill.png", SCENE)
+        self.assertIn('text="Sign in manually"', SCENE)
+        self.assertIn("applyPairingChromeFocus()", MAIN)
+        self.assertIn("openServerDialog()", MAIN)
 
     def test_pairing_logo_asset_exists_as_a_real_raster_not_a_placeholder(self) -> None:
         logo_path = ROOT / "images" / "pairing-logo.png"

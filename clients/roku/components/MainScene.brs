@@ -22,10 +22,19 @@ sub init()
     m.pairingAuthBg = m.top.findNode("pairingAuthBg")
     m.pairingThemeHit = m.top.findNode("pairingThemeHit")
     m.pairingLangHit = m.top.findNode("pairingLangHit")
+    m.pairingManualHit = m.top.findNode("pairingManualHit")
+    m.pairingBackHit = m.top.findNode("pairingBackHit")
     m.pairingThemeLabel = m.top.findNode("pairingThemeLabel")
     m.pairingLangLabel = m.top.findNode("pairingLangLabel")
+    m.pairingManualLabel = m.top.findNode("pairingManualLabel")
     m.pairingThemePill = m.top.findNode("pairingThemePill")
     m.pairingLangPill = m.top.findNode("pairingLangPill")
+    m.pairingManualPill = m.top.findNode("pairingManualPill")
+    m.pairingThemeIcon = m.top.findNode("pairingThemeIcon")
+    m.pairingLangIcon = m.top.findNode("pairingLangIcon")
+    m.pairingThemeChevron = m.top.findNode("pairingThemeChevron")
+    m.pairingLangChevron = m.top.findNode("pairingLangChevron")
+    m.pairingBackBtn = m.top.findNode("pairingBackBtn")
     m.themePreference = LoadPairingThemePreference()
     m.languagePreference = LoadPairingLanguagePreference()
 
@@ -424,7 +433,7 @@ sub acceptHostedLinkCode(data as Object)
     end if
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = strings.waiting
-    m.pairingManualHint.text = strings.manual
+    if m.pairingManualLabel <> invalid then m.pairingManualLabel.text = strings.manualBtn
     applyPairingChrome()
     ' expires_in seconds (hosted) — cap 5 minutes like web.
     expiresIn = data.expires_in
@@ -909,7 +918,7 @@ sub showPairingBusy(title as String, message as String)
     m.pairingCode.text = ""
     m.pairingStatus.text = ""
     if m.pairingTimerLabel <> invalid then m.pairingTimerLabel.text = ""
-    m.pairingManualHint.text = strings.manual
+    if m.pairingManualLabel <> invalid then m.pairingManualLabel.text = strings.manualBtn
     m.pairingCodeExpiresAt = 0
     hidePairingQr()
     showOnly("pairing")
@@ -919,9 +928,11 @@ sub showPairingBusy(title as String, message as String)
     else
         m.top.SetFocus(true)
     end if
+    applyPairingChromeFocus()
 end sub
 
 ' Apply theme wash + ink colours + chrome labels for current prefs.
+' Chrome matches web .language-dropdown-trigger / .device-login-manual.
 sub applyPairingChrome()
     theme = ResolvePairingTheme(m.themePreference)
     lang = ResolvePairingLanguage(m.languagePreference)
@@ -933,10 +944,19 @@ sub applyPairingChrome()
             m.pairingAuthBg.uri = "pkg:/images/pairing-auth-bg.png"
         end if
     end if
-    pillUri = "pkg:/images/pairing-chrome-pill.png"
-    if isLight then pillUri = "pkg:/images/pairing-chrome-pill-light.png"
-    if m.pairingThemePill <> invalid then m.pairingThemePill.uri = pillUri
-    if m.pairingLangPill <> invalid then m.pairingLangPill.uri = pillUri
+    m.pairingChromeIsLight = isLight
+    iconTheme = "pkg:/images/pairing-icon-theme.png"
+    iconLang = "pkg:/images/pairing-icon-lang.png"
+    iconChev = "pkg:/images/pairing-icon-chevron.png"
+    if isLight
+        iconTheme = "pkg:/images/pairing-icon-theme-light.png"
+        iconLang = "pkg:/images/pairing-icon-lang-light.png"
+        iconChev = "pkg:/images/pairing-icon-chevron-light.png"
+    end if
+    if m.pairingThemeIcon <> invalid then m.pairingThemeIcon.uri = iconTheme
+    if m.pairingLangIcon <> invalid then m.pairingLangIcon.uri = iconLang
+    if m.pairingThemeChevron <> invalid then m.pairingThemeChevron.uri = iconChev
+    if m.pairingLangChevron <> invalid then m.pairingLangChevron.uri = iconChev
     ink = &hF4F0F1FF
     inkSoft = &hC5B8BDFF
     inkMuted = &h887A82FF
@@ -954,7 +974,10 @@ sub applyPairingChrome()
     if m.pairingCode <> invalid then m.pairingCode.color = ink
     if m.pairingStatus <> invalid then m.pairingStatus.color = inkSoft
     if m.pairingTimerLabel <> invalid then m.pairingTimerLabel.color = inkMuted
-    if m.pairingManualHint <> invalid then m.pairingManualHint.color = inkMuted
+    if m.pairingManualLabel <> invalid
+        m.pairingManualLabel.color = inkSoft
+        m.pairingManualLabel.text = PairingUiStrings(lang).manualBtn
+    end if
     if m.pairingThemeLabel <> invalid
         m.pairingThemeLabel.color = ink
         m.pairingThemeLabel.text = PairingThemeChromeLabel(m.themePreference, lang)
@@ -963,6 +986,57 @@ sub applyPairingChrome()
         m.pairingLangLabel.color = ink
         m.pairingLangLabel.text = PairingLanguageChromeLabel(m.languagePreference)
     end if
+    if m.pairingManualHint <> invalid
+        m.pairingManualHint.visible = false
+        m.pairingManualHint.text = ""
+    end if
+    applyPairingChromeFocus()
+end sub
+
+' Rest vs focus posters: web trigger border goes accent when focused/expanded.
+function pairingChromeUri(kind as String, focused as Boolean) as String
+    isLight = m.pairingChromeIsLight = true
+    if kind = "theme"
+        if focused
+            if isLight then return "pkg:/images/pairing-chrome-dd-theme-focus-light.png"
+            return "pkg:/images/pairing-chrome-dd-theme-focus.png"
+        end if
+        if isLight then return "pkg:/images/pairing-chrome-dd-theme-light.png"
+        return "pkg:/images/pairing-chrome-dd-theme.png"
+    else if kind = "lang"
+        if focused
+            if isLight then return "pkg:/images/pairing-chrome-dd-focus-light.png"
+            return "pkg:/images/pairing-chrome-dd-focus.png"
+        end if
+        if isLight then return "pkg:/images/pairing-chrome-dd-light.png"
+        return "pkg:/images/pairing-chrome-dd.png"
+    else if kind = "manual"
+        if focused
+            if isLight then return "pkg:/images/pairing-manual-pill-focus-light.png"
+            return "pkg:/images/pairing-manual-pill-focus.png"
+        end if
+        if isLight then return "pkg:/images/pairing-manual-pill-light.png"
+        return "pkg:/images/pairing-manual-pill.png"
+    else if kind = "back"
+        if focused
+            if isLight then return "pkg:/images/pairing-back-btn-focus-light.png"
+            return "pkg:/images/pairing-back-btn-focus.png"
+        end if
+        if isLight then return "pkg:/images/pairing-back-btn-light.png"
+        return "pkg:/images/pairing-back-btn.png"
+    end if
+    return ""
+end function
+
+sub applyPairingChromeFocus()
+    themeF = m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
+    langF = m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
+    manualF = m.pairingManualHit <> invalid and m.pairingManualHit.IsInFocusChain()
+    backF = m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain()
+    if m.pairingThemePill <> invalid then m.pairingThemePill.uri = pairingChromeUri("theme", themeF)
+    if m.pairingLangPill <> invalid then m.pairingLangPill.uri = pairingChromeUri("lang", langF)
+    if m.pairingManualPill <> invalid then m.pairingManualPill.uri = pairingChromeUri("manual", manualF)
+    if m.pairingBackBtn <> invalid then m.pairingBackBtn.uri = pairingChromeUri("back", backF)
 end sub
 
 sub refreshPairingCopy()
@@ -980,7 +1054,7 @@ sub refreshPairingCopy()
     if m.pairingScan <> invalid and m.pairingScan.visible then m.pairingScan.text = strings.scan
     if m.pairingEnter <> invalid and m.pairingEnter.visible then m.pairingEnter.text = strings.enter
     if m.pairingStatus <> invalid and m.pairingStatus.text <> "" then m.pairingStatus.text = strings.waiting
-    if m.pairingManualHint <> invalid then m.pairingManualHint.text = strings.manual
+    if m.pairingManualLabel <> invalid then m.pairingManualLabel.text = strings.manualBtn
     applyPairingChrome()
     updatePairingCountdown()
 end sub
@@ -1080,7 +1154,11 @@ sub acceptDeviceCode(data as Object)
     end if
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = "Waiting for approval…"
-    m.pairingManualHint.text = "Press * for manual server entry"
+    if m.pairingManualHint <> invalid
+        m.pairingManualHint.visible = false
+        m.pairingManualHint.text = ""
+    end if
+    applyPairingChrome()
     expiresIn = data.expires_in
     if expiresIn = invalid then expiresIn = 300
     if expiresIn > 300 then expiresIn = 300
@@ -5020,15 +5098,58 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
             openPairingLanguagePicker()
             return true
+        else if m.pairingManualHit <> invalid and m.pairingManualHit.IsInFocusChain()
+            m.hostedLinkTimer.control = "stop"
+            m.pairingTimer.control = "stop"
+            openServerDialog()
+            return true
+        else if m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain()
+            ' Web back returns to profiles when session still has tokens.
+            if m.accessToken <> invalid and m.accessToken <> ""
+                loadProfiles()
+            else
+                openServerDialog()
+            end if
+            return true
         end if
     else if state = "pairing" and key = "right"
-        if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
+        if m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain()
+            if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        else if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
             if m.pairingLangHit <> invalid then m.pairingLangHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        else if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
+            if m.pairingManualHit <> invalid then m.pairingManualHit.SetFocus(true)
+            applyPairingChromeFocus()
             return true
         end if
     else if state = "pairing" and key = "left"
-        if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
+        if m.pairingManualHit <> invalid and m.pairingManualHit.IsInFocusChain()
+            if m.pairingLangHit <> invalid then m.pairingLangHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        else if m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()
             if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        else if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain()
+            if m.pairingBackHit <> invalid then m.pairingBackHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        end if
+    else if state = "pairing" and key = "down"
+        if m.pairingThemeHit <> invalid and m.pairingThemeHit.IsInFocusChain() or (m.pairingLangHit <> invalid and m.pairingLangHit.IsInFocusChain()) or (m.pairingBackHit <> invalid and m.pairingBackHit.IsInFocusChain())
+            if m.pairingManualHit <> invalid then m.pairingManualHit.SetFocus(true)
+            applyPairingChromeFocus()
+            return true
+        end if
+    else if state = "pairing" and key = "up"
+        if m.pairingManualHit <> invalid and m.pairingManualHit.IsInFocusChain()
+            if m.pairingThemeHit <> invalid then m.pairingThemeHit.SetFocus(true)
+            applyPairingChromeFocus()
             return true
         end if
     else if state = "pairing" and key = "options"

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../lib/i18n/LanguageProvider";
+import { ThemeProvider } from "../lib/theme";
 import { ClientsPage } from "./Clients";
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -18,9 +19,11 @@ afterAll(() => consoleErrorSpy.mockRestore());
 
 function renderPage(page: React.ReactNode, path: string): string {
   return renderToStaticMarkup(
-    <LanguageProvider>
-      <MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>
-    </LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 
