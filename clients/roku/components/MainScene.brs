@@ -842,12 +842,14 @@ sub refreshSession()
 end sub
 
 sub beginPairing()
+    ' Match web `/login/qr`: always use the hosted playarr.app device-link
+    ' broker so the viewer gets a scanable QR (verification URI complete is
+    ' always https://playarr.app/link?…). Direct POST /oauth/device/code to
+    ' a remembered relay URL only shows a typed code and cannot use the
+    ' hosted `/api/link/qr` renderer (it only encodes playarr.app links).
     m.pairingTimer.control = "stop"
     m.hostedLinkTimer.control = "stop"
-    showPairingBusy("Link this Roku", "Requesting a secure sign-in code…")
-    sendApi("deviceCode", "POST", "/api/v1/oauth/device/code", {
-        client_platform: AppConfig().clientPlatform
-    }, false)
+    beginHostedLink()
 end sub
 
 ' Pairing chrome in place of fullscreen statusGroup (no Loading wall).
@@ -876,11 +878,25 @@ sub acceptDeviceCode(data as Object)
     m.deviceCode = data.device_code
     m.pollInterval = data.interval
     if m.pollInterval < 5 then m.pollInterval = 5
-    m.pairingInstruction.text = "Open " + data.verification_uri + " on a phone or computer, then enter:"
+    m.pairingInstruction.text = "Scan the QR code, or visit " + data.verification_uri + " and enter:"
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = "Waiting for approval…"
-    m.pairingManualHint.text = ""
-    hidePairingQr()
+    m.pairingManualHint.text = "Press * to enter a server address manually instead"
+    ' Prefer hosted QR when the complete URI is a playarr.app link; otherwise
+    ' hide the tile (hosted /api/link/qr refuses non-playarr.app values).
+    qrTarget = data.verification_uri_complete
+    if qrTarget = invalid then qrTarget = ""
+    if qrTarget = "" and data.verification_uri <> invalid and data.user_code <> invalid
+        qrTarget = data.verification_uri + "?user_code=" + data.user_code
+    end if
+    if Left(qrTarget, 25) = "https://playarr.app/link?"
+        m.pairingQr.uri = AppConfig().hostedLinkOrigin + "/api/link/qr?value=" + UrlEncode(qrTarget)
+        m.pairingQr.visible = true
+        if m.pairingQrBg <> invalid then m.pairingQrBg.visible = true
+        if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = true
+    else
+        hidePairingQr()
+    end if
     showOnly("pairing")
     m.top.screenState = "pairing"
     m.pairingTimer.duration = m.pollInterval
