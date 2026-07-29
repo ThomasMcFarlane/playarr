@@ -227,7 +227,6 @@ sub init()
     m.preferredAudioLanguage = invalid
 
     m.detailActions.ObserveField("itemSelected", "onDetailActionSelected")
-    m.pendingPlaybackRequest = invalid
     m.detailEpisodes.ObserveField("rowItemSelected", "onDetailEpisodeSelected")
     m.detailChapters.ObserveField("rowItemSelected", "onDetailChapterSelected")
     m.detailSimilar.ObserveField("rowItemSelected", "onDetailSimilarSelected")
@@ -244,6 +243,8 @@ sub init()
     end if
 
     m.requestBusy = false
+    m.pendingApiQueue = []
+    m.pendingPlaybackRequest = invalid
     m.items = []
     m.totalItems = invalid
     m.profiles = []
@@ -449,11 +450,16 @@ sub sendApi(action as String, method as String, path as String, body as Dynamic,
         accessToken: ""
     }
     if authenticated then request.accessToken = m.accessToken
-    ' Playback must never be silently dropped while chapters/similar are
-    ' still in flight (single-flight requestBusy). Queue and flush next.
+    ' Single-flight ApiTask: never silently drop requests. Home chain
+    ' (catalogKinds → watchProgress → rails) used to vanish forever when
+    ' requestBusy was still true from an earlier call, leaving left-nav-only
+    ' Home with no content. Playback keeps a dedicated slot at the front.
     if m.requestBusy
         if action = "playback"
             m.pendingPlaybackRequest = request
+        else
+            if m.pendingApiQueue = invalid then m.pendingApiQueue = []
+            m.pendingApiQueue.Push(request)
         end if
         return
     end if
@@ -471,12 +477,22 @@ sub startApiRequest(request as Object)
     task.control = "RUN"
 end sub
 
-sub flushPendingPlaybackRequest()
-    if m.pendingPlaybackRequest = invalid then return
+sub flushPendingApiRequests()
     if m.requestBusy then return
-    req = m.pendingPlaybackRequest
-    m.pendingPlaybackRequest = invalid
+    ' Playback first (user hit Play while embellishments were in flight).
+    if m.pendingPlaybackRequest <> invalid
+        req = m.pendingPlaybackRequest
+        m.pendingPlaybackRequest = invalid
+        startApiRequest(req)
+        return
+    end if
+    if m.pendingApiQueue = invalid or m.pendingApiQueue.Count() = 0 then return
+    req = m.pendingApiQueue.Shift()
     startApiRequest(req)
+end sub
+
+sub flushPendingPlaybackRequest()
+    flushPendingApiRequests()
 end sub
 
 sub onApiResult(event as Object)
@@ -2639,8 +2655,17 @@ sub enterHome(profileName as String)
     m.homeMoreMovies = []
     m.homeMoreSeries = []
     ' Authenticated shell stays up while rails load (no fullscreen Loading UI).
+    ' Reveal settled stage chrome immediately so the viewer never sits on
+    ' opacity-0 content (left nav only) while catalogKinds → rails chain runs.
     showOnly("home")
     m.top.screenState = "home"
+    if m.homeStage <> invalid
+        m.homeStage.stageTitle = "Home"
+        m.homeStage.stageKicker = "PLAYARR"
+        m.homeStage.stageMeta = "Loading your library…"
+        m.homeStage.stageOverview = ""
+        m.homeStage.callFunc("revealStage")
+    end if
     ' Filter Sites / other library kinds against GET /api/v1/catalog/kinds,
     ' then load home rails (chained one request at a time).
     sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds", invalid, true)
@@ -2972,9 +2997,11 @@ sub finishHomeLoad()
     ' ever (m.homeShown below), so a return trip to Home would otherwise
     ' keep whatever scroll position Back left it at.
     m.homeContent.translation = [983, 259]
-    updateHeroFromWork(m.visibleRails[0].works[0])
     showOnly("home")
     m.top.screenState = "home"
+    ' Reveal rails/hero first, then load key-art. Key-art used to block the
+    ' SceneGraph thread (sync GetToFile) before playEntrance, so Home painted
+    ' as left-nav-only dark stage forever when art was slow or hung.
     if not m.homeShown
         ' Dot-call syntax (m.homeStage.playEntrance()) reliably throws "Member
         ' function not found" on this device/OS despite the interface field
@@ -2983,7 +3010,10 @@ sub finishHomeLoad()
         ' robust invocation path for custom interface <function> members.
         m.homeStage.callFunc("playEntrance")
         m.homeShown = true
+    else
+        m.homeStage.callFunc("revealStage")
     end if
+    updateHeroFromWork(m.visibleRails[0].works[0])
     m.visibleRails[0].row.SetFocus(true)
 end sub
 
@@ -3991,23 +4021,30 @@ function episodeArtworkUrl(ep as Object) as String
     return ""
 end function
 
+' Iterative stack walk (not recursive): deep series trees must not overflow
+' BrightScript's call stack and stall the home load chain mid homeWorkDetail.
 function findFirstMediaFileId(value as Dynamic) as String
     if value = invalid then return ""
-    valueType = type(value)
-    if valueType = "roAssociativeArray"
-        if value.media_file_id <> invalid and value.media_file_id <> ""
-            return value.media_file_id
+    stack = []
+    stack.Push(value)
+    while stack.Count() > 0
+        node = stack.Pop()
+        if node <> invalid
+            valueType = type(node)
+            if valueType = "roAssociativeArray"
+                if node.media_file_id <> invalid and node.media_file_id <> ""
+                    return node.media_file_id
+                end if
+                for each key in node
+                    stack.Push(node[key])
+                end for
+            else if valueType = "roArray"
+                for each child in node
+                    stack.Push(child)
+                end for
+            end if
         end if
-        for each key in value
-            result = findFirstMediaFileId(value[key])
-            if result <> "" then return result
-        end for
-    else if valueType = "roArray"
-        for each child in value
-            result = findFirstMediaFileId(child)
-            if result <> "" then return result
-        end for
-    end if
+    end while
     return ""
 end function
 

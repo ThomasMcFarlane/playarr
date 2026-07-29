@@ -62,6 +62,8 @@
          interface/backing sub both looking correct; renaming is the
          cheapest way to test that theory without deeper platform digging. -->
     <function name="playEntrance" />
+    <!-- Instant full-opacity reveal at settled layout (re-entry / recovery). -->
+    <function name="revealStage" />
   </interface>
   <children>
     <!--
