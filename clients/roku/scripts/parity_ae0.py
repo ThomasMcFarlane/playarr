@@ -74,9 +74,19 @@ RESIDUAL_RECTS: dict[str, list[tuple[int, int, int, int]]] = {
 }
 
 # Surfaces that use sparse residual PNG (opaque alpha = residual asset area).
-SPARSE_RESIDUAL_SURFACES = frozenset(
-    {"home", "series", "playlists", "movies", "music", "profiles"}
-)
+SPARSE_RESIDUAL_SURFACES = frozenset({
+    "pairing",
+    "profiles",
+    "home",
+    "search",
+    "series",
+    "movies",
+    "music",
+    "playlists",
+    "settings",
+    "detail",
+    "playback",
+})
 
 
 def load_rgb(path: pathlib.Path) -> np.ndarray:

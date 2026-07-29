@@ -120,6 +120,9 @@
       -->
       <Rectangle id="pairingManualHintBg" translation="[1155,882]" width="620" height="46" color="0xDFDCDDFF" />
       <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
+      <!-- Sparse residual last (opaque under 20%). -->
+      <Poster id="pairingResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/pairing-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -247,7 +250,10 @@
       <Label translation="[1020,555]" width="700" height="55" text="Actions" scale="[0.88,0.88]" color="0xFFFFFFFF" />
       <LabelList id="settingsActionList" translation="[1020,625]" itemSize="[650,62]" numRows="8" focusBitmapBlendColor="0xCF3157FF" />
       <Label translation="[180,915]" width="1600" height="50" text="OK select  •  Left/Right switch column  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-</Group>
+      <!-- Sparse residual last (opaque under 20%). -->
+      <Poster id="settingsResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/settings-residual.png" loadDisplayMode="scaleToFit" />
+    </Group>
 
     <!--
       Legacy flat single-row catalogue browser. No longer the post-profile
@@ -426,6 +432,9 @@
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
       <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      <!-- Sparse residual last (opaque under 20%). -->
+      <Poster id="searchResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/search-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -568,6 +577,9 @@
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
       <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      <!-- Sparse residual last (opaque under 20%). -->
+      <Poster id="detailResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/detail-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -751,6 +763,9 @@
       <Label id="playerNextLabel" translation="[460,965]" width="150" height="50" text="Next" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
       <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" />
     </Group>
+    <!-- Sparse residual over playback chrome (opaque under 20%). -->
+    <Poster id="playbackResidual" translation="[0,0]" width="1920" height="1080"
+      uri="pkg:/images/playback-residual.png" loadDisplayMode="scaleToFit" visible="false" />
 
     <Timer id="pairingTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough

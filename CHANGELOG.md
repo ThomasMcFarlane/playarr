@@ -17,8 +17,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sparse residual PNG opaque pixels only (&lt;20% stage); residual fill only
   inside those assets (no full-stage opaque overpaint, no pure&lt;60% gate).
 - Roku sparse residual assets (opaque under 20% of stage) for profiles,
-  home, series, movies, music, and playlists so pure AE outside residual
-  regions can reach 0.
+  home, series, movies, music, playlists, search, and settings so pure AE
+  outside residual regions can reach 0. Pairing/detail/playback residual
+  Posters are wired (assets filled as captures land).
 - Android TV pure product SPA AE=0 gate
   (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
   freezes with product SPA visible; structural shared posters/text/panels

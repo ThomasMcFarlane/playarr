@@ -36,6 +36,7 @@ sub init()
     m.browseGroup = m.top.findNode("browseGroup")
     m.browseGrid = m.top.findNode("browseGrid")
     m.browseResidual = m.top.findNode("browseResidual")
+    m.playbackResidual = m.top.findNode("playbackResidual")
     m.browseTitle = m.top.findNode("browseTitle")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
@@ -3351,6 +3352,7 @@ sub startPlayback(data as Object)
     m.playerBufferedFill.width = 0
     m.video.content = content
     m.video.visible = true
+    if m.playbackResidual <> invalid then m.playbackResidual.visible = true
     ' NOT m.video.SetFocus(true): a focused Video node swallows remote
     ' keypresses natively before Scene-level onKeyEvent ever sees them --
     ' same axis-ownership pattern already hit twice this session with
@@ -3606,6 +3608,7 @@ sub finishPlayback(reason as String)
     sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: reason })
     m.video.control = "stop"
     m.video.visible = false
+    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     m.controlBarProgressTimer.control = "stop"
     m.playerAutoHideTimer.control = "stop"
     m.top.screenState = "detail"
@@ -3664,6 +3667,7 @@ sub showOnly(name as String)
     if name <> "playback"
         m.video.visible = false
         m.playerControls.visible = false
+        if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     end if
 end sub
 
