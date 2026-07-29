@@ -9,6 +9,7 @@ import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
 import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
+import { bootstrapParityMode, readParityMode } from "./lib/parityMode";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -17,6 +18,12 @@ if (!container) {
 }
 
 document.documentElement.dataset.platform = PLAYARR_CLIENT_PLATFORM;
+
+// Product-path parity mode for cross-engine AE freezes (?parity=geometry|raster).
+const parityMode = readParityMode();
+if (parityMode !== "off") {
+  document.documentElement.dataset.parity = parityMode;
+}
 
 const Router = IS_PACKAGED_TV ? HashRouter : BrowserRouter;
 
@@ -39,3 +46,20 @@ createRoot(container).render(
     </Router>
   </StrictMode>
 );
+
+// Apply after first paint so DOM exists; re-run when SPA navigates.
+if (parityMode !== "off") {
+  const run = () => {
+    void bootstrapParityMode(parityMode);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    // Defer past React commit
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }
+  // SPA client navigations
+  window.addEventListener("popstate", () => {
+    setTimeout(run, 400);
+  });
+}
