@@ -93,11 +93,13 @@ fun PlayarrTvWebShell(
                         // populated before React hydrates profile state.
                         view.evaluateJavascript(bootstrap, null)
                         view.evaluateJavascript(TV_VIEWPORT_SCRIPT, null)
+                        view.evaluateJavascript(TV_LAYOUT_PARITY_SCRIPT, null)
                     }
 
                     override fun onPageFinished(view: WebView, url: String) {
                         view.evaluateJavascript(bootstrap, null)
                         view.evaluateJavascript(TV_VIEWPORT_SCRIPT, null)
+                        view.evaluateJavascript(TV_LAYOUT_PARITY_SCRIPT, null)
                         // Auto-select the injected profile when the SPA lands on
                         // the "Who's watching?" gate.
                         view.evaluateJavascript(
@@ -144,6 +146,29 @@ private const val TV_VIEWPORT_SCRIPT = """
     document.body.style.overflow = 'hidden';
     document.body.style.margin = '0';
   }
+})();
+"""
+
+/**
+ * Neutralise layout deltas between Android WebView and desktop Chromium that
+ * pure SPA freezes expose: scrollbar-gutter:stable reserves ~15px on desktop
+ * only (settings option width 465 vs 480), and hide platform scrollbars on
+ * TV so content width matches the live web-ref freeze stage.
+ */
+private const val TV_LAYOUT_PARITY_SCRIPT = """
+(function() {
+  var id = 'playarr-tv-layout-parity';
+  if (document.getElementById(id)) return;
+  var style = document.createElement('style');
+  style.id = id;
+  style.textContent = [
+    '*, *::before, *::after { scrollbar-gutter: auto !important; scrollbar-width: none !important; }',
+    '*::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }',
+    '.settings-options-panel, .settings-detail-scroll, .settings-options-list {',
+    '  scrollbar-gutter: auto !important;',
+    '}',
+  ].join('\\n');
+  (document.head || document.documentElement).appendChild(style);
 })();
 """
 

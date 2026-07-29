@@ -1575,8 +1575,22 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  /*
+   * Use auto, not stable. `scrollbar-gutter: stable` reserves ~15px on
+   * desktop Chromium but not on Android TV WebView, which widened
+   * `.settings-option` by 15px (465 vs 480) and shifted the detail panel.
+   * TV surfaces hide scrollbars; gutter reservation is pure layout noise.
+   */
+  scrollbar-gutter: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.settings-options-panel::-webkit-scrollbar,
+.settings-detail-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .settings-options-list {

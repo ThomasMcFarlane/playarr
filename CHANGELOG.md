@@ -9,6 +9,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Settings panels use `scrollbar-gutter: auto` (was `stable`) so Android TV
+  WebView and desktop Chromium share the same content width; `stable` reserved
+  ~15px on desktop only and widened `.settings-option` (465 vs 480).
+- Android TV WebView shell injects a layout-parity stylesheet that forces
+  `scrollbar-gutter: auto` and hides scrollbars, matching the pure SPA freeze
+  stage used for cross-engine AE compares.
+
 - Apple TV home fixture hero/posters use pre-filtered SPA suite
   crops (no double greyscale) and search title weight matches SPA ~580.
 - Apple TV home shell geometry aligned to SPA CSS clamps at 1920×1080
@@ -31,6 +38,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reference frames, and measured empty-state placement on search.
 
 ### Added
+
+- Android TV pure full-page AE suite (`parity_pure_fullpage_ae0.py`): desktop
+  Chromium vs WebView SPA freezes with zero residual-asset paint, stronger
+  layout lock (scroll zero, fixed settings widths, scrollbar-gutter kill).
 
 - Apple TV shell rewritten toward the live SPA dark stage: floating left nav,
   hero title panel, home rails, search empty state, and Preferences-style
