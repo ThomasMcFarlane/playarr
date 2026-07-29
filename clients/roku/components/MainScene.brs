@@ -65,6 +65,10 @@ sub init()
     m.searchGroup = m.top.findNode("searchGroup")
     m.searchGrid = m.top.findNode("searchGrid")
     m.searchTitle = m.top.findNode("searchTitle")
+    m.searchFieldLabel = m.top.findNode("searchFieldLabel")
+    m.searchEmptyState = m.top.findNode("searchEmptyState")
+    m.searchEmptyHint = m.top.findNode("searchEmptyHint")
+    m.searchHint = m.top.findNode("searchHint")
     m.searchPreviewKind = m.top.findNode("searchPreviewKind")
     m.searchPreviewTitle = m.top.findNode("searchPreviewTitle")
     m.searchPreviewMeta = m.top.findNode("searchPreviewMeta")
@@ -1828,6 +1832,38 @@ end sub
 ' other partial-cache-node concern elsewhere in this client.
 ' ---------------------------------------------------------------------------
 
+' Web /search empty shell first (Start typing to search). OK opens keyboard.
+sub openSearch()
+    m.searchQuery = ""
+    m.searchItems = []
+    m.searchDisplayItems = []
+    m.searchTitle.text = "Search"
+    if m.searchFieldLabel <> invalid
+        m.searchFieldLabel.text = "Search your libraries and playlists"
+        m.searchFieldLabel.color = &h887A82FF
+    end if
+    showSearchEmptyState(true)
+    buildGridContent(m.searchGrid, m.searchDisplayItems, 1.5)
+    showOnly("search")
+    m.top.screenState = "search"
+    m.top.SetFocus(true)
+end sub
+
+sub showSearchEmptyState(empty as Boolean)
+    if m.searchEmptyState <> invalid then m.searchEmptyState.visible = empty
+    if m.searchEmptyHint <> invalid then m.searchEmptyHint.visible = empty
+    if m.searchGrid <> invalid then m.searchGrid.visible = not empty
+    if m.searchPreviewKind <> invalid then m.searchPreviewKind.visible = not empty
+    if m.searchPreviewTitle <> invalid then m.searchPreviewTitle.visible = not empty
+    if m.searchPreviewMeta <> invalid then m.searchPreviewMeta.visible = not empty
+    if m.searchPreviewOverview <> invalid then m.searchPreviewOverview.visible = not empty
+    if empty and m.searchHint <> invalid
+        m.searchHint.text = "OK type query  •  Back home"
+    else if m.searchHint <> invalid
+        m.searchHint.text = "OK details  •  Back home"
+    end if
+end sub
+
 sub openSearchDialog()
     dialog = CreateObject("roSGNode", "StandardKeyboardDialog")
     dialog.title = "Search Playarr"
@@ -1853,8 +1889,13 @@ end sub
 sub performSearch(query as String)
     m.searchItems = []
     m.searchDisplayItems = []
-    m.searchTitle.text = "Search  •  “" + query + "”"
-    buildGridContent(m.searchGrid, m.searchDisplayItems, 1.0)
+    m.searchTitle.text = "Search"
+    if m.searchFieldLabel <> invalid
+        m.searchFieldLabel.text = query
+        m.searchFieldLabel.color = &hF4F0F1FF
+    end if
+    showSearchEmptyState(false)
+    buildGridContent(m.searchGrid, m.searchDisplayItems, 1.5)
     showOnly("search")
     m.top.screenState = "search"
     m.searchGrid.SetFocus(true)
@@ -3144,7 +3185,7 @@ sub selectNavDockItem()
         m.top.screenState = "home"
         focusCurrentHomeRail()
     else if kind = "search"
-        openSearchDialog()
+        openSearch()
     else if kind = "playlist"
         openPlaylists()
     else
@@ -4342,6 +4383,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     else if state = "search" and m.searchFilterMode and key = "OK"
         selectSearchFilter()
+        return true
+    else if state = "search" and key = "OK" and (m.searchDisplayItems = invalid or m.searchDisplayItems.Count() = 0)
+        ' Empty search shell: OK opens the keyboard (web focuses the field).
+        openSearchDialog()
         return true
     else if state = "search" and key = "up"
         enterSearchFilters()

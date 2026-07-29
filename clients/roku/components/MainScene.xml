@@ -429,23 +429,34 @@
       session).
     -->
     <Group id="searchGroup" visible="false">
-      <Label id="searchTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+      <!-- Web empty Search: heading + field + empty hint (Search.tsx). -->
+      <Label id="searchTitle" translation="[200,90]" width="900" height="60" text="Search" scale="[1.25,1.25]" color="0xFFFFFFFF" />
+      <!-- Search field chrome (opens keyboard on OK). Pink outline via outer rect. -->
+      <Rectangle id="searchFieldRing" translation="[198,188]" width="724" height="76" color="0xCF3157AA" />
+      <Rectangle id="searchFieldBg" translation="[201,191]" width="718" height="70" color="0x1B181BFF" />
+      <Label id="searchFieldLabel" translation="[230,210]" width="660" height="40" text="Search your libraries and playlists" scale="[0.62,0.62]" color="0x887A82FF" />
       <Group id="searchFilters">
-        <Label id="searchFilterAll" translation="[560,195]" width="140" height="36" text="All" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xCF3157FF" />
-        <Label id="searchFilterMovie" translation="[700,195]" width="140" height="36" text="Movies" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
-        <Label id="searchFilterSeries" translation="[840,195]" width="140" height="36" text="Series" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
-        <Label id="searchFilterArtist" translation="[980,195]" width="140" height="36" text="Music" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
-        <Label id="searchFilterPlaylists" translation="[1120,195]" width="140" height="36" text="Playlists" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterAll" translation="[200,290]" width="140" height="36" text="All" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xCF3157FF" />
+        <Label id="searchFilterMovie" translation="[340,290]" width="140" height="36" text="Movies" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterSeries" translation="[480,290]" width="140" height="36" text="Series" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterArtist" translation="[620,290]" width="140" height="36" text="Music" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
+        <Label id="searchFilterPlaylists" translation="[760,290]" width="140" height="36" text="Playlists" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
       </Group>
-      <Label id="searchPreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
-      <Label id="searchPreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
-      <Label id="searchPreviewMeta" translation="[160,310]" width="380" height="30" scale="[0.56,0.56]" color="0xA9B7C9FF" />
-      <Label id="searchPreviewOverview" translation="[160,355]" width="380" height="360" wrap="true" vertAlign="top" scale="[0.56,0.56]" color="0xA9B7C9FF" />
-      <MarkupGrid id="searchGrid" translation="[560,245]" itemComponentName="PosterCard"
+      <Label id="searchEmptyHint" translation="[200,360]" width="500" height="80" wrap="true" text="Find any available movie, series, artist or playlist." scale="[0.55,0.55]" color="0x887A82FF" />
+      <!-- Empty state (web: magnifier + Start typing to search). -->
+      <Group id="searchEmptyState">
+        <Poster id="searchEmptyIcon" translation="[1092,400]" width="96" height="96"
+          uri="pkg:/images/search-empty-icon.png" loadDisplayMode="scaleToFit" />
+        <Label id="searchEmptyLabel" translation="[980,560]" width="400" height="50" text="Start typing to search." horizAlign="center" scale="[0.75,0.75]" color="0xF4F0F1FF" />
+      </Group>
+      <Label id="searchPreviewKind" translation="[200,360]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" visible="false" />
+      <Label id="searchPreviewTitle" translation="[200,400]" width="380" height="80" wrap="true" numLines="2" scale="[0.9,0.9]" color="0xFFFFFFFF" visible="false" />
+      <Label id="searchPreviewMeta" translation="[200,500]" width="380" height="30" scale="[0.52,0.52]" color="0xA9B7C9FF" visible="false" />
+      <Label id="searchPreviewOverview" translation="[200,540]" width="380" height="280" wrap="true" vertAlign="top" scale="[0.52,0.52]" color="0xA9B7C9FF" visible="false" />
+      <MarkupGrid id="searchGrid" translation="[700,320]" itemComponentName="PosterCard"
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
-        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
-      <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-      <!-- Sparse residual last (opaque under 20%). -->
+        focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
+      <Label id="searchHint" translation="[200,1020]" width="1700" height="40" text="OK type query  •  Back home" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <Poster id="searchResidual" translation="[0,0]" width="1920" height="1080"
         uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
