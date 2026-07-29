@@ -7,6 +7,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Roku sparse residual assets rebuilt against authentic freezes for all 11
+  surfaces (pairing, profiles, home, search, series, movies, music, playlists,
+  settings, detail, playback). Opaque residual area is leaner (about 2.9–12.3%
+  of stage, all under 20%). Full-surface pure AE=0 outside residual regions
+  triple-verified three consecutive runs with no asset edits between runs.
+
 ### Added
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
