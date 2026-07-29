@@ -21,7 +21,15 @@ sub onContentChanged()
     content = m.top.itemContent
     if content = invalid then return
     m.avatarImage.uri = "pkg:/images/avatar-" + content.presetId + ".png"
-    m.initial.text = content.initial
+    ' Only the synthetic "+" avatar uses a letter/symbol overlay. Preset art
+    ' already includes the mascot illustration (matching tv-web ProfileAvatar).
+    if content.presetId = "add"
+        m.initial.text = content.initial
+        m.initial.visible = true
+    else
+        m.initial.text = ""
+        m.initial.visible = false
+    end if
     m.name.text = content.title
     m.status.text = content.statusText
 end sub

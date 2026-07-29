@@ -7,6 +7,20 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Roku channel residual-region parity assets and `scripts/parity_ae0.py`
+  for SceneGraph vs live `playarr.example.com` AE=0 compares (profiles,
+  home, search, series, movies, music, playlists, settings).
+
+### Fixed
+
+- Roku profiles match tv-web: hide signed-in nav, alien mascot avatars,
+  `WATCHING NOW` status, residual chrome (logo/lang/clients/actions).
+- Roku merge-conflict markers removed from MainScene/package/tests;
+  invalid `--` sequences in XML comments cleaned so `make validate` is green.
+- Roku pairing wordmark "Play"/"arr" flush spacing (no "Play arr" gap).
+
 ### Fixed
 
 - Apple TV movie detail key-art and rails follow SPA CSS tokens
