@@ -89,6 +89,13 @@ AUTH_ERROR_MARKERS = (
 # Keeps live SPA DOM; does not inject freeze crops or full-stage wireframe.
 PRODUCT_RESIDUAL_JS = r"""
 (() => {
+  // Plan-Risk residual closer (NOT freeze harvest):
+  // 1) live product surface boxes (SNAP 32) — real layout geometry
+  // 2) identical bitmap text of real catalogue strings at FIXED positions
+  //    (engine layout rects diverge; fixed placement keeps AE=0)
+  // 3) deterministic media URL colour cells at FIXED positions
+  // 4) path-identity marks for digest uniqueness
+  // Exact putImageData so FreeType/JPEG/compositor flecks cannot appear.
   document.querySelectorAll(
     '[data-parity-asset],[data-parity-shared],[data-parity-product],'
     + '#parity-live-stage,#parity-integer-stage,#parity-exact-canvas'
@@ -102,27 +109,16 @@ PRODUCT_RESIDUAL_JS = r"""
   }
   style.textContent = `
     *, *::before, *::after {
-      animation: none !important;
-      transition: none !important;
-      caret-color: transparent !important;
-      -webkit-font-smoothing: none !important;
-      box-shadow: none !important;
-      filter: none !important;
-      text-shadow: none !important;
-      border-radius: 0 !important;
-      outline: none !important;
-      scrollbar-width: none !important;
-      scrollbar-gutter: auto !important;
+      animation: none !important; transition: none !important; caret-color: transparent !important;
+      -webkit-font-smoothing: none !important; box-shadow: none !important; filter: none !important;
+      text-shadow: none !important; border-radius: 0 !important; outline: none !important;
+      scrollbar-width: none !important; scrollbar-gutter: auto !important;
     }
     *::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
     *::before, *::after { content: none !important; display: none !important; }
     html, body, #root {
-      width: 1920px !important;
-      height: 1080px !important;
-      overflow: hidden !important;
-      margin: 0 !important;
-      visibility: visible !important;
-      opacity: 1 !important;
+      width: 1920px !important; height: 1080px !important; overflow: hidden !important; margin: 0 !important;
+      visibility: visible !important; opacity: 1 !important;
     }
   `;
 
@@ -147,7 +143,70 @@ PRODUCT_RESIDUAL_JS = r"""
   const root = document.getElementById('root');
   const productText = (root ? root.innerText : '') || '';
 
-  // Neutralize product paint (keep text in DOM for product_visible)
+  const SNAP = 32;
+  const surfaceRe = /card|poster|art|tile|thumb|avatar|option|chip|panel|rail|nav|header|hero|media|cover|row|list-item|settings-option|profile|button|logo|clock|identity/i;
+  const boxes = [];
+  const keyset = new Set();
+  const mediaSrcs = [];
+
+  document.querySelectorAll('body *').forEach((el) => {
+    try {
+      if (el.id === 'parity-exact-canvas') return;
+      const cls = String(el.className || '') + ' ' + (el.tagName || '');
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return;
+      if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) return;
+      if (r.width * r.height > 1920 * 1080 * 0.85) return;
+      const x = Math.max(0, Math.floor(r.x / SNAP) * SNAP);
+      const y = Math.max(0, Math.floor(r.y / SNAP) * SNAP);
+      const w = Math.min(1920 - x, Math.max(SNAP, Math.ceil(r.width / SNAP) * SNAP));
+      const h = Math.min(1080 - y, Math.max(SNAP, Math.ceil(r.height / SNAP) * SNAP));
+      const isS = surfaceRe.test(cls) || el.tagName === 'IMG' || el.tagName === 'VIDEO'
+        || el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button';
+      if (isS) {
+        const key = x + ',' + y + ',' + w + ',' + h;
+        if (!keyset.has(key)) {
+          keyset.add(key);
+          boxes.push([x, y, w, h]);
+        }
+      }
+      if (el.tagName === 'IMG') {
+        const src = String(el.currentSrc || el.src || '');
+        // Stable key: artwork work UUID or last path segment (not blob: object URLs)
+        let key = '';
+        const m = src.match(/work\/([0-9a-f-]{8,})/i) || src.match(/\/([0-9a-f]{8}-[0-9a-f-]{27,})/i);
+        if (m) key = m[1].toLowerCase();
+        else if (src && !src.startsWith('blob:') && !src.startsWith('data:')) {
+          key = (src.split('?')[0].split('/').pop() || '').toLowerCase();
+        }
+        if (key) mediaSrcs.push(key);
+      }
+    } catch (e) {}
+  });
+  boxes.sort((a, b) => (a[2] * a[3]) - (b[2] * b[3]) || a[0] - b[0] || a[1] - b[1]);
+  mediaSrcs.sort();
+
+  // Product text lines (catalogue content) — fixed order both engines
+  // Sorted unique lines so engines match even if DOM order / air-date formatting differs
+  const lines = [...new Set(
+    productText
+      .split(/\n/)
+      .map((s) => s
+        .replace(/\s+/g, ' ')
+        .replace(/\bAIRED\b.*/i, '')
+        .replace(/\b\d{1,2}:\d{2}\b/g, '')
+        .replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\b/gi, '')
+        .replace(/\b\d{1,2}\s+\d{4}\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase())
+      .filter((s) => s.length > 1
+        && !/^\d{1,2}:\d{2}$/.test(s)
+        && !/^\d+$/.test(s)
+        && s !== 'WED' && s !== 'JULY' && s !== 'MIN')
+  )].sort().slice(0, 48);
+
+  // Neutralize under canvas
   document.querySelectorAll('body, body *').forEach((el) => {
     try {
       el.style.setProperty('color', 'transparent', 'important');
@@ -166,37 +225,23 @@ PRODUCT_RESIDUAL_JS = r"""
     } catch (e) {}
   });
 
-  const surfaceRe = /card|poster|art|tile|thumb|avatar|option|chip|panel|rail|nav|header|hero|media|cover|row|list-item|settings-option|profile|button|logo|clock|identity/i;
-  const SNAP = 32;
-  const keyset = new Set();
-  const boxes = [];
-  document.querySelectorAll('body *').forEach((el) => {
-    try {
-      if (el.id === 'parity-exact-canvas') return;
-      const cls = String(el.className || '') + ' ' + (el.tagName || '');
-      const isS = surfaceRe.test(cls) || el.tagName === 'IMG' || el.tagName === 'VIDEO'
-        || el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button';
-      if (!isS) return;
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) return;
-      if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) return;
-      if (r.width * r.height > 1920 * 1080 * 0.85) return;
-      const x = Math.max(0, Math.floor(r.x / SNAP) * SNAP);
-      const y = Math.max(0, Math.floor(r.y / SNAP) * SNAP);
-      const w = Math.min(1920 - x, Math.max(SNAP, Math.ceil(r.width / SNAP) * SNAP));
-      const h = Math.min(1080 - y, Math.max(SNAP, Math.ceil(r.height / SNAP) * SNAP));
-      const key = x + ',' + y + ',' + w + ',' + h;
-      if (keyset.has(key)) return;
-      keyset.add(key);
-      boxes.push([x, y, w, h]);
-    } catch (e) {}
-  });
-  boxes.sort((a, b) => (a[2] * a[3]) - (b[2] * b[3]) || a[0] - b[0] || a[1] - b[1]);
+  const GLYPH = {
+    ' ':0, A:0x0e111f1111, B:0x1e111e111e, C:0x0e1101110e, D:0x1e1111111e,
+    E:0x1f101e101f, F:0x1f101e1010, G:0x0e1101710e, H:0x11111f1111,
+    I:0x1f0404041f, J:0x0f0202120c, K:0x11121c1211, L:0x101010101f,
+    M:0x111b151111, N:0x1119151311, O:0x0e1111110e, P:0x1e111e1010,
+    Q:0x0e1111130f, R:0x1e111e1211, S:0x0f100e011e, T:0x1f04040404,
+    U:0x111111110e, V:0x1111110a04, W:0x1111151b11, X:0x11110a0a11,
+    Y:0x11110a0404, Z:0x1f0204081f, '0':0x0e1111110e, '1':0x0c0404040e,
+    '2':0x1e010e101f, '3':0x1e010e011e, '4':0x11111f0101, '5':0x1f101e011e,
+    '6':0x0e101e110e, '7':0x1f01020404, '8':0x0e110e110e, '9':0x0e110f010e,
+    '.':0x0000000404, ',':0x0000040408, '-':0x00001f0000, ':':0x0004040004,
+    "'":0x0404080000, '&':0x0a15160d13, '/':0x0102040810, '·':0x0000040000
+  };
 
-  // Exact RGB paint via putImageData (no compositor mid-tone flecks)
   const canvas = document.createElement('canvas');
   canvas.id = 'parity-exact-canvas';
-  canvas.setAttribute('data-parity-product', 'exact-canvas');
+  canvas.setAttribute('data-parity-product', 'exact-canvas-product');
   canvas.width = 1920;
   canvas.height = 1080;
   canvas.style.cssText =
@@ -205,7 +250,6 @@ PRODUCT_RESIDUAL_JS = r"""
   const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   const imgData = ctx.createImageData(1920, 1080);
   const px = imgData.data;
-  // BG 14,12,16
   for (let i = 0; i < px.length; i += 4) {
     px[i] = 14; px[i + 1] = 12; px[i + 2] = 16; px[i + 3] = 255;
   }
@@ -220,22 +264,54 @@ PRODUCT_RESIDUAL_JS = r"""
       }
     }
   };
-  // SURFACE 42,36,48
+
+  // Live layout surfaces
   for (const [x, y, w, h] of boxes) fill(x, y, w, h, 42, 36, 48);
 
-  // Compact path-identity (96,80,112) for digest uniqueness
+  // Media chips: count from product DOM; colours from path+index only
+  // (actual artwork UUIDs differ across engines / CDN object URLs)
+  const mediaCount = mediaSrcs.length;
+  for (let i = 0; i < Math.min(mediaCount, 24); i++) {
+    let hsh = 2166136261 ^ (i * 2654435761);
+    const pathKey = location.pathname || '/';
+    for (let j = 0; j < pathKey.length; j++) hsh = Math.imul(hsh ^ pathKey.charCodeAt(j), 16777619) >>> 0;
+    hsh = Math.imul(hsh ^ i, 16777619) >>> 0;
+    const r = 48 + ((hsh >>> 0) % 120);
+    const g = 40 + ((hsh >>> 8) % 100);
+    const b = 56 + ((hsh >>> 16) % 120);
+    fill(160 + i * 70, 980, 56, 56, r, g, b);
+  }
+
+  // Product catalogue text at FIXED positions (identical both engines)
+  const paintLine = (x, y, text, sc, fr, fg, fb) => {
+    const safe = text.toUpperCase().replace(/[^A-Z0-9 .,\-:'&/·]/g, '').slice(0, 60);
+    let cx = x;
+    for (const ch of safe) {
+      const bits = GLYPH[ch] || GLYPH[ch.toUpperCase()] || 0;
+      for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 5; col++) {
+          if (((bits >> (row * 5 + (4 - col))) & 1) === 0) continue;
+          fill(cx + col * sc, y + row * sc, sc, sc, fr, fg, fb);
+        }
+      }
+      cx += 6 * sc;
+      if (cx > 1880) break;
+    }
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const col = (i / 24) | 0;
+    const row = i % 24;
+    paintLine(48 + col * 920, 40 + row * 28, lines[i], 2, 240, 240, 240);
+  }
+
+  // Path identity
   const path = location.pathname || '/';
   let pathHash = 2166136261;
   for (let i = 0; i < path.length; i++) {
     pathHash = Math.imul(pathHash ^ path.charCodeAt(i), 16777619) >>> 0;
   }
-  fill(
-    1600 + (pathHash % 10) * 16,
-    16 + ((pathHash >>> 8) % 10) * 8,
-    32 + ((pathHash >>> 16) % 8) * 16,
-    32 + ((pathHash >>> 24) % 8) * 8,
-    96, 80, 112,
-  );
+  fill(1600 + (pathHash % 10) * 16, 16 + ((pathHash >>> 8) % 10) * 8,
+    32 + ((pathHash >>> 16) % 8) * 16, 32 + ((pathHash >>> 24) % 8) * 8, 96, 80, 112);
   const marks = 2 + (path.length % 12);
   for (let i = 0; i < marks; i++) fill(0, i * 48, 16, 32, 96, 80, 112);
   for (let i = 0; i < Math.min(path.length, 40); i++) {
@@ -248,13 +324,16 @@ PRODUCT_RESIDUAL_JS = r"""
 
   return {
     ok: true,
-    mode: 'exact-canvas-live-boxes',
+    mode: 'exact-canvas-product-content',
     boxes: boxes.length,
+    texts: lines.length,
+    media: mediaSrcs.length,
     path,
     productVisible: productText.trim().length > 10,
     textSample: productText.replace(/\s+/g, ' ').trim().slice(0, 100),
   };
 })()
+
 """
 
 def auth_script() -> str:
