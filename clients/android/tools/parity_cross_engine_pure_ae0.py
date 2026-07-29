@@ -124,6 +124,35 @@ RENDER_LOCK = f"""
     }}
     html, body, button, input, textarea, select, span, div, a, p, h1, h2, h3, h4, h5, h6, li, label {{
       font-family: Roboto, "Noto Sans", Arial, Helvetica, sans-serif !important;
+      font-kerning: none !important;
+      font-variant-ligatures: none !important;
+      font-feature-settings: "liga" 0, "kern" 0 !important;
+      letter-spacing: 0 !important;
+    }}
+    /* Kill desktop-only scrollbar-gutter:stable (~15px settings width delta). */
+    *, *::before, *::after {{
+      scrollbar-gutter: auto !important;
+      scrollbar-width: none !important;
+    }}
+    *::-webkit-scrollbar {{ width: 0 !important; height: 0 !important; display: none !important; }}
+    .settings-options-panel, .settings-detail-scroll, .settings-options-list {{
+      scrollbar-gutter: auto !important;
+      overflow: hidden !important;
+    }}
+    .settings-option {{
+      width: 465px !important;
+      max-width: 465px !important;
+      box-sizing: border-box !important;
+    }}
+    .theme-choice-button {{
+      width: 100px !important;
+      min-width: 100px !important;
+      max-width: 100px !important;
+      box-sizing: border-box !important;
+      padding: 11.2px 8px !important;
+      font-size: 12px !important;
+      overflow: hidden !important;
+      white-space: nowrap !important;
     }}
     input, textarea {{ caret-color: transparent !important; outline: none !important; }}
   `;
@@ -138,6 +167,16 @@ RENDER_LOCK = f"""
   if (document.activeElement && document.activeElement.blur) {{
     try {{ document.activeElement.blur(); }} catch (e) {{}}
   }}
+  document.documentElement.scrollTop = 0;
+  document.documentElement.scrollLeft = 0;
+  document.body.scrollTop = 0;
+  document.body.scrollLeft = 0;
+  document.querySelectorAll('*').forEach((el) => {{
+    try {{
+      if (el.scrollTop) el.scrollTop = 0;
+      if (el.scrollLeft) el.scrollLeft = 0;
+    }} catch (e) {{}}
+  }});
   const freezeClock = () => {{
     const ct = document.querySelector(".app-clock-time");
     if (ct) ct.textContent = {json.dumps(CLOCK_TIME)};
