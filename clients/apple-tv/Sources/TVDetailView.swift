@@ -191,14 +191,23 @@ struct TVWorkDetailView: View {
     }
 
     /// SPA `.tv-key-art img` with dark-theme filter chain.
+    ///
+    /// Parity fixtures are pre-baked with CSS `grayscale + contrast(0.82) +
+    /// brightness` and opacity-over-base already applied (see Fixtures/), so
+    /// re-running SwiftUI filters would double-darken. Live API art still gets
+    /// the full CSS-equivalent chain with multiplicative brightness via
+    /// `colorMultiply` (SwiftUI `.brightness` is additive and was too dark).
     @ViewBuilder
     private func detailKeyArt(detail: WorkDetail, size: CGSize) -> some View {
         let keyW = size.width * DesignTokens.Shell.keyArtWidthFraction
         let keyH = size.height * DesignTokens.Shell.keyArtHeightFraction
+        let useParityFixture = TVParityLaunch.requestedScreen != nil
+            && (TVParityArtwork.libraryHero(kind: detail.work.kind) != nil
+                || TVParityArtwork.heroImage != nil)
         Group {
             if let fixture = TVParityArtwork.libraryHero(kind: detail.work.kind)
                 ?? TVParityArtwork.heroImage,
-               TVParityLaunch.requestedScreen != nil || backdropURL(for: detail.work) == nil {
+               useParityFixture || backdropURL(for: detail.work) == nil {
                 fixture
                     .resizable()
                     .scaledToFill()
@@ -222,10 +231,7 @@ struct TVWorkDetailView: View {
             vertical: .top
         ))
         .clipped()
-        .saturation(0)
-        .contrast(DesignTokens.Shell.keyArtContrast)
-        .brightness(DesignTokens.Shell.keyArtBrightness)
-        .opacity(DesignTokens.Shell.keyArtOpacity)
+        .modifier(TVKeyArtFilterModifier(prebaked: useParityFixture))
         .scaleEffect(DesignTokens.Shell.keyArtScale)
         .mask(
             LinearGradient(
@@ -501,5 +507,28 @@ struct TVWorkDetailView: View {
             ?? work.images.first(where: { $0.kind == .poster })?.url
         guard let path else { return nil }
         return apiClient.resolvedURL(forPath: path)
+    }
+}
+
+/// CSS-equivalent key-art filter chain.
+///
+/// - Prebaked fixtures: greyscale/contrast/brightness already in the asset;
+///   only apply SPA opacity.
+/// - Live art: `grayscale(1) contrast(0.82) brightness(0.6)` + opacity 0.72.
+///   SwiftUI `.brightness` is additive; `colorMultiply` matches CSS multiply.
+private struct TVKeyArtFilterModifier: ViewModifier {
+    let prebaked: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if prebaked {
+            content.opacity(DesignTokens.Shell.keyArtOpacity)
+        } else {
+            content
+                .saturation(0)
+                .contrast(DesignTokens.Shell.keyArtContrast)
+                .colorMultiply(Color(white: 0.6))
+                .opacity(DesignTokens.Shell.keyArtOpacity)
+        }
     }
 }

@@ -33,6 +33,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV movie key-art uses prebaked greyscale/contrast fixtures with
+  SPA opacity only (no double filter); live art uses colorMultiply for CSS
+  brightness(0.6). Cast tiles cropped on SPA grid (x=883, pitch 193).
+  Honest suite movie AE 7.24% → 4.40%.
 - Apple TV movie-detail rail keeps SPA x≈883 for Chapters/Cast by
   clipping overflow chapter rows (horizontal scroll) and adding measured
   cast-track top inset; cast fixtures refreshed from SPA crops. Honest

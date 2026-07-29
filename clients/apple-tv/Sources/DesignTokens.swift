@@ -193,8 +193,9 @@ enum DesignTokens {
         static let keyArtOpacity: CGFloat = 0.72
         /// dark: `filter: contrast(0.82)`
         static let keyArtContrast: CGFloat = 0.82
-        /// dark: `filter: brightness(0.6)` — SwiftUI brightness is additive; map via opacity stack.
-        static let keyArtBrightness: CGFloat = -0.15
+        /// dark: CSS `brightness(0.6)` is multiplicative — use `colorMultiply(Color(white: 0.6))`
+        /// on live art; prebaked fixtures already include the multiply. Kept for docs/tests.
+        static let keyArtBrightness: CGFloat = 0.6
         /// mask solid to 72% then fade (`#000 0%, #000 72%, transparent 100%`)
         static let keyArtMaskSolidEnd: CGFloat = 0.72
         /// `object-position: center 20%` → alignment unit point y
