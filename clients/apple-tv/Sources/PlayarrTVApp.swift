@@ -6,16 +6,12 @@ struct PlayarrTVApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // Always use production SwiftUI shell. Parity suite forces tabs via
-            // `-PlayarrParityScreen` (handled inside TVRootView) — web-ref paint
-            // is only used when `-PlayarrParityWebRefBaseURL` is set (AE0 tooling).
-            if let parityScreen = TVParityLaunch.requestedScreen,
-               TVParityLaunch.webRefBaseURL != nil {
-                TVParityRootView(screen: parityScreen)
-            } else {
-                TVRootView()
-                    .environment(environment)
-            }
+            // Always production SwiftUI shell. Honest parity captures use
+            // `-PlayarrParityScreen` only (handled inside TVRootView). Full-bleed
+            // web-ref paint (`-PlayarrParityWebRefBaseURL` / TVParityRootView) is
+            // intentionally not wired — it cannot satisfy native-vs-SPA AE.
+            TVRootView()
+                .environment(environment)
         }
     }
 }

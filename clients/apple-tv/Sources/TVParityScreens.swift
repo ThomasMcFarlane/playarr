@@ -20,9 +20,8 @@ enum TVParityScreenID: String, CaseIterable {
 
 enum TVParityLaunch {
     static let argument = "-PlayarrParityScreen"
-    /// When set with a screen id, paints the remote web-ref PNG full-bleed
-    /// (Android `parity_ae0.py` technique) so AE against Playwright captures
-    /// of `playarr.example.com` can be zero for the capture pipeline.
+    /// Historical paint flag. Always ignored — honest parity never paints
+    /// web-ref PNGs into the simulator (see PlayarrTVApp).
     static let webRefBaseArgument = "-PlayarrParityWebRefBaseURL"
 
     static var requestedScreen: TVParityScreenID? {
@@ -33,15 +32,8 @@ enum TVParityLaunch {
         return TVParityScreenID(rawValue: args[idx + 1])
     }
 
-    /// Base URL whose `/{screen-id}.png` hosts the Playwright reference frame.
-    static var webRefBaseURL: URL? {
-        let args = ProcessInfo.processInfo.arguments
-        guard let idx = args.firstIndex(of: webRefBaseArgument),
-              args.indices.contains(idx + 1) else {
-            return nil
-        }
-        return URL(string: args[idx + 1])
-    }
+    /// Always `nil`. Web-ref paint is disabled for honest native-vs-SPA AE.
+    static var webRefBaseURL: URL? { nil }
 }
 
 /// Static fixture data so pixel diffs are not poisoned by live catalogue churn.
@@ -178,35 +170,20 @@ enum TVParityFixtures {
     }
 }
 
-/// Root used only when `-PlayarrParityScreen` is present.
-///
-/// If `-PlayarrParityWebRefBaseURL` is also set, paints that screen's web-ref
-/// PNG full-bleed at 1920×1080 (same technique as Android `parity_ae0.py`) so
-/// the native capture can match Playwright of playarr.example.com bit-exactly.
-/// Otherwise renders design-token fixture chrome for structural token checks.
+/// Legacy fixture-only root. Honest parity does **not** use this view —
+/// `PlayarrTVApp` always mounts `TVRootView` so simctl captures hit production
+/// SwiftUI. Kept for offline structural checks; web-ref paint is disabled.
 struct TVParityRootView: View {
     let screen: TVParityScreenID
-    private let webRefURL: URL?
 
     init(screen: TVParityScreenID) {
         self.screen = screen
-        if let base = TVParityLaunch.webRefBaseURL {
-            self.webRefURL = base.appendingPathComponent("\(screen.rawValue).png")
-        } else {
-            self.webRefURL = nil
-        }
     }
 
     var body: some View {
-        Group {
-            if let webRefURL {
-                TVParityWebRefPaintView(url: webRefURL)
-            } else {
-                ZStack {
-                    TVStageBackground()
-                    content
-                }
-            }
+        ZStack {
+            TVStageBackground()
+            content
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
@@ -661,42 +638,4 @@ struct TVParityPlayerFixtureView: View {
     }
 }
 
-/// Full-bleed 1920×1080 paint of a Playwright web-ref PNG (Android AE0 path).
-struct TVParityWebRefPaintView: View {
-    let url: URL
-    @State private var image: UIImage?
 
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFill()
-                    .frame(width: TVTheme.canvasWidth, height: TVTheme.canvasHeight)
-                    .clipped()
-            } else {
-                ProgressView("Loading web-ref…")
-                    .tint(.white)
-                    .foregroundStyle(.white)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: url) {
-            await load()
-        }
-    }
-
-    @MainActor
-    private func load() async {
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let ui = UIImage(data: data) {
-                image = ui
-            }
-        } catch {
-            image = nil
-        }
-    }
-}
