@@ -180,6 +180,8 @@ sub init()
     m.currentContinueWorks = []
     m.visibleRails = []
     m.homeFocusIndex = 0
+    m.homeColIndex = 0
+    m.homeLeftProxy = m.top.findNode("homeLeftProxy")
     m.navDockMode = false
     m.navDockIndex = 0
     m.navDockReturnState = "home"
@@ -3028,7 +3030,13 @@ sub onHomeItemFocused(event as Object)
     itemIndex = position[1]
     works = worksForRow(event.GetRoSGNode())
     if works = invalid or itemIndex < 0 or itemIndex >= works.Count() then return
+    m.homeColIndex = itemIndex
     updateHeroFromWork(works[itemIndex])
+    ' Column 0: hand focus to homeLeftProxy so Left can enter the dock
+    ' (RowList never bubbles Left/Right to Scene onKeyEvent).
+    if itemIndex = 0 and m.homeLeftProxy <> invalid and not m.navDockMode
+        m.homeLeftProxy.SetFocus(true)
+    end if
 end sub
 
 sub onHomeItemSelected(event as Object)
@@ -4590,16 +4598,28 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     else if state = "home" and m.navDockMode and key = "OK"
         selectNavDockItem()
         return true
+    else if state = "home" and key = "left"
+        ' homeLeftProxy (col 0) or Scene focus: Left enters nav dock (web parity).
+        enterNavDock()
+        return true
+    else if state = "home" and key = "right" and m.homeLeftProxy <> invalid and m.homeLeftProxy.IsInFocusChain()
+        ' From leftmost proxy, Right returns into the focused rail at col 0.
+        focusCurrentHomeRail()
+        return true
+    else if state = "home" and key = "OK" and m.homeLeftProxy <> invalid and m.homeLeftProxy.IsInFocusChain()
+        ' Select the leftmost card of the focused rail.
+        if m.visibleRails.Count() > 0
+            idx = m.homeFocusIndex
+            if idx < 0 or idx >= m.visibleRails.Count() then idx = 0
+            works = m.visibleRails[idx].works
+            if works <> invalid and works.Count() > 0
+                openWorkDetail(works[0], "home")
+                return true
+            end if
+        end if
+        return true
     else if state = "home" and key = "up"
-        ' A focused RowList (Home's rails) consumes Left/Right itself as its
-        ' own primary navigation axis and never bubbles them to onKeyEvent at
-        ' all (confirmed live via debug-console tracing: onKeyEvent never
-        ' even printed for a Left keypress here) -- only Up/Down reliably
-        ' bubble up when a RowList has real focus. So unlike tv-web's real
-        ' spatial layout (Left enters the fixed left-edge dock from
-        ' anywhere), entry into the dock on this platform has to ride the one
-        ' direction that actually reaches the Scene: Up, from the topmost
-        ' rail, exactly like the old homeShortcuts row this replaced.
+        ' Up from top rail also enters dock (backup to Left / homeLeftProxy).
         if m.homeFocusIndex = 0
             enterNavDock()
             return true

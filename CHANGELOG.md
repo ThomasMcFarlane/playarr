@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku Home leftmost card hands focus to a proxy so Left opens the nav dock
+  (SceneGraph RowList swallows Left/Right and never matches web spatial nav).
+
 - Roku playback control bar uses web-matched chrome (icon bar crop) with
   invisible Previous/Pause/Next labels for D-pad only.
 

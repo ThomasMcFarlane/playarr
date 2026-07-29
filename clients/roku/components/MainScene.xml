@@ -6,6 +6,12 @@
   <children>
     <Rectangle width="1920" height="1080" color="0x070B14FF" />
 
+    <!-- Focus proxy: when a Home rail is on column 0, focus moves here so Left
+         can enter the nav dock (RowList swallows Left/Right and never bubbles).
+         Invisible; size 1×1 off-content. -->
+    <Rectangle id="homeLeftProxy" translation="[0,0]" width="1" height="1"
+      color="0x00000000" focusable="true" visible="true" />
+
     <Group id="statusGroup" visible="true">
       <!--
         Small centered logo mark added for visual consistency with the
