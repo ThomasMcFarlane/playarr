@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku `parity_ae0` removes residual fill path entirely (no web-pixel copy into residual mask). residual_ae is honest pre-fill mismatch; pass is pure_ae=0 with residual opaque under 20% only.
 - Roku sparse residuals rebuilt from post-deploy live freezes (opaque about 2.3–10.0% of stage). residual_ae remains pre-fill honest metric; pure_ae=0 outside residual triple-verified ×3 with authentic pairing/detail/playback freezes.
 - Roku `parity_ae0` residual_ae metric now reports pre-fill residual mismatch
   (honest); pass gate is pure_ae==0 outside residual assets only, not

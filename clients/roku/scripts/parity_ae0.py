@@ -8,7 +8,10 @@ Pass criteria (plan + OBJECTIVE):
     alpha only on residual pixels (opaque area counts toward residual %).
   - Residual opaque/rect area must stay < 20% of the stage (no full-stage
     opaque overpaint).
-  - After residual fill inside residual regions only, residual AE is 0.
+  - residual_ae reports pre-fill mismatch inside residual assets (honest;
+    never forced to 0 by copying web pixels into the residual mask).
+  - Pass requires pure_ae == 0 and residual opaque area < 20% of stage.
+  - No pure_frac / pure<60% acceptance gate.
 
 Residual assets are fixed at package time. A wrong Roku frame with pure
 outside residual regions fails pure_ae (not theater).
@@ -155,26 +158,21 @@ def compare_surface(name: str) -> dict[str, Any]:
     pure_ae = int(pure_mask.sum())
 
     residual_diff = full_diff & rmask
-    residual_ae_before = int(residual_diff.sum())
-
-    # residual_ae is the pre-fill residual mismatch count (honest metric).
-    # After fill residual_ae is always 0 by construction and is NOT a pass gate.
-    # The only structural gate is pure_ae == 0 outside residual assets.
-    residual_ae = residual_ae_before
-
-    filled = r.copy()
-    if rarea:
-        filled[rmask] = w[rmask]
-    residual_ae_after_fill = int(((filled != w).any(axis=2) & rmask).sum()) if rarea else 0
+    # residual_ae = pre-fill mismatch inside residual assets only (honest).
+    # There is NO residual-fill path: we never copy web pixels into residual
+    # regions to force residual_ae to 0. That was residual theater.
+    residual_ae = int(residual_diff.sum())
 
     # Full-stage opaque residual: stage_fill if residual area >= 20%.
     # Sparse residual Posters are allowed only when opaque area < 20%.
     stage_fill = rfrac >= MAX_RESIDUAL_FRAC
+    # Pass gate: pure AE outside residual must be 0 (100% structure match
+    # outside residual assets). residual_ae is reported but never zeroed by fill.
+    # No pure_frac / pure<60% acceptance gate.
     ok = pure_ae == 0 and not stage_fill
 
     diff_dir = OUT / "diffs"
     diff_dir.mkdir(exist_ok=True)
-    Image.fromarray(filled).save(diff_dir / f"{name}-filled.png")
     ImageChops.difference(Image.fromarray(r), Image.fromarray(w)).point(
         lambda x: min(255, x * 6)
     ).save(diff_dir / f"{name}-pure-diff.png")
@@ -187,9 +185,7 @@ def compare_surface(name: str) -> dict[str, Any]:
         "surface": name,
         "pure_ae": pure_ae,
         "pure_pct": round(100 * pure_ae / STAGE, 4),
-        "residual_ae_before": residual_ae_before,
         "residual_ae": residual_ae,
-        "residual_ae_after_fill": residual_ae_after_fill,
         "residual_asset_area": rarea,
         "residual_asset_pct": round(100 * rfrac, 4),
         "residual_mode": rmode,
