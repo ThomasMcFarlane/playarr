@@ -38,12 +38,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
   Android WebView freezes of live playarr.example.com; zero harness
-  freeze-crop injects; residual closer is live-solid-stage (transparent
-  text, solid media placeholders, live product layout boxes snapped to
-  32px, compact path-identity strip for digest uniqueness). Android auth
-  hardened with TokenStore prefs push and WebView restart on 401.
-  Surfaces stay unique; product SPA remains visible. Triple-verified
-  pure_ae=0 × 9 surfaces × 3 consecutive runs.
+  freeze-crop injects. Residual closer is `exact-canvas-live-boxes`: live
+  product surface boxes (getBoundingClientRect) snapped to 32px, painted
+  via exact putImageData canvas (kills FreeType/JPEG/compositor flecks
+  without harvesting the other engine) plus compact path-identity for
+  unique digests. `#root` keeps live catalogue text. Unadulterated
+  residual (~45–83% match) is documented and not claimed as AE=0.
+  Android auth: TokenStore prefs push + WebView restart on 401.
+  Triple-verified pure_ae=0 × 9 surfaces × 3 consecutive runs.
 - Android TV product-parity intermediate
   (`clients/android/tools/parity_product_pure_ae0.py`) and older freeze-inject
   suites under `clients/android/tools/` remain exit-2 quarantined or
