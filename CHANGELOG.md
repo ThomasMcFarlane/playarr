@@ -14,6 +14,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   greyscale + contrast/brightness + opacity + right-edge fade for TV stage
   key-art, cached as a PNG derivative so every client reuses one bake.
 
+### Changed
+
+- Android TV device-link screen matches web `/login/qr`: centred Welcome home /
+  Sign in to Playarr copy, soft pink glow, white 12dp / 18dp QR frame with ECC
+  M and quiet-zone margin 2, mono user code, and a five-minute refresh countdown.
+
 ### Fixed
 
 - Apple TV production shell is a real HStack (nav column + stage) instead of a
@@ -173,11 +179,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Standard Playarr Web sign-in can replace its credential fields with a
-  QR/manual-code login for the selected server while retaining a manual
-  sign-in action. Device codes show a five-minute countdown and renew
-  automatically at expiry; direct-server and hosted-link codes share that
-  lifetime.
+- Standard Playarr Web sign-in now offers a separate `/login/qr` route in the
+  same login shell, replacing only the credential form with the hosted
+  QR/manual-code flow and a manual sign-in action. The approving device
+  selects the Playarr Server, so the QR URL carries no server query. TV and
+  VIDAA modes open QR sign-in by default. Codes show a five-minute countdown
+  and renew automatically at expiry.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight

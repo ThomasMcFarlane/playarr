@@ -47,6 +47,22 @@ class PlayarrLocalizationTest {
             "Pairing code {{code}}",
             interpolatePlayarrTranslation("Pairing code {{code}}", emptyMap()),
         )
+        assertEquals(
+            "Code refreshes in 4:51",
+            PlayarrLanguageState("en", PlayarrResolvedLanguage.English).text(
+                PlayarrString.DeviceLoginRefreshesIn,
+                mapOf("time" to formatDeviceCodeCountdown(291)),
+            ),
+        )
+    }
+
+    @Test
+    fun `device code countdown matches web m ss formatting`() {
+        assertEquals("0:00", formatDeviceCodeCountdown(0))
+        assertEquals("0:09", formatDeviceCodeCountdown(9))
+        assertEquals("4:51", formatDeviceCodeCountdown(291))
+        assertEquals("5:00", formatDeviceCodeCountdown(300))
+        assertEquals("0:00", formatDeviceCodeCountdown(-3))
     }
 
     @Test

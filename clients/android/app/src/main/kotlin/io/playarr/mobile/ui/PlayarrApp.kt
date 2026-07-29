@@ -42,21 +42,25 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -66,6 +70,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.playarr.mobile.BuildConfig
 import io.playarr.mobile.R
@@ -84,11 +92,11 @@ import io.playarr.shared.auth.model.toTokenResponse
 import io.playarr.shared.auth.remote.LoginApi
 import io.playarr.shared.data.config.ServerConfigStore
 import io.playarr.shared.data.remote.PlayarrApi
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.qrcode.QRCodeWriter
 import java.net.URI
 import javax.inject.Inject
+import kotlin.math.max
+import kotlin.math.min
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -288,7 +296,7 @@ internal class LoginViewModel @Inject constructor(
     }
 
     fun pairTelevision() {
-        if (_pairing.value == PairingState.Requesting || _pairing.value is PairingState.Waiting) return
+        if (_pairing.value == PairingState.Requesting) return
         viewModelScope.launch {
             _pairing.value = PairingState.Requesting
             runCatching {
@@ -300,12 +308,13 @@ internal class LoginViewModel @Inject constructor(
             }.onSuccess { code ->
                 _pairing.value = PairingState.Waiting(code)
                 hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
+                    // Ignore stale polls after a manual/auto refresh started a new code.
+                    if (_pairing.value !is PairingState.Waiting) return@collect
                     when (result) {
                         HostedLinkPollResult.AuthorizationPending -> Unit
                         HostedLinkPollResult.Expired -> {
-                            _pairing.value = PairingState.Failed(
-                                PairingFailure.Localized(PlayarrString.DeviceLoginCodeExpired),
-                            )
+                            // Match web /login/qr: renew immediately instead of trapping the user.
+                            pairTelevision()
                         }
                         is HostedLinkPollResult.Failed -> {
                             _pairing.value = PairingState.Failed(PairingFailure.Message(result.message))
@@ -672,118 +681,179 @@ private fun LoginField(
     }
 }
 
+/**
+ * Television pairing UI matches web `https://playarr.example.com/login/qr`
+ * (`QrLoginPage` + embedded `DeviceLogin`): centered panel, soft pink glow,
+ * framed QR (240 + 12 white border, 18 radius, soft shadow), mono user code,
+ * and a countdown refresh timer capped at five minutes.
+ */
 @Composable
 private fun TelevisionPairingScreen(
     state: PairingState,
     onStart: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        Box(
-            modifier = Modifier
-                .weight(0.55f)
-                .fillMaxHeight()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(WebPink.copy(alpha = 0.08f), WebSurface),
-                        radius = 740f,
-                    ),
+    val language = LocalPlayarrLanguage.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(WebSurface)
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(WebPink.copy(alpha = 0.14f), Color.Transparent),
+                    radius = 820f,
                 ),
-        )
-        Box(
-            modifier = Modifier.weight(1.45f).fillMaxHeight(),
-            contentAlignment = Alignment.Center,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 40.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth().padding(70.dp),
-                horizontalAlignment = Alignment.Start,
-            ) {
-                PlayarrPairingBrand()
-                Spacer(Modifier.height(70.dp))
-                Text(
-                    playarrString(PlayarrString.DeviceLoginKicker).uppercase(LocalPlayarrLanguage.current.locale),
-                    color = WebInkMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 2.sp,
-                )
-                Text(
-                    playarrString(PlayarrString.DeviceLoginTitle),
-                    color = WebInk,
-                    fontSize = 82.sp,
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = (-4).sp,
-                    lineHeight = 86.sp,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Spacer(Modifier.height(52.dp))
-                when (state) {
-                    PairingState.Idle, PairingState.Requesting -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(18.dp),
-                        ) {
-                            CircularProgressIndicator(color = WebPink)
-                            Text(playarrString(PlayarrString.DeviceLoginCreatingCode), color = WebInkMuted)
-                        }
-                    }
-                    is PairingState.Waiting -> {
-                        val pairingDescription = playarrString(
-                            PlayarrString.DeviceLoginPairingCode,
-                            "code" to state.code.userCode,
+            Text(
+                playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
+                color = WebInkMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.4.sp,
+            )
+            Text(
+                playarrString(PlayarrString.LoginHeading),
+                color = WebInk,
+                fontSize = 64.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-3.2).sp,
+                lineHeight = 62.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            Text(
+                playarrString(PlayarrString.LoginQrDescription),
+                color = WebInkMuted,
+                fontSize = 18.sp,
+                lineHeight = 26.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(max = 420.dp)
+                    .padding(top = 16.dp, bottom = 36.dp),
+            )
+
+            when (state) {
+                PairingState.Idle, PairingState.Requesting -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        CircularProgressIndicator(color = WebPink)
+                        Text(
+                            playarrString(PlayarrString.DeviceLoginCreatingCode),
+                            color = WebInkMuted,
+                            fontSize = 16.sp,
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(72.dp),
-                        ) {
-                            PlayarrQrCode(
-                                state.code.verificationUriComplete,
-                                playarrString(PlayarrString.DeviceLoginQrLabel),
-                                Modifier.size(240.dp),
-                            )
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Text(playarrString(PlayarrString.DeviceLoginScanQr), color = WebInkMuted, fontSize = 18.sp)
-                                Text(
-                                    state.code.verificationUri,
-                                    color = WebInk,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Text(playarrString(PlayarrString.DeviceLoginEnterCode), color = WebInkMuted, fontSize = 18.sp)
-                                Text(
-                                    state.code.userCode,
-                                    color = WebInk,
-                                    fontSize = 68.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 9.sp,
-                                    maxLines = 1,
-                                    modifier = Modifier.semantics { contentDescription = pairingDescription },
-                                )
-                                Text(
-                                    playarrString(PlayarrString.DeviceLoginWaitingApproval),
-                                    color = WebInkMuted,
-                                    fontSize = 12.sp,
-                                )
-                            }
-                        }
                     }
-                    is PairingState.Failed -> {
-                        Column(
-                            modifier = Modifier.widthIn(max = 520.dp),
-                            verticalArrangement = Arrangement.spacedBy(18.dp),
-                        ) {
-                            Text(
-                                when (val failure = state.failure) {
-                                    is PairingFailure.Localized -> playarrString(failure.key)
-                                    is PairingFailure.Message -> failure.text
-                                },
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Button(onClick = onStart) { Text(playarrString(PlayarrString.DeviceLoginTryAgain)) }
+                }
+                is PairingState.Waiting -> {
+                    val pairingDescription = playarrString(
+                        PlayarrString.DeviceLoginPairingCode,
+                        "code" to state.code.userCode,
+                    )
+                    // Web caps hosted codes at 5 minutes for the refresh UX.
+                    val lifetimeSeconds = min(
+                        5 * 60L,
+                        max(1L, state.code.expiresIn),
+                    ).toInt()
+                    var secondsRemaining by remember(state.code.deviceCode) {
+                        mutableIntStateOf(lifetimeSeconds)
+                    }
+                    LaunchedEffect(state.code.deviceCode) {
+                        secondsRemaining = lifetimeSeconds
+                        while (secondsRemaining > 0) {
+                            delay(1_000)
+                            secondsRemaining -= 1
+                        }
+                        onStart()
+                    }
+
+                    PlayarrQrCode(
+                        value = state.code.verificationUriComplete,
+                        contentDescription = playarrString(PlayarrString.DeviceLoginQrLabel),
+                        modifier = Modifier.size(240.dp),
+                    )
+                    Spacer(Modifier.height(28.dp))
+                    Text(
+                        playarrString(PlayarrString.DeviceLoginScanQr),
+                        color = WebInkMuted,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        state.code.verificationUri,
+                        color = WebInk,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        playarrString(PlayarrString.DeviceLoginEnterCode),
+                        color = WebInkMuted,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    Text(
+                        state.code.userCode,
+                        color = WebInk,
+                        fontSize = 56.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 8.sp,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .semantics { contentDescription = pairingDescription },
+                    )
+                    Text(
+                        playarrString(PlayarrString.DeviceLoginWaitingApproval),
+                        color = WebInkMuted,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
+                    Text(
+                        playarrString(
+                            PlayarrString.DeviceLoginRefreshesIn,
+                            "time" to formatDeviceCodeCountdown(secondsRemaining),
+                        ),
+                        color = WebInkSoft,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+                is PairingState.Failed -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.widthIn(max = 420.dp),
+                    ) {
+                        Text(
+                            when (val failure = state.failure) {
+                                is PairingFailure.Localized -> playarrString(failure.key)
+                                is PairingFailure.Message -> failure.text
+                            },
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            fontSize = 16.sp,
+                        )
+                        Button(onClick = onStart) {
+                            Text(playarrString(PlayarrString.DeviceLoginTryAgain))
                         }
                     }
                 }
@@ -792,19 +862,18 @@ private fun TelevisionPairingScreen(
     }
 }
 
-@Composable
-private fun PlayarrPairingBrand() {
-    Column(horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(
-            painter = painterResource(R.drawable.playarr_mark),
-            contentDescription = null,
-            tint = Color.Unspecified,
-            modifier = Modifier.size(48.dp),
-        )
-        Text("Playarr", color = WebInkSoft, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-    }
+/** Matches web `formatDeviceCodeCountdown` (`m:ss`). */
+internal fun formatDeviceCodeCountdown(seconds: Int): String {
+    val clamped = max(0, seconds)
+    val minutes = clamped / 60
+    val remainder = clamped % 60
+    return "$minutes:${remainder.toString().padStart(2, '0')}"
 }
 
+/**
+ * Pixel-match web `.device-login-qr`: 240px matrix, margin 2, ECC M,
+ * white 12px frame, 18px radius, soft drop shadow.
+ */
 @Composable
 internal fun PlayarrQrCode(
     value: String,
@@ -812,13 +881,16 @@ internal fun PlayarrQrCode(
     modifier: Modifier = Modifier,
 ) {
     val bitmap = remember(value) {
-        val size = 260
+        val size = 240
         val matrix = QRCodeWriter().encode(
             value,
             BarcodeFormat.QR_CODE,
             size,
             size,
-            mapOf(EncodeHintType.MARGIN to 1),
+            mapOf(
+                EncodeHintType.MARGIN to 2,
+                EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+            ),
         )
         createBitmap(size, size).apply {
             for (y in 0 until size) {
@@ -828,12 +900,35 @@ internal fun PlayarrQrCode(
             }
         }
     }
-    Surface(color = Color.White, shape = RoundedCornerShape(12.dp)) {
-        Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = contentDescription,
-            modifier = modifier.padding(8.dp),
-        )
+    // Outer glow halo behind the card (web soft pink radial under the QR).
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(WebPink.copy(alpha = 0.18f), Color.Transparent),
+                    radius = 280f,
+                ),
+            )
+            .padding(28.dp),
+    ) {
+        Surface(
+            color = Color.White,
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.shadow(
+                elevation = 22.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = Color(0x17382621),
+                spotColor = Color(0x17382621),
+            ),
+        ) {
+            // 12dp white border around the 240dp matrix → same chrome as web.
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = modifier.padding(12.dp),
+            )
+        }
     }
 }
 

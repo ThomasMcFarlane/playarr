@@ -32,6 +32,11 @@ internal enum class PlayarrString(
         "เลือกเซิร์ฟเวอร์ Playarr Server ของคุณ แล้วบันทึกโปรไฟล์นี้ไว้บนอุปกรณ์เครื่องนี้",
         "Playarr Serverサーバーを選択し、この端末にプロフィールを保存してください。",
     ),
+    LoginQrDescription(
+        "Scan the QR code with your phone or another browser to sign in on this device.",
+        "สแกนคิวอาร์โค้ดด้วยโทรศัพท์หรือเบราว์เซอร์อื่นเพื่อเข้าสู่ระบบบนอุปกรณ์นี้",
+        "スマートフォンまたは別のブラウザーでQRコードを読み取り、この端末にサインインしてください。",
+    ),
     LoginServerUrl("Server URL", "URL เซิร์ฟเวอร์", "サーバーURL"),
     LoginDirectConnectionHint(
         "Your device connects directly to this server. Playarr does not proxy your login.",
@@ -87,6 +92,11 @@ internal enum class PlayarrString(
     DeviceLoginEnterCode("and enter this code", "แล้วป้อนรหัสนี้", "このコードを入力してください"),
     DeviceLoginPairingCode("Pairing code {{code}}", "รหัสจับคู่ {{code}}", "ペアリングコード {{code}}"),
     DeviceLoginWaitingApproval("Waiting for approval…", "กำลังรอการอนุมัติ…", "承認をお待ちください…"),
+    DeviceLoginRefreshesIn(
+        "Code refreshes in {{time}}",
+        "รหัสจะรีเฟรชใน {{time}}",
+        "コードの更新まで {{time}}",
+    ),
     DeviceLoginTryAgain("Try again", "ลองอีกครั้ง", "もう一度試す"),
     DeviceLoginQrLabel(
         "QR code for the Playarr TV sign-in link",
