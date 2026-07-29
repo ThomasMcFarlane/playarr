@@ -84,7 +84,7 @@ export const PLAYARR_QR_STYLE = {
 /** Generates an offline SVG QR code without sending the pairing URL to a third party. */
 export function createQrCodeSvg(
   value: string,
-  width = PLAYARR_QR_STYLE.tileSize
+  width: number = PLAYARR_QR_STYLE.tileSize
 ): Promise<string> {
   return QRCode.toString(value, {
     type: "svg",

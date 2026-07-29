@@ -36,8 +36,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Fresh Web builds retain a numeric QR SVG size parameter instead of narrowing
-  the shared 240px default to a literal type.
+- Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
+  shared 240px default to a literal type.
 
 - Roku pairing chrome is 1:1 with web `/login/qr` TvStageChrome + DeviceLogin:
   dark stage by default, square theme (144) and language (168) dropdown
