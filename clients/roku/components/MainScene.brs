@@ -1960,8 +1960,9 @@ sub openSearch()
     m.searchDisplayItems = []
     m.searchTitle.text = "Search"
     if m.searchFieldLabel <> invalid
-        m.searchFieldLabel.text = "Search your libraries and playlists"
-        m.searchFieldLabel.color = &h887A82FF
+        ' Empty shell: placeholder is baked into searchFieldChrome; clear label.
+        m.searchFieldLabel.text = ""
+        m.searchFieldLabel.color = &hF4F0F1FF
     end if
     showSearchEmptyState(true)
     buildGridContent(m.searchGrid, m.searchDisplayItems, 1.5)
