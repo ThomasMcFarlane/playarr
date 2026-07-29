@@ -227,26 +227,31 @@ struct TVHomeView: View {
         } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
 
         return VStack(alignment: .leading, spacing: railGap) {
-            interactiveRail(
-                railID: "start",
-                title: "Start watching",
-                works: startWatching,
-                artW: artW,
-                artH: artH,
-                titleBlock: titleBlock,
-                gap: gap,
-                headingH: headingH
-            )
-            interactiveRail(
-                railID: "movies",
-                title: "New movies",
-                works: newMovies,
-                artW: artW,
-                artH: artH,
-                titleBlock: titleBlock,
-                gap: gap,
-                headingH: headingH
-            )
+            // SPA hides empty rails (`definitions.filter(items.length > 0)`).
+            if !startWatching.isEmpty {
+                interactiveRail(
+                    railID: "start",
+                    title: "Start watching",
+                    works: startWatching,
+                    artW: artW,
+                    artH: artH,
+                    titleBlock: titleBlock,
+                    gap: gap,
+                    headingH: headingH
+                )
+            }
+            if !newMovies.isEmpty {
+                interactiveRail(
+                    railID: "movies",
+                    title: "New movies",
+                    works: newMovies,
+                    artW: artW,
+                    artH: artH,
+                    titleBlock: titleBlock,
+                    gap: gap,
+                    headingH: headingH
+                )
+            }
             Spacer(minLength: 0)
         }
         .padding(.leading, x0)

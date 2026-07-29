@@ -33,14 +33,28 @@ final class TVHomeViewModel {
             return
         }
         do {
-            works = try await apiClient.browseCatalog(
-                kind: nil,
-                genre: nil,
-                tag: nil,
-                sort: "recent",
-                limit: 30,
-                offset: 0
-            ).items
+            // SPA Home pulls a mixed recent list plus kind-scoped rails.
+            // Parallel browse keeps “New movies” populated even when the
+            // mixed page is series-heavy.
+            async let mixed = apiClient.browseCatalog(
+                kind: nil, genre: nil, tag: nil, sort: "recent", limit: 40, offset: 0
+            )
+            async let movies = apiClient.browseCatalog(
+                kind: .movie, genre: nil, tag: nil, sort: "recent", limit: 24, offset: 0
+            )
+            async let series = apiClient.browseCatalog(
+                kind: .series, genre: nil, tag: nil, sort: "recent", limit: 24, offset: 0
+            )
+            let mixedItems = try await mixed.items
+            let movieItems = try await movies.items
+            let seriesItems = try await series.items
+            // Prefer series, then movies, then remaining mixed for rail feeds.
+            works = seriesItems + movieItems + mixedItems.filter {
+                $0.kind != .series && $0.kind != .movie
+            }
+            // De-dupe while preserving order.
+            var seen = Set<UUID>()
+            works = works.filter { seen.insert($0.id).inserted }
             state = .loaded
         } catch {
             // Parity suite must still paint production rails when the tunnel
