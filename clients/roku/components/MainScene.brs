@@ -2218,9 +2218,10 @@ sub openPlaylists()
     m.playlistDetailOpen = false
     m.playlistDetailGroup.visible = false
     m.playlistsDirectoryGroup.visible = true
+    showPlaylistsEmptyShell(true)
     showOnly("playlists")
     m.top.screenState = "playlists"
-    m.playlistsGrid.SetFocus(true)
+    m.top.SetFocus(true)
     sendApi("playlists", "GET", "/api/v1/playlists", invalid, true)
 end sub
 
@@ -2233,9 +2234,10 @@ sub acceptPlaylists(data as Object)
         m.playlistDetailOpen = false
         m.playlistDetailGroup.visible = false
         m.playlistsDirectoryGroup.visible = true
+        showPlaylistsEmptyShell(true)
         showOnly("playlists")
         m.top.screenState = "playlists"
-        m.playlistsGrid.SetFocus(true)
+        m.top.SetFocus(true)
         return
     end if
     m.playlists = data
@@ -2243,9 +2245,32 @@ sub acceptPlaylists(data as Object)
     m.playlistDetailOpen = false
     m.playlistDetailGroup.visible = false
     m.playlistsDirectoryGroup.visible = true
+    showPlaylistsEmptyShell(m.playlists.Count() = 0)
     showOnly("playlists")
     m.top.screenState = "playlists"
-    m.playlistsGrid.SetFocus(true)
+    if m.playlists.Count() > 0
+        m.playlistsGrid.SetFocus(true)
+    else
+        m.top.SetFocus(true)
+    end if
+end sub
+
+' Empty shell matches web (title chrome + empty card + filters chip).
+' Populated directory hides empty chrome and shows the grid.
+sub showPlaylistsEmptyShell(empty as Boolean)
+    chrome = m.top.findNode("playlistsEmptyChrome")
+    if chrome <> invalid then chrome.visible = empty
+    titleChrome = m.top.findNode("playlistsTitleChrome")
+    if titleChrome <> invalid then titleChrome.visible = empty
+    filtersChrome = m.top.findNode("playlistsFiltersChrome")
+    if filtersChrome <> invalid then filtersChrome.visible = empty
+    if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 0
+    if empty
+        if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 0
+    else
+        if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 1
+    end if
+    if m.playlistsGrid <> invalid then m.playlistsGrid.visible = not empty
 end sub
 
 ' Flat-content grid builder, mirroring buildGridContent's shape but against

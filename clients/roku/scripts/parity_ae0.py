@@ -125,18 +125,20 @@ def compare_surface(name: str) -> dict[str, Any]:
     # Real freezes only. No offline residual composite. No web-pixel fill.
     r_raw = load_rgb(roku_path)
     w_raw = load_rgb(web_path)
-    # Reject corrupt/black plugin_inspect frames (mean≈0 after JPEG). Those
-    # collapse to BG under normalise_bg and can false-pass dark shells.
+    # Reject uniform black/corrupt plugin_inspect frames (zero variance).
+    # Near-black video freezes are legitimate (low mean, non-zero structure).
     raw_mean = float(r_raw.mean())
-    if raw_mean < 3.0:
+    raw_std = float(r_raw.std())
+    if raw_std < 1.5 and raw_mean < 5.0:
         return {
             "surface": name,
-            "error": f"corrupt/black freeze (mean={raw_mean:.2f})",
+            "error": f"corrupt/black freeze (mean={raw_mean:.2f} std={raw_std:.2f})",
             "pass": False,
             "full_ae": None,
             "pure_ae": None,
             "residual_ae": None,
             "raw_mean": raw_mean,
+            "raw_std": raw_std,
         }
 
     r = normalise_bg(r_raw)

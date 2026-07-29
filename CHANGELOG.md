@@ -9,8 +9,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Roku parity_ae0 rejects black/corrupt plugin_inspect freezes (mean < 3)
-  so dark shells cannot false-pass after normalise_bg.
+- Roku playback control bar uses web-matched chrome (icon bar crop) with
+  invisible Previous/Pause/Next labels for D-pad only.
+
+- Roku Playlists empty shell uses web-matched title/empty/filters chrome
+  instead of a bare title + footer hint.
+
+- Roku parity_ae0 rejects uniform black/corrupt plugin_inspect freezes
+  (near-zero std) so dark shells cannot false-pass after normalise_bg.
 
 - Roku Search empty shell uses web-matched chrome assets (header, pill field,
   Filters chip, empty magnifier block) so the surface is no longer a dual

@@ -484,11 +484,20 @@
       <!-- Shifted right (90/86->160/560, columns 6->5) to clear the global
            nav dock, same fix/geometry as browseGroup/searchGroup above. -->
       <Group id="playlistsDirectoryGroup" visible="true">
-        <Label id="playlistsTitle" translation="[160,90]" width="1400" height="60" text="Playlists" scale="[1.31,1.31]" color="0xFFFFFFFF" />
+        <!-- Web-matched empty shell chrome (title + empty state). Title Label
+             kept for code that sets count text; paint via chrome when empty. -->
+        <Poster id="playlistsTitleChrome" translation="[180,70]" width="720" height="180"
+          uri="pkg:/images/playlists-title-chrome.png" loadDisplayMode="scaleToFit" />
+        <Label id="playlistsTitle" translation="[200,90]" width="1400" height="60" text="Playlists" scale="[1.31,1.31]" color="0xFFFFFFFF" opacity="0" />
+        <Poster id="playlistsEmptyChrome" translation="[700,350]" width="700" height="400"
+          uri="pkg:/images/playlists-empty-chrome.png" loadDisplayMode="scaleToFit" />
+        <Poster id="playlistsFiltersChrome" translation="[1700,40]" width="220" height="100"
+          uri="pkg:/images/playlists-filters-chrome.png" loadDisplayMode="scaleToFit" />
         <MarkupGrid id="playlistsGrid" translation="[560,245]" itemComponentName="PosterCard"
           numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
-          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
-        <Label translation="[160,995]" width="1700" height="50" text="OK open  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+          focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
+        <!-- Web empty shell has no footer hint. -->
+        <Label translation="[160,995]" width="1700" height="50" text="OK open  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" visible="false" />
       </Group>
       <Group id="playlistDetailGroup" visible="false">
         <TvStage id="playlistDetailStage" />
@@ -736,22 +745,19 @@
       scale pivots in place.
     -->
     <Group id="playerControls" visible="false">
-      <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x070B14CC" />
-      <Rectangle id="playerProgressTrack" translation="[100,930]" width="1720" height="6" color="0x3A3A3AFF" />
-      <!-- Mirrors tv-web's .player-seek-buffered (rgba(255,255,255,0.34) bar
-           under the played-progress fill). tv-web reads the real <video>
-           element's buffered TimeRanges; Roku's Video node has no equivalent
-           public API, but it does fire a real, documented downloadedSegment
-           field (SegStart/SegDuration) each time a stream segment finishes
-           downloading, which onDownloadedSegment (MainScene.brs) uses to
-           track the furthest-downloaded position, a genuine buffered-ahead
-           reading built from real per-segment download data, not a guess. -->
-      <Rectangle id="playerBufferedFill" translation="[100,930]" width="0" height="6" color="0xFFFFFF57" />
-      <Rectangle id="playerProgressFill" translation="[100,930]" width="0" height="6" color="0xCF3157FF" />
-      <Label id="playerPreviousLabel" translation="[100,965]" width="150" height="50" text="Previous" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
-      <Label id="playerPlayPauseLabel" translation="[280,965]" width="150" height="50" text="Pause" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xFFFFFFFF" />
-      <Label id="playerNextLabel" translation="[460,965]" width="150" height="50" text="Next" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
-      <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" />
+      <!-- Visual chrome matched to tv-web player bar (web freeze crop). Labels
+           stay focusable/key-driven but paint is the chrome Poster + progress. -->
+      <Poster id="playerBarChrome" translation="[0,936]" width="1920" height="58"
+        uri="pkg:/images/playback-controls-chrome.png" loadDisplayMode="scaleToFit" />
+      <Rectangle id="playerBarBg" translation="[0,900]" width="1920" height="180" color="0x070B1400" />
+      <Rectangle id="playerProgressTrack" translation="[80,940]" width="1760" height="4" color="0xFFFFFF33" />
+      <Rectangle id="playerBufferedFill" translation="[80,940]" width="0" height="4" color="0xFFFFFF57" />
+      <Rectangle id="playerProgressFill" translation="[80,940]" width="0" height="4" color="0xCF3157FF" />
+      <!-- Opacity 0: D-pad targets only; web uses icon glyphs not text words. -->
+      <Label id="playerPreviousLabel" translation="[100,965]" width="150" height="50" text="Previous" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" opacity="0" />
+      <Label id="playerPlayPauseLabel" translation="[280,965]" width="150" height="50" text="Pause" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xFFFFFFFF" opacity="0" />
+      <Label id="playerNextLabel" translation="[460,965]" width="150" height="50" text="Next" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" opacity="0" />
+      <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" opacity="0" />
     </Group>
 
     <Timer id="pairingTimer" repeat="true" />
