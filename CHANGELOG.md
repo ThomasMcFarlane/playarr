@@ -21,10 +21,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Android TV device-link screen matches web `/login/qr`: theme + language chrome
-  dropdowns (same square trigger style as web), theme-reactive light/dark tokens,
-  white scannable QR plate, mono code, refresh countdown, and Sign in manually
-  pill. Layout fits 1080p without clipping.
+- Android TV device-link chrome is 1:1 with web `ThemeDropdown` /
+  `LanguageDropdown`: stroke sun + globe icons, square triggers (theme min
+  144 / language min 168), accent border + scale when open, custom square
+  menus (not Material), accent checkmarks, language search field, and
+  theme-reactive light/dark auth tokens. White scannable QR plate, mono
+  code, refresh countdown, and Sign in manually pill. Layout fits 1080p
+  without clipping.
 
 ### Fixed
 

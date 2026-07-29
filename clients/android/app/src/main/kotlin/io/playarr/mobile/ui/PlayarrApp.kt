@@ -2,8 +2,11 @@ package io.playarr.mobile.ui
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -22,6 +26,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,7 +42,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -46,28 +51,42 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -518,29 +537,29 @@ private fun LoginScreen(
     var televisionManualLogin by remember { mutableStateOf(false) }
 
     if (isTelevision) {
-        // TV auth uses AuthDark (web dark theme). QR plate stays white for scan.
         LaunchedEffect(Unit) { viewModel.pairTelevision() }
-
-        if (televisionManualLogin) {
-            TelevisionManualLoginScreen(
-                serverUrl = serverUrl,
-                onServerUrlChange = { serverUrl = it },
-                username = username,
-                onUsernameChange = { username = it },
-                password = password,
-                onPasswordChange = { password = it },
-                state = loginState,
-                onSubmit = { viewModel.login(serverUrl, username, password, isTelevision = true) },
-                onBackToQr = { televisionManualLogin = false },
-                onBack = onBack,
-            )
-        } else {
-            TelevisionPairingScreen(
-                state = pairingState,
-                onStart = viewModel::pairTelevision,
-                onManualLogin = { televisionManualLogin = true },
-                onBack = onBack,
-            )
+        AuthTokensProvider {
+            if (televisionManualLogin) {
+                TelevisionManualLoginScreen(
+                    serverUrl = serverUrl,
+                    onServerUrlChange = { serverUrl = it },
+                    username = username,
+                    onUsernameChange = { username = it },
+                    password = password,
+                    onPasswordChange = { password = it },
+                    state = loginState,
+                    onSubmit = { viewModel.login(serverUrl, username, password, isTelevision = true) },
+                    onBackToQr = { televisionManualLogin = false },
+                    onBack = onBack,
+                )
+            } else {
+                TelevisionPairingScreen(
+                    state = pairingState,
+                    onStart = viewModel::pairTelevision,
+                    onManualLogin = { televisionManualLogin = true },
+                    onBack = onBack,
+                )
+            }
         }
         return
     }
@@ -573,20 +592,74 @@ private fun LoginScreen(
 }
 
 /**
- * Dark auth tokens matching web `:root[data-theme="dark"]`.
- * Android TV is always a dark ten-foot shell; only the QR plate stays white
- * so phones can scan it (same as web `.device-login-qr` background: #fff).
+ * Auth page tokens mirroring web `:root` / `:root[data-theme="dark"]`.
+ * QR plate is always white (scannable), matching `.device-login-qr`.
  */
-private object AuthDark {
-    val bg = Color(0xFF151315)
-    val surface = Color(0xFF1B181B)
-    val surfaceStrong = Color(0xFF211D21)
-    val ink = Color(0xFFF4F0F1)
-    val inkSoft = Color(0xFFC5B8BD)
-    val inkMuted = Color(0xFF887A82)
-    val lineStrong = Color(0x3BDFDCDD) // ~23% white line
-    val rose = Color(0xFFCF3157)
-    val qrPlate = Color.White
+private data class AuthTokens(
+    val bg: Color,
+    val surface: Color,
+    val surfaceStrong: Color,
+    val surfaceSoft: Color,
+    val ink: Color,
+    val inkSoft: Color,
+    val inkMuted: Color,
+    val line: Color,
+    val lineStrong: Color,
+    val accent: Color,
+    val rose: Color,
+    val danger: Color,
+    val qrPlate: Color = Color.White,
+)
+
+private val AuthTokensLight = AuthTokens(
+    bg = Color(0xFFF5F3F2),
+    surface = Color(0xFFFBFAF9),
+    surfaceStrong = Color.White,
+    surfaceSoft = Color(0xFFDFDCDD),
+    ink = Color(0xFF382621),
+    inkSoft = Color(0xFF675961),
+    inkMuted = Color(0xFFA5969E),
+    line = Color(0x24382621),
+    lineStrong = Color(0x47382621),
+    accent = Color(0xFF675961),
+    rose = Color(0xFFCF3157),
+    danger = Color(0xFFA8464C),
+)
+
+private val AuthTokensDark = AuthTokens(
+    bg = Color(0xFF151315),
+    surface = Color(0xFF1B181B),
+    surfaceStrong = Color(0xFF211D21),
+    surfaceSoft = Color(0xFF312A30),
+    ink = Color(0xFFF4F0F1),
+    inkSoft = Color(0xFFC5B8BD),
+    inkMuted = Color(0xFF887A82),
+    line = Color(0x1CDFDCDD),
+    lineStrong = Color(0x3BDFDCDD),
+    accent = Color(0xFFDFDCDD),
+    rose = Color(0xFFCF3157),
+    danger = Color(0xFFEE9297),
+)
+
+private val LocalAuthTokens = staticCompositionLocalOf { AuthTokensDark }
+
+@Composable
+private fun rememberAuthTokens(): AuthTokens {
+    val display = LocalPlayarrDisplayPreferences.current
+    val dark = when (display.theme) {
+        PlayarrThemePreference.System -> isSystemInDarkTheme()
+        PlayarrThemePreference.Light -> false
+        PlayarrThemePreference.Dark -> true
+    }
+    // Keep the global Compose palette in lockstep with the auth chrome selector.
+    androidx.compose.runtime.SideEffect { setPlayarrWebPalette(dark) }
+    return if (dark) AuthTokensDark else AuthTokensLight
+}
+
+@Composable
+private fun AuthTokensProvider(content: @Composable () -> Unit) {
+    val tokens = rememberAuthTokens()
+    CompositionLocalProvider(LocalAuthTokens provides tokens, content = content)
 }
 
 @Composable
@@ -742,12 +815,12 @@ private fun TelevisionPairingScreen(
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(AuthDark.surface, AuthDark.bg),
+                    colors = listOf(LocalAuthTokens.current.surface, LocalAuthTokens.current.bg),
                 ),
             )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(AuthDark.rose.copy(alpha = 0.13f), Color.Transparent),
+                    colors = listOf(LocalAuthTokens.current.rose.copy(alpha = 0.13f), Color.Transparent),
                     radius = 900f,
                 ),
             )
@@ -776,14 +849,14 @@ private fun TelevisionPairingScreen(
             ) {
                 Text(
                     playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
-                    color = AuthDark.inkMuted,
+                    color = LocalAuthTokens.current.inkMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.6.sp,
                 )
                 Text(
                     playarrString(PlayarrString.LoginHeading),
-                    color = AuthDark.ink,
+                    color = LocalAuthTokens.current.ink,
                     fontSize = titleSp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = (-3.6).sp,
@@ -794,7 +867,7 @@ private fun TelevisionPairingScreen(
                 )
                 Text(
                     playarrString(PlayarrString.LoginQrDescription),
-                    color = AuthDark.inkMuted,
+                    color = LocalAuthTokens.current.inkMuted,
                     fontSize = if (tight) 14.sp else 16.sp,
                     lineHeight = if (tight) 20.sp else 22.sp,
                     textAlign = TextAlign.Center,
@@ -810,13 +883,13 @@ private fun TelevisionPairingScreen(
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             CircularProgressIndicator(
-                                color = AuthDark.rose,
+                                color = LocalAuthTokens.current.rose,
                                 modifier = Modifier.size(28.dp),
                                 strokeWidth = 2.5.dp,
                             )
                             Text(
                                 playarrString(PlayarrString.DeviceLoginCreatingCode),
-                                color = AuthDark.inkMuted,
+                                color = LocalAuthTokens.current.inkMuted,
                                 fontSize = 15.sp,
                             )
                         }
@@ -850,13 +923,13 @@ private fun TelevisionPairingScreen(
                         Spacer(Modifier.height(gap))
                         Text(
                             playarrString(PlayarrString.DeviceLoginScanQr),
-                            color = AuthDark.inkMuted,
+                            color = LocalAuthTokens.current.inkMuted,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                         )
                         Text(
                             state.code.verificationUri,
-                            color = AuthDark.ink,
+                            color = LocalAuthTokens.current.ink,
                             fontSize = if (tight) 18.sp else 20.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -864,14 +937,14 @@ private fun TelevisionPairingScreen(
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginEnterCode),
-                            color = AuthDark.inkMuted,
+                            color = LocalAuthTokens.current.inkMuted,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(
                             state.code.userCode,
-                            color = AuthDark.ink,
+                            color = LocalAuthTokens.current.ink,
                             fontSize = codeSp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = FontFamily.Monospace,
@@ -884,7 +957,7 @@ private fun TelevisionPairingScreen(
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginWaitingApproval),
-                            color = AuthDark.inkMuted,
+                            color = LocalAuthTokens.current.inkMuted,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp),
@@ -894,7 +967,7 @@ private fun TelevisionPairingScreen(
                                 PlayarrString.DeviceLoginRefreshesIn,
                                 "time" to formatDeviceCodeCountdown(secondsRemaining),
                             ),
-                            color = AuthDark.inkSoft,
+                            color = LocalAuthTokens.current.inkSoft,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -913,7 +986,7 @@ private fun TelevisionPairingScreen(
                                     is PairingFailure.Localized -> playarrString(failure.key)
                                     is PairingFailure.Message -> failure.text
                                 },
-                                color = Color(0xFFA8464C),
+                                color = LocalAuthTokens.current.danger,
                                 textAlign = TextAlign.Center,
                                 fontSize = 15.sp,
                             )
@@ -921,8 +994,8 @@ private fun TelevisionPairingScreen(
                                 onClick = onStart,
                                 shape = CircleShape,
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = AuthDark.inkSoft,
-                                    contentColor = Color.White,
+                                    containerColor = LocalAuthTokens.current.inkSoft,
+                                    contentColor = LocalAuthTokens.current.surfaceStrong,
                                 ),
                             ) {
                                 Text(playarrString(PlayarrString.DeviceLoginTryAgain))
@@ -931,11 +1004,12 @@ private fun TelevisionPairingScreen(
                     }
                 }
 
+                // web `.btn.btn-secondary.device-login-manual` pill
                 Surface(
                     onClick = onManualLogin,
                     shape = CircleShape,
-                    color = AuthDark.surfaceStrong,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
+                    color = LocalAuthTokens.current.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, LocalAuthTokens.current.lineStrong),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = if (tight) 16.dp else 22.dp)
@@ -944,7 +1018,7 @@ private fun TelevisionPairingScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             playarrString(PlayarrString.DeviceLoginSignInManually),
-                            color = AuthDark.inkSoft,
+                            color = LocalAuthTokens.current.inkSoft,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -973,11 +1047,11 @@ private fun TelevisionManualLoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.linearGradient(listOf(AuthDark.surface, AuthDark.bg)),
+                Brush.linearGradient(listOf(LocalAuthTokens.current.surface, LocalAuthTokens.current.bg)),
             )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(AuthDark.rose.copy(alpha = 0.13f), Color.Transparent),
+                    colors = listOf(LocalAuthTokens.current.rose.copy(alpha = 0.13f), Color.Transparent),
                     radius = 900f,
                 ),
             )
@@ -999,14 +1073,14 @@ private fun TelevisionManualLoginScreen(
             ) {
                 Text(
                     playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
-                    color = AuthDark.inkMuted,
+                    color = LocalAuthTokens.current.inkMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.6.sp,
                 )
                 Text(
                     playarrString(PlayarrString.LoginHeading),
-                    color = AuthDark.ink,
+                    color = LocalAuthTokens.current.ink,
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = (-3.2).sp,
@@ -1023,7 +1097,7 @@ private fun TelevisionManualLoginScreen(
                 )
                 Text(
                     playarrString(PlayarrString.LoginDirectConnectionHint),
-                    color = AuthDark.inkMuted,
+                    color = LocalAuthTokens.current.inkMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp),
                 )
@@ -1057,7 +1131,7 @@ private fun TelevisionManualLoginScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(52.dp),
                     shape = CircleShape,
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = AuthDark.inkSoft,
+                        containerColor = LocalAuthTokens.current.inkSoft,
                         contentColor = Color.White,
                     ),
                 ) {
@@ -1070,8 +1144,8 @@ private fun TelevisionManualLoginScreen(
                 Surface(
                     onClick = onBackToQr,
                     shape = CircleShape,
-                    color = AuthDark.surfaceStrong,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
+                    color = LocalAuthTokens.current.surfaceStrong,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, LocalAuthTokens.current.lineStrong),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp)
@@ -1080,7 +1154,7 @@ private fun TelevisionManualLoginScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             playarrString(PlayarrString.LoginQrSubmit),
-                            color = AuthDark.inkSoft,
+                            color = LocalAuthTokens.current.inkSoft,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -1091,18 +1165,49 @@ private fun TelevisionManualLoginScreen(
     }
 }
 
-/** Web `tv-stage-chrome`: logo left, optional circular back, language right. */
+/**
+ * Web `tv-stage-chrome`: logo left, optional circular back, then theme + language
+ * dropdowns on the right (`ThemeDropdown` + `LanguageDropdown` styling).
+ */
 @Composable
 private fun AuthStageChrome(onBack: (() -> Unit)?) {
+    val tokens = LocalAuthTokens.current
     val display = LocalPlayarrDisplayPreferences.current
+    var themeExpanded by remember { mutableStateOf(false) }
     var languageExpanded by remember { mutableStateOf(false) }
+    var languageQuery by remember { mutableStateOf("") }
     val selectedLanguage = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
         ?: playarrUiLanguageOptions.first()
+    val themeLabel = when (display.theme) {
+        PlayarrThemePreference.System -> playarrString(PlayarrString.SettingsThemeSystem)
+        PlayarrThemePreference.Light -> playarrString(PlayarrString.SettingsThemeLight)
+        PlayarrThemePreference.Dark -> playarrString(PlayarrString.SettingsThemeDark)
+    }
+    val filteredLanguages = remember(languageQuery, display.language) {
+        val q = languageQuery.trim().lowercase()
+        if (q.isEmpty()) {
+            playarrUiLanguageOptions
+        } else {
+            playarrUiLanguageOptions.filter { option ->
+                val label = option.nativeName ?: "auto"
+                label.lowercase().contains(q) ||
+                    option.preference.lowercase().contains(q) ||
+                    when (option.preference) {
+                        "en" -> "english".contains(q)
+                        "th" -> "thai".contains(q)
+                        "ja" -> "japanese".contains(q)
+                        "system" -> "auto".contains(q) || "system".contains(q)
+                        else -> false
+                    }
+            }
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .zIndex(2f)
-            .padding(horizontal = 36.dp, vertical = 36.dp),
+            .padding(horizontal = 36.dp, vertical = 34.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -1112,63 +1217,388 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
             modifier = Modifier.size(40.dp),
         )
         onBack?.let { back ->
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(14.dp))
+            // web `.tv-page-back` circular control
             Surface(
                 onClick = back,
                 shape = CircleShape,
-                color = AuthDark.surfaceStrong.copy(alpha = 0.7f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong.copy(alpha = 0.66f)),
+                color = tokens.surfaceStrong.copy(alpha = 0.7f),
+                border = BorderStroke(1.dp, tokens.lineStrong.copy(alpha = 0.66f)),
                 modifier = Modifier.size(48.dp),
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = playarrString(PlayarrString.CommonBack),
-                        tint = AuthDark.inkSoft,
-                        modifier = Modifier.size(22.dp),
-                    )
+                    Text("←", color = tokens.inkSoft, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
         Spacer(Modifier.weight(1f))
-        Box {
-            Surface(
-                onClick = { languageExpanded = true },
-                shape = RoundedCornerShape(12.dp),
-                color = AuthDark.surfaceStrong,
-                border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
-                modifier = Modifier.height(44.dp),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Theme — web `ThemeDropdown` / `.theme-dropdown-trigger` (min-width 144)
+            AuthChromeDropdown(
+                label = themeLabel,
+                expanded = themeExpanded,
+                minWidth = 144.dp,
+                alignMenuEnd = false,
+                tokens = tokens,
+                leadingIcon = { AuthThemeIcon(color = tokens.inkMuted) },
+                onToggle = {
+                    themeExpanded = !themeExpanded
+                    languageExpanded = false
+                    languageQuery = ""
+                },
+                onDismiss = { themeExpanded = false },
             ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text("◎", color = AuthDark.inkSoft, fontSize = 14.sp)
-                    Text(
-                        selectedLanguage.label(),
-                        color = AuthDark.ink,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                PlayarrThemePreference.entries.forEach { option ->
+                    val optionLabel = when (option) {
+                        PlayarrThemePreference.System -> playarrString(PlayarrString.SettingsThemeSystem)
+                        PlayarrThemePreference.Light -> playarrString(PlayarrString.SettingsThemeLight)
+                        PlayarrThemePreference.Dark -> playarrString(PlayarrString.SettingsThemeDark)
+                    }
+                    AuthChromeDropdownOption(
+                        label = optionLabel,
+                        selected = option == display.theme,
+                        tokens = tokens,
+                        onClick = {
+                            display.setTheme(option)
+                            themeExpanded = false
+                        },
                     )
                 }
             }
-            DropdownMenu(
+
+            // Language — web `LanguageDropdown` / `.language-dropdown-trigger` (min-width 168)
+            AuthChromeDropdown(
+                label = selectedLanguage.label(),
                 expanded = languageExpanded,
-                onDismissRequest = { languageExpanded = false },
-            ) {
-                playarrUiLanguageOptions.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label()) },
-                        onClick = {
-                            display.setLanguage(option.preference)
-                            languageExpanded = false
-                        },
-                        enabled = option.preference != display.language,
+                minWidth = 168.dp,
+                alignMenuEnd = true,
+                tokens = tokens,
+                leadingIcon = { AuthGlobeIcon(color = tokens.inkMuted) },
+                onToggle = {
+                    val next = !languageExpanded
+                    languageExpanded = next
+                    themeExpanded = false
+                    languageQuery = ""
+                },
+                onDismiss = {
+                    languageExpanded = false
+                    languageQuery = ""
+                },
+                menuHeader = {
+                    // web `.language-dropdown-search`
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AuthSearchIcon(color = tokens.inkMuted)
+                        Box(Modifier.weight(1f)) {
+                            if (languageQuery.isEmpty()) {
+                                Text(
+                                    playarrString(PlayarrString.LanguageDropdownSearch),
+                                    color = tokens.inkMuted,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            BasicTextField(
+                                value = languageQuery,
+                                onValueChange = { languageQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = tokens.ink,
+                                    fontSize = 12.sp,
+                                ),
+                                cursorBrush = SolidColor(tokens.accent),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(tokens.line),
                     )
+                },
+            ) {
+                if (filteredLanguages.isEmpty()) {
+                    Text(
+                        playarrString(PlayarrString.LanguageDropdownNoResults),
+                        color = tokens.inkMuted,
+                        fontSize = 11.5.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 11.dp, vertical = 16.dp),
+                    )
+                } else {
+                    filteredLanguages.forEach { option ->
+                        AuthChromeDropdownOption(
+                            label = option.label(),
+                            selected = option.preference == display.language,
+                            tokens = tokens,
+                            onClick = {
+                                display.setLanguage(option.preference)
+                                languageExpanded = false
+                                languageQuery = ""
+                            },
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Web `.language-dropdown` composite: square trigger + absolute square menu.
+ * Menus use custom Surfaces (not Material `DropdownMenu`) so radius, border,
+ * type, and check colour match `global.css`.
+ */
+@Composable
+private fun AuthChromeDropdown(
+    label: String,
+    expanded: Boolean,
+    minWidth: Dp,
+    alignMenuEnd: Boolean,
+    tokens: AuthTokens,
+    leadingIcon: @Composable () -> Unit,
+    onToggle: () -> Unit,
+    onDismiss: () -> Unit,
+    menuHeader: (@Composable () -> Unit)? = null,
+    menuContent: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    Box {
+        AuthChromeDropdownTrigger(
+            label = label,
+            expanded = expanded,
+            onClick = onToggle,
+            minWidth = minWidth,
+            tokens = tokens,
+            leadingIcon = leadingIcon,
+        )
+        if (expanded) {
+            Popup(
+                alignment = if (alignMenuEnd) Alignment.TopEnd else Alignment.TopStart,
+                offset = IntOffset(0, with(density) { (48.dp + 6.dp).roundToPx() }),
+                onDismissRequest = onDismiss,
+                properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(0.dp),
+                    color = tokens.surfaceStrong,
+                    border = BorderStroke(1.dp, tokens.lineStrong),
+                    shadowElevation = 24.dp,
+                    // web `.language-dropdown-menu`: width max(240px, 100% of trigger)
+                    modifier = Modifier.width(maxOf(minWidth, 240.dp)),
+                ) {
+                    Column {
+                        menuHeader?.invoke()
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 260.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                        ) {
+                            menuContent()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Square-edged chrome control matching web `.language-dropdown-trigger`. */
+@Composable
+private fun AuthChromeDropdownTrigger(
+    label: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    minWidth: Dp,
+    tokens: AuthTokens,
+    leadingIcon: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(0.dp),
+        color = if (expanded) tokens.surfaceStrong else tokens.bg,
+        border = BorderStroke(1.dp, if (expanded) tokens.accent else tokens.lineStrong),
+        modifier = Modifier
+            .widthIn(min = minWidth)
+            .height(48.dp)
+            .scale(if (expanded) 1.02f else 1f),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            leadingIcon()
+            Text(
+                label,
+                color = tokens.ink,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            AuthChevronIcon(
+                color = tokens.inkMuted,
+                modifier = Modifier.rotate(if (expanded) 180f else 0f),
+            )
+        }
+    }
+}
+
+/** Web `.language-dropdown-option` (+ `.is-selected` check). */
+@Composable
+private fun AuthChromeDropdownOption(
+    label: String,
+    selected: Boolean,
+    tokens: AuthTokens,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(0.dp),
+        color = Color.Transparent,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                label,
+                color = tokens.ink,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (selected) {
+                Text(
+                    "✓",
+                    color = tokens.accent,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Web `ThemeIcon` (sun with rays), 16×16 stroke. */
+@Composable
+private fun AuthThemeIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(16.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val s = size.width / 24f
+        drawCircle(color = color, radius = 4f * s, center = Offset(cx, cy), style = stroke)
+        val rays = listOf(
+            Offset(12f, 3f) to Offset(12f, 5f),
+            Offset(12f, 19f) to Offset(12f, 21f),
+            Offset(3f, 12f) to Offset(5f, 12f),
+            Offset(19f, 12f) to Offset(21f, 12f),
+            Offset(5.64f, 5.64f) to Offset(7.06f, 7.06f),
+            Offset(16.94f, 16.94f) to Offset(18.36f, 18.36f),
+            Offset(18.36f, 5.64f) to Offset(16.94f, 7.06f),
+            Offset(7.06f, 16.94f) to Offset(5.64f, 18.36f),
+        )
+        rays.forEach { (a, b) ->
+            drawLine(
+                color = color,
+                start = Offset(a.x * s, a.y * s),
+                end = Offset(b.x * s, b.y * s),
+                strokeWidth = stroke.width,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+}
+
+/** Web `LanguageGlobeIcon`, 16×16 stroke. */
+@Composable
+private fun AuthGlobeIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(16.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val s = size.width / 24f
+        drawCircle(
+            color = color,
+            radius = 8.5f * s,
+            center = Offset(12f * s, 12f * s),
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = Offset(3.5f * s, 12f * s),
+            end = Offset(20.5f * s, 12f * s),
+            strokeWidth = stroke.width,
+            cap = StrokeCap.Round,
+        )
+        // Meridians approximated as vertical ellipses via cubic-ish paths.
+        val left = Path().apply {
+            moveTo(12f * s, 3.5f * s)
+            cubicTo(9.8f * s, 5.8f * s, 8.7f * s, 8.6f * s, 8.7f * s, 12f * s)
+            cubicTo(8.7f * s, 15.4f * s, 9.8f * s, 18.2f * s, 12f * s, 20.5f * s)
+        }
+        val right = Path().apply {
+            moveTo(12f * s, 3.5f * s)
+            cubicTo(14.2f * s, 5.8f * s, 15.3f * s, 8.6f * s, 15.3f * s, 12f * s)
+            cubicTo(15.3f * s, 15.4f * s, 14.2f * s, 18.2f * s, 12f * s, 20.5f * s)
+        }
+        drawPath(left, color = color, style = stroke)
+        drawPath(right, color = color, style = stroke)
+    }
+}
+
+/** Web chevron (12×12), path `m6 9 6 6 6-6` in 24 viewBox. */
+@Composable
+private fun AuthChevronIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(12.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val s = size.width / 24f
+        val path = Path().apply {
+            moveTo(6f * s, 9f * s)
+            lineTo(12f * s, 15f * s)
+            lineTo(18f * s, 9f * s)
+        }
+        drawPath(path, color = color, style = stroke)
+    }
+}
+
+/** Web search glyph for language menu header. */
+@Composable
+private fun AuthSearchIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(14.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val s = size.width / 24f
+        drawCircle(
+            color = color,
+            radius = 6.5f * s,
+            center = Offset(10.5f * s, 10.5f * s),
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = Offset(15.5f * s, 15.5f * s),
+            end = Offset(20f * s, 20f * s),
+            strokeWidth = stroke.width,
+            cap = StrokeCap.Round,
+        )
     }
 }
 
@@ -1220,7 +1650,7 @@ internal fun PlayarrQrCode(
         }
     }
     Surface(
-        color = AuthDark.qrPlate,
+        color = LocalAuthTokens.current.qrPlate,
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
             .size(matrixSize)

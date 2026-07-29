@@ -24,6 +24,8 @@ internal enum class PlayarrString(
     LanguageTitle("Language", "ภาษา", "言語"),
     LanguageAuto("Auto", "อัตโนมัติ", "自動"),
     LanguageAppLabel("App language", "ภาษาของแอป", "アプリの言語"),
+    LanguageDropdownSearch("Search languages", "ค้นหาภาษา", "言語を検索"),
+    LanguageDropdownNoResults("No languages found", "ไม่พบภาษา", "言語が見つかりません"),
 
     LoginKicker("Welcome home", "ยินดีต้อนรับกลับบ้าน", "おかえりなさい"),
     LoginHeading("Sign in to Playarr", "เข้าสู่ระบบ Playarr", "Playarrにサインイン"),
