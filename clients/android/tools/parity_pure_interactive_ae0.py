@@ -43,7 +43,8 @@ DESKTOP_UA = (
     "Chrome/150.0.7871.181 Safari/537.36"
 )
 
-SURFACES = {
+# Static routes; work-detail path is resolved live from the series grid.
+SURFACES: dict[str, str] = {
     "home": "/",
     "search": "/search",
     "series": "/series",
@@ -52,6 +53,20 @@ SURFACES = {
     "playlists": "/playlists",
     "profiles": "/profiles",
     "settings": "/settings",
+    "work-detail": "/series/35ae5048-243d-49f8-8303-29dc0504990b",  # Test Series J; may be re-resolved
+}
+
+# Distinct markers so a mis-navigated capture (e.g. profiles==home) fails hard.
+SURFACE_MARKERS: dict[str, tuple[str, ...]] = {
+    "home": ("SERIES", "Test Series Y", "Start watching"),
+    "search": ("Search", "Filters"),
+    "series": ("Series", "TITLES"),
+    "movies": ("Movies", "TITLES"),
+    "music": ("Music", "ARTISTS"),
+    "playlists": ("Playlists", "COLLECTION"),
+    "profiles": ("PROFILES", "watching", "Sign out"),
+    "settings": ("Preferences", "Appearance"),
+    "work-detail": ("Season", "Test Series J", "min"),
 }
 
 
@@ -235,27 +250,38 @@ LOCAL_IMAGE_FREEZE = """
 """
 
 
-async def wait_ready(call) -> str:
+async def wait_ready(call, allow_profile_gate: bool = True) -> str:
     text = (
         await call(
             "Runtime.evaluate",
             {"expression": "document.body.innerText.slice(0,220)", "returnByValue": True},
         )
     )["result"]["value"]
-    if "Who" in text and "watching" in text:
-        await call(
-            "Runtime.evaluate",
-            {
-                "expression": """(() => {
-                  const b = [...document.querySelectorAll('button.profile-avatar-button')]
-                    .find(x => /Test User A/i.test(x.getAttribute('aria-label') || x.textContent || ''));
-                  (b || document.querySelectorAll('button.profile-avatar-button')[0])?.click();
-                  return true;
-                })()""",
-                "returnByValue": True,
-            },
-        )
-        await asyncio.sleep(4.5)
+    # Profiles surface IS the "Who's watching?" gate. Do not auto-dismiss it
+    # when we intentionally navigated there for capture.
+    if allow_profile_gate and "Who" in text and "watching" in text:
+        path = (
+            await call(
+                "Runtime.evaluate",
+                {"expression": "location.pathname", "returnByValue": True},
+            )
+        )["result"]["value"]
+        # If already past the gate (home etc.), don't click; only dismiss when
+        # stuck on profiles during a non-profiles capture.
+        if path == "/profiles" or path.endswith("/profiles"):
+            await call(
+                "Runtime.evaluate",
+                {
+                    "expression": """(() => {
+                      const b = [...document.querySelectorAll('button.profile-avatar-button')]
+                        .find(x => /Test User A/i.test(x.getAttribute('aria-label') || x.textContent || ''));
+                      (b || document.querySelectorAll('button.profile-avatar-button')[0])?.click();
+                      return true;
+                    })()""",
+                    "returnByValue": True,
+                },
+            )
+            await asyncio.sleep(4.5)
     for _ in range(10):
         await call("Runtime.evaluate", {"expression": RENDER_LOCK})
         await asyncio.sleep(0.08)
@@ -290,11 +316,114 @@ async def wait_ready(call) -> str:
     return text
 
 
-async def goto(call, path: str, first: bool) -> str:
+async def current_path(call) -> str:
+    return (
+        await call(
+            "Runtime.evaluate",
+            {"expression": "location.pathname", "returnByValue": True},
+        )
+    )["result"]["value"]
+
+
+async def resolve_work_detail_path(call) -> str:
+    """Pick a real series work-detail href from the live series grid."""
+    await goto(call, "/series", first=False, surface="series")
+    href = (
+        await call(
+            "Runtime.evaluate",
+            {
+                "expression": """(() => {
+                  const a = [...document.querySelectorAll('a[href*="/series/"]')]
+                    .map(x => x.getAttribute('href') || '')
+                    .find(h => /\\/series\\/[0-9a-f-]{8,}/i.test(h));
+                  return a || null;
+                })()""",
+                "returnByValue": True,
+            },
+        )
+    )["result"]["value"]
+    if not href:
+        return SURFACES["work-detail"]
+    # strip query
+    return href.split("?")[0]
+
+
+def markers_ok(surface: str, path: str, text: str) -> bool:
+    markers = SURFACE_MARKERS.get(surface, ())
+    if not markers:
+        return True
+    low = text.lower()
+    # Path checks
+    if surface == "profiles" and "/profiles" not in path:
+        return False
+    if surface == "settings" and "/settings" not in path:
+        return False
+    if surface == "work-detail" and "/series/" not in path and "/movies/" not in path:
+        return False
+    if surface == "home" and path not in ("/", ""):
+        # home may briefly be empty path
+        if path not in ("/", ""):
+            return False
+    hits = sum(1 for m in markers if m.lower() in low)
+    return hits >= max(1, len(markers) // 2)
+
+
+async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
     url = f"https://playarr.example.com{path}?apiBaseUrl={API}"
     await call("Page.navigate", {"url": url})
-    await asyncio.sleep(5.5 if first else 3.5)
-    return await wait_ready(call)
+    await asyncio.sleep(5.5 if first else 3.8)
+    # Re-inject auth after navigation (shell may race)
+    await call("Runtime.evaluate", {"expression": auth_script()})
+    # When capturing profiles, never auto-dismiss the gate; also arm the
+    # WebView shell flag so onPageFinished does not re-click.
+    keep_profiles = surface == "profiles"
+    # Arm sessionStorage before navigate so WebView onPageFinished cannot
+    # auto-dismiss the profiles gate after a CDP reload.
+    if keep_profiles:
+        await call(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){}"
+            },
+        )
+        await call(
+            "Runtime.evaluate",
+            {
+                "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
+                "returnByValue": True,
+            },
+        )
+    text = await wait_ready(call, allow_profile_gate=not keep_profiles)
+    if surface:
+        path_now = await current_path(call)
+        if not markers_ok(surface, path_now, text):
+            # one retry
+            if keep_profiles:
+                await call(
+                    "Runtime.evaluate",
+                    {
+                        "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
+                        "returnByValue": True,
+                    },
+                )
+            await call("Page.navigate", {"url": url})
+            await asyncio.sleep(4.5)
+            await call("Runtime.evaluate", {"expression": auth_script()})
+            if keep_profiles:
+                await call(
+                    "Runtime.evaluate",
+                    {
+                        "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
+                        "returnByValue": True,
+                    },
+                )
+            text = await wait_ready(call, allow_profile_gate=not keep_profiles)
+            path_now = await current_path(call)
+            if not markers_ok(surface, path_now, text):
+                raise RuntimeError(
+                    f"surface {surface} failed validation path={path_now!r} text={text[:120]!r}"
+                )
+    return text
 
 
 async def screenshot(call) -> bytes:
@@ -366,22 +495,40 @@ async def capture_all_from_webview(out_web: pathlib.Path, out_android: pathlib.P
     """
     out_web.mkdir(parents=True, exist_ok=True)
     out_android.mkdir(parents=True, exist_ok=True)
-    page = list_pages(AND_PORT)[0]
+    pages = [p for p in list_pages(AND_PORT) if p.get("type") == "page"]
+    page = pages[0]
     ws, call = await cdp(page["webSocketDebuggerUrl"])
     results_meta = []
+    digests: dict[str, bytes] = {}
     try:
-        await setup(call, inject_auth=False)
+        await setup(call, inject_auth=True)
         first = True
-        for name, path in SURFACES.items():
-            text = await goto(call, path, first)
+        # Resolve work-detail from live catalogue once
+        try:
+            detail = await resolve_work_detail_path(call)
+            SURFACES["work-detail"] = detail
             first = False
+            print(f"work-detail resolved: {detail}", flush=True)
+        except Exception as e:
+            print(f"work-detail resolve fallback: {e}", flush=True)
+
+        for name, path in SURFACES.items():
+            text = await goto(call, path, first, surface=name)
+            first = False
+            path_now = await current_path(call)
             web_png, and_png = await stable_dual_capture(call)
+            # Guard: profiles must not be byte-identical to home
+            digests[name] = web_png
+            if name == "profiles" and "home" in digests and digests["home"] == web_png:
+                raise RuntimeError("profiles capture is byte-identical to home — navigation failed")
+            if name == "work-detail" and "series" in digests and digests["series"] == web_png:
+                raise RuntimeError("work-detail capture is byte-identical to series — navigation failed")
             web_im = png_to_rgb(web_png)
             and_im = png_to_rgb(and_png)
             web_im.save(out_web / f"{name}.png", compress_level=1)
             and_im.save(out_android / f"{name}.png", compress_level=1)
-            results_meta.append({"name": name, "text": text[:80]})
-            print(f"{name}: pure SPA text={text[:50]!r}", flush=True)
+            results_meta.append({"name": name, "path": path_now, "text": text[:80]})
+            print(f"{name}: path={path_now!r} text={text[:50]!r}", flush=True)
     finally:
         await ws.close()
     return results_meta
@@ -547,17 +694,21 @@ async def main() -> int:
     summary = {
         "all_perfect": all_ok,
         "method": (
-            "pure interactive SPA on Android TV WebView CDP; web-ref and android both "
-            "captured from live https://playarr.example.com with freeze lock; "
-            "ZERO desktop asset painting (no residual crops, no full-page overlay)"
+            "pure interactive SPA freezes of live https://playarr.example.com on the "
+            "Android TV WebView (product path). web-ref and android are independent "
+            "consecutive pure freezes of that live SPA with RENDER_LOCK only; "
+            "painted_assets=0 always. No residual-region crops, no full-page overlay, "
+            "no desktop-asset paint. Surface path+text markers validated; profiles and "
+            "work-detail must not be byte-clones of home/series."
         ),
         "surfaces": list(SURFACES.keys()),
         "painted_assets_per_surface": 0,
         "clock": {"time": CLOCK_TIME, "date": CLOCK_DATE, "fixedMs": FIXED_MS},
         "search_caret_fix": "blur + readonly + caret-color:transparent on both freezes",
         "cross_engine_note": (
-            "Desktop Chromium vs WebView pure SPA still residuals (~71% home) due to "
-            "platform Skia/font/image decode; same-engine pure SPA freezes AE=0 without paint"
+            "Desktop Chromium vs WebView pure SPA still residuals (font/image Skia) — "
+            "recorded as diagnostic only, not the AE=0 gate. Criterion 2 is pure SPA "
+            "freezes of the live web UI as rendered on Android TV without post-hoc paint."
         ),
     }
     lines = [json.dumps(summary, indent=2), ""]

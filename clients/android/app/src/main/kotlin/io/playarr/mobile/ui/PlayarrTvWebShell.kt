@@ -100,14 +100,27 @@ fun PlayarrTvWebShell(
                         view.evaluateJavascript(bootstrap, null)
                         view.evaluateJavascript(TV_VIEWPORT_SCRIPT, null)
                         view.evaluateJavascript(TV_LAYOUT_PARITY_SCRIPT, null)
-                        // Auto-select the injected profile when the SPA lands on
-                        // the "Who's watching?" gate.
+                        // Auto-select the injected profile once per session when
+                        // the SPA lands on the "Who's watching?" gate. Persist
+                        // the flag in sessionStorage so CDP Page.navigate
+                        // reloads cannot re-arm the click and bounce a later
+                        // intentional /profiles visit straight back to home.
                         view.evaluateJavascript(
                             """
                             (function(){
+                              try {
+                                if (sessionStorage.getItem('playarr:profileAutoClicked') === '1') return;
+                              } catch (e) {}
+                              const path = (location.pathname || '');
+                              const gate = path === '/profiles' || /who.?s watching/i.test(document.body && document.body.innerText || '');
+                              if (!gate) return;
                               const btn=[...document.querySelectorAll('button.profile-avatar-button')]
                                 .find(b => /$safeName/i.test(b.getAttribute('aria-label')||b.textContent||''));
-                              if (btn) { btn.focus(); btn.click(); }
+                              if (btn) {
+                                try { sessionStorage.setItem('playarr:profileAutoClicked', '1'); } catch (e) {}
+                                btn.focus();
+                                btn.click();
+                              }
                             })();
                             """.trimIndent(),
                             null,

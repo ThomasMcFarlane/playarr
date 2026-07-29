@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV WebView profile auto-click is once-per-session
+  (`sessionStorage`), so navigating to `/profiles` no longer bounces to home.
+
 - Settings panels use `scrollbar-gutter: auto` (was `stable`) so Android TV
   WebView and desktop Chromium share the same content width; `stable` reserved
   ~15px on desktop only and widened `.settings-option` (465 vs 480).
