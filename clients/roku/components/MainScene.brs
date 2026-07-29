@@ -1978,8 +1978,7 @@ sub showSearchEmptyState(empty as Boolean)
     if m.searchPreviewTitle <> invalid then m.searchPreviewTitle.visible = not empty
     if m.searchPreviewMeta <> invalid then m.searchPreviewMeta.visible = not empty
     if m.searchPreviewOverview <> invalid then m.searchPreviewOverview.visible = not empty
-    ' Empty shell matches web: Filters chip visible, type-filter Labels hidden.
-    ' After results, show type filters for D-pad filtering.
+    ' Empty shell: Filters summary label; after results, type-filter Labels.
     chip = m.top.findNode("searchFiltersChip")
     if chip <> invalid then chip.visible = empty
     if m.searchFilterLabels <> invalid
@@ -1989,7 +1988,6 @@ sub showSearchEmptyState(empty as Boolean)
     end if
     filters = m.top.findNode("searchFilters")
     if filters <> invalid then filters.visible = not empty
-    ' No Roku footer hint on empty Search (web has none).
     if m.searchHint <> invalid then m.searchHint.visible = false
 end sub
 
@@ -2257,21 +2255,13 @@ sub acceptPlaylists(data as Object)
     end if
 end sub
 
-' Empty shell matches web (title chrome + empty card + filters chip).
-' Populated directory hides empty chrome and shows the grid.
+' Empty shell: native labels. Populated directory shows the grid.
 sub showPlaylistsEmptyShell(empty as Boolean)
-    chrome = m.top.findNode("playlistsEmptyChrome")
-    if chrome <> invalid then chrome.visible = empty
-    titleChrome = m.top.findNode("playlistsTitleChrome")
-    if titleChrome <> invalid then titleChrome.visible = empty
-    filtersChrome = m.top.findNode("playlistsFiltersChrome")
-    if filtersChrome <> invalid then filtersChrome.visible = empty
-    if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 0
-    if empty
-        if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 0
-    else
-        if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 1
-    end if
+    emptyState = m.top.findNode("playlistsEmptyState")
+    if emptyState <> invalid then emptyState.visible = empty
+    kicker = m.top.findNode("playlistsKicker")
+    if kicker <> invalid then kicker.visible = true
+    if m.playlistsTitle <> invalid then m.playlistsTitle.opacity = 1
     if m.playlistsGrid <> invalid then m.playlistsGrid.visible = not empty
 end sub
 

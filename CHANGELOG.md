@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku Search/Playlists no longer paint web-freeze crop Posters (those showed
+  as solid dark/blue panel slabs cutting the shell). Native labels only.
+
 - Apple TV first-launch pairing no longer asks for a server address. It uses
   the playarr.app hosted device link (QR/code); the linking phone supplies the
   API base URL in the claim, matching web/Android TV. Settings still holds an

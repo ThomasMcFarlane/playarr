@@ -414,18 +414,14 @@
       session).
     -->
     <Group id="searchGroup" visible="false">
-      <!-- Web-matched chrome assets (Search.tsx empty shell). Pre-rendered from
-           live web freeze so SceneGraph matches pill field / Filters chip /
-           empty magnifier without dual full-stage residual paint. -->
-      <!-- Web Search empty shell: title, pill field, Filters chip, empty magnifier. -->
+      <!-- Native Search shell only. No web-freeze crop Posters (those painted
+           solid dark/blue panel slabs over the UI). -->
       <Label id="searchTitle" translation="[220,95]" width="900" height="60" text="Search" scale="[1.35,1.35]" color="0xFFFFFFFF" />
-      <!-- Pill field: outer pink ring + fill (approx web rounded input). -->
       <Rectangle id="searchFieldRing" translation="[200,188]" width="720" height="68" color="0xCF3157AA" />
       <Rectangle id="searchFieldBg" translation="[203,191]" width="714" height="62" color="0x1B181BFF" />
       <Label id="searchFieldLabel" translation="[250,206]" width="640" height="40" text="Search your libraries and playlists" scale="[0.58,0.58]" color="0x887A82FF" />
-      <!-- Filters chip (web empty). Type filters after results. -->
-      <Poster id="searchFiltersChip" translation="[200,280]" width="200" height="60"
-        uri="pkg:/images/search-filters-chip.png" loadDisplayMode="scaleToFit" />
+      <!-- Filters chip as plain labels (no crop Poster). -->
+      <Label id="searchFiltersChip" translation="[200,285]" width="220" height="36" text="Filters  ·  All libraries" scale="[0.5,0.5]" color="0xA9B7C9FF" />
       <Group id="searchFilters" visible="false">
         <Label id="searchFilterAll" translation="[200,290]" width="140" height="36" text="All" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xCF3157FF" />
         <Label id="searchFilterMovie" translation="[340,290]" width="140" height="36" text="Movies" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
@@ -434,7 +430,6 @@
         <Label id="searchFilterPlaylists" translation="[760,290]" width="140" height="36" text="Playlists" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
       </Group>
       <Label id="searchEmptyHint" translation="[200,360]" width="500" height="80" wrap="true" text="Find any available movie, series, artist or playlist." scale="[0.55,0.55]" color="0x887A82FF" />
-      <!-- Empty: magnifier circle + Start typing (web layout: icon left of text). -->
       <Group id="searchEmptyState">
         <Poster id="searchEmptyIcon" translation="[1080,430]" width="120" height="120"
           uri="pkg:/images/search-empty-icon.png" loadDisplayMode="scaleToFit" />
@@ -487,20 +482,17 @@
       <!-- Shifted right (90/86->160/560, columns 6->5) to clear the global
            nav dock, same fix/geometry as browseGroup/searchGroup above. -->
       <Group id="playlistsDirectoryGroup" visible="true">
-        <!-- Web-matched empty shell chrome (title + empty state). Title Label
-             kept for code that sets count text; paint via chrome when empty. -->
-        <Poster id="playlistsTitleChrome" translation="[180,80]" width="520" height="140"
-          uri="pkg:/images/playlists-title-chrome.png" loadDisplayMode="scaleToFit" />
-        <Label id="playlistsTitle" translation="[200,90]" width="1400" height="60" text="Playlists" scale="[1.31,1.31]" color="0xFFFFFFFF" opacity="0" />
-        <Poster id="playlistsEmptyChrome" translation="[780,380]" width="500" height="320"
-          uri="pkg:/images/playlists-empty-chrome.png" loadDisplayMode="scaleToFit" />
-        <Poster id="playlistsFiltersChrome" translation="[1750,40]" width="150" height="80"
-          uri="pkg:/images/playlists-filters-chrome.png" loadDisplayMode="scaleToFit" />
+        <!-- Native labels only. No web-freeze crop Posters (those painted
+             solid dark/blue panels over the shell). -->
+        <Label id="playlistsKicker" translation="[200,70]" width="600" height="28" text="YOUR COLLECTION" scale="[0.42,0.42]" color="0x887A82FF" />
+        <Label id="playlistsTitle" translation="[200,100]" width="1400" height="70" text="Playlists" scale="[1.45,1.45]" color="0xFFFFFFFF" />
+        <Group id="playlistsEmptyState">
+          <Label id="playlistsEmptyTitle" translation="[700,480]" width="600" height="50" text="No playlists yet" horizAlign="center" scale="[0.9,0.9]" color="0xF4F0F1FF" />
+          <Label id="playlistsEmptyHint" translation="[700,540]" width="600" height="80" wrap="true" text="Create a playlist to organise titles and tracks." horizAlign="center" scale="[0.55,0.55]" color="0x887A82FF" />
+        </Group>
         <MarkupGrid id="playlistsGrid" translation="[560,245]" itemComponentName="PosterCard"
           numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
           focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
-        <!-- Web empty shell has no footer hint. -->
-        <Label translation="[160,995]" width="1700" height="50" text="OK open  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" visible="false" />
       </Group>
       <Group id="playlistDetailGroup" visible="false">
         <TvStage id="playlistDetailStage" />
