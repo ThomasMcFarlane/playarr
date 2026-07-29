@@ -39,6 +39,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home always places Start watching / New movies rails at
+  SPA-measured design-token origins (production and parity share one path);
+  live home key-art uses colorMultiply for CSS brightness(0.6).
 - Apple TV parity player progress bar y and track colour match SPA
   (1px y dial-in, raised sample 44/42/44). Honest suite player AE
   0.25% → 0.16%.

@@ -161,27 +161,24 @@ struct TVHomeView: View {
             return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
         }()
 
-        if TVParityLaunch.requestedScreen != nil {
-            // Absolute SPA-measured card origins (pink-dot geometry).
-            parityHomeRails(
-                startWatching: Array(startWatching.prefix(5)),
-                newMovies: Array(newMovies.prefix(5)),
-                size: size
-            )
-        } else {
-            VStack(alignment: .leading, spacing: DesignTokens.Shell.railTrackGap) {
-                rail(title: "Start watching", works: startWatching)
-                rail(title: "New movies", works: Array(newMovies.prefix(12)))
-            }
-            .padding(.leading, size.width * DesignTokens.Shell.railLeftInset)
-            .padding(.trailing, 24)
-            .padding(.top, size.height * DesignTokens.Shell.railContentTopFraction)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
+        // Always place rails at SPA-measured origins (design-token geometry).
+        // Production wraps cards in NavigationLink for focus/select; parity
+        // freezes chrome for simctl AE captures.
+        homeRailsAbsolute(
+            startWatching: Array(startWatching.prefix(TVParityLaunch.requestedScreen != nil ? 5 : 12)),
+            newMovies: Array(newMovies.prefix(TVParityLaunch.requestedScreen != nil ? 5 : 12)),
+            size: size,
+            interactive: TVParityLaunch.requestedScreen == nil
+        )
     }
 
-    /// Fixed 2×5 home rails at SPA-measured art origins.
-    private func parityHomeRails(startWatching: [Work], newMovies: [Work], size: CGSize) -> some View {
+    /// SPA `.tv-home-rails` card grid at measured art origins (pink-dot geometry).
+    private func homeRailsAbsolute(
+        startWatching: [Work],
+        newMovies: [Work],
+        size: CGSize,
+        interactive: Bool
+    ) -> some View {
         let artW = DesignTokens.Shell.homeCardWidth
         let artH = DesignTokens.Shell.homeCardHeight
         let pitch = DesignTokens.Shell.homeCardPitchX
@@ -199,9 +196,13 @@ struct TVHomeView: View {
                 .offset(x: x0, y: y1 - headingH - 8)
 
             ForEach(Array(startWatching.enumerated()), id: \.element.id) { index, work in
-                TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
-                    .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
-                    .offset(x: x0 + CGFloat(index) * pitch, y: y1)
+                homeCardAt(
+                    work: work,
+                    interactive: interactive,
+                    frameWidth: artW,
+                    frameHeight: artH + titleBlock
+                )
+                .offset(x: x0 + CGFloat(index) * pitch, y: y1)
             }
 
             Text("New movies")
@@ -211,13 +212,47 @@ struct TVHomeView: View {
                 .offset(x: x0, y: y2 - headingH - 8)
 
             ForEach(Array(newMovies.enumerated()), id: \.element.id) { index, work in
-                TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
-                    .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
-                    .offset(x: x0 + CGFloat(index) * pitch, y: y2)
+                homeCardAt(
+                    work: work,
+                    interactive: interactive,
+                    frameWidth: artW,
+                    frameHeight: artH + titleBlock
+                )
+                .offset(x: x0 + CGFloat(index) * pitch, y: y2)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .allowsHitTesting(false)
+        .allowsHitTesting(interactive)
+    }
+
+    @ViewBuilder
+    private func homeCardAt(
+        work: Work,
+        interactive: Bool,
+        frameWidth: CGFloat,
+        frameHeight: CGFloat
+    ) -> some View {
+        let card = TVHomeCard(
+            work: work,
+            apiClient: environment.apiClient,
+            isSelected: interactive && focusedWorkID == work.id
+        )
+        .frame(width: frameWidth, height: frameHeight, alignment: .topLeading)
+
+        if interactive {
+            NavigationLink {
+                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+            } label: {
+                card
+            }
+            .buttonStyle(.plain)
+            .focusable(true)
+            .onAppear {
+                if focusedWorkID == nil { focusedWorkID = work.id }
+            }
+        } else {
+            card
+        }
     }
 
     private func heroWork(from works: [Work]) -> Work? {
@@ -240,18 +275,16 @@ struct TVHomeView: View {
     private func heroBackdrop(hero: Work?, size: CGSize) -> some View {
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
-            // Fixture hero is a lossless crop of the already-filtered SPA
-            // key art — display as-is (no re-greyscale). Live API art still
-            // gets the CSS-equivalent filter chain.
-            // SPA `.tv-key-art img`: width 52%, height 106%, greyscale, opacity 0.72 dark.
+            // Fixture hero is already SPA-filtered; display with opacity + mask only.
+            // Live API art gets greyscale + contrast + colorMultiply(0.6) + opacity.
             let liveURL = hero.flatMap { imageURL(for: $0, prefer: .backdrop) }
-            let keyW = size.width * 0.52
+            let keyW = size.width * DesignTokens.Shell.keyArtWidthFraction
             if let fixture = TVParityArtwork.heroImage,
                TVParityLaunch.requestedScreen != nil || liveURL == nil {
                 fixture
                     .resizable()
                     .scaledToFill()
-                    .frame(width: keyW, height: size.height * 1.06)
+                    .frame(width: keyW, height: size.height * DesignTokens.Shell.keyArtHeightFraction)
                     .clipped()
                     .opacity(DesignTokens.Shell.keyArtOpacity)
                     .mask(
@@ -273,15 +306,19 @@ struct TVHomeView: View {
                         image
                             .resizable()
                             .scaledToFill()
-                            .frame(width: keyW, height: size.height * 1.06)
+                            .frame(width: keyW, height: size.height * DesignTokens.Shell.keyArtHeightFraction)
                             .clipped()
                             .saturation(0)
-                            .contrast(0.82)
-                            .brightness(-0.05)
-                            .opacity(0.72)
+                            .contrast(DesignTokens.Shell.keyArtContrast)
+                            .colorMultiply(Color(white: DesignTokens.Shell.keyArtBrightness))
+                            .opacity(DesignTokens.Shell.keyArtOpacity)
                             .mask(
                                 LinearGradient(
-                                    colors: [.black, .black, .black.opacity(0.7), .clear],
+                                    stops: [
+                                        .init(color: .black, location: 0),
+                                        .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
+                                        .init(color: .clear, location: 1),
+                                    ],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
