@@ -44,13 +44,41 @@ export {
   type AuthorizeDeviceAcrossServersOptions,
 } from "./serverAddressBundle";
 
+/**
+ * Visual tokens for Playarr device-login QR tiles.
+ * Matches `.device-login-qr` in tv-web `global.css` (border-box 240, 12px
+ * white edge, 18px radius, black modules on white). Every surface that
+ * draws a pairing QR — SVG in the browser, PNG from `/api/link/qr`, native
+ * clients — should use these values so the tile looks identical.
+ */
+export const PLAYARR_QR_STYLE = {
+  /** Outer tile size (CSS border-box width/height of `.device-login-qr`). */
+  tileSize: 240,
+  /** White border width around the modules (CSS `border: 12px solid #fff`). */
+  borderPx: 12,
+  /** Corner radius of the white plate (CSS `border-radius: 18px`). */
+  radiusPx: 18,
+  /** Quiet-zone modules around the QR matrix (`qrcode` margin option). */
+  marginModules: 2,
+  errorCorrectionLevel: "M" as const,
+  dark: "#000000",
+  light: "#ffffff",
+} as const;
+
 /** Generates an offline SVG QR code without sending the pairing URL to a third party. */
-export function createQrCodeSvg(value: string, width = 240): Promise<string> {
+export function createQrCodeSvg(
+  value: string,
+  width = PLAYARR_QR_STYLE.tileSize
+): Promise<string> {
   return QRCode.toString(value, {
     type: "svg",
-    errorCorrectionLevel: "M",
-    margin: 2,
+    errorCorrectionLevel: PLAYARR_QR_STYLE.errorCorrectionLevel,
+    margin: PLAYARR_QR_STYLE.marginModules,
     width,
+    color: {
+      dark: PLAYARR_QR_STYLE.dark,
+      light: PLAYARR_QR_STYLE.light,
+    },
   });
 }
 
@@ -131,12 +159,19 @@ export async function requestDeviceCode(
  * result variant instead of throwing, so callers don't need a try/catch to
  * drive the polling loop.
  */
-export async function pollDeviceToken(client: ApiClient, deviceCode: string): Promise<DeviceTokenResult> {
+export async function pollDeviceToken(
+  client: ApiClient,
+  deviceCode: string,
+  signal?: AbortSignal
+): Promise<DeviceTokenResult> {
   try {
-    const raw = await client.requestDeviceToken({
-      grant_type: DEVICE_CODE_GRANT_TYPE,
-      device_code: deviceCode,
-    });
+    const raw = await client.requestDeviceToken(
+      {
+        grant_type: DEVICE_CODE_GRANT_TYPE,
+        device_code: deviceCode,
+      },
+      { signal }
+    );
     return {
       status: "success",
       accessToken: raw.access_token,
@@ -189,8 +224,13 @@ export async function pollForToken(
     }
 
     await sleep(intervalSeconds * 1000, options.signal);
+    if (Date.now() >= deadline) break;
 
-    const result = await pollDeviceToken(client, deviceCodeResponse.deviceCode);
+    const result = await pollDeviceToken(
+      client,
+      deviceCodeResponse.deviceCode,
+      options.signal
+    );
 
     switch (result.status) {
       case "success":

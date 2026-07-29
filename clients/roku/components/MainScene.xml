@@ -57,13 +57,22 @@
       <Label translation="[903,410]" width="120" height="32" text="arr" scale="[0.72,0.72]" color="0xFFFFFFFF" />
       <Label translation="[855,478]" width="600" height="20" text="SIGN IN ON ANOTHER DEVICE" scale="[0.38,0.38]" color="0x5C6B80FF" />
       <Label translation="[855,515]" width="700" height="50" text="Link this Roku" scale="[2.69,2.69]" color="0xFFFFFFFF" />
-      <!-- QR left, instructions right — never stacked (was overlapping as a white slab). -->
-      <Rectangle id="pairingQrBg" translation="[855,620]" width="220" height="220" color="0xFFFFFFFF" visible="false" />
-      <Poster id="pairingQr" translation="[865,630]" width="200" height="200" loadDisplayMode="scaleToFit" visible="false" />
-      <Label id="pairingInstruction" translation="[1120,620]" width="700" height="96" wrap="true" scale="[0.7,0.7]" color="0xA9B7C9FF" />
-      <Label id="pairingCode" translation="[1120,720]" width="500" height="50" scale="[2.2,2.2]" color="0xCF3157FF" />
-      <Label id="pairingStatus" translation="[1120,820]" width="700" height="40" scale="[0.7,0.7]" color="0xFFFFFFFF" />
-      <Label id="pairingManualHint" translation="[1120,880]" width="700" height="30" scale="[0.58,0.58]" color="0xA9B7C9FF" />
+      <!--
+        QR tile matches tv-web `.device-login-qr` exactly (see /login/qr):
+          border-box 240×240, white plate, border-radius 18, 12px white edge,
+          modules 216×216 inside. Roku has no border-radius, so the plate is
+          pre-rendered (`pairing-qr-plate.png`); modules come from
+          playarr.app `/api/link/qr` (same black/white + margin 2 as the SVG).
+        Soft shadow frame sits behind the plate for the SPA card lift.
+      -->
+      <Poster id="pairingQrFrame" translation="[847,612]" width="264" height="268" uri="pkg:/images/pairing-qr-frame.png" loadDisplayMode="scaleToFit" visible="false" />
+      <Poster id="pairingQrBg" translation="[855,620]" width="240" height="240" uri="pkg:/images/pairing-qr-plate.png" loadDisplayMode="scaleToFit" visible="false" />
+      <Poster id="pairingQr" translation="[867,632]" width="216" height="216" loadDisplayMode="scaleToFit" visible="false" />
+      <Label id="pairingInstruction" translation="[1140,620]" width="700" height="96" wrap="true" scale="[0.7,0.7]" color="0xC5B8BDFF" />
+      <!-- Code uses ink (not accent pink) — matches live /login/qr mono code. -->
+      <Label id="pairingCode" translation="[1140,720]" width="500" height="50" scale="[2.2,2.2]" color="0xF4F0F1FF" />
+      <Label id="pairingStatus" translation="[1140,820]" width="700" height="40" scale="[0.7,0.7]" color="0x887A82FF" />
+      <Label id="pairingManualHint" translation="[1140,880]" width="700" height="30" scale="[0.58,0.58]" color="0x887A82FF" />
     </Group>
 
     <!--

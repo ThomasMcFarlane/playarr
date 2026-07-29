@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Shared Playarr login QR style tokens (`PLAYARR_QR_STYLE`: 240 tile, 12px
+  white edge, 18px radius, black modules) in `@playarr-tv/device-auth`, used
+  by the web SVG and the hosted `/api/link/qr` PNG so every client matches
+  `/login/qr`.
+
 - Server-side artwork style bake on
   `GET /api/v1/artwork/work/{id}/{kind}?style=stage` (and the album twin):
   greyscale + contrast/brightness + opacity + right-edge fade for TV stage
@@ -21,6 +26,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   M and quiet-zone margin 2, mono user code, and a five-minute refresh countdown.
 
 ### Fixed
+
+- Roku pairing QR matches `/login/qr`: rounded white 240 plate (r=18), 12px
+  edge, 216 module field, soft shadow, ink-coloured mono code.
 
 - Apple TV production shell is a real HStack (nav column + stage) instead of a
   ZStack overlay, and home cards use the native tvOS `.card` button style so

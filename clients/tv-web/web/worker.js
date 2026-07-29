@@ -14,14 +14,16 @@ const VERSIONED_ANDROID_DOWNLOAD =
   /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android\.apk|SHA256SUMS)$/;
 
 const LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const LINK_CODE_TTL_MS = 10 * 60 * 1000;
+const LINK_CODE_TTL_MS = 5 * 60 * 1000;
 const LINK_CODE_POLL_SECONDS = 2;
 const LINK_CLIENT_PLATFORMS = new Set([
   "android-mobile",
   "android-tv",
   "ios",
+  "web",
   "tv-webos",
   "tv-tizen",
+  "tv-vidaa",
   "tv-roku",
   "tv-fire",
   "xbox",
@@ -203,20 +205,44 @@ function normaliseUserCode(value) {
 }
 
 /**
+ * Playarr device-login QR tokens — keep in lockstep with
+ * `@playarr-tv/device-auth` `PLAYARR_QR_STYLE` and `.device-login-qr` CSS:
+ * black modules on white, margin 2, ECC M. Outer rounded white plate
+ * (240 / r=18 / 12px edge) is applied by each client chrome; this PNG is
+ * the module field that sits inside that plate (content box 216 CSS px,
+ * rendered at 2× for crisp TV scale).
+ */
+const PLAYARR_QR_STYLE = {
+  /** Content-box width of `.device-login-qr` after the 12px white border. */
+  contentSize: 216,
+  marginModules: 2,
+  errorCorrectionLevel: "M",
+  dark: "#000000ff",
+  light: "#ffffffff",
+  renderScale: 2,
+};
+
+/**
  * Renders the device-link QR as a PNG for platforms whose native UI toolkit
- * can't display SVG (Roku's Poster node only accepts JPEG/PNG/WebP). Scoped
- * to `https://playarr.app/link?...` so this can't become a general-purpose
- * QR generator for arbitrary caller-supplied text.
+ * can't display SVG (Roku's Poster node only accepts JPEG/PNG/WebP). Matches
+ * the module field browsers draw inside `.device-login-qr`. Scoped to
+ * `https://playarr.app/link?...` so this can't become a general-purpose QR
+ * generator for arbitrary caller-supplied text.
  */
 async function linkQrPng(value) {
   if (typeof value !== "string" || !value.startsWith("https://playarr.app/link?")) {
     return json({ error: "invalid_value" }, { status: 400 });
   }
+  const width = PLAYARR_QR_STYLE.contentSize * PLAYARR_QR_STYLE.renderScale;
   const png = await QRCode.toBuffer(value, {
     type: "png",
-    errorCorrectionLevel: "M",
-    margin: 2,
-    width: 400,
+    errorCorrectionLevel: PLAYARR_QR_STYLE.errorCorrectionLevel,
+    margin: PLAYARR_QR_STYLE.marginModules,
+    width,
+    color: {
+      dark: PLAYARR_QR_STYLE.dark,
+      light: PLAYARR_QR_STYLE.light,
+    },
   });
   return new Response(png, {
     headers: {

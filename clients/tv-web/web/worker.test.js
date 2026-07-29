@@ -296,7 +296,7 @@ describe("hosted device linking", () => {
     expect(preflight.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 
-  it.each(["android-mobile", "android-tv", "ios", "tv-webos", "tv-tizen", "tv-roku", "tv-fire", "xbox"])(
+  it.each(["android-mobile", "android-tv", "ios", "web", "tv-webos", "tv-tizen", "tv-vidaa", "tv-roku", "tv-fire", "xbox"])(
     "preserves the %s client platform in the link session",
     async (clientPlatform) => {
       const env = environment(null);
@@ -334,6 +334,7 @@ describe("hosted device linking", () => {
     );
     const code = await created.json();
     expect(code.user_code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(code.expires_in).toBe(300);
     expect(code.verification_uri_complete).toContain(encodeURIComponent(code.user_code));
 
     const inspection = await worker.fetch(
@@ -425,6 +426,11 @@ describe("link QR code", () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     // PNG signature: 0x89 'P' 'N' 'G' \r \n 0x1A \n
     expect(Array.from(bytes.slice(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    // Content box is 216 CSS px at 2× = 432 (matches .device-login-qr inner).
+    // PNG IHDR width is big-endian at bytes 16..19.
+    const width =
+      (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+    expect(width).toBe(432);
   });
 
   it("refuses to encode arbitrary text", async () => {

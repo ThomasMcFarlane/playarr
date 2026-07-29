@@ -21,6 +21,16 @@ describe("createQrCodeSvg", () => {
     expect(svg).toContain("<svg");
     expect(svg).toContain('width="180"');
   });
+
+  it("uses the shared Playarr login/qr module colours", async () => {
+    const { PLAYARR_QR_STYLE, createQrCodeSvg: make } = await import("./index");
+    expect(PLAYARR_QR_STYLE.tileSize).toBe(240);
+    expect(PLAYARR_QR_STYLE.borderPx).toBe(12);
+    expect(PLAYARR_QR_STYLE.radiusPx).toBe(18);
+    const svg = await make("https://playarr.example/link?user_code=WXYZ-1234");
+    // qrcode embeds fill on path/rect; dark modules must be pure black.
+    expect(svg).toMatch(/#000000|fill="black"|rgb\(0,\s*0,\s*0\)/i);
+  });
 });
 
 describe("requestDeviceCode", () => {
@@ -111,6 +121,35 @@ describe("pollDeviceToken", () => {
 
     await expect(pollDeviceToken(client, "dc-1")).rejects.toMatchObject({ status: 500 });
   });
+
+  it("aborts an in-flight token request", async () => {
+    let markRequestStarted!: (request: Request) => void;
+    const requestStarted = new Promise<Request>((resolve) => {
+      markRequestStarted = resolve;
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: vi.fn(
+        (request: Request) =>
+          new Promise<Response>((_resolve, reject) => {
+            markRequestStarted(request);
+            request.signal.addEventListener(
+              "abort",
+              () => reject(request.signal.reason),
+              { once: true }
+            );
+          })
+      ),
+    });
+    const controller = new AbortController();
+    const result = pollDeviceToken(client, "dc-1", controller.signal);
+    const request = await requestStarted;
+
+    controller.abort();
+
+    expect(request.signal.aborted).toBe(true);
+    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  });
 });
 
 describe("pollForToken", () => {
@@ -158,6 +197,36 @@ describe("pollForToken", () => {
         {}
       )
     ).rejects.toThrow(/expired/i);
+  });
+
+  it("does not poll once its wait has crossed the expiry deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = mockFetch(() =>
+        jsonResponse(400, { error: "authorization_pending" })
+      );
+      const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl: fetch });
+      const result = expect(
+        pollForToken(
+          client,
+          {
+            deviceCode: "dc-1",
+            userCode: "U",
+            verificationUri: "v",
+            verificationUriComplete: "v",
+            expiresInSeconds: 1,
+            intervalSeconds: 5,
+          },
+          {}
+        )
+      ).rejects.toThrow(/expired/i);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await result;
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("throws when the user denies the request", async () => {

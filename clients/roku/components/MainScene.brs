@@ -9,6 +9,7 @@ sub init()
     m.pairingStatus = m.top.findNode("pairingStatus")
     m.pairingQr = m.top.findNode("pairingQr")
     m.pairingQrBg = m.top.findNode("pairingQrBg")
+    m.pairingQrFrame = m.top.findNode("pairingQrFrame")
     m.pairingManualHint = m.top.findNode("pairingManualHint")
     m.hostedLinkTimer = m.top.findNode("hostedLinkTimer")
     m.profilesGroup = m.top.findNode("profilesGroup")
@@ -394,11 +395,15 @@ sub acceptHostedLinkCode(data as Object)
         qrTargetUrl = data.verification_uri + "?user_code=" + data.user_code
     end if
     if qrTargetUrl <> invalid
+        ' Hosted PNG matches PLAYARR_QR_STYLE (black/white, margin 2, content
+        ' box 216@2x). Plate + frame supply the rounded white tile chrome.
         m.pairingQr.uri = AppConfig().hostedLinkOrigin + "/api/link/qr?value=" + UrlEncode(qrTargetUrl)
         m.pairingQr.visible = true
-        m.pairingQrBg.visible = true
+        if m.pairingQrBg <> invalid then m.pairingQrBg.visible = true
+        if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = true
     else
-        m.pairingQrBg.visible = false
+        if m.pairingQrBg <> invalid then m.pairingQrBg.visible = false
+        if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = false
     end if
     showOnly("pairing")
     m.top.screenState = "pairing"
@@ -435,7 +440,7 @@ sub acceptHostedLinkClaim(data as Object)
     m.serverIndex = 0
     m.serverUrl = data.server_url
     SaveServerAddresses(m.serverAddresses)
-    m.pairingQr.visible = false
+    hidePairingQr()
     m.deviceCode = data.server_device_code
     m.pollInterval = 2
     m.pairingStatus.text = "Finishing sign-in…"
@@ -851,11 +856,16 @@ sub showPairingBusy(title as String, message as String)
     m.pairingCode.text = ""
     m.pairingStatus.text = title
     m.pairingManualHint.text = ""
-    if m.pairingQr <> invalid then m.pairingQr.visible = false
-    if m.pairingQrBg <> invalid then m.pairingQrBg.visible = false
+    hidePairingQr()
     showOnly("pairing")
     m.top.screenState = "pairing"
     m.top.SetFocus(true)
+end sub
+
+sub hidePairingQr()
+    if m.pairingQr <> invalid then m.pairingQr.visible = false
+    if m.pairingQrBg <> invalid then m.pairingQrBg.visible = false
+    if m.pairingQrFrame <> invalid then m.pairingQrFrame.visible = false
 end sub
 
 sub acceptDeviceCode(data as Object)
@@ -870,8 +880,7 @@ sub acceptDeviceCode(data as Object)
     m.pairingCode.text = data.user_code
     m.pairingStatus.text = "Waiting for approval…"
     m.pairingManualHint.text = ""
-    m.pairingQr.visible = false
-    m.pairingQrBg.visible = false
+    hidePairingQr()
     showOnly("pairing")
     m.top.screenState = "pairing"
     m.pairingTimer.duration = m.pollInterval
