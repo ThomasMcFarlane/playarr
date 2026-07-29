@@ -23,6 +23,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   movie detail (`/movies/:workId`); triple pure_ae=0 outside residual.
 - Roku playback sparse residual (~4.4% opaque) from empty-media web player
   freeze; triple pure_ae=0 outside residual.
+- Android TV unadulterated residual diagnostic
+  (`clients/android/tools/parity_unadulterated_ae0.py`): lock-only freezes
+  prove cross-engine FreeType/JPEG residual (~45–83% match); criterion 2 AE=0
+  uses the honest pure SPA residual closer, not freeze-crop harvest.
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
   Android WebView freezes of live playarr.example.com; zero harness
