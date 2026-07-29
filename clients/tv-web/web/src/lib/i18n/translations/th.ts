@@ -824,7 +824,7 @@ export const th: Translations = {
   "pages.clients.chromecast.name": "Chromecast",
   "pages.clients.chromecast.platform": "อุปกรณ์ที่มี Chromecast ในตัว",
   "pages.clients.chromecast.description":
-    "การแคสต์จากแอป Playarr บนเว็บ Android และ iOS ไปยัง Chromecast อยู่ระหว่างการพัฒนา แอปตัวรับยังไม่เผยแพร่",
+    "ฝั่งส่งและฝั่งรับสำหรับ Chromecast สร้างเสร็จและทดสอบแล้วสำหรับแอป Playarr บนเว็บและ Android ส่วน iOS กำลังพัฒนาอยู่ การแคสต์ยังใช้งานจริงไม่ได้ เนื่องจากต้องลงทะเบียนตัวรับกับ Google Cast Developer Console ก่อนอุปกรณ์จริงจึงจะใช้งานได้",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "โทรศัพท์และแท็บเล็ต Android",
   "pages.clients.androidMobile.description": "มีตัวแอปแล้ว แต่ยังไม่มีไฟล์ดาวน์โหลดที่ลงลายเซ็นเผยแพร่",
@@ -847,10 +847,6 @@ export const th: Translations = {
   "pages.clients.xbox.name": "Xbox",
   "pages.clients.xbox.platform": "Xbox Series X|S และ Xbox One",
   "pages.clients.xbox.description": "ไคลเอนต์ Xbox แบบเนทีฟกำลังอยู่ระหว่างการพัฒนา โดยจะติดตั้งเป็นแพ็กเกจที่ลงลายเซ็นแล้ว จึงยังไม่มีรุ่นให้ดาวน์โหลด",
-  "pages.clients.playstation.name": "PlayStation",
-  "pages.clients.playstation.platform": "PlayStation 5 และ PlayStation 4",
-  "pages.clients.playstation.description":
-    "ไคลเอนต์ Playarr สำหรับเครื่องเล่น PlayStation อยู่ระหว่างการพิจารณา ยังไม่มีไฟล์ให้ติดตั้งในขณะนี้",
   "pages.clients.harmony.name": "HarmonyOS",
   "pages.clients.harmony.platform": "โทรศัพท์ แท็บเล็ต และทีวี Vision ของ Huawei",
   "pages.clients.harmony.description": "ไคลเอนต์ HarmonyOS แบบเนทีฟกำลังอยู่ระหว่างการพัฒนา โดยจะติดตั้งเป็นแพ็กเกจที่ลงลายเซ็นแล้ว จึงยังไม่มีรุ่นให้ดาวน์โหลด",

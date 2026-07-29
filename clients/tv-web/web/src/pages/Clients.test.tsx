@@ -116,15 +116,12 @@ describe("ClientsPage", () => {
     expect(markup).toContain('data-client-icon="roku"');
     expect(markup).toContain('data-client-icon="chromecast"');
     expect(markup).toContain('data-client-icon="harmony"');
-    expect(markup).toContain('data-client-icon="playstation"');
     expect(markup).toContain('data-client-icon="firetv"');
     expect(markup).toContain('id="client-vidaa"');
     expect(markup).toContain('id="client-roku"');
     expect(markup).toContain('id="client-chromecast"');
-    expect(markup).toContain('id="client-playstation"');
     expect(markup).toContain('id="client-firetv"');
     expect(markup).toContain("Chromecast built-in devices");
-    expect(markup).toContain("PlayStation 5 and PlayStation 4");
     expect(markup).toContain("Amazon Fire TV devices");
     expect(markup).toContain("Apple TV");
     expect(markup).toContain("iPhone, iPad and Apple TV");
@@ -143,7 +140,6 @@ describe("ClientsPage", () => {
       "roku",
       "chromecast",
       "harmony",
-      "playstation",
       "firetv",
     ]) {
       expect(markup).toContain(`id="client-${client}"`);
@@ -161,7 +157,6 @@ describe("ClientsPage", () => {
       "roku",
       "chromecast",
       "harmony",
-      "playstation",
       "firetv",
     ]) {
       expect(markup).not.toContain(`href="/clients/${client}"`);
@@ -197,7 +192,6 @@ describe("ClientsPage", () => {
       "chromecast",
       "xbox",
       "harmony",
-      "playstation",
       "firetv",
     ]) {
       const markup = renderClientRoute(`/clients/${client}`);

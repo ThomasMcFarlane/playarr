@@ -904,7 +904,7 @@ export const en = {
   "pages.clients.chromecast.name": "Chromecast",
   "pages.clients.chromecast.platform": "Chromecast built-in devices",
   "pages.clients.chromecast.description":
-    "Casting from the Playarr web, Android and iOS apps to a Chromecast is in development. The receiver app is not published yet.",
+    "The Chromecast sender and receiver are built and tested for the Playarr web and Android apps, with an iOS sender in progress. Casting is not live yet: it needs a receiver registered with the Google Cast Developer Console before any real device can use it.",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Android phones and tablets",
   "pages.clients.androidMobile.description":
@@ -933,10 +933,6 @@ export const en = {
   "pages.clients.xbox.platform": "Xbox Series X|S and Xbox One",
   "pages.clients.xbox.description":
     "The native Xbox client is in development. It will install as a signed package, so no release is available to download yet.",
-  "pages.clients.playstation.name": "PlayStation",
-  "pages.clients.playstation.platform": "PlayStation 5 and PlayStation 4",
-  "pages.clients.playstation.description":
-    "A Playarr client for PlayStation consoles is being scoped. Nothing is available to install yet.",
   "pages.clients.harmony.name": "HarmonyOS",
   "pages.clients.harmony.platform": "Huawei phones, tablets and Vision TVs",
   "pages.clients.harmony.description":

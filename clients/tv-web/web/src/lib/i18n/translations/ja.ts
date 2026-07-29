@@ -820,7 +820,7 @@ export const ja: Translations = {
   "pages.clients.chromecast.name": "Chromecast",
   "pages.clients.chromecast.platform": "Chromecast内蔵デバイス",
   "pages.clients.chromecast.description":
-    "Playarrのウェブ、Android、iOSアプリからChromecastへのキャストは開発中です。レシーバーアプリはまだ公開されていません。",
+    "PlayarrのウェブアプリとAndroidアプリ向けにChromecastの送信側と受信側の実装が完成し、テスト済みです。iOS版は開発中です。ただし、Google Cast Developer Consoleへのレシーバー登録がまだのため、実機ではキャストをご利用いただけません。",
   "pages.clients.androidMobile.name": "Android Mobile",
   "pages.clients.androidMobile.platform": "Androidスマートフォンとタブレット",
   "pages.clients.androidMobile.description": "クライアントビルドはありますが、署名済みダウンロードはまだ公開されていません。",
@@ -843,10 +843,6 @@ export const ja: Translations = {
   "pages.clients.xbox.name": "Xbox",
   "pages.clients.xbox.platform": "Xbox Series X|SおよびXbox One",
   "pages.clients.xbox.description": "Xbox向けネイティブクライアントは開発中です。署名済みパッケージとしてインストールされるため、ダウンロードできるリリースはまだありません。",
-  "pages.clients.playstation.name": "PlayStation",
-  "pages.clients.playstation.platform": "PlayStation 5 と PlayStation 4",
-  "pages.clients.playstation.description":
-    "PlayStation コンソール向けの Playarr クライアントは検討中です。現在インストールできるものはありません。",
   "pages.clients.harmony.name": "HarmonyOS",
   "pages.clients.harmony.platform": "Huaweiのスマートフォン、タブレット、Visionテレビ",
   "pages.clients.harmony.description": "HarmonyOS向けネイティブクライアントは開発中です。署名済みパッケージとしてインストールされるため、ダウンロードできるリリースはまだありません。",

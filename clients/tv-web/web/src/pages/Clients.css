@@ -189,10 +189,6 @@
   height: 62%;
 }
 
-.client-choice.is-playstation .client-platform-icon {
-  color: #003791;
-}
-
 .client-choice.is-firetv .client-platform-icon {
   color: #ff9900;
 }
@@ -328,10 +324,6 @@
 
 .client-details-summary.is-harmony .client-details-icon {
   color: var(--ink);
-}
-
-.client-details-summary.is-playstation .client-details-icon {
-  color: #003791;
 }
 
 .client-details-summary.is-firetv .client-details-icon {

@@ -154,10 +154,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   preparation material only.
 - Cover every `ClientPlatform` variant with round-trip, exhaustiveness and serde-representation
   tests, so a newly added platform can no longer be unparseable or split its wire contract in half.
-- List PlayStation as a coming-soon entry on the Playarr clients page in English, Japanese and
-  Thai, with the Simple Icons brand mark used by every other supported-platform tile. The copy
-  makes no delivery promise, because Sony publishes no console SDK outside its partner programme
-  and the shape of the client is still being scoped.
 
 ### Changed
 
