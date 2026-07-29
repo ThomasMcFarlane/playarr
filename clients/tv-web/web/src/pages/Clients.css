@@ -66,11 +66,12 @@
      clamp) so the nearest neighbour clears the enlarged active tile's
      footprint at every viewport size, instead of tucking in behind it. */
   --cf-spacing: calc(var(--cf-tile-width) * 1.15);
-  /* Deliberately tighter than --cf-spacing: a landing grid of equal-sized
-     bubbles reads better packed closer together, unlike the stack, which
-     needs room for the centred tile to be visibly larger than the rest. */
-  --grid-spacing-x: calc(var(--cf-tile-width) * 0.92);
-  --grid-spacing-y: calc(var(--cf-tile-width) * 0.92);
+  /* Every grid tile is a full-size circle (unlike the stack, where only the
+     centred tile is at full scale) -- so unlike --cf-spacing, this can't go
+     below 1x the tile's own diameter without adjacent bubbles overlapping.
+     1.3x leaves a clear gap between them. */
+  --grid-spacing-x: calc(var(--cf-tile-width) * 1.3);
+  --grid-spacing-y: calc(var(--cf-tile-width) * 1.3);
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
@@ -81,12 +82,20 @@
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
   place-items: center;
-  /* Sized for the taller of the two layouts (the grid's 3 rows), shared
-     with the stack's single row so the container itself never needs to
-     resize -- animating height is far less smooth than transform, so the
-     stack simply centres within extra vertical room instead. */
-  height: calc(2 * var(--grid-spacing-y) + var(--cf-tile-width) + 40px);
+  /* Stack mode is always a single row -- only grid mode (below) needs room
+     for more. Sizing this for the grid unconditionally left every client
+     detail page carrying dead space it never used, so this transitions
+     instead of permanently reserving the taller layout's height. */
+  height: calc(var(--cf-tile-width) + 40px);
   padding-block: clamp(22px, calc(3 * var(--viewport-unit)), 38px) 34px;
+  transition: height 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clients-coverflow.is-grid .clients-coverflow-track {
+  /* Matches gridOffset()'s row range of ±(rows-1)/2 -- 3 rows for the
+     current 10 clients, so the furthest tiles sit one full
+     --grid-spacing-y step above/below centre. */
+  height: calc(2 * var(--grid-spacing-y) + var(--cf-tile-width) + 40px);
 }
 
 .client-choice {
