@@ -12,7 +12,8 @@ import type { PlayarrCastStateMessage } from "@playarr-tv/cast-protocol";
 import type { PlaybackEngineController } from "../../lib/usePlaybackEngine";
 import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
-import { IS_TIZEN } from "../../lib/clientPlatform";
+import { IS_TIZEN, type PlayarrWebPlatform } from "../../lib/clientPlatform";
+import { usesTenFootChrome } from "../../lib/productSurfaces";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import {
@@ -32,6 +33,33 @@ import {
 
 const SEEK_STEP_SECONDS = 5;
 const AUTO_HIDE_MS = 3000;
+/** Full bar count for desktop web; ten-foot TVs use fewer bars for readability. */
+export const MUSIC_VISUALISER_BAR_COUNT = 36;
+export const MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT = 18;
+
+/** Music visualiser density: reduced on ten-foot TV identities (android-tv, tv-vidaa, …). */
+export function musicVisualiserBarCount(
+  platform: PlayarrWebPlatform | string | undefined
+): number {
+  if (
+    platform === "android-tv" ||
+    platform === "tv-vidaa" ||
+    platform === "tv-webos" ||
+    platform === "tv-tizen" ||
+    platform === "xbox"
+  ) {
+    return MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT;
+  }
+  if (
+    platform !== undefined &&
+    platform !== "" &&
+    usesTenFootChrome(platform as PlayarrWebPlatform)
+  ) {
+    return MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT;
+  }
+  return MUSIC_VISUALISER_BAR_COUNT;
+}
+
 
 interface WebKitFullscreenDocument extends Document {
   webkitFullscreenElement?: Element | null;
@@ -187,8 +215,6 @@ export interface PlayerMusicContext {
   artworkWork: Pick<Work, "id" | "images">;
 }
 
-const MUSIC_VISUALISER_BAR_COUNT = 36;
-
 interface MusicAudioGraph {
   context: AudioContext;
   analyser: AnalyserNode;
@@ -318,10 +344,9 @@ function useMusicAudioVisualiser(
 }
 
 export function MusicVisualiserBars() {
-  const barCount =
-    document.documentElement.dataset.platform === "android-tv"
-      ? 18
-      : MUSIC_VISUALISER_BAR_COUNT;
+  const barCount = musicVisualiserBarCount(
+    document.documentElement.dataset.platform
+  );
 
   return (
     <div className="player-music-visualiser" data-player-music-visualiser>
@@ -331,6 +356,7 @@ export function MusicVisualiserBars() {
     </div>
   );
 }
+
 
 function MusicPlayerVisual({
   context,

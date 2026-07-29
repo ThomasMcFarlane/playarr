@@ -1,6 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { playerVideoAccessibilityProps } from "./PlayerSurface";
+import {
+  MUSIC_VISUALISER_BAR_COUNT,
+  MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT,
+  musicVisualiserBarCount,
+  playerVideoAccessibilityProps,
+} from "./PlayerSurface";
 
 describe("playerVideoAccessibilityProps", () => {
   it("makes the minimised video inert instead of hiding retained focus", () => {
@@ -22,5 +27,20 @@ describe("playerVideoAccessibilityProps", () => {
     expect(markup).not.toContain("inert");
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('aria-label="Video playback"');
+  });
+});
+
+describe("musicVisualiserBarCount", () => {
+  it("uses full density on desktop web", () => {
+    expect(musicVisualiserBarCount("web")).toBe(MUSIC_VISUALISER_BAR_COUNT);
+  });
+
+  it("uses ten-foot density for tv-vidaa and android-tv (parity)", () => {
+    expect(musicVisualiserBarCount("tv-vidaa")).toBe(
+      MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT
+    );
+    expect(musicVisualiserBarCount("android-tv")).toBe(
+      MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT
+    );
   });
 });

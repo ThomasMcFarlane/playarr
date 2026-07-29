@@ -15,6 +15,8 @@ import {
   useNavigationLayer,
 } from "../../lib/navigationLayer";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import type { TranslationKey } from "../../lib/i18n/translations";
+import { PRODUCT_SETTINGS_SECTIONS } from "../../lib/productSurfaces";
 import { TvStageShell } from "../../components/tv/TvStage";
 
 interface SettingsSection {
@@ -33,57 +35,14 @@ const DETAIL_FOCUSABLE_SELECTOR = [
   "summary",
 ].join(",");
 
+/** Settings hierarchy from productSurfaces (shared with tv-vidaa parity tests). */
 function buildSettingsSections(t: TFunction): readonly SettingsSection[] {
-  return [
-    {
-      to: "/settings/appearance",
-      number: "01",
-      title: t("settings.index.appearance.title"),
-      description: t("settings.index.appearance.description"),
-    },
-    {
-      to: "/settings/profile-avatar",
-      number: "02",
-      title: t("settings.index.profileAvatar.title"),
-      description: t("settings.index.profileAvatar.description"),
-    },
-    {
-      to: "/settings/language",
-      number: "03",
-      title: t("settings.index.language.title"),
-      description: t("settings.language.description"),
-    },
-    {
-      to: "/settings/player",
-      number: "04",
-      title: t("settings.index.player.title"),
-      description: t("settings.playerPreferences.description"),
-    },
-    {
-      to: "/settings/server",
-      number: "05",
-      title: t("settings.index.server.title"),
-      description: t("settings.index.server.description"),
-    },
-    {
-      to: "/settings/profile-lock",
-      number: "06",
-      title: t("settings.index.profileLock.title"),
-      description: t("settings.index.profileLock.description"),
-    },
-    {
-      to: "/settings/invite",
-      number: "07",
-      title: t("settings.index.invite.title"),
-      description: t("settings.index.invite.description"),
-    },
-    {
-      to: "/settings/request-latency",
-      number: "08",
-      title: t("settings.index.requestLatency.title"),
-      description: t("settings.index.requestLatency.description"),
-    },
-  ] as const;
+  return PRODUCT_SETTINGS_SECTIONS.map((section) => ({
+    to: section.to,
+    number: section.number,
+    title: t(section.titleKey as TranslationKey),
+    description: t(section.descriptionKey as TranslationKey),
+  }));
 }
 
 export function shouldReturnSettingsFocusToList(

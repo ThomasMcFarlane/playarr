@@ -77,6 +77,7 @@ import {
   PLAYARR_CLIENT_PLATFORM,
   shouldStartPackagedTvLink,
 } from "./lib/clientPlatform";
+import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
 import {
@@ -115,66 +116,35 @@ export interface AppShellOutletContext {
   startPlayerSession: (session: ActivePlayerSession) => void;
 }
 
-const NAV_GROUPS: ReadonlyArray<NavGroup> = [
-  {
-    id: "search",
-    items: [
-      {
-        to: "/downloads",
-        labelKey: "shell.nav.downloads",
-        end: false,
-        Icon: DownloadsIcon,
-        requiresDownload: true,
-      },
-      { to: "/search", labelKey: "shell.nav.search", end: false, Icon: SearchIcon },
-    ],
-  },
-  {
-    id: "library",
-    items: [
-      { to: "/", labelKey: "shell.nav.home", end: true, Icon: HomeIcon },
-      {
-        to: "/series",
-        labelKey: "shell.nav.series",
-        end: false,
-        Icon: SeriesIcon,
-        workKind: "series",
-      },
-      {
-        to: "/movies",
-        labelKey: "shell.nav.movies",
-        end: false,
-        Icon: MoviesIcon,
-        workKind: "movie",
-      },
-      {
-        to: "/sites",
-        labelKey: "shell.nav.sites",
-        end: false,
-        Icon: SitesIcon,
-        workKind: "site",
-      },
-      {
-        to: "/music",
-        labelKey: "shell.nav.music",
-        end: false,
-        Icon: MusicIcon,
-        workKind: "artist",
-      },
-    ],
-  },
-  {
-    id: "playlists",
-    items: [
-      {
-        to: "/playlists",
-        labelKey: "shell.nav.playlists",
-        end: false,
-        Icon: PlaylistsIcon,
-      },
-    ],
-  },
-];
+const NAV_ICONS: Record<string, ComponentType> = {
+  "/downloads": DownloadsIcon,
+  "/search": SearchIcon,
+  "/": HomeIcon,
+  "/series": SeriesIcon,
+  "/movies": MoviesIcon,
+  "/sites": SitesIcon,
+  "/music": MusicIcon,
+  "/playlists": PlaylistsIcon,
+};
+
+/** Shell nav hierarchy from productSurfaces (shared with tv-vidaa parity tests). */
+const NAV_GROUPS: ReadonlyArray<NavGroup> = PRODUCT_NAV_GROUPS.map((group) => ({
+  id: group.id,
+  items: group.items.map((item) => {
+    const Icon = NAV_ICONS[item.to];
+    if (!Icon) {
+      throw new Error(`Missing nav icon for ${item.to}`);
+    }
+    return {
+      to: item.to,
+      labelKey: item.labelKey as TranslationKey,
+      end: item.end,
+      Icon,
+      workKind: item.workKind,
+      requiresDownload: item.requiresDownload,
+    };
+  }),
+}));
 
 function isBackKey(event: KeyboardEvent): boolean {
   return (

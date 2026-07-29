@@ -115,7 +115,12 @@ export function DeviceLogin({
   return (
     <div className="auth-page device-login-page">
       <div className="auth-backdrop" aria-hidden="true" />
-      <div className="auth-card device-login-card">
+      <div
+        className="auth-card device-login-card"
+        data-tv-scroll-container
+        data-tv-scroll-axis="vertical"
+        data-navigation-scroll-key="auth:device-login"
+      >
         <div className="auth-header">
           <span className="app-logo">
             <img

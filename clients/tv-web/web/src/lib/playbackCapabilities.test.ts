@@ -25,4 +25,18 @@ describe("playbackCapabilitiesForPlatform", () => {
     expect(playbackCapabilitiesForPlatform("web").videoCodecs).toContain("av1");
     expect(playbackCapabilitiesForPlatform("web").audioCodecs).toContain("flac");
   });
+
+  it("uses the conservative VIDAA browser profile without thinning containers wrongly", () => {
+    const vidaa = playbackCapabilitiesForPlatform("tv-vidaa");
+    expect(vidaa).toEqual({
+      containers: "mp4,webm,mp3,m4a",
+      videoCodecs: "h264,h265,vp9",
+      audioCodecs: "aac,opus,mp3",
+    });
+    // Still negotiates common streaming codecs; not an empty claim set.
+    const videoCodecs = vidaa.videoCodecs ?? "";
+    const audioCodecs = vidaa.audioCodecs ?? "";
+    expect(videoCodecs.split(",").filter(Boolean).length).toBeGreaterThanOrEqual(2);
+    expect(audioCodecs.split(",").filter(Boolean).length).toBeGreaterThanOrEqual(2);
+  });
 });

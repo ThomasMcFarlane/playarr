@@ -9,11 +9,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
+  web share the same complete-client routes, shell nav hierarchy, and eight
+  settings sections (client-principles parity source of truth).
 - Roku `scripts/parity_ae0.py` pure-AE suite (pure outside residual-asset
   rects must be 0; residual fill only on declared residual-asset rects).
 
 ### Fixed
 
+- VIDAA / ten-foot music visualiser bar density matches android-tv (18 bars)
+  instead of desktop-only 36, and DeviceLogin marks a real scroll container
+  for TV device-code sign-in.
 - Roku profiles match tv-web: hide signed-in nav, alien mascot avatars,
   `WATCHING NOW` status, residual chrome (logo/lang/clients/actions).
 - Roku merge-conflict markers removed from MainScene/package/tests;
