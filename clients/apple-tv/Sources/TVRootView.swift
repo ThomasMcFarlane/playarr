@@ -108,54 +108,13 @@ struct TVRootView: View {
         detailWork: Work?,
         nav: Binding<TVNavTab>
     ) -> some View {
-        let navColumn = DesignTokens.Shell.navItemSize
-            + DesignTokens.Shell.navGroupPadding * 2
-            + DesignTokens.Shell.navEdge * 2
-
-        return ZStack(alignment: .topLeading) {
-            HStack(alignment: .center, spacing: 0) {
-                TVFloatingNav(
-                    selection: nav,
-                    suppressFocusChrome: false,
-                    showSettings: true,
-                    externalFocus: $shellFocus
-                )
-                .frame(width: navColumn)
-                .focusSection()
-
-                NavigationStack {
-                    stageContent(tab: tab, detailWork: detailWork)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .toolbar(.hidden, for: .navigationBar)
-                        .navigationBarBackButtonHidden(true)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .focusSection()
-            }
-
-            TVShellHeader(frozenClock: false)
-                .frame(maxWidth: .infinity, alignment: .top)
-                .allowsHitTesting(false)
-                .zIndex(80)
-
-            VStack {
-                Spacer()
-                HStack {
-                    TVProfileChip(name: "Viewer", version: nil)
-                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
-                        .padding(.bottom, 36)
-                    Spacer()
-                }
-            }
-            .allowsHitTesting(false)
-            .zIndex(50)
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            if shellFocus == nil {
-                shellFocus = .stage
-            }
-        }
+        TVProductionShell(
+            tab: tab,
+            detailWork: detailWork,
+            nav: nav,
+            shellFocus: $shellFocus,
+            stageContent: { stageContent(tab: tab, detailWork: detailWork) }
+        )
     }
 
     /// Parity-only floating chrome (absolute SPA geometry).
@@ -244,6 +203,92 @@ struct TVRootView: View {
                 )
             }
         }
+    }
+}
+
+/// Production signed-in chrome with a single focus scope so Left from rails
+/// can land on the dock (and Right can return to the stage).
+private struct TVProductionShell<Stage: View>: View {
+    let tab: TVNavTab
+    let detailWork: Work?
+    @Binding var nav: TVNavTab
+    var shellFocus: FocusState<TVShellFocus?>.Binding
+    @ViewBuilder var stageContent: () -> Stage
+
+    @Namespace private var shellFocusNamespace
+    @State private var preferNavDefault = false
+    @Environment(\.resetFocus) private var resetFocus
+
+    private var navColumn: CGFloat {
+        DesignTokens.Shell.navItemSize
+            + DesignTokens.Shell.navGroupPadding * 2
+            + DesignTokens.Shell.navEdge * 2
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            HStack(alignment: .center, spacing: 0) {
+                TVFloatingNav(
+                    selection: $nav,
+                    suppressFocusChrome: false,
+                    showSettings: true,
+                    externalFocus: shellFocus,
+                    focusNamespace: shellFocusNamespace,
+                    preferDefaultFocus: preferNavDefault
+                )
+                .frame(width: navColumn)
+                .focusSection()
+
+                NavigationStack {
+                    stageContent()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .toolbar(.hidden, for: .navigationBar)
+                        .navigationBarBackButtonHidden(true)
+                        .focusSection()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focusSection()
+                .focused(shellFocus, equals: .stage)
+            }
+            // One scope for dock + stage so resetFocus / prefersDefaultFocus
+            // can pull the remote out of ScrollView rails into the dock.
+            .focusScope(shellFocusNamespace)
+            .environment(\.requestNavFocus) {
+                preferNavDefault = true
+                let target = TVShellFocus.nav(tab)
+                Task { @MainActor in
+                    shellFocus.wrappedValue = target
+                    resetFocus(in: shellFocusNamespace)
+                    // Prefer-nav is a one-shot entry hint; clear so Right can
+                    // re-enter the stage on the next move.
+                    try? await Task.sleep(for: .milliseconds(80))
+                    preferNavDefault = false
+                }
+            }
+            .onChange(of: shellFocus.wrappedValue) { _, newValue in
+                if case .nav = newValue {
+                    preferNavDefault = false
+                }
+            }
+
+            TVShellHeader(frozenClock: false)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .allowsHitTesting(false)
+                .zIndex(80)
+
+            VStack {
+                Spacer()
+                HStack {
+                    TVProfileChip(name: "Viewer", version: nil)
+                        .padding(.leading, DesignTokens.Shell.navEdge - 4)
+                        .padding(.bottom, 36)
+                    Spacer()
+                }
+            }
+            .allowsHitTesting(false)
+            .zIndex(50)
+        }
+        .ignoresSafeArea()
     }
 }
 

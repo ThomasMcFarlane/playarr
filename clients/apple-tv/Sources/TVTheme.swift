@@ -172,6 +172,19 @@ enum TVShellFocus: Hashable {
     case stage
 }
 
+/// Called when the stage wants the remote to land on the left nav (Left on a
+/// leading card). The shell owns the FocusState and performs the move.
+private struct RequestNavFocusKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var requestNavFocus: () -> Void {
+        get { self[RequestNavFocusKey.self] }
+        set { self[RequestNavFocusKey.self] = newValue }
+    }
+}
+
 struct TVFloatingNav: View {
     @Binding var selection: TVNavTab
     /// When true, suppress tvOS focus lift so parity captures match web chrome.
@@ -180,6 +193,10 @@ struct TVFloatingNav: View {
     var showSettings: Bool = true
     /// Parent-owned focus (required for moving between nav and stage).
     var externalFocus: FocusState<TVShellFocus?>.Binding
+    /// Shared shell namespace for prefersDefaultFocus / resetFocus hand-off.
+    var focusNamespace: Namespace.ID? = nil
+    /// When true, the active tab is the preferred default focus target.
+    var preferDefaultFocus: Bool = false
 
     private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
@@ -213,10 +230,11 @@ struct TVFloatingNav: View {
         )
     }
 
+    @ViewBuilder
     private func navButton(_ tab: TVNavTab) -> some View {
         let isActive = selection == tab
         let isFocused = externalFocus.wrappedValue == .nav(tab)
-        return Button {
+        let button = Button {
             selection = tab
             externalFocus.wrappedValue = .nav(tab)
         } label: {
@@ -256,11 +274,24 @@ struct TVFloatingNav: View {
             )
             .scaleEffect(isFocused && !suppressFocusChrome ? 1.05 : 1)
         }
+        // Card-like style stays focusable; .plain can drop remote hand-off.
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         .focused(externalFocus, equals: .nav(tab))
         .focusable(!suppressFocusChrome)
         .focusEffectDisabled(suppressFocusChrome)
+        .onMoveCommand { direction in
+            // Right from any dock item jumps into the stage (first rail card).
+            if direction == .right {
+                externalFocus.wrappedValue = .stage
+            }
+        }
+
+        if let focusNamespace, preferDefaultFocus, isActive {
+            button.prefersDefaultFocus(true, in: focusNamespace)
+        } else {
+            button
+        }
     }
 }
 

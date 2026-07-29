@@ -4,6 +4,7 @@ import SwiftUI
 struct TVWorkDetailView: View {
     let work: Work
     let apiClient: PlayarrAPIClient
+    @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVWorkDetailViewModel
     @FocusState private var focusedEpisodeID: UUID?
 
@@ -197,7 +198,6 @@ struct TVWorkDetailView: View {
         }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
-        .focusSection()
     }
 
     /// SPA `.tv-key-art img` with dark-theme filter chain.
@@ -330,7 +330,6 @@ struct TVWorkDetailView: View {
                 }
                 .padding(.bottom, 80)
             }
-            .focusSection()
         }
     }
 
@@ -346,16 +345,24 @@ struct TVWorkDetailView: View {
                 .foregroundStyle(DesignTokens.Color.textDisabled)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                    ForEach(playable, id: \.episode.id) { episode in
-                        seriesEpisodeCard(episode, seasonNumber: season.season.seasonNumber)
+                    ForEach(Array(playable.enumerated()), id: \.element.episode.id) { index, episode in
+                        seriesEpisodeCard(
+                            episode,
+                            seasonNumber: season.season.seasonNumber,
+                            isLeading: index == 0
+                        )
                     }
                 }
             }
-            .focusSection()
+            // No focusSection trap: Left on the leading episode must reach the dock.
         }
     }
 
-    private func seriesEpisodeCard(_ episode: EpisodeDetail, seasonNumber: Int32) -> some View {
+    private func seriesEpisodeCard(
+        _ episode: EpisodeDetail,
+        seasonNumber: Int32,
+        isLeading: Bool = false
+    ) -> some View {
         let ep = episode.episode
         let title = ep.title ?? "Episode \(ep.episodeNumber)"
         let label = "S\(String(format: "%02d", seasonNumber)) · E\(String(format: "%02d", ep.episodeNumber))"
@@ -405,6 +412,11 @@ struct TVWorkDetailView: View {
                 }
                 .buttonStyle(TVFocusableCardButtonStyle())
                 .focused($focusedEpisodeID, equals: ep.id)
+                .onMoveCommand { direction in
+                    guard direction == .left, isLeading else { return }
+                    focusedEpisodeID = nil
+                    requestNavFocus()
+                }
             )
         }
         return AnyView(
@@ -441,7 +453,6 @@ struct TVWorkDetailView: View {
             }
             .frame(width: railW, height: size.height, alignment: .topLeading)
             .clipped()
-            .focusSection()
         }
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(true)

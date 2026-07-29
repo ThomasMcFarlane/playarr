@@ -3,10 +3,12 @@ import SwiftUI
 
 struct TVHomeView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVHomeViewModel?
     /// Focus target is rail+work so the same title never lights up on two rails.
     @FocusState private var focusedCard: HomeRailCardFocus?
-    @Namespace private var homeFocusNamespace
+    /// Leading work ids per rail — Left on these hands focus to the dock.
+    @State private var leadingWorkIDs: Set<UUID> = []
 
     var body: some View {
         Group {
@@ -70,6 +72,9 @@ struct TVHomeView: View {
         let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
             HomeRailCardFocus(rail: "start", workID: $0.id)
         } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
+        let leadingIDs = Set(
+            [startWatching.first?.id, newMovies.first?.id].compactMap { $0 }
+        )
 
         return ZStack(alignment: .topLeading) {
             GeometryReader { geo in
@@ -141,16 +146,28 @@ struct TVHomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .defaultFocus($focusedCard, defaultFocus)
         .onAppear {
+            leadingWorkIDs = leadingIDs
             // Force a preferred focus target; without one, arrow keys do nothing.
             if focusedCard == nil {
                 focusedCard = defaultFocus
             }
         }
         .task(id: viewModel.works.map(\.id)) {
+            leadingWorkIDs = leadingIDs
             // After async load, re-assert focus once rails exist.
             if focusedCard == nil {
                 focusedCard = defaultFocus
             }
+        }
+        .onMoveCommand { direction in
+            // ScrollView / card focus often keeps Left local. At a rail head,
+            // release card focus then ask the shell to land on the dock.
+            guard direction == .left else { return }
+            guard let focused = focusedCard, leadingWorkIDs.contains(focused.workID) else {
+                return
+            }
+            focusedCard = nil
+            requestNavFocus()
         }
     }
 
@@ -352,8 +369,8 @@ struct TVHomeView: View {
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-            // Native tvOS card buttons + explicit FocusState. Avoid custom
-            // plain styles and nested focusSection traps.
+            // Native tvOS card buttons + explicit FocusState. No focusScope:
+            // that traps focus inside the rail and blocks Left → dock.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: gap) {
                     ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
@@ -374,14 +391,19 @@ struct TVHomeView: View {
                         }
                         .buttonStyle(.card)
                         .focused($focusedCard, equals: focus)
-                        .prefersDefaultFocus(index == 0 && railID == "start", in: homeFocusNamespace)
+                        .onMoveCommand { direction in
+                            // Per-card Left at the rail head → dock.
+                            if direction == .left, index == 0 {
+                                focusedCard = nil
+                                requestNavFocus()
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 12)
                 .padding(.trailing, 40)
             }
         }
-        .focusScope(homeFocusNamespace)
     }
 
     /// SPA `.tv-home-rails` absolute positions for parity AE freezes only.
@@ -908,11 +930,22 @@ struct TVLibraryKindView: View {
     var collectionNoun: String = "TITLES"
 
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var items: [Work] = []
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
 
     private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+
+    /// Leftmost grid column ids (SPA 3-col grid) — Left from these → dock.
+    private var leadingColumnIDs: Set<UUID> {
+        let cols = DesignTokens.Shell.libraryGridColumns
+        return Set(
+            items.enumerated()
+                .filter { $0.offset % cols == 0 }
+                .map(\.element.id)
+        )
+    }
 
     private var selected: Work? {
         if let selectedID, let match = items.first(where: { $0.id == selectedID }) {
@@ -1235,6 +1268,12 @@ struct TVLibraryKindView: View {
         .focused($selectedID, equals: work.id)
         .focusable(!parityMode)
         .focusEffectDisabled(parityMode)
+        .onMoveCommand { direction in
+            guard !parityMode, direction == .left else { return }
+            guard leadingColumnIDs.contains(work.id) else { return }
+            selectedID = nil
+            requestNavFocus()
+        }
         .onAppear {
             if selectedID == nil { selectedID = work.id }
         }

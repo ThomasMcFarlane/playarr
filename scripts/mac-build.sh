@@ -63,6 +63,9 @@ rsync -az --delete \
   --exclude 'DerivedData' \
   --exclude 'xcuserdata' \
   --exclude '*.xcworkspace/xcuserdata' \
+  --exclude 'android/app/build' \
+  --exclude 'android/.gradle' \
+  --exclude 'android/**/build' \
   "$REPO_ROOT/clients/" "$MAC_USER@$MAC_HOST:$REMOTE_DIR/clients/"
 
 echo "==> running xcodebuild $xcodebuild_action for $scheme ($destination)"
