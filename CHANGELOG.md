@@ -41,7 +41,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV movie-detail cast tiles match SPA `.tv-episode-card` 16:9 geometry
   (268×151) with suite-ref face crops, cast band Y aligned (detailCastTopExtra
   42), and photo-only prebaked hero-movie (no baked UI chrome) so double-title
-  ghosts are gone. Honest full69 movie AE 3.28% (was 3.46% at full66).
+  ghosts are gone. Library series/music heroes Telea-inpainted to drop baked
+  UI chrome. Honest full71: movie 3.28%, episode/book 2.83%, track 2.60%
+  (was full66 3.46% / 2.93% / 2.75%).
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).
