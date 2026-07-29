@@ -35,10 +35,8 @@ sub init()
     end for
     m.browseGroup = m.top.findNode("browseGroup")
     m.browseGrid = m.top.findNode("browseGrid")
-    m.browseResidual = m.top.findNode("browseResidual")
-    m.playbackResidual = m.top.findNode("playbackResidual")
-    ' Residual Posters must never paint in the product shell (dual stacked UI).
-    ' Product path keeps them permanently off; do not re-enable for AE theatre.
+    ' Product shell is a single SceneGraph UI — residual freeze Posters are
+    ' gone from MainScene.xml (no dual stacked interface).
     hideAllResiduals()
     m.availableWorkKinds = invalid
     ' Sites (index 4) starts disabled until catalog/kinds proves access.
@@ -258,6 +256,7 @@ sub init()
     m.accessToken = m.session.accessToken
     m.refreshToken = m.session.refreshToken
     m.deviceId = m.session.deviceId
+    publishArtAuthHeaders()
     m.profileLabel.text = m.session.profileName
     setListContent(m.profileActions, ["Settings", "Sign out"])
     setListContent(m.detailActions, ["Play"])
@@ -622,6 +621,7 @@ sub handleApiFailure(action as String, result as Object)
         m.accessToken = ""
         m.refreshToken = ""
         m.deviceId = ""
+        publishArtAuthHeaders()
         beginPairing()
         return
     end if
@@ -676,6 +676,59 @@ sub handleApiFailure(action as String, result as Object)
     if action = "catalogKinds"
         applyNavDockKindFilter()
         loadWatchProgress()
+        return
+    end if
+
+    ' Product surfaces stay in-shell on API failure — never a fullscreen
+    ' status wall mid-navigation (that is not how Playarr looks).
+    if action = "browseCatalog" or action = "browseCatalogMore"
+        if m.browseCountLabel <> invalid then m.browseCountLabel.text = "UNAVAILABLE"
+        showOnly("browse")
+        m.top.screenState = "browse"
+        m.browseGrid.SetFocus(true)
+        return
+    end if
+    if action = "search"
+        showSearchEmptyState(true)
+        showOnly("search")
+        m.top.screenState = "search"
+        m.searchGrid.SetFocus(true)
+        return
+    end if
+    if action = "playlists"
+        m.playlists = []
+        buildPlaylistDirectoryContent()
+        m.playlistsTitle.text = "Playlists  •  unavailable"
+        showOnly("playlists")
+        m.top.screenState = "playlists"
+        m.playlistsGrid.SetFocus(true)
+        return
+    end if
+    if action = "playlistItems"
+        m.playlistItems = []
+        buildGridContent(m.playlistItemsGrid, m.playlistItems)
+        showOnly("playlists")
+        m.top.screenState = "playlists"
+        m.playlistItemsGrid.SetFocus(true)
+        return
+    end if
+    if action = "catalog" or action = "catalogMore"
+        m.libraryTitle.text = "Library  •  unavailable"
+        showOnly("library")
+        m.top.screenState = "library"
+        m.library.SetFocus(true)
+        return
+    end if
+    if action = "detail"
+        showOnly("home")
+        m.top.screenState = "home"
+        focusCurrentHomeRail()
+        return
+    end if
+    if action = "playback"
+        showOnly("detail")
+        m.top.screenState = "detail"
+        m.detailActions.SetFocus(true)
         return
     end if
 
@@ -798,6 +851,19 @@ sub acceptTokenResponse(data as Object)
     deviceId = DecodeJwtDeviceId(m.accessToken)
     if deviceId <> "" then m.deviceId = deviceId
     SaveTokens(m.accessToken, m.refreshToken, m.deviceId)
+    publishArtAuthHeaders()
+end sub
+
+' Global art auth for PosterCard: MarkupGrid/RowList itemContent binding does
+' not reliably preserve custom ContentNode fields, so cards read headers from
+' GetGlobalAA().playarrArtHeaders instead of per-item artHeaders alone.
+sub publishArtAuthHeaders()
+    g = GetGlobalAA()
+    if m.accessToken = invalid or m.accessToken = ""
+        g.playarrArtHeaders = invalid
+        return
+    end if
+    g.playarrArtHeaders = ClientHeaders(m.accessToken)
 end sub
 
 sub loadProfiles()
@@ -1015,6 +1081,7 @@ sub onProfileActionSelected(event as Object)
         m.accessToken = ""
         m.refreshToken = ""
         m.deviceId = ""
+        publishArtAuthHeaders()
         m.profileLabel.text = ""
         beginPairing()
     else if index = 3
@@ -1297,7 +1364,12 @@ end sub
 
 sub acceptCatalog(data as Object, append as Boolean)
     if data = invalid or data.items = invalid
-        showStatus("Library unavailable", "The server returned an invalid catalogue response.", false)
+        ' Stay in library shell — never replace signed-in chrome with a
+        ' fullscreen status wall (that is not how Playarr looks).
+        m.libraryTitle.text = "Library  •  unavailable"
+        showOnly("library")
+        m.top.screenState = "library"
+        m.library.SetFocus(true)
         return
     end if
     if append
@@ -1374,7 +1446,11 @@ end sub
 
 sub acceptBrowseCatalog(data as Object, append as Boolean)
     if data = invalid or data.items = invalid
-        showStatus("Library unavailable", "The server returned an invalid catalogue response.", false)
+        ' Stay in browse shell (no fullscreen Loading / status wall).
+        if m.browseCountLabel <> invalid then m.browseCountLabel.text = "UNAVAILABLE"
+        showOnly("browse")
+        m.top.screenState = "browse"
+        m.browseGrid.SetFocus(true)
         return
     end if
     if append
@@ -1949,7 +2025,12 @@ end sub
 
 sub acceptSearchResults(data as Object)
     if data = invalid or data.items = invalid
-        showStatus("Search unavailable", "The server returned an invalid search response.", false)
+        ' Stay in Search shell (no fullscreen status wall).
+        m.searchTitle.text = "Search"
+        showSearchEmptyState(true)
+        showOnly("search")
+        m.top.screenState = "search"
+        m.searchGrid.SetFocus(true)
         return
     end if
     m.searchItems = data.items
@@ -2137,7 +2218,16 @@ end sub
 
 sub acceptPlaylists(data as Object)
     if data = invalid
-        showStatus("Playlists unavailable", "The server returned an invalid playlists response.", false)
+        ' Stay in playlists shell (no fullscreen status wall).
+        m.playlists = []
+        buildPlaylistDirectoryContent()
+        m.playlistsTitle.text = "Playlists  •  unavailable"
+        m.playlistDetailOpen = false
+        m.playlistDetailGroup.visible = false
+        m.playlistsDirectoryGroup.visible = true
+        showOnly("playlists")
+        m.top.screenState = "playlists"
+        m.playlistsGrid.SetFocus(true)
         return
     end if
     m.playlists = data
@@ -2208,7 +2298,15 @@ end sub
 
 sub acceptPlaylistItems(data as Object)
     if data = invalid
-        showStatus("Playlist unavailable", "The server returned an invalid playlist-items response.", false)
+        ' Stay in playlist detail shell (no fullscreen status wall).
+        m.playlistItems = []
+        buildGridContent(m.playlistItemsGrid, m.playlistItems)
+        m.playlistDetailOpen = true
+        m.playlistsDirectoryGroup.visible = false
+        m.playlistDetailGroup.visible = true
+        showOnly("playlists")
+        m.top.screenState = "playlists"
+        m.playlistItemsGrid.SetFocus(true)
         return
     end if
     ' Already position-ordered per the endpoint's own contract (confirmed
@@ -3015,32 +3113,12 @@ function navDockWorkKindForSlot(kind as String) as String
     return ""
 end function
 
+' Residual freeze Posters were removed from MainScene.xml. Keep these entry
+' points as no-ops so any stale call site cannot reintroduce dual-UI paint.
 sub hideAllResiduals()
-    residualIds = ["pairingResidual", "profilesResidual", "settingsResidual", "homeResidual", "browseResidual", "searchResidual", "playlistsResidual", "detailResidual", "playbackResidual"]
-    for each residualId in residualIds
-        node = m.top.findNode(residualId)
-        if node <> invalid
-            node.visible = false
-            node.opacity = 0
-            node.uri = ""
-        end if
-    end for
-    if m.browseResidual <> invalid
-        m.browseResidual.visible = false
-        m.browseResidual.opacity = 0
-        m.browseResidual.uri = ""
-    end if
-    if m.playbackResidual <> invalid
-        m.playbackResidual.visible = false
-        m.playbackResidual.opacity = 0
-        m.playbackResidual.uri = ""
-    end if
 end sub
 
-' Product shell never paints residual freezes (dual stacked UI). No-op kept so
-' any stale call sites cannot re-enable residual overpaint.
 sub showResidualForScreen(name as String)
-    hideAllResiduals()
 end sub
 
 sub acceptCatalogKinds(data as Object)
@@ -3084,6 +3162,10 @@ sub applyNavDockKindFilter()
             else
                 enabled = m.availableWorkKinds.Lookup(workKind) <> invalid
             end if
+        end if
+        ' Hard gate: Sites never shows unless kinds explicitly includes "site".
+        if workKind = "site" and (m.availableWorkKinds = invalid or m.availableWorkKinds.Lookup("site") = invalid)
+            enabled = false
         end if
         m.navEnabled[i] = enabled
         if m.navIcons[i] <> invalid then m.navIcons[i].visible = enabled
@@ -3284,7 +3366,10 @@ end sub
 
 sub showDetail(detail as Object)
     if detail = invalid or detail.work = invalid
-        showStatus("Title unavailable", "The server returned invalid title details.", false)
+        ' Stay in signed-in shell (home) — never a fullscreen status wall.
+        showOnly("home")
+        m.top.screenState = "home"
+        focusCurrentHomeRail()
         return
     end if
     m.selectedDetail = detail
@@ -3950,7 +4035,10 @@ end sub
 
 sub startPlayback(data as Object)
     if data = invalid or data.url = invalid
-        showStatus("Playback unavailable", "The server returned invalid playback information.", false)
+        ' Stay on detail chrome (no fullscreen status wall).
+        showOnly("detail")
+        m.top.screenState = "detail"
+        m.detailActions.SetFocus(true)
         return
     end if
     content = CreateObject("roSGNode", "ContentNode")
@@ -3967,7 +4055,6 @@ sub startPlayback(data as Object)
     m.playerBufferedFill.width = 0
     m.video.content = content
     m.video.visible = true
-    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     ' NOT m.video.SetFocus(true): a focused Video node swallows remote
     ' keypresses natively before Scene-level onKeyEvent ever sees them --
     ' same axis-ownership pattern already hit twice this session with
@@ -4223,7 +4310,6 @@ sub finishPlayback(reason as String)
     sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: reason })
     m.video.control = "stop"
     m.video.visible = false
-    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     m.controlBarProgressTimer.control = "stop"
     m.playerAutoHideTimer.control = "stop"
     m.top.screenState = "detail"

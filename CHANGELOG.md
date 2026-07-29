@@ -7,6 +7,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Roku product shell: residual freeze Posters removed from SceneGraph (single
+  native UI, no stacked second interface); signed-in product errors stay
+  in-shell instead of fullscreen status walls; Sites dock slot stays hard-
+  gated until `catalog/kinds` proves `site` access. Profile actions LabelList
+  XML typo repaired.
+
 ### Changed
 
 - Roku poster cards carry auth on a custom `artHeaders` field (ContentNode

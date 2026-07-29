@@ -281,10 +281,14 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn("playlistsGroupResidual", SCENE)
         self.assertNotIn("settingsGroupResidual", SCENE)
         self.assertNotIn("content-residual.png", SCENE)
-        # Residual Posters stay hidden (no dual stacked UI / full-stage overpaint).
+        # Residual freeze Posters must not exist in product SceneGraph at all
+        # (dual stacked UI). hideAllResiduals stays as a no-op guard.
+        self.assertNotIn('id="homeResidual"', SCENE)
+        self.assertNotIn('id="browseResidual"', SCENE)
+        self.assertNotIn('id="profilesResidual"', SCENE)
+        self.assertNotIn('id="playbackResidual"', SCENE)
+        self.assertNotIn("Residual", SCENE)
         self.assertIn("sub hideAllResiduals()", MAIN)
-        self.assertIn("hideAllResiduals()", MAIN)
-        self.assertIn('visible="false"', SCENE)
         self.assertNotIn("content-residual.png", MAIN)
 
     def test_parity_ae0_suite_requires_full_stage_ae0(self) -> None:
@@ -304,9 +308,19 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn('showStatus("Searching"', MAIN)
         self.assertNotIn('showStatus("Loading library"', MAIN)
         self.assertNotIn('showStatus("Loading playlist"', MAIN)
+        # Product surfaces must not swap to status walls on bad payloads.
+        self.assertNotIn('showStatus("Library unavailable"', MAIN)
+        self.assertNotIn('showStatus("Search unavailable"', MAIN)
+        self.assertNotIn('showStatus("Playlists unavailable"', MAIN)
+        self.assertNotIn('showStatus("Playlist unavailable"', MAIN)
+        self.assertNotIn('showStatus("Title unavailable"', MAIN)
+        self.assertNotIn('showStatus("Playback unavailable"', MAIN)
         self.assertIn('sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds"', MAIN)
         self.assertIn("sub applyNavDockKindFilter()", MAIN)
         self.assertIn('enabled = workKind <> "site"', MAIN)
+        # Sites hard-gated until kinds proves "site".
+        self.assertIn('workKind = "site"', MAIN)
+        self.assertIn('Lookup("site")', MAIN)
         # Home rails use real catalog artwork (not empty residual-budget tiles).
         self.assertIn("item.hdPosterUrl = artworkUrl(work)", MAIN)
         self.assertNotIn(

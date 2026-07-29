@@ -120,9 +120,6 @@
       -->
       <Rectangle id="pairingManualHintBg" translation="[1155,882]" width="620" height="46" color="0xDFDCDDFF" />
       <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
-      <!-- Sparse residual last (opaque under 20%). -->
-      <Poster id="pairingResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -149,12 +146,8 @@
       profile count).
     -->
     <Group id="profilesGroup" visible="false">
-      <!-- SceneGraph structure below (logo, kicker, title, avatar row, actions).
-           Residual Posters at the end of this Group paint live-web freeze crops
-           only inside declared residual-asset rects (parity_ae0 RESIDUAL_RECTS).
-           Residual area must stay under 20% of the stage; pure AE outside those
-           rects must already be 0 (no full-stage overpaint). Interactive focus
-           stays on profilesRow + profileActions under the residual layer. -->
+      <!-- SceneGraph structure: logo, kicker, title, avatar row, actions.
+           No residual freeze Posters — product path is a single native UI. -->
       <Poster id="profilesLogo" translation="[48,40]" width="52" height="52" uri="pkg:/images/pairing-logo.png" loadDisplayMode="scaleToFit" />
 
       <!-- Title previously overlapped the kicker: scaleRotateCenter at the
@@ -205,11 +198,7 @@
         uri="pkg:/images/profiles-clients.png" loadDisplayMode="scaleToFit" />
       <!-- Opacity 0: LabelList stays focusable for D-pad but must not paint
            "Settings"/"Sign out" text under the chrome Posters (dual UI). -->
-      <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0" />>
-
-      <!-- Residual Poster kept for tooling ids only; product path never shows it. -->
-      <Poster id="profilesResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
+      <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0" />
     </Group>
 
     <!--
@@ -258,9 +247,7 @@
       <Label id="settingsDetail" translation="[980,250]" width="860" height="320" wrap="true" scale="[0.88,0.88]" color="0xF4F0F1FF" />
       <LabelList id="settingsActionList" translation="[980,600]" itemSize="[620,56]" numRows="6" focusBitmapBlendColor="0xCF3157FF" />
       <Label translation="[200,960]" width="1600" height="40" text="OK select  •  Left/Right switch column  •  Back" scale="[0.62,0.62]" color="0xA9B7C9FF" />
-      <Poster id="settingsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
-    </Group>
+</Group>
 
     <!--
       Legacy flat single-row catalogue browser. No longer the post-profile
@@ -296,11 +283,6 @@
     -->
     <Group id="homeGroup" visible="false">
       <TvStage id="homeStage" />
-      <!-- Sparse residual asset: alpha only on residual pure-diff regions
-           (opaque area under 20% of stage). Not an opaque full-stage paint.
-           Suite residual_area counts opaque residual pixels only. -->
-      <Poster id="homeResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -387,9 +369,6 @@
         <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
         <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       </Group>
-      <!-- Sparse residual last so it paints over labels/grid (opaque <20%). -->
-      <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -457,9 +436,7 @@
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" visible="false" />
       <Label id="searchHint" translation="[200,1020]" width="1700" height="40" text="OK type query  •  Back home" scale="[0.62,0.62]" color="0xA9B7C9FF" />
-      <Poster id="searchResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
-    </Group>
+</Group>
 
     <!--
       Phase 10: playlists screen, reached from homeShortcuts' new 6th entry
@@ -510,9 +487,6 @@
           focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
         <Label translation="[100,915]" width="1600" height="50" text="OK details  •  Back playlists" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       </Group>
-      <!-- Sparse residual last so it paints over directory content. -->
-      <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -601,9 +575,6 @@
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
       <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-      <!-- Sparse residual last (opaque under 20%). -->
-      <Poster id="detailResidual" translation="[0,0]" width="1920" height="1080"
-        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -772,9 +743,6 @@
       <Label id="playerNextLabel" translation="[460,965]" width="150" height="50" text="Next" scale="[0.56,0.56]" scaleRotateCenter="[75,25]" color="0xA9B7C9FF" />
       <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" />
     </Group>
-    <!-- Sparse residual over playback chrome (opaque under 20%). -->
-    <Poster id="playbackResidual" translation="[0,0]" width="1920" height="1080"
-      uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
 
     <Timer id="pairingTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough
