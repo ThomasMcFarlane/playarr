@@ -37,10 +37,14 @@ sub onContentChanged()
     agent = CreateObject("roHttpAgent")
     agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
     agent.InitClientCertificates()
-    ' Use custom artHeaders (assocarray). ContentNode's built-in httpHeaders
-    ' is an empty roArray and cannot be retyped via AddField, so auth headers
-    ' never stuck there and browse/home posters often stayed blank.
-    if content.artHeaders <> invalid then agent.SetHeaders(content.artHeaders)
+    ' Prefer global auth headers set by MainScene (survives MarkupGrid/RowList
+    ' itemContent binding). Per-item artHeaders is a fallback only.
+    g = GetGlobalAA()
+    if g.playarrArtHeaders <> invalid
+        agent.SetHeaders(g.playarrArtHeaders)
+    else if content.artHeaders <> invalid
+        agent.SetHeaders(content.artHeaders)
+    end if
     m.poster.SetHttpAgent(agent)
     m.poster.uri = content.hdPosterUrl
     ' A field literally named rowFocusPercent turned out to be reserved --
