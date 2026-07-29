@@ -58,7 +58,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Roku profiles page matches web `/profiles`: rose-wash stage, TvStageChrome
   theme/language triggers, gear + Sign out pills under the focused avatar
-  (not a text LabelList), Clients pill, WATCHING NOW / READY status lines.
+  (not a text LabelList), WATCHING NOW / READY status lines. Clients link
+  omitted (no native Clients screen on Roku).
 
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language

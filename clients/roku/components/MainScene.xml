@@ -101,7 +101,7 @@
     <!--
       Profiles = web /profiles (Profiles.tsx + .profiles-page): rose wash stage,
       TvStageChrome (logo + theme/lang), centred PROFILES / Who's watching?,
-      horizontal avatar row, gear + Sign out under the focused profile, Clients pill.
+      horizontal avatar row, gear + Sign out under the focused profile.
     -->
     <Group id="profilesGroup" visible="false">
       <Poster id="profilesAuthBg" translation="[0,0]" width="1920" height="1080" uri="pkg:/images/pairing-auth-bg.png" loadDisplayMode="scaleToFill" />
@@ -139,9 +139,6 @@
         <Rectangle id="profilesSignOutHit" translation="[56,0]" width="160" height="44" color="0x00000000" focusable="true" />
       </Group>
 
-      <!-- .profile-clients-link bottom-right -->
-      <Poster id="profilesClientsBtn" translation="[1740,1010]" width="140" height="44" uri="pkg:/images/profiles-clients.png" />
-      <Rectangle id="profilesClientsHit" translation="[1740,1010]" width="140" height="44" color="0x00000000" focusable="true" />
     </Group>
 
     <!--
