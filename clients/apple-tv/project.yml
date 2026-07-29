@@ -26,7 +26,10 @@ targets:
         LSApplicationCategoryType: public.app-category.entertainment
         NSLocalNetworkUsageDescription: Playarr connects to the Playarr Server on your network.
         NSAppTransportSecurity:
+          # Self-hosted Playarr is often plain HTTP on LAN/Tailscale; local
+          # networking alone does not cover Tailscale CGNAT (100.x).
           NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
     dependencies:
       - package: Playarr Server
         product: PlayarrKit

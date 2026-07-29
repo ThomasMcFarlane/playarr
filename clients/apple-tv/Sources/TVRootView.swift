@@ -176,115 +176,277 @@ struct TVRootView: View {
     }
 }
 
-/// Full-screen pairing gate aligned with web device-login / hosted link.
-/// Server URL is **not** typed here: playarr.app QR/code linking supplies it
-/// from the phone (or Settings holds an advanced override after first link).
+/// Full-screen pairing gate: SPA DeviceLogin chrome 1:1 via
+/// `TVDeviceLoginChrome`. Server URL is not typed here; playarr.app hosted
+/// link supplies it from the phone claim.
 struct TVPairingGateView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var pairingTask: Task<Void, Never>?
 
     var body: some View {
-        ZStack {
-            TVStageBackground()
-            VStack(spacing: DesignTokens.Spacing.lg) {
-                Text("Link this Apple TV")
-                    .font(TVTheme.heroTitleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                pairingBody
+        chrome
+            .onAppear {
+                if case .signedOut = environment.pairingState {
+                    beginPairing()
+                }
             }
-            .padding(DesignTokens.Spacing.xxxl)
-            .frame(maxWidth: 1200)
-        }
-        .onAppear {
-            if case .signedOut = environment.pairingState {
-                beginPairing()
+            .onDisappear {
+                pairingTask?.cancel()
+                pairingTask = nil
             }
-        }
-        .onDisappear {
-            pairingTask?.cancel()
-            pairingTask = nil
-        }
     }
 
     @ViewBuilder
-    private var pairingBody: some View {
+    private var chrome: some View {
         switch environment.pairingState {
         case .signedOut, .requestingCode:
-            Text("Requesting a pairing code...")
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-            ProgressView().tint(DesignTokens.Color.brandPrimary)
+            TVDeviceLoginChrome(phase: .requesting, onRetry: nil)
         case .awaitingApproval(let pending):
-            VStack(spacing: DesignTokens.Spacing.md) {
-                if let qrURL = HostedDeviceLinkClient.qrImageURL(
-                    for: pending.verificationUriComplete
-                ) {
-                    AsyncImage(url: qrURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .interpolation(.none)
-                                .scaledToFit()
-                        case .failure:
-                            Color.white.opacity(0.08)
-                        case .empty:
-                            ProgressView().tint(DesignTokens.Color.brandPrimary)
-                        @unknown default:
-                            Color.white.opacity(0.08)
-                        }
-                    }
-                    .frame(width: 240, height: 240)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                            .fill(Color.white)
+            TVDeviceLoginChrome(
+                phase: .awaitingApproval(
+                    userCode: pending.userCode,
+                    verificationURI: pending.verificationUri,
+                    qr: AnyView(
+                        TVHostedLinkQRImage(
+                            verificationURIComplete: pending.verificationUriComplete
+                        )
                     )
-                }
-                Text("Scan the QR code, or visit")
-                    .font(TVTheme.subtitleFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Text(pending.verificationUri)
-                    .font(TVTheme.titleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                Text("and enter the code")
-                    .font(TVTheme.subtitleFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Text(pending.userCode)
-                    .font(.system(size: 64, weight: .bold, design: .monospaced))
-                    .tracking(8)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .padding(.horizontal, DesignTokens.Spacing.xl)
-                    .padding(.vertical, DesignTokens.Spacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                            .fill(DesignTokens.Color.backgroundRaised)
-                    )
-                ProgressView("Waiting for approval…")
-                    .tint(DesignTokens.Color.brandPrimary)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Button("Cancel pairing", role: .cancel) {
-                    pairingTask?.cancel()
-                    pairingTask = nil
-                    environment.signOut()
-                }
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-            }
+                ),
+                onRetry: nil
+            )
         case .signedIn:
             EmptyView()
         case .failed(let message):
-            Text(message)
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.stateError)
-                .multilineTextAlignment(.center)
-            TVPrimaryButton(label: "Try again") { beginPairing() }
+            TVDeviceLoginChrome(
+                phase: .failed(message),
+                onRetry: { beginPairing() }
+            )
         }
     }
 
     private func beginPairing() {
         pairingTask?.cancel()
         pairingTask = Task { await environment.startPairing() }
+    }
+}
+
+/// SPA DeviceLogin chrome measured @ 1920×1080 (same geometry as the parity
+/// fixture). Live pairing and parity fixture both mount this so product UI
+/// cannot diverge from the reference layout.
+///
+/// Geometry notes (from full30/full33 dial-in):
+/// - logo ~(883,272), kicker y≈404, title y≈434–496
+/// - QR y≈567–806 x≈854–1093 (240 border-box, 12pt white edge, r=18)
+/// - content leading = width×0.445, top = height×0.233
+struct TVDeviceLoginChrome: View {
+    enum Phase {
+        case requesting
+        case awaitingApproval(userCode: String, verificationURI: String, qr: AnyView)
+        case failed(String)
+    }
+
+    let phase: Phase
+    var onRetry: (() -> Void)?
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                DesignTokens.Color.backgroundBase
+                // SPA left wash is cool/neutral (sampled mean ~35,31,34) — not pink.
+                RadialGradient(
+                    colors: [
+                        Color(red: 0.28, green: 0.26, blue: 0.28).opacity(0.38),
+                        Color(red: 0.18, green: 0.16, blue: 0.18).opacity(0.18),
+                        .clear,
+                    ],
+                    center: UnitPoint(x: 0.12, y: 0.48),
+                    startRadius: 30,
+                    endRadius: geo.size.width * 0.38
+                )
+
+                VStack(alignment: .leading, spacing: 0) {
+                    playarrWordmark
+                        // Logo→kicker gap: REF kicker y404 − logo bottom ~292 ≈ 112
+                        .padding(.bottom, 112)
+
+                    Text("SIGN IN ON ANOTHER DEVICE")
+                        .font(.system(size: 11, weight: .heavy))
+                        .tracking(1.8)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+
+                    // REF title band y434–496 h≈63; 74pt medium closer than 68
+                    Text("Link this TV")
+                        .font(.system(size: 74, weight: .medium))
+                        .tracking(-4.0)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .padding(.top, 8)
+
+                    phaseBody
+                        // full33 QR y≈569 matched REF 567
+                        .padding(.top, 61)
+                }
+                // Logo top ≈ y 252 → 0.233; keep leading for x≈854 (0.445)
+                .padding(.leading, geo.size.width * 0.445)
+                .padding(.top, geo.size.height * 0.233)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private var playarrWordmark: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(DesignTokens.Color.brandPrimary)
+                    .frame(width: 34, height: 34)
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .offset(x: 1)
+            }
+            HStack(spacing: 0) {
+                Text("Play")
+                    .foregroundStyle(DesignTokens.Color.brandPrimary)
+                Text("arr")
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+            }
+            .font(.system(size: 18, weight: .semibold))
+        }
+    }
+
+    @ViewBuilder
+    private var phaseBody: some View {
+        switch phase {
+        case .requesting:
+            Text("Creating a secure sign-in code…")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+        case .awaitingApproval(let userCode, let verificationURI, let qr):
+            HStack(alignment: .center, spacing: 40) {
+                // SPA `.device-login-qr`: border-box 240 with 12px white border
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white)
+                    qr
+                        .frame(width: 216, height: 216)
+                }
+                .frame(width: 240, height: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Scan the QR code, or visit")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    Text(verificationURI)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text("and enter the code")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    Text(userCode)
+                        .font(.system(size: 52, weight: .bold, design: .monospaced))
+                        .tracking(5)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text("Waiting for approval…")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .padding(.top, 2)
+                }
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 16) {
+                Text(message)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.stateError)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let onRetry {
+                    Button("Try again", action: onRetry)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Color.brandPrimary)
+                }
+            }
+        }
+    }
+}
+
+/// Live hosted-link QR image (playarr.app `/api/link/qr`).
+struct TVHostedLinkQRImage: View {
+    let verificationURIComplete: String
+
+    var body: some View {
+        if let url = HostedDeviceLinkClient.qrImageURL(for: verificationURIComplete) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFit()
+                case .failure:
+                    Color.black.opacity(0.08)
+                case .empty:
+                    ProgressView()
+                        .tint(.black.opacity(0.4))
+                @unknown default:
+                    Color.black.opacity(0.08)
+                }
+            }
+        } else {
+            Color.black.opacity(0.08)
+        }
+    }
+}
+
+/// Deterministic monochrome QR stand-in for parity freezes (no network).
+struct TVParityQRModules: View {
+    var body: some View {
+        let n = 11
+        return Canvas { context, size in
+            let cell = size.width / CGFloat(n)
+            for (fx, fy) in [(0, 0), (n - 3, 0), (0, n - 3)] {
+                let r = CGRect(
+                    x: CGFloat(fx) * cell,
+                    y: CGFloat(fy) * cell,
+                    width: cell * 3,
+                    height: cell * 3
+                )
+                context.stroke(
+                    Path(roundedRect: r.insetBy(dx: cell * 0.15, dy: cell * 0.15), cornerRadius: 1),
+                    with: .color(.black),
+                    lineWidth: cell * 0.35
+                )
+                context.fill(
+                    Path(
+                        roundedRect: CGRect(
+                            x: r.midX - cell * 0.45,
+                            y: r.midY - cell * 0.45,
+                            width: cell * 0.9,
+                            height: cell * 0.9
+                        ),
+                        cornerRadius: 0.5
+                    ),
+                    with: .color(.black)
+                )
+            }
+            var seed: UInt64 = 0xA5C3_2345
+            for y in 0..<n {
+                for x in 0..<n {
+                    if (x < 3 && y < 3) || (x >= n - 3 && y < 3) || (x < 3 && y >= n - 3) {
+                        continue
+                    }
+                    seed = seed &* 1_103_515_245 &+ 12_345
+                    if seed % 3 == 0 {
+                        let r = CGRect(
+                            x: CGFloat(x) * cell + cell * 0.12,
+                            y: CGFloat(y) * cell + cell * 0.12,
+                            width: cell * 0.76,
+                            height: cell * 0.76
+                        )
+                        context.fill(Path(r), with: .color(.black))
+                    }
+                }
+            }
+        }
     }
 }

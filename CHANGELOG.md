@@ -21,6 +21,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   API base URL in the claim, matching web/Android TV. Settings still holds an
   advanced server override for direct device flow.
 
+- Apple TV pairing gate uses the same SPA DeviceLogin chrome as the parity
+  fixture (logo, kicker, “Link this TV”, QR + instructions). Session tokens
+  now wire into APIClient so catalog calls send Authorization after link.
+  Hosted claims prefer HTTPS relay URLs; ATS allows arbitrary loads for
+  plain-HTTP self-hosted servers on Tailscale.
+
 - Roku Search empty shell uses native SceneGraph title/field/empty magnifier (web crop Posters were misaligned).
 
 - Roku Home leftmost card hands focus to a proxy so Left opens the nav dock

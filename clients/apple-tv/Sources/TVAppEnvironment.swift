@@ -65,8 +65,9 @@ final class TVAppEnvironment {
     private let deviceID: UUID
     private var deviceAuthorizer: any TVDeviceAuthorizing
     private let hostedLinkClient: HostedDeviceLinkClient
-    private var accessToken: Sensitive<String>?
-    private var refreshToken: Sensitive<String>?
+    /// Session store plugged into `APIClient` so catalog/playback calls send
+    /// `Authorization: Bearer …` after pairing.
+    private var tokenStore: TVUserDefaultsTokenStore
     /// The remembered *group* of server addresses for this Apple TV —
     /// `docs/architecture/peer-groups.md` §6.4/§7.1, §8 Phase 5. Mirrors
     /// `AppEnvironment.serverGroupStore` on the iOS target exactly (same
@@ -105,6 +106,12 @@ final class TVAppEnvironment {
         }
         deviceID = resolvedDeviceID
 
+        let store = TVUserDefaultsTokenStore(
+            defaults: defaults,
+            account: effectiveURL.absoluteString
+        )
+        tokenStore = store
+
         let configuration = Self.apiConfiguration(serverURL: effectiveURL, deviceID: resolvedDeviceID)
         // Optional parity bootstrap: `-PlayarrAccessToken <jwt>` forces signed-in
         // so visual captures hit the production shell with a real catalogue.
@@ -114,14 +121,18 @@ final class TVAppEnvironment {
             return args[idx + 1]
         }()
         if let launchToken {
-            accessToken = Sensitive(launchToken)
             pairingState = .signedIn
             apiClient = APIClient(
                 configuration: configuration,
-                tokenProvider: StaticTokenProvider(accessToken: launchToken)
+                tokenProvider: StaticTokenProvider(accessToken: launchToken),
+                serverGroupStore: serverGroupStore
             )
         } else {
-            apiClient = APIClient(configuration: configuration)
+            apiClient = APIClient(
+                configuration: configuration,
+                tokenProvider: store,
+                serverGroupStore: serverGroupStore
+            )
         }
         deviceAuthorizer = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(
@@ -214,9 +225,7 @@ final class TVAppEnvironment {
             interval: 1,
             expiresIn: remaining
         )
-        accessToken = Sensitive(token.accessToken)
-        refreshToken = Sensitive(token.refreshToken)
-        pairingState = .signedIn
+        try await applyPairedSession(token)
     }
 
     /// Direct device flow against a configured server, retrying across every
@@ -236,8 +245,24 @@ final class TVAppEnvironment {
             interval: TimeInterval(pending.interval),
             expiresIn: TimeInterval(pending.expiresIn)
         )
-        accessToken = Sensitive(token.accessToken)
-        refreshToken = Sensitive(token.refreshToken)
+        try await applyPairedSession(token)
+    }
+
+    /// Persists the device-flow tokens and rebuilds `apiClient` so every
+    /// subsequent catalog/playback call attaches `Authorization`.
+    private func applyPairedSession(_ token: TokenResponse) async throws {
+        let session = StoredAuthSession(
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken,
+            tokenType: token.tokenType,
+            expiresAt: Date().addingTimeInterval(TimeInterval(max(token.expiresIn, 60)))
+        )
+        try await tokenStore.storeSession(session)
+        apiClient = APIClient(
+            configuration: Self.apiConfiguration(serverURL: serverURL, deviceID: deviceID),
+            tokenProvider: tokenStore,
+            serverGroupStore: serverGroupStore
+        )
         pairingState = .signedIn
     }
 
@@ -298,18 +323,34 @@ final class TVAppEnvironment {
         serverAddress = url.absoluteString
         hasConfiguredServer = true
         defaults.set(url.absoluteString, forKey: Self.serverURLKey)
-        apiClient = APIClient(configuration: Self.apiConfiguration(serverURL: url, deviceID: deviceID))
+        // Re-key the token store to this server before rebuild.
+        tokenStore = TVUserDefaultsTokenStore(
+            defaults: defaults,
+            account: url.absoluteString
+        )
+        apiClient = APIClient(
+            configuration: Self.apiConfiguration(serverURL: url, deviceID: deviceID),
+            tokenProvider: tokenStore,
+            serverGroupStore: serverGroupStore
+        )
     }
 
     func signOut() {
-        accessToken = nil
-        refreshToken = nil
+        Task { try? await tokenStore.clearSession() }
         pairingState = .signedOut
     }
 
     private func rebuildClients() {
+        tokenStore = TVUserDefaultsTokenStore(
+            defaults: defaults,
+            account: serverURL.absoluteString
+        )
         let configuration = Self.apiConfiguration(serverURL: serverURL, deviceID: deviceID)
-        apiClient = APIClient(configuration: configuration)
+        apiClient = APIClient(
+            configuration: configuration,
+            tokenProvider: tokenStore,
+            serverGroupStore: serverGroupStore
+        )
         deviceAuthorizer = DeviceFlowClient(
             configuration: DeviceFlowConfiguration(baseURL: serverURL, clientPlatform: .ios)
         )
@@ -389,4 +430,33 @@ private struct StaticTokenProvider: AccessTokenProviding {
 
     func storeSession(_ session: StoredAuthSession) async throws {}
     func clearSession() async throws {}
+}
+
+/// UserDefaults-backed session store for Apple TV (simulator-safe; no
+/// Keychain entitlement required for unsigned local builds).
+actor TVUserDefaultsTokenStore: AccessTokenProviding {
+    private let defaults: UserDefaults
+    private let key: String
+    private var cached: StoredAuthSession?
+
+    init(defaults: UserDefaults, account: String) {
+        self.defaults = defaults
+        self.key = "com.playarr.playarr.tvos.session.\(account)"
+        if let data = defaults.data(forKey: key) {
+            cached = try? JSONDecoder().decode(StoredAuthSession.self, from: data)
+        }
+    }
+
+    func currentSession() -> StoredAuthSession? { cached }
+
+    func storeSession(_ session: StoredAuthSession) throws {
+        let data = try JSONEncoder().encode(session)
+        defaults.set(data, forKey: key)
+        cached = session
+    }
+
+    func clearSession() {
+        defaults.removeObject(forKey: key)
+        cached = nil
+    }
 }
