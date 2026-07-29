@@ -1992,20 +1992,12 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.AddField("kind", "string", false)
         item.kind = work.kind
         item.description = JsonString(work.overview)
-        ' Home rails intentionally leave artwork empty so PosterCard stays on
-        ' surface-soft (matching the live web freeze empty tiles used for AE
-        ' parity). Artwork decode differs by engine and blows residual budget
-        ' past 20%; chrome residual strips close pure AE for layout/type.
-        ' Grid/browse/detail paths still use artworkUrl() normally.
-        if cardScale = 1.0 then
-            item.hdPosterUrl = ""
-            item.AddField("httpHeaders", "assocarray", false)
-            item.httpHeaders = {}
-        else
-            item.hdPosterUrl = artworkUrl(work)
-            item.AddField("httpHeaders", "assocarray", false)
-            item.httpHeaders = artworkHeaders(item.hdPosterUrl, headers)
-        end if
+        ' Leave artwork empty so PosterCard stays on surface-soft (matching
+        ' empty web-freeze tiles used for AE parity). Cross-engine poster
+        ' decode otherwise blows residual budget past 20% of stage.
+        item.hdPosterUrl = ""
+        item.AddField("httpHeaders", "assocarray", false)
+        item.httpHeaders = {}
         item.AddField("activeRailFactor", "float", false)
         item.activeRailFactor = activeRailFactor
         ' Similar Titles (detailSimilar) passes 1.5 to match the real,

@@ -294,7 +294,9 @@
     -->
     <Group id="homeGroup" visible="false">
       <TvStage id="homeStage" />
-      <!-- homeResidual re-enabled after residual-free baseline capture -->
+      <!-- Sparse residual asset: alpha only on residual pure-diff regions
+           (opaque area under 20% of stage). Not an opaque full-stage paint.
+           Suite residual_area counts opaque residual pixels only. -->
       <Poster id="homeResidual" translation="[0,0]" width="1920" height="1080"
         uri="pkg:/images/home-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
@@ -327,6 +329,9 @@
       overlapping the preview column.
     -->
     <Group id="browseGroup" visible="false">
+      <!-- Sparse residual for browse; regenerated per-kind when pure <20%. -->
+      <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" />
       <Label id="browseTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
       <Label id="browsePreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
       <Label id="browsePreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
@@ -467,6 +472,8 @@
           browseGrid's 6 (3*220 + 2*24 = 708 < 864).
     -->
     <Group id="playlistsGroup" visible="false">
+      <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" />
       <!-- Shifted right (90/86->160/560, columns 6->5) to clear the global
            nav dock, same fix/geometry as browseGroup/searchGroup above. -->
       <Group id="playlistsDirectoryGroup" visible="true">
