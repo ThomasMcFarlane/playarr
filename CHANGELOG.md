@@ -29,6 +29,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   code, refresh countdown, and Sign in manually pill. Layout fits 1080p
   without clipping.
 
+- Android TV pairing chrome shows the circular web-style back control
+  whenever any saved profile session exists, returning to the Who’s
+  watching picker (same as web `/login/qr` → `/profiles`). Saved profiles
+  are visible even when the hosted QR flow left the server URL blank.
+
 ### Fixed
 
 - Roku pairing chrome is 1:1 with web `/login/qr` TvStageChrome + DeviceLogin:

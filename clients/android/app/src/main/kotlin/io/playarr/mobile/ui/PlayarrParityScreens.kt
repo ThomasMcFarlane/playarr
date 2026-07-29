@@ -1363,8 +1363,21 @@ internal class ProfilesViewModel @Inject constructor(
 
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
-        val serverUrl = serverConfigStore.baseUrl.first()
-        val saved = tokenStore.savedProfilesForServer(serverUrl).first()
+        val allSaved = tokenStore.savedProfiles.first()
+        // Hosted QR may leave base URL blank; recover from the saved session so
+        // the profiles picker (and chrome back from /login/qr) still lists them.
+        var serverUrl = serverConfigStore.baseUrl.first()
+        if (serverUrl.isBlank()) {
+            serverUrl = allSaved.firstOrNull()?.serverUrl.orEmpty()
+            if (serverUrl.isNotBlank()) {
+                serverConfigStore.setBaseUrl(serverUrl)
+            }
+        }
+        val saved = if (serverUrl.isBlank()) {
+            allSaved
+        } else {
+            allSaved.filter { it.serverUrl == serverUrl }
+        }
         val savedIds = saved.mapTo(mutableSetOf(), SavedProfile::userId)
         val savedAvatars = saved.mapNotNull { profile ->
             profile.avatar?.toPlayarrProfileAvatarPreference()?.let { profile.userId to it }
@@ -1407,7 +1420,13 @@ internal class ProfilesViewModel @Inject constructor(
     ) = viewModelScope.launch {
         _switchingProfileId.value = profile.id
         runCatching {
-            val serverUrl = serverConfigStore.baseUrl.first()
+            val allSaved = tokenStore.savedProfiles.first()
+            val profileServer = allSaved.firstOrNull { it.userId == profile.id }?.serverUrl
+            var serverUrl = serverConfigStore.baseUrl.first()
+            if (serverUrl.isBlank() && !profileServer.isNullOrBlank()) {
+                serverUrl = profileServer
+                serverConfigStore.setBaseUrl(serverUrl)
+            }
             if (pin == null && tokenStore.isProfileSaved(serverUrl, profile.id)) {
                 check(tokenStore.activateProfile(serverUrl, profile.id))
             } else {
@@ -1431,7 +1450,13 @@ internal class ProfilesViewModel @Inject constructor(
     }
 
     fun signOut(profileId: String) = viewModelScope.launch {
-        tokenStore.logoutProfile(serverConfigStore.baseUrl.first(), profileId)
+        val allSaved = tokenStore.savedProfiles.first()
+        val serverUrl = serverConfigStore.baseUrl.first().ifBlank {
+            allSaved.firstOrNull { it.userId == profileId }?.serverUrl.orEmpty()
+        }
+        if (serverUrl.isNotBlank()) {
+            tokenStore.logoutProfile(serverUrl, profileId)
+        }
         load()
     }
 }

@@ -187,7 +187,11 @@ class PlayarrRootViewModel @Inject constructor(
         if (serverUrl != session.savedServerUrl) serverConfigStore.setBaseUrl(serverUrl)
         val access = session.accessToken
         if (access.isNullOrBlank() || serverUrl.isBlank()) {
-            val hasProfiles = session.savedProfiles.any { it.serverUrl == serverUrl }
+            // Hosted QR leaves server URL blank until a link completes, so do not
+            // require an exact server match — any saved session is enough to
+            // show the profiles picker and the chrome back control (web always
+            // exposes back → /profiles from /login/qr).
+            val hasProfiles = session.savedProfiles.isNotEmpty()
             RootState.SignedOut(
                 savedServerUrl = serverUrl,
                 showProfiles = hasProfiles && !showLogin,
@@ -1057,7 +1061,8 @@ private fun TelevisionManualLoginScreen(
             )
             .safeDrawingPadding(),
     ) {
-        AuthStageChrome(onBack = onBackToQr)
+        // Web chrome back always returns to profiles; QR toggle is the in-form pill.
+        AuthStageChrome(onBack = onBack ?: onBackToQr)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1217,14 +1222,17 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
             modifier = Modifier.size(40.dp),
         )
         onBack?.let { back ->
-            Spacer(Modifier.width(14.dp))
-            // web `.tv-page-back` circular control
+            Spacer(Modifier.width(18.dp))
+            // web `.tv-page-back.tv-stage-chrome-back` circular control → profiles
+            val backLabel = playarrString(PlayarrString.CommonBack)
             Surface(
                 onClick = back,
                 shape = CircleShape,
                 color = tokens.surfaceStrong.copy(alpha = 0.7f),
                 border = BorderStroke(1.dp, tokens.lineStrong.copy(alpha = 0.66f)),
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = backLabel },
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("←", color = tokens.inkSoft, fontSize = 18.sp, fontWeight = FontWeight.Bold)
