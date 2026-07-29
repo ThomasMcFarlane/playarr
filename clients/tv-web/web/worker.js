@@ -130,14 +130,27 @@ function renderClientMeta(html, clientId, copy, url) {
 const CLIENTS_INDEX_REDIRECT_TARGET = "vidaa";
 
 async function clientPageResponse(clientId, url, env, request) {
-  const response = await env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+  // Deliberately NOT env.ASSETS.fetch(new Request(new URL("/index.html", url), ...)):
+  // an explicit, literal "/index.html" request is auto-redirected (307, to
+  // "/") by Cloudflare's static-asset serving -- the same normalisation
+  // that turns a request for "/cast/index.html" into a 307 to "/cast/". A
+  // request for a path that *doesn't* correspond to a real file (which
+  // "/clients", "/clients/roku", or "/clients/roku/" never do) instead
+  // takes the SPA fallback and gets the real index.html content directly,
+  // with no redirect -- so fetch the actual incoming path/method here, not
+  // a hardcoded filename.
+  const response = await env.ASSETS.fetch(new Request(url, { method: request.method }));
   const copy = CLIENTS_SOCIAL_COPY.get(clientId);
   if (!copy) return response;
   const html = await response.text();
+  const headers = new Headers(response.headers);
+  // The rewritten body below is neither the original length nor encoding.
+  headers.delete("Content-Length");
+  headers.delete("Content-Encoding");
   return new Response(renderClientMeta(html, clientId, copy, url), {
     status: response.status,
     statusText: response.statusText,
-    headers: response.headers,
+    headers,
   });
 }
 
@@ -384,7 +397,11 @@ export default {
       return clientPageResponse(CLIENTS_INDEX_REDIRECT_TARGET, url, env, request);
     }
     if (url.pathname.startsWith("/clients/")) {
-      const clientId = url.pathname.slice("/clients/".length);
+      // Strip a trailing slash ("/clients/roku/" -> "roku", not "roku/") so
+      // it still matches a real id -- react-router itself already tolerates
+      // the slash (confirmed via matchPath), so this only affects which
+      // meta tags a crawler sees, not what a real visitor's browser renders.
+      const clientId = url.pathname.slice("/clients/".length).replace(/\/+$/, "");
       return clientPageResponse(clientId, url, env, request);
     }
     if (url.pathname === "/cast") {

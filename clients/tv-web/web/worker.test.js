@@ -508,7 +508,14 @@ describe("client page meta tags", () => {
     expect(html).not.toContain("Playarr is a self-hosted media server");
   });
 
-  it("requests the fetched asset at the shared index.html, not a per-client file", async () => {
+  it("requests the actual incoming path, not a hardcoded index.html", async () => {
+    // Cloudflare's static-asset serving auto-redirects (307) an explicit,
+    // literal "/index.html" request to "/" -- confirmed directly against
+    // the deployed site, and the exact bug that made every /clients/* page
+    // redirect to the homepage. A path that doesn't correspond to a real
+    // file (every /clients/* path) instead takes the SPA fallback and
+    // returns the real content with no redirect, so the fetched request
+    // must preserve the actual incoming path.
     const env = environment(null);
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
@@ -518,7 +525,42 @@ describe("client page meta tags", () => {
 
     expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
     const requested = env.ASSETS.fetch.mock.calls[0][0];
-    expect(new URL(requested.url).pathname).toBe("/index.html");
+    expect(new URL(requested.url).pathname).toBe("/clients/xbox");
+  });
+
+  it("strips a trailing slash so the id still matches a real client", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/clients/roku/"),
+      env
+    );
+    const html = await response.text();
+
+    expect(html).toContain("<title>Playarr for Roku</title>");
+    expect(html).toContain('content="https://playarr.app/clients/roku"');
+  });
+
+  it("drops the original Content-Length and Content-Encoding, which no longer match the rewritten body", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, {
+        headers: {
+          "Content-Type": "text/html",
+          "Content-Length": String(SAMPLE_INDEX_HTML.length),
+          "Content-Encoding": "br",
+        },
+      })
+    );
+
+    const response = await worker.fetch(new Request("https://playarr.app/clients/roku"), env);
+
+    expect(response.headers.get("Content-Length")).toBeNull();
+    expect(response.headers.get("Content-Encoding")).toBeNull();
+    expect(response.headers.get("Content-Type")).toBe("text/html");
   });
 
   it("leaves the generic shell untouched for an id that isn't a real client", async () => {
