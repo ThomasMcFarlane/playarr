@@ -19,3 +19,6 @@ gradle/wrapper/dists/
 # Banned WebView parity archives (local only)
 tools/quarantine/*.bak
 tools/quarantine/*.webview-banned.bak
+
+# Local release packaging (signed APK + manifest)
+release/
