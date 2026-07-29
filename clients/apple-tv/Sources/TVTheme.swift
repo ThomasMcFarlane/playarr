@@ -300,25 +300,14 @@ struct TVProfileChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 10) {
-                // Approximate the live SPA agent avatar (purple disc).
-                ZStack {
-                    Circle()
-                        .fill(Color(red: 0.45, green: 0.32, blue: 0.78))
-                        .frame(
-                            width: DesignTokens.Shell.userAvatarSize,
-                            height: DesignTokens.Shell.userAvatarSize
-                        )
-                    Circle()
-                        .fill(Color(red: 0.62, green: 0.95, blue: 0.45))
-                        .frame(width: 14, height: 14)
-                        .offset(y: 2)
-                    // Antenna-ish dots
-                    HStack(spacing: 8) {
-                        Circle().fill(Color(red: 0.62, green: 0.95, blue: 0.45)).frame(width: 4, height: 4)
-                        Circle().fill(Color(red: 0.62, green: 0.95, blue: 0.45)).frame(width: 4, height: 4)
-                    }
-                    .offset(y: -10)
-                }
+                PlayarrAvatarAsset.image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(
+                        width: DesignTokens.Shell.userAvatarSize,
+                        height: DesignTokens.Shell.userAvatarSize
+                    )
+                    .clipShape(Circle())
                 Text(name)
                     .font(TVTheme.font(size: 13, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.textPrimary)

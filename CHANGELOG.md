@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity home/detail use fixture hero and rail artwork
+  extracted from the SPA suite reference so offline captures share posters
+  with the web home frame; profile chip uses the suite avatar raster.
+
 - Align `AVPlayerEngine.avPlayer` with the optional `PlayerEngine.avPlayer`
   requirement (`AVPlayer?`) so the Apple TV target builds after the Cast
   relaxation of the protocol witness.
@@ -143,6 +147,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   composables to the standard Modifier contract without changing left-to-right layouts.
 
 ### Fixed
+
+- Apple TV parity home/detail use fixture hero and rail artwork
+  extracted from the SPA suite reference so offline captures share posters
+  with the web home frame; profile chip uses the suite avatar raster.
 
 - Decode Android catalogue search's current `{items, remote_only}` response envelope instead of
   the obsolete bare work array, matching Playarr Web and restoring search against real servers.
@@ -561,6 +569,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of maintaining a separate administrator page.
 
 ### Fixed
+
+- Apple TV parity home/detail use fixture hero and rail artwork
+  extracted from the SPA suite reference so offline captures share posters
+  with the web home frame; profile chip uses the suite avatar raster.
 
 - Let scrolled media cards travel into a longer fade outside the shared track's left edge, and
   keep vertical remote navigation snapped to the first and last populated rails.

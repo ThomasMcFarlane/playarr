@@ -48,73 +48,95 @@ struct TVWorkDetailView: View {
     private func detailContent(_ detail: WorkDetail) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                // Backdrop
-                if let url = backdropURL(for: detail.work) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: geo.size.height)
-                                .clipped()
-                                .saturation(0)
-                                .opacity(0.45)
-                        default:
-                            EmptyView()
+                DesignTokens.Color.backgroundElevated
+                // Backdrop + fixture fallback (parity offline detail).
+                Group {
+                    if let url = backdropURL(for: detail.work) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                TVParityArtwork.heroImage?.resizable().scaledToFill()
+                            }
                         }
+                    } else {
+                        TVParityArtwork.heroImage?.resizable().scaledToFill()
                     }
                 }
+                .frame(width: geo.size.width * 0.62, height: geo.size.height)
+                .clipped()
+                .saturation(0)
+                .opacity(0.55)
+                .mask(
+                    LinearGradient(
+                        colors: [.black, .black, .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+
                 LinearGradient(
                     colors: [
-                        DesignTokens.Color.backgroundBase.opacity(0.2),
-                        DesignTokens.Color.backgroundBase.opacity(0.95),
+                        DesignTokens.Color.backgroundBase.opacity(0.15),
+                        DesignTokens.Color.backgroundBase.opacity(0.92),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
 
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
                     Text(detail.work.kind.rawValue.uppercased())
-                        .font(.system(size: 12, weight: .heavy))
+                        .font(TVTheme.font(size: 12, weight: .heavy))
                         .tracking(1.2)
                         .foregroundStyle(DesignTokens.Color.brandPrimary)
                     Text(detail.work.title)
                         .font(TVTheme.heroTitleFont())
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(maxWidth: 700, alignment: .leading)
+                        .frame(maxWidth: 640, alignment: .leading)
                     if let overview = detail.work.overview, !overview.isEmpty {
                         Text(overview)
-                            .font(.system(size: 17))
+                            .font(TVTheme.font(size: 17, weight: .regular))
                             .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(maxWidth: 700, alignment: .leading)
+                            .frame(maxWidth: 640, alignment: .leading)
                             .lineLimit(6)
                     }
 
-                    if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
-                        NavigationLink {
-                            TVPlayerView(
-                                mediaFileID: mediaFileID,
-                                title: detail.work.title,
-                                apiClient: apiClient
-                            )
-                        } label: {
+                    HStack(spacing: 16) {
+                        if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
+                            NavigationLink {
+                                TVPlayerView(
+                                    mediaFileID: mediaFileID,
+                                    title: detail.work.title,
+                                    apiClient: apiClient
+                                )
+                            } label: {
+                                Text("Play")
+                                    .font(TVTheme.font(size: 18, weight: .bold))
+                                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                                    .padding(.horizontal, 36)
+                                    .padding(.vertical, 14)
+                                    .background(Capsule().fill(DesignTokens.Color.brandPrimary))
+                            }
+                            .buttonStyle(.plain)
+                            .focusable(TVParityLaunch.requestedScreen == nil)
+                            .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
+                        } else {
                             Text("Play")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(TVTheme.font(size: 18, weight: .bold))
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                                 .padding(.horizontal, 36)
                                 .padding(.vertical, 14)
                                 .background(Capsule().fill(DesignTokens.Color.brandPrimary))
                         }
-                        .buttonStyle(.card)
-                        .padding(.top, 12)
                     }
+                    .padding(.top, 8)
 
                     children(detail.children)
                         .padding(.top, 28)
                 }
-                .padding(.leading, 140)
-                .padding(.top, 140)
+                .padding(.leading, 200)
+                .padding(.top, geo.size.height * 0.28)
                 .padding(.trailing, 80)
                 .padding(.bottom, 80)
             }

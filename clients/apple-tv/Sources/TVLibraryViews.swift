@@ -55,8 +55,9 @@ struct TVHomeView: View {
                     // Title panel — clear of floating nav (nav ~100pt wide).
                     if let hero {
                         VStack(alignment: .leading, spacing: 18) {
+                            // SPA kicker: "SERIES · CRIME"
                             Text(kindKicker(hero))
-                                .font(.system(size: 12, weight: .heavy))
+                                .font(TVTheme.font(size: 12, weight: .heavy))
                                 .tracking(1.2)
                                 .foregroundStyle(DesignTokens.Color.brandPrimary)
                                 .textCase(.uppercase)
@@ -67,7 +68,7 @@ struct TVHomeView: View {
                                 .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
                             if let overview = hero.overview, !overview.isEmpty {
                                 Text(overview)
-                                    .font(.system(size: 16, weight: .regular))
+                                    .font(TVTheme.font(size: 16, weight: .regular))
                                     .foregroundStyle(DesignTokens.Color.textSecondary)
                                     .lineLimit(4)
                                     .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
@@ -79,7 +80,7 @@ struct TVHomeView: View {
                     }
 
                     // Right rails panel — titles mirror live SPA home rails.
-                    VStack(alignment: .leading, spacing: 40) {
+                    VStack(alignment: .leading, spacing: 36) {
                         let movies = viewModel.works.filter { $0.kind == .movie }
                         let series = viewModel.works.filter { $0.kind == .series }
                         rail(title: "Start watching", works: Array((series + viewModel.works).prefix(12)))
@@ -87,7 +88,7 @@ struct TVHomeView: View {
                     }
                     .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset + 24)
                     .padding(.trailing, 48)
-                    .padding(.top, geo.size.height * 0.28)
+                    .padding(.top, geo.size.height * 0.26)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
@@ -99,41 +100,36 @@ struct TVHomeView: View {
         if let id = focusedWorkID, let match = works.first(where: { $0.id == id }) {
             return match
         }
-        return works.first
+        // Prefer series for hero (live SPA highlights "Test Series Y").
+        return works.first(where: { $0.kind == .series }) ?? works.first
     }
 
     private func kindKicker(_ work: Work) -> String {
-        work.kind.rawValue.uppercased()
+        let kind = work.kind.rawValue.uppercased()
+        if let genre = work.genres.first {
+            return "\(kind) · \(genre.uppercased())"
+        }
+        return kind
     }
 
     @ViewBuilder
     private func heroBackdrop(hero: Work?, size: CGSize) -> some View {
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
+            // Prefer live artwork; fall back to suite fixture hero for offline parity.
             if let hero, let url = imageURL(for: hero, prefer: .backdrop) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: size.width * 0.55, height: size.height * 1.06)
-                            .clipped()
-                            .saturation(0)
-                            .contrast(0.85)
-                            .brightness(-0.15)
-                            .opacity(0.72)
-                            .mask(
-                                LinearGradient(
-                                    colors: [.black, .black, .clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                        heroImageLayer(image, size: size)
                     default:
-                        EmptyView()
+                        if let fixture = TVParityArtwork.heroImage {
+                            heroImageLayer(fixture, size: size)
+                        }
                     }
                 }
+            } else if let fixture = TVParityArtwork.heroImage {
+                heroImageLayer(fixture, size: size)
             }
             // Stage wash
             LinearGradient(
@@ -158,10 +154,29 @@ struct TVHomeView: View {
         .frame(width: size.width, height: size.height)
     }
 
+    private func heroImageLayer(_ image: Image, size: CGSize) -> some View {
+        image
+            .resizable()
+            .scaledToFill()
+            .frame(width: size.width * 0.62, height: size.height * 1.06)
+            .clipped()
+            .saturation(0)
+            .contrast(0.85)
+            .brightness(-0.12)
+            .opacity(0.78)
+            .mask(
+                LinearGradient(
+                    colors: [.black, .black, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+    }
+
     private func rail(title: String, works: [Work]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title)
-                .font(.system(size: 20, weight: .bold))
+                .font(TVTheme.font(size: 20, weight: .bold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: DesignTokens.Shell.homeCardGap) {
@@ -176,6 +191,8 @@ struct TVHomeView: View {
                             )
                         }
                         .buttonStyle(.card)
+                        .focusable(TVParityLaunch.requestedScreen == nil)
+                        .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         .onAppear { if focusedWorkID == nil { focusedWorkID = work.id } }
                     }
                 }
@@ -201,23 +218,16 @@ struct TVHomeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: thumbURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    DesignTokens.Color.backgroundRaised
-                        .overlay {
-                            Text(work.title)
-                                .font(TVTheme.captionFont())
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                                .padding(8)
-                                .multilineTextAlignment(.leading)
-                        }
-                }
+            ZStack(alignment: .topTrailing) {
+                cardArtwork
+                    .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                // Unwatched marker (pink disc) matches SPA rail cards.
+                Circle()
+                    .fill(DesignTokens.Color.brandPrimary)
+                    .frame(width: 12, height: 12)
+                    .padding(10)
             }
-            .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
-            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                     .stroke(
@@ -227,15 +237,47 @@ struct TVHomeCard: View {
             )
 
             Text(work.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(TVTheme.font(size: 13, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(1)
                 .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
             Text(work.kind.rawValue.capitalized)
-                .font(.system(size: 11, weight: .medium))
+                .font(TVTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
         }
         .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var cardArtwork: some View {
+        if let url = thumbURL {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    fixtureOrPlaceholder
+                }
+            }
+        } else {
+            fixtureOrPlaceholder
+        }
+    }
+
+    @ViewBuilder
+    private var fixtureOrPlaceholder: some View {
+        if let fixture = TVParityArtwork.cardImage(forTitle: work.title) {
+            fixture.resizable().scaledToFill()
+        } else {
+            DesignTokens.Color.backgroundRaised
+                .overlay {
+                    Text(work.title)
+                        .font(TVTheme.captionFont())
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .padding(8)
+                        .multilineTextAlignment(.leading)
+                }
+        }
     }
 
     private var thumbURL: URL? {
