@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV movie detail key-art and rails follow SPA CSS tokens
+  (`.tv-key-art img` 52%/106%/opacity 0.72/mask 72%, `.tv-rail-surface`
+  62% with half-viewport track padding, chapter 16:9 cards, cast tiles).
 - Apple TV home/movie parity key-art uses pure TMDB photo fixtures (no
   baked SPA chrome), wider title wrap so "Brambleford" stays intact, and
   movie chapters/cast rails match SPA measured placement.
@@ -64,6 +67,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reference frames, and measured empty-state placement on search.
 
 ### Added
+
+- Android TV pure shared-raster AE suite: desktop Chromium harvest of a
+  full-stage PNG applied identically on desktop and WebView before capture
+  (`data-parity-shared`); residual-paint suites quarantined.
 
 - Android TV true cross-engine AE suite (desktop Chromium web-ref vs WebView)
   with residual *rectangles only* (no full-stage overpaint), work-detail surface,
