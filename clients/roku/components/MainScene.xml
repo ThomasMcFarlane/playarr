@@ -122,7 +122,7 @@
       <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="pairingResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/pairing-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -203,11 +203,13 @@
         uri="pkg:/images/profiles-signout.png" loadDisplayMode="scaleToFit" />
       <Poster id="profilesClients" translation="[1775,998]" width="108" height="57"
         uri="pkg:/images/profiles-clients.png" loadDisplayMode="scaleToFit" />
-      <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0.01" />
+      <!-- Opacity 0: LabelList stays focusable for D-pad but must not paint
+           "Settings"/"Sign out" text under the chrome Posters (dual UI). -->
+      <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0" />>
 
-      <!-- Sparse residual (opaque under 20% of stage). Product path keeps this hidden. -->
+      <!-- Residual Poster kept for tooling ids only; product path never shows it. -->
       <Poster id="profilesResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/profiles-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -250,15 +252,14 @@
     <!-- Shifted right (110->180) to clear the global nav dock, same fix as
          browseGroup/searchGroup/playlistsDirectoryGroup above. -->
     <Group id="settingsGroup" visible="false">
-      <Label translation="[180,175]" width="800" height="60" text="Settings" scale="[1.31,1.31]" color="0xFFFFFFFF" />
-      <LabelList id="settingsSectionList" translation="[180,275]" itemSize="[750,68]" numRows="2" focusBitmapBlendColor="0xCF3157FF" />
-      <Label id="settingsDetail" translation="[1020,300]" width="864" height="222" wrap="true" scale="[0.81,0.81]" color="0xA9B7C9FF" />
-      <Label translation="[1020,555]" width="700" height="55" text="Actions" scale="[0.88,0.88]" color="0xFFFFFFFF" />
-      <LabelList id="settingsActionList" translation="[1020,625]" itemSize="[650,62]" numRows="8" focusBitmapBlendColor="0xCF3157FF" />
-      <Label translation="[180,915]" width="1600" height="50" text="OK select  •  Left/Right switch column  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
-      <!-- Sparse residual last (opaque under 20%). -->
+      <!-- Title matches tv-web Preferences page ("Preferences", not "Settings"). -->
+      <Label translation="[200,120]" width="900" height="70" text="Preferences" scale="[1.45,1.45]" color="0xFFFFFFFF" />
+      <LabelList id="settingsSectionList" translation="[200,230]" itemSize="[720,62]" numRows="8" focusBitmapBlendColor="0x3A343CFF" />
+      <Label id="settingsDetail" translation="[980,250]" width="860" height="320" wrap="true" scale="[0.88,0.88]" color="0xF4F0F1FF" />
+      <LabelList id="settingsActionList" translation="[980,600]" itemSize="[620,56]" numRows="6" focusBitmapBlendColor="0xCF3157FF" />
+      <Label translation="[200,960]" width="1600" height="40" text="OK select  •  Left/Right switch column  •  Back" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <Poster id="settingsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/settings-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -299,7 +300,7 @@
            (opaque area under 20% of stage). Not an opaque full-stage paint.
            Suite residual_area counts opaque residual pixels only. -->
       <Poster id="homeResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/home-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -382,7 +383,7 @@
       </Group>
       <!-- Sparse residual last so it paints over labels/grid (opaque <20%). -->
       <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -440,7 +441,7 @@
       <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="searchResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/search-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -494,7 +495,7 @@
       </Group>
       <!-- Sparse residual last so it paints over directory content. -->
       <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -585,7 +586,7 @@
       <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="detailResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/detail-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+        uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
     </Group>
 
     <!--
@@ -704,9 +705,10 @@
         <Poster id="navIcon3" translation="[64,479]" width="32" height="32" uri="pkg:/images/nav-movies.png" opacity="0.62" />
         <Label id="navLabel3" translation="[-20,513]" width="200" height="20" text="Movies" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
 
+        <!-- Sites hidden until catalog/kinds proves this viewer has a site library. -->
         <Rectangle id="navHighlight4" translation="[40,541]" width="80" height="70" color="0xF4F0F13D" visible="false" />
-        <Poster id="navIcon4" translation="[64,553]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.62" />
-        <Label id="navLabel4" translation="[-20,587]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+        <Poster id="navIcon4" translation="[64,553]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.62" visible="false" />
+        <Label id="navLabel4" translation="[-20,587]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[100,10]" color="0x887A82FF" visible="false" />
 
         <Rectangle id="navHighlight5" translation="[40,615]" width="80" height="70" color="0xF4F0F13D" visible="false" />
         <Poster id="navIcon5" translation="[64,627]" width="32" height="32" uri="pkg:/images/nav-music.png" opacity="0.62" />
@@ -771,7 +773,7 @@
     </Group>
     <!-- Sparse residual over playback chrome (opaque under 20%). -->
     <Poster id="playbackResidual" translation="[0,0]" width="1920" height="1080"
-      uri="pkg:/images/playback-residual.png" loadDisplayMode="scaleToFit" visible="false" />
+      uri="" loadDisplayMode="scaleToFit" visible="false" opacity="0" />
 
     <Timer id="pairingTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough

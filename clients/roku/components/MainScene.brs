@@ -37,12 +37,12 @@ sub init()
     m.browseGrid = m.top.findNode("browseGrid")
     m.browseResidual = m.top.findNode("browseResidual")
     m.playbackResidual = m.top.findNode("playbackResidual")
-    ' Residual Posters paint a second web freeze on top of native SceneGraph
-    ' (dual stacked UI). They stay in the tree for optional parity tooling but
-    ' must never be visible in the product shell.
+    ' Residual Posters must never paint in the product shell (dual stacked UI).
+    ' Product path keeps them permanently off; do not re-enable for AE theatre.
     hideAllResiduals()
     m.availableWorkKinds = invalid
-    m.navEnabled = [true, true, true, true, true, true, true]
+    ' Sites (index 4) starts disabled until catalog/kinds proves access.
+    m.navEnabled = [true, true, true, true, false, true, true]
     m.browseTitle = m.top.findNode("browseTitle")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
@@ -178,6 +178,7 @@ sub init()
     m.navDockMode = false
     m.navDockIndex = 0
     m.navDockReturnState = "home"
+    m.profiles = []
     ' Hide Sites until GET /api/v1/catalog/kinds confirms the viewer has a site library.
     applyNavDockKindFilter()
     m.detailOrigin = "home"
@@ -701,9 +702,8 @@ sub refreshSession()
         beginPairing()
         return
     end if
-    if m.top.screenState <> "playback"
-        showStatus("Signing in", "Restoring the linked profile…", true)
-    end if
+    ' Stay off the fullscreen status wall for session restore; profiles shell
+    ' appears as soon as the refresh succeeds (loadProfiles is in-shell).
     sendApi("refresh", "POST", "/api/v1/auth/refresh", {
         device_id: m.deviceId
         refresh_token: m.refreshToken
@@ -756,7 +756,12 @@ sub acceptTokenResponse(data as Object)
 end sub
 
 sub loadProfiles()
-    showStatus("Loading profiles", "Finding viewers on this server…", true)
+    ' In-shell profiles chrome while the list loads (no fullscreen Loading wall).
+    if m.profiles = invalid then m.profiles = []
+    buildProfileAvatarContent(m.profiles)
+    showOnly("profiles")
+    m.top.screenState = "profiles"
+    m.profilesRow.SetFocus(true)
     sendApi("profiles", "GET", "/api/v1/users/profiles", invalid, true)
 end sub
 
@@ -1014,8 +1019,22 @@ end sub
 '     `pin: null` removes it).
 ' ---------------------------------------------------------------------------
 
+' Section list matches tv-web Preferences (Settings.tsx) order and labels.
+function settingsSectionLabels() as Object
+    return [
+        "01  Appearance",
+        "02  Profile avatar",
+        "03  Language",
+        "04  Player",
+        "05  Server connection",
+        "06  Profile lock",
+        "07  Invite a friend",
+        "08  Request latency"
+    ]
+end function
+
 sub openSettings()
-    setListContent(m.settingsSectionList, ["Server connection", "Player", "Profile lock"])
+    setListContent(m.settingsSectionList, settingsSectionLabels())
     m.settingsSectionIndex = 0
     renderSettingsSection(0)
     showOnly("settings")
@@ -1026,25 +1045,42 @@ end sub
 sub onSettingsSectionFocused(event as Object)
     index = event.GetData()
     if index = invalid then return
+    m.settingsSectionIndex = index
     renderSettingsSection(index)
 end sub
 
-' Repaints settingsDetail/settingsActionList for whichever section is
-' currently focused in settingsSectionList. Player preferences are fetched
-' lazily the first time that section is opened (m.preferredAudioLanguage
-' starts invalid) rather than unconditionally at openSettings() time, so
-' viewing Server never issues a request the viewer didn't ask for.
+' Repaints settingsDetail/settingsActionList for the focused Preferences
+' section (indices match settingsSectionLabels / tv-web Settings.tsx).
 sub renderSettingsSection(index as Integer)
     m.settingsSectionIndex = index
     if index = 0
-        renderServerSettings()
+        renderAppearanceSettings()
     else if index = 1
+        m.settingsDetail.text = "Profile avatar" + Chr(10) + "Avatar presets match your other Playarr apps. Upload is not available on Roku."
+        setListContent(m.settingsActionList, [])
+    else if index = 2
+        m.settingsDetail.text = "Language" + Chr(10) + "App language follows the Roku system language."
+        setListContent(m.settingsActionList, [])
+    else if index = 3
         renderPlayerSettings()
         if m.preferredAudioLanguage = invalid then loadPlayerPreferences()
-    else if index = 2
+    else if index = 4
+        renderServerSettings()
+    else if index = 5
         renderProfileLockSettings()
         if m.profilePinLocked = invalid then loadProfilePinSetting()
+    else if index = 6
+        m.settingsDetail.text = "Invite a friend" + Chr(10) + "Invite links are managed on the web or mobile app."
+        setListContent(m.settingsActionList, [])
+    else if index = 7
+        m.settingsDetail.text = "Request latency" + Chr(10) + "Latency diagnostics are available to admins on the web app."
+        setListContent(m.settingsActionList, [])
     end if
+end sub
+
+sub renderAppearanceSettings()
+    m.settingsDetail.text = "Colour theme" + Chr(10) + "Dark (Roku)" + Chr(10) + Chr(10) + "Home screen artwork" + Chr(10) + "Thumbnails"
+    setListContent(m.settingsActionList, ["Theme: Dark", "Artwork: Thumbnails"])
 end sub
 
 sub renderServerSettings()
@@ -1108,7 +1144,7 @@ end sub
 sub acceptProfilePinSetting(data as Object)
     if data = invalid or data.pin_locked = invalid then return
     m.profilePinLocked = data.pin_locked
-    if m.settingsSectionIndex = 2 then renderProfileLockSettings()
+    if m.settingsSectionIndex = 5 then renderProfileLockSettings()
     if m.top.dialog <> invalid then m.top.dialog.close = true
 end sub
 
@@ -1155,13 +1191,14 @@ end sub
 sub onSettingsActionSelected(event as Object)
     index = event.GetData()
     if index = invalid or index < 0 then return
-    if m.settingsSectionIndex = 0
-        if index = 0 then openServerDialog()
-    else if m.settingsSectionIndex = 1
+    ' Indices match settingsSectionLabels / tv-web Preferences order.
+    if m.settingsSectionIndex = 3
         if index >= 0 and index < m.audioLanguageCodes.Count()
             saveAudioLanguage(m.audioLanguageCodes[index])
         end if
-    else if m.settingsSectionIndex = 2
+    else if m.settingsSectionIndex = 4
+        if index = 0 then openServerDialog()
+    else if m.settingsSectionIndex = 5
         if m.profilePinLocked
             if index = 0 then openProfilePinDialog()
             if index = 1 then removeProfilePin()
@@ -1184,7 +1221,7 @@ end sub
 sub acceptPlayerPreferences(data as Object)
     if data = invalid or data.preferred_audio_language = invalid then return
     m.preferredAudioLanguage = data.preferred_audio_language
-    if m.settingsSectionIndex = 1 then renderPlayerSettings()
+    if m.settingsSectionIndex = 3 then renderPlayerSettings()
 end sub
 
 sub enterLibrary(profileName as String)
@@ -1267,13 +1304,6 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
-    ' Sparse residual asset matches the browse kind (series/movies/music).
-    if m.browseResidual <> invalid
-        residualUri = "pkg:/images/series-residual.png"
-        if kind = "movie" then residualUri = "pkg:/images/movies-residual.png"
-        if kind = "artist" then residualUri = "pkg:/images/music-residual.png"
-        m.browseResidual.uri = residualUri
-    end if
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
     m.browseTitle.text = label + "  •  …"
     m.browseItems = []
@@ -2634,42 +2664,45 @@ sub hideAllResiduals()
     residualIds = ["pairingResidual", "profilesResidual", "settingsResidual", "homeResidual", "browseResidual", "searchResidual", "playlistsResidual", "detailResidual", "playbackResidual"]
     for each residualId in residualIds
         node = m.top.findNode(residualId)
-        if node <> invalid then node.visible = false
+        if node <> invalid
+            node.visible = false
+            node.opacity = 0
+            node.uri = ""
+        end if
     end for
-    if m.browseResidual <> invalid then m.browseResidual.visible = false
-    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
+    if m.browseResidual <> invalid
+        m.browseResidual.visible = false
+        m.browseResidual.opacity = 0
+        m.browseResidual.uri = ""
+    end if
+    if m.playbackResidual <> invalid
+        m.playbackResidual.visible = false
+        m.playbackResidual.opacity = 0
+        m.playbackResidual.uri = ""
+    end if
 end sub
 
-' Sparse residual Posters (opaque under 20% of stage) paint only AA/decode
-' residual pixels from web freezes. Not full-stage overpaint. Used so freezes
-' can hit full-stage AE=0 without residual-mask exclusion in parity_ae0.
-' Map screenState / showOnly name to residual Poster id.
-function residualIdForScreen(name as String) as String
-    if name = "pairing" then return "pairingResidual"
-    if name = "profiles" then return "profilesResidual"
-    if name = "settings" then return "settingsResidual"
-    if name = "home" then return "homeResidual"
-    if name = "browse" then return "browseResidual"
-    if name = "library" then return "browseResidual"
-    if name = "search" then return "searchResidual"
-    if name = "playlists" then return "playlistsResidual"
-    if name = "detail" then return "detailResidual"
-    if name = "playback" then return "playbackResidual"
-    return ""
-end function
-
+' Product shell never paints residual freezes (dual stacked UI). No-op kept so
+' any stale call sites cannot re-enable residual overpaint.
 sub showResidualForScreen(name as String)
     hideAllResiduals()
-    residualId = residualIdForScreen(name)
-    if residualId = "" then return
-    node = m.top.findNode(residualId)
-    if node <> invalid then node.visible = true
 end sub
 
 sub acceptCatalogKinds(data as Object)
     m.availableWorkKinds = CreateObject("roAssociativeArray")
-    if data <> invalid and GetInterface(data, "ifArray") <> invalid
-        for each kind in data
+    kindsList = data
+    ' Accept bare array or { kinds: [...] } / { items: [...] } shapes.
+    if data <> invalid and GetInterface(data, "ifArray") = invalid
+        if data.kinds <> invalid and GetInterface(data.kinds, "ifArray") <> invalid
+            kindsList = data.kinds
+        else if data.items <> invalid and GetInterface(data.items, "ifArray") <> invalid
+            kindsList = data.items
+        else
+            kindsList = invalid
+        end if
+    end if
+    if kindsList <> invalid and GetInterface(kindsList, "ifArray") <> invalid
+        for each kind in kindsList
             if kind <> invalid and kind <> ""
                 m.availableWorkKinds.AddReplace(kind, true)
             end if
@@ -2682,9 +2715,10 @@ end sub
 ' Hide library nav slots the viewer has no source for (same rule as tv-web
 ' App.tsx: item.workKind must be in availableWorkKinds from catalog/kinds).
 ' Sites is the common case: no Whisparr-style source => no Sites tab.
+' Also reflows enabled items so hidden slots do not leave empty gaps.
 sub applyNavDockKindFilter()
     kinds = navDockKindList()
-    if m.navEnabled = invalid then m.navEnabled = [true, true, true, true, true, true, true]
+    if m.navEnabled = invalid then m.navEnabled = [true, true, true, true, false, true, true]
     for i = 0 to kinds.Count() - 1
         workKind = navDockWorkKindForSlot(kinds[i])
         enabled = true
@@ -2701,10 +2735,38 @@ sub applyNavDockKindFilter()
         if m.navLabels[i] <> invalid then m.navLabels[i].visible = enabled
         if m.navHighlights[i] <> invalid and not enabled then m.navHighlights[i].visible = false
     end for
+    layoutNavDock()
     if m.navDockIndex < 0 or m.navDockIndex >= m.navEnabled.Count() or not m.navEnabled[m.navDockIndex]
         m.navDockIndex = firstEnabledNavIndex()
     end if
     renderNavDockFocus()
+end sub
+
+' Pack enabled dock items tightly (Search, library kinds, Playlists) so hiding
+' Sites/Music does not leave a blank slot mid-dock like the old fixed layout.
+sub layoutNavDock()
+    if m.navIcons = invalid or m.navIcons.Count() = 0 then return
+    itemStep = 74
+    groupGap = 28
+    ' Three visual groups match tv-web NAV_GROUPS: search | libraries | playlists.
+    groupRanges = [[0, 0], [1, 5], [6, 6]]
+    y = 211
+    for g = 0 to groupRanges.Count() - 1
+        range = groupRanges[g]
+        groupHasVisible = false
+        for i = range[0] to range[1]
+            if m.navEnabled <> invalid and m.navEnabled[i]
+                groupHasVisible = true
+                if m.navHighlights[i] <> invalid then m.navHighlights[i].translation = [40, y]
+                if m.navIcons[i] <> invalid then m.navIcons[i].translation = [64, y + 12]
+                if m.navLabels[i] <> invalid then m.navLabels[i].translation = [-20, y + 46]
+                y = y + itemStep
+            end if
+        end for
+        if groupHasVisible and g < groupRanges.Count() - 1
+            y = y + groupGap
+        end if
+    end for
 end sub
 
 function firstEnabledNavIndex() as Integer
@@ -3846,9 +3908,7 @@ sub showOnly(name as String)
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
-    ' Sparse residual paint under 20% opaque for AA/decode residual only.
-    ' Residual PNG for profiles is pure-diff under 10%; other surfaces empty
-    ' until their SceneGraph matches. hideAllResiduals on status.
+    ' Never paint residual freezes over native SceneGraph (dual stacked UI).
     hideAllResiduals()
     if name <> "playback"
         m.video.visible = false

@@ -9,6 +9,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku product shell hardened against the three recurring failures: residual
+  freeze Posters are stripped (empty URI, opacity 0, never shown) so native
+  SceneGraph is never stacked under a second UI; signed-in loads (profiles
+  restore, session refresh) stay in-shell instead of a fullscreen Loading
+  status wall; Sites (and other library kinds) start hidden and only appear
+  after `GET /api/v1/catalog/kinds` proves access, with the dock reflowed so
+  hidden slots leave no blank gap. Preferences actions map to the eight
+  web sections (Player/Server/Profile lock indices fixed).
+
 - Roku Profiles chrome matches web: Auto and Clients pills, gear + Sign out
   actions, avatar geometry aligned to live web freeze centres, web-extracted
   avatar art. Residual paint stays off (no dual UI).
