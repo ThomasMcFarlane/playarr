@@ -3,8 +3,31 @@ import {
   circularOffset,
   coverflowDepth,
   coverflowPosition,
+  gridOffset,
   nextClientIndex,
 } from "./coverflow";
+
+describe("gridOffset", () => {
+  it("arranges 11 items into a 4-4-3 pyramid, centred as a whole", () => {
+    // 4 columns (ceil(sqrt(11))), 3 rows (ceil(11/4)).
+    expect(gridOffset(0, 11)).toEqual({ x: -1.5, y: -1 });
+    expect(gridOffset(3, 11)).toEqual({ x: 1.5, y: -1 });
+    expect(gridOffset(4, 11)).toEqual({ x: -1.5, y: 0 });
+    expect(gridOffset(7, 11)).toEqual({ x: 1.5, y: 0 });
+  });
+
+  it("centres an incomplete last row on its own, not left-aligned", () => {
+    // Row 2 only has 3 items (indices 8-10) -- centred is -1, 0, 1, not the
+    // ragged -1.5, -0.5, 0.5 a left-aligned row would give.
+    expect(gridOffset(8, 11)).toEqual({ x: -1, y: 1 });
+    expect(gridOffset(9, 11)).toEqual({ x: 0, y: 1 });
+    expect(gridOffset(10, 11)).toEqual({ x: 1, y: 1 });
+  });
+
+  it("returns the origin for a non-positive total", () => {
+    expect(gridOffset(0, 0)).toEqual({ x: 0, y: 0 });
+  });
+});
 
 describe("nextClientIndex", () => {
   it("steps forward and backward within the track", () => {

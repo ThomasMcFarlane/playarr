@@ -40,7 +40,7 @@ import { PlaylistsPage } from "./pages/Playlists";
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
-import { ClientDetailsPage, ClientsPage } from "./pages/Clients";
+import { ClientsPage } from "./pages/Clients";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import { TvEmptyState } from "./components/tv/TvEmptyState";
@@ -577,8 +577,7 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
       <Route path="/profiles" element={<ProfilesPage />} />
-      <Route path="/clients" element={<ClientsPage />} />
-      <Route path="/clients/:clientId" element={<ClientDetailsPage />} />
+      <Route path="/clients/:clientId?" element={<ClientsPage />} />
       <Route path="/download" element={<Navigate to="/clients" replace />} />
       <Route path="/install" element={<Navigate to="/clients" replace />} />
       <Route element={<AppShell />}>

@@ -1,16 +1,11 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import {
-  Link,
-  Navigate,
-  useLocation,
-  useNavigate,
-  useParams,
-} from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { TvStageChrome } from "../components/tv/TvStage";
 import {
   circularOffset,
   coverflowDepth,
   coverflowPosition,
+  gridOffset,
   nextClientIndex,
 } from "../lib/coverflow";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
@@ -215,34 +210,66 @@ function PublicClientsLayout({
   );
 }
 
+/**
+ * Every tile's position/size, in both modes, is expressed as the exact same
+ * transform shape -- translate(x, y) scale(s) -- computed from plain
+ * numbers rather than left to CSS layout. Grid placement (CSS Grid
+ * row/column) can't be smoothly animated by the browser at all, and even a
+ * structural change in the transform's own function list (translateX(...)
+ * vs translate(...)) risks the browser falling back to coarser matrix
+ * interpolation instead of animating x/y/scale independently. Keeping the
+ * shape identical is what makes clicking a bubble in the grid morph
+ * smoothly into its place in the stack, instead of jumping.
+ */
+function gridTileStyle(index: number, total: number): CSSProperties {
+  const { x, y } = gridOffset(index, total);
+  return {
+    "--pos-x": x,
+    "--pos-y": y,
+    transform:
+      "translate(calc(var(--pos-x) * var(--grid-spacing-x)), calc(var(--pos-y) * var(--grid-spacing-y))) scale(1)",
+    zIndex: 1,
+  } as CSSProperties;
+}
+
 function coverflowTileStyle(offset: number): CSSProperties {
   const depth = coverflowDepth(offset);
   return {
-    // translateX + scale only -- no rotateY. A 3D tilt under perspective
-    // projects off-centre tiles into a slightly asymmetric shape, which can
-    // shift a tile's *computed* vertical centre by a stray pixel or two.
-    // The app-wide arrow-key focus system scores directional candidates
-    // geometrically, so that drift could occasionally make a neighbouring
-    // tile look like a valid Up/Down target instead of the current one.
-    // Keeping this transform 2D guarantees every tile's vertical centre is
-    // identical, so Up/Down can never land on another tile, not just
-    // "usually" won't.
-    "--cf-position": coverflowPosition(offset),
-    transform: `translateX(calc(var(--cf-position) * var(--cf-spacing))) scale(${depth.scale})`,
+    // No rotateY: a 3D tilt under perspective projects off-centre tiles
+    // into a slightly asymmetric shape, which can shift a tile's *computed*
+    // vertical centre by a stray pixel or two. The app-wide arrow-key focus
+    // system scores directional candidates geometrically, so that drift
+    // could occasionally make a neighbouring tile look like a valid Up/Down
+    // target instead of the current one. Keeping this transform 2D
+    // guarantees every tile's vertical centre is identical, so Up/Down can
+    // never land on another tile, not just "usually" won't.
+    "--pos-x": coverflowPosition(offset),
+    "--pos-y": 0,
+    transform: `translate(calc(var(--pos-x) * var(--cf-spacing)), calc(var(--pos-y) * 1px)) scale(${depth.scale})`,
     zIndex: depth.zIndex,
   } as CSSProperties;
 }
 
-function ClientsSelector({ activeClientId }: { activeClientId: string }) {
+/**
+ * `activeClientId` undefined means the bare /clients landing page: every
+ * client is shown as an equal-sized bubble in a grid, and every one of them
+ * is a real, focusable, natively-activatable target (there's nothing to
+ * privilege yet, and 2D arrow-key movement between bubbles is exactly what
+ * the app-wide geometric focus system already does well). Once a client is
+ * selected, the same tiles morph into the coverflow.
+ */
+function ClientsSelector({ activeClientId }: { activeClientId?: string }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const total = PLAYARR_CLIENTS.length;
+  const mode = activeClientId ? "stack" : "grid";
   const selectedIndex = Math.max(
     0,
     PLAYARR_CLIENTS.findIndex((client) => client.id === activeClientId)
   );
 
-  // Only Left/Right ever change the selection. Up/Down must stay free for
+  // Only Left/Right ever change the stack's selection (grid mode leaves
+  // arrow keys alone entirely -- see below). Up/Down must stay free for
   // row/page scrolling: the app-wide arrow-key system moves focus by nearest
   // on-screen geometry, and that geometry genuinely does put some other
   // tile "above" or "below" once focus has moved elsewhere on the page (e.g.
@@ -254,22 +281,24 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
   // focus arrival, removes the ambiguity: nothing but this handler ever
   // navigates.
   useEffect(() => {
-    const activeLink = document.getElementById(`client-${activeClientId}`);
+    if (mode !== "stack") return;
+    const activeTile = document.getElementById(`client-${activeClientId}`);
     const focusIsWithinCoverflow = document.activeElement
       ?.closest(".clients-coverflow") != null;
-    if (activeLink && focusIsWithinCoverflow) {
-      activeLink.focus({ preventScroll: true });
+    if (activeTile && focusIsWithinCoverflow) {
+      activeTile.focus({ preventScroll: true });
     }
-  }, [activeClientId]);
+  }, [mode, activeClientId]);
 
   return (
     <section
-      className="clients-coverflow"
+      className={`clients-coverflow is-${mode}`}
       aria-label={t("pages.clients.gridAriaLabel")}
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="clients:platforms"
       onKeyDown={(event) => {
+        if (mode !== "stack") return;
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         event.preventDefault();
         event.stopPropagation();
@@ -283,69 +312,64 @@ function ClientsSelector({ activeClientId }: { activeClientId: string }) {
       <div className="clients-coverflow-track">
         {PLAYARR_CLIENTS.map((client, index) => {
           const isActive = client.id === activeClientId;
-          const icon = (
-            <span
-              className="client-platform-icon"
-              data-client-icon={client.icon}
-              aria-hidden="true"
-            >
-              <ClientPlatformIcon icon={client.icon} />
-            </span>
-          );
+          // The grid has nothing to privilege yet, so every bubble is a
+          // real target; the stack keeps only the active tile focusable
+          // (see the module-level comment on coverflowTileStyle) -- but
+          // both modes use the exact same <div role="link"> element with
+          // only its tabIndex/handlers changing, specifically so a tile's
+          // DOM node survives the grid<->stack transition unchanged and its
+          // position/scale can actually animate, rather than being replaced
+          // (which a real <a> <-> <div> swap would cause, with the new node
+          // simply appearing at its final position with nothing to animate
+          // from).
+          const focusable = mode === "grid" || isActive;
+          const activate = () => {
+            if (client.id === activeClientId) return;
+            navigate(`/clients/${client.id}`, { replace: mode === "stack" });
+          };
 
           return (
             <article
               className={`client-choice is-${client.status} is-${client.icon}${isActive ? " is-active" : ""}`}
               key={client.id}
-              style={coverflowTileStyle(circularOffset(index, selectedIndex, total))}
+              style={
+                mode === "grid"
+                  ? gridTileStyle(index, total)
+                  : coverflowTileStyle(circularOffset(index, selectedIndex, total))
+              }
             >
-              {isActive ? (
-                <Link
-                  id={`client-${client.id}`}
-                  className="client-platform"
-                  to={`/clients/${client.id}`}
-                  aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
-                  aria-current="page"
-                  data-tv-focus-default
-                  data-navigation-focus-key={`clients:${client.id}`}
+              <div
+                id={`client-${client.id}`}
+                className="client-platform"
+                role="link"
+                tabIndex={focusable ? 0 : -1}
+                aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
+                aria-current={isActive ? "page" : undefined}
+                data-tv-focus-default={
+                  (mode === "grid" ? index === 0 : isActive) ? true : undefined
+                }
+                data-navigation-focus-key={`clients:${client.id}`}
+                onClick={activate}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  activate();
+                }}
+              >
+                <span
+                  className="client-platform-icon"
+                  data-client-icon={client.icon}
+                  aria-hidden="true"
                 >
-                  {icon}
-                </Link>
-              ) : (
-                // Deliberately not a real <a>/<button>: this app's shared
-                // directional focus system treats every native interactive
-                // element as reachable regardless of tabindex, so a real
-                // link here would let Up/Down land on it from anywhere on
-                // the page (see the keydown handler above). A plain element
-                // stays fully clickable but is invisible to that system --
-                // only the active tile is ever keyboard/remote-focusable;
-                // every other tile is reached by stepping Left/Right onto
-                // it, which swaps it in as the real, focusable Link above.
-                <div
-                  id={`client-${client.id}`}
-                  className="client-platform"
-                  role="link"
-                  aria-label={`${t(client.nameKey)} — ${t(client.platformKey)}`}
-                  onClick={() => navigate(`/clients/${client.id}`, { replace: true })}
-                >
-                  {icon}
-                </div>
-              )}
+                  <ClientPlatformIcon icon={client.icon} />
+                </span>
+              </div>
             </article>
           );
         })}
       </div>
     </section>
   );
-}
-
-/**
- * A coverflow always has something centred, so the bare index collapses
- * onto the first client's own URL rather than rendering a distinct
- * no-selection state.
- */
-export function ClientsPage() {
-  return <Navigate to={`/clients/${PLAYARR_CLIENTS[0]?.id}`} replace />;
 }
 
 export function AndroidDownloadDetails() {
@@ -742,10 +766,20 @@ function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
   );
 }
 
-export function ClientDetailsPage() {
-  const { clientId } = useParams<{ clientId: string }>();
+/**
+ * The whole /clients experience: bare "/clients" (no :clientId) shows every
+ * client as an equal bubble in a grid; "/clients/:clientId" shows the same
+ * tiles morphed into a coverflow centred on that one client, plus its
+ * install details below. Both URLs resolve to this one component (see the
+ * single "/clients/:clientId?" route in App.tsx) specifically so React
+ * never unmounts/remounts the tiles when navigating between them -- that
+ * persistence is what lets clicking a grid bubble animate into the stack
+ * rather than cutting between two separately-rendered pages.
+ */
+export function ClientsPage() {
+  const { clientId } = useParams<{ clientId?: string }>();
   const { t } = useLanguage();
-  const client = PLAYARR_CLIENTS.find(({ id }) => id === clientId);
+  const client = clientId ? PLAYARR_CLIENTS.find(({ id }) => id === clientId) : undefined;
   useDocumentTitle(
     client?.id === "vidaa"
       ? t("pages.clients.vidaaPage.documentTitle")
@@ -754,10 +788,15 @@ export function ClientDetailsPage() {
         : t("pages.clients.documentTitle")
   );
 
-  if (!client) return <Navigate to="/clients" replace />;
+  // A real id that isn't a real client falls back to the grid; the bare
+  // index is never itself a "not found" case.
+  if (clientId && !client) return <Navigate to="/clients" replace />;
 
   return (
-    <PublicClientsLayout backTo="/clients" scrollKey={`clients:${client.id}`}>
+    <PublicClientsLayout
+      backTo={client ? "/clients" : "/profiles"}
+      scrollKey={client ? `clients:${client.id}` : "clients:index"}
+    >
       <section className="clients-hero" aria-labelledby="clients-title">
         <p className="page-kicker">{t("pages.clients.kicker")}</p>
         <h1 className="auth-title" id="clients-title">
@@ -765,27 +804,31 @@ export function ClientDetailsPage() {
         </h1>
       </section>
 
-      <ClientsSelector activeClientId={client.id} />
-      <div className="client-details-content">
-        {client.id === "vidaa" ? (
-          <VidaaInstallDetails />
-        ) : client.id === "android" ? (
-          <AndroidDownloadDetails />
-        ) : client.id === "roku" ? (
-          <>
-            <ClientOverviewDetails client={client} />
-            <RokuInstallGuide />
-          </>
-        ) : client.id === "webos" || client.id === "tizen" ? (
-          <SmartTvInstallGuide
-            client={client as PlayarrClient & { id: SmartTvClientId }}
-          />
-        ) : (
-          <ClientOverviewDetails client={client} />
-        )}
-      </div>
-      <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
-      <p className="clients-footer">{t("pages.clients.footer")}</p>
+      <ClientsSelector activeClientId={client?.id} />
+      {client ? (
+        <>
+          <div className="client-details-content">
+            {client.id === "vidaa" ? (
+              <VidaaInstallDetails />
+            ) : client.id === "android" ? (
+              <AndroidDownloadDetails />
+            ) : client.id === "roku" ? (
+              <>
+                <ClientOverviewDetails client={client} />
+                <RokuInstallGuide />
+              </>
+            ) : client.id === "webos" || client.id === "tizen" ? (
+              <SmartTvInstallGuide
+                client={client as PlayarrClient & { id: SmartTvClientId }}
+              />
+            ) : (
+              <ClientOverviewDetails client={client} />
+            )}
+          </div>
+          <p className="clients-preview-note">{t("pages.clients.downloadNote")}</p>
+          <p className="clients-footer">{t("pages.clients.footer")}</p>
+        </>
+      ) : null}
     </PublicClientsLayout>
   );
 }

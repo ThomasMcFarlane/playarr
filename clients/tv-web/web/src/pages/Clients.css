@@ -59,13 +59,18 @@
 
 .clients-coverflow {
   --cf-tile-width: clamp(150px, 12vw, 220px);
-  /* --cf-position (set per tile) is a geometrically-converging step count,
-     not a linear one -- see coverflowPosition() -- so this is the distance
-     of just the nearest neighbour, not a hard cap on how far tiles spread.
-     Sized off the tile's own width (rather than an independent clamp) so
-     the nearest neighbour clears the enlarged active tile's footprint at
-     every viewport size, instead of tucking in behind it. */
+  /* --pos-x (set per tile, stack mode) is a geometrically-converging step
+     count, not a linear one -- see coverflowPosition() -- so this is the
+     distance of just the nearest neighbour, not a hard cap on how far tiles
+     spread. Sized off the tile's own width (rather than an independent
+     clamp) so the nearest neighbour clears the enlarged active tile's
+     footprint at every viewport size, instead of tucking in behind it. */
   --cf-spacing: calc(var(--cf-tile-width) * 1.15);
+  /* Deliberately tighter than --cf-spacing: a landing grid of equal-sized
+     bubbles reads better packed closer together, unlike the stack, which
+     needs room for the centred tile to be visibly larger than the rest. */
+  --grid-spacing-x: calc(var(--cf-tile-width) * 0.92);
+  --grid-spacing-y: calc(var(--cf-tile-width) * 0.92);
   width: 100vw;
   margin-right: calc(50% - 50vw);
   margin-left: calc(50% - 50vw);
@@ -76,7 +81,11 @@
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
   place-items: center;
-  height: clamp(220px, 30vw, 340px);
+  /* Sized for the taller of the two layouts (the grid's 3 rows), shared
+     with the stack's single row so the container itself never needs to
+     resize -- animating height is far less smooth than transform, so the
+     stack simply centres within extra vertical room instead. */
+  height: calc(2 * var(--grid-spacing-y) + var(--cf-tile-width) + 40px);
   padding-block: clamp(22px, calc(3 * var(--viewport-unit)), 38px) 34px;
 }
 

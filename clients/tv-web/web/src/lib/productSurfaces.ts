@@ -87,8 +87,11 @@ export const COMPLETE_CLIENT_PUBLIC_ROUTES: readonly ProductRoute[] = [
   { path: "/signup", id: "signup", label: "Signup", shelled: false },
   { path: "/link", id: "device-link", label: "Device link approval", shelled: false },
   { path: "/profiles", id: "profiles", label: "Profiles", shelled: false },
-  { path: "/clients", id: "clients", label: "Clients / install", shelled: false },
-  { path: "/clients/:clientId", id: "client-detail", label: "Client install detail", shelled: false },
+  // "/clients" (a landing grid of every client) and "/clients/:clientId"
+  // (that same grid morphed into a coverflow, plus install details) are a
+  // single React Router route -- see the "/clients/:clientId?" route in
+  // App.tsx -- so they're one surface here too, not two.
+  { path: "/clients/:clientId?", id: "clients", label: "Clients / install", shelled: false },
 ] as const;
 
 export const COMPLETE_CLIENT_ROUTES: readonly ProductRoute[] = [

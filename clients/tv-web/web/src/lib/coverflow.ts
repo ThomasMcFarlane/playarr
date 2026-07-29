@@ -55,6 +55,30 @@ export function coverflowPosition(offset: number): number {
   return offset < 0 ? -position : position;
 }
 
+export interface GridOffset {
+  x: number;
+  y: number;
+}
+
+/**
+ * Centred (x, y) offset, in grid-cell units, for `index` in a roughly
+ * square grid of `total` items. An incomplete last row is centred on its
+ * own rather than left-aligned, so the grid reads as a balanced cluster of
+ * bubbles instead of a ragged one.
+ */
+export function gridOffset(index: number, total: number): GridOffset {
+  if (total <= 0) return { x: 0, y: 0 };
+  const columns = Math.ceil(Math.sqrt(total));
+  const rows = Math.ceil(total / columns);
+  const row = Math.floor(index / columns);
+  const col = index % columns;
+  const itemsInRow = Math.min(columns, total - row * columns);
+  return {
+    x: col - (itemsInRow - 1) / 2,
+    y: row - (rows - 1) / 2,
+  };
+}
+
 // The centred tile is a deliberate step up from the "first neighbour" size
 // below, not just the top of a smooth shrink curve -- it's meant to read as
 // clearly the largest, not just the least-shrunk.
