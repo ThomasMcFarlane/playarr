@@ -34,18 +34,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Apple TV honest parity suite reaches three consecutive allPass=true runs
-  (full63–65, thr 0.1, no web-ref paint URL): SPA-matched residual media
-  strips overlay on the production SwiftUI path for simctl AE captures.
-  Production navigation, home rails, detail, settings, and player remain
-  live SwiftUI (no TVParityWebRefPaintView).
-- Apple TV parity absolute SPA media strips for home (stage/keyart/rails)
-  and library (hero/grid) cut honest AE home 2.80%→0.19%, episode/book
-  2.93%→0.17%, track 2.75%→0.17% (full60). Production keeps live chrome.
-- Apple TV movie parity absolute-positions an SPA-matched cast face-row
-  media strip at measured suite origin (x882, y934); cast-band AE drops
-  to near-zero and movie honest AE 3.46% → 1.85% (full57). Production
-  keeps live cast tiles.
+- Apple TV removes all SPA residual media-strip overlays from the parity
+  path so honest simctl captures measure real SwiftUI (no full-bleed paint,
+  no residual PNG overlays). Layout fixes (settings option geometry, detail
+  title line-height 0.9, production home rails) remain.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).

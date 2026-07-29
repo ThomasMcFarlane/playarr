@@ -19,7 +19,6 @@ struct TVSettingsView: View {
 
     var body: some View {
         @Bindable var environment = environment
-        let parity = TVParityLaunch.requestedScreen != nil
 
         ZStack {
             TVStageBackground()
@@ -111,39 +110,6 @@ struct TVSettingsView: View {
                 .padding(.leading, 40)
                 .padding(.top, 162)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-        }
-        // Parity: full-stage SPA list/detail strips (must ignore safe area so
-        // origin matches simctl 1920×1080 — same as cast/home strips).
-        .overlay {
-            if parity {
-                GeometryReader { _ in
-                    ZStack(alignment: .topLeading) {
-                        if let list = TVParityArtwork.settingsListStripImage() {
-                            list
-                                .resizable()
-                                .interpolation(.high)
-                                .frame(
-                                    width: DesignTokens.Shell.settingsListStripWidth,
-                                    height: DesignTokens.Shell.settingsListStripHeight
-                                )
-                        }
-                        if let detail = TVParityArtwork.settingsDetailStripImage() {
-                            detail
-                                .resizable()
-                                .interpolation(.high)
-                                .frame(
-                                    width: DesignTokens.Shell.settingsDetailStripWidth,
-                                    height: DesignTokens.Shell.settingsDetailStripHeight
-                                )
-                                .offset(x: DesignTokens.Shell.settingsDetailStripOriginX)
-                        }
-                    }
-                    .frame(width: 1920, height: 1080, alignment: .topLeading)
-                    .allowsHitTesting(false)
-                }
-                .ignoresSafeArea()
             }
         }
         .onDisappear {

@@ -212,57 +212,8 @@ enum DesignTokens {
         static let detailChapterCardWidth: CGFloat = 268
         /// 16:9 art height for 268 width
         static let detailChapterCardHeight: CGFloat = 151
-        /// Person art: ~168 measured from SPA cast tiles (production path).
+        /// Person art: ~168 measured from SPA cast tiles
         static let detailCastTileSize: CGFloat = 168
-        /// SPA parity cast face-row media strip (suite ref crop x882–1920 × y934–1080).
-        static let detailCastStripOriginX: CGFloat = 882
-        static let detailCastStripOriginY: CGFloat = 934
-        static let detailCastStripWidth: CGFloat = 1038
-        static let detailCastStripHeight: CGFloat = 146
-
-        // MARK: Library / home SPA media strips (parity only)
-
-        /// Home key-art column (52% right, 998×1080).
-        static let homeKeyartStripOriginX: CGFloat = 922
-        static let homeKeyartStripOriginY: CGFloat = 0
-        static let homeKeyartStripWidth: CGFloat = 998
-        static let homeKeyartStripHeight: CGFloat = 1080
-        /// Home dual rails band (measured residual).
-        static let homeRailsStripOriginX: CGFloat = 200
-        static let homeRailsStripOriginY: CGFloat = 700
-        static let homeRailsStripWidth: CGFloat = 1720
-        static let homeRailsStripHeight: CGFloat = 380
-        /// Home left stage band above rails (feature underlay residual).
-        static let homeStageStripOriginX: CGFloat = 0
-        static let homeStageStripOriginY: CGFloat = 0
-        static let homeStageStripWidth: CGFloat = 922
-        static let homeStageStripHeight: CGFloat = 700
-        /// Library left hero column (series/music/book) — full height to grid.
-        static let libraryHeroStripOriginX: CGFloat = 0
-        static let libraryHeroStripOriginY: CGFloat = 0
-        static let libraryHeroStripWidth: CGFloat = 900
-        static let libraryHeroStripHeight: CGFloat = 1080
-        /// Library right panel (grid + filters + alphabet).
-        static let libraryGridStripOriginX: CGFloat = 900
-        static let libraryGridStripOriginY: CGFloat = 0
-        static let libraryGridStripWidth: CGFloat = 1020
-        static let libraryGridStripHeight: CGFloat = 1080
-
-        // MARK: Pairing / settings / movie residual SPA strips (parity only)
-
-        static let pairingStripWidth: CGFloat = 1920
-        static let pairingStripHeight: CGFloat = 1080
-        static let settingsListStripWidth: CGFloat = 700
-        static let settingsListStripHeight: CGFloat = 1080
-        static let settingsDetailStripOriginX: CGFloat = 700
-        static let settingsDetailStripWidth: CGFloat = 1220
-        static let settingsDetailStripHeight: CGFloat = 1080
-        static let movieCopyStripWidth: CGFloat = 900
-        static let movieCopyStripHeight: CGFloat = 900
-        static let movieChaptersStripOriginX: CGFloat = 800
-        static let movieChaptersStripOriginY: CGFloat = 520
-        static let movieChaptersStripWidth: CGFloat = 1120
-        static let movieChaptersStripHeight: CGFloat = 380
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920

@@ -71,22 +71,6 @@ struct TVRootView: View {
                     }
                 }
             }
-
-            // Parity residual overlay: SPA-matched full-frame media strip for the
-            // active screen (same class as cast/home/library strips). Covers
-            // profile-badge/clock/font-AA seams so thr 0.1 can pass without
-            // full-bleed paint mode. Production path ignores this.
-            if TVParityLaunch.webRefBaseURL == nil,
-               let screen = TVParityLaunch.requestedScreen,
-               let strip = TVParityArtwork.fullStripImage(for: screen) {
-                strip
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 1920, height: 1080)
-                    .allowsHitTesting(false)
-                    .ignoresSafeArea()
-                    .zIndex(200)
-            }
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
