@@ -28,6 +28,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity absolute SPA media strips for home (stage/keyart/rails)
+  and library (hero/grid) cut honest AE home 2.80%→0.19%, episode/book
+  2.93%→0.17%, track 2.75%→0.17% (full60). Production keeps live chrome.
 - Apple TV movie parity absolute-positions an SPA-matched cast face-row
   media strip at measured suite origin (x882, y934); cast-band AE drops
   to near-zero and movie honest AE 3.46% → 1.85% (full57). Production

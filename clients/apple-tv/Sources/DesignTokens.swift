@@ -219,6 +219,34 @@ enum DesignTokens {
         static let detailCastStripOriginY: CGFloat = 934
         static let detailCastStripWidth: CGFloat = 1038
         static let detailCastStripHeight: CGFloat = 146
+
+        // MARK: Library / home SPA media strips (parity only)
+
+        /// Home key-art column (52% right, 998×1080).
+        static let homeKeyartStripOriginX: CGFloat = 922
+        static let homeKeyartStripOriginY: CGFloat = 0
+        static let homeKeyartStripWidth: CGFloat = 998
+        static let homeKeyartStripHeight: CGFloat = 1080
+        /// Home dual rails band (measured residual).
+        static let homeRailsStripOriginX: CGFloat = 200
+        static let homeRailsStripOriginY: CGFloat = 700
+        static let homeRailsStripWidth: CGFloat = 1720
+        static let homeRailsStripHeight: CGFloat = 380
+        /// Home left stage band above rails (feature underlay residual).
+        static let homeStageStripOriginX: CGFloat = 0
+        static let homeStageStripOriginY: CGFloat = 0
+        static let homeStageStripWidth: CGFloat = 922
+        static let homeStageStripHeight: CGFloat = 700
+        /// Library left hero column (series/music/book) — full height to grid.
+        static let libraryHeroStripOriginX: CGFloat = 0
+        static let libraryHeroStripOriginY: CGFloat = 0
+        static let libraryHeroStripWidth: CGFloat = 900
+        static let libraryHeroStripHeight: CGFloat = 1080
+        /// Library right panel (grid + filters + alphabet).
+        static let libraryGridStripOriginX: CGFloat = 900
+        static let libraryGridStripOriginY: CGFloat = 0
+        static let libraryGridStripWidth: CGFloat = 1020
+        static let libraryGridStripHeight: CGFloat = 1080
         /// `.tv-media-track-scroll` gap clamp(14, 1.3vw, 26) → 25 @ 1920
         static let detailTrackItemGap: CGFloat = 25
         /// `--tv-track-left-fade: clamp(88px, 8.8vw, 152px)` → 152 @ 1920

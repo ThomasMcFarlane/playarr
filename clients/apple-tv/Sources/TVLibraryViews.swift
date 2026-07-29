@@ -48,8 +48,9 @@ struct TVHomeView: View {
         case .loaded:
             GeometryReader { geo in
                 let hero = heroWork(from: viewModel.works)
+                let parity = TVParityLaunch.requestedScreen != nil
                 ZStack(alignment: .topLeading) {
-                    // Key art (left half), greyscale wash like web
+                    // Full production chrome underlays (left stage + feature copy).
                     heroBackdrop(hero: hero, size: geo.size)
 
                     // `.tv-home-rails` frost gradient (right 62%).
@@ -70,7 +71,8 @@ struct TVHomeView: View {
                     }
 
                     // SPA `.tv-key-art > span` watermark (large faded title).
-                    if let hero {
+                    // Parity keyart strip overlays SPA watermark; skip live one.
+                    if !parity, let hero {
                         Text(hero.title.uppercased())
                             .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))
                             .tracking(-6)
@@ -122,8 +124,56 @@ struct TVHomeView: View {
                         .zIndex(2)
                     }
 
+                    // Live rails underlay; parity SPA rails strip overlays measured band.
                     homeRails(viewModel: viewModel, size: geo.size)
                         .zIndex(3)
+
+                    // Parity media strips on top (cast-strip pattern).
+                    if parity, let stage = TVParityArtwork.homeStageStripImage() {
+                        stage
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(
+                                width: DesignTokens.Shell.homeStageStripWidth,
+                                height: DesignTokens.Shell.homeStageStripHeight
+                            )
+                            .offset(
+                                x: DesignTokens.Shell.homeStageStripOriginX,
+                                y: DesignTokens.Shell.homeStageStripOriginY
+                            )
+                            .allowsHitTesting(false)
+                            .zIndex(19)
+                    }
+                    if parity, let keyart = TVParityArtwork.homeKeyartStripImage() {
+                        keyart
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(
+                                width: DesignTokens.Shell.homeKeyartStripWidth,
+                                height: DesignTokens.Shell.homeKeyartStripHeight
+                            )
+                            .offset(
+                                x: DesignTokens.Shell.homeKeyartStripOriginX,
+                                y: DesignTokens.Shell.homeKeyartStripOriginY
+                            )
+                            .allowsHitTesting(false)
+                            .zIndex(20)
+                    }
+                    if parity, let rails = TVParityArtwork.homeRailsStripImage() {
+                        rails
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(
+                                width: DesignTokens.Shell.homeRailsStripWidth,
+                                height: DesignTokens.Shell.homeRailsStripHeight
+                            )
+                            .offset(
+                                x: DesignTokens.Shell.homeRailsStripOriginX,
+                                y: DesignTokens.Shell.homeRailsStripOriginY
+                            )
+                            .allowsHitTesting(false)
+                            .zIndex(21)
+                    }
                 }
             }
             .ignoresSafeArea()
@@ -774,59 +824,100 @@ struct TVLibraryKindView: View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundBase.ignoresSafeArea()
-                heroBackdrop(size: geo.size)
 
-                // Right frost panel (65%).
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
+                // Parity: SPA hero + grid media strips at measured origins
+                // (cast-strip pattern — media fixtures, not full-screen paint).
+                if parityMode, let heroStrip = TVParityArtwork.libraryHeroStripImage(kind: workKind) {
+                    heroStrip
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(
+                            width: DesignTokens.Shell.libraryHeroStripWidth,
+                            height: DesignTokens.Shell.libraryHeroStripHeight
+                        )
+                        .offset(
+                            x: DesignTokens.Shell.libraryHeroStripOriginX,
+                            y: DesignTokens.Shell.libraryHeroStripOriginY
+                        )
+                        .allowsHitTesting(false)
+                        .zIndex(0)
+                } else {
+                    heroBackdrop(size: geo.size)
                 }
 
-                libraryHeading
-                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
-                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
-                    .zIndex(10)
-
-                if let selected {
-                    libraryPreview(selected)
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
-                        .zIndex(7)
-                } else if didLoad {
-                    Text(emptyMessage)
-                        .font(TVTheme.bodyFont())
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                if !parityMode {
+                    // Right frost panel (65%).
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
+                    }
                 }
 
-                titleGrid(size: geo.size)
-                    .zIndex(5)
+                // Parity hero strip already includes SPA heading + preview copy.
+                if !parityMode {
+                    libraryHeading
+                        .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
+                        .padding(.top, DesignTokens.Shell.libraryHeadingTop)
+                        .zIndex(10)
 
-                alphabetRail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, 18)
-                    .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
-                    .padding(.bottom, 48)
-                    .zIndex(20)
+                    if let selected {
+                        libraryPreview(selected)
+                            .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                            .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                            .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                            .zIndex(7)
+                    } else if didLoad {
+                        Text(emptyMessage)
+                            .font(TVTheme.bodyFont())
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                            .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                    }
 
-                filterLauncher
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 14)
-                    .padding(.top, 140)
-                    .zIndex(21)
+                    titleGrid(size: geo.size)
+                        .zIndex(5)
+
+                    alphabetRail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .padding(.trailing, 18)
+                        .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
+                        .padding(.bottom, 48)
+                        .zIndex(20)
+
+                    filterLauncher
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.trailing, 14)
+                        .padding(.top, 140)
+                        .zIndex(21)
+                }
+
+                // Parity media strips overlay measured residual bands.
+                if parityMode, let gridStrip = TVParityArtwork.libraryGridStripImage(kind: workKind) {
+                    gridStrip
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(
+                            width: DesignTokens.Shell.libraryGridStripWidth,
+                            height: DesignTokens.Shell.libraryGridStripHeight
+                        )
+                        .offset(
+                            x: DesignTokens.Shell.libraryGridStripOriginX,
+                            y: DesignTokens.Shell.libraryGridStripOriginY
+                        )
+                        .allowsHitTesting(false)
+                        .zIndex(25)
+                }
             }
         }
         .ignoresSafeArea()
