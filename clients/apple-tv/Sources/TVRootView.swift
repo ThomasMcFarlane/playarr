@@ -133,6 +133,9 @@ struct TVRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .toolbar(.hidden, for: .navigationBar)
             }
+            // Main stage is its own focus section so Left from the first card
+            // can hand focus to the floating nav (sibling overlay).
+            .focusSection()
 
             // Floating left nav (web `.app-nav`) — vertically centred at nav edge.
             TVFloatingNav(
@@ -148,11 +151,13 @@ struct TVRootView: View {
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)
+            .focusSection()
             .zIndex(50)
 
-            // Logo / clock
+            // Logo / clock — never steals remote focus.
             TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)
                 .frame(maxWidth: .infinity, alignment: .top)
+                .allowsHitTesting(false)
                 .zIndex(80)
 
             // Profile chip (live SPA shows signed-in user under the nav).
@@ -168,6 +173,7 @@ struct TVRootView: View {
                     Spacer()
                 }
             }
+            .allowsHitTesting(false)
             .zIndex(50)
         }
         // Shell chrome is authored for the full 1920×1080 stage, matching web

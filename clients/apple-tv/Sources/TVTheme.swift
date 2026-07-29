@@ -76,6 +76,17 @@ struct TVStageBackground: View {
     }
 }
 
+/// tvOS-safe card/nav button style: keeps the focus engine happy (unlike
+/// `.buttonStyle(.plain)`, which can leave controls unfocusable under some
+/// SwiftUI/tvOS combinations) while avoiding the default glass chrome.
+struct TVFocusableCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
 struct TVPrimaryButton: View {
     let label: String
     var isFocused: Bool = false
@@ -93,7 +104,7 @@ struct TVPrimaryButton: View {
                 )
                 .scaleEffect(isFocused ? DesignTokens.FocusMotion.focusScale : 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVFocusableCardButtonStyle())
     }
 }
 
@@ -113,7 +124,7 @@ struct TVSecondaryButton: View {
                     Capsule().fill(DesignTokens.Color.backgroundRaised)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVFocusableCardButtonStyle())
     }
 }
 
@@ -222,7 +233,7 @@ struct TVFloatingNav: View {
             )
             .scaleEffect(isActive && !suppressFocusChrome ? 1.05 : 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
         // Parity captures: disable focusability entirely so the system white
         // focus pill cannot appear (focusEffectDisabled alone still leaves a

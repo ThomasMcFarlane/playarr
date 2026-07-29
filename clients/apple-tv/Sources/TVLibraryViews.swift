@@ -4,7 +4,9 @@ import SwiftUI
 struct TVHomeView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var viewModel: TVHomeViewModel?
-    @State private var focusedWorkID: UUID?
+    /// Real focus engine binding (must be `@FocusState`, not plain `@State`)
+    /// so Siri Remote / simulator arrows move between cards.
+    @FocusState private var focusedWorkID: UUID?
 
     var body: some View {
         Group {
@@ -168,23 +170,109 @@ struct TVHomeView: View {
             return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
         }()
 
-        // Always place rails at SPA-measured origins (design-token geometry).
-        // Production wraps cards in NavigationLink for focus/select; parity
-        // freezes chrome for simctl AE captures.
-        homeRailsAbsolute(
-            startWatching: Array(startWatching.prefix(TVParityLaunch.requestedScreen != nil ? 5 : 12)),
-            newMovies: Array(newMovies.prefix(TVParityLaunch.requestedScreen != nil ? 5 : 12)),
-            size: size,
-            interactive: TVParityLaunch.requestedScreen == nil
-        )
+        let interactive = TVParityLaunch.requestedScreen == nil
+        let start = Array(startWatching.prefix(interactive ? 12 : 5))
+        let movieRail = Array(newMovies.prefix(interactive ? 12 : 5))
+        // Interactive: real HStack layout so the focus engine can move left/right.
+        // Absolute `.offset` stacking breaks directional focus (all cards share
+        // one layout rect). Parity freezes keep pixel-locked absolute geometry.
+        if interactive {
+            homeRailsInteractive(startWatching: start, newMovies: movieRail, size: size)
+        } else {
+            homeRailsAbsolute(startWatching: start, newMovies: movieRail, size: size)
+        }
     }
 
-    /// SPA `.tv-home-rails` card grid at measured art origins (pink-dot geometry).
+    /// Production rails: layout-based rows so Siri Remote / keyboard arrows work.
+    private func homeRailsInteractive(
+        startWatching: [Work],
+        newMovies: [Work],
+        size: CGSize
+    ) -> some View {
+        let artW = DesignTokens.Shell.homeCardWidth
+        let artH = DesignTokens.Shell.homeCardHeight
+        let gap = DesignTokens.Shell.homeCardGap
+        let titleBlock = DesignTokens.Shell.homeCardTitleBlock
+        let headingH = DesignTokens.Shell.homeRailHeadingOffsetY
+        let x0 = DesignTokens.Shell.homeCardOriginX
+        let y1 = DesignTokens.Shell.homeCardOriginY1
+        let y2 = DesignTokens.Shell.homeCardOriginY2
+        let railGap = max(0, y2 - y1 - artH - titleBlock)
+        let defaultFocusID = startWatching.first?.id ?? newMovies.first?.id
+
+        return VStack(alignment: .leading, spacing: railGap) {
+            interactiveRail(
+                title: "Start watching",
+                works: startWatching,
+                artW: artW,
+                artH: artH,
+                titleBlock: titleBlock,
+                gap: gap,
+                headingH: headingH
+            )
+            interactiveRail(
+                title: "New movies",
+                works: newMovies,
+                artW: artW,
+                artH: artH,
+                titleBlock: titleBlock,
+                gap: gap,
+                headingH: headingH
+            )
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, x0)
+        .padding(.top, y1 - headingH)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .focusSection()
+        .defaultFocus($focusedWorkID, defaultFocusID)
+    }
+
+    private func interactiveRail(
+        title: String,
+        works: [Work],
+        artW: CGFloat,
+        artH: CGFloat,
+        titleBlock: CGFloat,
+        gap: CGFloat,
+        headingH: CGFloat
+    ) -> some View {
+        VStack(alignment: .leading, spacing: max(8, headingH - 20)) {
+            Text(title)
+                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                .tracking(-0.5)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: gap) {
+                    ForEach(works) { work in
+                        NavigationLink {
+                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                        } label: {
+                            TVHomeCard(
+                                work: work,
+                                apiClient: environment.apiClient,
+                                isSelected: focusedWorkID == work.id
+                            )
+                            .frame(
+                                width: artW,
+                                height: artH + titleBlock,
+                                alignment: .topLeading
+                            )
+                        }
+                        .buttonStyle(TVFocusableCardButtonStyle())
+                        .focused($focusedWorkID, equals: work.id)
+                    }
+                }
+            }
+            .focusSection()
+        }
+    }
+
+    /// SPA `.tv-home-rails` absolute positions for parity AE freezes only.
     private func homeRailsAbsolute(
         startWatching: [Work],
         newMovies: [Work],
-        size: CGSize,
-        interactive: Bool
+        size: CGSize
     ) -> some View {
         let artW = DesignTokens.Shell.homeCardWidth
         let artH = DesignTokens.Shell.homeCardHeight
@@ -203,12 +291,12 @@ struct TVHomeView: View {
                 .offset(x: x0, y: y1 - headingH)
 
             ForEach(Array(startWatching.enumerated()), id: \.element.id) { index, work in
-                homeCardAt(
+                TVHomeCard(
                     work: work,
-                    interactive: interactive,
-                    frameWidth: artW,
-                    frameHeight: artH + titleBlock
+                    apiClient: environment.apiClient,
+                    isSelected: false
                 )
+                .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
                 .offset(x: x0 + CGFloat(index) * pitch, y: y1)
             }
 
@@ -219,47 +307,17 @@ struct TVHomeView: View {
                 .offset(x: x0, y: y2 - headingH)
 
             ForEach(Array(newMovies.enumerated()), id: \.element.id) { index, work in
-                homeCardAt(
+                TVHomeCard(
                     work: work,
-                    interactive: interactive,
-                    frameWidth: artW,
-                    frameHeight: artH + titleBlock
+                    apiClient: environment.apiClient,
+                    isSelected: false
                 )
+                .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
                 .offset(x: x0 + CGFloat(index) * pitch, y: y2)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .allowsHitTesting(interactive)
-    }
-
-    @ViewBuilder
-    private func homeCardAt(
-        work: Work,
-        interactive: Bool,
-        frameWidth: CGFloat,
-        frameHeight: CGFloat
-    ) -> some View {
-        let card = TVHomeCard(
-            work: work,
-            apiClient: environment.apiClient,
-            isSelected: interactive && focusedWorkID == work.id
-        )
-        .frame(width: frameWidth, height: frameHeight, alignment: .topLeading)
-
-        if interactive {
-            NavigationLink {
-                TVWorkDetailView(work: work, apiClient: environment.apiClient)
-            } label: {
-                card
-            }
-            .buttonStyle(.plain)
-            .focusable(true)
-            .onAppear {
-                if focusedWorkID == nil { focusedWorkID = work.id }
-            }
-        } else {
-            card
-        }
+        .allowsHitTesting(false)
     }
 
     private func heroWork(from works: [Work]) -> Work? {
@@ -765,7 +823,7 @@ struct TVLibraryKindView: View {
 
     @Environment(TVAppEnvironment.self) private var environment
     @State private var items: [Work] = []
-    @State private var selectedID: UUID?
+    @FocusState private var selectedID: UUID?
     @State private var didLoad = false
 
     private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
@@ -1087,7 +1145,8 @@ struct TVLibraryKindView: View {
             .opacity(isSelected || parityMode ? 1 : 0.92)
             .offset(y: isSelected && !parityMode ? -5 : 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TVFocusableCardButtonStyle())
+        .focused($selectedID, equals: work.id)
         .focusable(!parityMode)
         .focusEffectDisabled(parityMode)
         .onAppear {

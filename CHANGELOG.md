@@ -28,6 +28,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of an empty `ASSETCATALOG_COMPILER_APPICON_NAME`, and restores a stored
   device session on launch when still valid.
 
+- Apple TV remote focus: production home rails use real horizontal stacks (not
+  absolute `.offset` stacking) with `@FocusState`, and shell/nav use
+  `focusSection`, so arrow keys / Siri Remote can move between cards and the
+  left nav.
+
 - Apple TV pairing gate uses the same SPA DeviceLogin chrome as the parity
   fixture (logo, kicker, “Link this TV”, QR + instructions). Session tokens
   now wire into APIClient so catalog calls send Authorization after link.
@@ -139,10 +144,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Standard Playarr Web sign-in can open a QR/manual-code login for the
-  selected server. Device codes now show a five-minute countdown and renew
-  automatically at expiry; direct-server and hosted-link codes share the
-  same five-minute lifetime.
+- Standard Playarr Web sign-in can replace its credential fields with a
+  QR/manual-code login for the selected server while retaining a manual
+  sign-in action. Device codes show a five-minute countdown and renew
+  automatically at expiry; direct-server and hosted-link codes share that
+  lifetime.
 
 - Playarr Web `productSurfaces` module and tests so `tv-vidaa` and standard
   web share the same complete-client routes, shell nav hierarchy, and eight
