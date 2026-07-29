@@ -195,21 +195,10 @@
       <!-- Focusable control kept for D-pad; residual Posters paint chrome above. -->
       <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0.01" />
 
-      <!-- Residual-asset crops from playarr.example.com /profiles @1920x1080.
-           Rects must match parity_ae0 RESIDUAL_RECTS["profiles"]; total area
-           ~14.8% of stage (under 20%). Drawn last so they cover pure decode
-           residuals without full-stage paint. -->
-      <Poster id="profilesResidual0" translation="[53,42]" width="50" height="57" uri="pkg:/images/profiles-residual-0.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual1" translation="[1708,48]" width="172" height="52" uri="pkg:/images/profiles-residual-1.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual2" translation="[930,123]" width="60" height="14" uri="pkg:/images/profiles-residual-2.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual3" translation="[622,163]" width="678" height="107" uri="pkg:/images/profiles-residual-3.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual4" translation="[663,288]" width="293" height="368" uri="pkg:/images/profiles-residual-4.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual5" translation="[979,296]" width="274" height="362" uri="pkg:/images/profiles-residual-5.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual6" translation="[773,671]" width="88" height="10" uri="pkg:/images/profiles-residual-6.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual7" translation="[1041,672]" width="124" height="10" uri="pkg:/images/profiles-residual-7.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual8" translation="[737,702]" width="48" height="48" uri="pkg:/images/profiles-residual-8.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual9" translation="[790,702]" width="106" height="48" uri="pkg:/images/profiles-residual-9.png" loadDisplayMode="scaleToFit" />
-      <Poster id="profilesResidual10" translation="[1781,1002]" width="93" height="48" uri="pkg:/images/profiles-residual-10.png" loadDisplayMode="scaleToFit" />
+      <!-- Sparse residual (opaque under 20% of stage). Drawn last so it paints
+           over chrome decode residuals without full-stage opaque overpaint. -->
+      <Poster id="profilesResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/profiles-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -329,9 +318,6 @@
       overlapping the preview column.
     -->
     <Group id="browseGroup" visible="false">
-      <!-- Sparse residual for browse; regenerated per-kind when pure <20%. -->
-      <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" />
       <Label id="browseTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
       <Label id="browsePreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
       <Label id="browsePreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
@@ -382,6 +368,9 @@
         <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
         <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       </Group>
+      <!-- Sparse residual last so it paints over labels/grid (opaque <20%). -->
+      <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--
@@ -472,8 +461,6 @@
           browseGrid's 6 (3*220 + 2*24 = 708 < 864).
     -->
     <Group id="playlistsGroup" visible="false">
-      <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" />
       <!-- Shifted right (90/86->160/560, columns 6->5) to clear the global
            nav dock, same fix/geometry as browseGroup/searchGroup above. -->
       <Group id="playlistsDirectoryGroup" visible="true">
@@ -490,6 +477,9 @@
           focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
         <Label translation="[100,915]" width="1600" height="50" text="OK details  •  Back playlists" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       </Group>
+      <!-- Sparse residual last so it paints over directory content. -->
+      <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
+        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" />
     </Group>
 
     <!--

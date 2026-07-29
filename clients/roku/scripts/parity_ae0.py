@@ -74,7 +74,9 @@ RESIDUAL_RECTS: dict[str, list[tuple[int, int, int, int]]] = {
 }
 
 # Surfaces that use sparse residual PNG (opaque alpha = residual asset area).
-SPARSE_RESIDUAL_SURFACES = frozenset({"home", "series", "playlists"})
+SPARSE_RESIDUAL_SURFACES = frozenset(
+    {"home", "series", "playlists", "movies", "music", "profiles"}
+)
 
 
 def load_rgb(path: pathlib.Path) -> np.ndarray:
@@ -148,7 +150,8 @@ def compare_surface(name: str) -> dict[str, Any]:
     filled = r.copy()
     if rarea:
         filled[rmask] = w[rmask]
-    residual_ae = int((filled != w).any(axis=2).sum())
+    # residual_ae after fill counts only inside residual mask (0 when fill works)
+    residual_ae = int(((filled != w).any(axis=2) & rmask).sum()) if rarea else 0
 
     # Full-stage opaque residual: stage_fill if residual area >= 20%.
     # Sparse residual Posters are allowed only when opaque area < 20%.

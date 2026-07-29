@@ -35,6 +35,7 @@ sub init()
     end for
     m.browseGroup = m.top.findNode("browseGroup")
     m.browseGrid = m.top.findNode("browseGrid")
+    m.browseResidual = m.top.findNode("browseResidual")
     m.browseTitle = m.top.findNode("browseTitle")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
@@ -1233,6 +1234,24 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
+    ' Sparse residual asset per library kind (opaque area <20% of stage).
+    ' series-residual.png / movies-residual.png / music-residual.png.
+    if m.browseResidual <> invalid
+        residualUri = ""
+        if kind = "series"
+            residualUri = "pkg:/images/series-residual.png"
+        else if kind = "movie"
+            residualUri = "pkg:/images/movies-residual.png"
+        else if kind = "artist"
+            residualUri = "pkg:/images/music-residual.png"
+        end if
+        if residualUri <> ""
+            m.browseResidual.uri = residualUri
+            m.browseResidual.visible = true
+        else
+            m.browseResidual.visible = false
+        end if
+    end if
     showStatus("Loading " + label, "Fetching titles…", true)
     loadBrowseCatalog(false)
 end sub
