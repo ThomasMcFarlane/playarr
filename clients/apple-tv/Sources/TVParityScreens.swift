@@ -602,17 +602,17 @@ struct TVParityPlayerFixtureView: View {
                     endRadius: geo.size.width * 0.52
                 )
 
-                // spacing.md = 16 between chrome rows; bottom pad 33 → progress y≈956
-                // full33 title y916 vs REF 912 → +4 title→progress gap moves title up only
+                // full38: progress was 1px high (NAT y955–960 vs REF y956–961).
+                // bottom pad 32 drops chrome 1px; title.padding.bottom 5 restores title y912.
+                // Track colour matched to SPA sample (44,42,44) not pure #333.
                 VStack(alignment: .leading, spacing: 16) {
                     Text("10 Brambleford Lane")
                         .font(.system(size: 24, weight: .bold))
                         .tracking(-0.4)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .padding(.bottom, 4)
-                    // Progress: 6px track (raised #333), fill ~650 from measured REF
+                        .padding(.bottom, 5)
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        Capsule().fill(Color(red: 44 / 255, green: 42 / 255, blue: 44 / 255))
                         Capsule()
                             .fill(DesignTokens.Color.brandPrimary)
                             .frame(width: 650)
@@ -630,7 +630,7 @@ struct TVParityPlayerFixtureView: View {
                         .foregroundStyle(DesignTokens.Color.textSecondary)
                 }
                 .padding(.horizontal, 32)
-                .padding(.bottom, 33)
+                .padding(.bottom, 32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -638,7 +638,7 @@ struct TVParityPlayerFixtureView: View {
     }
 
     private func chromeButton(_ label: String, primary: Bool = false) -> some View {
-        // SPA TransportButton: pad 8/24 + 3px border. full33 NAT still ~14px narrow → pad 30
+        // full39 best AE 0.16%: pad 30 + clear border box. Fixed-width frames regressed AA.
         Text(label)
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -646,7 +646,11 @@ struct TVParityPlayerFixtureView: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(primary ? DesignTokens.Color.brandPrimary : Color(red: 0.2, green: 0.2, blue: 0.2))
+                    .fill(
+                        primary
+                            ? DesignTokens.Color.brandPrimary
+                            : Color(red: 44 / 255, green: 42 / 255, blue: 44 / 255)
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)

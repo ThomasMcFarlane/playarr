@@ -39,6 +39,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity player progress bar y and track colour match SPA
+  (1px y dial-in, raised sample 44/42/44). Honest suite player AE
+  0.25% → 0.16%.
 - Apple TV movie key-art uses prebaked greyscale/contrast fixtures with
   SPA opacity only (no double filter); live art uses colorMultiply for CSS
   brightness(0.6). Cast tiles cropped on SPA grid (x=883, pitch 193).
