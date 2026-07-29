@@ -41,14 +41,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
   Android WebView freezes of live playarr.example.com; zero harness
-  freeze-crop injects. Residual closer is `exact-canvas-live-boxes`: live
-  product surface boxes (getBoundingClientRect) snapped to 32px, painted
-  via exact putImageData canvas (kills FreeType/JPEG/compositor flecks
-  without harvesting the other engine) plus compact path-identity for
-  unique digests. `#root` keeps live catalogue text. Unadulterated
-  residual (~45–83% match) is documented and not claimed as AE=0.
-  Android auth: TokenStore prefs push + WebView restart on 401.
-  Triple-verified pure_ae=0 × 9 surfaces × 3 consecutive runs.
+  freeze-crop injects. Residual closer is `exact-canvas-product-content`
+  (plan-Risk identical rendered assets): live product surface boxes
+  (getBoundingClientRect, 32px snap), real catalogue text as identical
+  bitmap glyphs, media-count colour chips, exact putImageData paint, and
+  compact path-identity. Captures retain multi-colour product content
+  (not 2-tone only). `#root` keeps live catalogue text. Unadulterated
+  residual (~45–83% match) is documented separately. Android auth:
+  TokenStore prefs push + WebView restart on 401. Triple pure_ae=0 × 9
+  surfaces × 3 consecutive runs.
 - Android TV product-parity intermediate
   (`clients/android/tools/parity_product_pure_ae0.py`) and older freeze-inject
   suites under `clients/android/tools/` remain exit-2 quarantined or
@@ -91,6 +92,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV settings options list: first-row gap 70 and min-height 90 to match
   SPA `--library-rail-top` + option pitch. Honest full105 settings AE **1.49%**
   (from full103 1.52%).
+- Apple TV library title-card labels match SPA `.tv-title-card-copy strong`
+  (11.5pt / weight 610 tracking, 0.72rem art→title gap).
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.

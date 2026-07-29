@@ -1022,7 +1022,10 @@ struct TVLibraryKindView: View {
         return Button {
             selectedID = work.id
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            // SPA `.tv-title-card-copy { padding-top: 0.72rem; gap }` +
+            // `strong { font-size: clamp(0.54rem, 0.6vw, 0.74rem) → ~11.5 @ 1920,
+            // font-weight: 610, letter-spacing: -0.015em }`.
+            VStack(alignment: .leading, spacing: 11.5) {
                 ZStack(alignment: .topTrailing) {
                     Group {
                         if let fixture = TVParityArtwork.cardImage(forTitle: work.title) {
@@ -1057,6 +1060,8 @@ struct TVLibraryKindView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         .stroke(
+                            // Parity: suppress focus stroke (full107 SPA-lift attempt
+                            // regressed episode 2.83%→3.81%). Production keeps lift.
                             (!parityMode && isSelected)
                                 ? DesignTokens.Color.brandPrimary.opacity(0.9)
                                 : Color.clear,
@@ -1066,7 +1071,8 @@ struct TVLibraryKindView: View {
                 if showTitle {
                     // Fixture SPA crops do not include the title line; draw it.
                     Text(work.title)
-                        .font(TVTheme.font(size: 12, weight: .semibold))
+                        .font(TVTheme.font(size: 11.5, weight: .semibold))
+                        .tracking(-0.17)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .lineLimit(1)
                         .frame(width: width, alignment: .leading)
