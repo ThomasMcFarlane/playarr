@@ -37,12 +37,16 @@
   <interface>
     <!-- Background art image (poster/backdrop) for the key-art layer. -->
     <field id="keyArtUri" type="string" onChange="onKeyArtUriChange" />
+    <!-- Optional HTTP headers (Bearer) for authenticated artwork proxy loads. -->
+    <field id="keyArtHeaders" type="assocarray" />
     <!-- from: .tv-provider / .tv-detail-kicker text content -->
     <field id="stageKicker" type="string" onChange="onStageKickerChange" />
     <!-- from: .tv-title-panel h1 text content -->
     <field id="stageTitle" type="string" onChange="onStageTitleChange" />
     <!-- from: .tv-title-meta text content (kind / year / genres line) -->
     <field id="stageMeta" type="string" onChange="onStageMetaChange" />
+    <!-- from: .tv-title-panel synopsis / overview under the meta line -->
+    <field id="stageOverview" type="string" onChange="onStageOverviewChange" />
     <!--
       Output field: the empty content-panel Group other scenes should
       findNode()/append their own rail or grid content into. Treat this as
@@ -116,6 +120,8 @@
       <!-- from: .tv-title-meta font-size clamp(0.68rem,0.78vw,0.96rem) evaluated at
            1920px: 0.78vw = 14.976px -> 15px. Color: theme inkSoft. -->
       <Label id="stageMetaLabel" translation="[0,270]" width="518" height="40" scale="[0.47,0.47]" color="0xC5B8BDFF" />
+      <!-- Synopsis under meta (tv-web .tv-title-panel body copy). -->
+      <Label id="stageOverviewLabel" translation="[0,320]" width="620" height="160" wrap="true" maxLines="5" scale="[0.42,0.42]" color="0xC5B8BDFF" />
     </Group>
 
     <!--

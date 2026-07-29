@@ -1982,7 +1982,7 @@ sub openPlaylistDetail(playlist as Object)
     m.playlistDetailStage.stageMeta = kindLabel + "  •  " + visibilityLabel
     ' No cover art of its own -- filled in from the first hydrated item's
     ' own backdrop/poster once items resolve, see finishPlaylistDetail().
-    m.playlistDetailStage.keyArtUri = ""
+    setStageKeyArt(m.playlistDetailStage, "")
     m.playlistItems = []
     m.playlistItemQueue = []
     ' Stay in the playlists shell while items hydrate (no fullscreen status).
@@ -2036,7 +2036,7 @@ end sub
 sub finishPlaylistDetail()
     buildGridContent(m.playlistItemsGrid, m.playlistItems)
     if m.playlistItems.Count() > 0
-        m.playlistDetailStage.keyArtUri = heroArtworkUrl(m.playlistItems[0])
+        setStageKeyArt(m.playlistDetailStage, heroArtworkUrl(m.playlistItems[0]))
     end if
     itemSuffix = m.playlistItems.Count().ToStr() + " item"
     if m.playlistItems.Count() <> 1 then itemSuffix += "s"
@@ -2509,7 +2509,12 @@ end sub
 sub updateHeroFromWork(work as Object)
     if work = invalid then return
     m.homeStage.stageTitle = work.title
-    m.homeStage.stageKicker = UCase(work.kind)
+    ' Web hero kicker is "SERIES · CRIME" (kind + first genre), not bare kind.
+    kicker = UCase(work.kind)
+    if work.genres <> invalid and work.genres.Count() > 0
+        kicker = kicker + "  ·  " + UCase(work.genres[0])
+    end if
+    m.homeStage.stageKicker = kicker
     meta = ""
     if work.release_date <> invalid and work.release_date.Len() >= 4
         meta = work.release_date.Left(4)
@@ -2519,7 +2524,18 @@ sub updateHeroFromWork(work as Object)
         meta += joinStrings(work.genres, ", ")
     end if
     m.homeStage.stageMeta = meta
-    m.homeStage.keyArtUri = heroArtworkUrl(work)
+    overview = ""
+    if work.overview <> invalid then overview = work.overview
+    m.homeStage.stageOverview = overview
+    setStageKeyArt(m.homeStage, heroArtworkUrl(work))
+end sub
+
+' Authenticated artwork proxy for TvStage key-art Posters (Bearer required).
+' Headers use the assocarray form PosterCard/roHttpAgent.SetHeaders expects.
+sub setStageKeyArt(stage as Object, uri as String)
+    if stage = invalid then return
+    stage.keyArtHeaders = ClientHeaders(m.accessToken)
+    stage.keyArtUri = uri
 end sub
 
 ' Maps a rail's RowList node back to its backing works array so
@@ -2942,11 +2958,9 @@ sub showDetail(detail as Object)
     m.detailStage.stageMeta = joinStrings(metaParts, "  •  ")
     ' Full-bleed backdrop key-art replaces the old small poster thumbnail
     ' (detailPoster, removed) -- tv-web's real detail page has no separate
-    ' poster once there is hero art behind the title panel. Same helper
-    ' Home's updateHeroFromWork already uses, and (like Home) no auth
-    ' headers are attached to the Poster's uri fetch, matching that
-    ' already-working pattern.
-    m.detailStage.keyArtUri = heroArtworkUrl(work)
+    ' poster once there is hero art behind the title panel. Auth headers
+    ' required for the artwork proxy (same as home hero).
+    setStageKeyArt(m.detailStage, heroArtworkUrl(work))
     overview = JsonString(work.overview)
     if overview = "" then overview = "No description is available."
     m.detailOverview.text = overview

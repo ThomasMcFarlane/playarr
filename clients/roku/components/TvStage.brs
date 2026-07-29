@@ -13,6 +13,7 @@ sub init()
     m.stageKickerLabel = m.top.findNode("stageKickerLabel")
     m.stageTitleLabel = m.top.findNode("stageTitleLabel")
     m.stageMetaLabel = m.top.findNode("stageMetaLabel")
+    m.stageOverviewLabel = m.top.findNode("stageOverviewLabel")
     m.contentPanel = m.top.findNode("contentPanel")
     m.entranceAnimation = m.top.findNode("entranceAnimation")
 
@@ -34,7 +35,37 @@ sub resetForEntrance()
 end sub
 
 sub onKeyArtUriChange()
-    m.keyArt.uri = m.top.keyArtUri
+    uri = m.top.keyArtUri
+    if uri = ""
+        m.keyArt.uri = ""
+        return
+    end if
+    ' Download authenticated artwork to tmp, then point the Poster at the
+    ' local file. SetHttpAgent on this nested Poster has been unreliable on
+    ' device (cards use the same agent pattern and work; key-art stayed blank).
+    xfer = CreateObject("roUrlTransfer")
+    xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    xfer.InitClientCertificates()
+    xfer.SetUrl(uri)
+    if m.top.keyArtHeaders <> invalid
+        xfer.SetHeaders(m.top.keyArtHeaders)
+    end if
+    tmpPath = "tmp:/playarr-keyart.jpg"
+    ok = xfer.GetToFile(tmpPath)
+    if ok
+        m.keyArt.uri = tmpPath
+    else
+        ' Fallback: try in-place agent path used by PosterCard.
+        m.keyArtAgent = CreateObject("roHttpAgent")
+        m.keyArtAgent.SetCertificatesFile("common:/certs/ca-bundle.crt")
+        m.keyArtAgent.InitClientCertificates()
+        if m.top.keyArtHeaders <> invalid
+            m.keyArtAgent.SetHeaders(m.top.keyArtHeaders)
+        end if
+        m.keyArt.SetHttpAgent(m.keyArtAgent)
+        m.keyArt.uri = uri
+    end if
+    if m.keyArtLayer <> invalid then m.keyArtLayer.opacity = 1
 end sub
 
 sub onStageKickerChange()
@@ -47,6 +78,12 @@ end sub
 
 sub onStageMetaChange()
     m.stageMetaLabel.text = m.top.stageMeta
+end sub
+
+sub onStageOverviewChange()
+    if m.stageOverviewLabel <> invalid
+        m.stageOverviewLabel.text = m.top.stageOverview
+    end if
 end sub
 
 ' Public entry point (declared as a <function> in TvStage.xml). Other scenes

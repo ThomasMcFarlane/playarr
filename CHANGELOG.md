@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku home/detail hero key-art loads authenticated artwork via the Playarr
+  proxy (tmp download + Poster file URI). Hero shows web-style synopsis and
+  `SERIES · GENRE` kicker under the title panel.
+
 - Roku product shell hardened against the three recurring failures: residual
   freeze Posters are stripped (empty URI, opacity 0, never shown) so native
   SceneGraph is never stacked under a second UI; signed-in loads (profiles
