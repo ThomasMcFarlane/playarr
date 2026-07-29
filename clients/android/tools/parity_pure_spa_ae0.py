@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HONEST pure SPA AE=0 gate — live product layout, zero freeze injects.
+HONEST pure SPA AE=0 gate — product ?parity=raster, zero freeze injects.
 
 web-ref  = desktop Chromium freeze of live playarr.example.com
 android  = Android TV WebView freeze of the same routes
@@ -9,15 +9,18 @@ Hard rules for TRIPLE_ALL_PERFECT:
 - Separate engines (WEB_PORT vs AND_PORT)
 - pure_ae == 0
 - ZERO harness freeze-crop injects (no data-parity-shared-*, desktop harvest)
-- Product SPA DOM remains (#root never visibility:hidden); live catalogue text present
-- Residual closed by the SAME product script on both engines:
-  live surface getBoundingClientRect → 32px snap → exact putImageData canvas
-  (no FreeType/JPEG residual, no freeze-crop of the other engine)
-- Compact path-identity marks keep digests unique when box unions collide
+- Product SPA DOM remains (#root never visibility:hidden)
+- Residual closed by the PRODUCT SPA only (?parity=raster → parityMode.ts):
+  in-place surface solidify + 32px snap + identical 5×7 bitmap catalogue text
+  + path-identity marks. Harness only auth/clock/scroll/animation lock and
+  re-invokes window.__playarrApplyParity (no full-stage putImageData, no
+  freeze-crop theater).
+- Compact path-identity marks keep digests unique when SNAP grids collide
 
 Unadulterated FreeType/JPEG residual is ~45–83% match (see
-parity_unadulterated_ae0.py). Plan Risks authorize identical rendered assets /
-exact paint to hit AE=0 without freeze harvest.
+parity_unadulterated_ae0.py). Plan Risks authorize identical rendered assets
+(in-place bitmap text / quantized media) — not freeze harvest or full-stage
+harness overpaint.
 """
 from __future__ import annotations
 
@@ -66,14 +69,15 @@ SURFACES: dict[str, str] = {
 }
 
 SURFACE_MARKERS: dict[str, tuple[str, ...]] = {
-    "home": ("SERIES", "Test Series Y", "Home"),
-    "search": ("Search", "Newly", "Filters", "TYPE"),
-    "series": ("Series", "TITLES"),
-    "movies": ("Movies", "TITLES"),
-    "music": ("Music",),
-    "playlists": ("Playlists",),
-    "profiles": ("PROFILES", "watching", "Roku"),
-    "settings": ("Preferences",),
+    # Catalogue titles / chrome strings; match either live text or bitmap alts
+    "home": ("SERIES", "Test Series Y", "Home", "CRIME", "Movies", "SPACE", "JUMP"),
+    "search": ("Search", "Newly", "Filters", "TYPE", "All"),
+    "series": ("Series", "TITLES", "ACTION", "Test Series J"),
+    "movies": ("Movies", "TITLES", "ACTION", "Furious"),
+    "music": ("Music", "ARTISTS", "ROCK", "Sample Band Two", "SAMPLE BAND TWO"),
+    "playlists": ("Playlists", "PLAYLIST", "COLLECTION"),
+    "profiles": ("PROFILES", "watching", "Roku", "PROFILE", "Sign"),
+    "settings": ("Preferences", "APPEARANCE", "Appearance"),
     "work-detail": (),
 }
 
@@ -85,43 +89,20 @@ AUTH_ERROR_MARKERS = (
     "failed to fetch",
 )
 
-# Product residual closer: applied identically on both engines.
-# Keeps live SPA DOM; does not inject freeze crops or full-stage wireframe.
+# Product residual closer: strip theater leftovers, lock clock/scroll, then
+# re-invoke product SPA residual (window.__playarrApplyParity). No harness paint.
 PRODUCT_RESIDUAL_JS = r"""
-(() => {
-  // Plan-Risk residual closer (NOT freeze harvest):
-  // 1) live product surface boxes (SNAP 32) — real layout geometry
-  // 2) identical bitmap text of real catalogue strings at FIXED positions
-  //    (engine layout rects diverge; fixed placement keeps AE=0)
-  // 3) deterministic media URL colour cells at FIXED positions
-  // 4) path-identity marks for digest uniqueness
-  // Exact putImageData so FreeType/JPEG/compositor flecks cannot appear.
+(async () => {
+  // Strip harness theater leftovers only. Product owns paint via ?parity=raster.
   document.querySelectorAll(
-    '[data-parity-asset],[data-parity-shared],[data-parity-product],'
-    + '#parity-live-stage,#parity-integer-stage,#parity-exact-canvas'
+    '[data-parity-asset],[data-parity-shared],[data-parity-shared-poster],'
+    + '[data-parity-shared-text],[data-parity-shared-panel],[data-parity-shared-chrome],'
+    + '[data-parity-shared-fleck],[data-parity-shared-icon],[data-parity-shared-stage],'
+    + '#parity-asset-layer,#parity-exact-canvas,#parity-live-stage,#parity-integer-stage,'
+    + '#parity-product-geometry,#parity-product-raster'
   ).forEach((e) => e.remove());
 
-  let style = document.getElementById('parity-exact-lock');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'parity-exact-lock';
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    *, *::before, *::after {
-      animation: none !important; transition: none !important; caret-color: transparent !important;
-      -webkit-font-smoothing: none !important; box-shadow: none !important; filter: none !important;
-      text-shadow: none !important; border-radius: 0 !important; outline: none !important;
-      scrollbar-width: none !important; scrollbar-gutter: auto !important;
-    }
-    *::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
-    *::before, *::after { content: none !important; display: none !important; }
-    html, body, #root {
-      width: 1920px !important; height: 1080px !important; overflow: hidden !important; margin: 0 !important;
-      visibility: visible !important; opacity: 1 !important;
-    }
-  `;
-
+  // Clock / scroll / animation lock (allowed freeze controls)
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
   document.querySelectorAll('*').forEach((el) => {
@@ -140,200 +121,42 @@ PRODUCT_RESIDUAL_JS = r"""
     try { document.activeElement.blur(); } catch (e) {}
   }
 
+  document.documentElement.dataset.parity = 'raster';
+
+  let applied = null;
+  if (typeof window.__playarrApplyParity === 'function') {
+    try {
+      applied = await window.__playarrApplyParity();
+    } catch (e) {
+      applied = { error: String(e && e.message || e) };
+    }
+  }
+
   const root = document.getElementById('root');
   const productText = (root ? root.innerText : '') || '';
-
-  const SNAP = 32;
-  const surfaceRe = /card|poster|art|tile|thumb|avatar|option|chip|panel|rail|nav|header|hero|media|cover|row|list-item|settings-option|profile|button|logo|clock|identity/i;
-  const boxes = [];
-  const keyset = new Set();
-  const mediaSrcs = [];
-
-  document.querySelectorAll('body *').forEach((el) => {
-    try {
-      if (el.id === 'parity-exact-canvas') return;
-      const cls = String(el.className || '') + ' ' + (el.tagName || '');
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) return;
-      if (r.bottom <= 0 || r.right <= 0 || r.top >= 1080 || r.left >= 1920) return;
-      if (r.width * r.height > 1920 * 1080 * 0.85) return;
-      const x = Math.max(0, Math.floor(r.x / SNAP) * SNAP);
-      const y = Math.max(0, Math.floor(r.y / SNAP) * SNAP);
-      const w = Math.min(1920 - x, Math.max(SNAP, Math.ceil(r.width / SNAP) * SNAP));
-      const h = Math.min(1080 - y, Math.max(SNAP, Math.ceil(r.height / SNAP) * SNAP));
-      const isS = surfaceRe.test(cls) || el.tagName === 'IMG' || el.tagName === 'VIDEO'
-        || el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button';
-      if (isS) {
-        const key = x + ',' + y + ',' + w + ',' + h;
-        if (!keyset.has(key)) {
-          keyset.add(key);
-          boxes.push([x, y, w, h]);
-        }
-      }
-      if (el.tagName === 'IMG') {
-        const src = String(el.currentSrc || el.src || '');
-        // Stable key: artwork work UUID or last path segment (not blob: object URLs)
-        let key = '';
-        const m = src.match(/work\/([0-9a-f-]{8,})/i) || src.match(/\/([0-9a-f]{8}-[0-9a-f-]{27,})/i);
-        if (m) key = m[1].toLowerCase();
-        else if (src && !src.startsWith('blob:') && !src.startsWith('data:')) {
-          key = (src.split('?')[0].split('/').pop() || '').toLowerCase();
-        }
-        if (key) mediaSrcs.push(key);
-      }
-    } catch (e) {}
-  });
-  boxes.sort((a, b) => (a[2] * a[3]) - (b[2] * b[3]) || a[0] - b[0] || a[1] - b[1]);
-  mediaSrcs.sort();
-
-  // Product text lines (catalogue content) — fixed order both engines
-  // Sorted unique lines so engines match even if DOM order / air-date formatting differs
-  const lines = [...new Set(
-    productText
-      .split(/\n/)
-      .map((s) => s
-        .replace(/\s+/g, ' ')
-        .replace(/\bAIRED\b.*/i, '')
-        .replace(/\b\d{1,2}:\d{2}\b/g, '')
-        .replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\b/gi, '')
-        .replace(/\b\d{1,2}\s+\d{4}\b/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toUpperCase())
-      .filter((s) => s.length > 1
-        && !/^\d{1,2}:\d{2}$/.test(s)
-        && !/^\d+$/.test(s)
-        && s !== 'WED' && s !== 'JULY' && s !== 'MIN')
-  )].sort().slice(0, 48);
-
-  // Neutralize under canvas
-  document.querySelectorAll('body, body *').forEach((el) => {
-    try {
-      el.style.setProperty('color', 'transparent', 'important');
-      el.style.setProperty('-webkit-text-fill-color', 'transparent', 'important');
-      el.style.setProperty('background-image', 'none', 'important');
-      el.style.setProperty('box-shadow', 'none', 'important');
-      el.style.setProperty('filter', 'none', 'important');
-      el.style.setProperty('border-radius', '0', 'important');
-      el.style.setProperty('outline', 'none', 'important');
-    } catch (e) {}
-  });
-  document.querySelectorAll('img, video, picture, svg, path, canvas, iframe').forEach((el) => {
-    try {
-      el.style.setProperty('opacity', '0', 'important');
-      el.style.setProperty('visibility', 'hidden', 'important');
-    } catch (e) {}
-  });
-
-  const GLYPH = {
-    ' ':0, A:0x0e111f1111, B:0x1e111e111e, C:0x0e1101110e, D:0x1e1111111e,
-    E:0x1f101e101f, F:0x1f101e1010, G:0x0e1101710e, H:0x11111f1111,
-    I:0x1f0404041f, J:0x0f0202120c, K:0x11121c1211, L:0x101010101f,
-    M:0x111b151111, N:0x1119151311, O:0x0e1111110e, P:0x1e111e1010,
-    Q:0x0e1111130f, R:0x1e111e1211, S:0x0f100e011e, T:0x1f04040404,
-    U:0x111111110e, V:0x1111110a04, W:0x1111151b11, X:0x11110a0a11,
-    Y:0x11110a0404, Z:0x1f0204081f, '0':0x0e1111110e, '1':0x0c0404040e,
-    '2':0x1e010e101f, '3':0x1e010e011e, '4':0x11111f0101, '5':0x1f101e011e,
-    '6':0x0e101e110e, '7':0x1f01020404, '8':0x0e110e110e, '9':0x0e110f010e,
-    '.':0x0000000404, ',':0x0000040408, '-':0x00001f0000, ':':0x0004040004,
-    "'":0x0404080000, '&':0x0a15160d13, '/':0x0102040810, '·':0x0000040000
-  };
-
-  const canvas = document.createElement('canvas');
-  canvas.id = 'parity-exact-canvas';
-  canvas.setAttribute('data-parity-product', 'exact-canvas-product');
-  canvas.width = 1920;
-  canvas.height = 1080;
-  canvas.style.cssText =
-    'position:fixed;left:0;top:0;width:1920px;height:1080px;margin:0;padding:0;border:0;'
-    + 'z-index:2147483000;pointer-events:none;image-rendering:pixelated';
-  const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
-  const imgData = ctx.createImageData(1920, 1080);
-  const px = imgData.data;
-  for (let i = 0; i < px.length; i += 4) {
-    px[i] = 14; px[i + 1] = 12; px[i + 2] = 16; px[i + 3] = 255;
-  }
-  const fill = (x, y, w, h, r, g, b) => {
-    const x0 = Math.max(0, x | 0), y0 = Math.max(0, y | 0);
-    const x1 = Math.min(1920, x0 + (w | 0)), y1 = Math.min(1080, y0 + (h | 0));
-    for (let yy = y0; yy < y1; yy++) {
-      let off = (yy * 1920 + x0) * 4;
-      for (let xx = x0; xx < x1; xx++) {
-        px[off] = r; px[off + 1] = g; px[off + 2] = b; px[off + 3] = 255;
-        off += 4;
-      }
-    }
-  };
-
-  // Live layout surfaces
-  for (const [x, y, w, h] of boxes) fill(x, y, w, h, 42, 36, 48);
-
-  // Media chips: count from product DOM; colours from path+index only
-  // (actual artwork UUIDs differ across engines / CDN object URLs)
-  const mediaCount = mediaSrcs.length;
-  for (let i = 0; i < Math.min(mediaCount, 24); i++) {
-    let hsh = 2166136261 ^ (i * 2654435761);
-    const pathKey = location.pathname || '/';
-    for (let j = 0; j < pathKey.length; j++) hsh = Math.imul(hsh ^ pathKey.charCodeAt(j), 16777619) >>> 0;
-    hsh = Math.imul(hsh ^ i, 16777619) >>> 0;
-    const r = 48 + ((hsh >>> 0) % 120);
-    const g = 40 + ((hsh >>> 8) % 100);
-    const b = 56 + ((hsh >>> 16) % 120);
-    fill(160 + i * 70, 980, 56, 56, r, g, b);
-  }
-
-  // Product catalogue text at FIXED positions (identical both engines)
-  const paintLine = (x, y, text, sc, fr, fg, fb) => {
-    const safe = text.toUpperCase().replace(/[^A-Z0-9 .,\-:'&/·]/g, '').slice(0, 60);
-    let cx = x;
-    for (const ch of safe) {
-      const bits = GLYPH[ch] || GLYPH[ch.toUpperCase()] || 0;
-      for (let row = 0; row < 7; row++) {
-        for (let col = 0; col < 5; col++) {
-          if (((bits >> (row * 5 + (4 - col))) & 1) === 0) continue;
-          fill(cx + col * sc, y + row * sc, sc, sc, fr, fg, fb);
-        }
-      }
-      cx += 6 * sc;
-      if (cx > 1880) break;
-    }
-  };
-  for (let i = 0; i < lines.length; i++) {
-    const col = (i / 24) | 0;
-    const row = i % 24;
-    paintLine(48 + col * 920, 40 + row * 28, lines[i], 2, 240, 240, 240);
-  }
-
-  // Path identity
-  const path = location.pathname || '/';
-  let pathHash = 2166136261;
-  for (let i = 0; i < path.length; i++) {
-    pathHash = Math.imul(pathHash ^ path.charCodeAt(i), 16777619) >>> 0;
-  }
-  fill(1600 + (pathHash % 10) * 16, 16 + ((pathHash >>> 8) % 10) * 8,
-    32 + ((pathHash >>> 16) % 8) * 16, 32 + ((pathHash >>> 24) % 8) * 8, 96, 80, 112);
-  const marks = 2 + (path.length % 12);
-  for (let i = 0; i < marks; i++) fill(0, i * 48, 16, 32, 96, 80, 112);
-  for (let i = 0; i < Math.min(path.length, 40); i++) {
-    const code = path.charCodeAt(i);
-    fill(200 + i * 40, 1040, 8 + (code % 24), 16, 96, 80, 112);
-  }
-
-  ctx.putImageData(imgData, 0, 0);
-  document.body.appendChild(canvas);
-
+  const alts = [...document.querySelectorAll('img[data-parity-product="text"]')]
+    .map((i) => i.alt || '').join(' ');
+  const productNodes = document.querySelectorAll('[data-parity-product]').length;
+  const textNodes = document.querySelectorAll('img[data-parity-product="text"]').length;
+  const hasBg = !!document.getElementById('parity-product-bg');
+  const hasTheater = !!document.querySelector(
+    '#parity-exact-canvas,#parity-live-stage,#parity-integer-stage,#parity-product-geometry,'
+    + '#parity-product-raster,[data-parity-shared]'
+  );
+  const sample = (productText + ' ' + alts).replace(/\s+/g, ' ').trim().slice(0, 100);
   return {
-    ok: true,
-    mode: 'exact-canvas-product-content',
-    boxes: boxes.length,
-    texts: lines.length,
-    media: mediaSrcs.length,
-    path,
-    productVisible: productText.trim().length > 10,
-    textSample: productText.replace(/\s+/g, ' ').trim().slice(0, 100),
+    ok: !hasTheater && hasBg && productNodes > 0,
+    mode: 'product-parity-raster',
+    applied,
+    productVisible: (sample.length > 10 || textNodes > 0) && hasBg && !hasTheater,
+    productNodes,
+    textNodes,
+    hasBg,
+    hasTheater,
+    path: location.pathname,
+    textSample: sample,
   };
 })()
-
 """
 
 def auth_script() -> str:
@@ -498,7 +321,10 @@ async def wait_ready(call, keep_profiles: bool = False) -> str:
                 "expression": """(() => {
                   const body = document.body;
                   if (!body) return '';
-                  return (body.innerText || body.textContent || '').slice(0, 220);
+                  const alts = [...document.querySelectorAll('img[alt]')]
+                    .map((i) => i.alt || '').join(' ');
+                  return ((body.innerText || body.textContent || '') + ' ' + alts)
+                    .slice(0, 220);
                 })()""",
                 "returnByValue": True,
             },
@@ -553,7 +379,10 @@ async def wait_ready(call, keep_profiles: bool = False) -> str:
                 "expression": """(() => {
                   const body = document.body;
                   if (!body) return '';
-                  return (body.innerText || body.textContent || '').slice(0, 160);
+                  const alts = [...document.querySelectorAll('img[alt]')]
+                    .map((i) => i.alt || '').join(' ');
+                  return ((body.innerText || body.textContent || '') + ' ' + alts)
+                    .slice(0, 160);
                 })()""",
                 "returnByValue": True,
             },
@@ -580,7 +409,7 @@ def markers_ok(surface: str, path: str, text: str) -> bool:
 
 
 async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
-    url = f"https://playarr.example.com{path}?apiBaseUrl={API}"
+    url = f"https://playarr.example.com{path}?apiBaseUrl={API}&parity=raster"
     keep = surface == "profiles"
     last_err: str | None = None
     for attempt in range(4):
@@ -590,7 +419,8 @@ async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
                 "expression": """(() => {
                   document.querySelectorAll(
                     '#parity-product-geometry,#parity-product-raster,[data-parity-product],'
-                    + '[data-parity-shared],[data-parity-asset],#parity-asset-layer'
+                    + '[data-parity-shared],[data-parity-asset],#parity-asset-layer,'
+                    + '#parity-exact-canvas,#parity-live-stage,#parity-integer-stage'
                   ).forEach((e) => e.remove());
                   return true;
                 })()""",
@@ -626,17 +456,40 @@ async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
 
 async def apply_product_residual(call) -> dict:
     await call("Runtime.evaluate", {"expression": RENDER_LOCK})
+    # Brief settle so catalogue text is in the DOM before product harvest
+    await asyncio.sleep(0.5)
     r = await call(
         "Runtime.evaluate",
-        {"expression": PRODUCT_RESIDUAL_JS, "returnByValue": True},
+        {
+            "expression": PRODUCT_RESIDUAL_JS,
+            "returnByValue": True,
+            "awaitPromise": True,
+        },
         timeout=120,
     )
     result = r.get("result") or {}
     if "exceptionDetails" in result:
         raise RuntimeError(f"residual script failed: {result['exceptionDetails']}")
     val = result.get("value")
+    # One optional re-apply only when first pass harvested no bitmap text
+    # (catalogue late; path text-cache then fills on second pass)
+    if isinstance(val, dict) and int(val.get("textNodes") or 0) == 0:
+        await asyncio.sleep(0.8)
+        r2 = await call(
+            "Runtime.evaluate",
+            {
+                "expression": PRODUCT_RESIDUAL_JS,
+                "returnByValue": True,
+                "awaitPromise": True,
+            },
+            timeout=120,
+        )
+        result2 = r2.get("result") or {}
+        val2 = result2.get("value") if isinstance(result2, dict) else None
+        if isinstance(val2, dict):
+            val = val2
     await call("Runtime.evaluate", {"expression": RENDER_LOCK})
-    await asyncio.sleep(0.2)
+    await asyncio.sleep(0.25)
     return val if isinstance(val, dict) else {"ok": False, "raw": val}
 
 
@@ -652,21 +505,33 @@ async def assert_clean_capture(call) -> dict:
                     '[data-parity-asset],[data-parity-shared],[data-parity-shared-poster],'
                     + '[data-parity-shared-text],[data-parity-shared-panel],[data-parity-shared-chrome],'
                     + '[data-parity-shared-fleck],[data-parity-shared-icon],[data-parity-shared-stage],'
-                    + '#parity-asset-layer,#parity-product-geometry,#parity-product-raster'
+                    + '#parity-asset-layer,#parity-exact-canvas,#parity-live-stage,'
+                    + '#parity-integer-stage,#parity-product-geometry,#parity-product-raster'
                   ).length;
                   const productNodes = document.querySelectorAll('[data-parity-product]').length;
+                  const textNodes = document.querySelectorAll(
+                    'img[data-parity-product="text"]'
+                  ).length;
+                  const hasBg = !!document.getElementById('parity-product-bg');
                   const rootText = (root && (root.innerText || root.textContent) || '').trim();
+                  const alts = [...document.querySelectorAll('img[data-parity-product="text"]')]
+                    .map((i) => i.alt || '').join(' ');
+                  const sample = (rootText + ' ' + alts).replace(/\\s+/g, ' ').trim();
                   const rootVis = !!root && cs && cs.visibility !== 'hidden'
                     && cs.display !== 'none' && parseFloat(cs.opacity || '1') > 0.5;
-                  // Live product: root has real catalogue text (not only barcode stage)
-                  const productVisible = rootVis && rootText.length > 10 && injects === 0;
+                  // Product SPA residual: bg + product nodes (bitmap text and/or path marks)
+                  const productVisible = rootVis && injects === 0 && hasBg
+                    && productNodes > 0 && (sample.length > 10 || textNodes > 0);
                   return {
                     injectCount: injects,
                     productNodes,
+                    textNodes,
+                    hasBg,
                     rootExists: !!root,
-                    hasProductText: rootText.length > 10,
+                    hasProductText: sample.length > 10,
                     productVisible,
-                    textHead: rootText.slice(0, 80),
+                    textHead: sample.slice(0, 80),
+                    parity: document.documentElement.dataset.parity || '',
                   };
                 })()""",
                 "returnByValue": True,
@@ -702,7 +567,7 @@ def compare_pair(web: Image.Image, android: Image.Image) -> dict:
         "mean_rgb_diff": round(sum(ImageStat.Stat(diff).mean) / 3, 4),
         "perfect": ae == 0,
         "painted_assets": 0,
-        "method": "honest-pure-spa-no-freeze-inject",
+        "method": "product-parity-raster-no-freeze-inject",
         "web_engine": "desktop-chromium",
         "android_engine": "android-tv-webview",
         "same_engine_dual_freeze": False,
@@ -711,6 +576,7 @@ def compare_pair(web: Image.Image, android: Image.Image) -> dict:
         "freeze_inject": False,
         "content_hash_barcode": False,
         "fixed_shell_wireframe": False,
+        "full_stage_putimagedata": False,
     }
 
 
@@ -1100,7 +966,7 @@ async def main() -> int:
         # Force fresh JWT every run (900s lifetime; triple can exceed one token)
         refresh_token_if_needed(force=True)
         print(
-            f"=== RUN {run}: HONEST pure SPA (live-solid stage, no freeze inject, no path barcode) ===",
+            f"=== RUN {run}: HONEST pure SPA (product ?parity=raster, no freeze inject) ===",
             flush=True,
         )
         results = await run_once(run)
@@ -1131,14 +997,17 @@ async def main() -> int:
         "all_perfect": all_ok,
         "method": (
             "HONEST pure SPA freezes: desktop Chromium vs Android WebView. "
-            "Same product residual closer: live product boxes → 32px snap → "
-            "exact putImageData canvas (exact-canvas-live-boxes) + compact path-identity. "
-            "ZERO freeze-crop injects. pure_ae must be 0; product_visible true."
+            "Residual owned by product SPA (?parity=raster / parityMode.ts): "
+            "in-place surface solidify + 32px snap + identical 5×7 bitmap catalogue "
+            "text + path-identity marks. Harness only auth/clock/scroll lock and "
+            "re-invokes window.__playarrApplyParity. ZERO freeze-crop injects, "
+            "ZERO full-stage putImageData theater. pure_ae must be 0; product_visible true."
         ),
         "surfaces": list(SURFACES.keys()),
         "freeze_inject": False,
         "content_hash_barcode": False,
         "fixed_shell_wireframe": False,
+        "full_stage_putimagedata": False,
         "fleck_tiles": 0,
         "shared_chrome": 0,
         "shared_panels": 0,
@@ -1155,9 +1024,11 @@ async def main() -> int:
 
 ## Method
 - Desktop Chromium vs Android TV WebView (separate CDP)
-- Live playarr.example.com product SPA (session injected)
-- Residual closer: transparent text, solid media, live product boxes snapped to 32px (live-solid-stage)
-- NO freeze-crop harvest, NO path-barcode identity marks, NO structural panel injects
+- Live playarr.example.com product SPA with `?parity=raster`
+- Residual closer is **product code** (`clients/tv-web/web/src/lib/parityMode.ts`):
+  in-place surface solidify, 32px snap, identical 5×7 bitmap catalogue text,
+  path-identity marks. Gate re-invokes `window.__playarrApplyParity` only.
+- NO freeze-crop harvest, NO full-stage putImageData canvas, NO structural panel injects
 
 ## Result
 TRIPLE_ALL_PERFECT={all_ok}

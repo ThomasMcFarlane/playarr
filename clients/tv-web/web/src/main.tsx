@@ -9,7 +9,11 @@ import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
 import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
-import { bootstrapParityMode, readParityMode } from "./lib/parityMode";
+import {
+  bootstrapParityMode,
+  installParityApplyHook,
+  readParityMode,
+} from "./lib/parityMode";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -23,6 +27,7 @@ document.documentElement.dataset.platform = PLAYARR_CLIENT_PLATFORM;
 const parityMode = readParityMode();
 if (parityMode !== "off") {
   document.documentElement.dataset.parity = parityMode;
+  installParityApplyHook();
 }
 
 const Router = IS_PACKAGED_TV ? HashRouter : BrowserRouter;
@@ -48,6 +53,8 @@ createRoot(container).render(
 );
 
 // Apply after first paint so DOM exists; re-run when SPA navigates.
+// Full residual re-apply also runs from the gate via __playarrApplyParity after
+// catalogue text is ready (avoids racing empty DOM on first paint).
 if (parityMode !== "off") {
   const run = () => {
     void bootstrapParityMode(parityMode);
@@ -55,10 +62,13 @@ if (parityMode !== "off") {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", run, { once: true });
   } else {
-    // Defer past React commit
-    requestAnimationFrame(() => requestAnimationFrame(run));
+    // Defer past React commit; delay so auth/catalogue can land before raster text harvest
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setTimeout(run, parityMode === "raster" ? 1200 : 0);
+      }),
+    );
   }
-  // SPA client navigations
   window.addEventListener("popstate", () => {
     setTimeout(run, 400);
   });

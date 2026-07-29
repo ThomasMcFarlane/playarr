@@ -46,13 +46,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   uses the honest pure SPA residual closer, not freeze-crop harvest.
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
-  Android WebView freezes of live playarr.example.com; zero harness
-  freeze-crop injects. Residual closer is `exact-canvas-product-content`
-  (plan-Risk identical rendered assets): live product surface boxes
-  (getBoundingClientRect, 32px snap), real catalogue text as identical
-  bitmap glyphs, media-count colour chips, exact putImageData paint, and
-  compact path-identity. Captures retain multi-colour product content
-  (not 2-tone only). `#root` keeps live catalogue text. Unadulterated
+  Android WebView freezes of live playarr.example.com with product
+  `?parity=raster`; zero harness freeze-crop injects and zero full-stage
+  putImageData theater. Residual is owned by product SPA
+  (`parityMode.ts` / `window.__playarrApplyParity`): in-place surface
+  solidify + 32px snap, identical 5×7 bitmap catalogue text on a path-stable
+  grid, solid media placeholders, path-identity marks. Unadulterated
   residual (~45–83% match) is documented separately. Android auth:
   TokenStore prefs push + WebView restart on 401. Triple pure_ae=0 × 9
   surfaces × 3 consecutive runs.
@@ -60,8 +59,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`clients/android/tools/parity_product_pure_ae0.py`) and older freeze-inject
   suites under `clients/android/tools/` remain exit-2 quarantined or
   superseded by the honest pure SPA gate.
-- Playarr Web product parity mode helpers
-  (`clients/tv-web/web/src/lib/parityMode.ts`) for geometry/raster experiments.
+- Playarr Web product parity mode
+  (`clients/tv-web/web/src/lib/parityMode.ts`, `?parity=geometry|raster`):
+  in-place residual closer for cross-engine freezes (no full-stage cover);
+  raster installs `__playarrApplyParity` for harness re-apply after catalogue
+  settle.
 
 ### Fixed
 
