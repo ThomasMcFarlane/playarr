@@ -86,6 +86,24 @@ struct TVRootView: View {
     private func signedInShell(forcedSelection: TVNavTab?, detailWork: Work? = nil) -> some View {
         let tab = forcedSelection ?? selectedTab
         return ZStack(alignment: .topLeading) {
+            // Floating left nav first in the tree so the focus engine can reach
+            // it when moving left from stage content (sibling focusSection).
+            TVFloatingNav(
+                selection: Binding(
+                    get: { forcedSelection ?? selectedTab },
+                    set: { if forcedSelection == nil { selectedTab = $0 } }
+                ),
+                suppressFocusChrome: TVParityLaunch.requestedScreen != nil,
+                // SPA never shows the settings gear in the floating nav on
+                // library/home/search/settings frames (settings is reached
+                // via other chrome). Keep gear only for live non-parity.
+                showSettings: TVParityLaunch.requestedScreen == nil
+            )
+            .padding(.leading, DesignTokens.Shell.navEdge)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .focusSection()
+            .zIndex(50)
+
             // Main content fills the stage
             NavigationStack {
                 Group {
@@ -132,27 +150,10 @@ struct TVRootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .toolbar(.hidden, for: .navigationBar)
+                .navigationBarBackButtonHidden(true)
+                .focusSection()
             }
-            // Main stage is its own focus section so Left from the first card
-            // can hand focus to the floating nav (sibling overlay).
-            .focusSection()
-
-            // Floating left nav (web `.app-nav`) — vertically centred at nav edge.
-            TVFloatingNav(
-                selection: Binding(
-                    get: { forcedSelection ?? selectedTab },
-                    set: { if forcedSelection == nil { selectedTab = $0 } }
-                ),
-                suppressFocusChrome: TVParityLaunch.requestedScreen != nil,
-                // SPA never shows the settings gear in the floating nav on
-                // library/home/search/settings frames (settings is reached
-                // via other chrome). Keep gear only for live non-parity.
-                showSettings: TVParityLaunch.requestedScreen == nil
-            )
-            .padding(.leading, DesignTokens.Shell.navEdge)
-            .frame(maxHeight: .infinity, alignment: .center)
-            .focusSection()
-            .zIndex(50)
+            .zIndex(10)
 
             // Logo / clock — never steals remote focus.
             TVShellHeader(frozenClock: TVParityLaunch.requestedScreen != nil)

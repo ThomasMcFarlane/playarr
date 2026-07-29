@@ -39,6 +39,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `focusSection`, so arrow keys / Siri Remote can move between cards and the
   left nav.
 
+- Apple TV home rails match SPA takeUnused membership (no title on two rails)
+  and per-rail focus keys (no dual pink selection). Series detail seasons and
+  episodes render as right-hand tracks (SPA `.tv-series-browser`), not a left
+  column under the synopsis.
+
 - Apple TV pairing gate uses the same SPA DeviceLogin chrome as the parity
   fixture (logo, kicker, “Link this TV”, QR + instructions). Session tokens
   now wire into APIClient so catalog calls send Authorization after link.

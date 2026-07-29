@@ -5,6 +5,7 @@ struct TVWorkDetailView: View {
     let work: Work
     let apiClient: PlayarrAPIClient
     @State private var viewModel: TVWorkDetailViewModel
+    @FocusState private var focusedEpisodeID: UUID?
 
     init(work: Work, apiClient: PlayarrAPIClient) {
         self.work = work
@@ -165,9 +166,16 @@ struct TVWorkDetailView: View {
                     }
                     .padding(.top, DesignTokens.Shell.detailActionTopGap)
 
+                    // Music/author children stay under copy; series seasons
+                    // live in the right rail (SPA `.tv-series-browser`).
                     if TVParityLaunch.requestedScreen == nil {
-                        children(detail.children)
-                            .padding(.top, 28)
+                        switch detail.children {
+                        case .series:
+                            EmptyView()
+                        default:
+                            children(detail.children)
+                                .padding(.top, 28)
+                        }
                     }
                 }
                 .padding(.leading, DesignTokens.Shell.titlePanelLeft)
@@ -176,15 +184,20 @@ struct TVWorkDetailView: View {
                 .padding(.bottom, 80)
                 .zIndex(5)
 
-                // SPA `.tv-rail-surface.tv-movie-browser`: width 62% right,
-                // vertical-tracks padding-top = half viewport, frost gradient.
+                // SPA `.tv-rail-surface` (right 62%): seasons/episodes for series,
+                // chapters/cast fixtures for movie parity.
                 if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
                     detailMovieRailSurface(size: geo.size)
+                        .zIndex(6)
+                } else if TVParityLaunch.requestedScreen == nil, case .series(let seasons) = detail.children {
+                    detailSeriesRailSurface(seasons: seasons, size: geo.size)
                         .zIndex(6)
                 }
             }
         }
         .ignoresSafeArea()
+        .navigationBarBackButtonHidden(true)
+        .focusSection()
     }
 
     /// SPA `.tv-key-art img` with dark-theme filter chain.
@@ -299,11 +312,116 @@ struct TVWorkDetailView: View {
 
     /// SPA `.tv-rail-surface.is-vertical-tracks.tv-movie-browser`.
     private func detailMovieRailSurface(size: CGSize) -> some View {
+        detailRailSurfaceChrome(size: size) {
+            detailSideRails
+        }
+    }
+
+    /// SPA `.tv-rail-surface.tv-series-browser`: one horizontal episode track
+    /// per season (Season 1, Season 2, …) on the right half of the stage.
+    private func detailSeriesRailSurface(seasons: [SeasonDetail], size: CGSize) -> some View {
+        let ordered = seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+        return detailRailSurfaceChrome(size: size) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: DesignTokens.Shell.detailMediaTrackGap) {
+                    ForEach(ordered, id: \.season.id) { season in
+                        seriesSeasonTrack(season)
+                    }
+                }
+                .padding(.bottom, 80)
+            }
+            .focusSection()
+        }
+    }
+
+    private func seriesSeasonTrack(_ season: SeasonDetail) -> some View {
+        let episodes = season.episodes.filter { $0.mediaFileID != nil }
+        let playable = episodes.isEmpty ? season.episodes : episodes
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(season.season.title ?? "Season \(season.season.seasonNumber)")
+                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text("\(playable.count) episodes")
+                .font(TVTheme.font(size: 11, weight: .medium))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
+                    ForEach(playable, id: \.episode.id) { episode in
+                        seriesEpisodeCard(episode, seasonNumber: season.season.seasonNumber)
+                    }
+                }
+            }
+            .focusSection()
+        }
+    }
+
+    private func seriesEpisodeCard(_ episode: EpisodeDetail, seasonNumber: Int32) -> some View {
+        let ep = episode.episode
+        let title = ep.title ?? "Episode \(ep.episodeNumber)"
+        let label = "S\(String(format: "%02d", seasonNumber)) · E\(String(format: "%02d", ep.episodeNumber))"
+        let card = VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
+                    .frame(
+                        width: DesignTokens.Shell.detailChapterCardWidth,
+                        height: DesignTokens.Shell.detailChapterCardHeight
+                    )
+                Text(String(format: "%02d", ep.episodeNumber))
+                    .font(TVTheme.font(size: 16, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 12)
+            }
+            Text(label)
+                .font(TVTheme.font(size: 11, weight: .medium))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+            Text(title)
+                .font(TVTheme.font(size: 13, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(2)
+                .frame(width: DesignTokens.Shell.detailChapterCardWidth, alignment: .leading)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    focusedEpisodeID == ep.id
+                        ? DesignTokens.Color.brandPrimary.opacity(0.9)
+                        : Color.clear,
+                    lineWidth: 2
+                )
+        )
+
+        if let mediaFileID = episode.mediaFileID {
+            return AnyView(
+                NavigationLink {
+                    TVPlayerView(
+                        mediaFileID: mediaFileID,
+                        title: title,
+                        apiClient: apiClient
+                    )
+                } label: {
+                    card
+                }
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .focused($focusedEpisodeID, equals: ep.id)
+            )
+        }
+        return AnyView(
+            card
+                .opacity(0.55)
+                .focusable(false)
+        )
+    }
+
+    private func detailRailSurfaceChrome<Content: View>(
+        size: CGSize,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         let railW = size.width * DesignTokens.Shell.detailRailWidthFraction
         return HStack(spacing: 0) {
             Spacer(minLength: 0)
             ZStack(alignment: .topLeading) {
-                // Frost gradient (dark theme).
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
@@ -315,9 +433,7 @@ struct TVWorkDetailView: View {
                     startPoint: .leading,
                     endPoint: .trailing
                 )
-                // Constrain rails to rail width so wide chapter HStacks scroll
-                // rightward instead of expanding left and shifting SPA x≈883.
-                detailSideRails
+                content()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, size.height * DesignTokens.Shell.detailRailContentTopFraction)
                     .padding(.leading, DesignTokens.Shell.detailTrackLeftFade)
@@ -325,8 +441,10 @@ struct TVWorkDetailView: View {
             }
             .frame(width: railW, height: size.height, alignment: .topLeading)
             .clipped()
+            .focusSection()
         }
         .frame(width: size.width, height: size.height)
+        .allowsHitTesting(true)
     }
 
     private var detailSideRails: some View {

@@ -4,9 +4,8 @@ import SwiftUI
 struct TVHomeView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var viewModel: TVHomeViewModel?
-    /// Real focus engine binding (must be `@FocusState`, not plain `@State`)
-    /// so Siri Remote / simulator arrows move between cards.
-    @FocusState private var focusedWorkID: UUID?
+    /// Focus target is rail+work so the same title never lights up on two rails.
+    @FocusState private var focusedCard: HomeRailCardFocus?
 
     var body: some View {
         Group {
@@ -23,10 +22,13 @@ struct TVHomeView: View {
             let model = TVHomeViewModel(apiClient: environment.apiClient)
             viewModel = model
             await model.load()
-            if focusedWorkID == nil {
-                focusedWorkID = model.works.first?.id
-            }
         }
+    }
+
+    /// Stable focus key: rail id + work id (works may not repeat across rails).
+    private struct HomeRailCardFocus: Hashable {
+        let rail: String
+        let workID: UUID
     }
 
     @ViewBuilder
@@ -139,48 +141,70 @@ struct TVHomeView: View {
         }
     }
 
-    @ViewBuilder
     private func homeRails(viewModel: TVHomeViewModel, size: CGSize) -> some View {
-        let movies = viewModel.works.filter { $0.kind == .movie }
-        let series = viewModel.works.filter { $0.kind == .series }
-        let startWatching = Array((series + viewModel.works.filter { $0.kind != .series }).prefix(12))
-        let newMovies: [Work] = {
-            if TVParityLaunch.requestedScreen != nil {
-                let preferred = [
-                    "28 Sample Years",
-                    "28 Sample Years: The Sequel",
-                    "30 Sample Nights",
-                    "30 Sample Nights: The Sequel",
-                    "47 Sample Metres",
-                    "10,000 Sample",
-                    "2001: A Sample Voyage",
-                    "Sample Film 2012",
-                ]
-                var ordered: [Work] = []
-                for title in preferred {
-                    if let match = movies.first(where: { $0.title == title }) {
-                        ordered.append(match)
-                    }
-                }
-                for m in movies where !ordered.contains(where: { $0.id == m.id }) {
-                    ordered.append(m)
-                }
-                return ordered
-            }
-            return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
-        }()
-
-        let interactive = TVParityLaunch.requestedScreen == nil
-        let start = Array(startWatching.prefix(interactive ? 12 : 5))
-        let movieRail = Array(newMovies.prefix(interactive ? 12 : 5))
+        let (startWatching, newMovies) = Self.homeRailMembership(
+            works: viewModel.works,
+            interactive: TVParityLaunch.requestedScreen == nil
+        )
         // Interactive: real HStack layout so the focus engine can move left/right.
         // Absolute `.offset` stacking breaks directional focus (all cards share
         // one layout rect). Parity freezes keep pixel-locked absolute geometry.
-        if interactive {
-            homeRailsInteractive(startWatching: start, newMovies: movieRail, size: size)
-        } else {
-            homeRailsAbsolute(startWatching: start, newMovies: movieRail, size: size)
+        return Group {
+            if TVParityLaunch.requestedScreen == nil {
+                homeRailsInteractive(startWatching: startWatching, newMovies: newMovies, size: size)
+            } else {
+                homeRailsAbsolute(startWatching: startWatching, newMovies: newMovies, size: size)
+            }
         }
+    }
+
+    /// Match SPA Home.tsx `takeUnused`: a work appears on at most one rail.
+    private static func homeRailMembership(
+        works: [Work],
+        interactive: Bool
+    ) -> (startWatching: [Work], newMovies: [Work]) {
+        let movies = works.filter { $0.kind == .movie }
+        let series = works.filter { $0.kind == .series }
+        var used = Set<UUID>()
+        func takeUnused(_ source: [Work], count: Int) -> [Work] {
+            var out: [Work] = []
+            for work in source {
+                if used.contains(work.id) { continue }
+                used.insert(work.id)
+                out.append(work)
+                if out.count >= count { break }
+            }
+            return out
+        }
+
+        if !interactive {
+            let start = Array((series + works.filter { $0.kind != .series }).prefix(5))
+            let preferred = [
+                "28 Sample Years",
+                "28 Sample Years: The Sequel",
+                "30 Sample Nights",
+                "30 Sample Nights: The Sequel",
+                "47 Sample Metres",
+                "10,000 Sample",
+                "2001: A Sample Voyage",
+                "Sample Film 2012",
+            ]
+            var ordered: [Work] = []
+            for title in preferred {
+                if let match = movies.first(where: { $0.title == title }) {
+                    ordered.append(match)
+                }
+            }
+            for m in movies where !ordered.contains(where: { $0.id == m.id }) {
+                ordered.append(m)
+            }
+            return (start, Array(ordered.prefix(5)))
+        }
+
+        let mixed = series + works.filter { $0.kind != .series && $0.kind != .artist }
+        let start = takeUnused(mixed, count: 10)
+        let movieRail = takeUnused(movies, count: 12)
+        return (start, movieRail)
     }
 
     /// Production rails: layout-based rows so Siri Remote / keyboard arrows work.
@@ -198,10 +222,13 @@ struct TVHomeView: View {
         let y1 = DesignTokens.Shell.homeCardOriginY1
         let y2 = DesignTokens.Shell.homeCardOriginY2
         let railGap = max(0, y2 - y1 - artH - titleBlock)
-        let defaultFocusID = startWatching.first?.id ?? newMovies.first?.id
+        let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
+            HomeRailCardFocus(rail: "start", workID: $0.id)
+        } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
 
         return VStack(alignment: .leading, spacing: railGap) {
             interactiveRail(
+                railID: "start",
                 title: "Start watching",
                 works: startWatching,
                 artW: artW,
@@ -211,6 +238,7 @@ struct TVHomeView: View {
                 headingH: headingH
             )
             interactiveRail(
+                railID: "movies",
                 title: "New movies",
                 works: newMovies,
                 artW: artW,
@@ -225,10 +253,11 @@ struct TVHomeView: View {
         .padding(.top, y1 - headingH)
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .focusSection()
-        .defaultFocus($focusedWorkID, defaultFocusID)
+        .defaultFocus($focusedCard, defaultFocus)
     }
 
     private func interactiveRail(
+        railID: String,
         title: String,
         works: [Work],
         artW: CGFloat,
@@ -245,13 +274,14 @@ struct TVHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: gap) {
                     ForEach(works) { work in
+                        let focus = HomeRailCardFocus(rail: railID, workID: work.id)
                         NavigationLink {
                             TVWorkDetailView(work: work, apiClient: environment.apiClient)
                         } label: {
                             TVHomeCard(
                                 work: work,
                                 apiClient: environment.apiClient,
-                                isSelected: focusedWorkID == work.id
+                                isSelected: focusedCard == focus
                             )
                             .frame(
                                 width: artW,
@@ -260,7 +290,7 @@ struct TVHomeView: View {
                             )
                         }
                         .buttonStyle(TVFocusableCardButtonStyle())
-                        .focused($focusedWorkID, equals: work.id)
+                        .focused($focusedCard, equals: focus)
                     }
                 }
             }
@@ -321,7 +351,7 @@ struct TVHomeView: View {
     }
 
     private func heroWork(from works: [Work]) -> Work? {
-        if let id = focusedWorkID, let match = works.first(where: { $0.id == id }) {
+        if let focus = focusedCard, let match = works.first(where: { $0.id == focus.workID }) {
             return match
         }
         // Prefer series for hero (live SPA highlights "Test Series Y").
@@ -418,59 +448,29 @@ struct TVHomeView: View {
         .frame(width: size.width, height: size.height)
     }
 
+    // Legacy rail helper kept for parity-only call sites; production home
+    // uses `homeRailsInteractive` / `homeRailsAbsolute`.
     private func rail(title: String, works: [Work]) -> some View {
-        let parity = TVParityLaunch.requestedScreen != nil
-        return VStack(alignment: .leading, spacing: 0) {
-            // `.tv-media-track-heading h2`
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .padding(.leading, DesignTokens.Shell.railTrackLeftFade)
                 .padding(.bottom, 17)
-            // Parity: fixed HStack (no ScrollView focus lift / partial clip).
-            // Production keeps horizontal scroll.
-            Group {
-                if parity {
-                    HStack(spacing: DesignTokens.Shell.homeCardGap) {
-                        ForEach(works.prefix(5)) { work in
-                            TVHomeCard(
-                                work: work,
-                                apiClient: environment.apiClient,
-                                isSelected: focusedWorkID == work.id
-                            )
-                        }
-                    }
-                    .padding(.top, 18)
-                    .padding(.bottom, 8)
-                    .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
-                    .padding(.trailing, 46)
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: DesignTokens.Shell.homeCardGap) {
-                            ForEach(works) { work in
-                                NavigationLink {
-                                    TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                                } label: {
-                                    TVHomeCard(
-                                        work: work,
-                                        apiClient: environment.apiClient,
-                                        isSelected: focusedWorkID == work.id
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .focusable(true)
-                                .onAppear { if focusedWorkID == nil { focusedWorkID = work.id } }
-                            }
-                        }
-                        .padding(.top, 18)
-                        .padding(.bottom, 8)
-                        .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
-                        .padding(.trailing, 46)
-                    }
-                    .scrollClipDisabled()
+            HStack(spacing: DesignTokens.Shell.homeCardGap) {
+                ForEach(works.prefix(5)) { work in
+                    TVHomeCard(
+                        work: work,
+                        apiClient: environment.apiClient,
+                        isSelected: false
+                    )
                 }
             }
+            .padding(.top, 18)
+            .padding(.bottom, 8)
+            .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
+            .padding(.trailing, 46)
         }
     }
 

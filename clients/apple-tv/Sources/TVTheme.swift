@@ -172,6 +172,7 @@ struct TVFloatingNav: View {
     var suppressFocusChrome: Bool = false
     /// SPA library/home frames omit the settings group from the left rail.
     var showSettings: Bool = true
+    @FocusState private var focusedTab: TVNavTab?
 
     private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
@@ -185,6 +186,7 @@ struct TVFloatingNav: View {
             }
         }
         .frame(width: DesignTokens.Shell.navItemSize + DesignTokens.Shell.navGroupPadding * 2)
+        .focusSection()
     }
 
     private func navGroup(tabs: [TVNavTab]) -> some View {
@@ -203,10 +205,12 @@ struct TVFloatingNav: View {
                         .stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1)
                 )
         )
+        .focusSection()
     }
 
     private func navButton(_ tab: TVNavTab) -> some View {
         let isActive = selection == tab
+        let isFocused = focusedTab == tab
         return Button {
             selection = tab
         } label: {
@@ -218,7 +222,11 @@ struct TVFloatingNav: View {
                     .tracking(0.3)
                     .lineLimit(1)
             }
-            .foregroundStyle(isActive ? DesignTokens.Color.textPrimary : DesignTokens.Color.textDisabled)
+            .foregroundStyle(
+                isActive || isFocused
+                    ? DesignTokens.Color.textPrimary
+                    : DesignTokens.Color.textDisabled
+            )
             .frame(
                 width: DesignTokens.Shell.navItemSize,
                 height: DesignTokens.Shell.navItemSize
@@ -226,18 +234,27 @@ struct TVFloatingNav: View {
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
-                        isActive
+                        isActive || isFocused
                             ? DesignTokens.Color.textPrimary.opacity(0.09)
                             : Color.clear
                     )
             )
-            .scaleEffect(isActive && !suppressFocusChrome ? 1.05 : 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        isFocused && !suppressFocusChrome
+                            ? DesignTokens.Color.brandPrimary.opacity(0.85)
+                            : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .scaleEffect(isFocused && !suppressFocusChrome ? 1.05 : 1)
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .accessibilityLabel(tab.title)
+        .focused($focusedTab, equals: tab)
         // Parity captures: disable focusability entirely so the system white
-        // focus pill cannot appear (focusEffectDisabled alone still leaves a
-        // large lift on tvOS). Production keeps full focus chrome.
+        // focus pill cannot appear.
         .focusable(!suppressFocusChrome)
         .focusEffectDisabled(suppressFocusChrome)
     }
