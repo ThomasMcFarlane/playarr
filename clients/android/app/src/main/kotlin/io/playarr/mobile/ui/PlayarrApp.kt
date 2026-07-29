@@ -48,10 +48,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -1161,8 +1164,9 @@ internal fun formatDeviceCodeCountdown(seconds: Int): String {
 }
 
 /**
- * Matches web `.device-login-qr`: 240px matrix (margin 2, ECC M) inside a
- * pure white 12dp frame, 18dp radius, soft brown shadow, no grey plate.
+ * Matches live `/login/qr` `.device-login-qr` / `PLAYARR_QR_STYLE`:
+ * border-box 240, 12dp white edge, r=18, content matrix 216 (margin 2, ECC M),
+ * pure black modules on white, soft plate shadow. No extra outer chrome.
  */
 @Composable
 internal fun PlayarrQrCode(
@@ -1170,21 +1174,22 @@ internal fun PlayarrQrCode(
     contentDescription: String,
     modifier: Modifier = Modifier,
 ) {
+    // Content box only — white edge is the Surface padding (12dp × 2 + 216 = 240).
+    val contentPx = 216
     val bitmap = remember(value) {
-        val size = 240
         val matrix = QRCodeWriter().encode(
             value,
             BarcodeFormat.QR_CODE,
-            size,
-            size,
+            contentPx,
+            contentPx,
             mapOf(
                 EncodeHintType.MARGIN to 2,
                 EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
             ),
         )
-        createBitmap(size, size).apply {
-            for (y in 0 until size) {
-                for (x in 0 until size) {
+        createBitmap(contentPx, contentPx).apply {
+            for (y in 0 until contentPx) {
+                for (x in 0 until contentPx) {
                     this[x, y] = if (matrix[x, y]) {
                         android.graphics.Color.BLACK
                     } else {
@@ -1194,38 +1199,30 @@ internal fun PlayarrQrCode(
             }
         }
     }
-    // Soft rose halo only (no solid grey box) — matches the web page glow.
-    Box(contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .size(320.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            AuthLight.rose.copy(alpha = 0.20f),
-                            AuthLight.rose.copy(alpha = 0.06f),
-                            Color.Transparent,
-                        ),
-                    ),
-                ),
-        )
-        Surface(
-            color = AuthLight.surfaceStrong,
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier.shadow(
-                elevation = 24.dp,
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(18.dp),
+        // CSS: box-shadow 0 24px 72px rgba(0,0,0,0.3)
+        modifier = modifier
+            .size(240.dp)
+            .shadow(
+                elevation = 28.dp,
                 shape = RoundedCornerShape(18.dp),
-                ambientColor = Color(0x17382621),
-                spotColor = Color(0x17382621),
+                ambientColor = Color.Black.copy(alpha = 0.30f),
+                spotColor = Color.Black.copy(alpha = 0.30f),
             ),
-        ) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = contentDescription,
-                // padding first → outer chrome 264dp, matrix 240dp (web border: 12px)
-                modifier = modifier.padding(12.dp).size(240.dp),
-            )
-        }
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = contentDescription,
+            contentScale = ContentScale.FillBounds,
+            // Nearest-neighbour: avoid grey antialias on module edges (web crispEdges).
+            filterQuality = FilterQuality.None,
+            modifier = Modifier
+                .padding(12.dp)
+                .size(216.dp)
+                .clip(RoundedCornerShape(0.dp)),
+        )
     }
 }
 

@@ -352,16 +352,13 @@ struct TVPairingGateView: View {
     }
 }
 
-// MARK: - Device login chrome (SPA DeviceLogin geometry)
+// MARK: - Device login chrome (live /login/qr)
 
-/// SPA DeviceLogin chrome measured @ 1920×1080 (same geometry as the parity
-/// fixture). Live pairing and parity fixture both mount this so product UI
-/// cannot diverge from the reference layout.
-///
-/// Geometry notes (from full30/full33 dial-in):
-/// - logo ~(883,272), kicker y≈404, title y≈434–496
-/// - QR y≈567–806 x≈854–1093 (240 border-box, 12pt white edge, r=18)
-/// - content leading = width×0.445, top = height×0.233
+/// Production pairing chrome matches live web `/login/qr`
+/// (`ProfileAuthLayout` + embedded `DeviceLogin`): centred column, Welcome
+/// home / Sign in to Playarr, QR tile (240 / 12 / r=18 + soft shadow) above
+/// instructions and code. Parity freezes still use measured left-rail geometry
+/// via `TVParityPairingFixtureView`.
 struct TVDeviceLoginChrome: View {
     enum Phase {
         case requesting
@@ -374,45 +371,49 @@ struct TVDeviceLoginChrome: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 DesignTokens.Color.backgroundBase
-                // SPA left wash is cool/neutral (sampled mean ~35,31,34) — not pink.
+                // Soft rose halo behind the plate (web profiles-page wash).
                 RadialGradient(
                     colors: [
-                        Color(red: 0.28, green: 0.26, blue: 0.28).opacity(0.38),
-                        Color(red: 0.18, green: 0.16, blue: 0.18).opacity(0.18),
+                        DesignTokens.Color.brandPrimary.opacity(0.14),
+                        DesignTokens.Color.brandPrimary.opacity(0.05),
                         .clear,
                     ],
-                    center: UnitPoint(x: 0.12, y: 0.48),
-                    startRadius: 30,
-                    endRadius: geo.size.width * 0.38
+                    center: UnitPoint(x: 0.50, y: 0.42),
+                    startRadius: 20,
+                    endRadius: min(geo.size.width, geo.size.height) * 0.42
                 )
 
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(spacing: 0) {
                     playarrWordmark
-                        // Logo→kicker gap: REF kicker y404 − logo bottom ~292 ≈ 112
-                        .padding(.bottom, 112)
+                        .padding(.bottom, 28)
 
-                    Text("SIGN IN ON ANOTHER DEVICE")
-                        .font(.system(size: 11, weight: .heavy))
-                        .tracking(1.8)
+                    Text("WELCOME HOME")
+                        .font(.system(size: 12, weight: .heavy))
+                        .tracking(2.4)
                         .foregroundStyle(DesignTokens.Color.textDisabled)
 
-                    // REF title band y434–496 h≈63; 74pt medium closer than 68
-                    Text("Link this TV")
-                        .font(.system(size: 74, weight: .medium))
+                    Text("Sign in to Playarr")
+                        .font(.system(size: 64, weight: .medium))
                         .tracking(-4.0)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .multilineTextAlignment(.center)
                         .padding(.top, 8)
 
+                    Text("Scan the QR code with your phone or another browser to sign in on this device.")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 440)
+                        .padding(.top, 16)
+                        .padding(.bottom, 28)
+
                     phaseBody
-                        // full33 QR y≈569 matched REF 567
-                        .padding(.top, 61)
                 }
-                // Logo top ≈ y 252 → 0.233; keep leading for x≈854 (0.445)
-                .padding(.leading, geo.size.width * 0.445)
-                .padding(.top, geo.size.height * 0.233)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(.horizontal, 48)
             }
         }
         .ignoresSafeArea()
@@ -447,8 +448,10 @@ struct TVDeviceLoginChrome: View {
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
         case .awaitingApproval(let userCode, let verificationURI, let qr):
-            HStack(alignment: .center, spacing: 40) {
-                // SPA `.device-login-qr`: border-box 240 with 12px white border
+            // Live `/login/qr` embedded DeviceLogin: column, centred, QR above copy.
+            VStack(alignment: .center, spacing: 22) {
+                // `.device-login-qr`: border-box 240, 12pt white edge, r=18,
+                // content 216, soft plate shadow (0 24 72 / 30% black).
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.white)
@@ -457,8 +460,9 @@ struct TVDeviceLoginChrome: View {
                 }
                 .frame(width: 240, height: 240)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: Color.black.opacity(0.30), radius: 36, x: 0, y: 24)
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .center, spacing: 10) {
                     Text("Scan the QR code, or visit")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(DesignTokens.Color.textSecondary)
@@ -477,6 +481,7 @@ struct TVDeviceLoginChrome: View {
                         .foregroundStyle(DesignTokens.Color.textDisabled)
                         .padding(.top, 2)
                 }
+                .multilineTextAlignment(.center)
             }
         case .failed(let message):
             VStack(alignment: .leading, spacing: 16) {

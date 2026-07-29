@@ -2609,6 +2609,12 @@ code {
   margin-top: 1.5rem;
 }
 
+.auth-qr-submit {
+  width: 100%;
+  margin-top: 0.75rem;
+  border-radius: 999px;
+}
+
 .auth-switch {
   margin-top: 1.5rem;
   font-size: 0.78rem;
@@ -2638,6 +2644,8 @@ code {
   margin-top: 2rem;
 }
 
+/* Pairing QR tile — lockstep with PLAYARR_QR_STYLE / live /login/qr:
+ * border-box 240, 12px white edge, r=18, black modules, soft plate shadow. */
 .device-login-qr {
   flex: 0 0 auto;
   width: 240px;
@@ -2646,13 +2654,28 @@ code {
   border: 12px solid #fff;
   border-radius: 18px;
   background: #fff;
-  box-shadow: var(--shadow-soft);
+  /* Prefer the measured dark-auth plate lift; fall back to theme soft shadow. */
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.3);
 }
 
 .device-login-qr svg {
   display: block;
   width: 100%;
   height: 100%;
+  /* Match qrcode's crispEdges; avoids soft grey antialias on TV panels. */
+  shape-rendering: crispEdges;
+}
+
+:root:not([data-theme="dark"]) .device-login-qr {
+  box-shadow: var(--shadow-soft);
+}
+
+.device-login-qr-placeholder {
+  box-shadow: none;
+}
+
+.device-login-blank {
+  visibility: hidden;
 }
 
 .device-login-instructions {
@@ -2664,6 +2687,7 @@ code {
 }
 
 .device-login-url {
+  min-height: 1.5em;
   overflow-wrap: anywhere;
   color: var(--ink);
   font-size: clamp(1rem, 1.8vw, 1.5rem);
@@ -2680,6 +2704,42 @@ code {
 .device-login-code {
   font-size: clamp(2rem, 4.2vw, 4.8rem);
   white-space: nowrap;
+}
+
+.device-login-timer {
+  display: block;
+  margin-top: 0.85rem;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: clamp(0.82rem, 1.2vw, 1rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+}
+
+.device-login-embedded {
+  display: grid;
+  justify-items: center;
+}
+
+.device-login-embedded .device-login-options {
+  width: 100%;
+  flex-direction: column;
+  gap: 1.35rem;
+  margin-top: 0;
+}
+
+.device-login-embedded .device-login-instructions {
+  text-align: center;
+}
+
+.device-login-embedded .device-login-code {
+  font-size: clamp(2rem, 7vw, 3.5rem);
+}
+
+.device-login-manual {
+  width: 100%;
+  margin-top: 1.25rem;
+  border-radius: 999px;
 }
 
 .device-login-error .btn {

@@ -29,6 +29,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Pairing QR tile locked to live `/login/qr` `.device-login-qr` across
+  clients: border-box 240, 12px white edge, r=18, content 216, ECC M /
+  margin 2, pure black modules, soft plate shadow (`0 24px 72px / 30%`).
+  Apple TV production pairing is now the centred web column (Welcome home /
+  Sign in to Playarr + QR above code). Android QR outer size corrected from
+  264→240. Shared `PLAYARR_QR_STYLE` gains `contentSize` + shadow tokens.
+
 - Roku pairing QR matches `/login/qr`: rounded white 240 plate (r=18), 12px
   edge, 216 module field, soft shadow, ink-coloured mono code. Sign-in /
   Sign out now open the hosted playarr.app link flow (with QR) instead of

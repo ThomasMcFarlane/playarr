@@ -26,7 +26,11 @@ describe("createQrCodeSvg", () => {
     const { PLAYARR_QR_STYLE, createQrCodeSvg: make } = await import("./index");
     expect(PLAYARR_QR_STYLE.tileSize).toBe(240);
     expect(PLAYARR_QR_STYLE.borderPx).toBe(12);
+    expect(PLAYARR_QR_STYLE.contentSize).toBe(216);
     expect(PLAYARR_QR_STYLE.radiusPx).toBe(18);
+    expect(PLAYARR_QR_STYLE.marginModules).toBe(2);
+    expect(PLAYARR_QR_STYLE.errorCorrectionLevel).toBe("M");
+    expect(PLAYARR_QR_STYLE.shadow.blur).toBe(72);
     const svg = await make("https://playarr.example/link?user_code=WXYZ-1234");
     // qrcode embeds fill on path/rect; dark modules must be pure black.
     expect(svg).toMatch(/#000000|fill="black"|rgb\(0,\s*0,\s*0\)/i);

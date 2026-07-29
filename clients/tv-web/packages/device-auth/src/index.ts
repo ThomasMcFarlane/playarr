@@ -46,16 +46,23 @@ export {
 
 /**
  * Visual tokens for Playarr device-login QR tiles.
- * Matches `.device-login-qr` in tv-web `global.css` (border-box 240, 12px
- * white edge, 18px radius, black modules on white). Every surface that
- * draws a pairing QR — SVG in the browser, PNG from `/api/link/qr`, native
- * clients — should use these values so the tile looks identical.
+ *
+ * Source of truth: live `/login/qr` `.device-login-qr` (measured 2026-07-29
+ * at playarr.example.com): border-box 240×240, 12px solid #fff edge,
+ * border-radius 18px, pure white plate, black modules (ECC M, margin 2),
+ * soft drop shadow. Content box after the border is 216×216.
+ *
+ * Every surface that draws a pairing QR — SVG in the browser, PNG from
+ * `/api/link/qr`, native clients — must use these values so the tile is
+ * identical.
  */
 export const PLAYARR_QR_STYLE = {
   /** Outer tile size (CSS border-box width/height of `.device-login-qr`). */
   tileSize: 240,
   /** White border width around the modules (CSS `border: 12px solid #fff`). */
   borderPx: 12,
+  /** Content box = tileSize − 2×borderPx (where the module matrix sits). */
+  contentSize: 216,
   /** Corner radius of the white plate (CSS `border-radius: 18px`). */
   radiusPx: 18,
   /** Quiet-zone modules around the QR matrix (`qrcode` margin option). */
@@ -63,6 +70,15 @@ export const PLAYARR_QR_STYLE = {
   errorCorrectionLevel: "M" as const,
   dark: "#000000",
   light: "#ffffff",
+  /**
+   * Soft plate lift on dark auth chrome (`--shadow-soft` in dark theme).
+   * Light theme uses a warmer softer value; dark is the TV default.
+   */
+  shadow: {
+    offsetY: 24,
+    blur: 72,
+    color: "rgba(0, 0, 0, 0.3)",
+  },
 } as const;
 
 /** Generates an offline SVG QR code without sending the pairing URL to a third party. */

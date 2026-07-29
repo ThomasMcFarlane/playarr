@@ -15,6 +15,7 @@ const VERSIONED_ANDROID_DOWNLOAD =
 
 const LINK_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LINK_CODE_TTL_MS = 5 * 60 * 1000;
+const LINK_CLAIM_REDEMPTION_GRACE_MS = 30 * 1000;
 const LINK_CODE_POLL_SECONDS = 2;
 const LINK_CLIENT_PLATFORMS = new Set([
   "android-mobile",
@@ -24,7 +25,6 @@ const LINK_CLIENT_PLATFORMS = new Set([
   "tv-webos",
   "tv-tizen",
   "tv-vidaa",
-  "tv-roku",
   "tv-fire",
   "xbox",
 ]);
@@ -205,16 +205,19 @@ function normaliseUserCode(value) {
 }
 
 /**
- * Playarr device-login QR tokens — keep in lockstep with
- * `@playarr-tv/device-auth` `PLAYARR_QR_STYLE` and `.device-login-qr` CSS:
+ * Playarr device-login QR tokens — lockstep with `@playarr-tv/device-auth`
+ * `PLAYARR_QR_STYLE` and live `/login/qr` `.device-login-qr`:
  * black modules on white, margin 2, ECC M. Outer rounded white plate
- * (240 / r=18 / 12px edge) is applied by each client chrome; this PNG is
- * the module field that sits inside that plate (content box 216 CSS px,
- * rendered at 2× for crisp TV scale).
+ * (240 / r=18 / 12px edge + soft shadow) is applied by each client chrome;
+ * this PNG is only the module field inside that plate (content 216 CSS px,
+ * rendered at 2× → 432 px for crisp TV scale).
  */
 const PLAYARR_QR_STYLE = {
+  tileSize: 240,
+  borderPx: 12,
   /** Content-box width of `.device-login-qr` after the 12px white border. */
   contentSize: 216,
+  radiusPx: 18,
   marginModules: 2,
   errorCorrectionLevel: "M",
   dark: "#000000ff",
@@ -273,9 +276,10 @@ function linkObject(env, userCode) {
 
 async function createLinkSession(request, env) {
   const body = await request.json().catch(() => ({}));
-  const clientPlatform = LINK_CLIENT_PLATFORMS.has(body.client_platform)
-    ? body.client_platform
-    : "android-tv";
+  if (!LINK_CLIENT_PLATFORMS.has(body?.client_platform)) {
+    return json({ error: "invalid_request" }, { status: 400 });
+  }
+  const clientPlatform = body.client_platform;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const userCode = randomUserCode();
     const deviceSecret = `${userCode.replace("-", "")}.${randomToken()}`;
@@ -339,7 +343,16 @@ export class LinkSession {
       await this.state.storage.setAlarm(session.expires_at);
       return json({ ok: true }, { status: 201 });
     }
-    if (!current || current.expires_at <= Date.now()) return json({ error: "not_found" }, { status: 404 });
+    if (!current) return json({ error: "not_found" }, { status: 404 });
+    const now = Date.now();
+    const isClaimRedemption =
+      url.pathname === "/status" &&
+      request.method === "GET" &&
+      current.claim &&
+      now < current.expires_at + LINK_CLAIM_REDEMPTION_GRACE_MS;
+    if (current.expires_at <= now && !isClaimRedemption) {
+      return json({ error: "not_found" }, { status: 404 });
+    }
     if (url.pathname === "/inspect" && request.method === "GET") {
       return json({
         client_platform: current.client_platform,
@@ -362,6 +375,9 @@ export class LinkSession {
         return json({ error: "invalid_request" }, { status: 400 });
       }
       await this.state.storage.put("session", { ...current, claim });
+      await this.state.storage.setAlarm(
+        current.expires_at + LINK_CLAIM_REDEMPTION_GRACE_MS
+      );
       return json({ linked: true });
     }
     if (url.pathname === "/status" && request.method === "GET") {
