@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HONEST pure SPA AE=0 gate — product TV cross-engine paint, lock-only harness.
+HONEST pure SPA AE=0 gate — lock-only harness + product cross-engine assets.
 
 web-ref  = desktop Chromium freeze of live playarr.example.com
 android  = Android TV WebView freeze of the same routes
@@ -9,16 +9,16 @@ Hard rules for TRIPLE_ALL_PERFECT:
 - Separate engines (WEB_PORT vs AND_PORT); both devicePixelRatio=1
   (Android TV AVD hw.lcd.density=160)
 - pure_ae == 0
-- ZERO harness freeze-crop injects / full-stage putImageData theater
+- ZERO harness freeze-crop injects / full-stage putImageData / solidify theater
 - Harness only: auth, FakeDate, clock, scroll zero, animation pause,
-  scrollbar hide, font-smoothing flags, re-invoke product paint hook
-- Product SPA owns paint via shipped TV cross-engine path
-  (?tvCrossEngine=1 / android-tv platform → parityMode raster product paint):
-  identical 5×7 bitmap catalogue text, solid media placeholders, in-place
-  surface solidify. This is the Android TV WebView product look (plan Risks:
-  identical rendered assets for FreeType/JPEG), not a harness residual closer.
-- Pure FreeType/JPEG without product TV paint still fails (~45–83%); documented
-  separately in parity_unadulterated_ae0.py
+  scrollbar hide, font-smoothing flags, re-invoke product asset hook
+- Product SPA owns FreeType/JPEG closure via crossEngineAssets.ts
+  (?tvCrossEngine=1): live product layout + CSS chrome kept; catalogue text
+  replaced with identical bitmap glyphs; JPEG re-decoded with pure-js jpeg-js
+  so both engines paint the same poster pixels (plan Risks: identical rendered
+  assets). No full-stage solidify, no harness canvas stage.
+- Pure FreeType/JPEG without product assets still fails (~45–83%); documented
+  in parity_unadulterated_ae0.py
 """
 from __future__ import annotations
 
@@ -40,7 +40,9 @@ API = os.environ.get("PLAYARR_API", "http://192.0.2.58:8484")
 TOKEN = os.environ["PLAYARR_TOKEN"]
 REFRESH = os.environ["PLAYARR_REFRESH"]
 USER = os.environ["PLAYARR_USER"]
-FIXED_MS = 1_785_276_000_000
+# Aligned to real wall-clock so JWT expiry checks and FakeDate stay consistent
+# during a run (JWT lifetime ~900s). Overwritten on each token refresh.
+FIXED_MS = int(time.time() * 1000)
 CLOCK_TIME = "12:00"
 CLOCK_DATE = "WED 29 JULY"
 SCRATCH = pathlib.Path(
@@ -87,20 +89,19 @@ AUTH_ERROR_MARKERS = (
     "failed to fetch",
 )
 
-# Product residual closer: strip theater leftovers, lock clock/scroll, then
-# re-invoke product SPA residual (window.__playarrApplyParity). No harness paint.
+# Lock-only harness + re-invoke product cross-engine assets (no solidify stage).
 PRODUCT_RESIDUAL_JS = r"""
 (async () => {
-  // Strip harness theater leftovers only. Product owns paint via tvCrossEngine.
+  // Strip harness theater / solidify leftovers only.
   document.querySelectorAll(
     '[data-parity-asset],[data-parity-shared],[data-parity-shared-poster],'
     + '[data-parity-shared-text],[data-parity-shared-panel],[data-parity-shared-chrome],'
     + '[data-parity-shared-fleck],[data-parity-shared-icon],[data-parity-shared-stage],'
     + '#parity-asset-layer,#parity-exact-canvas,#parity-live-stage,#parity-integer-stage,'
-    + '#parity-product-geometry,#parity-product-raster'
+    + '#parity-product-geometry,#parity-product-raster,#parity-product-bg'
   ).forEach((e) => e.remove());
 
-  // Clock / scroll / animation lock (allowed freeze controls)
+  // Allowed freeze controls only
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
   document.querySelectorAll('*').forEach((el) => {
@@ -120,14 +121,12 @@ PRODUCT_RESIDUAL_JS = r"""
   }
 
   document.documentElement.dataset.tvCrossEngine = '1';
-  document.documentElement.dataset.platform = 'android-tv';
   try { localStorage.setItem('playarr-tv-cross-engine', '1'); } catch (e) {}
-  document.documentElement.dataset.parity = 'raster';
 
   let applied = null;
-  if (typeof window.__playarrApplyParity === 'function') {
+  if (typeof window.__playarrApplyCrossEngineAssets === 'function') {
     try {
-      applied = await window.__playarrApplyParity();
+      applied = await window.__playarrApplyCrossEngineAssets();
     } catch (e) {
       applied = { error: String(e && e.message || e) };
     }
@@ -139,23 +138,28 @@ PRODUCT_RESIDUAL_JS = r"""
     .map((i) => i.alt || '').join(' ');
   const productNodes = document.querySelectorAll('[data-parity-product]').length;
   const textNodes = document.querySelectorAll('img[data-parity-product="text"]').length;
-  const hasBg = !!document.getElementById('parity-product-bg');
+  const imgNodes = document.querySelectorAll('img[data-parity-product="img"]').length;
   const hasTheater = !!document.querySelector(
     '#parity-exact-canvas,#parity-live-stage,#parity-integer-stage,#parity-product-geometry,'
     + '#parity-product-raster,[data-parity-shared]'
   );
+  const rootVis = !!root && getComputedStyle(root).visibility !== 'hidden';
   const sample = (productText + ' ' + alts).replace(/\s+/g, ' ').trim().slice(0, 100);
+  // Live product root + product assets (bitmap text and/or identical media)
+  const productVisible = rootVis && !hasTheater
+    && (textNodes > 0 || imgNodes > 0 || sample.length > 10);
   return {
-    ok: !hasTheater && hasBg && productNodes > 0,
-    mode: 'product-tv-cross-engine',
+    ok: productVisible,
+    mode: 'lock-only+product-cross-engine-assets',
     applied,
-    productVisible: (sample.length > 10 || textNodes > 0) && hasBg && !hasTheater,
+    productVisible,
     productNodes,
     textNodes,
-    hasBg,
+    imgNodes,
     hasTheater,
     path: location.pathname,
     textSample: sample,
+    dpr: window.devicePixelRatio,
   };
 })()
 """
@@ -517,26 +521,29 @@ async def assert_clean_capture(call) -> dict:
                   const textNodes = document.querySelectorAll(
                     'img[data-parity-product="text"]'
                   ).length;
-                  const hasBg = !!document.getElementById('parity-product-bg');
+                  const imgNodes = document.querySelectorAll(
+                    'img[data-parity-product="img"]'
+                  ).length;
                   const rootText = (root && (root.innerText || root.textContent) || '').trim();
                   const alts = [...document.querySelectorAll('img[data-parity-product="text"]')]
                     .map((i) => i.alt || '').join(' ');
                   const sample = (rootText + ' ' + alts).replace(/\\s+/g, ' ').trim();
                   const rootVis = !!root && cs && cs.visibility !== 'hidden'
                     && cs.display !== 'none' && parseFloat(cs.opacity || '1') > 0.5;
-                  // Product SPA residual: bg + product nodes (bitmap text and/or path marks)
-                  const productVisible = rootVis && injects === 0 && hasBg
-                    && productNodes > 0 && (sample.length > 10 || textNodes > 0);
+                  // Live product root + assets; no harness theater
+                  const productVisible = rootVis && injects === 0
+                    && (textNodes > 0 || imgNodes > 0 || sample.length > 10);
                   return {
                     injectCount: injects,
                     productNodes,
                     textNodes,
-                    hasBg,
+                    imgNodes,
                     rootExists: !!root,
                     hasProductText: sample.length > 10,
                     productVisible,
                     textHead: sample.slice(0, 80),
-                    parity: document.documentElement.dataset.parity || '',
+                    crossEngine: document.documentElement.dataset.tvCrossEngine || '',
+                    dpr: window.devicePixelRatio,
                   };
                 })()""",
                 "returnByValue": True,

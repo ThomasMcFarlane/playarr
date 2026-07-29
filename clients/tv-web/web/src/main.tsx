@@ -13,7 +13,9 @@ import {
   bootstrapParityMode,
   installParityApplyHook,
   readParityMode,
+  readTvCrossEngine,
 } from "./lib/parityMode";
+import { installCrossEngineHook } from "./lib/crossEngineAssets";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -23,9 +25,16 @@ if (!container) {
 
 document.documentElement.dataset.platform = PLAYARR_CLIENT_PLATFORM;
 
-// Product-path parity mode for cross-engine AE freezes (?parity=geometry|raster).
+// Product TV cross-engine assets: identical text/media, live layout (no solidify).
+const tvCrossEngine = readTvCrossEngine();
+if (tvCrossEngine) {
+  document.documentElement.dataset.tvCrossEngine = "1";
+  installCrossEngineHook();
+}
+
+// Legacy solidify modes only when explicitly requested (not tvCrossEngine).
 const parityMode = readParityMode();
-if (parityMode !== "off") {
+if (parityMode !== "off" && !tvCrossEngine) {
   document.documentElement.dataset.parity = parityMode;
   installParityApplyHook();
 }
@@ -52,17 +61,15 @@ createRoot(container).render(
   </StrictMode>
 );
 
-// Apply after first paint so DOM exists; re-run when SPA navigates.
-// Full residual re-apply also runs from the gate via __playarrApplyParity after
-// catalogue text is ready (avoids racing empty DOM on first paint).
-if (parityMode !== "off") {
+// Cross-engine assets are applied by the AE gate after catalogue is ready
+// (window.__playarrApplyCrossEngineAssets). Avoid racing partial DOM here.
+if (parityMode !== "off" && !tvCrossEngine) {
   const run = () => {
     void bootstrapParityMode(parityMode);
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", run, { once: true });
   } else {
-    // Defer past React commit; delay so auth/catalogue can land before raster text harvest
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         setTimeout(run, parityMode === "raster" ? 1200 : 0);

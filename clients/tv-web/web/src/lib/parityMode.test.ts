@@ -16,10 +16,11 @@ describe("readParityMode", () => {
     expect(readParityMode("?parity=full-stage")).toBe("off");
   });
 
-  it("maps product TV cross-engine query to raster paint path", () => {
+  it("detects product TV cross-engine without solidify parity modes", () => {
     expect(readTvCrossEngine("?tvCrossEngine=1")).toBe(true);
     expect(readTvCrossEngine("?platform=android-tv")).toBe(true);
-    expect(readParityMode("?tvCrossEngine=1")).toBe("raster");
-    expect(readParityMode("?platform=android-tv")).toBe("raster");
+    // cross-engine assets path is separate from geometry/raster solidify
+    expect(readParityMode("?tvCrossEngine=1")).toBe("off");
+    expect(readParityMode("?platform=android-tv")).toBe("off");
   });
 });
