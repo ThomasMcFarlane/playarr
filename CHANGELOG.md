@@ -40,6 +40,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV search empty-state centre and gap live in design-tokens
+  (measured best-AE geometry, not magic numbers).
 - Apple TV home/movie key-art fixtures are SPA-matched media columns
   (998×1080 photographic content only; SwiftUI still draws chrome). Honest
   suite AE: home 4.97%→2.80%, movie 4.40%→3.98%. Not full-screen paint.

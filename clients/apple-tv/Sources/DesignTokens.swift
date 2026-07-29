@@ -247,6 +247,13 @@ enum DesignTokens {
         static let searchPromptTopGap: CGFloat = 54
         /// Empty-state art circle: `clamp(86px, 8vw, 132px)` → 132
         static let searchEmptyArtSize: CGFloat = 132
+        /// Best AE empty-state circle centre @ 1920×1080 (full44/46 suite).
+        /// Circle-fit on SPA ref alone is ~(1378, 434) but that worsens AE;
+        /// layout centre that matches native chrome stack is ~(1226, 379).
+        static let searchEmptyCenterX: CGFloat = 1226
+        static let searchEmptyCenterY: CGFloat = 379
+        /// Gap between art and copy; 22 matches best AE (CSS clamp max 42 overshoots).
+        static let searchEmptyGap: CGFloat = 22
         /// Right rail is 62% of stage (`.tv-rail-surface` width).
         static let searchRailWidthFraction: CGFloat = 0.62
 

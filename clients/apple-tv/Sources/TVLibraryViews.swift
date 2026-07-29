@@ -599,11 +599,12 @@ struct TVSearchView: View {
                     .padding(.top, DesignTokens.Shell.searchCopyTop)
 
                     // Idle empty state in the right rail.
-                    // SPA `.tv-empty-state.graphic-search`: 1:1 circle, border only,
-                    // translucent surface, pink magnifier. Measured centre ≈ (1226, 379).
+                    // SPA `.tv-empty-state.graphic-search`: 1:1 circle, border only.
                     if let viewModel, viewModel.state == .idle {
                         let art = DesignTokens.Shell.searchEmptyArtSize
-                        HStack(spacing: 22) {
+                        let cx = DesignTokens.Shell.searchEmptyCenterX
+                        let cy = DesignTokens.Shell.searchEmptyCenterY
+                        HStack(spacing: DesignTokens.Shell.searchEmptyGap) {
                             ZStack {
                                 Circle()
                                     .fill(DesignTokens.Color.backgroundRaised.opacity(0.28))
@@ -622,8 +623,8 @@ struct TVSearchView: View {
                                 .tracking(-0.3)
                                 .foregroundStyle(DesignTokens.Color.textPrimary)
                         }
-                        .padding(.top, 379 - art / 2)
-                        .padding(.leading, 1226 - art / 2)
+                        .padding(.top, cy - art / 2)
+                        .padding(.leading, cx - art / 2)
                     }
                 }
             }

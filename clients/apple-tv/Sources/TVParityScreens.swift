@@ -638,7 +638,8 @@ struct TVParityPlayerFixtureView: View {
     }
 
     private func chromeButton(_ label: String, primary: Bool = false) -> some View {
-        // full39 best AE 0.16%: pad 30 + clear border box. Fixed-width frames regressed AA.
+        // full44 best player AE 0.16%: pad 30 + clear border box.
+        // frame(height:) / fixed widths regressed to ~0.5%.
         Text(label)
             .font(.system(size: 14, weight: .bold))
             .foregroundStyle(DesignTokens.Color.textPrimary)
