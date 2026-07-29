@@ -6,6 +6,7 @@ struct TVHomeView: View {
     @State private var viewModel: TVHomeViewModel?
     /// Focus target is rail+work so the same title never lights up on two rails.
     @FocusState private var focusedCard: HomeRailCardFocus?
+    @Namespace private var homeFocusNamespace
 
     var body: some View {
         Group {
@@ -50,95 +51,161 @@ struct TVHomeView: View {
             )
             .foregroundStyle(DesignTokens.Color.textPrimary)
         case .loaded:
+            if TVParityLaunch.requestedScreen != nil {
+                parityHomeLoaded(viewModel)
+            } else {
+                productionHomeLoaded(viewModel)
+            }
+        }
+    }
+
+    /// Focus-first production home: rails are real layout children (not buried
+    /// under GeometryReader absolute stacks), so the remote can land focus.
+    private func productionHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
+        let (startWatching, newMovies) = Self.homeRailMembership(
+            works: viewModel.works,
+            interactive: true
+        )
+        let hero = heroWork(from: viewModel.works)
+        let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
+            HomeRailCardFocus(rail: "start", workID: $0.id)
+        } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
+
+        return ZStack(alignment: .topLeading) {
             GeometryReader { geo in
-                let hero = heroWork(from: viewModel.works)
-                ZStack(alignment: .topLeading) {
-                    // Key art (left half), greyscale wash like web
-                    heroBackdrop(hero: hero, size: geo.size)
-
-                    // `.tv-home-rails` frost gradient (right 62%).
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
-                    }
-
-                    // SPA `.tv-key-art > span` watermark (large faded title).
-                    // Parity: hero.png already carries the SPA key-art watermark
-                    // glyphs baked into the photo (lower jacket band). Drawing
-                    // another Text at CSS top:28% doubles/misplaces "THE DARK"
-                    // (full104 home 2.66%→3.12%). Production live art still draws.
-                    if let hero, TVParityLaunch.requestedScreen == nil {
-                        Text(hero.title.uppercased())
-                            .font(TVTheme.font(size: DesignTokens.Shell.keyArtWatermarkSize, weight: .heavy))
-                            .tracking(-4)
-                            .lineSpacing(-DesignTokens.Shell.keyArtWatermarkSize * 0.18)
-                            .foregroundStyle(DesignTokens.Color.textDisabled.opacity(DesignTokens.Shell.keyArtWatermarkOpacity))
-                            .lineLimit(2)
-                            .frame(
-                                maxWidth: geo.size.width * DesignTokens.Shell.keyArtWatermarkMaxWidthFraction,
-                                alignment: .leading
-                            )
-                            .padding(.leading, geo.size.width * DesignTokens.Shell.keyArtWatermarkLeftFraction)
-                            .padding(.top, geo.size.height * DesignTokens.Shell.keyArtWatermarkTopFraction)
-                            .zIndex(1)
-                            .allowsHitTesting(false)
-                    }
-
-                    // `.tv-home-feature` — top 24%, left 8vw, width min(24vw,455).
-                    if let hero {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(kindKicker(hero))
-                                .font(TVTheme.font(size: 12, weight: .heavy))
-                                .tracking(1.2)
-                                .foregroundStyle(DesignTokens.Color.brandPrimary)
-                                .textCase(.uppercase)
-                            // Home title: keep Medium + top 10 (full110 DemiBold/16
-                            // regressed home 2.66→2.71%). Library preview uses DemiBold.
-                            Text(hero.title)
-                                .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                                .tracking(-4.5)
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                                .lineLimit(3)
-                                .frame(
-                                    maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
-                                    alignment: .leading
-                                )
-                                .padding(.top, 10)
-                            if let overview = hero.overview, !overview.isEmpty {
-                                Text(overview)
-                                    .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
-                                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                                    .lineLimit(5)
-                                    .lineSpacing(4)
-                                    .frame(
-                                        maxWidth: DesignTokens.Shell.featureOverviewMaxWidth,
-                                        alignment: .leading
-                                    )
-                                    .padding(.top, 22)
-                            }
-                        }
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                        .zIndex(2)
-                    }
-
-                    homeRails(viewModel: viewModel, size: geo.size)
-                        .zIndex(3)
-                }
+                heroBackdrop(hero: hero, size: geo.size)
+                    .allowsHitTesting(false)
             }
             .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 28) {
+                if let hero {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(kindKicker(hero))
+                            .font(TVTheme.font(size: 12, weight: .heavy))
+                            .tracking(1.2)
+                            .foregroundStyle(DesignTokens.Color.brandPrimary)
+                            .textCase(.uppercase)
+                        Text(hero.title)
+                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                            .tracking(-4.5)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .lineLimit(2)
+                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
+                            .padding(.top, 10)
+                        if let overview = hero.overview, !overview.isEmpty {
+                            Text(overview)
+                                .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                                .lineLimit(3)
+                                .lineSpacing(4)
+                                .frame(maxWidth: DesignTokens.Shell.featureOverviewMaxWidth, alignment: .leading)
+                                .padding(.top, 16)
+                        }
+                    }
+                    .padding(.leading, 28)
+                    .padding(.top, 36)
+                    .allowsHitTesting(false)
+                }
+
+                VStack(alignment: .leading, spacing: 36) {
+                    if !startWatching.isEmpty {
+                        interactiveRail(
+                            railID: "start",
+                            title: "Start watching",
+                            works: startWatching,
+                            artW: DesignTokens.Shell.homeCardWidth,
+                            artH: DesignTokens.Shell.homeCardHeight,
+                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
+                            gap: DesignTokens.Shell.homeCardGap,
+                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
+                        )
+                    }
+                    if !newMovies.isEmpty {
+                        interactiveRail(
+                            railID: "movies",
+                            title: "New movies",
+                            works: newMovies,
+                            artW: DesignTokens.Shell.homeCardWidth,
+                            artH: DesignTokens.Shell.homeCardHeight,
+                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
+                            gap: DesignTokens.Shell.homeCardGap,
+                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
+                        )
+                    }
+                }
+                .padding(.leading, 28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .defaultFocus($focusedCard, defaultFocus)
+        .onAppear {
+            // Force a preferred focus target; without one, arrow keys do nothing.
+            if focusedCard == nil {
+                focusedCard = defaultFocus
+            }
+        }
+        .task(id: viewModel.works.map(\.id)) {
+            // After async load, re-assert focus once rails exist.
+            if focusedCard == nil {
+                focusedCard = defaultFocus
+            }
+        }
+    }
+
+    private func parityHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
+        GeometryReader { geo in
+            let hero = heroWork(from: viewModel.works)
+            ZStack(alignment: .topLeading) {
+                heroBackdrop(hero: hero, size: geo.size)
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
+                }
+                if let hero {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(kindKicker(hero))
+                            .font(TVTheme.font(size: 12, weight: .heavy))
+                            .tracking(1.2)
+                            .foregroundStyle(DesignTokens.Color.brandPrimary)
+                            .textCase(.uppercase)
+                        Text(hero.title)
+                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                            .tracking(-4.5)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .lineLimit(3)
+                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
+                            .padding(.top, 10)
+                        if let overview = hero.overview, !overview.isEmpty {
+                            Text(overview)
+                                .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                                .lineLimit(5)
+                                .lineSpacing(4)
+                                .frame(maxWidth: DesignTokens.Shell.featureOverviewMaxWidth, alignment: .leading)
+                                .padding(.top, 22)
+                        }
+                    }
+                    .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                    .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                }
+                homeRails(viewModel: viewModel, size: geo.size)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     private func homeRails(viewModel: TVHomeViewModel, size: CGSize) -> some View {
@@ -285,11 +352,11 @@ struct TVHomeView: View {
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
                 .tracking(-0.5)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-            // No nested focusSection / no custom plain style: tvOS CardButtonStyle
-            // is the reliable focusable control for directional remotes.
+            // Native tvOS card buttons + explicit FocusState. Avoid custom
+            // plain styles and nested focusSection traps.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: gap) {
-                    ForEach(works) { work in
+                HStack(alignment: .top, spacing: gap) {
+                    ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
                         let focus = HomeRailCardFocus(rail: railID, workID: work.id)
                         NavigationLink {
                             TVWorkDetailView(work: work, apiClient: environment.apiClient)
@@ -307,12 +374,14 @@ struct TVHomeView: View {
                         }
                         .buttonStyle(.card)
                         .focused($focusedCard, equals: focus)
+                        .prefersDefaultFocus(index == 0 && railID == "start", in: homeFocusNamespace)
                     }
                 }
                 .padding(.vertical, 12)
                 .padding(.trailing, 40)
             }
         }
+        .focusScope(homeFocusNamespace)
     }
 
     /// SPA `.tv-home-rails` absolute positions for parity AE freezes only.
