@@ -210,9 +210,11 @@ struct TVWorkDetailView: View {
 
                 // SPA movie detail: Chapters + Cast rails on the right.
                 if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
+                    // SPA: chapters mid-right (~y 400), cast bottom (~y 820).
                     detailSideRails
                         .padding(.leading, geo.size.width * 0.42)
-                        .padding(.top, geo.size.height * 0.36)
+                        .padding(.top, geo.size.height * 0.34)
+                        .padding(.trailing, 48)
                         .zIndex(6)
                 }
             }

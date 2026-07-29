@@ -165,12 +165,13 @@ enum DesignTokens {
         static let titlePanelWidth: CGFloat = 455
         // Feature h2: clamp(2.2rem, 3.6vw, 5rem) → ~69.
         static let featureTitleSize: CGFloat = 69
-        /// SPA detail/library h2 `max-width: 9ch` at feature title size ≈ 340.
-        static let featureTitleMaxWidth: CGFloat = 340
+        /// SPA detail/library h2 `max-width: 9ch` — force "10 / Brambleford / Lane".
+        /// At ~69pt with tight tracking, ~280px wraps after "10".
+        static let featureTitleMaxWidth: CGFloat = 280
         // Overview: clamp(0.58rem, 0.67vw, 0.84rem) → ~13.
         static let featureOverviewSize: CGFloat = 13
-        /// SPA overview `max-width: 42ch` ≈ 340 at body size.
-        static let featureOverviewMaxWidth: CGFloat = 340
+        /// SPA overview `max-width: 42ch` at small body size ≈ 300.
+        static let featureOverviewMaxWidth: CGFloat = 300
         // Rail heading: clamp(0.76rem, 0.92vw, 1.18rem) → ~18.
         static let railHeadingSize: CGFloat = 18
         // SPA `.tv-key-art > span` watermark: top 28%, left 18%, max 34vw, weight 760, opacity 0.22.

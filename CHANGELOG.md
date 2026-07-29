@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV movie detail uses house-only key-art (no baked SPA chrome),
+  tighter 9ch title wrap, and re-cropped cast headshots.
 - Apple TV detail titles honour SPA `max-width: 9ch` stacking; home/movie
   key-art fixtures use SPA-framed greyscale strips with gentler text erase.
 - Apple TV home parity rails use SPA-measured card origins (879×489 /
