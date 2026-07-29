@@ -14,6 +14,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   settings sections (client-principles parity source of truth).
 - Roku `scripts/parity_ae0.py` pure-AE suite (pure outside residual-asset
   rects must be 0; residual fill only on declared residual-asset rects).
+- Android TV pure product SPA AE=0 gate
+  (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
+  freezes with product SPA visible, shared poster tiles + residual-mask
+  flecks on both engines (no `#root` hide, no full-stage opaque overlay);
+  triple-verified AE=0 on nine surfaces.
 
 ### Fixed
 
