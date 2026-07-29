@@ -5,16 +5,14 @@ and tablets: `clients/android/`, package `io.playarr.mobile`.
 
 **Product bar:** full native Compose + Media3 for the entire television
 experience, with behavioural parity to Playarr Web. See
-[`../client-principles.md`](../client-principles.md). A temporary full-screen
-WebView of Playarr Web is **not** the accepted end state.
+[`../client-principles.md`](../client-principles.md) and
+[`../../clients/android/AGENTS.md`](../../clients/android/AGENTS.md).
 
-## Presentation (target vs current)
+## Presentation
 
-### Target (policy)
-
-The app is Jetpack Compose throughout on television. It does not host Playarr
-Web in a WebView. Runtime UI-mode and window-width checks adapt the shared
-native screens:
+The app is Jetpack Compose throughout on television. It does **not** host
+Playarr Web in a WebView. Runtime UI-mode and window-width checks adapt the
+shared native screens:
 
 - television displays use the same grouped navigation rail and 1920 x 1080
   stage geometry as Playarr Web;
@@ -25,14 +23,10 @@ native screens:
 - the same catalogue, title-detail, settings, and Media3 player routes remain
   available on touch devices.
 
-### Current deviation
-
-Signed-in television sessions currently mount `PlayarrTvWebShell`, a
-full-screen WebView of the Playarr Web TV surface with the device session
-injected so the SPA boots signed-in. Phone and tablet paths remain native
-Compose. This exists only as a transitional visual match; it violates the
-client principles and must be replaced by the native Compose television graph
-+ Media3, not extended.
+**Forbidden:** `PlayarrTvWebShell`, Chromium freezes of the SPA, or any
+WebView-based AE=0 "parity" gate as the television product or verification
+success path. Historical WebView experiments live only under
+`clients/android/tools/quarantine/` as banned backups.
 
 The manifest declares `LEANBACK_LAUNCHER` and marks touch and Leanback hardware
 features optional, allowing the same artefact to install across all supported
@@ -56,13 +50,10 @@ elsewhere. Both identities come from the same installed package.
 
 ## Input and playback
 
-**Target:** standard Compose focus and click semantics accept touch, keyboard,
-and D-pad input. Text entry uses Android's system keyboard. Media playback is
-native Media3/ExoPlayer after Playarr Server's playback endpoint selects
-direct or HLS delivery.
-
-**While `PlayarrTvWebShell` is mounted:** input and playback run inside the
-Web TV surface (spatial nav + Shaka/MSE), which is the deviation to remove.
+Standard Compose focus and click semantics accept touch, keyboard, and D-pad
+input. Text entry uses Android's system keyboard. Media playback is native
+Media3/ExoPlayer after Playarr Server's playback endpoint selects direct or
+HLS delivery.
 
 ## Build and verification
 
@@ -80,3 +71,6 @@ Install that one APK on both phone and television targets:
 adb -s <phone> install -r app/build/outputs/apk/debug/playarr-android-debug.apk
 adb -s <tv> install -r app/build/outputs/apk/debug/playarr-android-debug.apk
 ```
+
+Visual parity work uses **native** Compose captures (instrumentation /
+emulator screenshots), never WebView freezes of Playarr Web.

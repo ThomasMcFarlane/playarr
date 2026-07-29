@@ -461,27 +461,17 @@ fun PlayarrApp(
                 }
                 is RootState.SignedIn -> {
                     val initialRoute = remember(current.serverUrl) { current.initialRoute }
-                    if (isTelevision) {
-                        // Television shares the Playarr Web TV surface so the
-                        // 1920×1080 stage, focus motion, and artwork match the
-                        // live web UI under Chromium.
-                        PlayarrTvWebShell(
-                            serverUrl = current.serverUrl,
-                            accessToken = current.accessToken,
-                            refreshToken = current.refreshToken,
-                            userId = current.userId,
-                            userName = current.userName.ifBlank { "Viewer" },
-                            darkTheme = darkTheme,
-                        )
-                    } else {
-                        PlayarrExperience(
-                            serverUrl = current.serverUrl,
-                            isTelevision = false,
-                            initialRoute = initialRoute,
-                            onAddProfile = rootViewModel::addProfile,
-                            onRouteChanged = rootViewModel::rememberRoute,
-                        )
-                    }
+                    // Fully native on every form factor (phone, tablet, TV).
+                    // Never mount a WebView shell for television "parity".
+                    // Policy: docs/architecture/client-principles.md and
+                    // clients/android/AGENTS.md.
+                    PlayarrExperience(
+                        serverUrl = current.serverUrl,
+                        isTelevision = isTelevision,
+                        initialRoute = initialRoute,
+                        onAddProfile = rootViewModel::addProfile,
+                        onRouteChanged = rootViewModel::rememberRoute,
+                    )
                 }
             }
         }

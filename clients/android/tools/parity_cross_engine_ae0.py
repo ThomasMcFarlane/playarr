@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""Quarantined: freeze-crop inject parity suites are exit-2 stubs.
+"""FORBIDDEN: WebView / SPA AE parity is not the Android TV product path.
 
-Use parity_pure_spa_ae0.py (honest pure SPA residual closer, zero freeze injects).
+Android TV is fully native Jetpack Compose + Media3.
+Do not reintroduce Chromium freezes, WebView shells, or SPA residual closers
+as the criterion for television parity.
+
+See:
+  docs/architecture/client-principles.md
+  docs/architecture/clients/android-tv.md
+  clients/android/AGENTS.md
 """
 import sys
-print("QUARANTINED: use clients/android/tools/parity_pure_spa_ae0.py", file=sys.stderr)
+print(
+    "FORBIDDEN: Android TV parity is native Compose only. "
+    "WebView/SPA AE gates are banned. See clients/android/AGENTS.md",
+    file=sys.stderr,
+)
 raise SystemExit(2)

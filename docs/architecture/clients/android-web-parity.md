@@ -5,12 +5,12 @@ Google TV. **Product bar:** native Compose + Media3 on every form factor, with
 behavioural parity to Playarr Web (same account, catalogue, navigation,
 playback, profile, playlist, and settings tasks, platform-native controls, same
 visual hierarchy). Binding policy:
-[`../client-principles.md`](../client-principles.md).
+[`../client-principles.md`](../client-principles.md) and
+[`../../clients/android/AGENTS.md`](../../clients/android/AGENTS.md).
 
-**Current exception:** signed-in Android TV may still mount `PlayarrTvWebShell`
-(WebView of Playarr Web). That path is not parity-complete under this audit and
-is scheduled for removal; phone and tablet remain the native reference
-implementation of the table below.
+**No WebView.** Television is the same native Compose graph as mobile with
+`isTelevision` adaptations. WebView shells of Playarr Web and SPA AE freeze
+gates are forbidden as the television product or as a parity success path.
 
 ## Audited surfaces
 
@@ -61,8 +61,9 @@ Each universal APK release must pass:
 2. A debug install on phone and Android TV emulators.
 3. Phone checks for Home, Search, library filters, Playlists, Profiles,
    Settings, and light/dark appearance.
-4. Television checks for the 1920 x 1080 layout, grouped navigation, D-pad
-   movement into content, and a playable detail route.
+4. Television checks for the 1920 x 1080 **native Compose** layout, grouped
+   navigation, D-pad movement into content, and a playable detail route
+   (**not** a WebView of Playarr Web).
 5. A signed release build whose package, version code, certificate, and SHA-256
    digest match the public update manifest.
 6. An unauthenticated HTTP request to the versioned APK and stable APK URLs,

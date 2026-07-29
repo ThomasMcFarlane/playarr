@@ -6,11 +6,10 @@ product bar: native Compose + Media3 with full parity to Playarr Web (see
 [`../client-principles.md`](../client-principles.md) and
 [`android-web-parity.md`](android-web-parity.md)).
 
-Phones and tablets use the native Compose navigation graph and Media3 player
-end to end. Television currently has a temporary WebView shell of Playarr Web
-for the signed-in experience; that is a documented policy deviation and must
-return to the same native Compose + Media3 path (see
-[`android-tv.md`](android-tv.md)).
+Phones, tablets, and television use the native Compose navigation graph and
+Media3 player end to end. There is no WebView shell of Playarr Web on any
+Android form factor (see [`android-tv.md`](android-tv.md) and
+`clients/android/AGENTS.md`).
 
 ## Platform baseline
 

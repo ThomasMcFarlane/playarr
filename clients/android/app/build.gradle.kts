@@ -47,15 +47,8 @@ android {
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebaseProjectId.get()}\"")
         buildConfigField("String", "FIREBASE_SENDER_ID", "\"${firebaseSenderId.get()}\"")
         buildConfigField("String", "CAST_RECEIVER_APP_ID", "\"${castReceiverAppId.get()}\"")
-        // Television shell hosts the Playarr Web TV surface so the 1920×1080
-        // stage, focus motion, and artwork decode match playarr.example.com
-        // pixel-for-pixel under Chromium. Override at build time for local
-        // SPA hosts (e.g. http://playarr.localhost).
-        buildConfigField(
-            "String",
-            "TV_WEB_ORIGIN",
-            "\"${providers.gradleProperty("playarrTvWebOrigin").orElse("https://playarr.example.com").get()}\"",
-        )
+        // No TV_WEB_ORIGIN: Android TV is fully native Compose + Media3.
+        // WebView shells of Playarr Web are forbidden (see clients/android/AGENTS.md).
 
         // No PLAYARR_BASE_URL buildConfigField: the server base URL is a
         // runtime-configurable, DataStore-backed setting now (see

@@ -52,13 +52,10 @@ normally with push registration disabled.
   profile selected in the browser supplies the short-lived Playarr Server device credential plus its
   server-address bundle. No server URL is entered or compiled into the television application.
 - Touch-device username/password sign-in still accepts a direct Playarr Server URL for account setup.
-- Phones and tablets: all visible screens are native Compose; playback uses
-  Media3. There is no WebView presentation layer on those form factors.
-- Television **target:** the same native Compose + Media3 bar (full parity and
-  performance; see `docs/architecture/client-principles.md`).
-- Television **current deviation:** signed-in sessions may host Playarr Web in
-  `PlayarrTvWebShell` (full-screen WebView). Do not extend that shell; restore
-  native Compose television UI instead.
+- Phones, tablets, and television: all visible screens are native Compose;
+  playback uses Media3. There is **no WebView presentation layer** on any
+  form factor. Do not reintroduce `PlayarrTvWebShell` or SPA AE freeze gates
+  for television "parity" (see `clients/android/AGENTS.md`).
 
 Cleartext HTTP is permitted because self-hosted Playarr Server instances commonly run
 on a private LAN. Public deployments should use HTTPS.

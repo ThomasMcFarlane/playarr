@@ -173,8 +173,7 @@ Do not extend them. Prefer removing them over building new features on top.
 
 | Deviation | Location | Target |
 | --- | --- | --- |
-| Android TV signed-in experience hosts Playarr Web in a full-screen WebView (`PlayarrTvWebShell`) | `clients/android/` | Restore full native Compose television UI + Media3 for the entire signed-in product; WebView is not an accepted end state |
-| Docs/READMEs that still claim "no WebView" while `PlayarrTvWebShell` is mounted on television | Android README, `clients/android-tv.md`, `android-web-parity.md` | Match reality until the WebView is removed, then restore the no-WebView claim |
+| ~~Android TV WebView shell~~ **closed** (2026-07-29) | was `PlayarrTvWebShell` | Signed-in television uses native Compose + Media3 only; WebView shell and SPA AE parity gates are banned (`clients/android/AGENTS.md`) |
 | overview.md historically described Android as React/TypeScript shared with TV web | `docs/architecture/overview.md` | Android is native Compose; Web sharing is for webOS/Tizen/VIDAA/Web only |
 | Packaged webOS/Tizen UI is the shared React app | `clients/tv-web/apps/*` | Keep native player + lifecycle; maintain full product parity; revisit thicker native UI only if the web stack cannot meet performance |
 | Xbox Edge browser route | Playarr Web UA / profile | Zero-install fallback beside native UWP |
@@ -203,3 +202,5 @@ Before merging client work, confirm:
 - 2026-07-29 — Initial canonical policy: fully native clients, full parity and
   performance, capability-only degradation; catalogue of known deviations
   including Android TV WebView shell.
+- 2026-07-29 — Android TV WebView shell removed from signed-in product path;
+  native Compose restored; WebView/SPA AE parity tools exit-2 banned.

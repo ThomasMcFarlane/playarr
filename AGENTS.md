@@ -11,6 +11,10 @@ It overrides weaker or older wording elsewhere in the tree.
   SceneGraph, UWP/XAML, ArkUI, vendor TV package + native player plane, or a
   first-class browser app on Web). Do not introduce WebView shells of Playarr
   Web as the signed-in product on native-capable OS targets.
+- **Android TV especially:** fully native Compose + Media3 only. Never use a
+  WebView of Playarr Web, Chromium freezes, or SPA residual AE=0 gates as the
+  television product or as the parity success path. Binding detail:
+  `clients/android/AGENTS.md` and `docs/architecture/clients/android-tv.md`.
 - **Full product parity** across complete clients: same tasks, hierarchy, and
   server contract. Do not thin a client because another surface already has
   the UI.

@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV signed-in product is fully native Compose + Media3 again. Removed
+  the temporary `PlayarrTvWebShell` WebView path. WebView/SPA AE freeze tools
+  under `clients/android/tools/parity_*.py` are exit-2 banned. Policy locked in
+  `clients/android/AGENTS.md`, client principles, and android-tv docs.
 - Roku parity_ae0 full_ae=0 gate (residual asset apply, no mask exclusion); residual Posters stay product-hidden; triple ×3.
 
 - Roku product shell: residual freeze Posters stay hidden (no dual stacked
