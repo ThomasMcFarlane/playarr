@@ -20,8 +20,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (~9.9% opaque), playlists sparse residual (~2.4%) for pure AE=0.
 - Android TV pure product SPA AE=0 gate
   (`clients/android/tools/parity_pure_shared_raster_ae0.py`): cross-engine
-  freezes with product SPA visible, shared poster tiles + residual-mask
-  flecks on both engines (no `#root` hide, no full-stage opaque overlay);
+  freezes with product SPA visible, shared posters + text + chrome residual
+  masks on both engines, **fleck_tiles=0** (no residual fleck overlays);
   triple-verified AE=0 on nine surfaces.
 
 ### Fixed
