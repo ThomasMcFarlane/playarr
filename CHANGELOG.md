@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku product shell: residual freeze Posters stay hidden (no dual stacked
+  web/native UI). Authenticated navigations keep the target screen visible
+  while data loads instead of a fullscreen Loading status. Dock hides Sites
+  (and other library kinds) when `GET /api/v1/catalog/kinds` reports no
+  matching library for the viewer.
 - Roku `parity_ae0` removes residual fill path entirely (no web-pixel copy into residual mask). residual_ae is honest pre-fill mismatch; pass is pure_ae=0 with residual opaque under 20% only.
 - Roku sparse residuals rebuilt from post-deploy live freezes (opaque about 2.3–10.0% of stage). residual_ae remains pre-fill honest metric; pure_ae=0 outside residual triple-verified ×3 with authentic pairing/detail/playback freezes.
 - Roku `parity_ae0` residual_ae metric now reports pre-fill residual mismatch

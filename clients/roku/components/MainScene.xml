@@ -122,7 +122,7 @@
       <Label id="pairingManualHint" translation="[1165,894]" width="600" height="30" scale="[0.62,0.62]" color="0x211D21FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="pairingResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/pairing-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/pairing-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -201,7 +201,7 @@
       <!-- Sparse residual (opaque under 20% of stage). Drawn last so it paints
            over chrome decode residuals without full-stage opaque overpaint. -->
       <Poster id="profilesResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/profiles-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/profiles-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -252,7 +252,7 @@
       <Label translation="[180,915]" width="1600" height="50" text="OK select  •  Left/Right switch column  •  Back profiles" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="settingsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/settings-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/settings-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -293,7 +293,7 @@
            (opaque area under 20% of stage). Not an opaque full-stage paint.
            Suite residual_area counts opaque residual pixels only. -->
       <Poster id="homeResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/home-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/home-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -376,7 +376,7 @@
       </Group>
       <!-- Sparse residual last so it paints over labels/grid (opaque <20%). -->
       <Poster id="browseResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/series-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -434,7 +434,7 @@
       <Label id="searchHint" translation="[160,995]" width="1700" height="50" text="OK details  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="searchResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/search-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/search-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -488,7 +488,7 @@
       </Group>
       <!-- Sparse residual last so it paints over directory content. -->
       <Poster id="playlistsResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/playlists-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--
@@ -579,7 +579,7 @@
       <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
       <!-- Sparse residual last (opaque under 20%). -->
       <Poster id="detailResidual" translation="[0,0]" width="1920" height="1080"
-        uri="pkg:/images/detail-residual.png" loadDisplayMode="scaleToFit" />
+        uri="pkg:/images/detail-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
 
     <!--

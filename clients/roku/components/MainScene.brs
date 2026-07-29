@@ -37,6 +37,12 @@ sub init()
     m.browseGrid = m.top.findNode("browseGrid")
     m.browseResidual = m.top.findNode("browseResidual")
     m.playbackResidual = m.top.findNode("playbackResidual")
+    ' Residual Posters paint a second web freeze on top of native SceneGraph
+    ' (dual stacked UI). They stay in the tree for optional parity tooling but
+    ' must never be visible in the product shell.
+    hideAllResiduals()
+    m.availableWorkKinds = invalid
+    m.navEnabled = [true, true, true, true, true, true, true]
     m.browseTitle = m.top.findNode("browseTitle")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
@@ -172,6 +178,8 @@ sub init()
     m.navDockMode = false
     m.navDockIndex = 0
     m.navDockReturnState = "home"
+    ' Hide Sites until GET /api/v1/catalog/kinds confirms the viewer has a site library.
+    applyNavDockKindFilter()
     m.detailOrigin = "home"
     m.currentProfileName = ""
     m.browseKind = ""
@@ -498,6 +506,8 @@ sub onApiResult(event as Object)
         loadProfiles()
     else if action = "profiles"
         showProfiles(result.data)
+    else if action = "catalogKinds"
+        acceptCatalogKinds(result.data)
     else if action = "catalog" or action = "catalogMore"
         acceptCatalog(result.data, action = "catalogMore")
     else if action = "browseCatalog" or action = "browseCatalogMore"
@@ -618,6 +628,14 @@ sub handleApiFailure(action as String, result as Object)
     ' the generic retry-status screen below.
     if action = "playlistItemWork"
         processNextPlaylistItem()
+        return
+    end if
+
+    ' Catalog kinds filter is best-effort: if it fails, keep Sites hidden
+    ' (applyNavDockKindFilter default) and still load home rails.
+    if action = "catalogKinds"
+        applyNavDockKindFilter()
+        loadWatchProgress()
         return
     end if
 
@@ -1235,25 +1253,13 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
-    ' Sparse residual asset per library kind (opaque area <20% of stage).
-    ' series-residual.png / movies-residual.png / music-residual.png.
-    if m.browseResidual <> invalid
-        residualUri = ""
-        if kind = "series"
-            residualUri = "pkg:/images/series-residual.png"
-        else if kind = "movie"
-            residualUri = "pkg:/images/movies-residual.png"
-        else if kind = "artist"
-            residualUri = "pkg:/images/music-residual.png"
-        end if
-        if residualUri <> ""
-            m.browseResidual.uri = residualUri
-            m.browseResidual.visible = true
-        else
-            m.browseResidual.visible = false
-        end if
-    end if
-    showStatus("Loading " + label, "Fetching titles…", true)
+    ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
+    m.browseTitle.text = label + "  •  …"
+    m.browseItems = []
+    buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
+    showOnly("browse")
+    m.top.screenState = "browse"
+    m.browseGrid.SetFocus(true)
     loadBrowseCatalog(false)
 end sub
 
@@ -1669,7 +1675,12 @@ end sub
 
 sub performSearch(query as String)
     m.searchItems = []
-    showStatus("Searching", "Looking for “" + query + "”…", true)
+    m.searchDisplayItems = []
+    m.searchTitle.text = "Search  •  “" + query + "”"
+    buildGridContent(m.searchGrid, m.searchDisplayItems, 1.0)
+    showOnly("search")
+    m.top.screenState = "search"
+    m.searchGrid.SetFocus(true)
     config = AppConfig()
     path = "/api/v1/catalog/search?q=" + UrlEncode(query) + "&limit=" + config.catalogPageSize.ToStr()
     sendApi("search", "GET", path, invalid, true)
@@ -1852,7 +1863,14 @@ end sub
 ' ---------------------------------------------------------------------------
 
 sub openPlaylists()
-    showStatus("Loading playlists", "Fetching your playlists…", true)
+    ' Show the playlists shell immediately; directory fills when the API returns.
+    m.playlistsTitle.text = "Playlists"
+    m.playlistDetailOpen = false
+    m.playlistDetailGroup.visible = false
+    m.playlistsDirectoryGroup.visible = true
+    showOnly("playlists")
+    m.top.screenState = "playlists"
+    m.playlistsGrid.SetFocus(true)
     sendApi("playlists", "GET", "/api/v1/playlists", invalid, true)
 end sub
 
@@ -2108,7 +2126,15 @@ end sub
 sub openWorkDetail(work as Object, originState as String)
     m.selectedWork = work
     m.detailOrigin = originState
-    showStatus("Loading details", "Opening " + work.title + "…", true)
+    ' Stay in the detail shell while WorkDetail loads (matches tv-web: route
+    ' changes first, body fills when the request returns).
+    if work <> invalid and work.title <> invalid
+        m.detailStage.stageTitle = work.title
+        if work.kind <> invalid then m.detailStage.stageKicker = UCase(work.kind)
+    end if
+    m.detailOverview.text = ""
+    showOnly("detail")
+    m.top.screenState = "detail"
     sendApi("detail", "GET", "/api/v1/catalog/" + UrlEncode(work.id), invalid, true)
 end sub
 
@@ -2196,8 +2222,12 @@ sub enterHome(profileName as String)
     m.homeSeries = []
     m.homeMoreMovies = []
     m.homeMoreSeries = []
-    showStatus("Loading home", "Finding what’s new…", true)
-    loadWatchProgress()
+    ' Authenticated shell stays up while rails load (no fullscreen Loading UI).
+    showOnly("home")
+    m.top.screenState = "home"
+    ' Filter Sites / other library kinds against GET /api/v1/catalog/kinds,
+    ' then load home rails (chained one request at a time).
+    sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds", invalid, true)
 end sub
 
 sub loadWatchProgress()
@@ -2556,6 +2586,75 @@ function navDockLabelList() as Object
     return ["Search", "Home", "Series", "Movies", "Sites", "Music", "Playlists"]
 end function
 
+' Map dock kind strings to WorkKind values from GET /api/v1/catalog/kinds.
+' search / home / playlist are always shown (not library-kind gated).
+function navDockWorkKindForSlot(kind as String) as String
+    if kind = "series" then return "series"
+    if kind = "movie" then return "movie"
+    if kind = "site" then return "site"
+    if kind = "artist" then return "artist"
+    return ""
+end function
+
+sub hideAllResiduals()
+    residualIds = ["pairingResidual", "profilesResidual", "settingsResidual", "homeResidual", "browseResidual", "searchResidual", "playlistsResidual", "detailResidual", "playbackResidual"]
+    for each residualId in residualIds
+        node = m.top.findNode(residualId)
+        if node <> invalid then node.visible = false
+    end for
+    if m.browseResidual <> invalid then m.browseResidual.visible = false
+    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
+end sub
+
+sub acceptCatalogKinds(data as Object)
+    m.availableWorkKinds = CreateObject("roAssociativeArray")
+    if data <> invalid and GetInterface(data, "ifArray") <> invalid
+        for each kind in data
+            if kind <> invalid and kind <> ""
+                m.availableWorkKinds.AddReplace(kind, true)
+            end if
+        end for
+    end if
+    applyNavDockKindFilter()
+    loadWatchProgress()
+end sub
+
+' Hide library nav slots the viewer has no source for (same rule as tv-web
+' App.tsx: item.workKind must be in availableWorkKinds from catalog/kinds).
+' Sites is the common case: no Whisparr-style source => no Sites tab.
+sub applyNavDockKindFilter()
+    kinds = navDockKindList()
+    if m.navEnabled = invalid then m.navEnabled = [true, true, true, true, true, true, true]
+    for i = 0 to kinds.Count() - 1
+        workKind = navDockWorkKindForSlot(kinds[i])
+        enabled = true
+        if workKind <> ""
+            if m.availableWorkKinds = invalid
+                ' Until kinds load, hide Sites only (safest default for this user base).
+                enabled = workKind <> "site"
+            else
+                enabled = m.availableWorkKinds.Lookup(workKind) <> invalid
+            end if
+        end if
+        m.navEnabled[i] = enabled
+        if m.navIcons[i] <> invalid then m.navIcons[i].visible = enabled
+        if m.navLabels[i] <> invalid then m.navLabels[i].visible = enabled
+        if m.navHighlights[i] <> invalid and not enabled then m.navHighlights[i].visible = false
+    end for
+    if m.navDockIndex < 0 or m.navDockIndex >= m.navEnabled.Count() or not m.navEnabled[m.navDockIndex]
+        m.navDockIndex = firstEnabledNavIndex()
+    end if
+    renderNavDockFocus()
+end sub
+
+function firstEnabledNavIndex() as Integer
+    if m.navEnabled = invalid then return 0
+    for i = 0 to m.navEnabled.Count() - 1
+        if m.navEnabled[i] then return i
+    end for
+    return 0
+end function
+
 ' SetFocus(true) on the Scene alone does not reliably strip focus away from
 ' the previously-focused rail RowList (confirmed on-device: pressing OK
 ' right after entering dock mode still triggered the still-focused rail's
@@ -2585,22 +2684,37 @@ end sub
 
 function moveNavDockFocus(delta as Integer) as Boolean
     newIndex = m.navDockIndex + delta
-    if newIndex < 0 or newIndex >= m.navLabels.Count() then return true
-    m.navDockIndex = newIndex
-    renderNavDockFocus()
+    while newIndex >= 0 and newIndex < m.navLabels.Count()
+        if m.navEnabled = invalid or m.navEnabled[newIndex]
+            m.navDockIndex = newIndex
+            renderNavDockFocus()
+            return true
+        end if
+        newIndex = newIndex + delta
+    end while
     return true
 end function
 
 sub renderNavDockFocus()
     for i = 0 to m.navLabels.Count() - 1
-        isFocused = m.navDockMode and i = m.navDockIndex
-        m.navHighlights[i].visible = isFocused
-        if isFocused
-            m.navIcons[i].opacity = 1
-            m.navLabels[i].color = &hF4F0F1FF
+        enabled = true
+        if m.navEnabled <> invalid then enabled = m.navEnabled[i]
+        if not enabled
+            m.navHighlights[i].visible = false
+            if m.navIcons[i] <> invalid then m.navIcons[i].visible = false
+            if m.navLabels[i] <> invalid then m.navLabels[i].visible = false
         else
-            m.navIcons[i].opacity = 0.62
-            m.navLabels[i].color = &h887A82FF
+            if m.navIcons[i] <> invalid then m.navIcons[i].visible = true
+            if m.navLabels[i] <> invalid then m.navLabels[i].visible = true
+            isFocused = m.navDockMode and i = m.navDockIndex
+            m.navHighlights[i].visible = isFocused
+            if isFocused
+                m.navIcons[i].opacity = 1
+                m.navLabels[i].color = &hF4F0F1FF
+            else
+                m.navIcons[i].opacity = 0.62
+                m.navLabels[i].color = &h887A82FF
+            end if
         end if
     end for
 end sub
@@ -2610,6 +2724,7 @@ sub selectNavDockItem()
     labels = navDockLabelList()
     idx = m.navDockIndex
     if idx < 0 or idx >= kinds.Count() then return
+    if m.navEnabled <> invalid and not m.navEnabled[idx] then return
     m.navDockMode = false
     renderNavDockFocus()
     kind = kinds[idx]
@@ -3336,7 +3451,7 @@ sub requestPlayback(mediaFileId as String)
     path = "/api/v1/playback/" + UrlEncode(mediaFileId)
     path += "?containers=mp4%2Cmkv%2Cm3u8&video_codecs=h264&audio_codecs=aac%2Cac3%2Ceac3"
     path += "&max_bitrate_bps=" + config.maxBitrateBps.ToStr()
-    showStatus("Preparing playback", "Negotiating the best Roku-compatible stream…", true)
+    ' Stay on detail (or player chrome) while negotiating; no fullscreen Loading shell.
     sendApi("playback", "GET", path, invalid, true)
 end sub
 
@@ -3359,7 +3474,7 @@ sub startPlayback(data as Object)
     m.playerBufferedFill.width = 0
     m.video.content = content
     m.video.visible = true
-    if m.playbackResidual <> invalid then m.playbackResidual.visible = true
+    if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     ' NOT m.video.SetFocus(true): a focused Video node swallows remote
     ' keypresses natively before Scene-level onKeyEvent ever sees them --
     ' same axis-ownership pattern already hit twice this session with
@@ -3671,10 +3786,11 @@ sub showOnly(name as String)
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
+    ' Never paint residual freeze Posters over the live product shell.
+    hideAllResiduals()
     if name <> "playback"
         m.video.visible = false
         m.playerControls.visible = false
-        if m.playbackResidual <> invalid then m.playbackResidual.visible = false
     end if
 end sub
 

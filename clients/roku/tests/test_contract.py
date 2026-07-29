@@ -266,6 +266,10 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn("playlistsGroupResidual", SCENE)
         self.assertNotIn("settingsGroupResidual", SCENE)
         self.assertNotIn("content-residual.png", SCENE)
+        # Product shell never paints residual freeze Posters (dual stacked UI).
+        self.assertIn("sub hideAllResiduals()", MAIN)
+        self.assertIn("hideAllResiduals()", MAIN)
+        self.assertIn('visible="false"', SCENE)
 
     def test_parity_ae0_suite_requires_pure_outside_residual_rects(self) -> None:
         suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
@@ -273,3 +277,13 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertIn("MAX_RESIDUAL_FRAC", suite)
         # Must not fill every pure-diff pixel unconditionally
         self.assertNotIn("filled[mask] = w[mask]", suite)
+
+    def test_shell_loads_in_place_not_fullscreen_status(self) -> None:
+        # Authenticated navigations keep the target shell visible while data
+        # loads; fullscreen statusGroup is not used for home/browse/search.
+        self.assertNotIn('showStatus("Loading home"', MAIN)
+        self.assertNotIn('showStatus("Loading details"', MAIN)
+        self.assertNotIn('showStatus("Searching"', MAIN)
+        self.assertIn('sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds"', MAIN)
+        self.assertIn("sub applyNavDockKindFilter()", MAIN)
+        self.assertIn('enabled = workKind <> "site"', MAIN)
