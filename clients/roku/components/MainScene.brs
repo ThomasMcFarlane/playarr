@@ -185,6 +185,10 @@ sub init()
     m.navDockMode = false
     m.navDockIndex = 0
     m.navDockReturnState = "home"
+    ' Layout rounded group panels after dock mode defaults exist (calling
+    ' renderNavDockFocus before m.navDockMode is set suspends in the debugger).
+    layoutNavDock()
+    renderNavDockFocus()
     m.profiles = []
     ' Hide Sites until GET /api/v1/catalog/kinds confirms the viewer has a site library.
     applyNavDockKindFilter()
@@ -3261,39 +3265,86 @@ end sub
 
 ' Pack enabled dock items tightly (Search, library kinds, Playlists) so hiding
 ' Sites/Music does not leave a blank slot mid-dock like the old fixed layout.
-' Also sizes/moves .app-nav-group background rects behind each visible group.
+' Metrics match tv-web TV .app-nav / .app-nav-group / .app-nav-link at 1920×1080:
+'   --tv-nav-edge ≈ 32–42, item 64×64, group pad 8, item gap 10, group gap 14,
+'   group radius 22 (pre-rendered PNG), link radius 16 (pre-rendered chip).
+' Group PNGs include an 8px soft-shadow pad around the solid rounded face.
 sub layoutNavDock()
     if m.navIcons = invalid or m.navIcons.Count() = 0 then return
-    itemStep = 74
-    groupGap = 28
-    groupPadTop = 8
-    groupPadBottom = 10
+    itemSize = 64
+    itemGap = 10
+    itemStep = itemSize + itemGap ' 74
+    groupPad = 8
+    groupGap = 14
+    shadowPad = 8
+    dockLeft = 32
+    contentLeft = dockLeft + groupPad ' face origin inside shadow pad
+    iconInset = 16 ' centres 32×32 icon in 64 cell
     ' Three visual groups match tv-web NAV_GROUPS: search | libraries | playlists.
     groupRanges = [[0, 0], [1, 5], [6, 6]]
-    y = 211
+    ' Measure total dock height so we can vertically centre like
+    ' .app-nav { top:50%; transform:translateY(-50%) }.
+    totalH = 0
+    visibleGroups = 0
+    for g = 0 to groupRanges.Count() - 1
+        range = groupRanges[g]
+        n = 0
+        for i = range[0] to range[1]
+            if m.navEnabled <> invalid and m.navEnabled[i] then n = n + 1
+        end for
+        if n > 0
+            if visibleGroups > 0 then totalH = totalH + groupGap
+            totalH = totalH + groupPad * 2 + n * itemSize + (n - 1) * itemGap
+            visibleGroups = visibleGroups + 1
+        end if
+    end for
+    y = int((1080 - totalH) / 2)
+    if y < 160 then y = 160
+
     for g = 0 to groupRanges.Count() - 1
         range = groupRanges[g]
         groupStartY = y
         groupHasVisible = false
         visibleCount = 0
+        itemY = y + groupPad
         for i = range[0] to range[1]
             if m.navEnabled <> invalid and m.navEnabled[i]
                 groupHasVisible = true
                 visibleCount = visibleCount + 1
-                if m.navHighlights[i] <> invalid then m.navHighlights[i].translation = [40, y]
-                if m.navIcons[i] <> invalid then m.navIcons[i].translation = [64, y + 12]
-                if m.navLabels[i] <> invalid then m.navLabels[i].translation = [-20, y + 46]
-                y = y + itemStep
+                ' Highlight chip sits on the 64×64 cell; focus PNG is 80×80 with
+                ' 8px shadow pad and is offset in renderNavDockFocus.
+                if m.navHighlights[i] <> invalid
+                    m.navHighlights[i].translation = [contentLeft, itemY]
+                    m.navHighlights[i].width = 64
+                    m.navHighlights[i].height = 64
+                end if
+                if m.navIcons[i] <> invalid
+                    m.navIcons[i].translation = [contentLeft + iconInset, itemY + iconInset]
+                    m.navIcons[i].width = 32
+                    m.navIcons[i].height = 32
+                end if
+                if m.navLabels[i] <> invalid
+                    ' Label centred under icon. Pivot at local x=100
+                    ' (scaleRotateCenter); keep that pivot on the icon centre.
+                    m.navLabels[i].translation = [contentLeft + 32 - 100, itemY + 42]
+                end if
+                itemY = itemY + itemStep
             end if
         end for
         bg = m.top.findNode("navGroupBg" + g.ToStr())
         if bg <> invalid
             if groupHasVisible
                 bg.visible = true
-                bgHeight = visibleCount * itemStep + groupPadTop + groupPadBottom
-                bg.translation = [28, groupStartY - groupPadTop]
-                bg.height = bgHeight
-                bg.width = 104
+                ' Pre-rendered nav-group-N.png: content + 8px shadow pad each side.
+                n = visibleCount
+                if n < 1 then n = 1
+                if n > 5 then n = 5
+                faceH = groupPad * 2 + n * itemSize + (n - 1) * itemGap
+                bg.uri = "pkg:/images/nav-group-" + n.ToStr() + ".png"
+                bg.width = 80 + shadowPad * 2
+                bg.height = faceH + shadowPad * 2
+                bg.translation = [dockLeft - shadowPad, groupStartY - shadowPad]
+                y = groupStartY + faceH
             else
                 bg.visible = false
             end if
@@ -3352,24 +3403,68 @@ function moveNavDockFocus(delta as Integer) as Boolean
     return true
 end function
 
+' Which dock slot matches the current screen (web .app-nav-link.is-active).
+function activeNavDockIndex() as Integer
+    state = m.top.screenState
+    if state = "search" then return 0
+    if state = "home" then return 1
+    if state = "playlists" then return 6
+    if state = "browse"
+        if m.browseKind = "series" then return 2
+        if m.browseKind = "movie" then return 3
+        if m.browseKind = "site" then return 4
+        if m.browseKind = "artist" then return 5
+    end if
+    return -1
+end function
+
 sub renderNavDockFocus()
+    activeIdx = activeNavDockIndex()
     for i = 0 to m.navLabels.Count() - 1
         enabled = true
         if m.navEnabled <> invalid then enabled = m.navEnabled[i]
         if not enabled
-            m.navHighlights[i].visible = false
+            if m.navHighlights[i] <> invalid then m.navHighlights[i].visible = false
             if m.navIcons[i] <> invalid then m.navIcons[i].visible = false
             if m.navLabels[i] <> invalid then m.navLabels[i].visible = false
         else
             if m.navIcons[i] <> invalid then m.navIcons[i].visible = true
             if m.navLabels[i] <> invalid then m.navLabels[i].visible = true
-            isFocused = m.navDockMode and i = m.navDockIndex
-            m.navHighlights[i].visible = isFocused
+            isFocused = false
+            if m.navDockMode = true and i = m.navDockIndex then isFocused = true
+            isActive = false
+            if i = activeIdx then isActive = true
+            showChip = false
+            if isFocused or isActive then showChip = true
+            if m.navHighlights[i] <> invalid
+                m.navHighlights[i].visible = showChip
+                if showChip
+                    ' Focus chip is 80×80 with 8px shadow pad; active is exact 64×64.
+                    ' Icon is inset 16px inside the 64 cell; chip top-left = icon - 16.
+                    if m.navIcons[i] <> invalid
+                        iconPos = m.navIcons[i].translation
+                        if isFocused
+                            m.navHighlights[i].uri = "pkg:/images/nav-item-focus.png"
+                            m.navHighlights[i].width = 80
+                            m.navHighlights[i].height = 80
+                            m.navHighlights[i].translation = [iconPos[0] - 24, iconPos[1] - 24]
+                        else
+                            m.navHighlights[i].uri = "pkg:/images/nav-item-active.png"
+                            m.navHighlights[i].width = 64
+                            m.navHighlights[i].height = 64
+                            m.navHighlights[i].translation = [iconPos[0] - 16, iconPos[1] - 16]
+                        end if
+                    end if
+                end if
+            end if
             if isFocused
                 m.navIcons[i].opacity = 1
                 m.navLabels[i].color = &hF4F0F1FF
+            else if isActive
+                m.navIcons[i].opacity = 1
+                m.navLabels[i].color = &hF4F0F1FF
             else
-                m.navIcons[i].opacity = 0.62
+                m.navIcons[i].opacity = 0.72
                 m.navLabels[i].color = &h887A82FF
             end if
         end if

@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku left nav matches tv-web TV dock: rounded group panels, 64px
+  active/focus chips, route-active highlight, centred logo, and
+  capsule user identity with avatar under the dock.
+
 - Roku Home after profile select no longer stays as left-nav-only empty stage:
   stage layers reveal immediately while rails load, key-art no longer blocks
   the SceneGraph thread with sync `GetToFile`, API requests queue instead of
