@@ -4,6 +4,10 @@ Native SwiftUI tvOS client for Playarr Server. It uses the shared
 `clients/ios/PlayarrKit` package for API schemas, networking, RFC 8628
 device-code authentication, and AVFoundation playback.
 
+**No WebView.** Catalogue, settings, player chrome, and visual-parity captures
+are production SwiftUI only. Do not introduce `WKWebView` / web-shell / web-ref
+paint for parity (other platforms’ WebView shells are not a model for Apple).
+
 ## Features
 
 - Native tvOS tab, focus, card, scroll, and remote-control behaviour.

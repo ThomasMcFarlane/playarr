@@ -109,6 +109,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   AE **2.76%**, track **2.54%** (from full109 2.84% / 2.61%).
 - Apple TV pairing left wash uses SPA-sampled cool grey (not pink) so residual
   is QR/glyph only under approved E5/E3 geometric exclusions.
+- Apple TV removes dead web-ref paint launch stubs (`webRefBaseURL` always-nil
+  API). Parity is native SwiftUI / simctl only; no WebView on Apple platforms.
 
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).

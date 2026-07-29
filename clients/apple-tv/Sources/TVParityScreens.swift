@@ -20,10 +20,10 @@ enum TVParityScreenID: String, CaseIterable {
 
 enum TVParityLaunch {
     static let argument = "-PlayarrParityScreen"
-    /// Historical paint flag. Always ignored — honest parity never paints
-    /// web-ref PNGs into the simulator (see PlayarrTVApp).
-    static let webRefBaseArgument = "-PlayarrParityWebRefBaseURL"
 
+    /// When set, production SwiftUI mounts deterministic fixture state for
+    /// honest simctl captures. Apple platforms never use WebView/WKWebView
+    /// (or web-ref paint) for parity — native SwiftUI only.
     static var requestedScreen: TVParityScreenID? {
         let args = ProcessInfo.processInfo.arguments
         guard let idx = args.firstIndex(of: argument), args.indices.contains(idx + 1) else {
@@ -31,9 +31,6 @@ enum TVParityLaunch {
         }
         return TVParityScreenID(rawValue: args[idx + 1])
     }
-
-    /// Always `nil`. Web-ref paint is disabled for honest native-vs-SPA AE.
-    static var webRefBaseURL: URL? { nil }
 }
 
 /// Static fixture data so pixel diffs are not poisoned by live catalogue churn.

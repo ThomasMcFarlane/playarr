@@ -5,8 +5,8 @@ struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var selectedTab: TVNavTab = .home
 
-    /// When `-PlayarrParityScreen` is set without a web-ref paint URL, force
-    /// that tab so simctl captures hit the production SwiftUI path.
+    /// When `-PlayarrParityScreen` is set, force that tab so simctl captures
+    /// hit production SwiftUI (never WebView / web-ref paint).
     ///
     /// Suite `webPath` maps:
     ///   detail-episode → /series (library)
@@ -14,8 +14,7 @@ struct TVRootView: View {
     ///   detail-book → /library → /series (library)
     ///   detail-movie → SPA capture shows work-detail chrome (chapters/cast)
     private var parityForcedTab: TVNavTab? {
-        guard TVParityLaunch.webRefBaseURL == nil,
-              let screen = TVParityLaunch.requestedScreen else { return nil }
+        guard let screen = TVParityLaunch.requestedScreen else { return nil }
         switch screen {
         case .search: return .search
         case .homeRecentlyAdded: return .home
@@ -31,8 +30,7 @@ struct TVRootView: View {
     /// Work-detail fixture for screens whose SPA reference is a title page
     /// (detail-movie / player), not a library directory.
     private var parityWorkDetail: Work? {
-        guard TVParityLaunch.webRefBaseURL == nil,
-              let screen = TVParityLaunch.requestedScreen else { return nil }
+        guard let screen = TVParityLaunch.requestedScreen else { return nil }
         switch screen {
         case .detailMovie:
             return TVParityFixtures.libraryWorks(kind: .movie).first

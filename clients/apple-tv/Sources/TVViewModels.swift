@@ -27,7 +27,6 @@ final class TVHomeViewModel {
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
         if TVParityLaunch.requestedScreen != nil,
-           TVParityLaunch.webRefBaseURL == nil,
            !ProcessInfo.processInfo.arguments.contains("-PlayarrAccessToken") {
             works = TVParityFixtures.sampleWorks()
             state = .loaded
