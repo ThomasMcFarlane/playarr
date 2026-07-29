@@ -111,6 +111,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV Who’s watching ArrowUp from the avatar / add tile returns focus
   to stage chrome (theme/language), matching the login QR Down/Up bridge.
 
+- Apple TV add-profile plate matches web `#profile-add`: soft surface→rose
+  fill, dashed line-strong edge, light “+”, and real focus nav chrome
+  (lift 8 / scale 1.045, avatar scale 1.035, 4px pink outer ring + shadow).
+
 - Apple TV Who’s watching (`TVProfilesView`) matches web `/profiles` 1:1:
   large gradient avatars (~244px @ 1080p), status labels (Watching now /
   PIN required / Ready), selected settings + Sign out actions, and an

@@ -549,18 +549,11 @@ struct TVProfilesView: View {
                         .padding(.top, 8 * s)
 
                     // Always paint the track (including the dashed + add tile).
-                    // Never gate the empty household on isLoading — web shows
-                    // `#profile-add` immediately; a spinner-only empty state
-                    // is what looked like “no circle to add an account”.
+                    // Never gate the empty household on isLoading — a spinner
+                    // over the plate looked like a broken focus ornament.
                     profileRow(scale: s, avatarSize: size)
                         .padding(.top, 88 * s)
-                        .overlay(alignment: .top) {
-                            if isLoading && profiles.isEmpty {
-                                ProgressView()
-                                    .tint(palette.brandPink)
-                                    .padding(.top, 40 * s)
-                            }
-                        }
+                        .opacity(isLoading && profiles.isEmpty ? 0.92 : 1)
 
                     if let loadError {
                         Text(loadError)
@@ -799,71 +792,29 @@ struct TVProfilesView: View {
         }
     }
 
-    /// Web `#profile-add`: dashed circle, large light “+”, Sign in / ADD ANOTHER PROFILE.
+    /// Web `#profile-add`: dashed plate, large light “+”, Sign in / ADD ANOTHER PROFILE.
+    /// Active nav matches `.profile-avatar-button:focus-visible` + `.profile-choice.is-selected`.
     private func addProfileCard(scale s: CGFloat, avatarSize size: CGFloat) -> some View {
-        let focused = focusedTarget == .add
-        let selected = selectedID == "add" || (profiles.isEmpty && selectedID.isEmpty)
-        let active = focused || selected
+        // FocusState selected → keep is-selected chrome while peers exist.
+        // Empty household relies on Environment isFocused for rest→active.
+        let peerSelected = focusedTarget == .add && !profiles.isEmpty
 
         return Button {
             selectedID = "add"
             onLinkTV()
         } label: {
-            VStack(spacing: 9 * s) {
-                ZStack {
-                    // Dashed blank avatar — web `.profile-add .profile-avatar`.
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    palette.surfaceStrong.opacity(0.92),
-                                    palette.surfaceStrong.mixed(with: palette.brandPink, amount: 0.16),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Circle()
-                        .strokeBorder(
-                            palette.lineStrong.opacity(0.75),
-                            style: StrokeStyle(
-                                lineWidth: 2 * s,
-                                dash: [7 * s, 6 * s]
-                            )
-                        )
-                    Text("+")
-                        .font(.system(size: size * 0.42, weight: .ultraLight))
-                        .foregroundStyle(palette.inkSoft)
-                }
-                .frame(width: size, height: size)
-                .overlay {
-                    if active {
-                        Circle()
-                            .stroke(palette.brandPink.opacity(0.42), lineWidth: 4 * s)
-                            .padding(-2 * s)
-                    }
-                }
-                .shadow(
-                    color: active ? Color.black.opacity(0.18) : Color.clear,
-                    radius: active ? 22 * s : 0,
-                    y: active ? 12 * s : 0
-                )
-
-                Text("Sign in")
-                    .font(.system(size: 16 * s, weight: .semibold))
-                    .foregroundStyle(active ? palette.ink : palette.inkSoft)
-                    .lineLimit(1)
-
-                Text("Add another profile")
-                    .font(.system(size: 9 * s, weight: .bold))
-                    .tracking(0.6 * s)
-                    .textCase(.uppercase)
-                    .foregroundStyle(palette.inkMuted)
-                    .frame(minHeight: 12 * s)
-            }
-            .frame(width: size)
+            TVProfileAddLabel(
+                palette: palette,
+                scale: s,
+                avatarSize: size,
+                forceActive: peerSelected
+            )
         }
-        .buttonStyle(TVProfileCardButtonStyle(palette: palette, isSelected: selected))
+        // Lift/scale from ButtonStyle when focused; isSelected only for peer select.
+        .buttonStyle(TVProfileCardButtonStyle(
+            palette: palette,
+            isSelected: peerSelected
+        ))
         .focusEffectDisabled(true)
         .focused($focusedTarget, equals: .add)
         .onChange(of: focusedTarget) { _, newValue in
@@ -971,24 +922,7 @@ struct TVProfilesView: View {
     }
 }
 
-// MARK: - Colour mix helper (web color-mix approximation)
 
-private extension Color {
-    /// Approximate CSS `color-mix(in srgb, self (1-amount), other amount)`.
-    func mixed(with other: Color, amount: Double) -> Color {
-        let t = max(0, min(1, amount))
-        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
-        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-        UIColor(self).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        UIColor(other).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-        return Color(
-            red: Double(r1 * (1 - t) + r2 * t),
-            green: Double(g1 * (1 - t) + g2 * t),
-            blue: Double(b1 * (1 - t) + b2 * t),
-            opacity: Double(a1 * (1 - t) + a2 * t)
-        )
-    }
-}
 
 // MARK: - Device login chrome (live /login/qr @ 1920×1080)
 

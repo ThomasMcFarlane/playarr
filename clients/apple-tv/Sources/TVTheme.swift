@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum TVTheme {
     static let canvasWidth = DesignTokens.Shell.canvasWidth
@@ -207,7 +208,7 @@ struct TVPrimaryPillButtonStyle: ButtonStyle {
 }
 
 /// Web `.profile-avatar-button:hover/focus-visible`:
-/// translateY(-8) scale(1.045) + pink ring on avatar.
+/// translateY(-8) scale(1.045) on the whole choice.
 struct TVProfileCardButtonStyle: ButtonStyle {
     let palette: TVAuthPalette
     var isSelected: Bool = false
@@ -219,7 +220,131 @@ struct TVProfileCardButtonStyle: ButtonStyle {
                 .scaleEffect(active ? DesignTokens.FocusMotion.profileFocusScale : 1)
                 .offset(y: active ? -DesignTokens.FocusMotion.profileFocusLift : 0)
                 .brightness(pressed ? -0.02 : 0)
+                .animation(
+                    .easeOut(duration: DesignTokens.FocusMotion.transitionSeconds),
+                    value: active
+                )
         }
+    }
+}
+
+/// Web `#profile-add` plate + labels.
+/// Rest: dashed line-strong border, surface→rose fill, light “+”.
+/// Active (focus): 4px pink ring, soft drop shadow, avatar scale 1.035, ink title.
+struct TVProfileAddLabel: View {
+    let palette: TVAuthPalette
+    let scale: CGFloat
+    let avatarSize: CGFloat
+    /// When true, force the active nav chrome (FocusState lag / selected peer).
+    var forceActive: Bool = false
+
+    @Environment(\.isFocused) private var isFocused
+
+    private var active: Bool { isFocused || forceActive }
+
+    /// Web `.profile-add` start: `color-mix(surface-strong 84%, #cf3157)`.
+    private var fillStart: Color {
+        Color.tvMix(palette.surfaceStrong, palette.brandPink, amount: 0.16)
+    }
+
+    /// Muted end of the plate (surface-heavy, slight rose) — not a solid pink disc.
+    private var fillEnd: Color {
+        Color.tvMix(palette.surfaceStrong, palette.brandPink, amount: 0.08)
+    }
+
+    var body: some View {
+        VStack(spacing: 9 * scale) {
+            ZStack {
+                // Soft plate (web linear 145deg + highlight radial).
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [fillStart, fillEnd],
+                            startPoint: UnitPoint(x: 0.18, y: 0.0),
+                            endPoint: UnitPoint(x: 0.82, y: 1.0)
+                        )
+                    )
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [.white.opacity(0.22), .clear],
+                            center: UnitPoint(x: 0.34, y: 0.26),
+                            startRadius: 0,
+                            endRadius: avatarSize * 0.36
+                        )
+                    )
+                // Dashed plate edge — web `.profile-add .profile-avatar { border-style: dashed }`.
+                // Keep dash visible under the solid focus ring (ring sits outside).
+                Circle()
+                    .strokeBorder(
+                        palette.lineStrong.opacity(active ? 0.85 : 0.66),
+                        style: StrokeStyle(
+                            lineWidth: max(1.5, 1.75 * scale),
+                            dash: [10 * scale, 8 * scale]
+                        )
+                    )
+                Text("+")
+                    // Web clamp(2.4rem, 4vw, 5.4rem) weight 300 → ~0.35× avatar.
+                    .font(.system(size: avatarSize * 0.36, weight: .light))
+                    .foregroundStyle(active ? palette.ink : palette.inkSoft)
+            }
+            .frame(width: avatarSize, height: avatarSize)
+            // Web focus avatar: scale 1.035 + 4px pink ring (box-shadow) + soft lift.
+            .scaleEffect(active ? 1.035 : 1)
+            .background {
+                // Outer pink focus ring sits *outside* the dashed edge (web
+                // `0 0 0 4px color-mix(#cf3157 42%)`).
+                if active {
+                    Circle()
+                        .stroke(palette.brandPink.opacity(0.42), lineWidth: 4 * scale)
+                        .frame(
+                            width: avatarSize + 8 * scale,
+                            height: avatarSize + 8 * scale
+                        )
+                }
+            }
+            .shadow(
+                color: active
+                    ? Color(red: 0x1f / 255, green: 0x0e / 255, blue: 0x14 / 255).opacity(0.22)
+                    : Color.clear,
+                radius: active ? 26 * scale : 0,
+                y: active ? 14 * scale : 0
+            )
+            .animation(
+                .easeOut(duration: DesignTokens.FocusMotion.transitionSeconds),
+                value: active
+            )
+
+            Text("Sign in")
+                .font(.system(size: 16 * scale, weight: .semibold))
+                .foregroundStyle(active ? palette.ink : palette.inkSoft)
+                .lineLimit(1)
+
+            Text("Add another profile")
+                .font(.system(size: 9 * scale, weight: .bold))
+                .tracking(0.6 * scale)
+                .textCase(.uppercase)
+                .foregroundStyle(palette.inkMuted)
+                .frame(minHeight: 12 * scale)
+        }
+        .frame(width: avatarSize)
+    }
+}
+
+extension Color {
+    /// Approximate CSS `color-mix(in srgb, a (1-amount), b amount)`.
+    static func tvMix(_ a: Color, _ b: Color, amount: Double) -> Color {
+        let t = max(0, min(1, amount))
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        UIColor(a).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(b).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return Color(
+            red: Double(r1 * (1 - t) + r2 * t),
+            green: Double(g1 * (1 - t) + g2 * t),
+            blue: Double(b1 * (1 - t) + b2 * t),
+            opacity: Double(a1 * (1 - t) + a2 * t)
+        )
     }
 }
 
