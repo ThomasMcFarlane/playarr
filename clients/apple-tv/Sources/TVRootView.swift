@@ -553,11 +553,16 @@ struct TVProfilesView: View {
                     .background(palette.brandPink)
                     .clipShape(Capsule())
             }
-            .buttonStyle(TVFocusableCardButtonStyle())
-            Button("Sign in manually", action: onManual)
-                .font(.system(size: 15 * s, weight: .semibold))
-                .foregroundStyle(palette.inkSoft)
-                .buttonStyle(TVFocusableCardButtonStyle())
+            .buttonStyle(TVPrimaryPillButtonStyle(palette: palette))
+            .focusEffectDisabled(true)
+            Button(action: onManual) {
+                Text("Sign in manually")
+                    .font(.system(size: 15 * s, weight: .semibold))
+                    .padding(.horizontal, 20 * s)
+                    .padding(.vertical, 12 * s)
+            }
+            .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+            .focusEffectDisabled(true)
         }
     }
 
@@ -570,13 +575,16 @@ struct TVProfilesView: View {
                 addProfileCard(scale: s)
             }
             .padding(.horizontal, 120 * s)
+            // Extra top padding so focus lift (translateY -8) is not clipped.
             .padding(.vertical, 24 * s)
+            .padding(.top, 12 * s)
         }
     }
 
     private func profileCard(_ profile: AvailableProfile, scale s: CGFloat) -> some View {
         let focused = focusedProfileID == profile.id
         let busy = switchingID == profile.id
+        let active = focused || profile.isCurrent
         return Button {
             if profile.pinLocked && !profile.isCurrent {
                 pinProfile = profile
@@ -593,11 +601,16 @@ struct TVProfilesView: View {
                         .frame(width: 120 * s, height: 120 * s)
                         .overlay(
                             Circle().stroke(
-                                focused || profile.isCurrent
-                                    ? palette.brandPink
-                                    : palette.lineStrong,
-                                lineWidth: focused ? 3 : 1
+                                active ? palette.brandPink : palette.lineStrong,
+                                lineWidth: active ? 4 * s : 1
                             )
+                        )
+                        // Web focused avatar soft pink outer ring.
+                        .shadow(
+                            color: active
+                                ? palette.brandPink.opacity(0.42)
+                                : Color.clear,
+                            radius: active ? 8 * s : 0
                         )
                     Text(profileInitials(profile))
                         .font(.system(size: 36 * s, weight: .semibold))
@@ -608,7 +621,7 @@ struct TVProfilesView: View {
                 }
                 Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
                     .font(.system(size: 16 * s, weight: .semibold))
-                    .foregroundStyle(palette.ink)
+                    .foregroundStyle(active ? palette.ink : palette.inkSoft)
                     .lineLimit(1)
                 if profile.pinLocked {
                     Image(systemName: "lock.fill")
@@ -617,9 +630,10 @@ struct TVProfilesView: View {
                 }
             }
             .frame(width: 140 * s)
-            .scaleEffect(focused ? 1.06 : 1)
         }
-        .buttonStyle(TVFocusableCardButtonStyle())
+        // Web `.profile-avatar-button:hover/focus` → lift + scale 1.045.
+        .buttonStyle(TVProfileCardButtonStyle(palette: palette, isSelected: profile.isCurrent))
+        .focusEffectDisabled(true)
         .focused($focusedProfileID, equals: profile.id)
         .disabled(switchingID != nil)
     }
@@ -641,7 +655,8 @@ struct TVProfilesView: View {
             }
             .frame(width: 140 * s)
         }
-        .buttonStyle(TVFocusableCardButtonStyle())
+        .buttonStyle(TVProfileCardButtonStyle(palette: palette))
+        .focusEffectDisabled(true)
     }
 
     private func profileInitials(_ profile: AvailableProfile) -> String {
@@ -877,10 +892,15 @@ struct TVDeviceLoginChrome: View {
                     .foregroundStyle(palette.danger)
                     .multilineTextAlignment(.center)
                 if let onRetry {
-                    Button("Try again", action: onRetry)
-                        .font(.system(size: 15 * s, weight: .semibold))
-                        .foregroundStyle(palette.brandPink)
-                        .buttonStyle(TVFocusableCardButtonStyle())
+                    Button(action: onRetry) {
+                        Text("Try again")
+                            .font(.system(size: 15 * s, weight: .semibold))
+                            .foregroundStyle(palette.brandPink)
+                            .padding(.horizontal, 20 * s)
+                            .padding(.vertical, 12 * s)
+                    }
+                    .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+                    .focusEffectDisabled(true)
                 }
             }
             manualButton(scale: s)
@@ -916,16 +936,17 @@ struct TVDeviceLoginChrome: View {
                         .background(palette.inkSoft)
                         .clipShape(Capsule())
                 }
-                .buttonStyle(TVFocusableCardButtonStyle())
+                .buttonStyle(TVPrimaryPillButtonStyle(palette: palette))
+                .focusEffectDisabled(true)
                 if let onBackToQr {
-                    Button("Sign in with QR code", action: onBackToQr)
-                        .font(.system(size: 15 * s, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16 * s)
-                        .foregroundStyle(palette.inkSoft)
-                        .background(palette.surfaceStrong)
-                        .overlay(Capsule().stroke(palette.lineStrong, lineWidth: 1))
-                        .buttonStyle(TVFocusableCardButtonStyle())
+                    Button(action: onBackToQr) {
+                        Text("Sign in with QR code")
+                            .font(.system(size: 15 * s, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16 * s)
+                    }
+                    .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+                    .focusEffectDisabled(true)
                 }
             }
             .frame(maxWidth: 520 * s)
@@ -940,14 +961,10 @@ struct TVDeviceLoginChrome: View {
                     .font(.system(size: 14.72 * s, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16 * s)
-                    .foregroundStyle(palette.inkSoft)
-                    .background(palette.surfaceStrong)
-                    .overlay(
-                        Capsule().stroke(palette.lineStrong, lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
             }
-            .buttonStyle(TVFocusableCardButtonStyle())
+            // Web `.btn.btn-secondary` + focus scale 1.055.
+            .buttonStyle(TVSecondaryPillButtonStyle(palette: palette))
+            .focusEffectDisabled(true)
             .padding(.top, 20 * s)
             .frame(maxWidth: 560 * s)
         }
@@ -999,15 +1016,11 @@ struct TVAuthStageChrome: View {
                 Button(action: onBack) {
                     Image(systemName: "arrow.left")
                         .font(.system(size: 17 * scale, weight: .semibold))
-                        .foregroundStyle(palette.inkSoft)
                         .frame(width: 50 * scale, height: 50 * scale)
-                        .background(palette.surfaceStrong.opacity(0.70))
-                        .overlay(
-                            Circle().stroke(palette.lineStrong.opacity(0.66), lineWidth: 1)
-                        )
-                        .clipShape(Circle())
                 }
-                .buttonStyle(TVFocusableCardButtonStyle())
+                // Web `.tv-page-back:hover/focus` → ink fill, scale 1.1.
+                .buttonStyle(TVBackButtonStyle(palette: palette))
+                .focusEffectDisabled(true)
                 .position(x: 154 * scale + 25 * scale, y: logoTop + 25 * scale)
                 .accessibilityLabel("Back")
             }
@@ -1045,7 +1058,9 @@ struct TVAuthStageChrome: View {
                 accessibility: "Theme: \(displayPreferences.themeTriggerLabel)"
             )
         }
-        .buttonStyle(TVFocusableCardButtonStyle())
+        // Web `.language-dropdown-trigger:hover/focus` → accent border, scale 1.02.
+        .buttonStyle(TVChromeMenuButtonStyle(palette: palette))
+        .focusEffectDisabled(true)
     }
 
     private var languageMenu: some View {
@@ -1069,7 +1084,8 @@ struct TVAuthStageChrome: View {
                 accessibility: "Language: \(displayPreferences.languageTriggerLabel)"
             )
         }
-        .buttonStyle(TVFocusableCardButtonStyle())
+        .buttonStyle(TVChromeMenuButtonStyle(palette: palette))
+        .focusEffectDisabled(true)
     }
 
     private func chromeTrigger(
@@ -1078,7 +1094,7 @@ struct TVAuthStageChrome: View {
         minWidth: CGFloat,
         accessibility: String
     ) -> some View {
-        // Web `.language-dropdown-trigger`: square corners, 48px tall, bg var(--bg).
+        // Content only — focus fill/border/scale come from TVChromeMenuButtonStyle.
         HStack(spacing: 9.6 * scale) {
             Image(systemName: icon)
                 .font(.system(size: 14 * scale, weight: .semibold))
@@ -1093,10 +1109,7 @@ struct TVAuthStageChrome: View {
         }
         .padding(.horizontal, 18.4 * scale)
         .frame(minWidth: minWidth, minHeight: 48 * scale)
-        .background(palette.bg)
-        .overlay(
-            Rectangle().stroke(palette.lineStrong, lineWidth: 1)
-        )
+        .contentShape(Rectangle())
         .accessibilityLabel(accessibility)
     }
 }

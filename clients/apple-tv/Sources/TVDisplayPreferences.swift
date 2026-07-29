@@ -102,11 +102,14 @@ final class TVDisplayPreferences {
 /// (web `:root` light vs `[data-theme="dark"]`).
 struct TVAuthPalette {
     let bg: Color
+    let surface: Color
     let surfaceStrong: Color
     let ink: Color
     let inkSoft: Color
     let inkMuted: Color
     let lineStrong: Color
+    /// Web `--accent` (focus borders on chrome menus). Dark: #dfdcdd, light: #675961.
+    let accent: Color
     let brandPink: Color
     let danger: Color
     let isDark: Bool
@@ -116,11 +119,13 @@ struct TVAuthPalette {
         case .dark:
             return TVAuthPalette(
                 bg: DesignTokens.Stage.bg,
+                surface: DesignTokens.Stage.surface,
                 surfaceStrong: DesignTokens.Stage.surfaceStrong,
                 ink: DesignTokens.Stage.ink,
                 inkSoft: DesignTokens.Stage.inkSoft,
                 inkMuted: DesignTokens.Stage.inkMuted,
-                lineStrong: DesignTokens.Stage.inkMuted.opacity(0.45),
+                lineStrong: Color(red: 0xdf / 255, green: 0xdc / 255, blue: 0xdd / 255).opacity(0.23),
+                accent: Color(red: 0xdf / 255, green: 0xdc / 255, blue: 0xdd / 255),
                 brandPink: DesignTokens.Stage.brandPink,
                 danger: DesignTokens.Stage.danger,
                 isDark: true
@@ -129,11 +134,13 @@ struct TVAuthPalette {
             // Web light `:root` on /login/qr.
             return TVAuthPalette(
                 bg: Color(red: 0xf5 / 255, green: 0xf3 / 255, blue: 0xf2 / 255),
+                surface: Color(red: 0xfb / 255, green: 0xfa / 255, blue: 0xf9 / 255),
                 surfaceStrong: Color.white,
                 ink: Color(red: 0x38 / 255, green: 0x26 / 255, blue: 0x21 / 255),
                 inkSoft: Color(red: 0x67 / 255, green: 0x59 / 255, blue: 0x61 / 255),
                 inkMuted: Color(red: 0xa5 / 255, green: 0x96 / 255, blue: 0x9e / 255),
                 lineStrong: Color(red: 0x38 / 255, green: 0x26 / 255, blue: 0x21 / 255).opacity(0.28),
+                accent: Color(red: 0x67 / 255, green: 0x59 / 255, blue: 0x61 / 255),
                 brandPink: DesignTokens.Stage.brandPink,
                 danger: Color(red: 0xa8 / 255, green: 0x46 / 255, blue: 0x4c / 255),
                 isDark: false

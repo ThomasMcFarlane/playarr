@@ -110,8 +110,18 @@ enum DesignTokens {
 
     enum FocusMotion {
         static let restScale: CGFloat = 1
+        /// Default media-card focus lift (rails, posters).
         static let focusScale: CGFloat = 1.08
-        static let transitionSeconds: Double = 0.15
+        /// Web `.btn:hover/focus-visible` → `scale(1.055)`.
+        static let buttonFocusScale: CGFloat = 1.055
+        /// Web `.language-dropdown-trigger:hover/focus` → `scale(1.02)`.
+        static let chromeMenuFocusScale: CGFloat = 1.02
+        /// Web `.tv-page-back:hover/focus` → `scale(1.1)`.
+        static let backFocusScale: CGFloat = 1.1
+        /// Web `.profile-avatar-button:hover/focus` → `translateY(-8px) scale(1.045)`.
+        static let profileFocusScale: CGFloat = 1.045
+        static let profileFocusLift: CGFloat = 8
+        static let transitionSeconds: Double = 0.22
     }
 
     /// Shell layout from `.app-shell` CSS custom properties at 1920×1080

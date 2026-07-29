@@ -51,6 +51,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ← back opens a Who’s watching? profiles screen (list/switch/cache
   household profiles, Add profile returns to QR link).
 
+- Apple TV auth controls use web-matched focus/hover states: chrome menus
+  scale 1.02 + accent border, back scale 1.1 + ink invert, secondary pills
+  scale 1.055, profile cards lift −8px / scale 1.045 with pink ring.
+
 - Apple TV pairing gate always uses the playarr.app hosted broker (even when
   a relay/server URL is remembered), so the on-screen visit line is
   `https://playarr.app/link` and never a `v4-…relay.playarr.app` Host.

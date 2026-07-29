@@ -87,6 +87,126 @@ struct TVFocusableCardButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - Web-matched focus / hover (tvOS focus ≈ web :focus-visible / :hover)
+
+/// Shared focus environment for ButtonStyles (tvOS paints focus here, not
+/// via `configuration.isPressed`).
+private struct TVButtonFocusBody<Content: View>: View {
+    @Environment(\.isFocused) private var isFocused
+    let isPressed: Bool
+    @ViewBuilder var content: (_ focused: Bool, _ pressed: Bool) -> Content
+
+    var body: some View {
+        content(isFocused, isPressed)
+            .animation(
+                .easeOut(duration: DesignTokens.FocusMotion.transitionSeconds),
+                value: isFocused
+            )
+    }
+}
+
+/// Web `.language-dropdown-trigger:hover/focus-visible`:
+/// border → accent, bg → surface-strong, scale 1.02.
+struct TVChromeMenuButtonStyle: ButtonStyle {
+    let palette: TVAuthPalette
+
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            configuration.label
+                .background(focused || pressed ? palette.surfaceStrong : palette.bg)
+                .overlay(
+                    Rectangle().stroke(
+                        focused || pressed ? palette.accent : palette.lineStrong,
+                        lineWidth: 1
+                    )
+                )
+                .scaleEffect(
+                    focused || pressed
+                        ? DesignTokens.FocusMotion.chromeMenuFocusScale
+                        : 1
+                )
+        }
+    }
+}
+
+/// Web `.tv-page-back:hover/focus-visible`:
+/// fill ink, colour bg, scale 1.1.
+struct TVBackButtonStyle: ButtonStyle {
+    let palette: TVAuthPalette
+
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            let active = focused || pressed
+            configuration.label
+                .foregroundStyle(active ? palette.bg : palette.inkSoft)
+                .background(active ? palette.ink : palette.surfaceStrong.opacity(0.70))
+                .overlay(
+                    Circle().stroke(
+                        active ? Color.clear : palette.lineStrong.opacity(0.66),
+                        lineWidth: 1
+                    )
+                )
+                .clipShape(Circle())
+                .scaleEffect(active ? DesignTokens.FocusMotion.backFocusScale : 1)
+        }
+    }
+}
+
+/// Web `.btn:hover/focus-visible` + `.btn-secondary`:
+/// scale 1.055, surface fill, line-strong border.
+struct TVSecondaryPillButtonStyle: ButtonStyle {
+    let palette: TVAuthPalette
+    var emphasizeOnFocus: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            let active = focused || pressed
+            configuration.label
+                .foregroundStyle(active && emphasizeOnFocus ? palette.ink : palette.inkSoft)
+                .background(active ? palette.surfaceStrong : palette.surface)
+                .overlay(
+                    Capsule().stroke(
+                        active ? palette.accent : palette.lineStrong,
+                        lineWidth: 1
+                    )
+                )
+                .clipShape(Capsule())
+                .scaleEffect(active ? DesignTokens.FocusMotion.buttonFocusScale : 1)
+        }
+    }
+}
+
+/// Web `.btn-primary` focus: scale 1.055, slightly brighter fill.
+struct TVPrimaryPillButtonStyle: ButtonStyle {
+    let palette: TVAuthPalette
+
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            let active = focused || pressed
+            configuration.label
+                .scaleEffect(active ? DesignTokens.FocusMotion.buttonFocusScale : 1)
+                .brightness(active ? 0.06 : 0)
+        }
+    }
+}
+
+/// Web `.profile-avatar-button:hover/focus-visible`:
+/// translateY(-8) scale(1.045) + pink ring on avatar.
+struct TVProfileCardButtonStyle: ButtonStyle {
+    let palette: TVAuthPalette
+    var isSelected: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        TVButtonFocusBody(isPressed: configuration.isPressed) { focused, pressed in
+            let active = focused || pressed || isSelected
+            configuration.label
+                .scaleEffect(active ? DesignTokens.FocusMotion.profileFocusScale : 1)
+                .offset(y: active ? -DesignTokens.FocusMotion.profileFocusLift : 0)
+                .brightness(pressed ? -0.02 : 0)
+        }
+    }
+}
+
 struct TVPrimaryButton: View {
     let label: String
     var isFocused: Bool = false
