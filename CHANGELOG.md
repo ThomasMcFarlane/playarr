@@ -27,6 +27,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
+  so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
+  3.98% → 3.46% (full53).
 - Apple TV settings list matches SPA option geometry (min-height 88, uniform
   ~30pt titles, 35fr panel, list/detail top padding) and cuts honest AE
   from 1.77% to 1.63% (full49).

@@ -102,17 +102,11 @@ struct TVWorkDetailView: View {
                         .font(TVTheme.font(size: 12, weight: .heavy))
                         .tracking(1.2)
                         .foregroundStyle(DesignTokens.Color.brandPrimary)
-                    // SPA forces narrow title so "10 Brambleford Lane" stacks as 3 lines.
-                    Text(detail.work.title)
-                        .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                        .tracking(-5.0)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .frame(
-                            maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
-                            alignment: .leading
-                        )
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // SPA: max-width 9ch, ~69pt, line-height 0.9 (gaps ~12–15).
+                    // SwiftUI Text keeps a tall line box (gaps ~42); use a tight
+                    // VStack of soft-wrapped lines. full51 spacing −20 → gaps 22;
+                    // −30 targets SPA ~12–15 without the cast-y overshoot.
+                    detailTitleBlock(detail.work.title)
                         .padding(.top, 10)
                     // Meta line: kind · runtime · year · genres
                     HStack(spacing: 10) {
@@ -405,6 +399,46 @@ struct TVWorkDetailView: View {
             }
             .padding(.top, DesignTokens.Shell.detailCastTopExtra)
         }
+    }
+
+    /// SPA title line-height 0.9. Negative `lineSpacing` is ignored on Text, so
+    /// soft-wrap into a VStack. Spacing −30 → inter-line gap ≈ SPA 12–15px.
+    @ViewBuilder
+    private func detailTitleBlock(_ title: String) -> some View {
+        let lines = Self.softWrapTitle(title, maxChars: 9)
+        VStack(alignment: .leading, spacing: -30) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                    .tracking(-5.0)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: true)
+            }
+        }
+        .frame(
+            maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
+            alignment: .leading
+        )
+    }
+
+    /// Approximate SPA `max-width: 9ch` + `text-wrap: balance`.
+    private static func softWrapTitle(_ title: String, maxChars: Int) -> [String] {
+        let words = title.split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return [title] }
+        var lines: [String] = []
+        var current = ""
+        for word in words {
+            let candidate = current.isEmpty ? word : current + " " + word
+            if candidate.count > maxChars, !current.isEmpty {
+                lines.append(current)
+                current = word
+            } else {
+                current = candidate
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines
     }
 
     private func detailChromeButton(_ label: String, primary: Bool) -> some View {
