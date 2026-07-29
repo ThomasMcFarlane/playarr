@@ -27,6 +27,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV settings list matches SPA option geometry (min-height 88, uniform
+  ~30pt titles, 35fr panel, list/detail top padding) and cuts honest AE
+  from 1.77% to 1.63% (full49).
 - VIDAA / ten-foot music visualiser bar density matches android-tv (18 bars)
   instead of desktop-only 36, and DeviceLogin marks a real scroll container
   for TV device-code sign-in.

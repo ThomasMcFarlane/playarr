@@ -23,8 +23,9 @@ struct TVSettingsView: View {
         ZStack {
             TVStageBackground()
             HStack(alignment: .top, spacing: 0) {
-                // Left: section list (web Preferences)
-                VStack(alignment: .leading, spacing: 14) {
+                // Left: SPA `.settings-options-panel` (35fr) + `.settings-options-list`
+                // padding-top: --library-rail-top (15vh≈162), left clamp 8vw→154.
+                VStack(alignment: .leading, spacing: 0) {
                     // SPA settings heading: white filled back + Preferences + kicker.
                     HStack(alignment: .center, spacing: 14) {
                         Image(systemName: "chevron.left")
@@ -47,37 +48,42 @@ struct TVSettingsView: View {
                         }
                         .padding(.leading, 4)
                     }
+                    .padding(.bottom, 28)
 
-                    VStack(spacing: 4) {
+                    // SPA `.settings-option`: min-height 88, title clamp ~1.6vw≈31,
+                    // weight 480; active only changes background (not title size).
+                    VStack(spacing: 0) {
                         ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
                             let selected = selectedSection == index
                             Button {
                                 selectedSection = index
                             } label: {
-                                HStack(spacing: 14) {
+                                HStack(spacing: 18) {
                                     Text(section.number)
-                                        .font(.system(size: selected ? 11 : 12, weight: .bold))
+                                        .font(.system(size: 10, weight: .heavy))
                                         .foregroundStyle(DesignTokens.Color.textDisabled)
-                                        .frame(width: 28, alignment: .leading)
+                                        .frame(width: 32, alignment: .leading)
                                     Text(section.title)
-                                        // SPA selected row uses larger title type.
-                                        .font(.system(
-                                            size: selected ? 28 : 17,
-                                            weight: selected ? .semibold : .medium
-                                        ))
+                                        .font(.system(size: 30, weight: .medium))
+                                        .tracking(-1.0)
                                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                                    Spacer()
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
                                     Image(systemName: "arrow.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(
+                                            selected
+                                                ? DesignTokens.Color.textPrimary
+                                                : DesignTokens.Color.textDisabled
+                                        )
                                 }
-                                .padding(.horizontal, selected ? 20 : 16)
-                                .padding(.vertical, selected ? 18 : 12)
+                                .padding(.horizontal, 28)
+                                .frame(minHeight: 88, alignment: .center)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 0, style: .continuous)
                                         .fill(
                                             selected
-                                                ? DesignTokens.Color.backgroundRaised.opacity(0.95)
+                                                ? DesignTokens.Color.backgroundRaised.opacity(0.9)
                                                 : Color.clear
                                         )
                                 )
@@ -87,20 +93,22 @@ struct TVSettingsView: View {
                             .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
                         }
                     }
-                    .frame(width: 400)
-                    Spacer()
+                    .frame(width: 465, alignment: .leading)
+                    Spacer(minLength: 0)
                 }
+                // SPA list padding-top 15vh≈162; heading sits in shell header band.
                 .padding(.leading, 154)
-                .padding(.top, 48)
+                .padding(.top, 56)
+                .frame(width: 1920 * 0.35, alignment: .topLeading)
                 .ignoresSafeArea()
 
-                // Right: section detail
+                // Right: SPA `.settings-detail-panel` (65fr)
                 VStack(alignment: .leading, spacing: 22) {
                     sectionDetail
                     Spacer()
                 }
                 .padding(.leading, 40)
-                .padding(.top, 140)
+                .padding(.top, 162)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
