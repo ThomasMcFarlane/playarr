@@ -2515,12 +2515,28 @@ end function
 ' Prefers a wide "backdrop" image for the TvStage hero key-art (poster art is
 ' too narrow/tall to read well behind the title panel); falls back to the
 ' same poster-first logic as artworkUrl() when no backdrop is available.
+' Stage key-art always requests the server-side `style=stage` bake (greyscale
+' + contrast/brightness + right fade + opacity) so this client does not
+' re-implement CSS filters that SceneGraph cannot express.
 function heroArtworkUrl(work as Object) as String
-    if work.images = invalid then return ""
-    for each image in work.images
-        if image.kind = "backdrop" then return resolveImageUrl(work, image)
-    end for
-    return artworkUrl(work)
+    url = ""
+    if work.images <> invalid
+        for each image in work.images
+            if image.kind = "backdrop"
+                url = resolveImageUrl(work, image)
+                exit for
+            end if
+        end for
+    end if
+    if url = "" then url = artworkUrl(work)
+    if url = "" then return ""
+    return withArtworkStyle(url, "stage")
+end function
+
+function withArtworkStyle(url as String, style as String) as String
+    if url = "" or style = "" then return url
+    if Instr(1, url, "?") > 0 then return url + "&style=" + UrlEncode(style)
+    return url + "?style=" + UrlEncode(style)
 end function
 
 function artworkHeaders(url as String, headers as Object) as Object

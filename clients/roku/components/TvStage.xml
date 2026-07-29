@@ -12,20 +12,14 @@
   the CSS rule and the evaluated formula.
 
   CSS -> SceneGraph substitutions made here (see also TvStage.brs):
-    - CSS `filter: grayscale()/contrast()/brightness()` on the key-art <img>
-      has no SceneGraph equivalent (Poster cannot apply pixel filters).
-      Substituted with a semi-transparent Rectangle (`keyArtWash`) laid over
-      the Poster, using the theme's `bg` color at ~72% alpha - matching the
-      *dimming* (opacity: 0.72) the dark theme applies, without the actual
-      desaturation/contrast shift. Documented as an approximation only.
+    - CSS `filter: grayscale()/contrast()/brightness()` + opacity + right
+      mask on `.tv-key-art img` is applied **server-side** via
+      `GET /api/v1/artwork/work/{id}/{kind}?style=stage` (see
+      playarr-artwork::ArtworkStyle::Stage). The Poster loads that PNG;
+      no client pixel filter exists on SceneGraph.
     - CSS `linear-gradient()` scrims (`.tv-key-art::after`, `.tv-stage-wash`)
-      have no native equivalent either: SceneGraph's `Rectangle` node only
-      exposes a flat `color` field, not a gradient field or `roku_gradient`
-      region image. A real bitmap gradient asset would be the correct fix,
-      but none exists yet in this channel's `images/`. Substituted with a
-      small stack of flat, differently-sized/differently-alpha `Rectangle`
-      nodes (`scrimLeft1/2`, `scrimTop`, `scrimBottom`) that fake a
-      left-edge and top/bottom-edge fade using the theme's `surface` color.
+      still have no native equivalent: stacked semi-transparent `Rectangle`
+      nodes approximate left/top/bottom/right wash over the stage surface.
     - The CSS entrance easing `cubic-bezier(0.16, 1, 0.3, 1)` (strong
       deceleration) isn't expressible on SceneGraph's `Animation` node, which
       only accepts a fixed keyword set (linear, in/out/inOut Quad, Cubic,
@@ -82,16 +76,19 @@
       scaleToFill visibly warps photographic art.
     -->
     <Group id="keyArtLayer" opacity="0">
+      <!-- Key-art Poster loads GET /api/v1/artwork/...&style=stage (server
+           greyscale + opacity + right fade). No client-side filter wash on
+           the bitmap itself -- that used to fight a full-colour source. -->
       <Poster id="keyArt" translation="[0,-33]" width="998" height="1145" loadDisplayMode="scaleToZoom" />
-      <!-- CSS filter+opacity substitute - see file header comment. -->
-      <Rectangle id="keyArtWash" translation="[0,-33]" width="998" height="1145" color="0x151315B8" />
-      <!-- CSS linear-gradient scrim substitute - see file header comment.
-           from: .tv-key-art::after (left-edge fade) + .tv-stage-wash (left/right fade) -->
+      <!-- Soft stage wash only (left + vertical vignette). Pixel math for
+           greyscale/contrast/brightness/opacity is baked server-side. -->
       <Group id="scrimLayer">
-        <Rectangle id="scrimLeft1" translation="[0,0]" width="422" height="1080" color="0x1B181BE6" />
-        <Rectangle id="scrimLeft2" translation="[422,0]" width="170" height="1080" color="0x1B181B59" />
-        <Rectangle id="scrimTop" translation="[0,0]" width="1920" height="238" color="0x1B181B59" />
-        <Rectangle id="scrimBottom" translation="[0,886]" width="1920" height="194" color="0x1B181B59" />
+        <Rectangle id="scrimLeft1" translation="[0,0]" width="280" height="1080" color="0x1B181BCC" />
+        <Rectangle id="scrimLeft2" translation="[280,0]" width="220" height="1080" color="0x1B181B66" />
+        <Rectangle id="scrimLeft3" translation="[500,0]" width="180" height="1080" color="0x1B181B33" />
+        <Rectangle id="scrimTop" translation="[0,0]" width="1920" height="200" color="0x1B181B66" />
+        <Rectangle id="scrimBottom" translation="[0,860]" width="1920" height="220" color="0x1B181B88" />
+        <Rectangle id="scrimRight" translation="[1500,0]" width="420" height="1080" color="0x1B181B59" />
       </Group>
     </Group>
 
