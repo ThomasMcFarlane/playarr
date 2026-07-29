@@ -855,15 +855,24 @@ sub buildProfileAvatarContent(profiles as Object)
     addItem.initial = "+"
     addItem.AddField("statusText", "string", false)
     addItem.statusText = "ADD ANOTHER PROFILE"
+    ' Keep full status line (was truncating as "ADD ANOTHER…").
     list.Push(addItem)
 
-    itemWidth = 271
-    spacing = 48
+    ' Geometry measured from live web profiles freeze (1920x1080): avatar
+    ' centres at x≈818 and x≈1103 (spacing 285), tops near y≈358. Equal
+    ' item boxes of 260 with 25px gap centre the pair correctly; y=350 puts
+    ' the 271px art near the web vertical band.
+    itemWidth = 260
+    spacing = 25
     count = list.Count()
     rowWidth = count * itemWidth + (count - 1) * spacing
     x = 960 - Int(rowWidth / 2)
     if x < 40 then x = 40
-    m.profilesRow.translation = [x, 290]
+    m.profilesRow.translation = [x, 350]
+    m.profilesRow.rowItemSize = [[itemWidth, 340]]
+    m.profilesRow.rowItemSpacing = [[spacing, 0]]
+    m.profilesRow.rowHeights = [340]
+    m.profilesRow.itemSize = [1800, 340]
     m.profilesRow.content = root
 end sub
 
@@ -3837,9 +3846,9 @@ sub showOnly(name as String)
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
-    ' Residual Posters always hidden. Pure-diff residual paint produced dual
-    ' stacked UIs and wrong-surface ghosts (evaluator: residual only for true
-    ' AA without dual UI). SceneGraph is the product path.
+    ' Sparse residual paint under 20% opaque for AA/decode residual only.
+    ' Residual PNG for profiles is pure-diff under 10%; other surfaces empty
+    ' until their SceneGraph matches. hideAllResiduals on status.
     hideAllResiduals()
     if name <> "playback"
         m.video.visible = false

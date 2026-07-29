@@ -52,27 +52,13 @@
     <!-- Ring drawn first (behind the circle) with generous padding so it
          reads as an outer glow/frame around the sphere, not an inset
          border; matches PosterCard's focusFrame-behind-poster ordering. -->
-    <Poster id="focusRing" translation="[-10,-10]" width="291" height="291" uri="pkg:/images/avatar-ring.png" opacity="0" />
-    <Poster id="avatarImage" translation="[0,0]" width="271" height="271" loadDisplayMode="scaleToFit" />
-    <!-- Initial-letter overlay standing in for tv-web's SVG mascot icon (see
-         this component's header comment). scale 2.5 -> ~80px cap-height per
-         Theme.brs's 32px-baseline calibration; horizAlign/vertAlign="center"
-         so scaleRotateCenter is the label's own half-width/half-height in
-         the box's UNSCALED (pre-scale) coordinates, [271/2,271/2], matching
-         every other centered/scaled Label in this codebase (e.g.
-         PosterCard.brs's own title Label). -->
-    <Label id="initial" translation="[0,0]" width="271" height="271" horizAlign="center" vertAlign="center" scale="[2.5,2.5]" scaleRotateCenter="[135.5,135.5]" color="0xFFFFFFFF" />
-    <!-- Name label centred under the circle. size ~19 -> scale 0.59 (same
-         step PosterCard's own title label uses); wrap disabled (numLines=1)
-         since profile names are short, matching tv-web's single-line
-         <strong> name under each avatar. -->
-    <Label id="name" translation="[0,281]" width="271" height="34" horizAlign="center" numLines="1" scale="[0.59,0.59]" scaleRotateCenter="[135.5,17]" color="0xF4F0F1FF" />
-    <!-- Status suffix (Linked / PIN), the same suffix data showProfiles used
-         to append onto the old LabelList's text, now shown as a second,
-         dimmer line under the name instead, mirroring tv-web's <small>
-         status line under each avatar's name
-         (statusCurrent/statusPinRequired/etc). -->
-    <Label id="status" translation="[0,313]" width="271" height="28" horizAlign="center" numLines="1" scale="[0.44,0.44]" scaleRotateCenter="[135.5,14]" color="0xA9B7C9FF" />
+    <!-- Art sized to web freeze avatar band (~260px). Item box is 260x340
+         from buildProfileAvatarContent so two avatars centre at web x≈818/1103. -->
+    <Poster id="focusRing" translation="[-8,-8]" width="276" height="276" uri="pkg:/images/avatar-ring.png" opacity="0" />
+    <Poster id="avatarImage" translation="[0,0]" width="260" height="260" loadDisplayMode="scaleToFit" />
+    <Label id="initial" translation="[0,0]" width="260" height="260" horizAlign="center" vertAlign="center" scale="[2.4,2.4]" scaleRotateCenter="[130,130]" color="0xFFFFFFFF" />
+    <Label id="name" translation="[0,268]" width="260" height="34" horizAlign="center" numLines="1" scale="[0.59,0.59]" scaleRotateCenter="[130,17]" color="0xF4F0F1FF" />
+    <Label id="status" translation="[0,298]" width="260" height="28" horizAlign="center" numLines="1" scale="[0.42,0.42]" scaleRotateCenter="[130,14]" color="0xA9B7C9FF" />
   </children>
   <script type="text/brightscript" uri="pkg:/components/ProfileAvatar.brs" />
 </component>

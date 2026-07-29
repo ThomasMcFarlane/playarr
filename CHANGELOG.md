@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku Profiles chrome matches web: Auto and Clients pills, gear + Sign out
+  actions, avatar geometry aligned to live web freeze centres, web-extracted
+  avatar art. Residual paint stays off (no dual UI).
+
 - Roku parity_ae0 scores full_ae on real freezes only (no residual-mask
   exclusion, no offline residual composite, no filled[mask]=w[mask]).
   Residual Posters stay hidden in product. Residual PNGs emptied (0%

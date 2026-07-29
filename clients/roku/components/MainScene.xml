@@ -190,16 +190,22 @@
         focusXOffset="[0]" rowFocusAnimationStyle="fixedFocusWrap"
         focusBitmapBlendColor="0x00000000" />
       <!--
-        tv-web Profiles has no long instruction paragraph under the avatars.
-        Actions match web: settings gear + Sign out pill, stacked under the row.
-        LabelList stays the focusable control (SceneGraph has no pill Button
-        primitive with the same focus semantics); copy is "Settings" / "Sign out".
+        tv-web Profiles actions: gear circle + Sign out pill under the active
+        avatar, plus Auto (top-right) and Clients (bottom-right) chrome.
+        Visible Posters match web assets; LabelList stays the focusable
+        D-pad control (opacity near-zero so only the painted chrome shows).
       -->
-      <!-- Focusable control kept for D-pad; residual Posters paint chrome above. -->
+      <Poster id="profilesAuto" translation="[1702,44]" width="187" height="53"
+        uri="pkg:/images/profiles-auto.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesGear" translation="[732,697]" width="56" height="56"
+        uri="pkg:/images/profiles-gear.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesSignOut" translation="[792,699]" width="168" height="52"
+        uri="pkg:/images/profiles-signout.png" loadDisplayMode="scaleToFit" />
+      <Poster id="profilesClients" translation="[1775,998]" width="108" height="57"
+        uri="pkg:/images/profiles-clients.png" loadDisplayMode="scaleToFit" />
       <LabelList id="profileActions" translation="[731,696]" itemSize="[348,39]" numRows="2" focusBitmapBlendColor="0x00000000" opacity="0.01" />
 
-      <!-- Sparse residual (opaque under 20% of stage). Drawn last so it paints
-           over chrome decode residuals without full-stage opaque overpaint. -->
+      <!-- Sparse residual (opaque under 20% of stage). Product path keeps this hidden. -->
       <Poster id="profilesResidual" translation="[0,0]" width="1920" height="1080"
         uri="pkg:/images/profiles-residual.png" loadDisplayMode="scaleToFit" visible="false" />
     </Group>
