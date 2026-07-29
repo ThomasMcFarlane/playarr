@@ -269,8 +269,9 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
         self.assertIn("full_ae == 0", suite)
         self.assertIn("MAX_RESIDUAL_FRAC", suite)
-        # Must not fill every pure-diff pixel unconditionally
+        # Must not fill residual from web freezes or offline-composite residual
         self.assertNotIn("filled[mask] = w[mask]", suite)
+        self.assertNotIn("r[res_mask] = res_rgb[res_mask]", suite)
         self.assertIn("RESIDUAL_RECTS", suite)
 
     def test_scene_has_no_full_stage_residual_overpaint(self) -> None:
@@ -280,20 +281,20 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn("playlistsGroupResidual", SCENE)
         self.assertNotIn("settingsGroupResidual", SCENE)
         self.assertNotIn("content-residual.png", SCENE)
-        # Product shell hides residual Posters (no dual stacked UI).
+        # Residual Posters stay hidden (no dual stacked UI / full-stage overpaint).
         self.assertIn("sub hideAllResiduals()", MAIN)
         self.assertIn("hideAllResiduals()", MAIN)
         self.assertIn('visible="false"', SCENE)
+        self.assertNotIn("content-residual.png", MAIN)
 
     def test_parity_ae0_suite_requires_full_stage_ae0(self) -> None:
         suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
-        # Full-stage AE=0 after residual asset apply; pure structure outside residual.
+        # Full-stage AE=0 on real freezes; no residual-mask exclusion; no offline composite.
         self.assertIn("full_ae == 0", suite)
-        self.assertIn("pure_ae == 0", suite)
-        self.assertIn("ok = full_ae == 0 and pure_ae == 0 and not stage_fill", suite)
+        self.assertIn("ok = full_ae == 0 and not stage_fill", suite)
         self.assertIn("MAX_RESIDUAL_FRAC", suite)
-        # Must not fill every pure-diff pixel unconditionally in compare buffer
         self.assertNotIn("filled[mask] = w[mask]", suite)
+        self.assertNotIn("r[res_mask] = res_rgb[res_mask]", suite)
 
     def test_shell_loads_in_place_not_fullscreen_status(self) -> None:
         # Authenticated navigations keep the target shell visible while data

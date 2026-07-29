@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku parity_ae0 scores full_ae on real freezes only (no residual-mask
+  exclusion, no offline residual composite, no filled[mask]=w[mask]).
+  Residual Posters stay hidden in product. Residual PNGs emptied (0%
+  opaque) until SceneGraph matches closely enough for true AA residual.
+
 - Android TV signed-in product is fully native Compose + Media3 again. Removed
   the temporary `PlayarrTvWebShell` WebView path. WebView/SPA AE freeze tools
   under `clients/android/tools/parity_*.py` are exit-2 banned. Policy locked in

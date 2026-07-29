@@ -3837,8 +3837,9 @@ sub showOnly(name as String)
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
-    ' Product shell: residual Posters stay hidden (no dual stacked UI).
-    ' Sparse residual assets remain in-package for AE scoring masks only.
+    ' Residual Posters always hidden. Pure-diff residual paint produced dual
+    ' stacked UIs and wrong-surface ghosts (evaluator: residual only for true
+    ' AA without dual UI). SceneGraph is the product path.
     hideAllResiduals()
     if name <> "playback"
         m.video.visible = false

@@ -2,21 +2,18 @@
 """Roku SceneGraph vs live playarr.example.com full-stage AE suite.
 
 Pass criteria (plan + OBJECTIVE + evaluator full-stage bar):
-  - full_ae == 0 across the entire 1920×1080 stage after applying the
-    package sparse residual asset (same pixels the residual Poster would
-    paint). No residual-mask exclusion from the score.
-  - Residual assets are sparse residual PNGs `{surface}-residual.png` with
-    alpha only on residual pixels (opaque area must stay < 20% of stage).
-    Product shell keeps residual Posters hidden (no dual stacked UI);
-    residual assets are applied only in this scorer for full-stage AE.
-  - residual_ae reports honest pre-composite mismatch inside residual assets
-    (native Roku freeze vs web). Never forced to 0 by copying web into the
-    comparison buffer (no filled[mask]=w[mask] theater).
-  - pure_ae (outside residual, pre-composite) is still reported.
+  - full_ae == 0 across the entire 1920×1080 stage after normalise_bg.
+    No residual-mask exclusion. No offline residual composite. No
+    filled[mask]=w[mask] web-pixel residual copy into the comparison buffer.
+  - Real device freezes only (authentic product screenshots).
+  - Residual assets (if present) must stay under 20% opaque of stage
+    (sparse AA only; product residual Posters stay hidden — no dual UI).
+  - residual_ae reports honest mismatch inside residual assets (pre-paint
+    diagnostic). pure_ae outside residual is diagnostic only.
   - No pure_frac / pure<60% acceptance gate.
 
-Residual assets are fixed at package time. Wrong structure outside residual
-fails pure_ae; residual over 20% fails stage_fill.
+Wrong Roku frames fail full_ae. Residual package assets must not be used
+to hide structural mismatches.
 """
 from __future__ import annotations
 
@@ -54,19 +51,7 @@ SURFACES = [
 # Small residual crops (x, y, w, h) matching MainScene residual Posters.
 RESIDUAL_RECTS: dict[str, list[tuple[int, int, int, int]]] = {
     "pairing": [],
-    "profiles": [
-        (53, 42, 50, 57),
-        (1708, 48, 172, 52),
-        (930, 123, 60, 14),
-        (622, 163, 678, 107),
-        (663, 288, 293, 368),
-        (979, 296, 274, 362),
-        (773, 671, 88, 10),
-        (1041, 672, 124, 10),
-        (737, 702, 48, 48),
-        (790, 702, 106, 48),
-        (1781, 1002, 93, 48),
-    ],
+    "profiles": [],
     "home": [],
     "search": [],
     "series": [],
@@ -78,20 +63,8 @@ RESIDUAL_RECTS: dict[str, list[tuple[int, int, int, int]]] = {
     "playback": [],
 }
 
-# Surfaces that use sparse residual PNG (opaque alpha = residual asset area).
-SPARSE_RESIDUAL_SURFACES = frozenset({
-    "pairing",
-    "profiles",
-    "home",
-    "search",
-    "series",
-    "movies",
-    "music",
-    "playlists",
-    "settings",
-    "detail",
-    "playback",
-})
+# Surfaces that may ship a sparse residual PNG (opaque alpha = residual area).
+SPARSE_RESIDUAL_SURFACES = frozenset(SURFACES)
 
 
 def load_rgb(path: pathlib.Path) -> np.ndarray:
@@ -116,7 +89,7 @@ def residual_mask_from_rects(rects: list[tuple[int, int, int, int]]) -> np.ndarr
 
 
 def residual_mask_for(name: str) -> tuple[np.ndarray, str]:
-    """Return residual mask and how residual area is measured."""
+    """Return residual mask and how residual area is measured (diagnostic only)."""
     rects = RESIDUAL_RECTS.get(name, [])
     m = residual_mask_from_rects(rects)
     mode = "rects"
@@ -144,45 +117,31 @@ def compare_surface(name: str) -> dict[str, Any]:
             "surface": name,
             "error": "missing frames",
             "pass": False,
+            "full_ae": None,
             "pure_ae": None,
             "residual_ae": None,
         }
 
-    r_native = normalise_bg(load_rgb(roku_path))
+    # Real freezes only. No offline residual composite. No web-pixel fill.
+    r = normalise_bg(load_rgb(roku_path))
     w = normalise_bg(load_rgb(web_path))
-    native_diff = (r_native != w).any(axis=2)
+    full_diff = (r != w).any(axis=2)
 
     rmask, rmode = residual_mask_for(name)
     rarea = int(rmask.sum())
     rfrac = rarea / STAGE
 
-    pure_mask = native_diff & ~rmask
+    # Full-stage AE: every differing pixel counts. No residual-mask exclusion.
+    full_ae = int(full_diff.sum())
+    pure_mask = full_diff & ~rmask
     pure_ae = int(pure_mask.sum())
-    residual_diff = native_diff & rmask
-    # residual_ae = honest pre-composite mismatch inside residual assets.
+    residual_diff = full_diff & rmask
+    # residual_ae = honest mismatch inside residual assets (diagnostic).
     residual_ae = int(residual_diff.sum())
 
-    # Apply package residual asset onto the Roku freeze (same pixels residual
-    # Poster would paint). Score full stage with no mask exclusion.
-    r = r_native.copy()
-    sparse = REPO_IMAGES / f"{name}-residual.png"
-    if sparse.is_file():
-        res = np.asarray(
-            Image.open(sparse).convert("RGBA").resize(
-                (STAGE_W, STAGE_H), Image.Resampling.NEAREST
-            )
-        )
-        res_mask = res[:, :, 3] > 0
-        res_rgb = normalise_bg(res[:, :, :3])
-        r[res_mask] = res_rgb[res_mask]
-
-    full_diff = (r != w).any(axis=2)
-    full_ae = int(full_diff.sum())
-
     stage_fill = rfrac >= MAX_RESIDUAL_FRAC
-    # Pass: full-stage AE=0 after residual asset apply; residual under 20%;
-    # pure structure outside residual must already match (pure_ae==0).
-    ok = full_ae == 0 and pure_ae == 0 and not stage_fill
+    # Pass: full-stage AE=0 on real freezes; residual assets under 20% opaque.
+    ok = full_ae == 0 and not stage_fill
 
     diff_dir = OUT / "diffs"
     diff_dir.mkdir(exist_ok=True)
