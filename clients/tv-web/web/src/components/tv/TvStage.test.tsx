@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TvDetailHeading } from "./TvStage";
+import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
+import { ThemeProvider } from "../../lib/theme";
+import { TvDetailHeading, TvStageChrome } from "./TvStage";
 
 describe("TvDetailHeading", () => {
   it("uses the standard library-heading divider for the selected item", () => {
@@ -32,5 +34,25 @@ describe("TvDetailHeading", () => {
     expect(sharedDividerRule).toContain("border-left: 1px solid var(--line-strong)");
     expect(detailItemRule).not.toContain("padding-left");
     expect(detailItemRule).not.toContain("border-left");
+  });
+});
+
+describe("TvStageChrome", () => {
+  it("places the theme toggle beside the language selector", () => {
+    const markup = renderToStaticMarkup(
+      <ThemeProvider>
+        <LanguageProvider>
+          <TvStageChrome />
+        </LanguageProvider>
+      </ThemeProvider>
+    );
+    const themeToggle = markup.indexOf('class="theme-toggle"');
+    const languageToggle = markup.indexOf(
+      'class="language-dropdown tv-stage-chrome-language"'
+    );
+
+    expect(markup).toContain('class="tv-stage-chrome-controls"');
+    expect(themeToggle).toBeGreaterThan(-1);
+    expect(languageToggle).toBeGreaterThan(themeToggle);
   });
 });

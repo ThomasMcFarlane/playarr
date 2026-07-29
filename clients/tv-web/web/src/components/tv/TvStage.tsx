@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useScrollEdges } from "../../lib/useScrollEdges";
 import { LanguageDropdown } from "../LanguageDropdown";
+import { ThemeToggle } from "../ThemeToggle";
 
 const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
 
@@ -34,7 +35,10 @@ export function TvStageChrome({
           </button>
         </div>
       ) : null}
-      <LanguageDropdown className="tv-stage-chrome-language" />
+      <div className="tv-stage-chrome-controls">
+        <ThemeToggle />
+        <LanguageDropdown className="tv-stage-chrome-language" />
+      </div>
     </header>
   );
 }

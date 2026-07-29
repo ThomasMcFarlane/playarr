@@ -159,11 +159,16 @@ final class TVAppEnvironment {
         pairingState = .signedIn
     }
 
-    /// First launch (no stored/launch server URL) uses playarr.app hosted
-    /// link so the phone supplies the API host. Advanced: Settings server
-    /// address or `-PlayarrServerURL` uses direct RFC 8628 against that host.
+    /// TV pairing chrome always uses the playarr.app hosted broker so the
+    /// on-screen code / QR encode `https://playarr.app/link` (never the
+    /// server's public or relay Host). The phone claim still supplies the
+    /// real API base URL. Direct RFC 8628 against a typed server remains
+    /// available only via explicit Settings "server address" + a future
+    /// advanced path; a remembered relay must not take over the QR gate.
     static func shouldUseHostedDeviceLink(hasConfiguredServer: Bool) -> Bool {
-        !hasConfiguredServer
+        // `hasConfiguredServer` is intentionally ignored for the gate.
+        _ = hasConfiguredServer
+        return true
     }
 
     @discardableResult

@@ -8773,10 +8773,13 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   pointer-events: auto;
 }
 
-.tv-stage-chrome-language {
+.tv-stage-chrome-controls {
   position: absolute;
   top: clamp(30px, calc(4.6 * var(--viewport-unit)), 58px);
   right: var(--tv-stage-chrome-nav-edge);
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 0.8vw, 14px);
   pointer-events: auto;
 }
 

@@ -35,8 +35,23 @@ final class TVServerAddressTests: XCTestCase {
         XCTAssertTrue(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: false))
     }
 
-    func testConfiguredServerUsesDirectDeviceFlow() {
-        XCTAssertFalse(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: true))
+    func testRememberedServerStillUsesHostedGateForAppLinkQR() {
+        // A stored relay/server URL must not take over the pairing chrome —
+        // QR + "visit" always come from playarr.app/link.
+        XCTAssertTrue(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: true))
+    }
+
+    func testDisplayVerificationURIIsAlwaysPlayarrAppLink() {
+        XCTAssertEqual(
+            TVPairingGateView.displayVerificationURI(
+                "https://v4-1-2-3-4.relay.playarr.app:8484/link"
+            ),
+            "https://playarr.app/link"
+        )
+        XCTAssertEqual(
+            TVPairingGateView.displayVerificationURI("https://playarr.app/link?user_code=X"),
+            "https://playarr.app/link"
+        )
     }
 }
 

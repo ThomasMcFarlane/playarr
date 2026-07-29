@@ -1,5 +1,8 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
@@ -327,11 +330,10 @@ struct TVPairingGateView: View {
             TVDeviceLoginChrome(
                 phase: .awaitingApproval(
                     userCode: pending.userCode,
-                    verificationURI: pending.verificationUri,
+                    // Always show the app link, never a server/relay Host.
+                    verificationURI: Self.displayVerificationURI(pending.verificationUri),
                     qr: AnyView(
-                        TVHostedLinkQRImage(
-                            verificationURIComplete: pending.verificationUriComplete
-                        )
+                        TVLocalQRCodeImage(value: pending.verificationUriComplete)
                     )
                 ),
                 onRetry: nil
@@ -349,6 +351,15 @@ struct TVPairingGateView: View {
     private func beginPairing() {
         pairingTask?.cancel()
         pairingTask = Task { await environment.startPairing() }
+    }
+
+    /// On-screen "visit …" line is always the playarr.app app link, matching
+    /// live `/login/qr`. Direct-server Host/relay URLs stay out of the UI.
+    static func displayVerificationURI(_ uri: String) -> String {
+        if uri.hasPrefix("https://playarr.app/link") || uri.hasPrefix("http://playarr.app/link") {
+            return "https://playarr.app/link"
+        }
+        return "https://playarr.app/link"
     }
 }
 
@@ -372,12 +383,13 @@ struct TVDeviceLoginChrome: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                DesignTokens.Color.backgroundBase
+                // Force dark stage (#151315) — never follow a light system theme.
+                DesignTokens.Stage.bg
                 // Soft rose halo behind the plate (web profiles-page wash).
                 RadialGradient(
                     colors: [
-                        DesignTokens.Color.brandPrimary.opacity(0.14),
-                        DesignTokens.Color.brandPrimary.opacity(0.05),
+                        DesignTokens.Stage.brandPink.opacity(0.16),
+                        DesignTokens.Stage.brandPink.opacity(0.05),
                         .clear,
                     ],
                     center: UnitPoint(x: 0.50, y: 0.42),
@@ -392,18 +404,18 @@ struct TVDeviceLoginChrome: View {
                     Text("WELCOME HOME")
                         .font(.system(size: 12, weight: .heavy))
                         .tracking(2.4)
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .foregroundStyle(DesignTokens.Stage.inkMuted)
 
                     Text("Sign in to Playarr")
                         .font(.system(size: 64, weight: .medium))
                         .tracking(-4.0)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .foregroundStyle(DesignTokens.Stage.ink)
                         .multilineTextAlignment(.center)
                         .padding(.top, 8)
 
                     Text("Scan the QR code with your phone or another browser to sign in on this device.")
                         .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .foregroundStyle(DesignTokens.Stage.inkMuted)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 440)
                         .padding(.top, 16)
@@ -417,13 +429,14 @@ struct TVDeviceLoginChrome: View {
             }
         }
         .ignoresSafeArea()
+        .preferredColorScheme(.dark)
     }
 
     private var playarrWordmark: some View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
-                    .fill(DesignTokens.Color.brandPrimary)
+                    .fill(DesignTokens.Stage.brandPink)
                     .frame(width: 34, height: 34)
                 Image(systemName: "play.fill")
                     .font(.system(size: 12, weight: .bold))
@@ -432,9 +445,9 @@ struct TVDeviceLoginChrome: View {
             }
             HStack(spacing: 0) {
                 Text("Play")
-                    .foregroundStyle(DesignTokens.Color.brandPrimary)
+                    .foregroundStyle(DesignTokens.Stage.brandPink)
                 Text("arr")
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .foregroundStyle(DesignTokens.Stage.ink)
             }
             .font(.system(size: 18, weight: .semibold))
         }
@@ -446,7 +459,7 @@ struct TVDeviceLoginChrome: View {
         case .requesting:
             Text("Creating a secure sign-in code…")
                 .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .foregroundStyle(DesignTokens.Stage.inkMuted)
         case .awaitingApproval(let userCode, let verificationURI, let qr):
             // Live `/login/qr` embedded DeviceLogin: column, centred, QR above copy.
             VStack(alignment: .center, spacing: 22) {
@@ -465,34 +478,35 @@ struct TVDeviceLoginChrome: View {
                 VStack(alignment: .center, spacing: 10) {
                     Text("Scan the QR code, or visit")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .foregroundStyle(DesignTokens.Stage.inkMuted)
                     Text(verificationURI)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .foregroundStyle(DesignTokens.Stage.ink)
                     Text("and enter the code")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .foregroundStyle(DesignTokens.Stage.inkMuted)
                     Text(userCode)
                         .font(.system(size: 52, weight: .bold, design: .monospaced))
                         .tracking(5)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .foregroundStyle(DesignTokens.Stage.ink)
                     Text("Waiting for approval…")
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .foregroundStyle(DesignTokens.Stage.inkMuted)
                         .padding(.top, 2)
                 }
                 .multilineTextAlignment(.center)
             }
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .center, spacing: 16) {
                 Text(message)
                     .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(DesignTokens.Color.stateError)
+                    .foregroundStyle(DesignTokens.Stage.danger)
+                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 if let onRetry {
                     Button("Try again", action: onRetry)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(DesignTokens.Color.brandPrimary)
+                        .foregroundStyle(DesignTokens.Stage.brandPink)
                         .buttonStyle(TVFocusableCardButtonStyle())
                 }
             }
@@ -500,7 +514,54 @@ struct TVDeviceLoginChrome: View {
     }
 }
 
-/// Live hosted-link QR image (playarr.app `/api/link/qr`).
+/// Local QR (Core Image) so the tile never depends on `/api/link/qr` network
+/// or its playarr.app-only allow-list. Matches PLAYARR_QR_STYLE: pure black
+/// modules on white, ECC M.
+struct TVLocalQRCodeImage: View {
+    let value: String
+
+    var body: some View {
+        if let image = Self.makeUIImage(value: value, pixelSize: 432) {
+            Image(uiImage: image)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+        } else {
+            // Fallback: still show structure rather than a blank white hole.
+            Color.black.opacity(0.12)
+        }
+    }
+
+    static func makeUIImage(value: String, pixelSize: CGFloat) -> UIImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(value.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+
+        // Scale modules to a crisp integer grid (nearest-neighbour).
+        let extent = output.extent.integral
+        guard extent.width > 0, extent.height > 0 else { return nil }
+        let scale = pixelSize / extent.width
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+
+        // Core Image QR is black modules on transparent; force white plate.
+        let colored = scaled.applyingFilter(
+            "CIFalseColor",
+            parameters: [
+                "inputColor0": CIColor.black,
+                "inputColor1": CIColor.white,
+            ]
+        )
+
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(colored, from: colored.extent) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+/// Optional network QR (hosted PNG). Prefer `TVLocalQRCodeImage` for the gate.
 struct TVHostedLinkQRImage: View {
     let verificationURIComplete: String
 
@@ -514,16 +575,16 @@ struct TVHostedLinkQRImage: View {
                         .interpolation(.none)
                         .scaledToFit()
                 case .failure:
-                    Color.black.opacity(0.08)
+                    TVLocalQRCodeImage(value: verificationURIComplete)
                 case .empty:
                     ProgressView()
                         .tint(.black.opacity(0.4))
                 @unknown default:
-                    Color.black.opacity(0.08)
+                    TVLocalQRCodeImage(value: verificationURIComplete)
                 }
             }
         } else {
-            Color.black.opacity(0.08)
+            TVLocalQRCodeImage(value: verificationURIComplete)
         }
     }
 }
