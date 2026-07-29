@@ -228,10 +228,12 @@ enum DesignTokens {
         // MARK: Detail actions (`.tv-detail-play` / `.tv-detail-playback-settings`)
         /// `height: clamp(44px, 4.2vw, 64px)` → 64 @ 1920
         static let detailActionHeight: CGFloat = 64
-        /// play visual width measured SPA ~170 (CSS min-width 156 + content).
-        static let detailPlayMinWidth: CGFloat = 168
-        /// settings visual width measured SPA ~150 (CSS min-width 142).
-        static let detailPlaybackMinWidth: CGFloat = 150
+        /// SPA `.tv-detail-play` min-width clamp(112, 8.5vw, 156) → 156 @ 1920;
+        /// focused scale(1.06) ≈ 165 visual; 163 matches measured SPA pink run.
+        static let detailPlayMinWidth: CGFloat = 163
+        /// SPA `.tv-detail-playback-settings` min-width clamp(104, 7.6vw, 142) → 142.
+        /// 150 pushed Play ~8px right of SPA (full99 Play left 320 vs SPA 308).
+        static let detailPlaybackMinWidth: CGFloat = 142
         /// actions `gap: clamp(10px, 0.9vw, 16px)` → 16
         static let detailActionGap: CGFloat = 16
         /// actions `margin-top: clamp(24px, 3.5vh, 46px)` → 38; full80 y≈693 matches SPA.

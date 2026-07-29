@@ -68,6 +68,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so honest parity cannot paint Playwright PNGs.
 - Apple TV detail title uses Avenir Next DemiBold (SPA weight ~560) and
   slightly relaxed tracking so glyph mass matches SPA white-pixel area. Honest full90 movie AE 3.05% (from full66 3.46%).
+- Apple TV movie detail: re-bake `hero-movie` fixture (+30px grass horizon to
+  match SPA key-art crop) and SPA action pill widths (Playback 142, Play 163
+  from CSS min-width clamps). Honest full100 movie AE **2.21%** (from full99
+  3.05%); other screens unchanged.
 - Apple TV settings options list bottom gap after Preferences heading matches
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.
