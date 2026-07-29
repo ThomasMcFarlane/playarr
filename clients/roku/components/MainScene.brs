@@ -2205,7 +2205,14 @@ sub loadWatchProgress()
 end sub
 
 function itemsFromCatalog(data as Object) as Object
-    if data = invalid or data.items = invalid then return []
+    if data = invalid then return []
+    ' Catalog list endpoints return { items: [...] }. Recommendation /
+    ' similar endpoints return a bare array (confirmed live against
+    ' GET /api/v1/catalog/{id}/similar). Accessing .items on a roArray
+    ' is a BrightScript runtime error and suspends the channel in the
+    ' micro debugger, so check GetInterface before field access.
+    if GetInterface(data, "ifArray") <> invalid then return data
+    if data.items = invalid then return []
     return data.items
 end function
 

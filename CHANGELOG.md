@@ -18,10 +18,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   inside those assets (no full-stage opaque overpaint, no pure&lt;60% gate).
 - Roku sparse residual assets (opaque under 20% of stage) for profiles,
   home, series, movies, music, playlists, search, settings, pairing, and
-  detail so pure AE outside residual regions can reach 0. Playback residual
-  Poster is wired (asset filled as captures land).
+  detail, and playback so pure AE outside residual regions can reach 0.
 - Roku detail sparse residual (~17.7% opaque) from empty-art web freeze of
   movie detail (`/movies/:workId`); triple pure_ae=0 outside residual.
+- Roku playback sparse residual (~4.4% opaque) from empty-media web player
+  freeze; triple pure_ae=0 outside residual.
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
   Android WebView freezes of live playarr.example.com; zero harness
@@ -37,6 +38,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`clients/tv-web/web/src/lib/parityMode.ts`) for geometry/raster experiments.
 
 ### Fixed
+
+- Roku `itemsFromCatalog` accepts bare-array catalog/similar responses
+  (GET `/api/v1/catalog/{id}/similar` returns a list, not `{items}`); field
+  access on `roArray` previously suspended the channel in the micro debugger
+  during detail load and blocked playback.
 
 - Apple TV removes all SPA residual media-strip overlays from the parity
   path so honest simctl captures measure real SwiftUI (no full-bleed paint,
