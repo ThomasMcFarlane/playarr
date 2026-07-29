@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku library browse matches web heading ("Movies" + "1,730 TITLES"),
+  numeric title sort (2 Kites before 10 Brambleford), genre kicker/meta, and
+  layout chrome closer to Library.tsx. Browse key-art Poster wired (async).
+
 - Roku home rails match web membership rules: on-deck skips artists, Start
   watching merges recent movies+series (no artists), later rails use
   takeUnused so titles do not repeat across rails. Nav dock gains group
@@ -369,6 +373,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku library browse matches web heading ("Movies" + "1,730 TITLES"),
+  numeric title sort (2 Kites before 10 Brambleford), genre kicker/meta, and
+  layout chrome closer to Library.tsx. Browse key-art Poster wired (async).
+
 - Make Admin Activity peer-group-wide, with trusted connected-server attribution,
   partial-availability warnings, and searchable multi-select, date-time, session-length,
   stop-reason, and bytes-streamed filters; replace group-history offsets with stable opaque
@@ -689,6 +697,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shortcuts, and browser Media Session actions for play, pause, previous, and next.
 
 ### Changed
+
+- Roku library browse matches web heading ("Movies" + "1,730 TITLES"),
+  numeric title sort (2 Kites before 10 Brambleford), genre kicker/meta, and
+  layout chrome closer to Library.tsx. Browse key-art Poster wired (async).
 
 - Remove Android's unreachable pre-parity login, catalogue, player, and settings Compose stacks so
   audits and maintenance cover only the native phone and television experience that can run.

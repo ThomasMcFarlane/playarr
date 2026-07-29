@@ -331,15 +331,21 @@
       overlapping the preview column.
     -->
     <Group id="browseGroup" visible="false">
-      <Label id="browseTitle" translation="[160,90]" width="1400" height="60" scale="[1.31,1.31]" color="0xFFFFFFFF" />
-      <Label id="browsePreviewKind" translation="[160,175]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" />
-      <Label id="browsePreviewTitle" translation="[160,205]" width="380" height="80" wrap="true" numLines="2" scale="[0.94,0.94]" color="0xFFFFFFFF" />
-      <Label id="browsePreviewMeta" translation="[160,310]" width="380" height="30" scale="[0.56,0.56]" color="0xA9B7C9FF" />
-      <Label id="browsePreviewOverview" translation="[160,355]" width="380" height="360" wrap="true" vertAlign="top" scale="[0.56,0.56]" color="0xA9B7C9FF" />
-      <MarkupGrid id="browseGrid" translation="[560,245]" itemComponentName="PosterCard"
+      <!-- Full-bleed key art (web TvStageShell) behind chrome; washed for text. -->
+      <Poster id="browseKeyArt" translation="[0,0]" width="1100" height="1080"
+        loadDisplayMode="scaleToZoom" visible="false" />
+      <Rectangle translation="[0,0]" width="1920" height="1080" color="0x0B0A0BCC" />
+      <!-- Web .tv-library-heading: back is dock Home; h1 + "1,730 TITLES". -->
+      <Label id="browseTitle" translation="[200,90]" width="500" height="60" scale="[1.2,1.2]" color="0xFFFFFFFF" />
+      <Label id="browseCountLabel" translation="[520,110]" width="500" height="36" scale="[0.55,0.55]" color="0x887A82FF" />
+      <Label id="browsePreviewKind" translation="[200,200]" width="420" height="30" scale="[0.48,0.48]" color="0xCF3157FF" />
+      <Label id="browsePreviewTitle" translation="[200,235]" width="420" height="120" wrap="true" numLines="3" scale="[1.05,1.05]" color="0xFFFFFFFF" />
+      <Label id="browsePreviewMeta" translation="[200,380]" width="420" height="30" scale="[0.52,0.52]" color="0xA9B7C9FF" />
+      <Label id="browsePreviewOverview" translation="[200,420]" width="420" height="320" wrap="true" vertAlign="top" scale="[0.52,0.52]" color="0xA9B7C9FF" />
+      <MarkupGrid id="browseGrid" translation="[700,200]" itemComponentName="PosterCard"
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
-      <Label id="browseHint" translation="[160,995]" width="1700" height="50" text="OK details  •  *  A-Z / Filters  •  Back home" scale="[0.69,0.69]" color="0xA9B7C9FF" />
+      <Label id="browseHint" translation="[200,1020]" width="1700" height="40" text="" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
            A-Z, right edge, entered from the grid via Right at its last
            column, matching this app's established "bubble at the boundary"

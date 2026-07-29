@@ -44,6 +44,8 @@ sub init()
     ' Sites (index 4) starts disabled until catalog/kinds proves access.
     m.navEnabled = [true, true, true, true, false, true, true]
     m.browseTitle = m.top.findNode("browseTitle")
+    m.browseCountLabel = m.top.findNode("browseCountLabel")
+    m.browseKeyArt = m.top.findNode("browseKeyArt")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
     m.browsePreviewMeta = m.top.findNode("browsePreviewMeta")
@@ -1320,7 +1322,8 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
-    m.browseTitle.text = label + "  •  …"
+    m.browseTitle.text = label
+    if m.browseCountLabel <> invalid then m.browseCountLabel.text = "…"
     m.browseItems = []
     buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
     showOnly("browse")
@@ -1362,11 +1365,21 @@ sub acceptBrowseCatalog(data as Object, append as Boolean)
 end sub
 
 sub rebuildBrowseContent()
+    ' Web Library.tsx orderWorks: title sort uses numeric localeCompare on
+    ' sort_title/title. Server sort is stringy ("10" before "2"); re-order
+    ' client-side so the first page matches web freezes.
+    if m.browseSort = "title"
+        m.browseItems = sortWorksByTitleNumeric(m.browseItems, m.browseOrder)
+    end if
     buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
-    if m.browseTotal <> invalid
-        m.browseTitle.text = m.browseLabel + "  •  " + m.browseItems.Count().ToStr() + " of " + m.browseTotal.ToStr()
-    else
-        m.browseTitle.text = m.browseLabel + "  •  " + m.browseItems.Count().ToStr()
+    ' Web heading: h1 = "Movies", span = "1,730 TITLES" (not "50 of 1730").
+    m.browseTitle.text = m.browseLabel
+    if m.browseCountLabel <> invalid
+        total = m.browseItems.Count()
+        if m.browseTotal <> invalid then total = Int(m.browseTotal)
+        noun = "TITLES"
+        if m.browseKind = "artist" then noun = "ARTISTS"
+        m.browseCountLabel.text = formatCountWithCommas(total) + " " + noun
     end if
     ' A pending letter jump (see jumpToBrowseLetter) means the target
     ' wasn't loaded yet when it was requested -- now that another page has
@@ -1375,6 +1388,76 @@ sub rebuildBrowseContent()
         jumpToBrowseLetter(m.browseAlphabetPendingLetter)
     end if
 end sub
+
+function formatCountWithCommas(n as Dynamic) as String
+    if n = invalid then return "0"
+    s = Int(n).ToStr()
+    if Len(s) <= 3 then return s
+    out = ""
+    while Len(s) > 3
+        out = "," + Right(s, 3) + out
+        s = Left(s, Len(s) - 3)
+    end while
+    return s + out
+end function
+
+' Approximate web localeCompare({numeric:true}) for title sort.
+function sortWorksByTitleNumeric(items as Object, order as String) as Object
+    result = []
+    if items = invalid then return result
+    for each work in items
+        result.Push(work)
+    end for
+    direction = 1
+    if order = "desc" then direction = -1
+    for i = 0 to result.Count() - 2
+        bestIndex = i
+        for j = i + 1 to result.Count() - 1
+            a = sortTitleKey(result[j])
+            b = sortTitleKey(result[bestIndex])
+            cmp = 0
+            if a < b then cmp = -1
+            if a > b then cmp = 1
+            if cmp * direction < 0 then bestIndex = j
+        end for
+        if bestIndex <> i
+            temp = result[i]
+            result[i] = result[bestIndex]
+            result[bestIndex] = temp
+        end if
+    end for
+    return result
+end function
+
+function sortTitleKey(work as Object) as String
+    if work = invalid then return ""
+    t = ""
+    if work.sort_title <> invalid and work.sort_title <> "" then t = LCase(work.sort_title)
+    if t = "" and work.title <> invalid then t = LCase(work.title)
+    ' Pad digit runs so "2 kites" sorts before "10 brambleford" (web numeric).
+    key = ""
+    i = 1
+    while i <= Len(t)
+        ch = Mid(t, i, 1)
+        if ch >= "0" and ch <= "9"
+            num = ""
+            while i <= Len(t)
+                ch2 = Mid(t, i, 1)
+                if ch2 < "0" or ch2 > "9" then exit while
+                num = num + ch2
+                i = i + 1
+            end while
+            while Len(num) < 10
+                num = "0" + num
+            end while
+            key = key + num
+        else
+            key = key + ch
+            i = i + 1
+        end if
+    end while
+    return key
+end function
 
 ' ---------------------------------------------------------------------------
 ' Library/Movies/Series/Sites alphabet jump strip (from: .tv-alphabet,
@@ -1624,27 +1707,55 @@ function browseCardScale() as Float
     return 1.5
 end function
 
-' Mirrors Home's updateHeroFromWork: tv-web's real Library page
-' (Library.tsx's aside.tv-library-preview) shows the currently-focused
-' title's kind/genre, name, year, and synopsis in a fixed left column next
-' to the grid, updated live as focus moves -- not just a plain "N of Total"
-' header with no detail until a title is actually opened.
+' Mirrors web Library.tsx aside.tv-library-preview + TvStageShell key art.
 sub updateBrowsePreview(work as Object)
     if work = invalid then return
-    m.browsePreviewKind.text = UCase(m.browseLabel)
+    ' Provider line is first genre (or kind singular), not the page plural.
+    kicker = UCase(m.browseLabel)
+    if m.browseLabel = "Movies" then kicker = "MOVIE"
+    if m.browseLabel = "Series" then kicker = "SERIES"
+    if m.browseLabel = "Music" then kicker = "ARTIST"
+    if m.browseLabel = "Sites" then kicker = "SITE"
+    if work.genres <> invalid and work.genres.Count() > 0
+        kicker = UCase(work.genres[0])
+    end if
+    m.browsePreviewKind.text = kicker
     m.browsePreviewTitle.text = work.title
     meta = ""
-    if work.release_date <> invalid and work.release_date.Len() >= 4
+    ' Web uses added_at year, not release_date.
+    if work.added_at <> invalid and work.added_at.Len() >= 4
+        meta = work.added_at.Left(4)
+    else if work.release_date <> invalid and work.release_date.Len() >= 4
         meta = work.release_date.Left(4)
     end if
     if work.genres <> invalid and work.genres.Count() > 0
-        if meta <> "" then meta += "  •  "
-        meta += joinStrings(work.genres, ", ")
+        genreLine = joinStrings(work.genres, " · ")
+        if work.genres.Count() > 2
+            genreLine = work.genres[0] + " · " + work.genres[1]
+        end if
+        if meta <> "" then meta += "  "
+        meta += genreLine
     end if
     m.browsePreviewMeta.text = meta
     overview = work.overview
     if overview = invalid or overview = "" then overview = "No synopsis available."
     m.browsePreviewOverview.text = overview
+    ' Full-bleed key art via HttpAgent (async). Sync GetToFile here blocked
+    ' acceptBrowseCatalog from painting the grid (UI stuck on "…").
+    if m.browseKeyArt <> invalid
+        uri = heroArtworkUrl(work)
+        if uri = ""
+            m.browseKeyArt.uri = ""
+        else
+            m.browseKeyArtAgent = CreateObject("roHttpAgent")
+            m.browseKeyArtAgent.SetCertificatesFile("common:/certs/ca-bundle.crt")
+            m.browseKeyArtAgent.InitClientCertificates()
+            m.browseKeyArtAgent.SetHeaders(ClientHeaders(m.accessToken))
+            m.browseKeyArt.SetHttpAgent(m.browseKeyArtAgent)
+            m.browseKeyArt.uri = uri
+            m.browseKeyArt.visible = true
+        end if
+    end if
 end sub
 
 ' Flat-content counterpart to buildRailContent() below: MarkupGrid takes one
