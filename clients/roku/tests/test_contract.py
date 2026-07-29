@@ -88,6 +88,9 @@ class NavigationContractTests(unittest.TestCase):
         self.assertIn("profiles-signout.png", SCENE)
         self.assertIn("sub applyProfilesChrome(", MAIN)
         self.assertIn("sub updateProfileActionsLayout(", MAIN)
+        self.assertIn("sub focusProfilesRowOnCurrent(", MAIN)
+        self.assertIn("signOutFromProfiles()", MAIN)
+        self.assertIn("openSettings()", MAIN)
         self.assertNotIn('id="profileActions"', SCENE)
         # rowItemSelected is a [row, col] position, unlike the old plain
         # itemSelected index -- regression guard against reintroducing the

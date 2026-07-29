@@ -1285,7 +1285,7 @@ sub loadProfiles()
     applyProfilesChrome()
     showOnly("profiles")
     m.top.screenState = "profiles"
-    m.profilesRow.SetFocus(true)
+    focusProfilesRowOnCurrent()
     updateProfileActionsLayout()
     sendApi("profiles", "GET", "/api/v1/users/profiles", invalid, true)
 end sub
@@ -1321,8 +1321,17 @@ sub showProfiles(data as Dynamic)
     applyProfilesChrome()
     showOnly("profiles")
     m.top.screenState = "profiles"
-    m.profilesRow.SetFocus(true)
+    focusProfilesRowOnCurrent()
     updateProfileActionsLayout()
+end sub
+
+sub focusProfilesRowOnCurrent()
+    if m.profilesRow = invalid then return
+    idx = profilesCurrentIndex()
+    m.profilesFocusIndex = idx
+    ' Jump before SetFocus so the first paint is under the current avatar.
+    m.profilesRow.jumpToRowItem = [0, idx]
+    m.profilesRow.SetFocus(true)
 end sub
 
 ' Web TvStageChrome + profile-actions under the focused avatar.
@@ -1393,33 +1402,66 @@ sub applyProfilesChromeFocus()
     end if
 end sub
 
-' Centre gear + Sign out under the focused profile (web .profile-actions).
-' Hide when focus is on the synthetic Sign in (+) avatar.
+' Web .profile-actions: gear + Sign out under the active profile avatar.
+' Always show when any real profile exists (park under current if focus is
+' on the synthetic Sign in (+) avatar so the controls never disappear).
 sub updateProfileActionsLayout()
     if m.profileActionsGroup = invalid then return
     if m.profiles = invalid then m.profiles = []
-    focusIndex = m.profilesFocusIndex
-    if focusIndex = invalid then focusIndex = 0
-    ' Hide under Sign in / add avatar (web only shows actions on a real profile).
-    if focusIndex < 0 or focusIndex >= m.profiles.Count()
+    if m.profiles.Count() = 0
         m.profileActionsGroup.visible = false
         return
     end if
     m.profileActionsGroup.visible = true
+    if m.profilesSettingsBtn <> invalid
+        m.profilesSettingsBtn.visible = true
+        m.profilesSettingsBtn.opacity = 1
+    end if
+    if m.profilesSignOutBtn <> invalid
+        m.profilesSignOutBtn.visible = true
+        m.profilesSignOutBtn.opacity = 1
+    end if
+    if m.profilesSettingsHit <> invalid
+        m.profilesSettingsHit.visible = true
+        m.profilesSettingsHit.focusable = true
+    end if
+    if m.profilesSignOutHit <> invalid
+        m.profilesSignOutHit.visible = true
+        m.profilesSignOutHit.focusable = true
+    end if
+
+    targetIndex = m.profilesFocusIndex
+    if targetIndex = invalid then targetIndex = 0
+    if targetIndex < 0 or targetIndex >= m.profiles.Count()
+        ' Focus on Sign in (+): still show under current / first profile.
+        targetIndex = 0
+        for i = 0 to m.profiles.Count() - 1
+            p = m.profiles[i]
+            if p <> invalid and p.is_current = true
+                targetIndex = i
+                exit for
+            end if
+        end for
+    end if
+
     itemWidth = 280
     spacing = 32
     rowX = 0
+    rowY = 300
     if m.profilesRow <> invalid and m.profilesRow.translation <> invalid
         rowX = m.profilesRow.translation[0]
+        rowY = m.profilesRow.translation[1]
     end if
-    centerX = rowX + focusIndex * (itemWidth + spacing) + Int(itemWidth / 2)
-    ' Group width ≈ 44 + 12 gap + 160 = 216
-    actionsW = 216
+    centerX = rowX + targetIndex * (itemWidth + spacing) + Int(itemWidth / 2)
+    actionsW = 232 ' 48 gear + 12 gap + 172 pill
     x = centerX - Int(actionsW / 2)
     if x < 40 then x = 40
     if x > 1920 - actionsW - 40 then x = 1920 - actionsW - 40
-    ' Under name/status band (row y≈300 + 360 item).
-    m.profileActionsGroup.translation = [x, 700]
+    ' Sit just under name/status (circle+labels ~ 328px from row top).
+    y = rowY + 340
+    if y > 980 then y = 980
+    m.profileActionsGroup.translation = [x, y]
+    m.profileActionsGroup.opacity = 1
 end sub
 
 sub onProfilesRowFocused(event as Object)
@@ -1428,6 +1470,15 @@ sub onProfilesRowFocused(event as Object)
     m.profilesFocusIndex = position[1]
     updateProfileActionsLayout()
 end sub
+
+function profilesCurrentIndex() as Integer
+    if m.profiles = invalid or m.profiles.Count() = 0 then return 0
+    for i = 0 to m.profiles.Count() - 1
+        p = m.profiles[i]
+        if p <> invalid and p.is_current = true then return i
+    end for
+    return 0
+end function
 
 sub signOutFromProfiles()
     ClearSession(true)

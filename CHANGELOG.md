@@ -70,6 +70,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   had duplicated one circle), equal 240 circles in 280 slots, focus scale
   pivots from circle centre so the row stays on one baseline.
 
+- Roku profiles gear + Sign out stay visible under the current/focused
+  avatar (they were hidden when focus landed on Sign in or before the list
+  loaded). Focus jumps to the current profile on open.
+
 - Apple TV pairing gate is 1:1 with measured web `/login/qr` @ 1920×1080:
   logo only at nav centre-x (no centre wordmark), square theme/language
   triggers top-right, centred panel (kicker/title/desc/QR/code/timer),
