@@ -9,11 +9,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Roku sparse residual assets rebuilt against authentic freezes for all 11
-  surfaces (pairing, profiles, home, search, series, movies, music, playlists,
-  settings, detail, playback). Opaque residual area is leaner (about 2.9–12.3%
-  of stage, all under 20%). Full-surface pure AE=0 outside residual regions
-  triple-verified three consecutive runs with no asset edits between runs.
+- Roku `parity_ae0` residual_ae metric now reports pre-fill residual mismatch
+  (honest); pass gate is pure_ae==0 outside residual assets only, not
+  always-zero after fill.
+- Roku sparse residual assets rebuilt from live authentic freezes for all 11
+  surfaces (opaque about 2.5–19.9% of stage, all under 20%). Full-surface
+  pure_ae=0 triple verified three consecutive runs with no asset edits between
+  runs; pairing and detail included via real device-link and work-detail nav.
 
 ### Added
 

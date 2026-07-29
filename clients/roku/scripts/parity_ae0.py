@@ -157,16 +157,20 @@ def compare_surface(name: str) -> dict[str, Any]:
     residual_diff = full_diff & rmask
     residual_ae_before = int(residual_diff.sum())
 
+    # residual_ae is the pre-fill residual mismatch count (honest metric).
+    # After fill residual_ae is always 0 by construction and is NOT a pass gate.
+    # The only structural gate is pure_ae == 0 outside residual assets.
+    residual_ae = residual_ae_before
+
     filled = r.copy()
     if rarea:
         filled[rmask] = w[rmask]
-    # residual_ae after fill counts only inside residual mask (0 when fill works)
-    residual_ae = int(((filled != w).any(axis=2) & rmask).sum()) if rarea else 0
+    residual_ae_after_fill = int(((filled != w).any(axis=2) & rmask).sum()) if rarea else 0
 
     # Full-stage opaque residual: stage_fill if residual area >= 20%.
     # Sparse residual Posters are allowed only when opaque area < 20%.
     stage_fill = rfrac >= MAX_RESIDUAL_FRAC
-    ok = pure_ae == 0 and residual_ae == 0 and not stage_fill
+    ok = pure_ae == 0 and not stage_fill
 
     diff_dir = OUT / "diffs"
     diff_dir.mkdir(exist_ok=True)
@@ -185,6 +189,7 @@ def compare_surface(name: str) -> dict[str, Any]:
         "pure_pct": round(100 * pure_ae / STAGE, 4),
         "residual_ae_before": residual_ae_before,
         "residual_ae": residual_ae,
+        "residual_ae_after_fill": residual_ae_after_fill,
         "residual_asset_area": rarea,
         "residual_asset_pct": round(100 * rfrac, 4),
         "residual_mode": rmode,
