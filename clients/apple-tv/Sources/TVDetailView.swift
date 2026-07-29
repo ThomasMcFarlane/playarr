@@ -404,15 +404,18 @@ struct TVWorkDetailView: View {
         }
     }
 
-    /// SPA title line-height 0.9. Negative `lineSpacing` is ignored on Text, so
-    /// soft-wrap into a VStack. Spacing −30 → inter-line gap ≈ SPA 12–15px.
+    /// SPA `.tv-detail-copy h1`: weight 560, letter-spacing -0.072em, line-height
+    /// 0.9. Soft-wrap VStack spacing −30 → inter-line gap ≈ SPA 12–15px.
+    /// full89: DemiBold thickened glyphs toward SPA white-px mass (7996→10091
+    /// vs SPA 11425); keep DemiBold with original −30 spacing (full89 −28
+    /// slightly regressed AE).
     @ViewBuilder
     private func detailTitleBlock(_ title: String) -> some View {
         let lines = Self.softWrapTitle(title, maxChars: 9)
         VStack(alignment: .leading, spacing: -30) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
+                    .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
                     .tracking(-5.0)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)

@@ -64,6 +64,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV removes web-ref paint entry point (`PlayarrTVApp` always mounts
   `TVRootView`; `webRefBaseURL` always nil; `TVParityWebRefPaintView` deleted)
   so honest parity cannot paint Playwright PNGs.
+- Apple TV detail title uses Avenir Next DemiBold (SPA weight ~560) and
+  slightly relaxed tracking so glyph mass matches SPA white-pixel area. Honest full90 movie AE 3.05% (from full66 3.46%).
 - Apple TV home parity skips the key-art watermark Text when fixtures already
   carry SPA residual glyphs, avoiding double "THE DA" overpaint.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
