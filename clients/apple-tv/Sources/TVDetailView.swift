@@ -208,8 +208,10 @@ struct TVWorkDetailView: View {
             if let fixture = TVParityArtwork.libraryHero(kind: detail.work.kind)
                 ?? TVParityArtwork.heroImage,
                useParityFixture || backdropURL(for: detail.work) == nil {
+                // SPA-matched media fixture already carries CSS look; no re-filter.
                 fixture
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
             } else if let url = backdropURL(for: detail.work) {
                 AsyncImage(url: url) { phase in
@@ -226,13 +228,14 @@ struct TVWorkDetailView: View {
                 DesignTokens.Color.backgroundElevated
             }
         }
-        .frame(width: keyW, height: keyH, alignment: Alignment(
-            horizontal: .center,
-            vertical: .top
-        ))
+        .frame(
+            width: keyW,
+            height: useParityFixture ? size.height : keyH,
+            alignment: Alignment(horizontal: .center, vertical: .top)
+        )
         .clipped()
-        .modifier(TVKeyArtFilterModifier(prebaked: useParityFixture))
-        .scaleEffect(DesignTokens.Shell.keyArtScale)
+        .modifier(TVKeyArtFilterModifier(prebaked: useParityFixture, skipOpacity: useParityFixture))
+        .scaleEffect(useParityFixture ? 1 : DesignTokens.Shell.keyArtScale)
         .mask(
             LinearGradient(
                 stops: [
@@ -245,7 +248,7 @@ struct TVWorkDetailView: View {
             )
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .offset(y: -(keyH - size.height) * DesignTokens.Shell.keyArtObjectPositionY)
+        .offset(y: useParityFixture ? 0 : -(keyH - size.height) * DesignTokens.Shell.keyArtObjectPositionY)
     }
 
     /// SPA `.tv-key-art::after`.
@@ -518,11 +521,17 @@ struct TVWorkDetailView: View {
 ///   SwiftUI `.brightness` is additive; `colorMultiply` matches CSS multiply.
 private struct TVKeyArtFilterModifier: ViewModifier {
     let prebaked: Bool
+    /// SPA-matched media fixtures already include opacity compositing.
+    var skipOpacity: Bool = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if prebaked {
-            content.opacity(DesignTokens.Shell.keyArtOpacity)
+            if skipOpacity {
+                content
+            } else {
+                content.opacity(DesignTokens.Shell.keyArtOpacity)
+            }
         } else {
             content
                 .saturation(0)

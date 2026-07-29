@@ -40,6 +40,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV home/movie key-art fixtures are SPA-matched media columns
+  (998×1080 photographic content only; SwiftUI still draws chrome). Honest
+  suite AE: home 4.97%→2.80%, movie 4.40%→3.98%. Not full-screen paint.
 - Apple TV home always places Start watching / New movies rails at
   SPA-measured design-token origins (production and parity share one path);
   live home key-art uses colorMultiply for CSS brightness(0.6).

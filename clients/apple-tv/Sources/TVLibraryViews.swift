@@ -281,12 +281,15 @@ struct TVHomeView: View {
             let keyW = size.width * DesignTokens.Shell.keyArtWidthFraction
             if let fixture = TVParityArtwork.heroImage,
                TVParityLaunch.requestedScreen != nil || liveURL == nil {
+                // SPA-matched media fixture (998×1080 key-art column) already
+                // carries CSS filter+opacity look from the SPA capture. Do not
+                // re-apply opacity (double-darkens). Chrome is still SwiftUI.
                 fixture
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
-                    .frame(width: keyW, height: size.height * DesignTokens.Shell.keyArtHeightFraction)
+                    .frame(width: keyW, height: size.height)
                     .clipped()
-                    .opacity(DesignTokens.Shell.keyArtOpacity)
                     .mask(
                         LinearGradient(
                             stops: [
