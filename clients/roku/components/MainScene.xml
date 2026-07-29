@@ -417,17 +417,14 @@
       <!-- Web-matched chrome assets (Search.tsx empty shell). Pre-rendered from
            live web freeze so SceneGraph matches pill field / Filters chip /
            empty magnifier without dual full-stage residual paint. -->
-      <Poster id="searchHeaderChrome" translation="[175,75]" width="305" height="80"
-        uri="pkg:/images/search-header-chrome.png" loadDisplayMode="scaleToFit" />
-      <!-- Hidden title kept for code that sets searchTitle.text -->
-      <Label id="searchTitle" translation="[200,90]" width="900" height="60" text="Search" scale="[1.25,1.25]" color="0xFFFFFFFF" opacity="0" />
-      <Poster id="searchFieldChrome" translation="[185,175]" width="735" height="80"
-        uri="pkg:/images/search-field-chrome.png" loadDisplayMode="scaleToFit" />
-      <!-- Placeholder is baked into field chrome; label only shows typed query. -->
-      <Label id="searchFieldLabel" translation="[250,198]" width="640" height="40" text="" scale="[0.58,0.58]" color="0xF4F0F1FF" />
-      <!-- Filters chip (web empty shell). Type filter Labels stay for D-pad
-           filtering after results, but start hidden so empty shell matches. -->
-      <Poster id="searchFiltersChip" translation="[190,285]" width="230" height="70"
+      <!-- Web Search empty shell: title, pill field, Filters chip, empty magnifier. -->
+      <Label id="searchTitle" translation="[220,95]" width="900" height="60" text="Search" scale="[1.35,1.35]" color="0xFFFFFFFF" />
+      <!-- Pill field: outer pink ring + fill (approx web rounded input). -->
+      <Rectangle id="searchFieldRing" translation="[200,188]" width="720" height="68" color="0xCF3157AA" />
+      <Rectangle id="searchFieldBg" translation="[203,191]" width="714" height="62" color="0x1B181BFF" />
+      <Label id="searchFieldLabel" translation="[250,206]" width="640" height="40" text="Search your libraries and playlists" scale="[0.58,0.58]" color="0x887A82FF" />
+      <!-- Filters chip (web empty). Type filters after results. -->
+      <Poster id="searchFiltersChip" translation="[200,280]" width="200" height="60"
         uri="pkg:/images/search-filters-chip.png" loadDisplayMode="scaleToFit" />
       <Group id="searchFilters" visible="false">
         <Label id="searchFilterAll" translation="[200,290]" width="140" height="36" text="All" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xCF3157FF" />
@@ -437,11 +434,11 @@
         <Label id="searchFilterPlaylists" translation="[760,290]" width="140" height="36" text="Playlists" horizAlign="center" scale="[0.5,0.5]" scaleRotateCenter="[70,18]" color="0xA9B7C9FF" />
       </Group>
       <Label id="searchEmptyHint" translation="[200,360]" width="500" height="80" wrap="true" text="Find any available movie, series, artist or playlist." scale="[0.55,0.55]" color="0x887A82FF" />
-      <!-- Empty state: web-matched magnifier + Start typing block. -->
+      <!-- Empty: magnifier circle + Start typing (web layout: icon left of text). -->
       <Group id="searchEmptyState">
-        <Poster id="searchEmptyIcon" translation="[995,395]" width="609" height="259"
-          uri="pkg:/images/search-empty-block.png" loadDisplayMode="scaleToFit" />
-        <Label id="searchEmptyLabel" translation="[980,560]" width="400" height="50" text="Start typing to search." horizAlign="center" scale="[0.75,0.75]" color="0xF4F0F1FF" opacity="0" />
+        <Poster id="searchEmptyIcon" translation="[1080,430]" width="120" height="120"
+          uri="pkg:/images/search-empty-icon.png" loadDisplayMode="scaleToFit" />
+        <Label id="searchEmptyLabel" translation="[1220,470]" width="400" height="50" text="Start typing to search." scale="[0.72,0.72]" color="0xF4F0F1FF" />
       </Group>
       <Label id="searchPreviewKind" translation="[200,360]" width="380" height="30" scale="[0.5,0.5]" color="0xCF3157FF" visible="false" />
       <Label id="searchPreviewTitle" translation="[200,400]" width="380" height="80" wrap="true" numLines="2" scale="[0.9,0.9]" color="0xFFFFFFFF" visible="false" />

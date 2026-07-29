@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku Search empty shell uses native SceneGraph title/field/empty magnifier (web crop Posters were misaligned).
+
 - Roku Home leftmost card hands focus to a proxy so Left opens the nav dock
   (SceneGraph RowList swallows Left/Right and never matches web spatial nav).
 
