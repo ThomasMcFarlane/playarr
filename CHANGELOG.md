@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android release `0.2.11` (versionCode 2011) published to playarr.app with a
+  proper Playarr release certificate so TV **Check for updates** can install
+  signed builds.
+
+
 - Android release workflow accepts `workflow_dispatch` with a semver input so
   signed APKs can be published without re-pushing a tag when Actions needs a
   manual re-run. Job-level `runner.temp` was removed so GitHub can parse the
