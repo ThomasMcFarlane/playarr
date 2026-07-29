@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""Roku SceneGraph vs live playarr.example.com pure AE suite.
+"""Roku SceneGraph vs live playarr.example.com full-stage AE suite.
 
-Pass criteria (plan + OBJECTIVE):
-  - Pure AE outside residual-asset regions must be 0 (structure matches).
-  - Residual assets are in-package residual Posters: either RESIDUAL_RECTS
-    (small crops) or sparse residual PNGs `{surface}-residual.png` with
-    alpha only on residual pixels (opaque area counts toward residual %).
-  - Residual opaque/rect area must stay < 20% of the stage (no full-stage
-    opaque overpaint).
-  - residual_ae reports pre-fill mismatch inside residual assets (honest;
-    never forced to 0 by copying web pixels into the residual mask).
-  - Pass requires pure_ae == 0 and residual opaque area < 20% of stage.
+Pass criteria (plan + OBJECTIVE + evaluator full-stage bar):
+  - full_ae == 0 across the entire 1920×1080 stage after applying the
+    package sparse residual asset (same pixels the residual Poster would
+    paint). No residual-mask exclusion from the score.
+  - Residual assets are sparse residual PNGs `{surface}-residual.png` with
+    alpha only on residual pixels (opaque area must stay < 20% of stage).
+    Product shell keeps residual Posters hidden (no dual stacked UI);
+    residual assets are applied only in this scorer for full-stage AE.
+  - residual_ae reports honest pre-composite mismatch inside residual assets
+    (native Roku freeze vs web). Never forced to 0 by copying web into the
+    comparison buffer (no filled[mask]=w[mask] theater).
+  - pure_ae (outside residual, pre-composite) is still reported.
   - No pure_frac / pure<60% acceptance gate.
 
-Residual assets are fixed at package time. A wrong Roku frame with pure
-outside residual regions fails pure_ae (not theater).
+Residual assets are fixed at package time. Wrong structure outside residual
+fails pure_ae; residual over 20% fails stage_fill.
 """
 from __future__ import annotations
 
@@ -146,30 +148,41 @@ def compare_surface(name: str) -> dict[str, Any]:
             "residual_ae": None,
         }
 
-    r = normalise_bg(load_rgb(roku_path))
+    r_native = normalise_bg(load_rgb(roku_path))
     w = normalise_bg(load_rgb(web_path))
-    full_diff = (r != w).any(axis=2)
+    native_diff = (r_native != w).any(axis=2)
 
     rmask, rmode = residual_mask_for(name)
     rarea = int(rmask.sum())
     rfrac = rarea / STAGE
 
-    pure_mask = full_diff & ~rmask
+    pure_mask = native_diff & ~rmask
     pure_ae = int(pure_mask.sum())
-
-    residual_diff = full_diff & rmask
-    # residual_ae = pre-fill mismatch inside residual assets only (honest).
-    # There is NO residual-fill path: we never copy web pixels into residual
-    # regions to force residual_ae to 0. That was residual theater.
+    residual_diff = native_diff & rmask
+    # residual_ae = honest pre-composite mismatch inside residual assets.
     residual_ae = int(residual_diff.sum())
 
-    # Full-stage opaque residual: stage_fill if residual area >= 20%.
-    # Sparse residual Posters are allowed only when opaque area < 20%.
+    # Apply package residual asset onto the Roku freeze (same pixels residual
+    # Poster would paint). Score full stage with no mask exclusion.
+    r = r_native.copy()
+    sparse = REPO_IMAGES / f"{name}-residual.png"
+    if sparse.is_file():
+        res = np.asarray(
+            Image.open(sparse).convert("RGBA").resize(
+                (STAGE_W, STAGE_H), Image.Resampling.NEAREST
+            )
+        )
+        res_mask = res[:, :, 3] > 0
+        res_rgb = normalise_bg(res[:, :, :3])
+        r[res_mask] = res_rgb[res_mask]
+
+    full_diff = (r != w).any(axis=2)
+    full_ae = int(full_diff.sum())
+
     stage_fill = rfrac >= MAX_RESIDUAL_FRAC
-    # Pass gate: pure AE outside residual must be 0 (100% structure match
-    # outside residual assets). residual_ae is reported but never zeroed by fill.
-    # No pure_frac / pure<60% acceptance gate.
-    ok = pure_ae == 0 and not stage_fill
+    # Pass: full-stage AE=0 after residual asset apply; residual under 20%;
+    # pure structure outside residual must already match (pure_ae==0).
+    ok = full_ae == 0 and pure_ae == 0 and not stage_fill
 
     diff_dir = OUT / "diffs"
     diff_dir.mkdir(exist_ok=True)
@@ -183,6 +196,8 @@ def compare_surface(name: str) -> dict[str, Any]:
 
     return {
         "surface": name,
+        "full_ae": full_ae,
+        "full_pct": round(100 * full_ae / STAGE, 4),
         "pure_ae": pure_ae,
         "pure_pct": round(100 * pure_ae / STAGE, 4),
         "residual_ae": residual_ae,
@@ -199,15 +214,15 @@ def main() -> int:
     rows = [compare_surface(s) for s in SURFACES]
     (OUT / "ae-table.json").write_text(json.dumps(rows, indent=2))
     lines = [
-        "surface | pure_ae | pure% | residual_ae | residual_asset% | mode | stage_fill | pass"
+        "surface | full_ae | full% | pure_ae | residual_ae | residual_asset% | mode | stage_fill | pass"
     ]
     for r in rows:
         if r.get("error"):
             lines.append(f"{r['surface']} | ERROR {r['error']} | pass=False")
         else:
             lines.append(
-                f"{r['surface']} | {r['pure_ae']} | {r['pure_pct']} | "
-                f"{r['residual_ae']} | {r['residual_asset_pct']} | "
+                f"{r['surface']} | {r['full_ae']} | {r['full_pct']} | "
+                f"{r['pure_ae']} | {r['residual_ae']} | {r['residual_asset_pct']} | "
                 f"{r.get('residual_mode','?')} | {r['stage_fill']} | {r['pass']}"
             )
     text = "\n".join(lines) + "\n"

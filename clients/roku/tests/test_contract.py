@@ -267,7 +267,7 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
 
     def test_parity_suite_forbids_full_stage_residual_fill_theater(self) -> None:
         suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
-        self.assertIn("pure_ae == 0", suite)
+        self.assertIn("full_ae == 0", suite)
         self.assertIn("MAX_RESIDUAL_FRAC", suite)
         # Must not fill every pure-diff pixel unconditionally
         self.assertNotIn("filled[mask] = w[mask]", suite)
@@ -280,16 +280,19 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn("playlistsGroupResidual", SCENE)
         self.assertNotIn("settingsGroupResidual", SCENE)
         self.assertNotIn("content-residual.png", SCENE)
-        # Product shell never paints residual freeze Posters (dual stacked UI).
+        # Product shell hides residual Posters (no dual stacked UI).
         self.assertIn("sub hideAllResiduals()", MAIN)
         self.assertIn("hideAllResiduals()", MAIN)
         self.assertIn('visible="false"', SCENE)
 
-    def test_parity_ae0_suite_requires_pure_outside_residual_rects(self) -> None:
+    def test_parity_ae0_suite_requires_full_stage_ae0(self) -> None:
         suite = (ROOT / "scripts" / "parity_ae0.py").read_text(encoding="utf-8")
+        # Full-stage AE=0 after residual asset apply; pure structure outside residual.
+        self.assertIn("full_ae == 0", suite)
         self.assertIn("pure_ae == 0", suite)
+        self.assertIn("ok = full_ae == 0 and pure_ae == 0 and not stage_fill", suite)
         self.assertIn("MAX_RESIDUAL_FRAC", suite)
-        # Must not fill every pure-diff pixel unconditionally
+        # Must not fill every pure-diff pixel unconditionally in compare buffer
         self.assertNotIn("filled[mask] = w[mask]", suite)
 
     def test_shell_loads_in_place_not_fullscreen_status(self) -> None:

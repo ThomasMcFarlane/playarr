@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku parity_ae0 full_ae=0 gate (residual asset apply, no mask exclusion); residual Posters stay product-hidden; triple ×3.
+
 - Roku product shell: residual freeze Posters stay hidden (no dual stacked
   web/native UI). Authenticated navigations keep the target screen visible
   while data loads instead of a fullscreen Loading status (including library

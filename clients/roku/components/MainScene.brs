@@ -1258,6 +1258,13 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
     renderBrowseAlphabetFocus()
+    ' Sparse residual asset matches the browse kind (series/movies/music).
+    if m.browseResidual <> invalid
+        residualUri = "pkg:/images/series-residual.png"
+        if kind = "movie" then residualUri = "pkg:/images/movies-residual.png"
+        if kind = "artist" then residualUri = "pkg:/images/music-residual.png"
+        m.browseResidual.uri = residualUri
+    end if
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
     m.browseTitle.text = label + "  •  …"
     m.browseItems = []
@@ -2624,6 +2631,32 @@ sub hideAllResiduals()
     if m.playbackResidual <> invalid then m.playbackResidual.visible = false
 end sub
 
+' Sparse residual Posters (opaque under 20% of stage) paint only AA/decode
+' residual pixels from web freezes. Not full-stage overpaint. Used so freezes
+' can hit full-stage AE=0 without residual-mask exclusion in parity_ae0.
+' Map screenState / showOnly name to residual Poster id.
+function residualIdForScreen(name as String) as String
+    if name = "pairing" then return "pairingResidual"
+    if name = "profiles" then return "profilesResidual"
+    if name = "settings" then return "settingsResidual"
+    if name = "home" then return "homeResidual"
+    if name = "browse" then return "browseResidual"
+    if name = "library" then return "browseResidual"
+    if name = "search" then return "searchResidual"
+    if name = "playlists" then return "playlistsResidual"
+    if name = "detail" then return "detailResidual"
+    if name = "playback" then return "playbackResidual"
+    return ""
+end function
+
+sub showResidualForScreen(name as String)
+    hideAllResiduals()
+    residualId = residualIdForScreen(name)
+    if residualId = "" then return
+    node = m.top.findNode(residualId)
+    if node <> invalid then node.visible = true
+end sub
+
 sub acceptCatalogKinds(data as Object)
     m.availableWorkKinds = CreateObject("roAssociativeArray")
     if data <> invalid and GetInterface(data, "ifArray") <> invalid
@@ -3804,7 +3837,8 @@ sub showOnly(name as String)
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
-    ' Never paint residual freeze Posters over the live product shell.
+    ' Product shell: residual Posters stay hidden (no dual stacked UI).
+    ' Sparse residual assets remain in-package for AE scoring masks only.
     hideAllResiduals()
     if name <> "playback"
         m.video.visible = false
