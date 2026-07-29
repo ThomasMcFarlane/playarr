@@ -48,7 +48,11 @@ struct TVSettingsView: View {
                         }
                         .padding(.leading, 4)
                     }
-                    .padding(.bottom, 28)
+                    // SPA options list padding-top is `--library-rail-top` (15vh≈162).
+                    // Heading (back+Preferences) sits in the shell band; first option
+                    // on SPA starts y≈162. Native heading ends ~y105; need bottom
+                    // gap so Appearance row starts y≈162 (full90: native 133 vs SPA 162).
+                    .padding(.bottom, 57)
 
                     // SPA `.settings-option`: min-height 88, title clamp ~1.6vw≈31,
                     // weight 480; active only changes background (not title size).

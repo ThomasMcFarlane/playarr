@@ -66,6 +66,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so honest parity cannot paint Playwright PNGs.
 - Apple TV detail title uses Avenir Next DemiBold (SPA weight ~560) and
   slightly relaxed tracking so glyph mass matches SPA white-pixel area. Honest full90 movie AE 3.05% (from full66 3.46%).
+- Apple TV settings options list bottom gap after Preferences heading matches
+  SPA first-option y≈162 (was y≈133).
 - Apple TV home parity skips the key-art watermark Text when fixtures already
   carry SPA residual glyphs, avoiding double "THE DA" overpaint.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
