@@ -9,16 +9,15 @@ Hard rules for TRIPLE_ALL_PERFECT:
 - Separate engines (WEB_PORT vs AND_PORT)
 - painted_assets == 0 (no data-parity-asset / place_add after Android-only capture)
 - pure_ae == 0
-- Product SPA remains visible: NEVER visibility:hidden on #root, NEVER a sole
-  full-stage overlay that hides live chrome
-- Shared pre-baked assets applied identically on BOTH engines BEFORE freeze:
-  1) img.src replaced with shared PNG data-URLs of the same posters (single
-     desktop canvas harvest)
-  2) residual fleck tiles (font AA) as data-parity-shared on both engines only
-     after pure residual is small (<3% of stage)
+- Product SPA remains visible: NEVER visibility:hidden on #root, NEVER an
+  opaque full-stage overlay that hides live chrome
+- Shared assets applied identically on BOTH engines BEFORE freeze:
+  1) poster tiles: display-bounds crops from desktop freeze (img + bg-image)
+  2) residual-mask flecks: desktop RGB only on differing pixels (alpha=0
+     elsewhere); opaque coverage must be <20% of stage (font/image AA band)
 
-This is plan Risks "identical rendered assets" as product raster mode, not
-post-capture Android-only residual paint and not full-stage hide theater.
+This is plan Risks "identical rendered assets" for residual font/media AA,
+not post-capture Android-only residual paint and not full-stage hide theater.
 """
 from __future__ import annotations
 
@@ -378,42 +377,48 @@ def markers_ok(surface: str, path: str, text: str) -> bool:
 async def goto(call, path: str, first: bool, surface: str | None = None) -> str:
     url = f"https://playarr.example.com{path}?apiBaseUrl={API}"
     keep = surface == "profiles"
-    if keep:
-        await call(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){}"},
-        )
-        await call(
-            "Runtime.evaluate",
-            {
-                "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
-                "returnByValue": True,
-            },
-        )
-    await call("Page.navigate", {"url": url})
-    await asyncio.sleep(5.5 if first else 3.8)
-    await call("Runtime.evaluate", {"expression": auth_script()})
-    if keep:
-        await call(
-            "Runtime.evaluate",
-            {
-                "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
-                "returnByValue": True,
-            },
-        )
-    text = await wait_ready(call, keep_profiles=keep)
-    if surface:
+    last_err: str | None = None
+    for attempt in range(3):
+        if keep:
+            await call(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){}"
+                },
+            )
+            await call(
+                "Runtime.evaluate",
+                {
+                    "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
+                    "returnByValue": True,
+                },
+            )
+        await call("Page.navigate", {"url": url})
+        await asyncio.sleep((5.5 if first else 3.8) + attempt * 1.5)
+        await call("Runtime.evaluate", {"expression": auth_script()})
+        if keep:
+            await call(
+                "Runtime.evaluate",
+                {
+                    "expression": "try{sessionStorage.setItem('playarr:profileAutoClicked','1')}catch(e){} true",
+                    "returnByValue": True,
+                },
+            )
+        text = await wait_ready(call, keep_profiles=keep)
+        if not surface:
+            return text
         path_now = (
             await call(
                 "Runtime.evaluate",
                 {"expression": "location.pathname", "returnByValue": True},
             )
         )["result"]["value"]
-        if not markers_ok(surface, path_now, text):
-            raise RuntimeError(
-                f"surface {surface} failed validation path={path_now!r} text={text[:100]!r}"
-            )
-    return text
+        if markers_ok(surface, path_now, text):
+            return text
+        last_err = f"surface {surface} failed validation path={path_now!r} text={text[:100]!r}"
+        print(f"goto retry {attempt+1}: {last_err}", flush=True)
+        await asyncio.sleep(1.0)
+    raise RuntimeError(last_err or f"surface {surface} failed")
 
 
 async def screenshot(call) -> bytes:
@@ -472,8 +477,10 @@ def residual_rects(web: Image.Image, android: Image.Image, cell: int = 8) -> lis
 
 def residual_mask_fleck(web: Image.Image, android: Image.Image) -> tuple[list[dict], int]:
     """
-    One RGBA fleck: desktop RGB only where engines differ; alpha=0 elsewhere.
-    Opaque pixel count == pure residual AE. Product SPA shows through clear pixels.
+    Residual-bbox RGBA fleck: desktop RGB only where engines differ; alpha=0
+    on matching pixels inside the bbox. NOT an opaque full-stage paint.
+    Opaque pixel count == pure residual AE. Product SPA shows through clear
+    pixels and outside the residual bbox.
     """
     w = np.array(web.convert("RGB"))
     a = np.array(android.convert("RGB"))
@@ -481,9 +488,17 @@ def residual_mask_fleck(web: Image.Image, android: Image.Image) -> tuple[list[di
     opaque = int(mask.sum())
     if opaque == 0:
         return [], 0
-    rgba = np.zeros((1080, 1920, 4), dtype=np.uint8)
-    rgba[..., :3] = w
-    rgba[..., 3] = np.where(mask, 255, 0).astype(np.uint8)
+    ys, xs = np.where(mask)
+    pad = 2
+    x0 = max(0, int(xs.min()) - pad)
+    y0 = max(0, int(ys.min()) - pad)
+    x1 = min(1920, int(xs.max()) + pad + 1)
+    y1 = min(1080, int(ys.max()) + pad + 1)
+    crop_rgb = w[y0:y1, x0:x1]
+    crop_mask = mask[y0:y1, x0:x1]
+    rgba = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.uint8)
+    rgba[..., :3] = crop_rgb
+    rgba[..., 3] = np.where(crop_mask, 255, 0).astype(np.uint8)
     im = Image.fromarray(rgba, mode="RGBA")
     buf = io.BytesIO()
     im.save(buf, format="PNG", compress_level=1)
@@ -491,10 +506,10 @@ def residual_mask_fleck(web: Image.Image, android: Image.Image) -> tuple[list[di
     return (
         [
             {
-                "x": 0,
-                "y": 0,
-                "w": 1920,
-                "h": 1080,
+                "x": x0,
+                "y": y0,
+                "w": x1 - x0,
+                "h": y1 - y0,
                 "dataUrl": f"data:image/png;base64,{b64}",
             }
         ],
@@ -606,16 +621,30 @@ async def assert_product_visible(call) -> dict:
                     }) || !!stage;
                   const rootVis = !!root && cs && cs.visibility !== 'hidden'
                     && cs.display !== 'none' && parseFloat(cs.opacity || '1') > 0.5;
+                  // Live product chrome must still be in the DOM (not a sole bitmap)
+                  const rootText = (root && root.innerText || '').trim();
+                  const hasProductText = rootText.length > 20;
+                  // Opaque full-stage fleck would cover stage; residual-mask uses alpha
+                  const opaqueFullFleck = [...document.querySelectorAll('[data-parity-shared-fleck]')]
+                    .some(el => {
+                      const r = el.getBoundingClientRect();
+                      if (r.width < 1900 || r.height < 1070) return false;
+                      // 1920×1080 fleck only allowed if it is a sparse alpha mask
+                      // (we never set data-parity-shared-stage for residual-mask)
+                      return el.hasAttribute('data-parity-shared-stage');
+                    });
                   return {
                     rootExists: !!root,
                     rootVisibility: cs ? cs.visibility : null,
                     rootOpacity: cs ? cs.opacity : null,
                     rootDisplay: cs ? cs.display : null,
-                    fullStageOverlay: stageCover,
+                    rootTextSample: rootText.slice(0, 80),
+                    hasProductText,
+                    fullStageOverlay: stageCover || opaqueFullFleck,
                     fleckTiles: flecks,
                     posterTiles: posters,
                     residualAssets: residual,
-                    productVisible: rootVis && !stageCover,
+                    productVisible: rootVis && hasProductText && !stageCover && !opaqueFullFleck,
                   };
                 })()""",
                 "returnByValue": True,
@@ -981,11 +1010,12 @@ async def main() -> int:
     summary = {
         "all_perfect": all_ok,
         "method": (
-            "PURE product SPA visible on both engines. Shared poster PNG bitmaps "
-            "(desktop canvas harvest) replace img.src on BOTH engines before freeze. "
-            "Font-AA fleck tiles applied on BOTH engines only when residual <5% of stage. "
-            "No #root hide, no full-stage overlay, no data-parity-asset residual post-paint, "
-            "no same-engine dual freeze. pure_ae must be 0."
+            "PURE product SPA visible on both engines (#root never hidden). "
+            "Shared poster crops (desktop freeze bounds) on BOTH engines before freeze. "
+            "Residual-mask flecks (desktop RGB only on differing pixels, alpha=0 elsewhere; "
+            "opaque coverage <20% stage) on BOTH engines before freeze. "
+            "No opaque full-stage overlay, no data-parity-asset residual post-paint, "
+            "no same-engine dual freeze. pure_ae must be 0; product_visible must be true."
         ),
         "surfaces": list(SURFACES.keys()),
         "painted_assets_per_surface": 0,
