@@ -518,8 +518,7 @@ private fun LoginScreen(
     var televisionManualLogin by remember { mutableStateOf(false) }
 
     if (isTelevision) {
-        // Auth screens paint with AuthLight tokens so they match the web
-        // light /login/qr page even when the TV system theme is dark.
+        // TV auth uses AuthDark (web dark theme). QR plate stays white for scan.
         LaunchedEffect(Unit) { viewModel.pairTelevision() }
 
         if (televisionManualLogin) {
@@ -573,16 +572,21 @@ private fun LoginScreen(
     }
 }
 
-/** Light auth tokens matching web `:root` on `/login/qr` (not system dark). */
-private object AuthLight {
-    val bg = Color(0xFFF5F3F2)
-    val surface = Color(0xFFFBFAF9)
-    val surfaceStrong = Color.White
-    val ink = Color(0xFF382621)
-    val inkSoft = Color(0xFF675961)
-    val inkMuted = Color(0xFFA5969E)
-    val lineStrong = Color(0x47382621)
+/**
+ * Dark auth tokens matching web `:root[data-theme="dark"]`.
+ * Android TV is always a dark ten-foot shell; only the QR plate stays white
+ * so phones can scan it (same as web `.device-login-qr` background: #fff).
+ */
+private object AuthDark {
+    val bg = Color(0xFF151315)
+    val surface = Color(0xFF1B181B)
+    val surfaceStrong = Color(0xFF211D21)
+    val ink = Color(0xFFF4F0F1)
+    val inkSoft = Color(0xFFC5B8BD)
+    val inkMuted = Color(0xFF887A82)
+    val lineStrong = Color(0x3BDFDCDD) // ~23% white line
     val rose = Color(0xFFCF3157)
+    val qrPlate = Color.White
 }
 
 @Composable
@@ -738,12 +742,12 @@ private fun TelevisionPairingScreen(
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(AuthLight.surface, AuthLight.bg),
+                    colors = listOf(AuthDark.surface, AuthDark.bg),
                 ),
             )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(AuthLight.rose.copy(alpha = 0.13f), Color.Transparent),
+                    colors = listOf(AuthDark.rose.copy(alpha = 0.13f), Color.Transparent),
                     radius = 900f,
                 ),
             )
@@ -772,14 +776,14 @@ private fun TelevisionPairingScreen(
             ) {
                 Text(
                     playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
-                    color = AuthLight.inkMuted,
+                    color = AuthDark.inkMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.6.sp,
                 )
                 Text(
                     playarrString(PlayarrString.LoginHeading),
-                    color = AuthLight.ink,
+                    color = AuthDark.ink,
                     fontSize = titleSp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = (-3.6).sp,
@@ -790,7 +794,7 @@ private fun TelevisionPairingScreen(
                 )
                 Text(
                     playarrString(PlayarrString.LoginQrDescription),
-                    color = AuthLight.inkMuted,
+                    color = AuthDark.inkMuted,
                     fontSize = if (tight) 14.sp else 16.sp,
                     lineHeight = if (tight) 20.sp else 22.sp,
                     textAlign = TextAlign.Center,
@@ -806,13 +810,13 @@ private fun TelevisionPairingScreen(
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             CircularProgressIndicator(
-                                color = AuthLight.rose,
+                                color = AuthDark.rose,
                                 modifier = Modifier.size(28.dp),
                                 strokeWidth = 2.5.dp,
                             )
                             Text(
                                 playarrString(PlayarrString.DeviceLoginCreatingCode),
-                                color = AuthLight.inkMuted,
+                                color = AuthDark.inkMuted,
                                 fontSize = 15.sp,
                             )
                         }
@@ -846,13 +850,13 @@ private fun TelevisionPairingScreen(
                         Spacer(Modifier.height(gap))
                         Text(
                             playarrString(PlayarrString.DeviceLoginScanQr),
-                            color = AuthLight.inkMuted,
+                            color = AuthDark.inkMuted,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                         )
                         Text(
                             state.code.verificationUri,
-                            color = AuthLight.ink,
+                            color = AuthDark.ink,
                             fontSize = if (tight) 18.sp else 20.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -860,14 +864,14 @@ private fun TelevisionPairingScreen(
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginEnterCode),
-                            color = AuthLight.inkMuted,
+                            color = AuthDark.inkMuted,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         Text(
                             state.code.userCode,
-                            color = AuthLight.ink,
+                            color = AuthDark.ink,
                             fontSize = codeSp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = FontFamily.Monospace,
@@ -880,7 +884,7 @@ private fun TelevisionPairingScreen(
                         )
                         Text(
                             playarrString(PlayarrString.DeviceLoginWaitingApproval),
-                            color = AuthLight.inkMuted,
+                            color = AuthDark.inkMuted,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp),
@@ -890,7 +894,7 @@ private fun TelevisionPairingScreen(
                                 PlayarrString.DeviceLoginRefreshesIn,
                                 "time" to formatDeviceCodeCountdown(secondsRemaining),
                             ),
-                            color = AuthLight.inkSoft,
+                            color = AuthDark.inkSoft,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -917,7 +921,7 @@ private fun TelevisionPairingScreen(
                                 onClick = onStart,
                                 shape = CircleShape,
                                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = AuthLight.inkSoft,
+                                    containerColor = AuthDark.inkSoft,
                                     contentColor = Color.White,
                                 ),
                             ) {
@@ -930,8 +934,8 @@ private fun TelevisionPairingScreen(
                 Surface(
                     onClick = onManualLogin,
                     shape = CircleShape,
-                    color = AuthLight.surfaceStrong,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                    color = AuthDark.surfaceStrong,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = if (tight) 16.dp else 22.dp)
@@ -940,7 +944,7 @@ private fun TelevisionPairingScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             playarrString(PlayarrString.DeviceLoginSignInManually),
-                            color = AuthLight.inkSoft,
+                            color = AuthDark.inkSoft,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -969,11 +973,11 @@ private fun TelevisionManualLoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.linearGradient(listOf(AuthLight.surface, AuthLight.bg)),
+                Brush.linearGradient(listOf(AuthDark.surface, AuthDark.bg)),
             )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(AuthLight.rose.copy(alpha = 0.13f), Color.Transparent),
+                    colors = listOf(AuthDark.rose.copy(alpha = 0.13f), Color.Transparent),
                     radius = 900f,
                 ),
             )
@@ -995,14 +999,14 @@ private fun TelevisionManualLoginScreen(
             ) {
                 Text(
                     playarrString(PlayarrString.LoginKicker).uppercase(language.locale),
-                    color = AuthLight.inkMuted,
+                    color = AuthDark.inkMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 2.6.sp,
                 )
                 Text(
                     playarrString(PlayarrString.LoginHeading),
-                    color = AuthLight.ink,
+                    color = AuthDark.ink,
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = (-3.2).sp,
@@ -1019,7 +1023,7 @@ private fun TelevisionManualLoginScreen(
                 )
                 Text(
                     playarrString(PlayarrString.LoginDirectConnectionHint),
-                    color = AuthLight.inkMuted,
+                    color = AuthDark.inkMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 18.dp),
                 )
@@ -1053,7 +1057,7 @@ private fun TelevisionManualLoginScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(52.dp),
                     shape = CircleShape,
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = AuthLight.inkSoft,
+                        containerColor = AuthDark.inkSoft,
                         contentColor = Color.White,
                     ),
                 ) {
@@ -1066,8 +1070,8 @@ private fun TelevisionManualLoginScreen(
                 Surface(
                     onClick = onBackToQr,
                     shape = CircleShape,
-                    color = AuthLight.surfaceStrong,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                    color = AuthDark.surfaceStrong,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp)
@@ -1076,7 +1080,7 @@ private fun TelevisionManualLoginScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             playarrString(PlayarrString.LoginQrSubmit),
-                            color = AuthLight.inkSoft,
+                            color = AuthDark.inkSoft,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -1112,29 +1116,27 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
             Surface(
                 onClick = back,
                 shape = CircleShape,
-                color = AuthLight.surfaceStrong.copy(alpha = 0.7f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong.copy(alpha = 0.66f)),
+                color = AuthDark.surfaceStrong.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong.copy(alpha = 0.66f)),
                 modifier = Modifier.size(48.dp),
             ) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = playarrString(PlayarrString.CommonBack),
-                        tint = AuthLight.inkSoft,
+                        tint = AuthDark.inkSoft,
                         modifier = Modifier.size(22.dp),
                     )
                 }
             }
         }
         Spacer(Modifier.weight(1f))
-        // Use AuthLight ink so the control stays visible on the forced light page
-        // (global WebInk may still be the dark-theme light ink until palette flips).
         Box {
             Surface(
                 onClick = { languageExpanded = true },
                 shape = RoundedCornerShape(12.dp),
-                color = AuthLight.surfaceStrong,
-                border = androidx.compose.foundation.BorderStroke(1.dp, AuthLight.lineStrong),
+                color = AuthDark.surfaceStrong,
+                border = androidx.compose.foundation.BorderStroke(1.dp, AuthDark.lineStrong),
                 modifier = Modifier.height(44.dp),
             ) {
                 Row(
@@ -1142,10 +1144,10 @@ private fun AuthStageChrome(onBack: (() -> Unit)?) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("◎", color = AuthLight.inkSoft, fontSize = 14.sp)
+                    Text("◎", color = AuthDark.inkSoft, fontSize = 14.sp)
                     Text(
                         selectedLanguage.label(),
-                        color = AuthLight.ink,
+                        color = AuthDark.ink,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1218,15 +1220,16 @@ internal fun PlayarrQrCode(
         }
     }
     Surface(
-        color = Color.White,
+        color = AuthDark.qrPlate,
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
             .size(matrixSize)
             .shadow(
-                elevation = 24.dp,
+                // web dark: box-shadow 0 24px 72px rgba(0,0,0,0.3)
+                elevation = 28.dp,
                 shape = RoundedCornerShape(18.dp),
-                ambientColor = Color.Black.copy(alpha = 0.22f),
-                spotColor = Color.Black.copy(alpha = 0.22f),
+                ambientColor = Color.Black.copy(alpha = 0.30f),
+                spotColor = Color.Black.copy(alpha = 0.30f),
             ),
     ) {
         Image(

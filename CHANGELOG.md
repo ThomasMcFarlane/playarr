@@ -21,12 +21,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Android TV device-link screen matches web `/login/qr`: light cream auth page
-  with rose glow, stage chrome (logo + language), centred Welcome home /
-  Sign in to Playarr copy, white 12dp / 18dp QR frame (ECC M, margin 2), mono
-  user code, five-minute refresh countdown, and a Sign in manually pill that
-  switches to the credential form. Layout scales to fit a 1080p stage without
-  scrolling or clipping (no oversized QR glow plate).
+- Android TV device-link screen matches web `/login/qr` structure in the dark
+  TV shell (web dark theme tokens): rose glow on charcoal, stage chrome, centred
+  Welcome home / Sign in to Playarr copy, white scannable QR plate (12dp / 18dp,
+  ECC M), mono user code, five-minute refresh countdown, and Sign in manually.
+  Layout fits 1080p without clipping.
 
 ### Fixed
 
