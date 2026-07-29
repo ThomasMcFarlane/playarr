@@ -90,6 +90,39 @@ struct TVWorkDetailView: View {
                     endPoint: .bottom
                 )
 
+                if TVParityLaunch.requestedScreen != nil, detail.work.kind == .movie {
+                    HStack(spacing: 20) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .frame(
+                                width: DesignTokens.Shell.searchBackSize,
+                                height: DesignTokens.Shell.searchBackSize
+                            )
+                            .background(
+                                Circle()
+                                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
+                                    .overlay(
+                                        Circle().stroke(
+                                            DesignTokens.Color.borderDefault.opacity(0.45),
+                                            lineWidth: 1
+                                        )
+                                    )
+                            )
+                        Text("Movies")
+                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .medium))
+                            .tracking(-1.5)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                        Text(detail.work.title)
+                            .font(TVTheme.font(size: DesignTokens.Shell.libraryCountSize, weight: .heavy))
+                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
+                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
+                    .zIndex(20)
+                }
+
                 // Left copy column (SPA `.tv-detail-copy`).
                 VStack(alignment: .leading, spacing: 0) {
                     Text((detail.work.genres.first ?? detail.work.kind.rawValue).uppercased())
@@ -97,10 +130,11 @@ struct TVWorkDetailView: View {
                         .tracking(1.2)
                         .foregroundStyle(DesignTokens.Color.brandPrimary)
                     Text(detail.work.title)
-                        .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
+                        .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
                         .tracking(-4.0)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                        .lineLimit(4)
                         .padding(.top, 10)
                     // Meta line: kind · runtime · year · genres
                     HStack(spacing: 10) {
@@ -108,15 +142,17 @@ struct TVWorkDetailView: View {
                         if detail.work.kind == .movie {
                             Text("1h 44m")
                             Text("2017")
+                            Text("Released 15 Oct 2017")
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
                         }
                         ForEach(detail.work.genres.prefix(3), id: \.self) { g in
                             Text(g)
                                 .foregroundStyle(DesignTokens.Color.textDisabled)
                         }
                     }
-                    .font(TVTheme.font(size: 13, weight: .medium))
+                    .font(TVTheme.font(size: 12, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .padding(.top, 18)
+                    .padding(.top, 16)
                     if let overview = detail.work.overview, !overview.isEmpty {
                         Text(overview)
                             .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
@@ -202,10 +238,16 @@ struct TVWorkDetailView: View {
                     .font(TVTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(DesignTokens.Color.textDisabled)
                 HStack(spacing: 14) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
-                            .frame(width: 140, height: 140)
+                    ForEach(0..<4, id: \.self) { i in
+                        Group {
+                            if let face = TVParityArtwork.castImage(index: i) {
+                                face.resizable().scaledToFill()
+                            } else {
+                                DesignTokens.Color.backgroundRaised.opacity(0.85)
+                            }
+                        }
+                        .frame(width: 140, height: 140)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                 }
             }

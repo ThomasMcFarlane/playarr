@@ -49,12 +49,11 @@ struct TVRootView: View {
             TVStageBackground()
 
             if TVParityLaunch.requestedScreen == .deviceCodePairing {
-                TVPairingGateView()
-            } else if TVParityLaunch.requestedScreen == .player, let work = parityWorkDetail {
-                // Player suite screen: full-screen detail/player chrome.
-                NavigationStack {
-                    TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                }
+                // Fixture device-code chrome (do not hit live ATS / network).
+                TVParityPairingFixtureView()
+            } else if TVParityLaunch.requestedScreen == .player {
+                // Fixture player chrome (SPA suite maps /login when media is unavailable).
+                TVParityPlayerFixtureView()
             } else if TVParityLaunch.requestedScreen == .detailMovie, let work = parityWorkDetail {
                 // SPA movie ref is work-detail with shell (nav/logo/profile).
                 signedInShell(forcedSelection: .movies, detailWork: work)

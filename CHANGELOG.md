@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity pairing/player use offline fixtures (device code + player
+  chrome); home rails match SPA New movies order and fixed HStack cards;
+  movie detail adds Movies heading and SPA cast headshots.
 - Apple TV parity `detail-*` screens now open the SPA library directory
 
 - Apple TV library directory uses measured SPA card origins (775×162,

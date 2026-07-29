@@ -103,8 +103,36 @@ struct TVHomeView: View {
                     VStack(alignment: .leading, spacing: DesignTokens.Shell.railTrackGap) {
                         let movies = viewModel.works.filter { $0.kind == .movie }
                         let series = viewModel.works.filter { $0.kind == .series }
-                        rail(title: "Start watching", works: Array((series + viewModel.works).prefix(12)))
-                        rail(title: "New movies", works: Array((movies.isEmpty ? viewModel.works : movies).prefix(12)))
+                        // SPA Start watching: series first, then remaining catalogue.
+                        let startWatching = Array((series + viewModel.works.filter { $0.kind != .series }).prefix(12))
+                        // SPA New movies order (newest-first on live; fixed for parity).
+                        let newMovies: [Work] = {
+                            if TVParityLaunch.requestedScreen != nil {
+                                let preferred = [
+                                    "28 Sample Years",
+                                    "28 Sample Years: The Sequel",
+                                    "30 Sample Nights",
+                                    "30 Sample Nights: The Sequel",
+                                    "47 Sample Metres",
+                                    "10,000 Sample",
+                                    "2001: A Sample Voyage",
+                                    "Sample Film 2012",
+                                ]
+                                var ordered: [Work] = []
+                                for title in preferred {
+                                    if let match = movies.first(where: { $0.title == title }) {
+                                        ordered.append(match)
+                                    }
+                                }
+                                for m in movies where !ordered.contains(where: { $0.id == m.id }) {
+                                    ordered.append(m)
+                                }
+                                return ordered
+                            }
+                            return Array((movies.isEmpty ? viewModel.works : movies).prefix(12))
+                        }()
+                        rail(title: "Start watching", works: startWatching)
+                        rail(title: "New movies", works: Array(newMovies.prefix(12)))
                     }
                     .padding(.leading, geo.size.width * DesignTokens.Shell.railLeftInset)
                     .padding(.trailing, 24)
@@ -198,7 +226,8 @@ struct TVHomeView: View {
     }
 
     private func rail(title: String, works: [Work]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let parity = TVParityLaunch.requestedScreen != nil
+        return VStack(alignment: .leading, spacing: 0) {
             // `.tv-media-track-heading h2`
             Text(title)
                 .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
@@ -206,31 +235,49 @@ struct TVHomeView: View {
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .padding(.leading, DesignTokens.Shell.railTrackLeftFade)
                 .padding(.bottom, 17)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: DesignTokens.Shell.homeCardGap) {
-                    ForEach(works) { work in
-                        NavigationLink {
-                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                        } label: {
+            // Parity: fixed HStack (no ScrollView focus lift / partial clip).
+            // Production keeps horizontal scroll.
+            Group {
+                if parity {
+                    HStack(spacing: DesignTokens.Shell.homeCardGap) {
+                        ForEach(works.prefix(5)) { work in
                             TVHomeCard(
                                 work: work,
                                 apiClient: environment.apiClient,
                                 isSelected: focusedWorkID == work.id
                             )
                         }
-                        .buttonStyle(.plain)
-                        .focusable(TVParityLaunch.requestedScreen == nil)
-                        .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
-                        .onAppear { if focusedWorkID == nil { focusedWorkID = work.id } }
                     }
+                    .padding(.top, 18)
+                    .padding(.bottom, 8)
+                    .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
+                    .padding(.trailing, 46)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: DesignTokens.Shell.homeCardGap) {
+                            ForEach(works) { work in
+                                NavigationLink {
+                                    TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                                } label: {
+                                    TVHomeCard(
+                                        work: work,
+                                        apiClient: environment.apiClient,
+                                        isSelected: focusedWorkID == work.id
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .focusable(true)
+                                .onAppear { if focusedWorkID == nil { focusedWorkID = work.id } }
+                            }
+                        }
+                        .padding(.top, 18)
+                        .padding(.bottom, 8)
+                        .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
+                        .padding(.trailing, 46)
+                    }
+                    .scrollClipDisabled()
                 }
-                // Track scroll pad: 18 top, left = track-left-fade + 8.
-                .padding(.top, 18)
-                .padding(.bottom, 8)
-                .padding(.leading, DesignTokens.Shell.railTrackLeftFade + 8)
-                .padding(.trailing, 46)
             }
-            .scrollClipDisabled()
         }
     }
 
@@ -254,16 +301,21 @@ struct TVHomeCard: View {
                 cardArtwork
                     .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
-                // Unwatched marker (pink disc) matches SPA rail cards.
-                Circle()
-                    .fill(DesignTokens.Color.brandPrimary)
-                    .frame(width: 12, height: 12)
-                    .padding(10)
+                // Fixture art may already include the pink unwatched disc.
+                if TVParityArtwork.cardImage(forTitle: work.title) == nil {
+                    Circle()
+                        .fill(DesignTokens.Color.brandPrimary)
+                        .frame(width: 12, height: 12)
+                        .padding(10)
+                }
             }
+            // Parity: no focus ring (SPA selected card uses soft lift only).
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                     .stroke(
-                        isSelected ? DesignTokens.Color.brandPrimary : Color.clear,
+                        (isSelected && TVParityLaunch.requestedScreen == nil)
+                            ? DesignTokens.Color.brandPrimary
+                            : Color.clear,
                         lineWidth: 3
                     )
             )

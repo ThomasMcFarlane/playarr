@@ -140,7 +140,7 @@ enum TVParityFixtures {
             "10 Brambleford Lane",
             .movie,
             "After a catastrophic car crash, a young woman wakes up in a survivalist's underground bunker, where he claims to have saved her from an apocalyptic attack that has left the outside world uninhabitable.",
-            "Thriller"
+            "Thriller|Science Fiction|Drama"
         ),
         ("10,000 Sample", .movie, "A prehistoric adventure.", "Action"),
         ("2001: A Sample Voyage", .movie, "A voyage to Jupiter.", "Sci-Fi"),
@@ -412,6 +412,105 @@ struct TVParityRootView: View {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
                 .stroke(Color.clear, lineWidth: 3)
         )
+    }
+
+    private func chromeButton(_ label: String, primary: Bool = false) -> some View {
+        Text(label)
+            .font(TVTheme.bodyFont(emphasis: true))
+            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .padding(.horizontal, DesignTokens.Spacing.xl)
+            .padding(.vertical, DesignTokens.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                    .fill(primary ? DesignTokens.Color.brandPrimary : DesignTokens.Color.backgroundRaised)
+            )
+    }
+}
+
+
+/// Deterministic device-code pairing chrome for parity captures (no network).
+struct TVParityPairingFixtureView: View {
+    var body: some View {
+        ZStack {
+            TVStageBackground()
+            VStack(spacing: DesignTokens.Spacing.lg) {
+                Text("Playarr Server")
+                    .font(TVTheme.heroTitleFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                Text("Scan the QR code, or visit")
+                    .font(TVTheme.subtitleFont())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                Text(TVParityFixtures.verificationURI)
+                    .font(TVTheme.titleFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                Text("and enter the code")
+                    .font(TVTheme.subtitleFont())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                Text(TVParityFixtures.userCode)
+                    .font(.system(size: 64, weight: .bold, design: .monospaced))
+                    .tracking(8)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .padding(.horizontal, DesignTokens.Spacing.xl)
+                    .padding(.vertical, DesignTokens.Spacing.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                            .fill(DesignTokens.Color.backgroundRaised)
+                    )
+                Text("Waiting for approval…")
+                    .font(TVTheme.captionFont())
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+            .padding(DesignTokens.Spacing.xxxl)
+            .frame(maxWidth: 1200)
+        }
+    }
+}
+
+/// Deterministic player chrome for parity captures (ui-tv PlayerScreen layout).
+/// SPA suite maps `/login` when live media is unavailable; native still paints
+/// real player chrome so the production path is exercised.
+struct TVParityPlayerFixtureView: View {
+    var body: some View {
+        ZStack {
+            DesignTokens.Color.backgroundBase.ignoresSafeArea()
+            // Dim key-art wash
+            if let hero = TVParityArtwork.libraryHero(kind: .movie) ?? TVParityArtwork.heroImage {
+                hero
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(0.28)
+                    .blur(radius: 18)
+                    .ignoresSafeArea()
+            }
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+                Spacer()
+                Text("10 Brambleford Lane")
+                    .font(TVTheme.titleFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                // Progress bar matching ui-tv PlayerScreen
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(DesignTokens.Color.backgroundRaised)
+                        Capsule()
+                            .fill(DesignTokens.Color.brandPrimary)
+                            .frame(width: geo.size.width * 0.35)
+                    }
+                }
+                .frame(height: 6)
+                HStack(spacing: DesignTokens.Spacing.md) {
+                    chromeButton("< Back")
+                    chromeButton("Play", primary: true)
+                    chromeButton("Forward >")
+                    chromeButton("Exit")
+                }
+                Text("paused")
+                    .font(TVTheme.captionFont())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+            }
+            .padding(DesignTokens.Spacing.xl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     private func chromeButton(_ label: String, primary: Bool = false) -> some View {
