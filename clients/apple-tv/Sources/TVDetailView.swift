@@ -449,30 +449,31 @@ struct TVWorkDetailView: View {
     }
 
     /// SPA `.tv-detail-play` / `.tv-detail-playback-settings` @ 1920×1080:
-    /// height clamp(44, 4.2vw, 64) → 64; play min-width 156; settings min-width 142;
-    /// font ~0.62vw≈12; play focused = brand fill + white label.
+    /// height 64; play visual width ~156–170; settings ~136–150;
+    /// font ~12; play focused = brand fill + white label.
     private func detailChromeLabel(_ label: String, primary: Bool) -> some View {
-        HStack(spacing: primary ? 10 : 8) {
+        HStack(spacing: primary ? 8 : 7) {
             if primary {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
             } else {
                 // SPA playback-settings leading glyph (equaliser bars).
                 Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.brandPrimary)
             }
             Text(label)
                 .font(TVTheme.font(size: 12, weight: .semibold))
         }
         .foregroundStyle(primary ? Color.white : DesignTokens.Color.textPrimary)
+        // Fixed frames match SPA pill widths better than minWidth + padding
+        // (full80 native Play was ~325 wide vs SPA ~170).
         .frame(
-            minWidth: primary
+            width: primary
                 ? DesignTokens.Shell.detailPlayMinWidth
                 : DesignTokens.Shell.detailPlaybackMinWidth,
-            minHeight: DesignTokens.Shell.detailActionHeight
+            height: DesignTokens.Shell.detailActionHeight
         )
-        .padding(.horizontal, primary ? 22 : 16)
         .background(
             Capsule().fill(
                 primary

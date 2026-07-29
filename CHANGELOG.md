@@ -56,10 +56,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (was full66 3.46% / 2.93% / 2.75%).
 - Apple TV detail action buttons match SPA `.tv-detail-play` /
   `.tv-detail-playback-settings` (fixed 168/150×64 pills) and settings
-  option title weight/tracking.
-- Apple TV movie hero fixture is SPA-matched Telea-inpainted key-art
-  (photo stack from suite reference, baked UI chrome removed) so left-column
-  wash matches live web under SwiftUI title/meta/actions.
+  option title weight/tracking. Honest full82 movie AE 3.08% (from full66 3.46%).
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).

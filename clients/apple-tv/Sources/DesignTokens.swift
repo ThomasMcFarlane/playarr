@@ -228,16 +228,14 @@ enum DesignTokens {
         // MARK: Detail actions (`.tv-detail-play` / `.tv-detail-playback-settings`)
         /// `height: clamp(44px, 4.2vw, 64px)` → 64 @ 1920
         static let detailActionHeight: CGFloat = 64
-        /// play `min-width: clamp(112px, 8.5vw, 156px)` → 156; full73 visual
-        /// SPA pill was slightly narrower than raw CSS min with our font metrics.
-        static let detailPlayMinWidth: CGFloat = 148
-        /// settings `min-width: clamp(104px, 7.6vw, 142px)` → 142
-        static let detailPlaybackMinWidth: CGFloat = 136
+        /// play visual width measured SPA ~170 (CSS min-width 156 + content).
+        static let detailPlayMinWidth: CGFloat = 168
+        /// settings visual width measured SPA ~150 (CSS min-width 142).
+        static let detailPlaybackMinWidth: CGFloat = 150
         /// actions `gap: clamp(10px, 0.9vw, 16px)` → 16
-        static let detailActionGap: CGFloat = 14
-        /// actions `margin-top: clamp(24px, 3.5vh, 46px)` → 38; full73 native
-        /// Play y≈705 vs SPA y≈692, so pull up by ~12.
-        static let detailActionTopGap: CGFloat = 26
+        static let detailActionGap: CGFloat = 16
+        /// actions `margin-top: clamp(24px, 3.5vh, 46px)` → 38; full80 y≈693 matches SPA.
+        static let detailActionTopGap: CGFloat = 28
 
         // MARK: Search page (`.tv-library-heading` + `.tv-search-copy` @ 1920×1080)
 
