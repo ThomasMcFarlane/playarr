@@ -22,6 +22,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Apple TV parity pairing fixture matches SPA DeviceLogin TV layout
+  (Link this TV, QR, ABCD-2345); suite maps pairing/player to TV device
+  login and player chrome instead of phone `/link` and password login.
 - Apple TV settings Preferences chrome matches SPA (white back button,
   enlarged selected row title, compact theme chips); search empty-state
   art uses translucent circle border; parity nav hides settings gear.

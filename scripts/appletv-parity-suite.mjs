@@ -37,9 +37,9 @@ const VIEWPORT = { width: 1920, height: 1080 };
 export const SCREENS = [
   {
     id: "device-code-pairing",
-    webPath: "/link",
+    webPath: "/login?platform=android-tv",
     nativeFile: "device-code-pairing",
-    note: "Web: phone-side link form. Native: full-screen device-code display (RFC 8628 pair).",
+    note: "TV device-code display (SPA DeviceLogin / native pairing fixture). Not phone /link form.",
   },
   {
     id: "home-recently-added",
@@ -79,9 +79,9 @@ export const SCREENS = [
   },
   {
     id: "player",
-    webPath: "/login",
+    webPath: "/player/",
     nativeFile: "player",
-    note: "Player requires auth + mediaFileId; login/placeholder used when unavailable.",
+    note: "Player chrome (SPA PlayerScreen). Requires auth+mediaFileId; suite may inject chrome when live media unavailable.",
   },
   {
     id: "settings",

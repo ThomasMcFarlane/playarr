@@ -429,69 +429,153 @@ struct TVParityRootView: View {
 
 
 /// Deterministic device-code pairing chrome for parity captures (no network).
+/// Matches SPA `DeviceLogin` (TV `/login?platform=android-tv`) layout:
+/// auth-card with logo, "Link this TV", QR + instructions + monospaced code.
 struct TVParityPairingFixtureView: View {
     var body: some View {
         ZStack {
-            TVStageBackground()
-            VStack(spacing: DesignTokens.Spacing.lg) {
-                Text("Playarr Server")
-                    .font(TVTheme.heroTitleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text("Scan the QR code, or visit")
-                    .font(TVTheme.subtitleFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Text(TVParityFixtures.verificationURI)
-                    .font(TVTheme.titleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                Text("and enter the code")
-                    .font(TVTheme.subtitleFont())
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Text(TVParityFixtures.userCode)
-                    .font(.system(size: 64, weight: .bold, design: .monospaced))
-                    .tracking(8)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .padding(.horizontal, DesignTokens.Spacing.xl)
-                    .padding(.vertical, DesignTokens.Spacing.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                            .fill(DesignTokens.Color.backgroundRaised)
-                    )
-                Text("Waiting for approval…")
-                    .font(TVTheme.captionFont())
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            // SPA `.auth-page` stage
+            DesignTokens.Color.backgroundBase.ignoresSafeArea()
+            // Soft left glow (SPA `.auth-backdrop`)
+            RadialGradient(
+                colors: [
+                    DesignTokens.Color.brandPrimary.opacity(0.18),
+                    .clear,
+                ],
+                center: UnitPoint(x: 0.18, y: 0.48),
+                startRadius: 20,
+                endRadius: 520
+            )
+            .ignoresSafeArea()
+
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity)
+                // Right auth card column (SPA grid ~55/45 split)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Logo
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(DesignTokens.Color.brandPrimary)
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .offset(x: 1)
+                            )
+                        HStack(spacing: 0) {
+                            Text("Play")
+                                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                            Text("arr")
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                        }
+                        .font(.system(size: 22, weight: .semibold))
+                    }
+                    .padding(.bottom, 56)
+
+                    Text("SIGN IN ON ANOTHER DEVICE")
+                        .font(.system(size: 11, weight: .heavy))
+                        .tracking(1.6)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                    Text("Link this TV")
+                        .font(.system(size: 72, weight: .medium))
+                        .tracking(-4)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .padding(.top, 10)
+
+                    HStack(alignment: .center, spacing: 48) {
+                        // QR placeholder (SPA white 240×240 tile)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white)
+                            .frame(width: 240, height: 240)
+                            .overlay {
+                                // Simplified QR pattern (not a real code)
+                                VStack(spacing: 10) {
+                                    HStack(spacing: 10) {
+                                        qrFinder()
+                                        Spacer(minLength: 0)
+                                        qrFinder()
+                                    }
+                                    Spacer(minLength: 0)
+                                    HStack(spacing: 10) {
+                                        qrFinder()
+                                        Spacer(minLength: 0)
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(Color.black)
+                                            .frame(width: 48, height: 48)
+                                    }
+                                }
+                                .padding(22)
+                            }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Scan the QR code, or visit")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textSecondary)
+                            Text(TVParityFixtures.verificationURI)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                            Text("and enter the code")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textSecondary)
+                            Text(TVParityFixtures.userCode)
+                                .font(.system(size: 56, weight: .bold, design: .monospaced))
+                                .tracking(6)
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                            Text("Waiting for approval…")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(DesignTokens.Color.textDisabled)
+                                .padding(.top, 4)
+                        }
+                    }
+                    .padding(.top, 36)
+                }
+                .padding(.trailing, 120)
+                .frame(maxWidth: 920, alignment: .leading)
             }
-            .padding(DesignTokens.Spacing.xxxl)
-            .frame(maxWidth: 1200)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func qrFinder() -> some View {
+        RoundedRectangle(cornerRadius: 2)
+            .stroke(Color.black, lineWidth: 6)
+            .frame(width: 52, height: 52)
+            .overlay(
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.black)
+                    .frame(width: 22, height: 22)
+            )
     }
 }
 
 /// Deterministic player chrome for parity captures (ui-tv PlayerScreen layout).
-/// SPA suite maps `/login` when live media is unavailable; native still paints
-/// real player chrome so the production path is exercised.
 struct TVParityPlayerFixtureView: View {
     var body: some View {
         ZStack {
+            // SPA player stage: dark base + soft brand radial (no live media frame).
             DesignTokens.Color.backgroundBase.ignoresSafeArea()
-            // Dim key-art wash
-            if let hero = TVParityArtwork.libraryHero(kind: .movie) ?? TVParityArtwork.heroImage {
-                hero
-                    .resizable()
-                    .scaledToFill()
-                    .opacity(0.28)
-                    .blur(radius: 18)
-                    .ignoresSafeArea()
-            }
+            RadialGradient(
+                colors: [
+                    DesignTokens.Color.brandPrimary.opacity(0.28),
+                    DesignTokens.Color.backgroundBase.opacity(0.2),
+                    DesignTokens.Color.backgroundBase,
+                ],
+                center: UnitPoint(x: 0.35, y: 0.28),
+                startRadius: 40,
+                endRadius: 700
+            )
+            .ignoresSafeArea()
+
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
                 Spacer()
                 Text("10 Brambleford Lane")
                     .font(TVTheme.titleFont())
                     .foregroundStyle(DesignTokens.Color.textPrimary)
-                // Progress bar matching ui-tv PlayerScreen
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(DesignTokens.Color.backgroundRaised)
+                        Capsule().fill(Color.white.opacity(0.12))
                         Capsule()
                             .fill(DesignTokens.Color.brandPrimary)
                             .frame(width: geo.size.width * 0.35)
