@@ -77,6 +77,41 @@ use crate::playback::{
 };
 use crate::AppState;
 
+/// A source pathname suitable for ffprobe/ffmpeg while retaining any
+/// folder descriptor that pathname names.
+///
+/// Ordinary catalogue media keeps its resolved filesystem path. Folder
+/// media instead uses a procfs path to the already-authorised descriptor;
+/// `_folder_guard` deliberately lives for this value's whole lexical scope
+/// so a subprocess cannot be redirected by a later path replacement.
+struct SubprocessMediaSource {
+    path: std::path::PathBuf,
+    _folder_guard: Option<crate::folders::PinnedFolderFile>,
+}
+
+impl SubprocessMediaSource {
+    async fn open(
+        state: &AppState,
+        media_file: &playarr_model::MediaFile,
+        policy: &playarr_model::Policy,
+    ) -> Result<Self, ApiError> {
+        let folder_guard =
+            crate::folders::open_pinned_folder_media(state, media_file.id, policy).await?;
+        let path = match folder_guard.as_ref() {
+            Some(pinned) => pinned.subprocess_path()?,
+            None => playarr_model::resolve_media_path(&media_file.path),
+        };
+        Ok(Self {
+            path,
+            _folder_guard: folder_guard,
+        })
+    }
+
+    fn path(&self) -> &FsPath {
+        &self.path
+    }
+}
+
 /// One real chapter embedded in a media container, as reported by ffprobe.
 /// Untitled chapters remain untitled rather than receiving a fabricated
 /// name; Playarr can display their real start time as the label.
@@ -311,11 +346,11 @@ fn parse_ffprobe_duration_ms(stdout: &[u8]) -> Result<u64, ApiError> {
 /// manifests grow while ffmpeg is encoding, so their current seekable edge
 /// must never be presented to the player as the title's total duration.
 pub(crate) async fn probe_media_duration_ms(path: &FsPath) -> Result<u64, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
+            .kill_on_drop(true)
             .args([
                 "-v",
                 "error",
@@ -382,11 +417,11 @@ fn parse_ffprobe_audio_tracks(stdout: &[u8]) -> Result<Vec<SourceAudioTrack>, Ap
 pub(crate) async fn probe_media_audio_tracks(
     path: &FsPath,
 ) -> Result<Vec<SourceAudioTrack>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
+            .kill_on_drop(true)
             .args([
                 "-v",
                 "error",
@@ -460,11 +495,11 @@ fn parse_ffprobe_subtitle_tracks(stdout: &[u8]) -> Result<Vec<SourceSubtitleTrac
 pub(crate) async fn probe_media_subtitle_tracks(
     path: &FsPath,
 ) -> Result<Vec<SourceSubtitleTrack>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
+            .kill_on_drop(true)
             .args([
                 "-v",
                 "error",
@@ -495,11 +530,11 @@ pub(crate) async fn probe_media_subtitle_tracks(
 }
 
 async fn probe_media_chapters(path: &FsPath) -> Result<Vec<MediaChapter>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(15),
         Command::new(&binary)
+            .kill_on_drop(true)
             .args(["-v", "error", "-show_chapters", "-of", "json", "-i"])
             .arg(path)
             .output(),
@@ -966,6 +1001,7 @@ async fn ensure_media_thumbnail_at(
     let mut output = tokio::time::timeout(
         Duration::from_secs(30),
         Command::new(binary)
+            .kill_on_drop(true)
             .args(["-hide_banner", "-loglevel", "error", "-ss"])
             .arg(format!("{:.3}", position_ms as f64 / 1000.0))
             .arg("-i")
@@ -996,6 +1032,7 @@ async fn ensure_media_thumbnail_at(
         output = tokio::time::timeout(
             Duration::from_secs(30),
             Command::new(binary)
+                .kill_on_drop(true)
                 .args(["-hide_banner", "-loglevel", "error", "-i"])
                 .arg(source_path)
                 .args([
@@ -1074,12 +1111,41 @@ pub(crate) async fn serve_file(
     path: &std::path::Path,
     request: Request,
 ) -> Result<Response, ApiError> {
-    let service = ServeFile::new(path);
+    serve_file_service(ServeFile::new(path), request).await
+}
+
+async fn serve_file_service(service: ServeFile, request: Request) -> Result<Response, ApiError> {
     let response = match service.oneshot(request).await {
         Ok(response) => response,
         Err(infallible) => match infallible {},
     };
     Ok(response.map(axum::body::Body::new))
+}
+
+/// Serves a source media file through its ordinary pathname unless it is a
+/// folder-discovered original. Folder originals are reopened from a pinned
+/// Linux descriptor so path mutation between authorisation and `ServeFile`
+/// cannot redirect the response outside the configured root.
+pub(crate) async fn serve_original_media_file(
+    state: &AppState,
+    media_file: &playarr_model::MediaFile,
+    policy: &playarr_model::Policy,
+    request: Request,
+) -> Result<Response, ApiError> {
+    let Some(pinned) =
+        crate::folders::open_pinned_folder_media(state, media_file.id, policy).await?
+    else {
+        let resolved_path = playarr_model::resolve_media_path(&media_file.path);
+        return serve_file(&resolved_path, request).await;
+    };
+
+    let proc_path = pinned.proc_path()?;
+    let mime = mime_guess::from_path(pinned.mime_path()).first_or_octet_stream();
+    let result = serve_file_service(ServeFile::new_with_mime(proc_path, &mime), request).await;
+    // Keep the source descriptor alive until ServeFile has opened its own
+    // descriptor and returned the response body.
+    drop(pinned);
+    result
 }
 
 /// Counts only response-body chunks that Axum actually pulls from the file
@@ -1181,6 +1247,29 @@ fn hls_tracking_session_id(
     Ok(Some(session.id))
 }
 
+/// Re-authorises the current account behind an HLS/subtitle capability.
+///
+/// A playback session proves which media file was negotiated, not that its
+/// owner's grants remain valid forever. Bearerless requests therefore
+/// resolve that user's current policy and effective libraries before each
+/// file response, matching anonymous direct-play delivery.
+async fn current_hls_media_policy(
+    state: &AppState,
+    streaming: Option<&StreamingUser>,
+    playback_session: Option<&playarr_model::PlaybackSession>,
+    media_file: &playarr_model::MediaFile,
+) -> Result<playarr_model::Policy, ApiError> {
+    let (policy, allowed_libraries) = if let Some(streaming) = streaming {
+        (streaming.policy.clone(), streaming.allowed_libraries())
+    } else {
+        let playback_session = playback_session.ok_or_else(hls_cookie_unauthorized)?;
+        resolve_streaming_access(state, playback_session.user_id).await?
+    };
+    ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+    crate::folders::ensure_folder_media_allowed(state, media_file.id, &policy).await?;
+    Ok(policy)
+}
+
 /// Cold on-demand transcodes can take several seconds before ffmpeg writes
 /// the first manifest/segment. Holding the already-authenticated request
 /// briefly is both cheaper and more reliable than forcing every TV client
@@ -1243,17 +1332,20 @@ pub async fn stream_media_handler(
     let candidate_session = query
         .playback_session_id
         .and_then(|session_id| state.session_registry.get(session_id));
-    let tracking_session_id = if let Some(streaming) = streaming {
+    let (tracking_session_id, policy) = if let Some(streaming) = streaming {
         ensure_library_allowed(
             media_file.source_instance_id,
             streaming.allowed_libraries().as_deref(),
         )?;
 
-        candidate_session
-            .filter(|session| {
-                session.user_id == streaming.user_id && session.media_file_id == media_file_id
-            })
-            .map(|session| session.id)
+        (
+            candidate_session
+                .filter(|session| {
+                    session.user_id == streaming.user_id && session.media_file_id == media_file_id
+                })
+                .map(|session| session.id),
+            streaming.policy,
+        )
     } else {
         let session_id = query.playback_session_id.ok_or_else(|| {
             ApiError::new(
@@ -1276,11 +1368,12 @@ pub async fn stream_media_handler(
                 "playback session does not authorise this media file",
             ));
         }
-        Some(session_id)
+        let (policy, allowed_libraries) = resolve_streaming_access(&state, session.user_id).await?;
+        ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+        (Some(session_id), policy)
     };
 
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-    let response = serve_file(&resolved_path, request).await?;
+    let response = serve_original_media_file(&state, &media_file, &policy, request).await?;
     Ok(match tracking_session_id {
         Some(session_id) => {
             track_streamed_bytes(response, state.session_registry.clone(), session_id)
@@ -1540,10 +1633,9 @@ pub async fn peer_stream_media_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    let (_, allowed_libraries) = resolve_streaming_access(&state, session.user_id).await?;
+    let (policy, allowed_libraries) = resolve_streaming_access(&state, session.user_id).await?;
     ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
 
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let mut synthetic_request = Request::builder()
         .method(axum::http::Method::GET)
         .uri("/proxied-stream");
@@ -1556,7 +1648,8 @@ pub async fn peer_stream_media_handler(
             ApiError::internal(format!("failed to build proxied file request: {err}"))
         })?;
 
-    let response = serve_file(&resolved_path, synthetic_request).await?;
+    let response =
+        serve_original_media_file(&state, &media_file, &policy, synthetic_request).await?;
     Ok(track_streamed_bytes(
         response,
         state.session_registry.clone(),
@@ -1604,8 +1697,9 @@ pub async fn media_chapters_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-    Ok(Json(probe_media_chapters(&resolved_path).await?))
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
+    let source = SubprocessMediaSource::open(&state, &media_file, &streaming.policy).await?;
+    Ok(Json(probe_media_chapters(source.path()).await?))
 }
 
 #[utoipa::path(
@@ -1637,12 +1731,14 @@ pub async fn media_metadata_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
 
     let duration_ms = match media_file.duration_ms.filter(|duration| *duration > 0) {
         Some(duration_ms) => duration_ms,
         None => {
-            let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-            let duration_ms = probe_media_duration_ms(&resolved_path).await?;
+            let source =
+                SubprocessMediaSource::open(&state, &media_file, &streaming.policy).await?;
+            let duration_ms = probe_media_duration_ms(source.path()).await?;
             state
                 .catalog
                 .cache_media_file_duration(media_file.id, media_file.work_id, duration_ms)
@@ -1702,6 +1798,7 @@ pub async fn media_download_options_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
     ensure_can_download(&streaming.policy)?;
 
     // Same lazy-probe-and-cache pattern `media_metadata_handler` above
@@ -1711,8 +1808,9 @@ pub async fn media_download_options_handler(
     let duration_ms = match media_file.duration_ms.filter(|duration| *duration > 0) {
         Some(duration_ms) => duration_ms,
         None => {
-            let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-            let duration_ms = probe_media_duration_ms(&resolved_path).await?;
+            let source =
+                SubprocessMediaSource::open(&state, &media_file, &streaming.policy).await?;
+            let duration_ms = probe_media_duration_ms(source.path()).await?;
             state
                 .catalog
                 .cache_media_file_duration(media_file.id, media_file.work_id, duration_ms)
@@ -1761,6 +1859,7 @@ async fn media_playback_options(
     user_id: Uuid,
     media_file_id: Uuid,
     allowed_libraries: Option<&[Uuid]>,
+    policy: &playarr_model::Policy,
 ) -> Result<MediaPlaybackOptionsResponse, ApiError> {
     let media_file = state
         .media_files
@@ -1768,10 +1867,10 @@ async fn media_playback_options(
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
     ensure_library_allowed(media_file.source_instance_id, allowed_libraries)?;
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
+    let source = SubprocessMediaSource::open(state, &media_file, policy).await?;
     let (audio_result, subtitle_result) = tokio::join!(
-        probe_media_audio_tracks(&resolved_path),
-        probe_media_subtitle_tracks(&resolved_path)
+        probe_media_audio_tracks(source.path()),
+        probe_media_subtitle_tracks(source.path())
     );
     let audio_tracks = audio_result
         .unwrap_or_else(|error| {
@@ -1913,10 +2012,17 @@ pub async fn media_playback_options_handler(
     streaming: StreamingUser,
     Path(media_file_id): Path<Uuid>,
 ) -> Result<Json<MediaPlaybackOptionsResponse>, ApiError> {
+    crate::folders::ensure_folder_media_allowed(&state, media_file_id, &streaming.policy).await?;
     let allowed = streaming.allowed_libraries();
     Ok(Json(
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?,
+        media_playback_options(
+            &state,
+            streaming.user_id,
+            media_file_id,
+            allowed.as_deref(),
+            &streaming.policy,
+        )
+        .await?,
     ))
 }
 
@@ -1996,10 +2102,16 @@ pub async fn update_media_playback_options_handler(
     Path(media_file_id): Path<Uuid>,
     Json(body): Json<UpdateMediaPlaybackPreferencesRequest>,
 ) -> Result<Json<MediaPlaybackOptionsResponse>, ApiError> {
+    crate::folders::ensure_folder_media_allowed(&state, media_file_id, &streaming.policy).await?;
     let allowed = streaming.allowed_libraries();
-    let current =
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?;
+    let current = media_playback_options(
+        &state,
+        streaming.user_id,
+        media_file_id,
+        allowed.as_deref(),
+        &streaming.policy,
+    )
+    .await?;
     if !current
         .quality_options
         .iter()
@@ -2044,8 +2156,14 @@ pub async fn update_media_playback_options_handler(
         })?;
 
     Ok(Json(
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?,
+        media_playback_options(
+            &state,
+            streaming.user_id,
+            media_file_id,
+            allowed.as_deref(),
+            &streaming.policy,
+        )
+        .await?,
     ))
 }
 
@@ -2085,14 +2203,15 @@ pub async fn media_subtitle_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
-    }
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-    let supported_tracks = probe_media_subtitle_tracks(&resolved_path).await?;
+    let policy = current_hls_media_policy(
+        &state,
+        streaming.as_ref(),
+        cookie_session.as_ref(),
+        &media_file,
+    )
+    .await?;
+    let source = SubprocessMediaSource::open(&state, &media_file, &policy).await?;
+    let supported_tracks = probe_media_subtitle_tracks(source.path()).await?;
     if !supported_tracks
         .iter()
         .any(|track| track.stream_index == stream_index)
@@ -2104,11 +2223,12 @@ pub async fn media_subtitle_handler(
 
     let subtitle_path = ensure_media_subtitle(
         media_file_id,
-        &resolved_path,
+        source.path(),
         stream_index,
         query.source_offset_ms,
     )
     .await?;
+    drop(source);
     let mut response = serve_file(&subtitle_path, request).await?;
     response.headers_mut().insert(
         axum::http::header::CONTENT_TYPE,
@@ -2159,9 +2279,11 @@ pub async fn media_thumbnail_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
-    let resolved_path = playarr_model::resolve_media_path(&media_file.path);
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
+    let source = SubprocessMediaSource::open(&state, &media_file, &streaming.policy).await?;
     let position_ms = thumbnail_position_ms(query.position_ms);
-    let thumbnail_path = ensure_media_thumbnail(media_file_id, &resolved_path, position_ms).await?;
+    let thumbnail_path = ensure_media_thumbnail(media_file_id, source.path(), position_ms).await?;
+    drop(source);
     let mut response = serve_file(&thumbnail_path, request).await?;
     response.headers_mut().insert(
         axum::http::header::CACHE_CONTROL,
@@ -2216,12 +2338,13 @@ pub async fn serve_rendition_file_handler(
         .ok_or_else(|| {
             ApiError::not_found(format!("unknown media file {}", rendition.media_file_id))
         })?;
-    if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
-    }
+    current_hls_media_policy(
+        &state,
+        streaming.as_ref(),
+        cookie_session.as_ref(),
+        &media_file,
+    )
+    .await?;
     let response = serve_file(&rendition.output_path.join(&file_name), request).await?;
     Ok(match tracking_session_id {
         Some(session_id) => {
@@ -2262,7 +2385,7 @@ pub async fn serve_session_file_handler(
 
     let session = state
         .transcode
-        .lookup_session(session_id)
+        .peek_session(session_id)
         .await?
         .ok_or_else(|| ApiError::not_found(format!("unknown or expired session {session_id}")))?;
     let tracking_session_id = hls_tracking_session_id(
@@ -2282,12 +2405,18 @@ pub async fn serve_session_file_handler(
         .ok_or_else(|| {
             ApiError::not_found(format!("unknown media file {}", session.media_file_id))
         })?;
-    if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
-    }
+    current_hls_media_policy(
+        &state,
+        streaming.as_ref(),
+        cookie_session.as_ref(),
+        &media_file,
+    )
+    .await?;
+    state
+        .transcode
+        .touch_session(session)
+        .await?
+        .ok_or_else(|| ApiError::not_found(format!("unknown or expired session {session_id}")))?;
 
     let dir = state.transcode.session_output_dir(session_id);
     let path = dir.join(&file_name);
@@ -2313,13 +2442,13 @@ mod tests {
     use axum::body::Body;
     use axum::extract::ConnectInfo;
     use axum::http::{Request as HttpRequest, StatusCode};
-    use std::net::SocketAddr;
-    use std::path::PathBuf;
     use playarr_model::media::LeafRef;
     use playarr_model::{
         ClientPlatform, MediaFile, PlayMethod, PlaybackSession, ProducedBy, Rendition,
         RenditionStatus,
     };
+    use std::net::SocketAddr;
+    use std::path::PathBuf;
 
     fn write_temp_file(contents: &[u8]) -> PathBuf {
         let path =
@@ -2369,6 +2498,18 @@ mod tests {
             buffering_ms_total: 0,
             stop_reason: None,
         }
+    }
+
+    async fn active_authorised_playback_session(
+        state: &crate::test_support::TestState,
+        media_file_id: Uuid,
+        source_instance_id: Uuid,
+    ) -> PlaybackSession {
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(state, user_id, vec![source_instance_id]).await;
+        let mut session = active_playback_session(media_file_id);
+        session.user_id = user_id;
+        session
     }
 
     #[tokio::test]
@@ -3193,6 +3334,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn anonymous_direct_stream_rechecks_the_session_owners_current_library_policy() {
+        let (router, state) = test_state().await;
+        let path = write_temp_file(b"revoked bytes");
+        let file = media_file_at(path.clone());
+        let media_file_id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let mut session = active_playback_session(media_file_id);
+        session.user_id = user_id;
+        let session_id = session.id;
+        state.app.session_registry.insert(session);
+
+        let user = state.user_repo.find_by_id(user_id).await.unwrap().unwrap();
+        let mut policy = state
+            .policy_repo
+            .find_by_id(user.policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        policy.library_allow.clear();
+        state.policy_repo.upsert(&policy).await.unwrap();
+
+        let response = router
+            .oneshot(
+                HttpRequest::builder()
+                    .uri(format!(
+                        "/api/v1/media/{media_file_id}/stream?playback_session_id={session_id}"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn bearerless_hls_rechecks_the_session_owners_current_library_policy() {
+        let (_router, state) = test_state().await;
+        let media_file = media_file_at(write_temp_file(b"source"));
+        let session = active_authorised_playback_session(
+            &state,
+            media_file.id,
+            media_file.source_instance_id,
+        )
+        .await;
+
+        let user = state
+            .user_repo
+            .find_by_id(session.user_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut policy = state
+            .policy_repo
+            .find_by_id(user.policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        policy.library_allow.clear();
+        state.policy_repo.upsert(&policy).await.unwrap();
+
+        let error = current_hls_media_policy(&state.app, None, Some(&session), &media_file)
+            .await
+            .unwrap_err();
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+
+        let _ = std::fs::remove_file(media_file.path);
+    }
+
+    #[tokio::test]
     async fn stream_unknown_media_file_is_404() {
         let (router, state) = test_state().await;
         let user_id = Uuid::new_v4();
@@ -3326,6 +3543,7 @@ mod tests {
         let source = write_temp_file(b"source");
         let media_file = media_file_at(source.clone());
         let media_file_id = media_file.id;
+        let source_instance_id = media_file.source_instance_id;
         state.media_files.insert(media_file);
         let rendition = Rendition {
             id: Uuid::new_v4(),
@@ -3341,7 +3559,8 @@ mod tests {
         };
         state.rendition_repo.upsert(&rendition).await.unwrap();
 
-        let playback_session = active_playback_session(media_file_id);
+        let playback_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3393,6 +3612,7 @@ mod tests {
         let source = write_temp_file(b"source");
         let media_file = media_file_at(source.clone());
         let media_file_id = media_file.id;
+        let source_instance_id = media_file.source_instance_id;
         state.media_files.insert(media_file);
         let rendition = Rendition {
             id: Uuid::new_v4(),
@@ -3408,7 +3628,8 @@ mod tests {
         };
         state.rendition_repo.upsert(&rendition).await.unwrap();
 
-        let playback_session = active_playback_session(media_file_id);
+        let playback_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3459,6 +3680,7 @@ mod tests {
         let source = write_temp_file(b"source");
         let media_file = media_file_at(source.clone());
         let media_file_id = media_file.id;
+        let source_instance_id = media_file.source_instance_id;
         state.media_files.insert(media_file);
         let rendition = Rendition {
             id: Uuid::new_v4(),
@@ -3479,10 +3701,12 @@ mod tests {
         // query param. `hls_cookie_playback_session` resolves "cookie
         // first, query second", so only the cookie's session should ever
         // be looked up or tracked.
-        let cookie_session = active_playback_session(media_file_id);
+        let cookie_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let cookie_session_id = cookie_session.id;
         state.app.session_registry.insert(cookie_session);
-        let query_session = active_playback_session(media_file_id);
+        let query_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let query_session_id = query_session.id;
         state.app.session_registry.insert(query_session);
 
@@ -3713,6 +3937,7 @@ mod tests {
         let source = write_temp_file(b"source");
         let media_file = media_file_at(source.clone());
         let media_file_id = media_file.id;
+        let source_instance_id = media_file.source_instance_id;
         state.media_files.insert(media_file.clone());
         let transcode_session = state
             .app
@@ -3725,7 +3950,8 @@ mod tests {
             .await
             .unwrap();
 
-        let playback_session = active_playback_session(media_file_id);
+        let playback_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3777,6 +4003,7 @@ mod tests {
         let source = write_temp_file(b"source");
         let media_file = media_file_at(source.clone());
         let media_file_id = media_file.id;
+        let source_instance_id = media_file.source_instance_id;
         state.media_files.insert(media_file.clone());
         let transcode_session = state
             .app
@@ -3789,7 +4016,8 @@ mod tests {
             .await
             .unwrap();
 
-        let playback_session = active_playback_session(media_file_id);
+        let playback_session =
+            active_authorised_playback_session(&state, media_file_id, source_instance_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3956,6 +4184,7 @@ mod tests {
             .spawn_on_demand_transcode(&media_file, "h264-720p-4mbps", "test-node")
             .await
             .unwrap();
+        let original_expiry = session.expires_at;
 
         let user_id = Uuid::new_v4();
         seed_streaming_user_with_library_allow(&state, user_id, vec![Uuid::new_v4()]).await;
@@ -3975,6 +4204,18 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            state
+                .app
+                .transcode
+                .peek_session(session.id)
+                .await
+                .unwrap()
+                .expect("denied polling must not remove an otherwise live session")
+                .expires_at,
+            original_expiry,
+            "a denied request must not extend the transcode idle deadline"
+        );
 
         state
             .app

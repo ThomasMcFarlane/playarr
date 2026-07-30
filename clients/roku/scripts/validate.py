@@ -118,13 +118,14 @@ def validate_source_contract() -> None:
     required_fragments = (
         "/api/system/version",
         "/api/v1/auth/refresh",
-        "/api/v1/oauth/device/code",
         "/api/v1/oauth/token",
         "/api/v1/users/profiles",
         "/api/v1/catalog?",
         "/api/v1/catalog/",
         "/api/v1/playback/",
         "/api/v1/playback/progress",
+        "/api/v1/folders/roots",
+        "/api/v1/folders/",
         "/events",
     )
     for fragment in required_fragments:
@@ -134,6 +135,8 @@ def validate_source_contract() -> None:
         fail("library must use the native RowList scroll container")
     if 'm.video = m.top.findNode("video")' not in source:
         fail("playback must use the native Video node")
+    if 'm.folderBrowser = m.top.findNode("folderBrowser")' not in source:
+        fail("folder browsing must use the native RowList scroll container")
 
 
 def main() -> int:

@@ -448,9 +448,9 @@ export interface paths {
         };
         get?: never;
         /**
-         * Replaces one Source instance's peer-root mappings. Because mappings are
-         *     part of the normal Source row, the existing signed Source replication
-         *     carries this change to every peer.
+         * Replaces one Source instance's peer-root mappings and, when supplied, its
+         *     per-discovered-root mappings for the current node. Source-wide mappings
+         *     replicate with the Source row; root-specific overrides remain local.
          */
         put: operations["update_source_folder_mappings_handler"];
         post?: never;
@@ -972,6 +972,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["download_ticket_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_folder_roots_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/{root_folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["browse_folder_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2506,6 +2538,70 @@ export interface components {
             storage_bucket: string;
             vapid_public_key: string;
         };
+        FolderBreadcrumbResponse: {
+            name: string;
+            path: string;
+        };
+        FolderBrowseResponse: {
+            breadcrumbs: components["schemas"]["FolderBreadcrumbResponse"][];
+            entries: components["schemas"]["FolderEntryResponse"][];
+            limit: number;
+            offset: number;
+            path: string;
+            root: components["schemas"]["FolderRootResponse"];
+            /** Format: int64 */
+            total: number;
+        };
+        FolderEntryResponse: {
+            album?: string | null;
+            artist?: string | null;
+            audio_codec?: string | null;
+            /** Format: int64 */
+            bitrate_bps?: number | null;
+            container?: string | null;
+            /** Format: int64 */
+            duration_ms?: number | null;
+            entry_type: components["schemas"]["FolderEntryType"];
+            /** Format: int32 */
+            height?: number | null;
+            /** Format: uuid */
+            media_file_id?: string | null;
+            media_kind?: null | components["schemas"]["WorkKind"];
+            /** Format: date-time */
+            modified_at?: string | null;
+            name: string;
+            path: string;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            thumbnail_url?: string | null;
+            title?: string | null;
+            video_codec?: string | null;
+            /** Format: int32 */
+            width?: number | null;
+        };
+        /** @enum {string} */
+        FolderEntryType: "directory" | "media";
+        FolderRootErrorResponse: {
+            message: string;
+            /** Format: uuid */
+            source_instance_id: string;
+            source_name: string;
+        };
+        FolderRootResponse: {
+            available: boolean;
+            /** Format: uuid */
+            id: string;
+            library_kind: components["schemas"]["WorkKind"];
+            name: string;
+            /** Format: uuid */
+            source_instance_id: string;
+            source_name: string;
+            unavailable_reason?: string | null;
+        };
+        FolderRootsResponse: {
+            errors: components["schemas"]["FolderRootErrorResponse"][];
+            roots: components["schemas"]["FolderRootResponse"][];
+        };
         /** @description Request body for [`found_peer_group_handler`]. */
         FoundPeerGroupRequest: {
             name: string;
@@ -3771,6 +3867,14 @@ export interface components {
             folder_mappings: {
                 [key: string]: string;
             };
+            /**
+             * @description Optional complete replacement of current-node overrides for individual
+             *     discovered roots. Omit to leave them unchanged; send `{}` to clear
+             *     every per-root override for this source.
+             */
+            root_folder_mappings?: {
+                [key: string]: string;
+            } | null;
         };
         /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
@@ -5325,7 +5429,7 @@ export interface operations {
                     "application/json": components["schemas"]["SourceInstanceResponse"];
                 };
             };
-            /** @description A mapped path was empty */
+            /** @description A mapped path was invalid or a root did not belong to this source */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6421,7 +6525,10 @@ export interface operations {
     };
     album_artwork_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                style?: string | null;
+            };
             header?: never;
             path: {
                 /** @description Artist work id */
@@ -6435,7 +6542,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Playarr Server-cached album artwork */
+            /** @description Playarr Server-cached album artwork (optionally style-baked) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6451,7 +6558,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unsupported artwork kind */
+            /** @description Unsupported artwork kind or style */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6479,6 +6586,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Source artwork could not be styled */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description The metadata-provider artwork could not be safely cached */
             502: {
                 headers: {
@@ -6490,7 +6604,10 @@ export interface operations {
     };
     work_artwork_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                style?: string | null;
+            };
             header?: never;
             path: {
                 /** @description Work id */
@@ -6502,7 +6619,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Playarr Server-cached source artwork */
+            /** @description Playarr Server-cached source artwork (optionally style-baked) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6518,7 +6635,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unsupported artwork kind */
+            /** @description Unsupported artwork kind or style */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6541,6 +6658,13 @@ export interface operations {
             };
             /** @description Unknown work or unavailable artwork kind */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source artwork could not be styled */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7433,6 +7557,105 @@ export interface operations {
             };
             /** @description The ticket expired or was canceled */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_folder_roots_handler: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["WorkKind"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opaque, path-free root folders for the requested library kind */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRootsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    browse_folder_handler: {
+        parameters: {
+            query?: {
+                /** @description Root-relative directory path. Empty or omitted means the root. */
+                path?: string | null;
+                limit?: number | null;
+                offset?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Opaque root-folder id */
+                root_folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One path-safe, paginated directory level with file-derived metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderBrowseResponse"];
+                };
+            };
+            /** @description The requested path is absolute or contains traversal */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller cannot access this library or folder */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown root or directory */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The root is not mounted on this server */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

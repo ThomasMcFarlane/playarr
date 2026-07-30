@@ -7,9 +7,10 @@
 
 use chrono::{DateTime, Utc};
 use playarr_arr_client::{
-    ArrClientError, BazarrClient, LidarrAlbum, LidarrArtist, LidarrClient, LidarrImage,
-    ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor, ReadarrClient,
-    SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage, WhisparrSeries,
+    ArrClientError, ArrRootFolder, BazarrClient, LidarrAlbum, LidarrArtist, LidarrClient,
+    LidarrImage, ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor,
+    ReadarrClient, SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage,
+    WhisparrSeries,
 };
 use playarr_model::{
     Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
@@ -396,6 +397,21 @@ impl ArrClient {
         }
     }
 
+    /// Lists every root folder configured in a media-owning source app.
+    ///
+    /// Bazarr and Prowlarr do not own media libraries, so they return an
+    /// empty list rather than forcing callers to special-case source kinds.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        match self {
+            ArrClient::Sonarr(client) => client.list_root_folders().await,
+            ArrClient::Radarr(client) => client.list_root_folders().await,
+            ArrClient::Lidarr(client) => client.list_root_folders().await,
+            ArrClient::Readarr(client) => client.list_root_folders().await,
+            ArrClient::Whisparr(client) => client.list_root_folders().await,
+            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(Vec::new()),
+        }
+    }
+
     /// A single remote entity by the source app's own id, normalized to
     /// [`RemoteWork`]. `Ok(None)` (not an error) for source kinds with no
     /// `Work`-owning catalog surface.
@@ -427,6 +443,46 @@ impl ArrClient {
 mod tests {
     use super::*;
     use playarr_arr_client::LidarrArtistStatistics;
+    use serde_json::json;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn list_root_folders_dispatches_to_the_concrete_client() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 12,
+                    "path": "/movies",
+                    "accessible": true,
+                    "freeSpace": 123,
+                    "totalSpace": 456
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = ArrClient::Radarr(RadarrClient::new(server.uri(), "test-key"))
+            .list_root_folders()
+            .await
+            .expect("the unified client should dispatch root discovery");
+
+        assert_eq!(roots[0].id, 12);
+        assert_eq!(roots[0].path, "/movies");
+    }
+
+    #[tokio::test]
+    async fn list_root_folders_is_empty_for_non_media_sources() {
+        let roots = ArrClient::Bazarr(BazarrClient::new("http://127.0.0.1:1", "test-key"))
+            .list_root_folders()
+            .await
+            .expect("Bazarr should not require a root-folder request");
+
+        assert!(roots.is_empty());
+    }
 
     fn sonarr_series(id: i64, title: &str, tvdb_id: i64, monitored: bool) -> SonarrSeries {
         SonarrSeries {

@@ -5,6 +5,10 @@ import io.playarr.shared.data.model.CreateDownloadTicketRequest
 import io.playarr.shared.data.model.DownloadOptionsResponse
 import io.playarr.shared.data.model.DownloadTicketResponse
 import io.playarr.shared.data.model.ExternalProvider
+import io.playarr.shared.data.model.FolderBrowseResponse
+import io.playarr.shared.data.model.FolderRoot
+import io.playarr.shared.data.model.FolderRootError
+import io.playarr.shared.data.model.FolderRootsResponse
 import io.playarr.shared.data.model.MediaChapter
 import io.playarr.shared.data.model.MediaMetadata
 import io.playarr.shared.data.model.MediaPlaybackOptionsResponse
@@ -20,6 +24,7 @@ import io.playarr.shared.data.model.WorkCreditsResponse
 import io.playarr.shared.data.model.WorkDetail
 import io.playarr.shared.data.model.WorkKind
 import io.playarr.shared.data.remote.PlayarrApi
+import java.net.URI
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -37,6 +42,7 @@ internal data class PlayarrWorkSource(
 internal class PlayarrServerSourceRegistry {
     private val sourcesByWorkId = ConcurrentHashMap<String, List<PlayarrWorkSource>>()
     private val preferredServerByWorkId = ConcurrentHashMap<String, PlayarrServerClient>()
+    private val serverByFolderRootId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByMediaFileId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByPlaybackSessionId = ConcurrentHashMap<String, PlayarrServerClient>()
     private val serverByDownloadTicketId = ConcurrentHashMap<String, PlayarrServerClient>()
@@ -52,6 +58,7 @@ internal class PlayarrServerSourceRegistry {
         activeServerKeys = emptySet()
         sourcesByWorkId.clear()
         preferredServerByWorkId.clear()
+        serverByFolderRootId.clear()
         serverByMediaFileId.clear()
         serverByPlaybackSessionId.clear()
         serverByDownloadTicketId.clear()
@@ -110,6 +117,24 @@ internal class PlayarrServerSourceRegistry {
     }
 
     fun mediaServer(mediaFileId: String): PlayarrServerClient? = serverByMediaFileId[mediaFileId]
+
+    fun folderRootServer(rootId: String): PlayarrServerClient? = serverByFolderRootId[rootId]
+
+    @Synchronized
+    fun registerFolderRoots(server: PlayarrServerClient, roots: List<FolderRoot>) {
+        if (!server.isActive()) return
+        roots.forEach { root -> serverByFolderRootId[root.id] = server }
+    }
+
+    @Synchronized
+    fun registerFolderBrowse(server: PlayarrServerClient, response: FolderBrowseResponse) {
+        if (!server.isActive()) return
+        serverByFolderRootId[response.root.id] = server
+        response.entries.forEach { entry ->
+            entry.mediaFileId?.let { mediaFileId -> serverByMediaFileId[mediaFileId] = server }
+        }
+    }
+
     @Synchronized
     fun registerMediaServer(mediaFileId: String, server: PlayarrServerClient) {
         if (server.isActive()) serverByMediaFileId[mediaFileId] = server
@@ -185,6 +210,44 @@ internal class JoinedPlayarrApi(
         return successfulAcross(clients) { it.api.listCatalogKinds() }
             .flatMap { it.second }
             .distinct()
+    }
+
+    override suspend fun listFolderRoots(kind: String): FolderRootsResponse {
+        val results = settledAcross(clients()) { server -> server.api.listFolderRoots(kind) }
+        val responses = results.mapNotNull { (server, result) ->
+            result.getOrNull()?.let { server to it }
+        }
+        if (responses.isEmpty()) {
+            throw results.first().second.exceptionOrNull()
+                ?: IllegalStateException("No connected server returned a response.")
+        }
+        responses.forEach { (server, response) -> registry.registerFolderRoots(server, response.roots) }
+        return FolderRootsResponse(
+            roots = responses.flatMap { (_, response) -> response.roots },
+            errors = responses.flatMap { (_, response) -> response.errors } +
+                results.mapNotNull { (server, result) ->
+                    result.exceptionOrNull()?.let(server::folderRootError)
+                },
+        )
+    }
+
+    override suspend fun browseFolder(
+        rootId: String,
+        path: String?,
+        limit: Long?,
+        offset: Long?,
+    ): FolderBrowseResponse {
+        val clients = clients()
+        val owner = registry.folderRootServer(rootId)
+        val (server, response) = if (owner != null) {
+            owner to owner.api.browseFolder(rootId, path, limit, offset)
+        } else {
+            successfulAcross(clients) { candidate ->
+                candidate.api.browseFolder(rootId, path, limit, offset)
+            }.first()
+        }
+        registry.registerFolderBrowse(server, response)
+        return response
     }
 
     override suspend fun getWork(id: String): WorkDetail {
@@ -377,6 +440,15 @@ internal class JoinedPlayarrApi(
         results
     }
 }
+
+private fun PlayarrServerClient.folderRootError(error: Throwable): FolderRootError = FolderRootError(
+    sourceInstanceId = url,
+    sourceName = runCatching { URI(url).host?.takeIf(String::isNotBlank) }.getOrNull() ?: url,
+    message = generateSequence(error) { it.cause }
+        .mapNotNull { it.message?.trim()?.takeIf(String::isNotEmpty) }
+        .firstOrNull()
+        ?: "Could not load root folders from this server.",
+)
 
 private fun Work.identityKeys(): List<String> = externalRefs.map { reference ->
     "external:${reference.provider.key()}:${reference.externalId.trim().lowercase(Locale.ROOT)}"

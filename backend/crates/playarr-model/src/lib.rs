@@ -13,6 +13,7 @@
 
 pub mod download;
 pub mod embedding;
+pub mod folder;
 pub mod group_library;
 pub mod library_view;
 pub mod media;
@@ -36,6 +37,10 @@ pub mod work;
 
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
+pub use folder::{
+    folder_work_provider, FolderFileMetadata, FolderMediaEntry, FolderScanStatus,
+    ScannedFolderFile, SourceRootFolder, FOLDER_WORK_PROVIDER,
+};
 pub use group_library::{GroupLibrary, LeafSelector, PeerLeafAvailability};
 pub use library_view::{LibraryView, ViewCriteria, ViewSort};
 pub use media::{MediaFile, ProducedBy, Rendition, RenditionStatus};

@@ -34,6 +34,10 @@
  * - Sort (`title` default | `date_added` | `recent`) and order (`asc`|`desc`)
  *   controls, each a `LibraryChip` below; changing either resets pagination
  *   (offset back to 0, items cleared) and refetches.
+ * - A `Library` / `Folders` view control. `Folders` mounts the native
+ *   `LibraryFolders` browser, which discovers this kind's source roots and
+ *   navigates root-relative file-derived media without replacing this page
+ *   or introducing a browser/WebView surface.
  * - Pagination: fetches the next `limit=50` page when the Grid's visible
  *   tail (`.onScrollIndex`'s `last` index, backed up by `.onReachEnd` as a
  *   defensive second trigger) comes within `PAGINATION_LOOKAHEAD` (10) of the
@@ -113,6 +117,7 @@ import { FOCUS_LIFT, effectiveFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR } from '.
 import { PosterCard } from '../design/components/PosterCard';
 import { AsyncState, AsyncStateKind } from '../design/components/AsyncState';
 import { Spacing, Radii } from '../core/Tokens';
+import { LibraryFolders } from './LibraryFolders';
 
 import { getCatalog } from '../data/CatalogRepository';
 import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
@@ -252,6 +257,8 @@ interface LibrarySortOption {
   value: string;
   label: string;
 }
+
+type LibraryViewMode = 'library' | 'folders';
 
 /** Brief 4.8 / 9: `sort` is `"title"` (default) | `"date_added"` |
  * `"recent"`. Listed in the brief's own order. */
@@ -418,6 +425,7 @@ export struct Library {
   @State private loadMoreFailed: boolean = false;
   @State private sort: string = 'title';
   @State private order: string = 'asc';
+  @State private viewMode: LibraryViewMode = 'library';
   @State private measuredWidthVp: number = 0;
 
   // Tracked purely to force a re-render on theme / TV-scale change; the
@@ -500,6 +508,10 @@ export struct Library {
     this.resetAndReload();
   }
 
+  private setViewMode(next: LibraryViewMode): void {
+    this.viewMode = next;
+  }
+
   /** Brief 9, Slice 6: "paginates when the focused/scrolled index is
    * within 10 of the loaded tail" -- see this file's header comment on why
    * `Grid`'s own scroll/reach-end signals stand in for "focused" too. */
@@ -580,8 +592,10 @@ export struct Library {
   }
 
   build() {
-    const title = libraryKindTitle(this.kind);
+    const libraryKind = this.kind;
+    const title = libraryKindTitle(libraryKind);
     const sortValue = this.sort;
+    const viewMode = this.viewMode;
     const orderLabel = this.order === 'asc' ? 'Order: Asc' : 'Order: Desc';
     const loading = this.isLoading;
     const loadingMore = this.isLoadingMore;
@@ -615,35 +629,67 @@ export struct Library {
             .layoutWeight(1)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        .width('100%')
+        .padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.md, bottom: Spacing.sm })
 
-          Row({ space: Spacing.xs }) {
+        List({ space: Spacing.xs }) {
+          ListItem() {
+            LibraryChip({
+              label: 'Library',
+              selected: viewMode === 'library',
+              onActivate: () => {
+                this.setViewMode('library');
+              },
+            })
+          }
+
+          ListItem() {
+            LibraryChip({
+              label: 'Folders',
+              selected: viewMode === 'folders',
+              onActivate: () => {
+                this.setViewMode('folders');
+              },
+            })
+          }
+
+          if (viewMode === 'library') {
             ForEach(
               SORT_OPTIONS,
               (option: LibrarySortOption) => {
-                LibraryChip({
-                  label: option.label,
-                  selected: option.value === sortValue,
-                  onActivate: () => {
-                    this.setSort(option.value);
-                  },
-                })
+                ListItem() {
+                  LibraryChip({
+                    label: option.label,
+                    selected: option.value === sortValue,
+                    onActivate: () => {
+                      this.setSort(option.value);
+                    },
+                  })
+                }
               },
               (option: LibrarySortOption): string => option.value
             )
+
+            ListItem() {
+              LibraryChip({
+                label: orderLabel,
+                selected: true,
+                onActivate: () => {
+                  this.toggleOrder();
+                },
+              })
+            }
           }
-
-          LibraryChip({
-            label: orderLabel,
-            selected: true,
-            onActivate: () => {
-              this.toggleOrder();
-            },
-          })
         }
+        .listDirection(Axis.Horizontal)
+        .scrollBar(BarState.Auto)
+        .edgeEffect(EdgeEffect.Spring)
+        .height(isTvMetrics() ? tv(48) : 42)
         .width('100%')
-        .padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.md, bottom: Spacing.md })
+        .padding({ left: Spacing.lg, right: Spacing.lg, bottom: Spacing.sm })
 
-        if (loadingMore) {
+        if (viewMode === 'library' && loadingMore) {
           Row() {
             AsyncState({ kind: AsyncStateKind.Loading })
           }
@@ -652,7 +698,7 @@ export struct Library {
           .justifyContent(FlexAlign.Center)
         }
 
-        if (loadMoreFailed && !loadingMore) {
+        if (viewMode === 'library' && loadMoreFailed && !loadingMore) {
           Text("Couldn't load more. Scroll to try again.")
             .fontSize(12)
             .fontColor(toResourceColor(activeColors().inkMuted))
@@ -661,7 +707,11 @@ export struct Library {
             .padding({ top: Spacing.xs, bottom: Spacing.xs })
         }
 
-        if (loading) {
+        if (viewMode === 'folders') {
+          LibraryFolders({ kind: libraryKind })
+            .layoutWeight(1)
+            .width('100%')
+        } else if (loading) {
           AsyncState({ kind: AsyncStateKind.Loading })
             .layoutWeight(1)
             .width('100%')

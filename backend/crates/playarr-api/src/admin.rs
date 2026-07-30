@@ -14,13 +14,14 @@
 //! later as `arr-sync` reconciliation failures nobody's watching yet.
 
 use std::collections::{BTreeMap, HashMap};
+use std::path::{Component, Path as FsPath, PathBuf};
 
 use axum::extract::{Path, State};
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use playarr_arr_client::ArrConnector;
 use playarr_arr_sync::ArrClient;
 use playarr_model::{LeafSelector, PeerNodeStatus, SourceInstance, SourceKind};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -101,11 +102,16 @@ impl From<SourceInstance> for SourceInstanceResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SourceFolderMappingsRequest {
     pub folder_mappings: BTreeMap<Uuid, String>,
+    /// Optional complete replacement of current-node overrides for individual
+    /// discovered roots. Omit to leave them unchanged; send `{}` to clear
+    /// every per-root override for this source.
+    #[serde(default)]
+    pub root_folder_mappings: Option<BTreeMap<Uuid, String>>,
 }
 
-/// Replaces one Source instance's peer-root mappings. Because mappings are
-/// part of the normal Source row, the existing signed Source replication
-/// carries this change to every peer.
+/// Replaces one Source instance's peer-root mappings and, when supplied, its
+/// per-discovered-root mappings for the current node. Source-wide mappings
+/// replicate with the Source row; root-specific overrides remain local.
 #[utoipa::path(
     put,
     path = "/api/v1/admin/source-instances/{id}/folder-mappings",
@@ -114,7 +120,7 @@ pub struct SourceFolderMappingsRequest {
     request_body = SourceFolderMappingsRequest,
     responses(
         (status = 200, description = "Updated Source instance", body = SourceInstanceResponse),
-        (status = 400, description = "A mapped path was empty"),
+        (status = 400, description = "A mapped path was invalid or a root did not belong to this source"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin"),
         (status = 404, description = "No source instance registered with this id")
@@ -138,6 +144,43 @@ pub async fn update_source_folder_mappings_handler(
         }
         mappings.insert(peer_id, path.to_string());
     }
+    let root_overrides = body
+        .root_folder_mappings
+        .map(|overrides| {
+            overrides
+                .into_iter()
+                .map(|(root_id, path)| {
+                    normalise_local_root_override(&path).map(|path| (root_id, path))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()
+        })
+        .transpose()?;
+
+    // Discovery holds the same gate while replacing roots. Keeping it for
+    // ownership validation plus replacement prevents a root becoming stale
+    // between those two operations.
+    let _root_refresh_guard = if root_overrides.is_some() {
+        Some(state.folder_root_refresh_gate.lock().await)
+    } else {
+        None
+    };
+    if let Some(overrides) = root_overrides.as_ref() {
+        let owned_root_ids = state
+            .folder_repo
+            .list_active_roots_by_source(id)
+            .await?
+            .into_iter()
+            .map(|root| root.id)
+            .collect::<std::collections::BTreeSet<_>>();
+        if let Some(root_id) = overrides
+            .keys()
+            .find(|root_id| !owned_root_ids.contains(root_id))
+        {
+            return Err(ApiError::bad_request(format!(
+                "root folder {root_id} is not an active root for this source"
+            )));
+        }
+    }
     instance.folder_mappings = mappings;
     state
         .source_instance_repo
@@ -145,7 +188,42 @@ pub async fn update_source_folder_mappings_handler(
         .await
         .map_err(|error| ApiError::internal(format!("failed to save folder mappings: {error}")))?;
     state.source_instances.upsert(instance.clone());
+    if let Some(overrides) = root_overrides.as_ref() {
+        state
+            .folder_repo
+            .replace_local_path_overrides(id, overrides)
+            .await
+            .map_err(|error| {
+                ApiError::internal(format!("failed to save root-folder mappings: {error}"))
+            })?;
+    }
     Ok(Json(instance.into()))
+}
+
+fn normalise_local_root_override(raw: &str) -> Result<PathBuf, ApiError> {
+    let trimmed = raw.trim();
+    let path = FsPath::new(trimmed);
+    let has_normal_component = path
+        .components()
+        .any(|component| matches!(component, Component::Normal(_)));
+    let has_unsafe_component = path
+        .components()
+        .any(|component| matches!(component, Component::CurDir | Component::ParentDir));
+    let has_lexical_dot_component = trimmed
+        .split(std::path::MAIN_SEPARATOR)
+        .any(|component| matches!(component, "." | ".."));
+    if trimmed.is_empty()
+        || trimmed.contains('\0')
+        || !path.is_absolute()
+        || !has_normal_component
+        || has_unsafe_component
+        || has_lexical_dot_component
+    {
+        return Err(ApiError::bad_request(
+            "root-folder mappings must be absolute normal paths",
+        ));
+    }
+    Ok(path.components().collect())
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -740,6 +818,8 @@ pub async fn http_latency_handler(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
@@ -750,6 +830,20 @@ mod tests {
     use crate::test_support::{
         bearer_header, mint_access_token, seed_admin_user, seed_streaming_user, test_state,
     };
+
+    #[test]
+    fn root_override_paths_must_be_absolute_and_normal() {
+        assert_eq!(
+            super::normalise_local_root_override(" /mnt/media/movies/ ").unwrap(),
+            PathBuf::from("/mnt/media/movies")
+        );
+        for invalid in ["", "relative/media", "/", "/mnt/../private", "/mnt/./media"] {
+            assert!(
+                super::normalise_local_root_override(invalid).is_err(),
+                "{invalid}"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn register_confirms_reachability_before_accepting() {
@@ -774,6 +868,7 @@ mod tests {
             "api_key": "test-key",
         });
         let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -910,9 +1005,33 @@ mod tests {
             .await
             .unwrap();
         state.app.source_instances.upsert(instance.clone());
+        let root = playarr_model::SourceRootFolder {
+            id: Uuid::new_v4(),
+            source_instance_id: instance.id,
+            source_root_id: "7".to_string(),
+            reported_path: "/source/alternate".to_string(),
+            local_path_override: None,
+            display_name: "Alternate".to_string(),
+            work_kind: playarr_model::WorkKind::Movie,
+            accessible: true,
+            free_space_bytes: None,
+            total_space_bytes: None,
+            active: true,
+            scan_status: playarr_model::FolderScanStatus::Failed,
+            last_scanned_at: None,
+            scan_error: Some("mapping required".to_string()),
+            updated_at: chrono::Utc::now(),
+        };
+        state
+            .app
+            .folder_repo
+            .replace_active_roots(instance.id, std::slice::from_ref(&root))
+            .await
+            .unwrap();
         let peer_id = Uuid::new_v4();
 
         let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("PUT")
@@ -924,7 +1043,10 @@ mod tests {
                     .header("Authorization", bearer_header(&token))
                     .body(Body::from(
                         serde_json::json!({
-                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" }
+                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" },
+                            "root_folder_mappings": {
+                                root.id.to_string(): "/mnt/media/alternate"
+                            }
                         })
                         .to_string(),
                     ))
@@ -947,6 +1069,116 @@ mod tests {
             state.app.source_instance_repo.list_all().await.unwrap()[0].folder_mappings[&peer_id],
             "/mnt/media/movies"
         );
+        let persisted_root = state
+            .app
+            .folder_repo
+            .find_active_root(instance.id, "7")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            persisted_root.local_path_override,
+            Some(PathBuf::from("/mnt/media/alternate"))
+        );
+        assert_eq!(
+            persisted_root.reported_path, "/source/alternate",
+            "the source-reported path must remain distinct from its local override"
+        );
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/folder-mappings",
+                        instance.id
+                    ))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            state
+                .app
+                .folder_repo
+                .find_active_root(instance.id, "7")
+                .await
+                .unwrap()
+                .unwrap()
+                .local_path_override,
+            Some(PathBuf::from("/mnt/media/alternate")),
+            "omitting root_folder_mappings must preserve existing overrides"
+        );
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/folder-mappings",
+                        instance.id
+                    ))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" },
+                            "root_folder_mappings": {}
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            state
+                .app
+                .folder_repo
+                .find_active_root(instance.id, "7")
+                .await
+                .unwrap()
+                .unwrap()
+                .local_path_override,
+            None
+        );
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!(
+                        "/api/v1/admin/source-instances/{}/folder-mappings",
+                        instance.id
+                    ))
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&token))
+                    .body(Body::from(
+                        serde_json::json!({
+                            "folder_mappings": { peer_id.to_string(): "/mnt/media/movies" },
+                            "root_folder_mappings": {
+                                Uuid::new_v4().to_string(): "/mnt/media/not-owned"
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

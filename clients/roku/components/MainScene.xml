@@ -25,7 +25,7 @@
     <!--
       Pairing = web `/login/qr` layout (centered ProfileAuth panel + embedded
       DeviceLogin stack) in Playarr **dark** theme (same as the rest of the
-      Roku shell: --bg #151315, --ink #f4f0f1). Browser /login/qr often looks
+      Roku shell: background #151315, ink #f4f0f1). Browser /login/qr often looks
       light because desktop defaults to light theme; TV product is dark.
       QR tile stays white plate + black modules (.device-login-qr).
     -->
@@ -267,6 +267,26 @@
       <MarkupGrid id="browseGrid" translation="[700,200]" itemComponentName="PosterCard"
         numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
+      <!--
+        Native folder browser for the Folders view. One RowList owns all
+        overflow and directional focus: root folders, selectable
+        breadcrumbs, then the current directory entries. This keeps remote
+        navigation and scrolling in SceneGraph instead of hand-scrolling
+        labels or embedding a browser surface.
+      -->
+      <Group id="folderBrowserGroup" visible="false">
+        <RowList id="folderBrowser" translation="[200,245]" itemComponentName="FolderBrowserItem"
+          numRows="3" itemSize="[1640,670]"
+          rowItemSize="[[300,64],[270,58],[350,220]]"
+          rowItemSpacing="[[22,0],[18,0],[24,0]]"
+          rowHeights="[118,108,300]" showRowLabel="true"
+          rowLabelOffset="[[0,-30],[0,-30],[0,-30]]"
+          focusXOffset="[0,0,0]" focusBitmapBlendColor="0x00000000"
+          rowFocusAnimationStyle="fixedFocusWrap"
+          vertFocusAnimationStyle="fixedFocus" />
+        <Label id="folderStatusLabel" translation="[200,940]" width="1580" height="56"
+          wrap="true" numLines="2" text="" scale="[0.48,0.48]" color="0xA9B7C9FF" />
+      </Group>
       <Label id="browseHint" translation="[200,1020]" width="1700" height="40" text="" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
            A-Z, right edge, entered from the grid via Right at its last
@@ -285,29 +305,28 @@
       <!-- Filters button (from: .tv-filter-launcher, top-right, above the
            alphabet strip): reached from the alphabet strip's own "#" entry
            via Up (spatially matches the real layout, button above strip),
-           opens browseFiltersPanel. Confirmed live the real panel covers
-           View (List/Screen/Cover) and Artwork Size (Small/Medium/Large);
-           Artwork Size is wired (see applyBrowseArtworkSize, reflows
-           browseGrid's numColumns/itemSize/itemSpacing in place). View
-           (List/Screen/Cover) is not wired, each is a genuinely distinct
-           SceneGraph layout (row-list vs grid vs large single-column
-           carousel), not a parameter of this one MarkupGrid, so it is a
-           real, documented gap rather than a decorative stand-in. -->
+           opens browseFiltersPanel. The View section switches between the
+           title grid and the native directory browser; the latter is also
+           reachable with the remote Options key while its RowList owns
+           focus. -->
       <Label id="browseFiltersButton" translation="[1845,180]" width="120" height="40" text="Filters" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[60,10]" color="0xA9B7C9FF" />
       <Group id="browseFiltersPanel" visible="false">
         <Rectangle translation="[1550,0]" width="370" height="1080" color="0x151315F5" />
         <Label translation="[1610,90]" width="280" height="30" text="LIBRARY CONTROLS" scale="[0.38,0.38]" color="0x887A82FF" />
         <Label translation="[1610,120]" width="280" height="60" text="Filters" scale="[1.3,1.3]" color="0xFFFFFFFF" />
-        <Label translation="[1610,220]" width="280" height="26" text="SORT BY" scale="[0.38,0.38]" color="0x887A82FF" />
-        <Label id="browseFilterSortTitle" translation="[1610,255]" width="280" height="40" text="Title" scale="[0.62,0.62]" color="0xCF3157FF" />
-        <Label id="browseFilterSortDate" translation="[1610,305]" width="280" height="40" text="Date added" scale="[0.62,0.62]" color="0xA9B7C9FF" />
-        <Label translation="[1610,375]" width="280" height="26" text="ORDER" scale="[0.38,0.38]" color="0x887A82FF" />
-        <Label id="browseFilterOrderAsc" translation="[1610,410]" width="280" height="40" text="A-Z" scale="[0.62,0.62]" color="0xCF3157FF" />
-        <Label id="browseFilterOrderDesc" translation="[1610,460]" width="280" height="40" text="Z-A" scale="[0.62,0.62]" color="0xA9B7C9FF" />
-        <Label translation="[1610,530]" width="280" height="26" text="ARTWORK SIZE" scale="[0.38,0.38]" color="0x887A82FF" />
-        <Label id="browseFilterSizeSmall" translation="[1610,565]" width="280" height="40" text="Small" scale="[0.62,0.62]" color="0xA9B7C9FF" />
-        <Label id="browseFilterSizeMedium" translation="[1610,615]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
-        <Label id="browseFilterSizeLarge" translation="[1610,665]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,210]" width="280" height="26" text="VIEW" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterViewTitles" translation="[1610,245]" width="280" height="40" text="Titles" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterViewFolders" translation="[1610,295]" width="280" height="40" text="Folders" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,365]" width="280" height="26" text="SORT BY" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterSortTitle" translation="[1610,400]" width="280" height="40" text="Title" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterSortDate" translation="[1610,450]" width="280" height="40" text="Date added" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,520]" width="280" height="26" text="ORDER" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterOrderAsc" translation="[1610,555]" width="280" height="40" text="A-Z" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterOrderDesc" translation="[1610,605]" width="280" height="40" text="Z-A" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label translation="[1610,675]" width="280" height="26" text="ARTWORK SIZE" scale="[0.38,0.38]" color="0x887A82FF" />
+        <Label id="browseFilterSizeSmall" translation="[1610,710]" width="280" height="40" text="Small" scale="[0.62,0.62]" color="0xA9B7C9FF" />
+        <Label id="browseFilterSizeMedium" translation="[1610,760]" width="280" height="40" text="Medium" scale="[0.62,0.62]" color="0xCF3157FF" />
+        <Label id="browseFilterSizeLarge" translation="[1610,810]" width="280" height="40" text="Large" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       </Group>
     </Group>
 
@@ -583,7 +602,7 @@
       nav-shape fix this pass targets).
     -->
     <Group id="persistentHeader">
-      <!-- Logo centred over the dock (.app-logo over --tv-nav-centre-x).
+      <!-- Logo centred over the dock (.app-logo over the TV nav centre).
            Dock left edge ~32, item centre ~32+8+32 = 72; logo 40x40 → x=52. -->
       <Poster id="navLogo" translation="[52,36]" width="40" height="40" uri="pkg:/images/pairing-logo.png" />
 

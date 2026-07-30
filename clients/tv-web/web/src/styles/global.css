@@ -11309,3 +11309,492 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .tv-downloads-storage-bar {
   height: 4px;
 }
+
+/* -------------------------------------------------------------------------
+ * Raw folder browser
+ * ---------------------------------------------------------------------- */
+
+.tv-view-icon-folders {
+  position: relative;
+  width: 20px;
+  display: block;
+}
+
+.tv-view-icon-folders i:first-child {
+  position: absolute;
+  top: 0;
+  left: 1px;
+  width: 8px;
+  height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: currentColor;
+}
+
+.tv-view-icon-folders i:nth-child(2) {
+  position: absolute;
+  inset: 3px 0 0;
+  border-radius: 2px;
+}
+
+.tv-view-icon-folders i:last-child {
+  display: none;
+}
+
+.tv-folder-library .tv-stage-wash {
+  background:
+    radial-gradient(circle at 18% 48%, color-mix(in srgb, #cf3157 11%, transparent), transparent 32%),
+    linear-gradient(90deg, color-mix(in srgb, var(--surface) 96%, transparent), transparent 74%);
+}
+
+.tv-folder-root-scroll {
+  position: absolute;
+  z-index: 18;
+  top: clamp(108px, calc(13.5 * var(--viewport-unit)), 154px);
+  right: calc(
+    var(--directory-controls-edge) + var(--directory-controls-width) +
+      var(--directory-controls-gap)
+  );
+  left: clamp(102px, 8vw, 160px);
+  display: flex;
+  gap: clamp(8px, 0.7vw, 13px);
+  padding: 6px 4px 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-y: hidden;
+  scroll-padding-inline: 4px;
+  scrollbar-width: none;
+}
+
+.tv-folder-root-scroll::-webkit-scrollbar,
+.tv-folder-breadcrumb-scroll::-webkit-scrollbar,
+.tv-folder-entry-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tv-folder-root-scroll > button {
+  min-width: clamp(150px, 13vw, 230px);
+  min-height: clamp(52px, calc(6.5 * var(--viewport-unit)), 72px);
+  flex: 0 0 auto;
+  display: grid;
+  align-content: center;
+  gap: 0.24rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-strong) 76%, transparent);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.tv-folder-root-scroll > button strong {
+  overflow: hidden;
+  font-size: clamp(0.58rem, 0.68vw, 0.84rem);
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-folder-root-scroll > button small {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: clamp(0.42rem, 0.47vw, 0.58rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-folder-root-scroll > button:hover,
+.tv-folder-root-scroll > button:focus-visible,
+.tv-folder-root-scroll > button.is-active {
+  outline: 0;
+  background: var(--ink);
+  color: var(--bg);
+  transform: translateY(-2px);
+}
+
+.tv-folder-root-scroll > button:hover small,
+.tv-folder-root-scroll > button:focus-visible small,
+.tv-folder-root-scroll > button.is-active small {
+  color: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.tv-folder-root-scroll > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+  transform: none;
+}
+
+.tv-folder-breadcrumb-scroll {
+  position: absolute;
+  z-index: 18;
+  top: clamp(176px, calc(22 * var(--viewport-unit)), 238px);
+  right: calc(
+    var(--directory-controls-edge) + var(--directory-controls-width) +
+      var(--directory-controls-gap)
+  );
+  left: clamp(102px, 8vw, 160px);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 5px 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-y: hidden;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.tv-folder-breadcrumb-scroll span {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tv-folder-breadcrumb-scroll i {
+  color: var(--line-strong);
+  font-style: normal;
+}
+
+.tv-folder-breadcrumb-scroll button {
+  padding: 0.34rem 0.6rem;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: clamp(0.48rem, 0.56vw, 0.7rem);
+  cursor: pointer;
+}
+
+.tv-folder-breadcrumb-scroll button:hover,
+.tv-folder-breadcrumb-scroll button:focus-visible,
+.tv-folder-breadcrumb-scroll button.is-current {
+  outline: 0;
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+  color: var(--ink);
+}
+
+.tv-folder-panel {
+  position: absolute;
+  z-index: 8;
+  top: clamp(220px, calc(27.5 * var(--viewport-unit)), 294px);
+  right: calc(
+    var(--directory-controls-edge) + var(--directory-controls-width) +
+      var(--directory-controls-gap)
+  );
+  bottom: clamp(46px, calc(5.5 * var(--viewport-unit)), 70px);
+  left: clamp(102px, 8vw, 160px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: clamp(16px, 1.2vw, 24px);
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  box-shadow: 0 30px 90px rgba(56, 38, 33, 0.1);
+  backdrop-filter: blur(28px) saturate(112%);
+}
+
+.tv-folder-panel > .tv-empty-state,
+.tv-folder-loading {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.tv-folder-loading {
+  color: var(--ink-muted);
+  font-size: clamp(0.56rem, 0.64vw, 0.76rem);
+}
+
+.tv-folder-warning {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.65rem clamp(14px, 1.5vw, 24px);
+  border-bottom: 1px solid color-mix(in srgb, #cf3157 28%, transparent);
+  background: color-mix(in srgb, #cf3157 9%, var(--surface-soft));
+  color: var(--ink-muted);
+  font-size: clamp(0.43rem, 0.49vw, 0.6rem);
+}
+
+.tv-folder-warning strong {
+  flex: 0 0 auto;
+  color: #cf3157;
+}
+
+.tv-folder-warning span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-folder-entry-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-padding-block: 1rem 2rem;
+  scrollbar-width: none;
+}
+
+.tv-folder-entry-list {
+  display: grid;
+  gap: clamp(7px, 0.6vw, 11px);
+  min-height: 100%;
+  padding: clamp(14px, 1.5vw, 24px);
+}
+
+.tv-folder-entry {
+  width: 100%;
+  min-height: clamp(74px, calc(9 * var(--viewport-unit)), 104px);
+  display: grid;
+  grid-template-columns: clamp(98px, 9vw, 158px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(14px, 1.4vw, 26px);
+  padding: clamp(8px, 0.7vw, 12px);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  scroll-margin-block: 1rem;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.tv-folder-entry:hover,
+.tv-folder-entry:focus-visible {
+  outline: 0;
+  border-color: color-mix(in srgb, #cf3157 58%, transparent);
+  background: color-mix(in srgb, #cf3157 12%, var(--surface-soft));
+  transform: translateX(5px);
+}
+
+.tv-folder-entry[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.tv-folder-entry-art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #cf3157 15%, var(--surface-soft)), var(--surface-soft));
+  color: var(--ink-muted);
+}
+
+.tv-folder-entry-art img {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tv-folder-media-fallback {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: clamp(0.8rem, 1vw, 1.25rem);
+}
+
+.tv-folder-directory-icon {
+  aspect-ratio: 16 / 9;
+  overflow: visible;
+  background: transparent;
+}
+
+.tv-folder-directory-icon::before,
+.tv-folder-directory-icon i {
+  content: "";
+  position: absolute;
+  border: 1px solid color-mix(in srgb, #cf3157 58%, var(--line-strong));
+  background: color-mix(in srgb, #cf3157 14%, var(--surface-soft));
+}
+
+.tv-folder-directory-icon::before {
+  top: 19%;
+  left: 14%;
+  width: 34%;
+  height: 18%;
+  border-radius: 7px 7px 0 0;
+}
+
+.tv-folder-directory-icon i {
+  inset: 29% 10% 12%;
+  border-radius: 8px;
+}
+
+.tv-folder-entry-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.tv-folder-entry-copy strong,
+.tv-folder-entry-copy small,
+.tv-folder-entry-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-folder-entry-copy strong {
+  font-size: clamp(0.62rem, 0.74vw, 0.94rem);
+  font-weight: 660;
+}
+
+.tv-folder-entry-copy small {
+  color: var(--ink-muted);
+  font-size: clamp(0.45rem, 0.52vw, 0.65rem);
+}
+
+.tv-folder-entry-copy > span {
+  color: color-mix(in srgb, var(--ink-muted) 74%, transparent);
+  font-size: clamp(0.39rem, 0.44vw, 0.54rem);
+}
+
+.tv-folder-entry-action {
+  min-width: 2rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.7rem, 0.8vw, 1rem);
+  text-align: center;
+}
+
+.tv-folder-sentinel {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.45rem, 0.5vw, 0.62rem);
+}
+
+.tv-folder-retry {
+  min-height: 38px;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: clamp(0.48rem, 0.54vw, 0.66rem);
+  cursor: pointer;
+}
+
+.tv-folder-retry:hover,
+.tv-folder-retry:focus-visible {
+  outline: 2px solid #cf3157;
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px),
+  (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
+  .tv-folder-root-scroll {
+    top: calc(var(--mobile-top-inset) + 58px);
+    right: var(--mobile-page-gutter);
+    left: var(--mobile-page-gutter);
+    gap: 8px;
+    padding-block: 4px 8px;
+  }
+
+  .tv-folder-root-scroll > button {
+    min-width: min(48vw, 190px);
+    min-height: 54px;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .tv-folder-root-scroll > button strong {
+    font-size: 0.76rem;
+  }
+
+  .tv-folder-root-scroll > button small {
+    font-size: 0.58rem;
+  }
+
+  .tv-folder-breadcrumb-scroll {
+    top: calc(var(--mobile-top-inset) + 122px);
+    right: var(--mobile-page-gutter);
+    left: var(--mobile-page-gutter);
+  }
+
+  .tv-folder-breadcrumb-scroll button {
+    min-height: 36px;
+    font-size: 0.68rem;
+  }
+
+  .tv-folder-panel {
+    top: calc(var(--mobile-top-inset) + 168px);
+    right: var(--mobile-page-gutter);
+    bottom: calc(var(--mobile-nav-height) + 16px);
+    left: var(--mobile-page-gutter);
+    border-radius: 16px;
+  }
+
+  .tv-folder-entry-list {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .tv-folder-entry {
+    min-height: 76px;
+    grid-template-columns: 92px minmax(0, 1fr) 20px;
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .tv-folder-entry:hover,
+  .tv-folder-entry:focus-visible {
+    transform: none;
+  }
+
+  .tv-folder-entry-copy strong {
+    font-size: 0.76rem;
+  }
+
+  .tv-folder-entry-copy small {
+    font-size: 0.58rem;
+  }
+
+  .tv-folder-entry-copy > span {
+    font-size: 0.5rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .tv-folder-entry {
+    grid-template-columns: 72px minmax(0, 1fr) 18px;
+    gap: 9px;
+  }
+
+  .tv-folder-entry-copy > span {
+    display: none;
+  }
+}

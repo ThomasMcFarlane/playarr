@@ -15,12 +15,12 @@ pub mod repo;
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
 pub use repo::{
-    CreditRepo, DeviceRepo, DownloadTicketRepo, EmbeddingRepo, GroupLibraryRepo,
+    CreditRepo, DeviceRepo, DownloadTicketRepo, EmbeddingRepo, FolderRepo, GroupLibraryRepo,
     InMemoryRefreshTokenStore, LibraryViewRepo, MediaFileRepo, NodeIdentityRepo, PeerGroupRepo,
     PeerJoinToken, PeerJoinTokenRepo, PeerLeafAvailabilityRepo, PeerNodeRepo,
     PeerSourceInstanceRepo, PeerSyncState, PeerSyncStateRepo, PlaylistRepo, PolicyRepo,
     ProfilePinRepo, PushRegistrationRepo, RefreshTokenRepo, RenditionRepo, RoutingRuleRepo,
-    SourceInstanceRepo, SqlxCreditRepo, SqlxDownloadTicketRepo, SqlxEmbeddingRepo,
+    SourceInstanceRepo, SqlxCreditRepo, SqlxDownloadTicketRepo, SqlxEmbeddingRepo, SqlxFolderRepo,
     SqlxLibraryViewRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
     SqlxRefreshTokenRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
     SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SyncConflictLog, SyncConflictLogRepo,

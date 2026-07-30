@@ -127,6 +127,55 @@ class PlayarrHttpClientAuthTest {
     }
 
     @Test
+    fun `folder browsing uses the documented kind path and pagination queries`() = runBlocking {
+        val server = MockWebServer()
+        server.enqueue(jsonResponse("""{"roots":[],"errors":[]}"""))
+        server.enqueue(
+            jsonResponse(
+                """
+                {
+                  "root": {
+                    "id": "root-1",
+                    "source_instance_id": "source-1",
+                    "source_name": "Sonarr",
+                    "library_kind": "series",
+                    "name": "Television",
+                    "available": true,
+                    "unavailable_reason": null
+                  },
+                  "path": "Season 1",
+                  "breadcrumbs": [],
+                  "entries": [],
+                  "total": 0,
+                  "offset": 20,
+                  "limit": 20
+                }
+                """.trimIndent(),
+            ),
+        )
+        server.start()
+        try {
+            val api = PlayarrHttpClient.create(
+                baseUrlProvider = { server.url("/").toString() },
+                clientPlatform = ClientPlatform.AndroidTv,
+                clientVersion = "0.2.8",
+                accessTokenProvider = { "token" },
+            )
+
+            api.listFolderRoots("series")
+            api.browseFolder("root-1", path = "Season 1", limit = 20, offset = 20)
+
+            assertEquals("/api/v1/folders/roots?kind=series", server.takeRequest().path)
+            assertEquals(
+                "/api/v1/folders/root-1?path=Season%201&limit=20&offset=20",
+                server.takeRequest().path,
+            )
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun `playback quality defaults use the documented force transcode query`() = runBlocking {
         val server = MockWebServer()
         server.enqueue(jsonResponse("""{"mode":"hls","url":"/api/v1/media/sessions/s1/playlist.m3u8"}"""))

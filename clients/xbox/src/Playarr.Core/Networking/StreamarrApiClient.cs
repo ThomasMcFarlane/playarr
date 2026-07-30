@@ -46,6 +46,17 @@ namespace Playarr.Core.Networking
 
         Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default);
 
+        Task<FolderRootsResponse> ListFolderRootsAsync(
+            WorkKind kind,
+            CancellationToken cancellationToken = default);
+
+        Task<FolderBrowseResponse> BrowseFolderAsync(
+            Guid rootFolderId,
+            string? path = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken cancellationToken = default);
+
         Task<IList<AvailableProfile>> ListProfilesAsync(CancellationToken cancellationToken = default);
 
         Task<IList<WatchProgress>> ListWatchProgressAsync(CancellationToken cancellationToken = default);
@@ -180,6 +191,35 @@ namespace Playarr.Core.Networking
 
         public Task<IList<WorkKind>> ListCatalogKindsAsync(CancellationToken cancellationToken = default) =>
             GetAsync<IList<WorkKind>>("/api/v1/catalog/kinds", null, authenticated: true, cancellationToken);
+
+        public Task<FolderRootsResponse> ListFolderRootsAsync(
+            WorkKind kind,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new Dictionary<string, string>
+            {
+                ["kind"] = WireNameFor(kind),
+            };
+
+            return GetAsync<FolderRootsResponse>(
+                "/api/v1/folders/roots", query, authenticated: true, cancellationToken);
+        }
+
+        public Task<FolderBrowseResponse> BrowseFolderAsync(
+            Guid rootFolderId,
+            string? path = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken cancellationToken = default)
+        {
+            var query = new Dictionary<string, string>();
+            if (path != null) query["path"] = path;
+            if (limit is { } l) query["limit"] = l.ToString(CultureInfo.InvariantCulture);
+            if (offset is { } o) query["offset"] = o.ToString(CultureInfo.InvariantCulture);
+
+            return GetAsync<FolderBrowseResponse>(
+                $"/api/v1/folders/{rootFolderId:D}", query, authenticated: true, cancellationToken);
+        }
 
         public Task<IList<AvailableProfile>> ListProfilesAsync(CancellationToken cancellationToken = default) =>
             GetAsync<IList<AvailableProfile>>(

@@ -27,11 +27,11 @@ namespace Playarr.Xbox.Views
     /// -- a page's own constructor is parameterless and runs before that
     /// parameter exists. <see cref="WorkDetailViewModel"/> is therefore
     /// constructed in <see cref="OnNavigatedTo"/> rather than this page's
-    /// constructor. This is safe without extra guarding because this
-    /// project never sets <c>NavigationCacheMode</c>, so <see cref="Frame"/>
-    /// creates a fresh page instance -- and therefore a fresh constructor
-    /// call -- for every navigation to this page; <see cref="OnNavigatedTo"/>
-    /// is never called twice against the same instance.
+    /// constructor. This page does not opt into navigation caching, so
+    /// <see cref="Frame"/> creates a fresh page instance -- and therefore a
+    /// fresh constructor call -- for every navigation to this page;
+    /// <see cref="OnNavigatedTo"/> is never called twice against the same
+    /// instance.
     /// </remarks>
     public sealed partial class WorkDetailPage : Page
     {

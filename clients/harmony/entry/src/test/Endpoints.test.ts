@@ -29,6 +29,8 @@ import {
   catalogSimilarUrl,
   viewsUrl,
   viewResolveUrl,
+  folderRootsUrl,
+  folderBrowseUrl,
   artworkWorkUrl,
   artworkAlbumUrl,
   mediaThumbnailUrl,
@@ -133,6 +135,19 @@ describe('Endpoints - 4.8 catalog', () => {
     assert.equal(
       viewResolveUrl(OTHER_ID),
       '/api/v1/views/22222222-2222-2222-2222-222222222222/resolve'
+    );
+  });
+});
+
+describe('Endpoints - file-derived folder browsing', () => {
+  it('folderRootsUrl', () => {
+    assert.equal(folderRootsUrl(), '/api/v1/folders/roots');
+  });
+
+  it('folderBrowseUrl interpolates the opaque root id', () => {
+    assert.equal(
+      folderBrowseUrl(THIRD_ID),
+      '/api/v1/folders/33333333-3333-3333-3333-333333333333'
     );
   });
 });

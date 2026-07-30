@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Shared native renderer for all three rows in MainScene's folder browser:
+  root selectors, breadcrumb selectors, and directory/media entries.
+  RowList supplies scrolling and focus; this component only changes its
+  presentation from file-derived itemContent fields.
+-->
+<component name="FolderBrowserItem" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContentChanged" />
+    <field id="focusPercent" type="float" onChange="onFocusChanged" />
+  </interface>
+  <children>
+    <Group id="rootGroup" visible="false">
+      <Rectangle id="rootFocus" width="300" height="64" color="0xCF3157FF" visible="false" />
+      <Rectangle id="rootBackground" translation="[3,3]" width="294" height="58" color="0x262126FF" />
+      <Label id="rootTitle" translation="[16,8]" width="265" height="25" numLines="1"
+        scale="[0.46,0.46]" color="0xF4F0F1FF" />
+      <Label id="rootSubtitle" translation="[16,34]" width="265" height="20" numLines="1"
+        scale="[0.32,0.32]" color="0xA9B7C9FF" />
+    </Group>
+
+    <Group id="breadcrumbGroup" visible="false">
+      <Rectangle id="breadcrumbFocus" width="270" height="58" color="0xCF3157FF" visible="false" />
+      <Rectangle translation="[3,3]" width="264" height="52" color="0x262126FF" />
+      <Label id="breadcrumbTitle" translation="[14,12]" width="235" height="30" numLines="1"
+        scale="[0.43,0.43]" color="0xF4F0F1FF" />
+    </Group>
+
+    <Group id="entryGroup" visible="false">
+      <Rectangle id="entryFocus" width="350" height="220" color="0xCF3157FF" visible="false" />
+      <Rectangle translation="[3,3]" width="344" height="214" color="0x262126FF" />
+      <Rectangle id="entryArtworkBackground" translation="[12,12]" width="326" height="112" color="0x151315FF" />
+      <Poster id="entryArtwork" translation="[12,12]" width="326" height="112"
+        loadDisplayMode="scaleToZoom" visible="false" />
+      <Label id="entryFallback" translation="[12,12]" width="326" height="112"
+        horizAlign="center" vertAlign="center" text="FOLDER" scale="[0.52,0.52]"
+        scaleRotateCenter="[163,56]" color="0x887A82FF" />
+      <Label id="entryTitle" translation="[12,132]" width="326" height="32" numLines="1"
+        scale="[0.46,0.46]" color="0xF4F0F1FF" />
+      <Label id="entryMetadata" translation="[12,166]" width="326" height="44" wrap="true"
+        numLines="2" scale="[0.30,0.30]" color="0xA9B7C9FF" />
+    </Group>
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/FolderBrowserItem.brs" />
+</component>

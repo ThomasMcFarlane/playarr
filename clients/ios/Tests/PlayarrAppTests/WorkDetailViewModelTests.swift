@@ -7,6 +7,14 @@ import XCTest
 
 @MainActor
 final class WorkDetailViewModelTests: XCTestCase {
+    func testNativePlayerCapabilitiesIncludeFolderAudio() {
+        XCTAssertTrue(PlayerViewModel.supportedContainers.contains("mp3"))
+        XCTAssertTrue(PlayerViewModel.supportedContainers.contains("m4a"))
+        XCTAssertTrue(PlayerViewModel.supportedContainers.contains("flac"))
+        XCTAssertTrue(PlayerViewModel.supportedAudioCodecs.contains("mp3"))
+        XCTAssertTrue(PlayerViewModel.supportedAudioCodecs.contains("flac"))
+    }
+
     func testLoadPublishesFetchedDetail() async {
         let workID = UUID()
         let detail = WorkDetail(
@@ -47,6 +55,148 @@ final class WorkDetailViewModelTests: XCTestCase {
         }
         XCTAssertFalse(message.isEmpty)
         XCTAssertNil(viewModel.detail)
+    }
+}
+
+@MainActor
+final class FolderBrowserViewModelTests: XCTestCase {
+    func testOlderSameRootBrowseCannotReplaceNewerDirectory() async {
+        let root = makeFolderRoot()
+        let requests = FolderBrowseRequestController()
+        let viewModel = FolderBrowserViewModel(
+            apiClient: FolderBrowserAPIClient(root: root, requests: requests)
+        )
+
+        let initialLoad = Task { await viewModel.loadRoots(kind: .movie) }
+        guard await waitForFolderRequestCount(1, requests: requests) else { return }
+        let completedInitial = await requests.complete(
+            path: nil,
+            offset: 0,
+            with: makeFolderPage(root: root, path: "", names: ["Initial"])
+        )
+        XCTAssertTrue(completedInitial)
+        await initialLoad.value
+
+        let olderBrowse = Task { await viewModel.open(path: "Older") }
+        guard await waitForFolderRequestCount(2, requests: requests) else { return }
+        let newerBrowse = Task { await viewModel.open(path: "Newer") }
+        guard await waitForFolderRequestCount(3, requests: requests) else { return }
+
+        let completedNewer = await requests.complete(
+            path: "Newer",
+            offset: 0,
+            with: makeFolderPage(root: root, path: "Newer", names: ["Current"])
+        )
+        XCTAssertTrue(completedNewer)
+        await newerBrowse.value
+        XCTAssertEqual(viewModel.browseResponse?.path, "Newer")
+        XCTAssertEqual(viewModel.entries.map(\.name), ["Current"])
+
+        let completedOlder = await requests.complete(
+            path: "Older",
+            offset: 0,
+            with: makeFolderPage(root: root, path: "Older", names: ["Stale"])
+        )
+        XCTAssertTrue(completedOlder)
+        await olderBrowse.value
+
+        XCTAssertEqual(viewModel.browseResponse?.path, "Newer")
+        XCTAssertEqual(viewModel.entries.map(\.name), ["Current"])
+        XCTAssertEqual(viewModel.loadState, .loaded)
+    }
+
+    func testStalePaginationCannotAppendIntoNewDirectory() async {
+        let root = makeFolderRoot()
+        let requests = FolderBrowseRequestController()
+        let viewModel = FolderBrowserViewModel(
+            apiClient: FolderBrowserAPIClient(root: root, requests: requests)
+        )
+
+        let initialLoad = Task { await viewModel.loadRoots(kind: .movie) }
+        guard await waitForFolderRequestCount(1, requests: requests) else { return }
+        let completedInitial = await requests.complete(
+            path: nil,
+            offset: 0,
+            with: makeFolderPage(
+                root: root,
+                path: "",
+                names: ["First"],
+                total: 2
+            )
+        )
+        XCTAssertTrue(completedInitial)
+        await initialLoad.value
+        XCTAssertTrue(viewModel.canLoadMore)
+
+        let stalePagination = Task { await viewModel.loadMore() }
+        guard await waitForFolderRequestCount(2, requests: requests) else { return }
+        let newerBrowse = Task { await viewModel.open(path: "Subfolder") }
+        guard await waitForFolderRequestCount(3, requests: requests) else { return }
+
+        let completedNewer = await requests.complete(
+            path: "Subfolder",
+            offset: 0,
+            with: makeFolderPage(root: root, path: "Subfolder", names: ["Fresh"])
+        )
+        XCTAssertTrue(completedNewer)
+        await newerBrowse.value
+
+        let completedPagination = await requests.complete(
+            path: nil,
+            offset: 1,
+            with: makeFolderPage(
+                root: root,
+                path: "",
+                names: ["Stale"],
+                total: 2,
+                offset: 1
+            )
+        )
+        XCTAssertTrue(completedPagination)
+        await stalePagination.value
+
+        XCTAssertEqual(viewModel.browseResponse?.path, "Subfolder")
+        XCTAssertEqual(viewModel.entries.map(\.name), ["Fresh"])
+        XCTAssertFalse(viewModel.isLoadingMore)
+        XCTAssertFalse(viewModel.canLoadMore)
+    }
+
+    func testRetryKeepsFailedNestedDirectoryPath() async {
+        let root = makeFolderRoot()
+        let requests = FolderBrowseRequestController()
+        let viewModel = FolderBrowserViewModel(
+            apiClient: FolderBrowserAPIClient(root: root, requests: requests)
+        )
+
+        let initialLoad = Task { await viewModel.loadRoots(kind: .movie) }
+        guard await waitForFolderRequestCount(1, requests: requests) else { return }
+        await requests.completeNext(
+            with: makeFolderPage(root: root, path: "", names: ["Nested"])
+        )
+        await initialLoad.value
+
+        let failedBrowse = Task { await viewModel.open(path: "Nested") }
+        guard await waitForFolderRequestCount(2, requests: requests) else { return }
+        await requests.failNext(with: APIError.notFound(nil))
+        await failedBrowse.value
+
+        guard case .failed = viewModel.loadState else {
+            return XCTFail("Expected the failed nested browse to be visible")
+        }
+
+        let retry = Task { await viewModel.refresh() }
+        guard await waitForFolderRequestCount(3, requests: requests) else { return }
+        let retriedRequest = await requests.request(at: 2)
+        XCTAssertEqual(retriedRequest?.path, "Nested")
+        XCTAssertEqual(retriedRequest?.offset, 0)
+        await requests.completeNext(
+            with: makeFolderPage(root: root, path: "Nested", names: ["Recovered"])
+        )
+        await retry.value
+
+        XCTAssertEqual(viewModel.browseResponse?.path, "Nested")
+        XCTAssertEqual(viewModel.entries.map(\.name), ["Recovered"])
+        XCTAssertEqual(viewModel.loadState, .loaded)
     }
 }
 
@@ -201,6 +351,169 @@ private struct WorkDetailAPIClient: PlayarrAPIClient {
     func resolvedURL(forPath path: String) -> URL? {
         URL(string: path, relativeTo: baseURL)?.absoluteURL
     }
+}
+
+private actor FolderBrowseRequestController {
+    private struct PendingRequest {
+        let path: String?
+        let offset: Int
+        let continuation: CheckedContinuation<FolderBrowseResponse, Error>
+    }
+
+    private var requestHistory: [(path: String?, offset: Int)] = []
+    private var pendingRequests: [PendingRequest] = []
+
+    func response(path: String?, offset: Int) async throws -> FolderBrowseResponse {
+        try await withCheckedThrowingContinuation { continuation in
+            requestHistory.append((path: path, offset: offset))
+            pendingRequests.append(
+                PendingRequest(path: path, offset: offset, continuation: continuation)
+            )
+        }
+    }
+
+    func requestCount() -> Int {
+        requestHistory.count
+    }
+
+    func request(at index: Int) -> (path: String?, offset: Int)? {
+        guard requestHistory.indices.contains(index) else { return nil }
+        return requestHistory[index]
+    }
+
+    func complete(
+        path: String?,
+        offset: Int,
+        with response: FolderBrowseResponse
+    ) -> Bool {
+        guard let index = pendingRequests.firstIndex(where: {
+            $0.path == path && $0.offset == offset
+        }) else {
+            return false
+        }
+        let request = pendingRequests.remove(at: index)
+        request.continuation.resume(returning: response)
+        return true
+    }
+
+    func completeNext(with response: FolderBrowseResponse) {
+        let request = pendingRequests.removeFirst()
+        request.continuation.resume(returning: response)
+    }
+
+    func failNext(with error: Error) {
+        let request = pendingRequests.removeFirst()
+        request.continuation.resume(throwing: error)
+    }
+}
+
+private struct FolderBrowserAPIClient: PlayarrAPIClient {
+    let root: FolderRoot
+    let requests: FolderBrowseRequestController
+    let baseURL = URL(string: "https://playarr.example")!
+
+    func fetchHealth() async throws {}
+    func fetchReadiness() async throws {}
+    func fetchVersion() async throws -> VersionEnvelope {
+        VersionEnvelope(serverVersion: "0.1.0", apiVersion: "v1")
+    }
+    func login(_ body: LoginRequest) async throws -> LoginResponse {
+        throw APIError.unauthorized(nil)
+    }
+    func browseCatalog(
+        kind: WorkKind?,
+        genre: String?,
+        tag: String?,
+        sort: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> CatalogPage {
+        CatalogPage(items: [])
+    }
+    func searchCatalog(query: String, limit: Int?) async throws -> [Work] { [] }
+    func fetchWork(id: UUID) async throws -> WorkDetail { throw APIError.notFound(nil) }
+    func listFolderRoots(kind: WorkKind) async throws -> FolderRootsResponse {
+        FolderRootsResponse(roots: [root], errors: [])
+    }
+    func browseFolder(
+        rootID: UUID,
+        path: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> FolderBrowseResponse {
+        try await requests.response(path: path, offset: offset ?? 0)
+    }
+    func playbackInfo(
+        mediaFileID: UUID,
+        containers: [String],
+        videoCodecs: [String],
+        audioCodecs: [String],
+        maxBitrateBps: Int64?,
+        profile: String?
+    ) async throws -> PlaybackInfoResponse {
+        throw APIError.notFound(nil)
+    }
+    func sendWebhook(instanceID: UUID, payload: Data) async throws {}
+    func resolvedURL(forPath path: String) -> URL? {
+        URL(string: path, relativeTo: baseURL)?.absoluteURL
+    }
+}
+
+@MainActor
+private func waitForFolderRequestCount(
+    _ count: Int,
+    requests: FolderBrowseRequestController,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async -> Bool {
+    for _ in 0..<1_000 {
+        if await requests.requestCount() >= count {
+            return true
+        }
+        await Task.yield()
+    }
+    XCTFail("Timed out waiting for \(count) folder requests", file: file, line: line)
+    return false
+}
+
+private func makeFolderRoot() -> FolderRoot {
+    FolderRoot(
+        id: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!,
+        sourceInstanceID: UUID(uuidString: "00000000-0000-4000-8000-000000000002")!,
+        sourceName: "Radarr",
+        libraryKind: .movie,
+        name: "Movies",
+        available: true
+    )
+}
+
+private func makeFolderPage(
+    root: FolderRoot,
+    path: String,
+    names: [String],
+    total: Int64? = nil,
+    offset: Int = 0
+) -> FolderBrowseResponse {
+    let entries = names.map { name in
+        FolderEntry(
+            entryType: .directory,
+            name: name,
+            path: path.isEmpty ? name : "\(path)/\(name)"
+        )
+    }
+    let breadcrumbs = [
+        FolderBreadcrumb(name: root.name, path: ""),
+        path.isEmpty ? nil : FolderBreadcrumb(name: path, path: path),
+    ].compactMap { $0 }
+    return FolderBrowseResponse(
+        root: root,
+        path: path,
+        breadcrumbs: breadcrumbs,
+        entries: entries,
+        total: total ?? Int64(entries.count),
+        offset: offset,
+        limit: 200
+    )
 }
 
 private actor PlaybackEventRecorder {

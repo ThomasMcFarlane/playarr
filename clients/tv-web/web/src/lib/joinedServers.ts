@@ -2,9 +2,15 @@ import type {
   AccessTokenRequest,
   ApiClient,
   BrowseCatalogParams,
+  BrowseFolderParams,
   CatalogPage,
+  FolderBrowseResponse,
+  FolderRoot,
+  FolderRootError,
+  FolderRootsResponse,
   Work,
   WorkDetail,
+  WorkKind,
 } from "@playarr-tv/api-client";
 
 export interface ConnectedServerClient {
@@ -20,10 +26,12 @@ export interface JoinedWorkSource extends ConnectedServerClient {
 
 const sourcesByWorkId = new Map<string, JoinedWorkSource[]>();
 const serverByMediaFileId = new Map<string, ConnectedServerClient>();
+const serverByFolderRootId = new Map<string, ConnectedServerClient>();
 
 export function clearJoinedServerRegistry(): void {
   sourcesByWorkId.clear();
   serverByMediaFileId.clear();
+  serverByFolderRootId.clear();
 }
 
 function registerDetailMedia(server: ConnectedServerClient, detail: WorkDetail): void {
@@ -38,6 +46,25 @@ function registerDetailMedia(server: ConnectedServerClient, detail: WorkDetail):
         : [];
   for (const child of children) {
     if (child.media_file_id) serverByMediaFileId.set(child.media_file_id, server);
+  }
+}
+
+function registerFolderRoots(
+  server: ConnectedServerClient,
+  roots: FolderRoot[]
+): void {
+  for (const root of roots) serverByFolderRootId.set(root.id, server);
+}
+
+function registerFolderBrowse(
+  server: ConnectedServerClient,
+  response: FolderBrowseResponse
+): void {
+  serverByFolderRootId.set(response.root.id, server);
+  for (const entry of response.entries) {
+    if (entry.entry_type === "media" && entry.media_file_id) {
+      serverByMediaFileId.set(entry.media_file_id, server);
+    }
   }
 }
 
@@ -111,6 +138,11 @@ export function getJoinedWorkSources(workId: string): JoinedWorkSource[] {
   return sourcesByWorkId.get(workId) ?? [];
 }
 
+/** Returns the connected server that owns an opaque folder root. */
+export function getJoinedFolderRootServerUrl(rootId: string): string | undefined {
+  return serverByFolderRootId.get(rootId)?.url;
+}
+
 function successfulValues<T>(results: PromiseSettledResult<T>[]): T[] {
   const values = results.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : []
@@ -122,6 +154,21 @@ function successfulValues<T>(results: PromiseSettledResult<T>[]): T[] {
     throw failure?.reason ?? new Error("No connected server returned a response.");
   }
   return values;
+}
+
+function folderRootServerError(
+  server: ConnectedServerClient,
+  reason: unknown
+): FolderRootError {
+  const message =
+    reason instanceof Error && reason.message.trim()
+      ? reason.message
+      : "Could not load root folders from this server.";
+  return {
+    source_instance_id: server.url,
+    source_name: server.label,
+    message,
+  };
 }
 
 async function discoverSources(
@@ -234,6 +281,40 @@ export function createJoinedApiClient(servers: ConnectedServerClient[]): ApiClie
       ).flat()
     ),
   ];
+  joined.listFolderRoots = async (
+    kind: WorkKind
+  ): Promise<FolderRootsResponse> => {
+    const results = await Promise.allSettled(
+      servers.map(async (server) => ({
+        server,
+        response: await server.client.listFolderRoots(kind),
+      }))
+    );
+    const responses = successfulValues(results);
+    for (const { server, response } of responses) {
+      registerFolderRoots(server, response.roots);
+    }
+    return {
+      roots: responses.flatMap(({ response }) => response.roots),
+      errors: [
+        ...responses.flatMap(({ response }) => response.errors),
+        ...results.flatMap((result, index) =>
+          result.status === "rejected"
+            ? [folderRootServerError(servers[index]!, result.reason)]
+            : []
+        ),
+      ],
+    };
+  };
+  joined.browseFolder = async (
+    rootId: string,
+    params: BrowseFolderParams = {}
+  ): Promise<FolderBrowseResponse> => {
+    const server = serverByFolderRootId.get(rootId) ?? servers[0]!;
+    const response = await server.client.browseFolder(rootId, params);
+    registerFolderBrowse(server, response);
+    return response;
+  };
   joined.getWorkCredits = async (workId) => {
     const source = getJoinedWorkSources(workId)[0];
     return (source?.client ?? primary).getWorkCredits(source?.work.id ?? workId);

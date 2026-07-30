@@ -194,6 +194,77 @@ export interface BrowseCatalogParams {
   offset?: number;
 }
 
+// ---------------------------------------------------------------------------
+// folders -- source-independent browsing of media beneath a library's roots.
+//
+// These hand-authored types mirror the agreed consumer contract while the
+// OpenAPI schema and generated client catch up. Paths are always relative to
+// their root; clients must never need a server filesystem path.
+// ---------------------------------------------------------------------------
+
+export interface FolderRoot {
+  id: string;
+  source_instance_id: string;
+  source_name: string;
+  library_kind: WorkKind;
+  name: string;
+  available: boolean;
+  unavailable_reason: string | null;
+}
+
+export interface FolderRootsResponse {
+  roots: FolderRoot[];
+  errors: FolderRootError[];
+}
+
+export interface FolderRootError {
+  source_instance_id: string;
+  source_name: string;
+  message: string;
+}
+
+export interface FolderBreadcrumb {
+  name: string;
+  path: string;
+}
+
+export interface FolderEntry {
+  entry_type: "directory" | "media";
+  name: string;
+  path: string;
+  media_file_id?: string | null;
+  media_kind?: WorkKind | null;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  container?: string | null;
+  video_codec?: string | null;
+  audio_codec?: string | null;
+  duration_ms?: number | null;
+  bitrate_bps?: number | null;
+  size_bytes?: number | null;
+  width?: number | null;
+  height?: number | null;
+  modified_at?: string | null;
+  thumbnail_url?: string | null;
+}
+
+export interface FolderBrowseResponse {
+  root: FolderRoot;
+  path: string;
+  breadcrumbs: FolderBreadcrumb[];
+  entries: FolderEntry[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface BrowseFolderParams {
+  path?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface PlaybackInfoParams {
   /** Comma-separated container names the client can play, e.g. `"mp4"`. */
   containers?: string;
@@ -735,6 +806,33 @@ export class ApiClient {
           },
         },
       })
+    );
+  }
+
+  /** Lists every streaming-visible root associated with one library kind. */
+  async listFolderRoots(kind: WorkKind): Promise<FolderRootsResponse> {
+    const query = new URLSearchParams({ kind });
+    return this.requestJson(
+      "GET",
+      `/api/v1/folders/roots?${query.toString()}`
+    );
+  }
+
+  /** Enumerates one relative directory without exposing its physical path. */
+  async browseFolder(
+    rootId: string,
+    params: BrowseFolderParams = {}
+  ): Promise<FolderBrowseResponse> {
+    const query = new URLSearchParams();
+    if (params.path !== undefined) query.set("path", params.path);
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.offset !== undefined) query.set("offset", String(params.offset));
+    const queryString = query.toString();
+    return this.requestJson(
+      "GET",
+      `/api/v1/folders/${encodeURIComponent(rootId)}${
+        queryString ? `?${queryString}` : ""
+      }`
     );
   }
 

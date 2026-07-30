@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
-use crate::{ArrClientError, ArrConnector};
+use crate::{ArrClientError, ArrConnector, ArrRootFolder};
 
 /// A series as Whisparr V3's `/api/v3/series` endpoint returns it. Whisparr
 /// V3 is a direct Sonarr fork -- same route names, same resource shape --
@@ -217,6 +217,18 @@ impl WhisparrClient {
         .await
     }
 
+    /// `GET /api/v3/rootfolder` — every root folder configured in Whisparr.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "whisparr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v3/rootfolder",
+        )
+        .await
+    }
+
     /// `GET /api/v3/series/{id}` — a single series by Whisparr's own id.
     /// Used by the reconciliation poller's targeted re-fetch after a
     /// webhook signals that one series changed, instead of re-listing all
@@ -294,6 +306,42 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_v3_endpoint_and_parses_common_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 9,
+                    "path": "/sites",
+                    "accessible": true,
+                    "freeSpace": 300_000,
+                    "totalSpace": 900_000,
+                    "unmappedFolders": []
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = WhisparrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("Whisparr root folders should parse");
+
+        assert_eq!(
+            roots,
+            vec![ArrRootFolder {
+                id: 9,
+                path: "/sites".to_string(),
+                accessible: true,
+                free_space: Some(300_000),
+                total_space: Some(900_000),
+            }]
+        );
+    }
 
     #[test]
     fn episode_payload_parses_remote_screenshot_and_defaults_missing_images() {

@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
-use crate::{ArrClientError, ArrConnector};
+use crate::{ArrClientError, ArrConnector, ArrRootFolder};
 
 /// A movie as Radarr's `/api/v3/movie` endpoint returns it. Unlike Sonarr
 /// (episode files are a separate `/api/v3/episodefile` resource joined by
@@ -210,6 +210,18 @@ impl RadarrClient {
         .await
     }
 
+    /// `GET /api/v3/rootfolder` — every root folder configured in Radarr.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "radarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v3/rootfolder",
+        )
+        .await
+    }
+
     /// `GET /api/v3/movie/{id}` — a single movie by Radarr's own id.
     pub async fn get_movie(&self, id: i64) -> Result<RadarrMovie, ArrClientError> {
         get_json(
@@ -261,6 +273,42 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_v3_endpoint_and_parses_common_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 7,
+                    "path": "/movies",
+                    "accessible": true,
+                    "freeSpace": 500_000,
+                    "totalSpace": 1_000_000,
+                    "unmappedFolders": []
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = RadarrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("Radarr root folders should parse");
+
+        assert_eq!(
+            roots,
+            vec![ArrRootFolder {
+                id: 7,
+                path: "/movies".to_string(),
+                accessible: true,
+                free_space: Some(500_000),
+                total_space: Some(1_000_000),
+            }]
+        );
+    }
 
     #[tokio::test]
     async fn list_movies_parses_response_and_sends_api_key() {

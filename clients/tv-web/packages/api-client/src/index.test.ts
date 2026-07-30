@@ -87,6 +87,80 @@ describe("ApiClient", () => {
     await expect(client.listCatalogKinds()).resolves.toEqual(["movie", "site"]);
   });
 
+  it("lists authenticated folder roots for one library kind", async () => {
+    const getAccessToken = vi.fn(async () => "viewer-token");
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(request.method).toBe("GET");
+      expect(url.pathname).toBe("/api/v1/folders/roots");
+      expect(url.searchParams.get("kind")).toBe("movie");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, {
+        roots: [
+          {
+            id: "root-1",
+            source_instance_id: "source-1",
+            source_name: "Movies",
+            library_kind: "movie",
+            name: "Films",
+            available: true,
+            unavailable_reason: null,
+          },
+        ],
+        errors: [],
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    await expect(client.listFolderRoots("movie")).resolves.toMatchObject({
+      roots: [{ id: "root-1", name: "Films" }],
+    });
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
+  it("browses an encoded folder root with a relative path and pagination", async () => {
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe("/api/v1/folders/root%2Fone");
+      expect(url.searchParams.get("path")).toBe("Drama/Classic Films");
+      expect(url.searchParams.get("limit")).toBe("40");
+      expect(url.searchParams.get("offset")).toBe("80");
+      return jsonResponse(200, {
+        root: {
+          id: "root/one",
+          source_instance_id: "source-1",
+          source_name: "Movies",
+          library_kind: "movie",
+          name: "Films",
+          available: true,
+          unavailable_reason: null,
+        },
+        path: "Drama/Classic Films",
+        breadcrumbs: [
+          { name: "Drama", path: "Drama" },
+          { name: "Classic Films", path: "Drama/Classic Films" },
+        ],
+        entries: [],
+        total: 0,
+        offset: 80,
+        limit: 40,
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+
+    await expect(
+      client.browseFolder("root/one", {
+        path: "Drama/Classic Films",
+        limit: 40,
+        offset: 80,
+      })
+    ).resolves.toMatchObject({
+      path: "Drama/Classic Films",
+      offset: 80,
+      limit: 40,
+    });
+  });
+
   it("throws ApiError with the parsed body on a non-2xx response", async () => {
     const fetchImpl = mockFetch(() => new Response(null, { status: 404, statusText: "Not Found" }));
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });

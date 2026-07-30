@@ -74,10 +74,13 @@ export interface PlayerLocationState {
 const MOBILE_MUSIC_LAYOUT_QUERY =
   "(max-width: 760px), (max-width: 920px) and (max-height: 500px) and (pointer: coarse)";
 
-function isDetailRoute(value: unknown): value is string {
+function isPlaybackBackRoute(value: unknown): value is string {
   return (
     typeof value === "string" &&
     (/^\/(?:movies|series|sites|music)\/[^/?]+$/.test(value) ||
+      /^\/(?:movies|series|sites|music)\?folderRoot=[^&#]+(?:&folderPath=[^#]*)?$/.test(
+        value
+      ) ||
       /^\/search\/[^/?]+(?:\?.*)?$/.test(value))
   );
 }
@@ -210,7 +213,9 @@ function PlayerPageInner({
   }, [inlineMusic]);
   const navigationOrigin = navigationOriginFromState(locationState);
   const title = locationState?.title;
-  const backTo = isDetailRoute(locationState?.backTo) ? locationState.backTo : "/";
+  const backTo = isPlaybackBackRoute(locationState?.backTo)
+    ? locationState.backTo
+    : "/";
   const detailParentBackTo = isDetailParentRoute(locationState?.detailParentBackTo)
     ? locationState.detailParentBackTo
     : undefined;

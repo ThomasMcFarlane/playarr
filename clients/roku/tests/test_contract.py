@@ -9,6 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "components" / "MainScene.brs").read_text(encoding="utf-8")
 SCENE = (ROOT / "components" / "MainScene.xml").read_text(encoding="utf-8")
 CONFIG = (ROOT / "source" / "Config.brs").read_text(encoding="utf-8")
+FOLDER_ITEM_XML = (ROOT / "components" / "FolderBrowserItem.xml").read_text(
+    encoding="utf-8"
+)
+FOLDER_ITEM_BRS = (ROOT / "components" / "FolderBrowserItem.brs").read_text(
+    encoding="utf-8"
+)
 
 
 class ApiContractTests(unittest.TestCase):
@@ -23,6 +29,8 @@ class ApiContractTests(unittest.TestCase):
             "GET /api/v1/catalog": 'path = "/api/v1/catalog?',
             "GET /api/v1/catalog/{id}": '"detail", "GET", "/api/v1/catalog/"',
             "GET /api/v1/playback/{id}": 'path = "/api/v1/playback/"',
+            "GET /api/v1/folders/roots": 'path = "/api/v1/folders/roots?kind="',
+            "GET /api/v1/folders/{id}": 'path = "/api/v1/folders/" + UrlEncode(rootId)',
             "POST playback event": '"POST", "/api/v1/playback/sessions/"',
             "GET /api/v1/users/me/profile-pin": ('"profilePin", "GET", "/api/v1/users/me/profile-pin"'),
             "PATCH /api/v1/users/me/profile-pin": ('"profilePinSave", "PATCH", "/api/v1/users/me/profile-pin"'),
@@ -61,6 +69,7 @@ class NavigationContractTests(unittest.TestCase):
     def test_overflowing_collections_are_native_scenegraph_lists(self) -> None:
         self.assertRegex(SCENE, r'<RowList id="libraryList"')
         self.assertRegex(SCENE, r'<RowList id="profilesRow"')
+        self.assertRegex(SCENE, r'<RowList id="folderBrowser"')
         self.assertRegex(SCENE, r'<LabelList id="detailActions"')
         self.assertIn('rowFocusAnimationStyle="fixedFocusWrap"', SCENE)
 
@@ -146,6 +155,155 @@ class NavigationContractTests(unittest.TestCase):
         self.assertIn('sub loadHomeSeries()', MAIN)
         self.assertIn('sub loadHomeMoreMovies()', MAIN)
         self.assertIn('sub loadHomeMoreSeries()', MAIN)
+
+
+class FolderBrowserContractTests(unittest.TestCase):
+    def test_folders_is_a_real_library_view_for_every_browse_kind(self) -> None:
+        self.assertIn('id="browseFilterViewFolders"', SCENE)
+        self.assertIn('text="Folders"', SCENE)
+        self.assertIn('sub enterBrowseFoldersView()', MAIN)
+        self.assertIn('"/api/v1/folders/roots?kind=" + UrlEncode(m.browseKind)', MAIN)
+        self.assertIn(
+            'return ["search", "home", "series", "movie", "site", "artist", "playlist"]',
+            MAIN,
+        )
+        self.assertIn("openBrowse(kind, labels[idx])", MAIN)
+
+    def test_root_breadcrumb_and_entry_rows_use_one_native_scroll_surface(self) -> None:
+        row_list = re.search(
+            r'<RowList id="folderBrowser".*?/>',
+            SCENE,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(row_list)
+        assert row_list is not None
+        self.assertIn('itemComponentName="FolderBrowserItem"', row_list.group(0))
+        self.assertIn('numRows="3"', row_list.group(0))
+        self.assertIn('rowFocusAnimationStyle="fixedFocusWrap"', row_list.group(0))
+        self.assertIn('rootsRow.title = "ROOT FOLDERS"', MAIN)
+        self.assertIn('breadcrumbsRow.title = "PATH"', MAIN)
+        self.assertIn('entriesRow.title = "CONTENTS"', MAIN)
+        self.assertIn(
+            'm.folderBrowser.ObserveField("rowItemSelected", "onFolderBrowserItemSelected")',
+            MAIN,
+        )
+        self.assertNotIn("<WebView", SCENE)
+
+    def test_file_thumbnail_endpoint_is_used_only_when_the_server_advertises_it(self) -> None:
+        thumbnail_function = re.search(
+            r"function folderThumbnailUrl\(entry as Dynamic\).*?end function",
+            MAIN,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(thumbnail_function)
+        assert thumbnail_function is not None
+        source = thumbnail_function.group(0)
+        self.assertIn("entry.thumbnail_url", source)
+        self.assertNotIn('"/api/v1/media/"', source)
+
+    def test_directory_navigation_has_selectable_breadcrumbs_and_back_parent(self) -> None:
+        self.assertIn('m.folderPath = JsonString(entry.path)', MAIN)
+        self.assertIn(
+            'm.folderPath = JsonString(m.folderBreadcrumbs[itemIndex].path)',
+            MAIN,
+        )
+        self.assertIn('sub browseFolderParent()', MAIN)
+        self.assertIn(
+            'm.folderBreadcrumbs[m.folderBreadcrumbs.Count() - 2].path',
+            MAIN,
+        )
+        self.assertIn(
+            'm.browseView = "folders" and key = "back" and m.folderPath <> ""',
+            MAIN,
+        )
+
+    def test_folder_entries_paginate_near_the_focused_end(self) -> None:
+        self.assertIn('m.folderPageSize = 200', MAIN)
+        self.assertIn('&limit=" + m.folderPageSize.ToStr() + "&offset="', MAIN)
+        self.assertIn(
+            'itemIndex >= m.folderEntries.Count() - 8 and not m.requestBusy',
+            MAIN,
+        )
+        self.assertIn('loadFolderDirectory(true)', MAIN)
+        self.assertIn('action = "folderBrowseMore"', MAIN)
+
+    def test_failed_folder_requests_resume_the_shared_request_queue(self) -> None:
+        handler = re.search(
+            r"sub handleApiFailure\(action as String, result as Object\).*?end sub",
+            MAIN,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(handler)
+        assert handler is not None
+        source = handler.group(0)
+
+        roots_start = source.index('if action = "folderRoots"')
+        browse_start = source.index(
+            'if action = "folderBrowse" or action = "folderBrowseMore"'
+        )
+        catalog_start = source.index(
+            'if action = "browseCatalog" or action = "browseCatalogMore"'
+        )
+        roots_failure = source[roots_start:browse_start]
+        browse_failure = source[browse_start:catalog_start]
+
+        self.assertIn("flushPendingApiRequests()", roots_failure)
+        self.assertIn("flushPendingApiRequests()", browse_failure)
+        self.assertNotIn('if m.browseView <> "folders" then return', roots_failure)
+        self.assertNotIn('if m.browseView <> "folders" then return', browse_failure)
+
+    def test_file_metadata_and_authenticated_thumbnail_are_rendered(self) -> None:
+        for field in (
+            "artist",
+            "album",
+            "container",
+            "video_codec",
+            "audio_codec",
+            "width",
+            "height",
+            "duration_ms",
+            "bitrate_bps",
+            "size_bytes",
+            "modified_at",
+            "thumbnail_url",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(f"entry.{field}", MAIN)
+        self.assertIn("item.hdPosterUrl = folderThumbnailUrl(entry)", MAIN)
+        self.assertIn('<Poster id="entryArtwork"', FOLDER_ITEM_XML)
+        self.assertIn("m.entryArtwork.SetHttpAgent(agent)", FOLDER_ITEM_BRS)
+        self.assertIn("globalState.playarrArtHeaders", FOLDER_ITEM_BRS)
+
+    def test_media_selection_uses_native_video_and_returns_to_folders(self) -> None:
+        selection = re.search(
+            r"sub onFolderBrowserItemSelected\(event as Object\).*?end sub",
+            MAIN,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(selection)
+        assert selection is not None
+        self.assertIn(
+            'requestPlayback(mediaFileId, "folders", title)',
+            selection.group(0),
+        )
+        self.assertIn('if m.playbackOrigin = "folders"', MAIN)
+        self.assertIn("showFolderBrowser()", MAIN)
+        self.assertRegex(SCENE, r'<Video id="video"')
+        self.assertIn('m.video.control = "play"', MAIN)
+
+    def test_folder_music_negotiates_native_audio_formats(self) -> None:
+        self.assertIn(
+            "containers=mp4%2Cmkv%2Cm3u8%2Cmp3%2Cflac%2Cm4a%2Cm4b%2Caac%2Cwav",
+            MAIN,
+        )
+        self.assertIn(
+            "audio_codecs=aac%2Cac3%2Ceac3%2Cmp3%2Cflac%2Calac%2Cpcm_s16le%2Cpcm_s24le",
+            MAIN,
+        )
+        self.assertIn("content.streamFormat = playbackStreamFormat(data)", MAIN)
+        self.assertIn('if mimeType = "audio/mpeg" then return "mp3"', MAIN)
+        self.assertIn('if mimeType = "audio/flac" then return "flac"', MAIN)
+        self.assertIn('if mimeType = "video/x-matroska" then return "mkv"', MAIN)
 
 
 class SecretSafetyTests(unittest.TestCase):

@@ -31,6 +31,8 @@ axum = { workspace = true }
 futures = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
+mime_guess = { workspace = true }
+rustix = { workspace = true }
 utoipa = { workspace = true, features = ["yaml"] }
 utoipa-axum = { workspace = true }
 tokio = { workspace = true }

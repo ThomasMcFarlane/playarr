@@ -40,6 +40,16 @@ struct NativePlayerDefaults: Equatable {
 @MainActor
 @Observable
 public final class PlayerViewModel {
+    /// Formats AVPlayer can direct-play for both catalogue and folder media.
+    public static let supportedContainers = [
+        "mp4", "mov", "m4v",
+        "mp3", "m4a", "m4b", "aac", "flac", "wav", "aiff", "aif", "alac",
+    ]
+    public static let supportedVideoCodecs = ["h264", "hevc"]
+    public static let supportedAudioCodecs = [
+        "aac", "ac3", "eac3", "mp3", "alac", "flac", "pcm_s16le", "pcm_s24le",
+    ]
+
     public enum LoadState: Equatable, Sendable {
         case idle
         case loadingPlaybackInfo
@@ -149,9 +159,9 @@ public final class PlayerViewModel {
             }
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
-                containers: ["mp4", "mov", "m4v"],
-                videoCodecs: ["h264", "hevc"],
-                audioCodecs: ["aac", "ac3", "eac3"],
+                containers: Self.supportedContainers,
+                videoCodecs: Self.supportedVideoCodecs,
+                audioCodecs: Self.supportedAudioCodecs,
                 maxBitrateBps: nil,
                 profile: requestedProfile
             )

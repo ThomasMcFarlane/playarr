@@ -6,7 +6,14 @@ import io.playarr.shared.data.model.DownloadStatus
 import io.playarr.shared.data.model.DownloadTicketResponse
 import io.playarr.shared.data.model.ExternalProvider
 import io.playarr.shared.data.model.ExternalRef
+import io.playarr.shared.data.model.FolderBrowseResponse
+import io.playarr.shared.data.model.FolderEntry
+import io.playarr.shared.data.model.FolderEntryType
+import io.playarr.shared.data.model.FolderRoot
+import io.playarr.shared.data.model.FolderRootError
+import io.playarr.shared.data.model.FolderRootsResponse
 import io.playarr.shared.data.model.MediaChapter
+import io.playarr.shared.data.model.MediaMetadata
 import io.playarr.shared.data.model.PlaybackEventRequest
 import io.playarr.shared.data.model.PlaybackInfoResponse
 import io.playarr.shared.data.model.PlaybackMode
@@ -230,6 +237,109 @@ class JoinedPlayarrApiTest {
         assertSame(secondary, registry.mediaServer("secondary-media"))
         assertSame(secondary, registry.preferredWorkSource(primaryWork.id)?.server)
         assertSame(primary, registry.workSources(primaryWork.id).first().server)
+    }
+
+    @Test
+    fun `folder fanout preserves errors and routes browsing media to the owning server`() = runBlocking {
+        val primaryRoot = FolderRoot(
+            id = "primary-root",
+            sourceInstanceId = "primary-source",
+            sourceName = "Primary Radarr",
+            libraryKind = WorkKind.Movie,
+            name = "Films",
+            available = true,
+        )
+        val secondaryRoot = FolderRoot(
+            id = "secondary-root",
+            sourceInstanceId = "secondary-source",
+            sourceName = "Secondary Radarr",
+            libraryKind = WorkKind.Movie,
+            name = "Archive",
+            available = true,
+        )
+        val rootError = FolderRootError(
+            sourceInstanceId = "offline-source",
+            sourceName = "Offline Radarr",
+            message = "Root is unavailable",
+        )
+        val primary = server("https://primary.example", fakeApi(
+            "listFolderRoots" to { FolderRootsResponse(listOf(primaryRoot), listOf(rootError)) },
+            "getMediaMetadata" to { MediaMetadata(1) },
+        ))
+        val secondary = server("https://secondary.example", fakeApi(
+            "listFolderRoots" to { FolderRootsResponse(listOf(secondaryRoot)) },
+            "browseFolder" to {
+                FolderBrowseResponse(
+                    root = secondaryRoot,
+                    path = "Classics",
+                    breadcrumbs = emptyList(),
+                    entries = listOf(
+                        FolderEntry(
+                            entryType = FolderEntryType.Media,
+                            name = "Orbit.mkv",
+                            path = "Classics/Orbit.mkv",
+                            mediaFileId = "secondary-folder-media",
+                            mediaKind = WorkKind.Movie,
+                            title = "Orbit",
+                        ),
+                    ),
+                    total = 1,
+                    offset = 0,
+                    limit = 100,
+                )
+            },
+            "getMediaMetadata" to { MediaMetadata(170_000) },
+        ))
+        val registry = PlayarrServerSourceRegistry()
+        val joined = JoinedPlayarrApi(primary.api, { listOf(primary, secondary) }, registry)
+
+        val roots = joined.listFolderRoots("movie")
+        val browse = joined.browseFolder("secondary-root", path = "Classics")
+        val metadata = joined.getMediaMetadata("secondary-folder-media")
+
+        assertEquals(listOf("primary-root", "secondary-root"), roots.roots.map(FolderRoot::id))
+        assertEquals(listOf(rootError), roots.errors)
+        assertEquals("Orbit", browse.entries.single().title)
+        assertEquals(170_000L, metadata.durationMs)
+        assertSame(secondary, registry.folderRootServer("secondary-root"))
+        assertSame(secondary, registry.mediaServer("secondary-folder-media"))
+    }
+
+    @Test
+    fun `folder fanout surfaces an unavailable server alongside successful roots`() = runBlocking {
+        val primaryRoot = FolderRoot(
+            id = "primary-root",
+            sourceInstanceId = "primary-source",
+            sourceName = "Primary Radarr",
+            libraryKind = WorkKind.Movie,
+            name = "Films",
+            available = true,
+        )
+        val primary = server("https://primary.example", fakeApi(
+            "listFolderRoots" to { FolderRootsResponse(listOf(primaryRoot)) },
+        ))
+        val unavailable = server("https://offline.example", fakeApi(
+            "listFolderRoots" to { throw IOException("Server is offline") },
+        ))
+        val joined = JoinedPlayarrApi(
+            primary.api,
+            { listOf(primary, unavailable) },
+            PlayarrServerSourceRegistry(),
+        )
+
+        val roots = joined.listFolderRoots("movie")
+
+        assertEquals(listOf(primaryRoot), roots.roots)
+        assertEquals(
+            listOf(
+                FolderRootError(
+                    sourceInstanceId = "https://offline.example",
+                    sourceName = "offline.example",
+                    message = "Server is offline",
+                ),
+            ),
+            roots.errors,
+        )
     }
 
     private fun server(url: String, api: PlayarrApi) = PlayarrServerClient(

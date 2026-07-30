@@ -5,6 +5,9 @@ import io.playarr.shared.data.model.Availability
 import io.playarr.shared.data.model.CatalogPage
 import io.playarr.shared.data.model.ClientPlatform
 import io.playarr.shared.data.model.ExternalProvider
+import io.playarr.shared.data.model.FolderBrowseResponse
+import io.playarr.shared.data.model.FolderEntryType
+import io.playarr.shared.data.model.FolderRootsResponse
 import io.playarr.shared.data.model.MediaChapter
 import io.playarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.playarr.shared.data.model.PeerAddressBundle
@@ -115,6 +118,83 @@ class PlayarrJsonModelTest {
         )
         assertTrue(page.items.isEmpty())
         assertEquals(0L, page.total)
+    }
+
+    @Test
+    fun `decodes folder roots and file-derived browse metadata`() {
+        val roots = json.decodeFromString(
+            FolderRootsResponse.serializer(),
+            """
+            {
+              "roots": [{
+                "id": "root-1",
+                "source_instance_id": "source-1",
+                "source_name": "Living Room Sonarr",
+                "library_kind": "series",
+                "name": "Television",
+                "available": true,
+                "unavailable_reason": null
+              }],
+              "errors": [{
+                "source_instance_id": "source-2",
+                "source_name": "Offline Sonarr",
+                "message": "Root folder is not mapped on this peer"
+              }]
+            }
+            """.trimIndent(),
+        )
+        val browse = json.decodeFromString(
+            FolderBrowseResponse.serializer(),
+            """
+            {
+              "root": {
+                "id": "root-1",
+                "source_instance_id": "source-1",
+                "source_name": "Living Room Sonarr",
+                "library_kind": "series",
+                "name": "Television",
+                "available": true,
+                "unavailable_reason": null
+              },
+              "path": "Dark/Season 1",
+              "breadcrumbs": [
+                {"name": "Dark", "path": "Dark"},
+                {"name": "Season 1", "path": "Dark/Season 1"}
+              ],
+              "entries": [{
+                "entry_type": "media",
+                "name": "Dark.S01E01.mkv",
+                "path": "Dark/Season 1/Dark.S01E01.mkv",
+                "media_file_id": "media-1",
+                "media_kind": "series",
+                "title": "Secrets",
+                "artist": null,
+                "album": null,
+                "container": "mkv",
+                "video_codec": "hevc",
+                "audio_codec": "eac3",
+                "duration_ms": 3123000,
+                "bitrate_bps": 8000000,
+                "size_bytes": 3123456789,
+                "width": 3840,
+                "height": 2160,
+                "modified_at": "2026-07-30T12:00:00Z",
+                "thumbnail_url": "/api/v1/media/media-1/thumbnail"
+              }],
+              "total": 1,
+              "offset": 0,
+              "limit": 100
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("Television", roots.roots.single().name)
+        assertEquals("Offline Sonarr", roots.errors.single().sourceName)
+        assertEquals(FolderEntryType.Media, browse.entries.single().entryType)
+        assertEquals(WorkKind.Series, browse.entries.single().mediaKind)
+        assertEquals("Secrets", browse.entries.single().title)
+        assertEquals(3_123_456_789L, browse.entries.single().sizeBytes)
+        assertEquals(2160, browse.entries.single().height)
     }
 
     @Test

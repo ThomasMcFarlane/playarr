@@ -29,6 +29,8 @@ const ENDPOINT_PATH_LITERALS = [
   '/api/v1/catalog',
   '/api/v1/catalog/search',
   '/api/v1/catalog/kinds',
+  '/api/v1/folders/roots',
+  '/api/v1/folders/',
   '/api/v1/artwork/work/',
   '/api/v1/playback/',
   '/api/v1/playback/sessions/',
@@ -225,6 +227,30 @@ export function checkContract(harmonyDir) {
     harmonyDir,
     'entry/src/main/ets/pages/Player.ets',
     { requiredSubstrings: ['getFocusController().activate('] },
+    errors,
+    warnings
+  );
+
+  checkFileContract(
+    harmonyDir,
+    'entry/src/main/ets/data/FolderRepository.ets',
+    { requiredSubstrings: ['folderRootsPath(', 'folderBrowsePath(', 'folderPageSize'] },
+    errors,
+    warnings
+  );
+
+  checkFileContract(
+    harmonyDir,
+    'entry/src/main/ets/pages/LibraryFolders.ets',
+    {
+      requiredSubstrings: [
+        'fetchMediaThumbnail(',
+        'folderEntryMetadata(',
+        'ROUTES.Player',
+        '.listDirection(Axis.Horizontal)',
+        '.onReachEnd(',
+      ],
+    },
     errors,
     warnings
   );

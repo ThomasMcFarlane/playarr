@@ -2,10 +2,11 @@
  * Playback page (brief section 2.5: "Player.ets -- XComponent surface +
  * custom control chrome + key handling"; brief section 9, Slice 7). Pushed
  * onto the shared `NavPathStack` by name (`navigation/Routes.ets`'s
- * `ROUTES.Player`) with a `PlayerRouteParams` (`{mediaFileId, workId,
- * startPositionMs?}`) -- see `PlayerBuilder`, at the bottom of this file,
- * for the exact param-decoding entry point `router_map.json`'s `Player` row
- * targets.
+ * `ROUTES.Player`) with a `PlayerRouteParams`: catalogue launches provide
+ * `{mediaFileId, workId, startPositionMs?}`, while file-derived folder
+ * launches provide `{mediaFileId, title}`. See `PlayerBuilder`, at the
+ * bottom of this file, for the exact param-decoding entry point
+ * `router_map.json`'s `Player` row targets.
  *
  * This file is pure orchestration over four already-built collaborators
  * (their own header comments document the exact contract each one owns;
@@ -191,6 +192,9 @@ type PlayerPhase = 'loading' | 'error' | 'ready';
 struct Player {
   @Prop mediaFileId: string = '';
   @Prop workId: string = '';
+  /** File-derived title supplied by folder browsing. Catalogue launches
+   * leave this empty and retain the existing work-detail title lookup. */
+  @Prop titleHint: string = '';
   /** `0` means "no requested resume position", matching
    * `player/AvPlayerController.ets#attachSource`'s own
    * `startPositionMs > 0` threshold for whether a local seek applies. */
@@ -259,7 +263,12 @@ struct Player {
 
     this.controller.setCallbacks(this.buildControllerCallbacks());
     this.startUiTicker();
-    void this.loadTitle();
+    const suppliedTitle = this.titleHint;
+    if (suppliedTitle.length > 0) {
+      this.title = suppliedTitle;
+    } else if (this.workId.length > 0) {
+      void this.loadTitle();
+    }
     void this.loadInitial();
   }
 
@@ -935,14 +944,22 @@ struct Player {
  * Registered in `profile/router_map.json` as the `Player` route's
  * `buildFunction` (this file's header comment). Decodes `param` as
  * `navigation/Routes.ets`'s `PlayerRouteParams` and passes each field
- * straight through as `Player`'s own `@Prop`s, defaulting a missing
- * `startPositionMs` to `0` (this struct's own "no requested resume
- * position" sentinel, matching `player/AvPlayerController.ets#attachSource`'s
- * threshold).
+ * straight through as `Player`'s own `@Prop`s. Missing catalogue `workId`
+ * and folder `title` values become empty strings; a missing
+ * `startPositionMs` becomes `0` (this struct's own "no requested resume
+ * position" sentinel, matching
+ * `player/AvPlayerController.ets#attachSource`'s threshold).
  */
 @Builder
 export function PlayerBuilder(name: string, param: Object): void {
   const params = param as PlayerRouteParams;
   const startPositionMs = params.startPositionMs ?? 0;
-  Player({ mediaFileId: params.mediaFileId, workId: params.workId, startPositionMs: startPositionMs });
+  const workId = params.workId ?? '';
+  const titleHint = params.title ?? '';
+  Player({
+    mediaFileId: params.mediaFileId,
+    workId: workId,
+    titleHint: titleHint,
+    startPositionMs: startPositionMs,
+  });
 }

@@ -286,6 +286,36 @@ export const en = {
   "pages.library.errorTitle": "The {{plural}} library could not be loaded",
   "pages.library.filterDrawerAriaLabel": "{{plural}} display filters",
   "pages.library.filters": "Filters",
+  "pages.library.folderBreadcrumbsAriaLabel": "Folder path",
+  "pages.library.folderBrowseAriaLabel": "Folder contents",
+  "pages.library.folderBrowseErrorTitle": "This folder could not be loaded",
+  "pages.library.folderDirectory": "Folder",
+  "pages.library.folderEmptyDescription":
+    "Directories and playable files beneath this folder will appear here.",
+  "pages.library.folderEmptyRootsDescription":
+    "Playarr Server did not return any root folders for this library.",
+  "pages.library.folderEmptyRootsTitle": "No root folders",
+  "pages.library.folderEmptyTitle": "No media in this folder",
+  "pages.library.folderLoading": "Loading folder",
+  "pages.library.folderLoadingMore": "Loading more files",
+  "pages.library.folderLoadingRoots": "Loading root folders",
+  "pages.library.folderMedia": "Media file",
+  "pages.library.folderMediaUnavailable":
+    "This file is not available for playback.",
+  "pages.library.folderOpen": "Open {{name}}",
+  "pages.library.folderPlay": "Play {{title}}",
+  "pages.library.folderRetry": "Try again",
+  "pages.library.folderRetryMore":
+    "More files could not be loaded. Press to retry.",
+  "pages.library.folderRootUnavailable":
+    "{{name}} is unavailable: {{reason}}",
+  "pages.library.folderRootsAriaLabel": "Root folders",
+  "pages.library.folderRootsErrorTitle": "Root folders could not be loaded",
+  "pages.library.folderRootWarnings": "Some roots could not be refreshed",
+  "pages.library.folderStageAriaLabel": "{{plural}} folder browser",
+  "pages.library.folderUnavailableDescription":
+    "This root folder cannot be reached right now.",
+  "pages.library.folderUnavailableTitle": "Folder unavailable",
   "pages.library.jumpThrough": "Jump through {{plural}}",
   "pages.library.libraryControls": "Library controls",
   "pages.library.loadingLabel": "Loading {{label}}",
@@ -320,6 +350,7 @@ export const en = {
   "pages.library.view": "View",
   "pages.library.viewCover": "cover",
   "pages.library.viewCoverFlow": "Cover Flow",
+  "pages.library.viewFolders": "Folders",
   "pages.library.viewList": "list",
   "pages.library.viewScreen": "screen",
   "pages.login.description":

@@ -28,17 +28,27 @@ struct LibraryView: View {
 
     var body: some View {
         Group {
-            switch viewModel.loadState {
-            case .idle, .loading:
-                PlayarrLoadingView(title: viewModel.searchText.isEmpty ? "Loading \(title.lowercased())…" : "Searching…")
-            case .failed(let message):
-                PlayarrFailureView(title: "Couldn’t load \(title.lowercased())", message: message) {
-                    Task { await viewModel.load() }
+            if viewModel.viewMode == .folders, let kind = viewModel.selectedKind {
+                stage {
+                    FolderBrowserView(
+                        kind: kind,
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
                 }
-            case .empty:
-                stage { emptyState }
-            case .loaded:
-                stage { libraryContent }
+            } else {
+                switch viewModel.loadState {
+                case .idle, .loading:
+                    PlayarrLoadingView(title: viewModel.searchText.isEmpty ? "Loading \(title.lowercased())…" : "Searching…")
+                case .failed(let message):
+                    PlayarrFailureView(title: "Couldn’t load \(title.lowercased())", message: message) {
+                        Task { await viewModel.load() }
+                    }
+                case .empty:
+                    stage { emptyState }
+                case .loaded:
+                    stage { libraryContent }
+                }
             }
         }
         .task {
@@ -350,8 +360,10 @@ struct LibraryView: View {
                         if viewModel.selectedKind == .artist {
                             Label("Flow", systemImage: "rectangle.on.rectangle.angled").tag(LibraryViewModel.ViewMode.coverFlow)
                         }
+                        if viewModel.selectedKind != nil {
+                            Label("Folders", systemImage: "folder").tag(LibraryViewModel.ViewMode.folders)
+                        }
                     }
-                    .pickerStyle(.segmented)
                 }
                 Section("Sort") {
                     Picker("Sort by", selection: $viewModel.sort) {

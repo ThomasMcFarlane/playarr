@@ -184,6 +184,14 @@ public protocol PlayarrAPIClient: Sendable {
     func listCatalogKinds() async throws -> [WorkKind]
     func fetchArtwork(workID: UUID, kind: ImageKind) async throws -> Data
     func fetchAlbumArtwork(artistWorkID: UUID, albumID: UUID, kind: ImageKind) async throws -> Data
+    func listFolderRoots(kind: WorkKind) async throws -> FolderRootsResponse
+    func browseFolder(
+        rootID: UUID,
+        path: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> FolderBrowseResponse
+    func fetchMediaThumbnail(mediaFileID: UUID) async throws -> Data
 
     // Viewer state
     func listWatchProgress() async throws -> [WatchProgress]
@@ -253,6 +261,20 @@ public extension PlayarrAPIClient {
         throw APIError.notFound(nil)
     }
     func fetchAlbumArtwork(artistWorkID: UUID, albumID: UUID, kind: ImageKind) async throws -> Data {
+        throw APIError.notFound(nil)
+    }
+    func listFolderRoots(kind: WorkKind) async throws -> FolderRootsResponse {
+        FolderRootsResponse(roots: [], errors: [])
+    }
+    func browseFolder(
+        rootID: UUID,
+        path: String?,
+        limit: Int?,
+        offset: Int?
+    ) async throws -> FolderBrowseResponse {
+        throw APIError.notFound(nil)
+    }
+    func fetchMediaThumbnail(mediaFileID: UUID) async throws -> Data {
         throw APIError.notFound(nil)
     }
     func listWatchProgress() async throws -> [WatchProgress] { [] }
@@ -419,6 +441,38 @@ public final class APIClient: PlayarrAPIClient {
         try await authenticatedData(
             path: "/api/v1/artwork/album/\(artistWorkID.uuidString)/\(albumID.uuidString)/\(kind.rawValue)"
         )
+    }
+
+    // MARK: Folders
+
+    public func listFolderRoots(kind: WorkKind) async throws -> FolderRootsResponse {
+        try await get(
+            "/api/v1/folders/roots",
+            query: [URLQueryItem(name: "kind", value: kind.rawValue)]
+        )
+    }
+
+    public func browseFolder(
+        rootID: UUID,
+        path: String? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> FolderBrowseResponse {
+        var query: [URLQueryItem] = []
+        if let path, !path.isEmpty {
+            query.append(URLQueryItem(name: "path", value: path))
+        }
+        if let limit {
+            query.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        if let offset {
+            query.append(URLQueryItem(name: "offset", value: String(offset)))
+        }
+        return try await get("/api/v1/folders/\(rootID.uuidString)", query: query)
+    }
+
+    public func fetchMediaThumbnail(mediaFileID: UUID) async throws -> Data {
+        try await authenticatedData(path: "/api/v1/media/\(mediaFileID.uuidString)/thumbnail")
     }
 
     // MARK: Viewer state

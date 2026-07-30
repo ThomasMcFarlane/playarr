@@ -16,6 +16,8 @@
 		6A1B2C3D4E5F60718293A4B7 /* DesignTokensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */; };
 		6A1B2C3D4E5F60718293A4B8 /* TVParityScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */; };
 		9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */; };
+		A7F01D9B2C3E4F5061728390 /* TVFolderBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F01D9B2C3E4F5061728391 /* TVFolderBrowser.swift */; };
+		A7F01D9B2C3E4F5061728392 /* TVFolderBrowserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F01D9B2C3E4F5061728393 /* TVFolderBrowserTests.swift */; };
 		AF7DF9EA8CB93994B825C73E /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = ABDF4D6CFC05316980A29BBD /* PlayarrKit */; };
 		B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61029885CE1ECACC599117A4 /* TVSettingsView.swift */; };
 		BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */; };
@@ -50,6 +52,8 @@
 		6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokensTests.swift; sourceTree = "<group>"; };
 		6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVParityScreens.swift; sourceTree = "<group>"; };
 		7D92F8DF06F34E21C388ADDB /* PlayarrTV.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PlayarrTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7F01D9B2C3E4F5061728391 /* TVFolderBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVFolderBrowser.swift; sourceTree = "<group>"; };
+		A7F01D9B2C3E4F5061728393 /* TVFolderBrowserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVFolderBrowserTests.swift; sourceTree = "<group>"; };
 		B55D266DA17523B0E68FD342 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ../ios; sourceTree = SOURCE_ROOT; };
 		D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAppEnvironment.swift; sourceTree = "<group>"; };
 		E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerView.swift; sourceTree = "<group>"; };
@@ -87,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				6A1B2C3D4E5F60718293A4B2 /* DesignTokensTests.swift */,
+				A7F01D9B2C3E4F5061728393 /* TVFolderBrowserTests.swift */,
 				12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */,
 			);
 			path = Tests;
@@ -99,6 +104,7 @@
 				3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */,
 				D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */,
 				12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */,
+				A7F01D9B2C3E4F5061728391 /* TVFolderBrowser.swift */,
 				F39006E3292B3C3FCE2911BE /* TVLibraryViews.swift */,
 				6A1B2C3D4E5F60718293A4B3 /* TVParityScreens.swift */,
 				E53D2E91ED2B7BA71E18FA96 /* TVPlayerView.swift */,
@@ -225,6 +231,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6A1B2C3D4E5F60718293A4B7 /* DesignTokensTests.swift in Sources */,
+				A7F01D9B2C3E4F5061728392 /* TVFolderBrowserTests.swift in Sources */,
 				BDE28F6F95544F39B3758DF4 /* TVServerAddressTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -237,6 +244,7 @@
 				226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */,
 				31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */,
 				E767AB886D58490C7EEB8970 /* TVDetailView.swift in Sources */,
+				A7F01D9B2C3E4F5061728390 /* TVFolderBrowser.swift in Sources */,
 				9C02BF2443FB6202643F7608 /* TVLibraryViews.swift in Sources */,
 				6A1B2C3D4E5F60718293A4B8 /* TVParityScreens.swift in Sources */,
 				5F8107D4351619115ED35636 /* TVPlayerView.swift in Sources */,

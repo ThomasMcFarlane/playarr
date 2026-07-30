@@ -12,6 +12,7 @@ mod credit;
 mod device;
 mod download_ticket;
 mod embedding;
+mod folder;
 mod group_library;
 mod library_view;
 mod media_file;
@@ -43,6 +44,7 @@ pub use credit::{CreditRepo, SqlxCreditRepo};
 pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};
 pub use embedding::{EmbeddingRepo, SqlxEmbeddingRepo};
+pub use folder::{FolderRepo, SqlxFolderRepo};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
 pub use library_view::{
     seed_default_views, LibraryViewRepo, SqlxLibraryViewRepo, NEWLY_ADDED_VIEW_ID,

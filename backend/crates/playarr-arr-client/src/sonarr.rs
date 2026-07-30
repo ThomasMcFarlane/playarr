@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
-use crate::{ArrClientError, ArrConnector};
+use crate::{ArrClientError, ArrConnector, ArrRootFolder};
 
 /// A series as Sonarr's `/api/v3/series` endpoint returns it. Deliberately
 /// a small, hand-picked subset of Sonarr's actual (much larger) response —
@@ -190,6 +190,18 @@ impl SonarrClient {
         .await
     }
 
+    /// `GET /api/v3/rootfolder` — every root folder configured in Sonarr.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "sonarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v3/rootfolder",
+        )
+        .await
+    }
+
     /// `GET /api/v3/series/{id}` — a single series by Sonarr's own id.
     /// Used by the reconciliation poller's targeted re-fetch after a
     /// webhook signals that one series changed, instead of re-listing all
@@ -267,6 +279,42 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_v3_endpoint_and_parses_common_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 8,
+                    "path": "/series",
+                    "accessible": true,
+                    "freeSpace": 250_000,
+                    "totalSpace": 750_000,
+                    "unmappedFolders": []
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = SonarrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("Sonarr root folders should parse");
+
+        assert_eq!(
+            roots,
+            vec![ArrRootFolder {
+                id: 8,
+                path: "/series".to_string(),
+                accessible: true,
+                free_space: Some(250_000),
+                total_space: Some(750_000),
+            }]
+        );
+    }
 
     #[test]
     fn episode_payload_parses_remote_screenshot_and_defaults_missing_images() {

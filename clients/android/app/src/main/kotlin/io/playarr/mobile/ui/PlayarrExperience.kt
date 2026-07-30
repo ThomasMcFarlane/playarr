@@ -320,6 +320,11 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _libraries = MutableStateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>>(emptyMap())
     val libraries: StateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>> = _libraries.asStateFlow()
 
+    private val _folders = MutableStateFlow<Map<WorkKind, PlayarrFolderBrowserState>>(emptyMap())
+    val folders: StateFlow<Map<WorkKind, PlayarrFolderBrowserState>> = _folders.asStateFlow()
+    private val folderRootJobs = mutableMapOf<WorkKind, Job>()
+    private val folderBrowseJobs = mutableMapOf<WorkKind, Job>()
+
     private val _search = MutableStateFlow<ExperienceLoad<PlayarrSearchResults>>(
         ExperienceLoad.Ready(PlayarrSearchResults()),
     )
@@ -418,6 +423,11 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _availableKinds.value = null
         _canDownload.value = null
         _libraries.value = emptyMap()
+        folderRootJobs.values.forEach(Job::cancel)
+        folderBrowseJobs.values.forEach(Job::cancel)
+        folderRootJobs.clear()
+        folderBrowseJobs.clear()
+        _folders.value = emptyMap()
         searchJob?.cancel()
         availableSearchWorkIds = null
         _search.value = ExperienceLoad.Ready(PlayarrSearchResults())
@@ -456,6 +466,127 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 )
             })
         }
+    }
+
+    fun loadFolderRoots(kind: WorkKind, force: Boolean = false) {
+        val current = _folders.value[kind]
+        if (!force && current?.roots is ExperienceLoad.Ready) return
+        folderRootJobs.remove(kind)?.cancel()
+        folderRootJobs[kind] = viewModelScope.launch {
+            updateFolderState(kind) { it.copy(roots = ExperienceLoad.Loading) }
+            try {
+                val response = api.listFolderRoots(kind.wireName())
+                val selectedRootId = response.roots
+                    .firstOrNull { root -> root.id == current?.selectedRootId && root.available }
+                    ?.id
+                    ?: response.roots.firstOrNull { it.available }?.id
+                updateFolderState(kind) {
+                    it.copy(
+                        roots = ExperienceLoad.Ready(response),
+                        selectedRootId = selectedRootId,
+                        browse = null,
+                        requestedPath = "",
+                        loadingMore = false,
+                    )
+                }
+                selectedRootId?.let { browseFolder(kind, it, "") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                updateFolderState(kind) {
+                    it.copy(
+                        roots = ExperienceLoad.Failed(error.folderBrowserMessage()),
+                        selectedRootId = null,
+                        browse = null,
+                        requestedPath = "",
+                        loadingMore = false,
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectFolderRoot(kind: WorkKind, rootId: String) {
+        val state = _folders.value[kind] ?: return
+        val roots = (state.roots as? ExperienceLoad.Ready)?.value?.roots.orEmpty()
+        if (roots.none { it.id == rootId && it.available }) return
+        updateFolderState(kind) {
+            it.beginFolderBrowse(rootId, "")
+        }
+        browseFolder(kind, rootId, "")
+    }
+
+    fun browseFolder(
+        kind: WorkKind,
+        rootId: String,
+        path: String,
+        append: Boolean = false,
+    ) {
+        val current = _folders.value[kind] ?: PlayarrFolderBrowserState()
+        val currentBrowse = (current.browse as? ExperienceLoad.Ready)?.value
+        val appendBrowse = currentBrowse?.takeIf {
+            append &&
+                current.selectedRootId == rootId &&
+                it.path == path &&
+                it.entries.size.toLong() < it.total
+        }
+        val canAppend = appendBrowse != null
+        if (append && !canAppend) return
+        folderBrowseJobs.remove(kind)?.cancel()
+        updateFolderState(kind) {
+            if (canAppend) {
+                it.copy(loadingMore = true)
+            } else {
+                it.beginFolderBrowse(rootId, path)
+            }
+        }
+        folderBrowseJobs[kind] = viewModelScope.launch {
+            try {
+                val offset = appendBrowse?.entries?.size?.toLong() ?: 0L
+                val response = api.browseFolder(
+                    rootId = rootId,
+                    path = path.takeIf(String::isNotEmpty),
+                    limit = FOLDER_PAGE_SIZE,
+                    offset = offset,
+                )
+                val merged = if (appendBrowse != null) {
+                    response.copy(
+                        entries = appendBrowse.entries + response.entries,
+                        offset = 0,
+                        limit = appendBrowse.entries.size.toLong() + response.entries.size,
+                    )
+                } else {
+                    response
+                }
+                updateFolderState(kind) {
+                    it.copy(
+                        selectedRootId = rootId,
+                        browse = ExperienceLoad.Ready(merged),
+                        loadingMore = false,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                updateFolderState(kind) {
+                    if (appendBrowse != null) {
+                        it.copy(browse = ExperienceLoad.Ready(appendBrowse), loadingMore = false)
+                    } else {
+                        it.copy(
+                            browse = ExperienceLoad.Failed(error.folderBrowserMessage()),
+                            loadingMore = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateFolderState(
+        kind: WorkKind,
+        update: (PlayarrFolderBrowserState) -> PlayarrFolderBrowserState,
+    ) {
+        _folders.value = _folders.value + (kind to update(_folders.value[kind] ?: PlayarrFolderBrowserState()))
     }
 
     fun prepareSearch() {
@@ -612,7 +743,7 @@ internal data class ExperienceDestination(
     val kind: WorkKind? = null,
 )
 
-private enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
+private enum class LibraryViewMode { List, Screen, Cover, CoverFlow, Folders }
 private enum class LibraryArtworkSize { Small, Medium, Large }
 
 internal val experienceDestinations = listOf(
@@ -648,6 +779,7 @@ internal fun televisionDestinationGroups(
 
 private const val CAPABILITIES_POLL_MS = 60_000L
 private const val SEARCH_DEBOUNCE_MS = 320L
+private const val FOLDER_PAGE_SIZE = 100L
 private const val SEARCH_LIMIT = 60L
 private const val SEARCH_LIBRARY_LIMIT = 500L
 private const val SEARCH_AVAILABILITY_PAGE_SIZE = 500L
@@ -1872,6 +2004,7 @@ private fun LibraryResults(
                 }
             }
         }
+        LibraryViewMode.Folders -> Unit
     }
 }
 
@@ -1941,45 +2074,48 @@ private fun LibraryFiltersDialog(
                             LibraryViewMode.Screen -> PlayarrString.LibraryViewScreen
                             LibraryViewMode.Cover -> PlayarrString.LibraryViewCover
                             LibraryViewMode.CoverFlow -> PlayarrString.LibraryViewCoverFlow
+                            LibraryViewMode.Folders -> PlayarrString.LibraryViewFolders
                         },
                     )
                 }
-                LibraryFilterChoices(
-                    playarrString(PlayarrString.LibraryArtworkSize),
-                    LibraryArtworkSize.entries,
-                    artworkSize,
-                    onArtworkSize,
-                ) {
-                    playarrString(
-                        when (it) {
-                            LibraryArtworkSize.Small -> PlayarrString.LibrarySizeSmall
-                            LibraryArtworkSize.Medium -> PlayarrString.LibrarySizeMedium
-                            LibraryArtworkSize.Large -> PlayarrString.LibrarySizeLarge
-                        },
-                    )
-                }
-                LibraryFilterChoices(
-                    playarrString(PlayarrString.LibrarySortBy),
-                    listOf("title", "recent"),
-                    sortMode,
-                    onSortMode,
-                ) {
-                    playarrString(if (it == "title") PlayarrString.LibrarySortTitle else PlayarrString.LibrarySortDateAdded)
-                }
-                LibraryFilterChoices(
-                    playarrString(PlayarrString.LibraryOrder),
-                    listOf(false, true),
-                    descending,
-                    onDescending,
-                ) {
-                    playarrString(
-                        when {
-                            sortMode == "title" && !it -> PlayarrString.LibrarySortAscAlpha
-                            sortMode == "title" -> PlayarrString.LibrarySortDescAlpha
-                            !it -> PlayarrString.LibrarySortAscDate
-                            else -> PlayarrString.LibrarySortDescDate
-                        },
-                    )
+                if (viewMode != LibraryViewMode.Folders) {
+                    LibraryFilterChoices(
+                        playarrString(PlayarrString.LibraryArtworkSize),
+                        LibraryArtworkSize.entries,
+                        artworkSize,
+                        onArtworkSize,
+                    ) {
+                        playarrString(
+                            when (it) {
+                                LibraryArtworkSize.Small -> PlayarrString.LibrarySizeSmall
+                                LibraryArtworkSize.Medium -> PlayarrString.LibrarySizeMedium
+                                LibraryArtworkSize.Large -> PlayarrString.LibrarySizeLarge
+                            },
+                        )
+                    }
+                    LibraryFilterChoices(
+                        playarrString(PlayarrString.LibrarySortBy),
+                        listOf("title", "recent"),
+                        sortMode,
+                        onSortMode,
+                    ) {
+                        playarrString(if (it == "title") PlayarrString.LibrarySortTitle else PlayarrString.LibrarySortDateAdded)
+                    }
+                    LibraryFilterChoices(
+                        playarrString(PlayarrString.LibraryOrder),
+                        listOf(false, true),
+                        descending,
+                        onDescending,
+                    ) {
+                        playarrString(
+                            when {
+                                sortMode == "title" && !it -> PlayarrString.LibrarySortAscAlpha
+                                sortMode == "title" -> PlayarrString.LibrarySortDescAlpha
+                                !it -> PlayarrString.LibrarySortAscDate
+                                else -> PlayarrString.LibrarySortDescDate
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -2015,12 +2151,63 @@ private fun ExperienceLibraryScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val states by viewModel.libraries.collectAsState()
+    val folderStates by viewModel.folders.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
     val language = LocalPlayarrLanguage.current
     val plural = kind.playarrPluralLabel()
     val collection = kind.playarrCollectionNoun()
+    var activeLetter by remember(kind) { mutableStateOf("#") }
+    var filtersOpen by remember(kind) { mutableStateOf(false) }
+    var viewMode by remember(kind) { mutableStateOf(LibraryViewMode.Screen) }
+    var artworkSize by remember(kind) { mutableStateOf(LibraryArtworkSize.Medium) }
+    var sortMode by remember(kind) { mutableStateOf("title") }
+    var descending by remember(kind) { mutableStateOf(false) }
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
+    LaunchedEffect(kind, viewMode) {
+        if (viewMode == LibraryViewMode.Folders) viewModel.loadFolderRoots(kind)
+    }
+
+    if (viewMode == LibraryViewMode.Folders) {
+        ExperienceFolderBrowser(
+            libraryLabel = plural,
+            state = folderStates[kind] ?: PlayarrFolderBrowserState(),
+            serverUrl = serverUrl,
+            accessToken = accessToken,
+            isTelevision = isTelevision,
+            onOpenFilters = { filtersOpen = true },
+            onRetryRoots = { viewModel.loadFolderRoots(kind, force = true) },
+            onSelectRoot = { viewModel.selectFolderRoot(kind, it) },
+            onBrowse = { rootId, path -> viewModel.browseFolder(kind, rootId, path) },
+            onLoadMore = { rootId, path -> viewModel.browseFolder(kind, rootId, path, append = true) },
+            onPlay = { entry, entries ->
+                val queue = folderPlaybackQueueItems(entries)
+                val selected = queue.firstOrNull { it.mediaFileId == entry.mediaFileId }
+                if (selected != null) {
+                    viewModel.startPlayback(selected.mediaFileId, queue)
+                    if (!selected.music) {
+                        navController.navigate("experience-player/${Uri.encode(selected.mediaFileId)}")
+                    }
+                }
+            },
+        )
+        if (filtersOpen) {
+            LibraryFiltersDialog(
+                kind = kind,
+                viewMode = viewMode,
+                artworkSize = artworkSize,
+                sortMode = sortMode,
+                descending = descending,
+                onViewMode = { viewMode = it },
+                onArtworkSize = { artworkSize = it },
+                onSortMode = { sortMode = it; if (it != "title") activeLetter = "#" },
+                onDescending = { descending = it },
+                onDismiss = { filtersOpen = false },
+            )
+        }
+        return
+    }
+
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
         ExperienceLoad.Loading -> ExperienceLoading(
             playarrString(PlayarrString.LibraryLoading, "label" to plural),
@@ -2028,20 +2215,40 @@ private fun ExperienceLibraryScreen(
         is ExperienceLoad.Failed -> ExperienceFailure(state.message) { viewModel.loadLibrary(kind) }
         is ExperienceLoad.Ready -> {
             if (state.value.isEmpty()) {
-                ExperienceEmpty(
-                    playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
-                    playarrString(PlayarrString.LibraryEmptyDescription, "collection" to collection),
-                )
+                Box(Modifier.fillMaxSize()) {
+                    ExperienceEmpty(
+                        playarrString(PlayarrString.LibraryEmptyTitle, "plural" to plural.lowercase(language.locale)),
+                        playarrString(PlayarrString.LibraryEmptyDescription, "collection" to collection),
+                    )
+                    OutlinedButton(
+                        onClick = { filtersOpen = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = if (isTelevision) 92.dp else 18.dp, end = if (isTelevision) 36.dp else 68.dp),
+                    ) {
+                        Icon(Icons.Outlined.FilterList, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(playarrString(PlayarrString.LibraryFilters))
+                    }
+                }
+                if (filtersOpen) {
+                    LibraryFiltersDialog(
+                        kind = kind,
+                        viewMode = viewMode,
+                        artworkSize = artworkSize,
+                        sortMode = sortMode,
+                        descending = descending,
+                        onViewMode = { viewMode = it },
+                        onArtworkSize = { artworkSize = it },
+                        onSortMode = { sortMode = it; if (it != "title") activeLetter = "#" },
+                        onDescending = { descending = it },
+                        onDismiss = { filtersOpen = false },
+                    )
+                }
                 return
             }
             var selectedId by remember(state.value) { mutableStateOf(state.value.first().id) }
             var contextWork by remember { mutableStateOf<Work?>(null) }
-            var activeLetter by remember(kind) { mutableStateOf("#") }
-            var filtersOpen by remember { mutableStateOf(false) }
-            var viewMode by remember { mutableStateOf(LibraryViewMode.Screen) }
-            var artworkSize by remember { mutableStateOf(LibraryArtworkSize.Medium) }
-            var sortMode by remember { mutableStateOf("title") }
-            var descending by remember { mutableStateOf(false) }
             val filteredWorks = remember(state.value, activeLetter, sortMode, descending) {
                 val matching = state.value.filter { work -> activeLetter == "#" || work.sortTitle.startsWith(activeLetter, ignoreCase = true) }
                 val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedBy(Work::sortTitle)
@@ -5567,11 +5774,12 @@ internal fun AuthenticatedArtwork(
 }
 
 @Composable
-private fun AuthenticatedMediaThumbnail(
+internal fun AuthenticatedMediaThumbnail(
     mediaFileId: String,
     serverUrl: String,
     accessToken: String?,
     contentDescription: String,
+    thumbnailUrl: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -5580,8 +5788,10 @@ private fun AuthenticatedMediaThumbnail(
         Box(modifier.background(WebSurfaceSoft))
         return
     }
-    val url = remember(serverAccess.serverUrl, mediaFileId) {
-        "${serverAccess.serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
+    val url = remember(serverAccess.serverUrl, mediaFileId, thumbnailUrl) {
+        thumbnailUrl?.takeIf(String::isNotBlank)
+            ?.let { resolveArtworkUrl(serverAccess.serverUrl, it) }
+            ?: "${serverAccess.serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
     }
     val requestToken = playarrAccessTokenForUrl(serverAccess, url)
     val request = remember(url, requestToken) {

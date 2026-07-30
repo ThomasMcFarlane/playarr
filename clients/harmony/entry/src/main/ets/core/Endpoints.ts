@@ -90,6 +90,16 @@ export function viewResolveUrl(id: string): string {
   return "/api/v1/views/" + id + "/resolve";
 }
 
+// -- 4.8a File-derived folder browsing -------------------------------------
+
+export function folderRootsUrl(): string {
+  return "/api/v1/folders/roots";
+}
+
+export function folderBrowseUrl(rootFolderId: string): string {
+  return "/api/v1/folders/" + rootFolderId;
+}
+
 // -- 4.9 Artwork -----------------------------------------------------------
 
 export function artworkWorkUrl(workId: string, kind: string): string {

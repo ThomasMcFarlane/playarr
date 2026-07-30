@@ -190,6 +190,13 @@ struct TVRootView: View {
                     workKind: .movie,
                     collectionNoun: "TITLES"
                 )
+            case .sites:
+                TVLibraryKindView(
+                    kindLabel: "Sites",
+                    emptyMessage: "No sites in your library yet.",
+                    workKind: .site,
+                    collectionNoun: "TITLES"
+                )
             case .music:
                 TVLibraryKindView(
                     kindLabel: "Music",

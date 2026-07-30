@@ -73,4 +73,39 @@ final class OpenAPISchemasTests: XCTestCase {
 
         XCTAssertEqual(decoded, original)
     }
+
+    func testFolderEntryDecodesFileDerivedMetadata() throws {
+        let json = Data(
+            """
+            {
+              "entry_type": "media",
+              "name": "Example.mkv",
+              "path": "Extras/Example.mkv",
+              "media_file_id": "00000000-0000-0000-0000-000000000050",
+              "media_kind": "movie",
+              "title": "Example",
+              "artist": null,
+              "album": null,
+              "container": "matroska",
+              "video_codec": "h264",
+              "audio_codec": "aac",
+              "duration_ms": 90000,
+              "bitrate_bps": 4000000,
+              "size_bytes": 45000000,
+              "width": 1920,
+              "height": 1080,
+              "modified_at": "2026-07-31T10:00:00Z",
+              "thumbnail_url": "/api/v1/media/00000000-0000-0000-0000-000000000050/thumbnail"
+            }
+            """.utf8
+        )
+
+        let entry = try PlayarrJSONCoding.makeDecoder().decode(FolderEntry.self, from: json)
+
+        XCTAssertEqual(entry.entryType, .media)
+        XCTAssertEqual(entry.path, "Extras/Example.mkv")
+        XCTAssertEqual(entry.videoCodec, "h264")
+        XCTAssertEqual(entry.durationMS, 90_000)
+        XCTAssertEqual(entry.width, 1_920)
+    }
 }

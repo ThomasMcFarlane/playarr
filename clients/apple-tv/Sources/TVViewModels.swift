@@ -172,6 +172,15 @@ final class TVWorkDetailViewModel {
 @MainActor
 @Observable
 final class TVPlayerViewModel {
+    static let supportedContainers = [
+        "mp4", "mov", "m4v",
+        "mp3", "m4a", "m4b", "aac", "flac", "wav", "aiff", "aif", "alac",
+    ]
+    static let supportedVideoCodecs = ["h264", "hevc"]
+    static let supportedAudioCodecs = [
+        "aac", "ac3", "eac3", "mp3", "alac", "flac", "pcm_s16le", "pcm_s24le",
+    ]
+
     enum State: Equatable {
         case idle
         case negotiating
@@ -204,9 +213,9 @@ final class TVPlayerViewModel {
         do {
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
-                containers: ["mp4", "mov", "m4v", "mkv"],
-                videoCodecs: ["h264", "hevc"],
-                audioCodecs: ["aac", "ac3", "eac3"],
+                containers: Self.supportedContainers,
+                videoCodecs: Self.supportedVideoCodecs,
+                audioCodecs: Self.supportedAudioCodecs,
                 maxBitrateBps: 40_000_000,
                 profile: "apple-tv"
             )

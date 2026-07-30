@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
-use crate::{ArrClientError, ArrConnector};
+use crate::{ArrClientError, ArrConnector, ArrRootFolder};
 
 /// An author as Readarr's `/api/v1/author` endpoint returns it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,6 +111,18 @@ impl ReadarrClient {
         .await
     }
 
+    /// `GET /api/v1/rootfolder` — every root folder configured in Readarr.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "readarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v1/rootfolder",
+        )
+        .await
+    }
+
     /// `GET /api/v1/author/{id}` — a single author by Readarr's own id.
     pub async fn get_author(&self, id: i64) -> Result<ReadarrAuthor, ArrClientError> {
         get_json(
@@ -202,6 +214,42 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_v1_endpoint_and_parses_common_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 11,
+                    "path": "/books",
+                    "accessible": false,
+                    "freeSpace": null,
+                    "totalSpace": null,
+                    "unmappedFolders": []
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = ReadarrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("Readarr root folders should parse");
+
+        assert_eq!(
+            roots,
+            vec![ArrRootFolder {
+                id: 11,
+                path: "/books".to_string(),
+                accessible: false,
+                free_space: None,
+                total_space: None,
+            }]
+        );
+    }
 
     #[tokio::test]
     async fn list_authors_parses_response_and_sends_api_key() {

@@ -154,6 +154,7 @@ pub async fn create_download_ticket_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
     ensure_can_download(&streaming.policy)?;
 
     let is_original = body.quality_id == "original";
@@ -240,20 +241,30 @@ pub async fn list_download_tickets_handler(
         .list_for_user(streaming.user_id)
         .await?;
 
-    // Unrestricted (`None`) is the common case and needs no per-ticket
-    // `MediaFile` resolution -- mirrors `playback::list_watch_progress_handler`'s
+    // A fully unrestricted caller needs no per-ticket `MediaFile`
+    // resolution. A library restriction or blocked-folder policy mirrors
+    // `playback::list_watch_progress_handler`'s
     // own restricted-caller filtering, for the same reason: a stale ticket
     // for now-inaccessible content (the admin narrowed `library_allow`
     // after the ticket was created) must not keep confirming that content
     // exists. A ticket whose `MediaFile` no longer resolves at all is
     // dropped for a restricted caller too (fail closed).
-    let Some(allowed) = streaming.allowed_libraries() else {
+    let allowed = streaming.allowed_libraries();
+    if allowed.is_none() && streaming.policy.blocked_folders.is_empty() {
         return Ok(Json(all_tickets.into_iter().map(Into::into).collect()));
-    };
+    }
     let mut visible = Vec::with_capacity(all_tickets.len());
     for ticket in all_tickets {
         if let Some(media_file) = state.media_files.get(ticket.media_file_id).await {
-            if ensure_library_allowed(media_file.source_instance_id, Some(&allowed)).is_ok() {
+            if ensure_library_allowed(media_file.source_instance_id, allowed.as_deref()).is_ok()
+                && crate::folders::ensure_folder_media_allowed(
+                    &state,
+                    media_file.id,
+                    &streaming.policy,
+                )
+                .await
+                .is_ok()
+            {
                 visible.push(ticket.into());
             }
         }
@@ -290,6 +301,7 @@ async fn load_owned_ticket(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(state, media_file.id, &streaming.policy).await?;
     Ok(ticket)
 }
 
@@ -381,11 +393,13 @@ pub async fn download_ticket_file_handler(
         }
     }
 
-    let resolved_path = match &ticket.output_path {
-        Some(path) => path.clone(),
+    let mut response = match &ticket.output_path {
+        Some(path) => crate::media::serve_file(path, request).await?,
         None => {
             // Original-quality tickets have no separately-produced output
-            // file -- they serve the source `MediaFile` itself.
+            // file -- they serve the source `MediaFile` itself. Folder
+            // originals take the descriptor-pinned path so a mutable source
+            // directory cannot redirect this download after authorisation.
             let media_file = state
                 .media_files
                 .get(ticket.media_file_id)
@@ -393,12 +407,12 @@ pub async fn download_ticket_file_handler(
                 .ok_or_else(|| {
                     ApiError::not_found(format!("unknown media file {}", ticket.media_file_id))
                 })?;
-            playarr_model::resolve_media_path(&media_file.path)
+            crate::media::serve_original_media_file(&state, &media_file, &streaming.policy, request)
+                .await?
         }
     };
 
     let file_name = download_file_name(&ticket);
-    let mut response = crate::media::serve_file(&resolved_path, request).await?;
     if let Ok(value) =
         axum::http::HeaderValue::from_str(&format!("attachment; filename=\"{file_name}\""))
     {

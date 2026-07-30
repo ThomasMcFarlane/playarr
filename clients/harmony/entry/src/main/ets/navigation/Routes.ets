@@ -97,11 +97,14 @@ export interface LibraryRouteParams {
   kind: string;
 }
 
-/** `pages/Player.ets`. `mediaFileId` and `workId` together identify the
- * playable file and its parent work; `startPositionMs` resumes from a
- * prior watch position when present and is omitted to start from zero. */
+/** `pages/Player.ets`. `mediaFileId` identifies the playable file.
+ * Catalogue launches also supply `workId` so the player can resolve the
+ * work title; folder launches instead supply the file-derived `title`.
+ * `startPositionMs` resumes from a prior watch position when present and
+ * is omitted to start from zero. */
 export interface PlayerRouteParams {
   mediaFileId: string;
-  workId: string;
+  workId?: string;
+  title?: string;
   startPositionMs?: number;
 }

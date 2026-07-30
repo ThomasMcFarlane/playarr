@@ -377,82 +377,6 @@ paths:
           description: No peer node with this id
       security:
       - bearer_auth: []
-  /api/v1/admin/playback/activity/active:
-    get:
-      tags:
-      - admin
-      summary: |-
-        Group-wide live playback sessions. A peer outage is represented in
-        `unavailable_nodes`; it does not discard sessions returned by this node or
-        any other reachable peer.
-      operationId: playback_activity_active_handler
-      responses:
-        '200':
-          description: Live playback across the peer group
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlaybackActivityActiveResponse'
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Caller is authenticated but not an admin
-      security:
-      - bearer_auth: []
-  /api/v1/admin/playback/activity/facets:
-    get:
-      tags:
-      - admin
-      summary: |-
-        Complete library choices for the Activity filter. Unlike choices derived
-        from a history page, these remain available when the current filters return
-        no rows and include libraries known through peer synchronisation.
-      operationId: playback_activity_facets_handler
-      responses:
-        '200':
-          description: Complete effective library choices for playback activity
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlaybackActivityFacetsResponse'
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Caller is authenticated but not an admin
-      security:
-      - bearer_auth: []
-  /api/v1/admin/playback/activity/history:
-    post:
-      tags:
-      - admin
-      summary: |-
-        Group-wide, filtered playback history. Each node applies storage filters
-        first, then scans deterministic batches until it has enough enriched
-        title/library/duration matches for correct global pagination.
-      operationId: playback_activity_history_handler
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PlaybackActivityHistoryRequest'
-        required: true
-      responses:
-        '200':
-          description: Filtered playback history across the peer group
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlaybackActivityHistoryResponse'
-        '400':
-          description: Invalid range or pagination
-        '401':
-          description: Missing or invalid access token
-        '403':
-          description: Caller is authenticated but not an admin
-        '409':
-          description: Connected-server membership or availability changed during pagination
-      security:
-      - bearer_auth: []
   /api/v1/admin/playback/sessions/active:
     get:
       tags:
@@ -479,18 +403,10 @@ paths:
                 client_platform: web
                 client_version: 1.4.2
                 device_id: d290f1ee-6c54-4b01-90e6-d701748f0851
-                duration_ms: 42000
-                library_id: fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31
-                library_name: Movies
                 media_file_id: 9c858901-8a57-4791-81fe-4c455b099bc9
                 media_title: Sample Movie Kilo
-                peer_node_id: f29eaea2-5023-4a46-ae31-d84ea62f46c8
-                peer_node_is_self: true
-                peer_node_name: Living Room
                 play_method: direct_play
                 session_id: b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d
-                source_instance_id: 3d33221e-a4f2-4317-8887-763c13e2474d
-                source_instance_name: Movies
                 started_at: 2026-07-20T18:42:00Z
                 target_codec: h264
                 target_container: mp4
@@ -567,24 +483,16 @@ paths:
                 client_platform: android-tv
                 client_version: 2.1.0
                 device_id: d290f1ee-6c54-4b01-90e6-d701748f0851
-                duration_ms: 5832000
                 ended_at: 2026-07-20T20:19:12Z
                 id: b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d
                 ip_address: 192.168.1.42
-                library_id: fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31
-                library_name: Movies
                 media_file_id: 9c858901-8a57-4791-81fe-4c455b099bc9
                 media_title: Sample Movie Kilo
-                peer_node_id: f29eaea2-5023-4a46-ae31-d84ea62f46c8
-                peer_node_is_self: true
-                peer_node_name: Living Room
                 play_method: transcode
                 rendition_id: 6c9a5e2b-3d4f-4a8c-8e1b-7f2c9d3a5b6e
                 source_bitrate: 20000000
                 source_codec: hevc
                 source_container: mkv
-                source_instance_id: 3d33221e-a4f2-4317-8887-763c13e2474d
-                source_instance_name: Movies
                 started_at: 2026-07-20T18:42:00Z
                 stop_reason: completed
                 target_bitrate: 4000000
@@ -814,9 +722,9 @@ paths:
       tags:
       - admin
       summary: |-
-        Replaces one Source instance's peer-root mappings. Because mappings are
-        part of the normal Source row, the existing signed Source replication
-        carries this change to every peer.
+        Replaces one Source instance's peer-root mappings and, when supplied, its
+        per-discovered-root mappings for the current node. Source-wide mappings
+        replicate with the Source row; root-specific overrides remain local.
       operationId: update_source_folder_mappings_handler
       parameters:
       - name: id
@@ -840,7 +748,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SourceInstanceResponse'
         '400':
-          description: A mapped path was empty
+          description: A mapped path was invalid or a root did not belong to this source
         '401':
           description: Missing or invalid access token
         '403':
@@ -1608,16 +1516,12 @@ paths:
           type: string
       - name: style
         in: query
-        description: >
-          Optional server-side bake shared by every client. `original` (default)
-          or `stage` (TV key-art greyscale blend). Same semantics as work artwork.
+        description: 'Named bake: `original` (default) or `stage` (TV key-art greyscale blend).'
         required: false
         schema:
-          type: string
-          enum:
-          - original
-          - stage
-          default: original
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached album artwork (optionally style-baked)
@@ -1660,19 +1564,12 @@ paths:
           type: string
       - name: style
         in: query
-        description: >
-          Optional server-side bake shared by every client. `original` (default)
-          returns the raw cached source image. `stage` applies the dark-theme
-          TV key-art look (greyscale, contrast 0.82, brightness 0.6, opacity
-          0.72, soft right-edge fade) as a PNG so Roku and other native
-          clients need not re-implement CSS filters.
+        description: 'Named bake: `original` (default) or `stage` (TV key-art greyscale blend).'
         required: false
         schema:
-          type: string
-          enum:
-          - original
-          - stage
-          default: original
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached source artwork (optionally style-baked)
@@ -2339,6 +2236,86 @@ paths:
           description: The ticket has not finished processing yet (queued/processing/failed)
         '410':
           description: The ticket expired or was canceled
+      security:
+      - bearer_auth: []
+  /api/v1/folders/roots:
+    get:
+      tags:
+      - folders
+      operationId: list_folder_roots_handler
+      parameters:
+      - name: kind
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/WorkKind'
+      responses:
+        '200':
+          description: Opaque, path-free root folders for the requested library kind
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderRootsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+      security:
+      - bearer_auth: []
+  /api/v1/folders/{root_folder_id}:
+    get:
+      tags:
+      - folders
+      operationId: browse_folder_handler
+      parameters:
+      - name: root_folder_id
+        in: path
+        description: Opaque root-folder id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: path
+        in: query
+        description: Root-relative directory path. Empty or omitted means the root.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+      responses:
+        '200':
+          description: One path-safe, paginated directory level with file-derived metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderBrowseResponse'
+        '400':
+          description: The requested path is absolute or contains traversal
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller cannot access this library or folder
+        '404':
+          description: Unknown root or directory
+        '503':
+          description: The root is not mounted on this server
       security:
       - bearer_auth: []
   /api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream:
@@ -3283,56 +3260,6 @@ paths:
           description: The forwarded user does not have Playarr streaming access on this peer's own policy, or is outside its own library grant
         '404':
           description: Unknown media file, or no local leaf resolves the given external ref
-      security:
-      - peer_id_header: []
-        peer_nonce_header: []
-        peer_signature_header: []
-        peer_timestamp_header: []
-  /api/v1/peer/playback/activity/active:
-    get:
-      tags:
-      - peer-groups
-      summary: |-
-        Signed peer-local half of [`playback_activity_active_handler`]. It never
-        fans out again, preventing request loops.
-      operationId: peer_playback_activity_active_handler
-      responses:
-        '200':
-          description: This peer's live playback sessions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlaybackActivityActiveResponse'
-        '401':
-          description: Missing or invalid peer signature
-      security:
-      - peer_id_header: []
-        peer_nonce_header: []
-        peer_signature_header: []
-        peer_timestamp_header: []
-  /api/v1/peer/playback/activity/history:
-    post:
-      tags:
-      - peer-groups
-      summary: Signed peer-local half of [`playback_activity_history_handler`].
-      operationId: peer_playback_activity_history_handler
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PlaybackActivityHistoryRequest'
-        required: true
-      responses:
-        '200':
-          description: This peer's filtered playback history prefix
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlaybackActivityHistoryResponse'
-        '400':
-          description: Invalid range or pagination
-        '401':
-          description: Missing or invalid peer signature
       security:
       - peer_id_header: []
         peer_nonce_header: []
@@ -4926,10 +4853,6 @@ components:
       - user_id
       - device_id
       - media_file_id
-      - peer_node_id
-      - peer_node_name
-      - peer_node_is_self
-      - duration_ms
       - play_method
       - target_codec
       - target_container
@@ -4959,22 +4882,6 @@ components:
         device_id:
           type: string
           format: uuid
-        duration_ms:
-          type: integer
-          format: int64
-          minimum: 0
-        library_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-          description: |-
-            Group-wide library id when the source is mapped to one; otherwise the
-            node-local source-instance id is the effective standalone library id.
-        library_name:
-          type:
-          - string
-          - 'null'
         media_file_id:
           type: string
           format: uuid
@@ -4985,27 +4892,11 @@ components:
           description: |-
             Best-effort `CatalogService` lookup. For child media, this names the
             actual episode, track, or book rather than only its parent work.
-        peer_node_id:
-          type: string
-          format: uuid
-        peer_node_is_self:
-          type: boolean
-        peer_node_name:
-          type: string
         play_method:
           $ref: '#/components/schemas/PlayMethod'
         session_id:
           type: string
           format: uuid
-        source_instance_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        source_instance_name:
-          type:
-          - string
-          - 'null'
         started_at:
           type: string
           format: date-time
@@ -5874,6 +5765,195 @@ components:
           type: string
         vapid_public_key:
           type: string
+    FolderBreadcrumbResponse:
+      type: object
+      required:
+      - name
+      - path
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+    FolderBrowseResponse:
+      type: object
+      required:
+      - root
+      - path
+      - breadcrumbs
+      - entries
+      - total
+      - offset
+      - limit
+      properties:
+        breadcrumbs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderBreadcrumbResponse'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderEntryResponse'
+        limit:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+        path:
+          type: string
+        root:
+          $ref: '#/components/schemas/FolderRootResponse'
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+    FolderEntryResponse:
+      type: object
+      required:
+      - entry_type
+      - name
+      - path
+      properties:
+        album:
+          type:
+          - string
+          - 'null'
+        artist:
+          type:
+          - string
+          - 'null'
+        audio_codec:
+          type:
+          - string
+          - 'null'
+        bitrate_bps:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        container:
+          type:
+          - string
+          - 'null'
+        duration_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        entry_type:
+          $ref: '#/components/schemas/FolderEntryType'
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        media_kind:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+        modified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        name:
+          type: string
+        path:
+          type: string
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        thumbnail_url:
+          type:
+          - string
+          - 'null'
+        title:
+          type:
+          - string
+          - 'null'
+        video_codec:
+          type:
+          - string
+          - 'null'
+        width:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+    FolderEntryType:
+      type: string
+      enum:
+      - directory
+      - media
+    FolderRootErrorResponse:
+      type: object
+      required:
+      - source_instance_id
+      - source_name
+      - message
+      properties:
+        message:
+          type: string
+        source_instance_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+    FolderRootResponse:
+      type: object
+      required:
+      - id
+      - source_instance_id
+      - source_name
+      - library_kind
+      - name
+      - available
+      properties:
+        available:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        library_kind:
+          $ref: '#/components/schemas/WorkKind'
+        name:
+          type: string
+        source_instance_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+        unavailable_reason:
+          type:
+          - string
+          - 'null'
+    FolderRootsResponse:
+      type: object
+      required:
+      - roots
+      - errors
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderRootErrorResponse'
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderRootResponse'
     FoundPeerGroupRequest:
       type: object
       description: Request body for [`found_peer_group_handler`].
@@ -6972,182 +7052,6 @@ components:
       - direct_play
       - direct_stream
       - transcode
-    PlaybackActivityActiveResponse:
-      type: object
-      required:
-      - sessions
-      - unavailable_nodes
-      properties:
-        sessions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActiveSessionView'
-        unavailable_nodes:
-          type: array
-          items:
-            $ref: '#/components/schemas/UnavailableNodeView'
-    PlaybackActivityFacetsResponse:
-      type: object
-      description: |-
-        Filter choices whose completeness must not depend on the current Activity
-        result page.
-      required:
-      - libraries
-      properties:
-        libraries:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlaybackActivityLibraryFacet'
-    PlaybackActivityHistoryRequest:
-      type: object
-      properties:
-        cursor:
-          type:
-          - string
-          - 'null'
-          description: |-
-            Opaque continuation returned as `next_cursor` by the previous page.
-            Leave unset for the first page.
-          default: null
-        from:
-          type:
-          - string
-          - 'null'
-          format: date-time
-          default: null
-        library_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          default: []
-        limit:
-          type: integer
-          format: int64
-          default: 100
-        max_bytes_streamed:
-          type:
-          - integer
-          - 'null'
-          format: int64
-          default: null
-        max_duration_ms:
-          type:
-          - integer
-          - 'null'
-          format: int64
-          default: null
-        min_bytes_streamed:
-          type:
-          - integer
-          - 'null'
-          format: int64
-          default: null
-        min_duration_ms:
-          type:
-          - integer
-          - 'null'
-          format: int64
-          default: null
-        offset:
-          type: integer
-          format: int64
-          description: |-
-            Legacy first-page compatibility field. Only zero is accepted; use
-            `cursor` for continuation.
-          default: 0
-        peer_node_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          default: []
-        play_methods:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlayMethod'
-          default: []
-        stop_reasons:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlaybackActivityStopReason'
-          default: []
-        title_terms:
-          type: array
-          items:
-            type: string
-          default: []
-        to:
-          type:
-          - string
-          - 'null'
-          format: date-time
-          default: null
-        user_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-          default: []
-    PlaybackActivityHistoryResponse:
-      type: object
-      required:
-      - sessions
-      - unavailable_nodes
-      - has_more
-      - snapshot_to
-      properties:
-        has_more:
-          type: boolean
-        next_cursor:
-          type:
-          - string
-          - 'null'
-          description: |-
-            Opaque keyset continuation. Send this with the same filters to request
-            the next page. `None` means the result has been exhausted.
-        sessions:
-          type: array
-          items:
-            $ref: '#/components/schemas/SessionHistoryView'
-        snapshot_to:
-          type: string
-          format: date-time
-          description: |-
-            Stable inclusive upper bound applied to every node for this cursor
-            sequence. This remains exposed for result labelling and compatibility;
-            callers should continue with `next_cursor`, not an offset.
-        unavailable_nodes:
-          type: array
-          items:
-            $ref: '#/components/schemas/UnavailableNodeView'
-    PlaybackActivityLibraryFacet:
-      type: object
-      description: |-
-        One complete effective-library choice for the Activity filter. Grouped
-        sources collapse onto their portable group-library id; an ungrouped source
-        keeps its own source-instance id so standalone activity remains filterable.
-      required:
-      - id
-      - name
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-    PlaybackActivityStopReason:
-      type: string
-      enum:
-      - completed
-      - user_stopped
-      - error
-      - device_disconnected
-      - session_revoked
-      - concurrent_limit_exceeded
-      - idle_timeout
-      - other
-      - in_progress
     PlaybackAudioTrackOption:
       type: object
       required:
@@ -8316,10 +8220,6 @@ components:
       - user_id
       - device_id
       - media_file_id
-      - peer_node_id
-      - peer_node_name
-      - peer_node_is_self
-      - duration_ms
       - started_at
       - play_method
       - source_codec
@@ -8351,10 +8251,6 @@ components:
         device_id:
           type: string
           format: uuid
-        duration_ms:
-          type: integer
-          format: int64
-          minimum: 0
         ended_at:
           type:
           - string
@@ -8367,15 +8263,6 @@ components:
           type:
           - string
           - 'null'
-        library_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        library_name:
-          type:
-          - string
-          - 'null'
         media_file_id:
           type: string
           format: uuid
@@ -8383,13 +8270,6 @@ components:
           type:
           - string
           - 'null'
-        peer_node_id:
-          type: string
-          format: uuid
-        peer_node_is_self:
-          type: boolean
-        peer_node_name:
-          type: string
         play_method:
           $ref: '#/components/schemas/PlayMethod'
         rendition_id:
@@ -8407,15 +8287,6 @@ components:
           type: string
         source_container:
           type: string
-        source_instance_id:
-          type:
-          - string
-          - 'null'
-          format: uuid
-        source_instance_name:
-          type:
-          - string
-          - 'null'
         started_at:
           type: string
           format: date-time
@@ -8481,6 +8352,19 @@ components:
       properties:
         folder_mappings:
           type: object
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+            format: uuid
+        root_folder_mappings:
+          type:
+          - object
+          - 'null'
+          description: |-
+            Optional complete replacement of current-node overrides for individual
+            discovered roots. Omit to leave them unchanged; send `{}` to clear
+            every per-root override for this source.
           additionalProperties:
             type: string
           propertyNames:
@@ -9013,24 +8897,6 @@ components:
       description: |-
         Why a session couldn't direct-play/direct-stream and had to fall back to
         a transcode. Populated only when `play_method == Transcode`.
-    UnavailableNodeView:
-      type: object
-      description: |-
-        A peer that could not contribute to a group-wide activity response.
-        Failures are row-level metadata rather than whole-request errors so an
-        administrator can still inspect every reachable node.
-      required:
-      - peer_node_id
-      - peer_node_name
-      - error
-      properties:
-        error:
-          type: string
-        peer_node_id:
-          type: string
-          format: uuid
-        peer_node_name:
-          type: string
     UpdateMediaPlaybackPreferencesRequest:
       type: object
       required:
@@ -9661,6 +9527,8 @@ tags:
   description: '*arr webhook receiver'
 - name: catalog
   description: Catalog browse/search/detail
+- name: folders
+  description: Path-safe browsing of file-derived media beneath source root folders
 - name: playback
   description: 'Playback negotiation: direct-play vs. transcode decision'
 - name: admin

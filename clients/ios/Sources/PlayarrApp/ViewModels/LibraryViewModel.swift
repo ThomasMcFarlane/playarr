@@ -12,7 +12,13 @@ import PlayarrKit
 @MainActor
 @Observable
 public final class LibraryViewModel {
-    public enum ViewMode: String, CaseIterable, Sendable { case list, screen, cover, coverFlow = "cover-flow" }
+    public enum ViewMode: String, CaseIterable, Sendable {
+        case list
+        case screen
+        case cover
+        case coverFlow = "cover-flow"
+        case folders
+    }
     public enum SearchScope: String, CaseIterable, Sendable { case all, movie, series, site, artist, playlist }
     public enum LoadState: Equatable, Sendable {
         case idle

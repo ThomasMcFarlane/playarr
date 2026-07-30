@@ -46,7 +46,7 @@ dotnet test tests/Playarr.Core.Tests/Playarr.Core.Tests.csproj
 ```
 
 Expected output: a clean build with 0 warnings/errors, and `Passed! -
-Failed: 0, Passed: 36, Skipped: 0, Total: 36`. The repo's `Justfile` wraps
+Failed: 0, Passed: 43, Skipped: 0, Total: 43`. The repo's `Justfile` wraps
 the same two commands as `just xbox-core-build` / `just xbox-core-test`, and
 CI runs them on every PR that touches `clients/xbox/**` (`xbox-check` in
 `.github/workflows/ci.yml`).

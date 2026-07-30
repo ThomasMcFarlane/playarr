@@ -253,6 +253,37 @@ export const ja: Translations = {
   "pages.library.retryLoadMore": "他のタイトルを読み込めませんでした。押して再試行してください。",
   "pages.library.filters": "フィルター",
   "pages.library.filterDrawerAriaLabel": "{{plural}}の表示フィルター",
+  "pages.library.folderBreadcrumbsAriaLabel": "フォルダーパス",
+  "pages.library.folderBrowseAriaLabel": "フォルダーの内容",
+  "pages.library.folderBrowseErrorTitle": "このフォルダーを読み込めませんでした",
+  "pages.library.folderDirectory": "フォルダー",
+  "pages.library.folderEmptyDescription":
+    "このフォルダー内のディレクトリと再生可能なファイルがここに表示されます。",
+  "pages.library.folderEmptyRootsDescription":
+    "Playarr Serverからこのライブラリのルートフォルダーが返されませんでした。",
+  "pages.library.folderEmptyRootsTitle": "ルートフォルダーがありません",
+  "pages.library.folderEmptyTitle": "このフォルダーにはメディアがありません",
+  "pages.library.folderLoading": "フォルダーを読み込んでいます",
+  "pages.library.folderLoadingMore": "他のファイルを読み込んでいます",
+  "pages.library.folderLoadingRoots": "ルートフォルダーを読み込んでいます",
+  "pages.library.folderMedia": "メディアファイル",
+  "pages.library.folderMediaUnavailable": "このファイルは再生できません。",
+  "pages.library.folderOpen": "{{name}}を開く",
+  "pages.library.folderPlay": "{{title}}を再生",
+  "pages.library.folderRetry": "もう一度試す",
+  "pages.library.folderRetryMore":
+    "他のファイルを読み込めませんでした。押して再試行してください。",
+  "pages.library.folderRootUnavailable":
+    "{{name}}は利用できません: {{reason}}",
+  "pages.library.folderRootsAriaLabel": "ルートフォルダー",
+  "pages.library.folderRootsErrorTitle":
+    "ルートフォルダーを読み込めませんでした",
+  "pages.library.folderRootWarnings":
+    "一部のルートフォルダーを更新できませんでした",
+  "pages.library.folderStageAriaLabel": "{{plural}}のフォルダーブラウザー",
+  "pages.library.folderUnavailableDescription":
+    "現在このルートフォルダーに接続できません。",
+  "pages.library.folderUnavailableTitle": "フォルダーを利用できません",
   "pages.library.libraryControls": "ライブラリの操作",
   "pages.library.closeFilters": "フィルターを閉じる",
   "pages.library.view": "表示",
@@ -260,6 +291,7 @@ export const ja: Translations = {
   "pages.library.viewList": "リスト",
   "pages.library.viewScreen": "スクリーン",
   "pages.library.viewCover": "カバー",
+  "pages.library.viewFolders": "フォルダー",
   "pages.library.artworkSize": "アートワークサイズ",
   "pages.library.sizeSmall": "小",
   "pages.library.sizeMedium": "中",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   describeApiError,
   type WatchProgress,
@@ -22,6 +22,7 @@ import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { LibraryFolders } from "./LibraryFolders";
 
 const PAGE_SIZE = 200;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"] as const;
@@ -62,7 +63,7 @@ function afterTwoFrames(): Promise<void> {
 }
 
 type LibraryKind = Extract<WorkKind, "movie" | "series" | "site" | "artist">;
-type LibraryView = "list" | "screen" | "cover" | "cover-flow";
+type LibraryView = "list" | "screen" | "cover" | "cover-flow" | "folders";
 type ArtworkSize = "small" | "medium" | "large";
 type LibrarySort = "title" | "date_added";
 type SortOrder = "asc" | "desc";
@@ -70,7 +71,9 @@ type SortOrder = "asc" | "desc";
 function storedView(kind: LibraryKind): LibraryView {
   const value = window.localStorage.getItem(`playarr.libraryView.${kind}`);
   if (value === "cover-flow") return kind === "artist" ? "cover-flow" : "screen";
-  return value === "list" || value === "cover" ? value : "screen";
+  return value === "list" || value === "cover" || value === "folders"
+    ? value
+    : "screen";
 }
 
 function storedArtworkSize(kind: LibraryKind): ArtworkSize {
@@ -95,6 +98,7 @@ function storedOrder(kind: LibraryKind): SortOrder {
  */
 export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const { t } = useLanguage();
+  const location = useLocation();
   const singular =
     kind === "series"
       ? t("pages.library.singular.series")
@@ -141,6 +145,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [order, setOrder] = useState<SortOrder>(() => storedOrder(kind));
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
+  const folderView = view === "folders";
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -159,6 +164,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
+    if (folderView) {
+      setRefreshing(false);
+      return;
+    }
     let cancelled = false;
     const kindChanged = loadedKindRef.current !== kind;
     const hasVisibleItems = !kindChanged && itemsRef.current.length > 0;
@@ -210,7 +219,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return () => {
       cancelled = true;
     };
-  }, [client, kind, order, sort]);
+  }, [client, folderView, kind, order, sort]);
 
   useEffect(() => {
     setView(storedView(kind));
@@ -221,6 +230,10 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   }, [kind]);
 
   useEffect(() => {
+    if (folderView) {
+      setWatchProgress(null);
+      return;
+    }
     let cancelled = false;
     setWatchProgress(null);
     client
@@ -235,7 +248,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, folderView]);
 
   function changeView(nextView: LibraryView) {
     window.localStorage.setItem(`playarr.libraryView.${kind}`, nextView);
@@ -404,10 +417,12 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     onProgressChanged: handleProgressChanged,
   });
   const navigationLayer = useNavigationLayer(
-    `${kind}:${view}:${artworkSize}:${sort}:${order}:${
-      items?.map((work) => work.id).join(",") ?? "loading"
-    }`,
-    items !== null && !hasMore
+    folderView
+      ? `${kind}:folders:${location.search}`
+      : `${kind}:${view}:${artworkSize}:${sort}:${order}:${
+          items?.map((work) => work.id).join(",") ?? "loading"
+        }`,
+    folderView || (items !== null && !hasMore)
   );
   const restoreFocusPrefix = `library:${kind}:`;
   const restoreWorkId = navigationLayer.focusKey?.startsWith(restoreFocusPrefix)
@@ -461,6 +476,38 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     } finally {
       setJumpingLetter(null);
     }
+  }
+
+  const filterControls = (
+    <LibraryFilters
+      kind={kind}
+      plural={plural}
+      view={view}
+      artworkSize={artworkSize}
+      sort={sort}
+      order={order}
+      open={filtersOpen}
+      onToggle={() => setFiltersOpen((open) => !open)}
+      onClose={() => setFiltersOpen(false)}
+      onViewChange={changeView}
+      onArtworkSizeChange={changeArtworkSize}
+      onSortChange={changeSort}
+      onOrderChange={changeOrder}
+    />
+  );
+
+  if (folderView) {
+    return (
+      <LibraryFolders
+        key={kind}
+        kind={kind}
+        plural={plural}
+        routeBase={routeBase}
+        filterControls={filterControls}
+        navigationOrigin={navigationLayer.origin}
+        onNavigate={navigationLayer.captureLink}
+      />
+    );
   }
 
   if (items === null && !initialError) {
@@ -677,138 +724,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         )}
       </TvRailSurface>
 
-      <button
-        type="button"
-        className={`tv-filter-launcher${filtersOpen ? " is-active" : ""}`}
-        onClick={() => setFiltersOpen((open) => !open)}
-        aria-expanded={filtersOpen}
-        aria-controls={`${kind}-library-filters`}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16M7 12h10m-7 6h4" />
-          <circle cx="8" cy="6" r="1.5" />
-          <circle cx="15" cy="12" r="1.5" />
-          <circle cx="12" cy="18" r="1.5" />
-        </svg>
-        <span>{t("pages.library.filters")}</span>
-      </button>
-
-      {filtersOpen ? (
-        <aside
-          id={`${kind}-library-filters`}
-          className="tv-filter-drawer"
-          aria-label={t("pages.library.filterDrawerAriaLabel", { plural })}
-        >
-          <header>
-            <div>
-              <p>{t("pages.library.libraryControls")}</p>
-              <h2>{t("pages.library.filters")}</h2>
-            </div>
-            <button type="button" onClick={() => setFiltersOpen(false)} aria-label={t("pages.library.closeFilters")}>
-              ×
-            </button>
-          </header>
-
-          <section>
-            <h3>{t("pages.library.view")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-view-options">
-              {(
-                kind === "artist"
-                  ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
-                  : (["list", "screen", "cover"] as LibraryView[])
-              ).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={view === option ? "is-active" : ""}
-                  onClick={() => changeView(option)}
-                  aria-pressed={view === option}
-                >
-                  <span className={`tv-view-icon tv-view-icon-${option}`} aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <strong>
-                    {option === "cover-flow"
-                      ? t("pages.library.viewCoverFlow")
-                      : option === "list"
-                        ? t("pages.library.viewList")
-                        : option === "screen"
-                          ? t("pages.library.viewScreen")
-                          : t("pages.library.viewCover")}
-                  </strong>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3>{t("pages.library.artworkSize")}</h3>
-            <div className="tv-filter-choice-grid">
-              {(["small", "medium", "large"] as ArtworkSize[]).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={artworkSize === size ? "is-active" : ""}
-                  onClick={() => changeArtworkSize(size)}
-                  aria-pressed={artworkSize === size}
-                >
-                  {size === "small"
-                    ? t("pages.library.sizeSmall")
-                    : size === "large"
-                      ? t("pages.library.sizeLarge")
-                      : t("pages.library.sizeMedium")}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3>{t("pages.library.sortBy")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={sort === "title" ? "is-active" : ""}
-                onClick={() => changeSort("title")}
-                aria-pressed={sort === "title"}
-              >
-                {t("pages.library.sortTitle")}
-              </button>
-              <button
-                type="button"
-                className={sort === "date_added" ? "is-active" : ""}
-                onClick={() => changeSort("date_added")}
-                aria-pressed={sort === "date_added"}
-              >
-                {t("pages.library.sortDateAdded")}
-              </button>
-            </div>
-          </section>
-
-          <section>
-            <h3>{t("pages.library.order")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
-              <button
-                type="button"
-                className={order === "asc" ? "is-active" : ""}
-                onClick={() => changeOrder("asc")}
-                aria-pressed={order === "asc"}
-              >
-                {sort === "title" ? t("pages.library.sortAscAlpha") : t("pages.library.sortAscDate")}
-              </button>
-              <button
-                type="button"
-                className={order === "desc" ? "is-active" : ""}
-                onClick={() => changeOrder("desc")}
-                aria-pressed={order === "desc"}
-              >
-                {sort === "title" ? t("pages.library.sortDescAlpha") : t("pages.library.sortDescDate")}
-              </button>
-            </div>
-          </section>
-        </aside>
-      ) : null}
+      {filterControls}
 
       {sort === "title" ? (
         <nav className="tv-alphabet" aria-label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}>
@@ -828,6 +744,199 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       ) : null}
       {mediaContext.contextMenu}
     </TvStageShell>
+  );
+}
+
+interface LibraryFiltersProps {
+  kind: LibraryKind;
+  plural: string;
+  view: LibraryView;
+  artworkSize: ArtworkSize;
+  sort: LibrarySort;
+  order: SortOrder;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onViewChange: (view: LibraryView) => void;
+  onArtworkSizeChange: (size: ArtworkSize) => void;
+  onSortChange: (sort: LibrarySort) => void;
+  onOrderChange: (order: SortOrder) => void;
+}
+
+function LibraryFilters({
+  kind,
+  plural,
+  view,
+  artworkSize,
+  sort,
+  order,
+  open,
+  onToggle,
+  onClose,
+  onViewChange,
+  onArtworkSizeChange,
+  onSortChange,
+  onOrderChange,
+}: LibraryFiltersProps) {
+  const { t } = useLanguage();
+  const views: LibraryView[] =
+    kind === "artist"
+      ? ["list", "screen", "cover", "cover-flow", "folders"]
+      : ["list", "screen", "cover", "folders"];
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`tv-filter-launcher${open ? " is-active" : ""}`}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={`${kind}-library-filters`}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M7 12h10m-7 6h4" />
+          <circle cx="8" cy="6" r="1.5" />
+          <circle cx="15" cy="12" r="1.5" />
+          <circle cx="12" cy="18" r="1.5" />
+        </svg>
+        <span>{t("pages.library.filters")}</span>
+      </button>
+
+      {open ? (
+        <aside
+          id={`${kind}-library-filters`}
+          className="tv-filter-drawer"
+          aria-label={t("pages.library.filterDrawerAriaLabel", { plural })}
+          data-tv-scroll-container
+          data-tv-scroll-axis="vertical"
+          data-navigation-scroll-key={`library:${kind}:filters`}
+        >
+          <header>
+            <div>
+              <p>{t("pages.library.libraryControls")}</p>
+              <h2>{t("pages.library.filters")}</h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("pages.library.closeFilters")}
+            >
+              ×
+            </button>
+          </header>
+
+          <section>
+            <h3>{t("pages.library.view")}</h3>
+            <div className="tv-filter-choice-grid tv-filter-view-options">
+              {views.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={view === option ? "is-active" : ""}
+                  onClick={() => onViewChange(option)}
+                  aria-pressed={view === option}
+                >
+                  <span
+                    className={`tv-view-icon tv-view-icon-${option}`}
+                    aria-hidden="true"
+                  >
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <strong>
+                    {option === "cover-flow"
+                      ? t("pages.library.viewCoverFlow")
+                      : option === "list"
+                        ? t("pages.library.viewList")
+                        : option === "screen"
+                          ? t("pages.library.viewScreen")
+                          : option === "folders"
+                            ? t("pages.library.viewFolders")
+                            : t("pages.library.viewCover")}
+                  </strong>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {view !== "folders" ? (
+            <>
+              <section>
+                <h3>{t("pages.library.artworkSize")}</h3>
+                <div className="tv-filter-choice-grid">
+                  {(["small", "medium", "large"] as ArtworkSize[]).map(
+                    (size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        className={artworkSize === size ? "is-active" : ""}
+                        onClick={() => onArtworkSizeChange(size)}
+                        aria-pressed={artworkSize === size}
+                      >
+                        {size === "small"
+                          ? t("pages.library.sizeSmall")
+                          : size === "large"
+                            ? t("pages.library.sizeLarge")
+                            : t("pages.library.sizeMedium")}
+                      </button>
+                    )
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h3>{t("pages.library.sortBy")}</h3>
+                <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+                  <button
+                    type="button"
+                    className={sort === "title" ? "is-active" : ""}
+                    onClick={() => onSortChange("title")}
+                    aria-pressed={sort === "title"}
+                  >
+                    {t("pages.library.sortTitle")}
+                  </button>
+                  <button
+                    type="button"
+                    className={sort === "date_added" ? "is-active" : ""}
+                    onClick={() => onSortChange("date_added")}
+                    aria-pressed={sort === "date_added"}
+                  >
+                    {t("pages.library.sortDateAdded")}
+                  </button>
+                </div>
+              </section>
+
+              <section>
+                <h3>{t("pages.library.order")}</h3>
+                <div className="tv-filter-choice-grid tv-filter-choice-grid-wide">
+                  <button
+                    type="button"
+                    className={order === "asc" ? "is-active" : ""}
+                    onClick={() => onOrderChange("asc")}
+                    aria-pressed={order === "asc"}
+                  >
+                    {sort === "title"
+                      ? t("pages.library.sortAscAlpha")
+                      : t("pages.library.sortAscDate")}
+                  </button>
+                  <button
+                    type="button"
+                    className={order === "desc" ? "is-active" : ""}
+                    onClick={() => onOrderChange("desc")}
+                    aria-pressed={order === "desc"}
+                  >
+                    {sort === "title"
+                      ? t("pages.library.sortDescAlpha")
+                      : t("pages.library.sortDescDate")}
+                  </button>
+                </div>
+              </section>
+            </>
+          ) : null}
+        </aside>
+      ) : null}
+    </>
   );
 }
 

@@ -315,6 +315,7 @@ internal enum class PlayarrString(
     LibraryViewList("list", "รายการ", "リスト"),
     LibraryViewScreen("screen", "หน้าจอ", "スクリーン"),
     LibraryViewCover("cover", "ปก", "カバー"),
+    LibraryViewFolders("folders", "โฟลเดอร์", "フォルダ"),
     LibraryArtworkSize("Artwork size", "ขนาดภาพปก", "アートワークサイズ"),
     LibrarySizeSmall("small", "เล็ก", "小"),
     LibrarySizeMedium("medium", "กลาง", "中"),
@@ -327,6 +328,54 @@ internal enum class PlayarrString(
     LibrarySortAscDate("Oldest first", "เก่าสุดก่อน", "古い順"),
     LibrarySortDescAlpha("Z-A", "Z-A", "Z-A"),
     LibrarySortDescDate("Newest first", "ใหม่สุดก่อน", "新しい順"),
+
+    FoldersTitle(
+        "{{library}} folders",
+        "โฟลเดอร์{{library}}",
+        "{{library}}のフォルダ",
+    ),
+    FoldersDescription(
+        "Browse media by its directory tree.",
+        "เรียกดูสื่อตามโครงสร้างโฟลเดอร์",
+        "ディレクトリ構造でメディアを閲覧します。",
+    ),
+    FoldersLoadingRoots(
+        "Loading root folders…",
+        "กำลังโหลดโฟลเดอร์หลัก…",
+        "ルートフォルダを読み込んでいます…",
+    ),
+    FoldersLoadingDirectory(
+        "Loading folder…",
+        "กำลังโหลดโฟลเดอร์…",
+        "フォルダを読み込んでいます…",
+    ),
+    FoldersNoRoots(
+        "No root folders are configured for this library.",
+        "ยังไม่ได้กำหนดโฟลเดอร์หลักสำหรับไลบรารีนี้",
+        "このライブラリにはルートフォルダが設定されていません。",
+    ),
+    FoldersNoAvailableRoots(
+        "No root folder is available on a connected server.",
+        "ไม่มีโฟลเดอร์หลักที่พร้อมใช้งานบนเซิร์ฟเวอร์ที่เชื่อมต่อ",
+        "接続中のサーバーで利用できるルートフォルダがありません。",
+    ),
+    FoldersEmptyDirectory(
+        "This folder contains no playable media.",
+        "โฟลเดอร์นี้ไม่มีสื่อที่เล่นได้",
+        "このフォルダには再生可能なメディアがありません。",
+    ),
+    FoldersItemCount(
+        "{{count}} items",
+        "{{count}} รายการ",
+        "{{count}}件",
+    ),
+    FoldersLoadMore("Load more", "โหลดเพิ่มเติม", "さらに読み込む"),
+    FoldersRetry("Try again", "ลองอีกครั้ง", "もう一度試す"),
+    FoldersUnableToLoad(
+        "Unable to load folders.",
+        "ไม่สามารถโหลดโฟลเดอร์ได้",
+        "フォルダを読み込めません。",
+    ),
 
     SearchTitle("Search", "ค้นหา", "検索"),
     SearchAll("All", "ทั้งหมด", "すべて"),

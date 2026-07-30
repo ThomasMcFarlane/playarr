@@ -180,6 +180,79 @@ final class APIClientAuthenticationTests: XCTestCase {
         )
     }
 
+    func testFolderBrowseUsesOpaqueRootAndRelativePath() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        let rootID = UUID(uuidString: "00000000-0000-0000-0000-000000000040")!
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/folders/\(rootID.uuidString)")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let query = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+            XCTAssertEqual(query["path"], "Season 1/Extras")
+            XCTAssertEqual(query["limit"], "200")
+            XCTAssertEqual(query["offset"], "0")
+            return Self.response(
+                request,
+                json: """
+                {
+                  "root": {
+                    "id": "\(rootID.uuidString)",
+                    "source_instance_id": "00000000-0000-0000-0000-000000000041",
+                    "source_name": "Sonarr",
+                    "library_kind": "series",
+                    "name": "TV",
+                    "available": true,
+                    "unavailable_reason": null
+                  },
+                  "path": "Season 1/Extras",
+                  "breadcrumbs": [{"name":"TV","path":""}],
+                  "entries": [],
+                  "total": 0,
+                  "offset": 0,
+                  "limit": 200
+                }
+                """
+            )
+        }
+
+        let response = try await makeClient(store: store).browseFolder(
+            rootID: rootID,
+            path: "Season 1/Extras",
+            limit: 200,
+            offset: 0
+        )
+
+        XCTAssertEqual(response.root.id, rootID)
+        XCTAssertEqual(response.path, "Season 1/Extras")
+    }
+
+    func testFolderThumbnailUsesAuthenticatedMediaRoute() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        let mediaFileID = UUID(uuidString: "00000000-0000-0000-0000-000000000042")!
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/media/\(mediaFileID.uuidString)/thumbnail")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access")
+            return Self.response(request, json: "thumbnail")
+        }
+
+        let data = try await makeClient(store: store).fetchMediaThumbnail(mediaFileID: mediaFileID)
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "thumbnail")
+    }
+
     func testAlbumArtworkUsesAuthenticatedWebRoute() async throws {
         let store = TestTokenStore(
             session: StoredAuthSession(

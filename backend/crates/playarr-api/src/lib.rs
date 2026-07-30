@@ -31,6 +31,7 @@ pub mod catalog;
 pub mod credits;
 pub mod downloads;
 pub mod error;
+pub mod folders;
 pub mod health;
 pub mod login;
 pub mod media;
@@ -70,7 +71,9 @@ use axum::extract::FromRef;
 use axum::Router;
 use tower_http::cors::{AllowHeaders, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
-use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
+use utoipa::openapi::security::{
+    ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme,
+};
 use utoipa::{Modify, OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -85,8 +88,11 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 
 /// Registers the `bearer_auth` HTTP bearer (JWT) security scheme every
 /// [`auth_extractor::AuthUser`]/[`AdminUser`]-family extractor implies, and
-/// marks every operation in the generated spec as requiring it *except*
-/// the genuinely public, no-token endpoints: the login, signup, and
+/// marks normal application operations as requiring it. Node-to-node
+/// `/api/v1/peer/*` operations instead require all four Ed25519 signing
+/// headers, except enrolment, whose one-shot join token is carried in its
+/// body. The remaining exclusions are the genuinely public, no-token
+/// endpoints: the login, signup, and
 /// refresh handlers; the two unauthenticated legs of the RFC 8628
 /// device-flow (`/api/v1/oauth/device/code` and `/api/v1/oauth/token` --
 /// *not* `/api/v1/oauth/device/authorize`, which itself requires a
@@ -101,6 +107,30 @@ pub use version_gate::{ClientCompatibilityTable, VersionGateLayer};
 /// exclusion list rather than an inclusion list that would silently miss
 /// newly added routes.
 struct SecurityAddon;
+
+const PEER_SIGNED_OPENAPI_PATH_PREFIX: &str = "/api/v1/peer/";
+const PEER_SECURITY_SCHEMES: &[(&str, &str, &str)] = &[
+    (
+        "peer_id_header",
+        "X-Playarr-Peer-Id",
+        "UUID of the peer signing this request",
+    ),
+    (
+        "peer_nonce_header",
+        "X-Playarr-Nonce",
+        "Unique nonce covered by the peer signature",
+    ),
+    (
+        "peer_signature_header",
+        "X-Playarr-Signature",
+        "Base64 Ed25519 signature over the canonical request",
+    ),
+    (
+        "peer_timestamp_header",
+        "X-Playarr-Timestamp",
+        "Unix timestamp covered by the peer signature",
+    ),
+];
 
 /// `path = "..."` strings (see each handler's `#[utoipa::path]`) for the
 /// operations excluded from the blanket `bearer_auth` requirement --
@@ -123,23 +153,43 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
 
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        openapi
-            .components
-            .get_or_insert_with(Default::default)
-            .add_security_scheme(
-                "bearer_auth",
-                SecurityScheme::Http(
-                    HttpBuilder::new()
-                        .scheme(HttpAuthScheme::Bearer)
-                        .bearer_format("JWT")
-                        .build(),
-                ),
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .bearer_format("JWT")
+                    .build(),
+            ),
+        );
+        for (scheme_name, header_name, description) in PEER_SECURITY_SCHEMES {
+            components.add_security_scheme(
+                *scheme_name,
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
+                    *header_name,
+                    *description,
+                ))),
             );
+        }
 
         for (path, item) in openapi.paths.paths.iter_mut() {
             if PUBLIC_OPENAPI_PATHS.contains(&path.as_str()) {
                 continue;
             }
+            let security = if path.starts_with(PEER_SIGNED_OPENAPI_PATH_PREFIX) {
+                let mut requirement = SecurityRequirement::new(
+                    PEER_SECURITY_SCHEMES[0].0,
+                    Vec::<String>::new(),
+                );
+                for (scheme_name, _, _) in &PEER_SECURITY_SCHEMES[1..] {
+                    requirement =
+                        requirement.add(*scheme_name, Vec::<String>::new());
+                }
+                requirement
+            } else {
+                SecurityRequirement::new("bearer_auth", Vec::<String>::new())
+            };
             for operation in [
                 item.get.as_mut(),
                 item.put.as_mut(),
@@ -153,10 +203,7 @@ impl Modify for SecurityAddon {
             .into_iter()
             .flatten()
             {
-                operation.security = Some(vec![SecurityRequirement::new(
-                    "bearer_auth",
-                    Vec::<String>::new(),
-                )]);
+                operation.security = Some(vec![security.clone()]);
             }
         }
     }
@@ -173,6 +220,7 @@ impl Modify for SecurityAddon {
         (name = "oauth", description = "RFC 8628 OAuth 2.0 device authorization endpoints"),
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
+        (name = "folders", description = "Path-safe browsing of file-derived media beneath source root folders"),
         (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
         (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
         (name = "users", description = "User account management and signed-in player preferences"),
@@ -213,6 +261,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::get_work_handler))
         .routes(routes!(catalog::search_catalog_handler))
         .routes(routes!(catalog::similar_works_handler))
+        .routes(routes!(folders::list_folder_roots_handler))
+        .routes(routes!(folders::browse_folder_handler))
         .routes(routes!(artwork::work_artwork_handler))
         .routes(routes!(artwork::album_artwork_handler))
         .routes(routes!(playback::playback_info_handler))
@@ -400,6 +450,30 @@ pub struct AppState {
     /// is the actual fix for registered `*arr` connections not surviving
     /// a restart.
     pub source_instance_repo: Arc<dyn playarr_db::SourceInstanceRepo>,
+    /// Durable root-folder discovery and file-derived browse cache. Physical
+    /// root paths remain inside this repository and are never projected
+    /// directly into an API response.
+    pub folder_repo: Arc<dyn playarr_db::FolderRepo>,
+    /// Serialises rate-limited root discovery so a burst of viewer requests
+    /// cannot fan out duplicate authenticated calls to every configured
+    /// source application.
+    pub folder_root_refresh_gate: Arc<tokio::sync::Mutex<()>>,
+    /// Last bounded discovery attempt per source, including empty/error
+    /// results, so those cases are rate-limited just like successful roots.
+    pub folder_root_refresh_attempts:
+        Arc<
+            tokio::sync::Mutex<
+                std::collections::BTreeMap<uuid::Uuid, chrono::DateTime<chrono::Utc>>,
+            >,
+        >,
+    /// Recent failed discovery attempts, retained for the same cache window
+    /// so every viewer sees the source warning without causing retry storms.
+    pub folder_root_refresh_failures:
+        Arc<
+            tokio::sync::Mutex<
+                std::collections::BTreeMap<uuid::Uuid, chrono::DateTime<chrono::Utc>>,
+            >,
+        >,
     /// The real, durable persistence layer for `playarr_model::LibraryView`
     /// ("Views" -- saved catalog filter+sort presets, see that type's doc
     /// comment) -- backs `views.rs`'s admin CRUD and public list/resolve
@@ -914,6 +988,32 @@ mod tests {
         assert!(json.contains("/api/v1/views"));
         assert!(json.contains("/api/v1/views/{id}/resolve"));
         assert!(json.contains("/api/v1/users/me/profile-avatar"));
+    }
+
+    #[test]
+    fn openapi_security_matches_bearer_public_and_peer_signed_routes() {
+        let spec = serde_json::to_value(openapi_spec()).unwrap();
+        let schemes = &spec["components"]["securitySchemes"];
+        assert_eq!(schemes["bearer_auth"]["type"], "http");
+        for (scheme_name, header_name, _) in PEER_SECURITY_SCHEMES {
+            assert_eq!(schemes[*scheme_name]["type"], "apiKey");
+            assert_eq!(schemes[*scheme_name]["in"], "header");
+            assert_eq!(schemes[*scheme_name]["name"], *header_name);
+        }
+
+        assert!(spec["paths"]["/api/v1/peer/enroll"]["post"]
+            .get("security")
+            .is_none());
+        let peer_security =
+            &spec["paths"]["/api/v1/peer/playback-info"]["post"]["security"][0];
+        for (scheme_name, _, _) in PEER_SECURITY_SCHEMES {
+            assert_eq!(peer_security[*scheme_name], serde_json::json!([]));
+        }
+        assert!(peer_security.get("bearer_auth").is_none());
+        assert_eq!(
+            spec["paths"]["/api/v1/folders/roots"]["get"]["security"][0],
+            serde_json::json!({"bearer_auth": []})
+        );
     }
 
     /// Regenerates (with `UPDATE_OPENAPI_SPEC=1`) or verifies (without it)

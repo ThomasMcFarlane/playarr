@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Deserializer, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
-use crate::{ArrClientError, ArrConnector};
+use crate::{ArrClientError, ArrConnector, ArrRootFolder};
 
 /// An artist as Lidarr's `/api/v1/artist` endpoint returns it. Note Lidarr
 /// is on API v1 (Sonarr/Radarr are on v3) — each *arr app version-bumps its
@@ -270,6 +270,18 @@ impl LidarrClient {
         .await
     }
 
+    /// `GET /api/v1/rootfolder` — every root folder configured in Lidarr.
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "lidarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v1/rootfolder",
+        )
+        .await
+    }
+
     /// `GET /api/v1/artist/{id}` — a single artist by Lidarr's own id.
     pub async fn get_artist(&self, id: i64) -> Result<LidarrArtist, ArrClientError> {
         get_json(
@@ -370,6 +382,42 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_v1_endpoint_and_parses_common_fields() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {
+                    "id": 10,
+                    "path": "/music",
+                    "accessible": true,
+                    "freeSpace": 400_000,
+                    "totalSpace": 800_000,
+                    "unmappedFolders": []
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let roots = LidarrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("Lidarr root folders should parse");
+
+        assert_eq!(
+            roots,
+            vec![ArrRootFolder {
+                id: 10,
+                path: "/music".to_string(),
+                accessible: true,
+                free_space: Some(400_000),
+                total_space: Some(800_000),
+            }]
+        );
+    }
 
     #[tokio::test]
     async fn list_artists_parses_response_and_sends_api_key() {

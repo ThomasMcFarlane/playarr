@@ -226,9 +226,8 @@ async fn serve() -> anyhow::Result<()> {
     // `SessionReaper`, `RetentionSweeper`) run leader-gated inside
     // `boot_worker`. See `playarr_telemetry::analytics::collector`'s
     // module doc comment for the overall architecture.
-    let analytics_store: Arc<dyn playarr_db::analytics::AnalyticsStore> = Arc::new(
-        playarr_db::analytics::SqlxAnalyticsStore::new(pool.clone()),
-    );
+    let analytics_store: Arc<dyn playarr_db::analytics::AnalyticsStore> =
+        Arc::new(playarr_db::analytics::SqlxAnalyticsStore::new(pool.clone()));
     let session_registry: Arc<dyn playarr_telemetry::analytics::SessionRegistry> =
         Arc::new(playarr_telemetry::analytics::InMemorySessionRegistry::new());
     // Drained by `AnalyticsFlusher`, spawned inside `boot_api` -- see that
@@ -342,9 +341,7 @@ async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn playarr_cache::C
             let pg_pool = sqlx::postgres::PgPoolOptions::new()
                 .connect(&config.database_url)
                 .await?;
-            Ok(Arc::new(playarr_cache::PostgresListenNotify::new(
-                pg_pool,
-            )))
+            Ok(Arc::new(playarr_cache::PostgresListenNotify::new(pg_pool)))
         }
     }
 }
@@ -357,9 +354,9 @@ async fn build_coordinator(
     config: &Config,
 ) -> anyhow::Result<Arc<dyn playarr_coordination::ClusterCoordinator>> {
     match config.deployment_tier {
-        DeploymentTier::SingleNode => Ok(Arc::new(
-            playarr_coordination::SingleNodeCoordinator::new(),
-        )),
+        DeploymentTier::SingleNode => {
+            Ok(Arc::new(playarr_coordination::SingleNodeCoordinator::new()))
+        }
         DeploymentTier::MultiNodePostgres | DeploymentTier::MultiNodePostgresRedis => {
             let pg_pool = sqlx::postgres::PgPoolOptions::new()
                 .connect(&config.database_url)
@@ -821,9 +818,7 @@ async fn bootstrap_admin_with(
         username: username.to_string(),
         display_name: username.to_string(),
         email: None,
-        password_hash: playarr_model::Sensitive::new(playarr_auth::login::hash_password(
-            &password,
-        )),
+        password_hash: playarr_model::Sensitive::new(playarr_auth::login::hash_password(&password)),
         policy_id: policy.id,
         created_at: chrono::Utc::now(),
         disabled: false,
@@ -887,16 +882,17 @@ async fn boot_api(
     };
     use playarr_db::repo::{
         seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-        SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
-        SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-        SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo, SqlxPlaylistRepo, SqlxPolicyRepo,
-        SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo,
-        SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo,
+        SqlxFolderRepo, SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
+        SqlxNodeIdentityRepo, SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo,
+        SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo, SqlxPeerSourceInstanceRepo,
+        SqlxPeerSyncStateRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
+        SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxRoutingRuleRepo,
+        SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo,
         SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
         SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use playarr_db::{
-        CreditRepo, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
+        CreditRepo, DeviceRepo, DownloadTicketRepo, FolderRepo, GroupLibraryRepo, LibraryViewRepo,
         MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo,
         PeerLeafAvailabilityRepo, PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncStateRepo,
         PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo,
@@ -931,6 +927,7 @@ async fn boot_api(
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+    let folder_repo: Arc<dyn FolderRepo> = Arc::new(SqlxFolderRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
@@ -1213,6 +1210,14 @@ async fn boot_api(
         webhook,
         source_instances,
         source_instance_repo,
+        folder_repo,
+        folder_root_refresh_gate: Arc::new(tokio::sync::Mutex::new(())),
+        folder_root_refresh_attempts: Arc::new(tokio::sync::Mutex::new(
+            std::collections::BTreeMap::new(),
+        )),
+        folder_root_refresh_failures: Arc::new(tokio::sync::Mutex::new(
+            std::collections::BTreeMap::new(),
+        )),
         library_view_repo,
         playlist_repo,
         work_repo,
@@ -1998,9 +2003,8 @@ async fn boot_worker(
     // `TDARR_URL`/`TDARR_API_KEY`/`TDARR_DB_ID` env-var-only config, same
     // "durable, admin-registerable, not a restart-required env var"
     // upgrade `SourceInstance` already went through for `*arr` apps.
-    let tdarr_connection_repo: Arc<dyn playarr_db::TdarrConnectionRepo> = Arc::new(
-        playarr_db::repo::SqlxTdarrConnectionRepo::new(pool.clone()),
-    );
+    let tdarr_connection_repo: Arc<dyn playarr_db::TdarrConnectionRepo> =
+        Arc::new(playarr_db::repo::SqlxTdarrConnectionRepo::new(pool.clone()));
     match tdarr_connection_repo.get().await {
         Ok(Some(connection)) => {
             handles.push(spawn_tdarr_dispatcher(
@@ -2315,18 +2319,16 @@ async fn check_for_update(channel: UpdateChannel) -> anyhow::Result<UpdateCheckO
 ///    (`rename(2)` within one filesystem is atomic — there is no window
 ///    where the path points at a partially-written file) and re-exec.
 async fn apply_update(target_version: &str) -> anyhow::Result<()> {
-    anyhow::bail!(
-        "playarr update --yes is not implemented yet (would update to {target_version})"
-    );
+    anyhow::bail!("playarr update --yes is not implemented yet (would update to {target_version})");
 }
 
 #[cfg(test)]
 mod bootstrap_tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use playarr_auth::PasswordVerifier as _;
     use playarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
     use playarr_db::{DbPool, PolicyRepo, UserRepo};
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     /// Same private, migrated, in-memory SQLite pool idiom
     /// `playarr-api`'s `test_support::test_pool` and `playarr-catalog`'s

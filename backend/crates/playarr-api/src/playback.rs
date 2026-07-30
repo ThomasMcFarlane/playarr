@@ -29,12 +29,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use chrono::Utc;
 use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use playarr_model::{
     ClientPlatform, DeliveryMode, ExternalProvider, LeafSelector, MediaFile, PeerNode, PlayMethod,
     PlaybackEvent, PlaybackEventKind, PlaybackSession, TranscodeReason, WatchProgress,
 };
 use playarr_transcode::ClientCapabilities;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -53,6 +53,12 @@ use crate::AppState;
 #[async_trait]
 pub trait MediaFileLookup: Send + Sync {
     async fn get(&self, id: Uuid) -> Option<MediaFile>;
+
+    /// Makes a newly-discovered file immediately visible to lookup
+    /// implementations that cache in memory. The production repository-backed
+    /// lookup needs no action because the folder repository has already
+    /// committed the row before this hook runs.
+    fn register(&self, _file: MediaFile) {}
 }
 
 /// Real (not a mock), thread-safe, in-process [`MediaFileLookup`] -- starts
@@ -77,6 +83,10 @@ impl InMemoryMediaFileLookup {
 impl MediaFileLookup for InMemoryMediaFileLookup {
     async fn get(&self, id: Uuid) -> Option<MediaFile> {
         self.files.get(&id).map(|entry| entry.clone())
+    }
+
+    fn register(&self, file: MediaFile) {
+        self.insert(file);
     }
 }
 
@@ -364,11 +374,21 @@ fn direct_play_mime_type(container: &str) -> &'static str {
     match container.to_ascii_lowercase().as_str() {
         "mp3" => "audio/mpeg",
         "flac" => "audio/flac",
-        "m4a" => "audio/mp4",
+        "m4a" | "m4b" | "alac" => "audio/mp4",
+        "aac" => "audio/aac",
         "ogg" | "oga" => "audio/ogg",
         "opus" => "audio/ogg; codecs=opus",
         "wav" => "audio/wav",
+        "wma" => "audio/x-ms-wma",
+        "aiff" | "aif" => "audio/aiff",
+        "mkv" => "video/x-matroska",
         "webm" => "video/webm",
+        "avi" => "video/x-msvideo",
+        "mov" => "video/quicktime",
+        "ts" | "m2ts" => "video/mp2t",
+        "mpg" | "mpeg" => "video/mpeg",
+        "wmv" => "video/x-ms-wmv",
+        "ogv" => "video/ogg",
         _ => "video/mp4",
     }
 }
@@ -418,8 +438,8 @@ pub async fn list_watch_progress_handler(
         .list_for_user(streaming.user_id)
         .await?;
 
-    // Unrestricted (`None`) is the common case and needs no per-row
-    // `MediaFile` resolution at all. A restricted caller's "continue
+    // Fully unrestricted callers need no per-row `MediaFile` resolution.
+    // A library restriction or blocked-folder policy must filter "continue
     // watching"/history list must not surface rows for media outside their
     // current `Policy::library_allow` -- e.g. after an admin narrows a
     // grant, a stale progress row for now-inaccessible content shouldn't
@@ -427,13 +447,21 @@ pub async fn list_watch_progress_handler(
     // at all is dropped for a restricted caller too (fail closed -- there's
     // nothing left to check its library against), same as every other gate
     // in this module.
-    let Some(allowed) = allowed else {
+    if allowed.is_none() && streaming.policy.blocked_folders.is_empty() {
         return Ok(Json(all_progress));
-    };
+    }
     let mut visible = Vec::with_capacity(all_progress.len());
     for progress in all_progress {
         if let Some(media_file) = state.media_files.get(progress.media_file_id).await {
-            if ensure_library_allowed(media_file.source_instance_id, Some(&allowed)).is_ok() {
+            if ensure_library_allowed(media_file.source_instance_id, allowed.as_deref()).is_ok()
+                && crate::folders::ensure_folder_media_allowed(
+                    &state,
+                    media_file.id,
+                    &streaming.policy,
+                )
+                .await
+                .is_ok()
+            {
                 visible.push(progress);
             }
         }
@@ -474,6 +502,7 @@ pub async fn get_watch_progress_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
     let progress = state
         .watch_progress
         .get(streaming.user_id, media_file_id)
@@ -528,6 +557,7 @@ pub async fn update_watch_progress_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    crate::folders::ensure_folder_media_allowed(&state, media_file.id, &streaming.policy).await?;
     let position_ms = if body.duration_ms > 0 {
         body.position_ms.min(body.duration_ms)
     } else {
@@ -778,6 +808,8 @@ pub async fn playback_info_handler(
         media_file.source_instance_id,
         streaming.allowed_libraries().as_deref(),
     )?;
+    let pinned_folder_media =
+        crate::folders::open_pinned_folder_media(&state, media_file.id, &streaming.policy).await?;
 
     // Clients already send these on every request -- see
     // `crate::version_gate`'s own doc comment -- so deriving session
@@ -841,6 +873,7 @@ pub async fn playback_info_handler(
             Some(remote_addr.ip().to_string()),
             &query,
             streaming.policy.can_transcode,
+            pinned_folder_media,
         )
         .await?,
     ))
@@ -867,11 +900,15 @@ pub(crate) async fn negotiate_playback(
     ip_address: Option<String>,
     query: &PlaybackQuery,
     can_transcode: bool,
+    pinned_folder_media: Option<crate::folders::PinnedFolderFile>,
 ) -> Result<PlaybackInfoResponse, ApiError> {
     let media_file_id = media_file.id;
     // Sonarr/Radarr may report a path from a remote host. Probe the same
     // locally-resolved source path that direct serving and transcoding use.
-    let resolved_media_path = playarr_model::resolve_media_path(&media_file.path);
+    let resolved_media_path = match pinned_folder_media.as_ref() {
+        Some(pinned) => pinned.subprocess_path()?,
+        None => playarr_model::resolve_media_path(&media_file.path),
+    };
     let duration_ms = match media_file.duration_ms.filter(|duration| *duration > 0) {
         Some(duration_ms) => duration_ms,
         None => match crate::media::probe_media_duration_ms(&resolved_media_path).await {
@@ -1152,16 +1189,35 @@ pub(crate) async fn negotiate_playback(
     } else {
         query.start_position_ms
     };
-    let transcode_session = state
-        .transcode
-        .spawn_on_demand_transcode_at_with_audio(
-            &media_file,
-            &profile,
-            &state.node_id,
-            source_offset_ms,
-            selected_audio_stream_index,
-        )
-        .await?;
+    let transcode_session = match pinned_folder_media {
+        Some(pinned) => {
+            let source_guard = pinned.into_file()?;
+            state
+                .transcode
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    &resolved_media_path,
+                    Some(source_guard),
+                    &profile,
+                    &state.node_id,
+                    source_offset_ms,
+                    selected_audio_stream_index,
+                )
+                .await?
+        }
+        None => {
+            state
+                .transcode
+                .spawn_on_demand_transcode_at_with_audio(
+                    &media_file,
+                    &profile,
+                    &state.node_id,
+                    source_offset_ms,
+                    selected_audio_stream_index,
+                )
+                .await?
+        }
+    };
 
     let target_profile = playarr_transcode::TranscodeTargetProfile::resolve(&profile);
     let session = seed.into_session(
@@ -1251,6 +1307,17 @@ async fn resolve_route_for_local_media_file(
     media_file: &MediaFile,
     user_id: Uuid,
 ) -> Result<LocalRouteOutcome, ApiError> {
+    // Folder-discovered media is intentionally node-local: its backing Work
+    // and root-relative identity are not portable catalogue records and must
+    // never be delegated to a peer.
+    if state
+        .folder_repo
+        .find_media_entry_by_media_file_id(media_file.id)
+        .await?
+        .is_some()
+    {
+        return Ok(LocalRouteOutcome::ServeLocally);
+    }
     let Some(identity) = state.node_identity_repo.get().await? else {
         return Ok(LocalRouteOutcome::ServeLocally);
     };
@@ -1451,6 +1518,8 @@ pub async fn peer_playback_info_handler(
             })?,
     };
     ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+    let pinned_folder_media =
+        crate::folders::open_pinned_folder_media(&state, media_file.id, &policy).await?;
 
     let response = negotiate_playback(
         &state,
@@ -1462,6 +1531,7 @@ pub async fn peer_playback_info_handler(
         None,
         &body.query,
         policy.can_transcode,
+        pinned_folder_media,
     )
     .await?;
     Ok(Json(response))
@@ -1832,9 +1902,20 @@ mod tests {
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use std::path::PathBuf;
     use playarr_model::media::LeafRef;
+    use std::path::PathBuf;
     use tower::ServiceExt;
+
+    #[test]
+    fn direct_play_mime_types_cover_folder_media_extensions() {
+        assert_eq!(direct_play_mime_type("mp3"), "audio/mpeg");
+        assert_eq!(direct_play_mime_type("flac"), "audio/flac");
+        assert_eq!(direct_play_mime_type("m4b"), "audio/mp4");
+        assert_eq!(direct_play_mime_type("aac"), "audio/aac");
+        assert_eq!(direct_play_mime_type("aiff"), "audio/aiff");
+        assert_eq!(direct_play_mime_type("mkv"), "video/x-matroska");
+        assert_eq!(direct_play_mime_type("m2ts"), "video/mp2t");
+    }
 
     /// `playback_info_handler` now takes `ConnectInfo<SocketAddr>` (mirrors
     /// `login.rs`'s own tests, which hit the same requirement first) --

@@ -82,6 +82,9 @@ sub init()
     end for
     m.browseGroup = m.top.findNode("browseGroup")
     m.browseGrid = m.top.findNode("browseGrid")
+    m.folderBrowserGroup = m.top.findNode("folderBrowserGroup")
+    m.folderBrowser = m.top.findNode("folderBrowser")
+    m.folderStatusLabel = m.top.findNode("folderStatusLabel")
     ' Product shell is a single SceneGraph UI — residual freeze Posters are
     ' gone from MainScene.xml (no dual stacked interface).
     hideAllResiduals()
@@ -95,10 +98,13 @@ sub init()
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
     m.browsePreviewMeta = m.top.findNode("browsePreviewMeta")
     m.browsePreviewOverview = m.top.findNode("browsePreviewOverview")
+    m.browseHint = m.top.findNode("browseHint")
     m.browseAlphabet = m.top.findNode("browseAlphabet")
     buildAlphabetStrip()
     m.browseFiltersButton = m.top.findNode("browseFiltersButton")
     m.browseFiltersPanel = m.top.findNode("browseFiltersPanel")
+    m.browseFilterViewTitles = m.top.findNode("browseFilterViewTitles")
+    m.browseFilterViewFolders = m.top.findNode("browseFilterViewFolders")
     m.browseFilterSortTitle = m.top.findNode("browseFilterSortTitle")
     m.browseFilterSortDate = m.top.findNode("browseFilterSortDate")
     m.browseFilterOrderAsc = m.top.findNode("browseFilterOrderAsc")
@@ -106,7 +112,7 @@ sub init()
     m.browseFilterSizeSmall = m.top.findNode("browseFilterSizeSmall")
     m.browseFilterSizeMedium = m.top.findNode("browseFilterSizeMedium")
     m.browseFilterSizeLarge = m.top.findNode("browseFilterSizeLarge")
-    m.browseFilterOptions = [m.browseFilterSortTitle, m.browseFilterSortDate, m.browseFilterOrderAsc, m.browseFilterOrderDesc, m.browseFilterSizeSmall, m.browseFilterSizeMedium, m.browseFilterSizeLarge]
+    m.browseFilterOptions = [m.browseFilterViewTitles, m.browseFilterViewFolders, m.browseFilterSortTitle, m.browseFilterSortDate, m.browseFilterOrderAsc, m.browseFilterOrderDesc, m.browseFilterSizeSmall, m.browseFilterSizeMedium, m.browseFilterSizeLarge]
     m.searchGroup = m.top.findNode("searchGroup")
     m.searchGrid = m.top.findNode("searchGrid")
     m.searchTitle = m.top.findNode("searchTitle")
@@ -189,6 +195,8 @@ sub init()
     m.library.ObserveField("rowItemFocused", "onLibraryItemFocused")
     m.browseGrid.ObserveField("itemSelected", "onBrowseItemSelected")
     m.browseGrid.ObserveField("itemFocused", "onBrowseItemFocused")
+    m.folderBrowser.ObserveField("rowItemSelected", "onFolderBrowserItemSelected")
+    m.folderBrowser.ObserveField("rowItemFocused", "onFolderBrowserItemFocused")
     m.searchGrid.ObserveField("itemSelected", "onSearchItemSelected")
     m.searchGrid.ObserveField("itemFocused", "onSearchItemFocused")
     m.playlistsGrid.ObserveField("itemSelected", "onPlaylistDirectoryItemSelected")
@@ -251,8 +259,24 @@ sub init()
     m.browseFiltersButtonFocused = false
     m.browseFiltersMode = false
     m.browseFiltersIndex = 0
+    m.browseView = "titles"
     m.browseSort = "title"
     m.browseOrder = "asc"
+    m.folderRoots = []
+    m.folderRootErrors = []
+    m.folderRootIndex = -1
+    m.folderSelectedRoot = invalid
+    m.folderPath = ""
+    m.folderBreadcrumbs = []
+    m.folderEntries = []
+    m.folderTotal = 0
+    m.folderPageSize = 200
+    m.folderLoading = false
+    m.folderFocusedRow = 0
+    m.folderFocusedIndex = 0
+    m.folderFocusEntriesAfterLoad = false
+    m.playbackOrigin = "detail"
+    m.playbackTitle = ""
     m.searchQuery = ""
     m.searchItems = []
     m.searchDisplayItems = []
@@ -635,6 +659,10 @@ sub onApiResult(event as Object)
         acceptCatalog(result.data, action = "catalogMore")
     else if action = "browseCatalog" or action = "browseCatalogMore"
         acceptBrowseCatalog(result.data, action = "browseCatalogMore")
+    else if action = "folderRoots"
+        acceptFolderRoots(result.data, request)
+    else if action = "folderBrowse" or action = "folderBrowseMore"
+        acceptFolderDirectory(result.data, action = "folderBrowseMore")
     else if action = "search"
         acceptSearchResults(result.data)
     else if action = "playlists"
@@ -776,7 +804,36 @@ sub handleApiFailure(action as String, result as Object)
 
     ' Product surfaces stay in-shell on API failure — never a fullscreen
     ' status wall mid-navigation (that is not how Playarr looks).
+    if action = "folderRoots"
+        if m.browseView = "folders"
+            m.folderLoading = false
+            m.folderRoots = []
+            m.folderRootErrors = []
+            m.folderSelectedRoot = invalid
+            m.folderEntries = []
+            m.folderBreadcrumbs = []
+            m.folderStatusLabel.text = "Couldn’t load root folders. Press * to return to Filters and retry."
+            rebuildFolderBrowserContent()
+            showFolderBrowser()
+        end if
+        flushPendingApiRequests()
+        return
+    end if
+    if action = "folderBrowse" or action = "folderBrowseMore"
+        if m.browseView = "folders"
+            m.folderLoading = false
+            m.folderStatusLabel.text = "Couldn’t load this folder. Choose a root or breadcrumb to retry."
+            rebuildFolderBrowserContent()
+            showFolderBrowser()
+        end if
+        flushPendingApiRequests()
+        return
+    end if
     if action = "browseCatalog" or action = "browseCatalogMore"
+        if m.browseView = "folders"
+            showFolderBrowser()
+            return
+        end if
         if m.browseCountLabel <> invalid then m.browseCountLabel.text = "UNAVAILABLE"
         showOnly("browse")
         m.top.screenState = "browse"
@@ -821,9 +878,14 @@ sub handleApiFailure(action as String, result as Object)
         return
     end if
     if action = "playback"
-        showOnly("detail")
-        m.top.screenState = "detail"
-        m.detailActions.SetFocus(true)
+        if m.playbackOrigin = "folders"
+            m.folderStatusLabel.text = "This file could not be played."
+            showFolderBrowser()
+        else
+            showOnly("detail")
+            m.top.screenState = "detail"
+            m.detailActions.SetFocus(true)
+        end if
         return
     end if
 
@@ -1974,6 +2036,7 @@ end sub
 sub openBrowse(kind as String, label as String)
     m.browseKind = kind
     m.browseLabel = label
+    m.browseView = "titles"
     m.browseItems = []
     m.browseTotal = invalid
     m.browseSort = "title"
@@ -1985,6 +2048,18 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersMode = false
     m.browseFiltersPanel.visible = false
     m.browseFiltersButton.color = &hA9B7C9FF
+    m.folderRoots = []
+    m.folderRootErrors = []
+    m.folderRootIndex = -1
+    m.folderSelectedRoot = invalid
+    m.folderPath = ""
+    m.folderBreadcrumbs = []
+    m.folderEntries = []
+    m.folderTotal = 0
+    m.folderLoading = false
+    m.folderStatusLabel.text = ""
+    m.folderFocusEntriesAfterLoad = false
+    applyBrowseViewVisibility()
     renderBrowseAlphabetFocus()
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
     m.browseTitle.text = label
@@ -2012,6 +2087,10 @@ end sub
 sub acceptBrowseCatalog(data as Object, append as Boolean)
     if data = invalid or data.items = invalid
         ' Stay in browse shell (no fullscreen Loading / status wall).
+        if m.browseView = "folders"
+            showFolderBrowser()
+            return
+        end if
         if m.browseCountLabel <> invalid then m.browseCountLabel.text = "UNAVAILABLE"
         showOnly("browse")
         m.top.screenState = "browse"
@@ -2026,6 +2105,7 @@ sub acceptBrowseCatalog(data as Object, append as Boolean)
         m.browseItems = data.items
     end if
     m.browseTotal = data.total
+    if m.browseView = "folders" then return
     rebuildBrowseContent()
     showOnly("browse")
     m.top.screenState = "browse"
@@ -2239,14 +2319,10 @@ end sub
 
 ' ---------------------------------------------------------------------------
 ' Filters button + panel (from: .tv-filter-launcher / the real Filters
-' drawer). Sort By (Title/Date Added) and Order (A-Z/Z-A) trigger a real
-' refetch (loadBrowseCatalog); Artwork Size (Small/Medium/Large) is a pure
-' client-side reflow of browseGrid's numColumns/itemSize/itemSpacing
-' (applyBrowseArtworkSize) against the already-loaded items, matching
-' tv-web's own tv-artwork-small/medium/large classes exactly. View
-' (List/Screen/Cover) is not wired -- each is a genuinely distinct
-' SceneGraph layout (row-list vs grid vs large single-column carousel), not
-' a parameter of this one MarkupGrid, so it stays a real, documented gap.
+' drawer). View switches between the title grid and the native folder
+' browser. Sort By (Title/Date Added) and Order (A-Z/Z-A) trigger a real
+' catalogue refetch while Titles is active; Artwork Size
+' (Small/Medium/Large) is a pure client-side reflow of browseGrid.
 ' ---------------------------------------------------------------------------
 
 sub focusBrowseFiltersButton()
@@ -2267,24 +2343,31 @@ end sub
 sub openBrowseFiltersPanel()
     m.browseFiltersMode = true
     m.browseFiltersIndex = 0
-    if m.browseSort = "title" then m.browseFiltersIndex = 0
-    if m.browseSort = "date_added" then m.browseFiltersIndex = 1
+    if m.browseView = "folders" then m.browseFiltersIndex = 1
+    m.browseGrid.SetFocus(false)
+    m.folderBrowser.SetFocus(false)
+    m.top.SetFocus(true)
     m.browseFiltersPanel.visible = true
     renderBrowseFiltersOptionsFocus()
 end sub
 
 ' Kept out of the shared browseFilterOptions/isSelected loop below since
 ' small/medium/large are radio-style and each has its own item index
-' (4/5/6), same convention as the sort/order pairs above it.
+' (6/7/8), same convention as the view/sort/order pairs above it.
 function browseArtworkSizeOptionIndex() as Integer
-    if m.browseArtworkSize = "small" then return 4
-    if m.browseArtworkSize = "large" then return 6
-    return 5
+    if m.browseArtworkSize = "small" then return 6
+    if m.browseArtworkSize = "large" then return 8
+    return 7
 end function
 
 sub closeBrowseFiltersPanel()
     m.browseFiltersMode = false
     m.browseFiltersPanel.visible = false
+    if m.browseView = "folders"
+        m.browseFiltersButtonFocused = false
+        m.browseFiltersButton.color = &hA9B7C9FF
+        m.folderBrowser.SetFocus(true)
+    end if
 end sub
 
 function moveBrowseFiltersFocus(delta as Integer) as Boolean
@@ -2303,7 +2386,7 @@ end function
 sub renderBrowseFiltersOptionsFocus()
     selectedSizeIndex = browseArtworkSizeOptionIndex()
     for i = 0 to m.browseFilterOptions.Count() - 1
-        isSelected = (i = 0 and m.browseSort = "title") or (i = 1 and m.browseSort = "date_added") or (i = 2 and m.browseOrder = "asc") or (i = 3 and m.browseOrder = "desc") or (i = selectedSizeIndex)
+        isSelected = (i = 0 and m.browseView = "titles") or (i = 1 and m.browseView = "folders") or (i = 2 and m.browseSort = "title") or (i = 3 and m.browseSort = "date_added") or (i = 4 and m.browseOrder = "asc") or (i = 5 and m.browseOrder = "desc") or (i = selectedSizeIndex)
         if i = m.browseFiltersIndex or isSelected
             m.browseFilterOptions[i].color = &hCF3157FF
         else
@@ -2314,32 +2397,475 @@ end sub
 
 sub selectBrowseFilterOption()
     if m.browseFiltersIndex = 0
-        m.browseSort = "title"
+        enterBrowseTitlesView()
+        return
     else if m.browseFiltersIndex = 1
-        m.browseSort = "date_added"
+        enterBrowseFoldersView()
+        return
     else if m.browseFiltersIndex = 2
-        m.browseOrder = "asc"
+        m.browseSort = "title"
     else if m.browseFiltersIndex = 3
-        m.browseOrder = "desc"
+        m.browseSort = "date_added"
     else if m.browseFiltersIndex = 4
-        m.browseArtworkSize = "small"
+        m.browseOrder = "asc"
     else if m.browseFiltersIndex = 5
-        m.browseArtworkSize = "medium"
+        m.browseOrder = "desc"
     else if m.browseFiltersIndex = 6
+        m.browseArtworkSize = "small"
+    else if m.browseFiltersIndex = 7
+        m.browseArtworkSize = "medium"
+    else if m.browseFiltersIndex = 8
         m.browseArtworkSize = "large"
     end if
     renderBrowseFiltersOptionsFocus()
-    if m.browseFiltersIndex >= 4
+    if m.browseFiltersIndex >= 6
         ' Artwork size is a pure client-side reflow of the same already-loaded
         ' items -- no refetch, unlike Sort/Order which change what the server
         ' returns.
-        applyBrowseArtworkSize()
-        rebuildBrowseContent()
+        if m.browseView = "titles"
+            applyBrowseArtworkSize()
+            rebuildBrowseContent()
+        end if
         return
     end if
+    if m.browseView = "folders" then return
     m.browseItems = []
     m.browseTotal = invalid
     loadBrowseCatalog(false)
+end sub
+
+' Switches the library shell back to the metadata catalogue. The folder
+' state stays in memory for this visit so toggling the View control does not
+' needlessly re-enumerate mounted roots.
+sub enterBrowseTitlesView()
+    m.browseView = "titles"
+    applyBrowseViewVisibility()
+    closeBrowseFiltersPanel()
+    renderBrowseFiltersOptionsFocus()
+    if m.browseItems.Count() = 0 and m.browseTotal = invalid
+        loadBrowseCatalog(false)
+    else
+        rebuildBrowseContent()
+        if m.browseItems.Count() > 0 then updateBrowsePreview(m.browseItems[0])
+    end if
+    m.browseGrid.SetFocus(true)
+end sub
+
+' Folders is a first-class native view beneath every supported library kind
+' (movie/series/site/artist). Root discovery and directory enumeration come
+' from the folder API; no source-app work metadata is used here.
+sub enterBrowseFoldersView()
+    m.browseView = "folders"
+    m.browseAlphabetMode = false
+    m.browseFiltersButtonFocused = false
+    applyBrowseViewVisibility()
+    closeBrowseFiltersPanel()
+    renderBrowseAlphabetFocus()
+    renderBrowseFiltersOptionsFocus()
+    showFolderBrowser()
+    if m.folderRoots.Count() = 0
+        loadFolderRoots()
+    else
+        rebuildFolderBrowserContent()
+        m.folderBrowser.SetFocus(true)
+    end if
+end sub
+
+sub applyBrowseViewVisibility()
+    foldersVisible = m.browseView = "folders"
+    m.folderBrowserGroup.visible = foldersVisible
+    m.browseGrid.visible = not foldersVisible
+    m.browsePreviewKind.visible = not foldersVisible
+    m.browsePreviewTitle.visible = not foldersVisible
+    m.browsePreviewMeta.visible = not foldersVisible
+    m.browsePreviewOverview.visible = not foldersVisible
+    m.browseAlphabet.visible = not foldersVisible
+    if foldersVisible
+        m.browseKeyArt.visible = false
+        m.browseHint.text = "OK open or play  •  Back parent folder  •  * Filters"
+    else
+        m.browseHint.text = "OK open title  •  * Alphabet and Filters"
+    end if
+end sub
+
+sub showFolderBrowser()
+    showOnly("browse")
+    m.top.screenState = "browse"
+    applyBrowseViewVisibility()
+    m.folderBrowser.SetFocus(true)
+end sub
+
+sub loadFolderRoots()
+    m.folderLoading = true
+    m.folderRoots = []
+    m.folderRootErrors = []
+    m.folderRootIndex = -1
+    m.folderSelectedRoot = invalid
+    m.folderPath = ""
+    m.folderBreadcrumbs = []
+    m.folderEntries = []
+    m.folderTotal = 0
+    m.folderStatusLabel.text = "Loading root folders…"
+    if m.browseCountLabel <> invalid then m.browseCountLabel.text = "ROOT FOLDERS"
+    rebuildFolderBrowserContent()
+    path = "/api/v1/folders/roots?kind=" + UrlEncode(m.browseKind)
+    sendApi("folderRoots", "GET", path, invalid, true)
+end sub
+
+sub acceptFolderRoots(data as Object, request as Object)
+    expectedPath = "/api/v1/folders/roots?kind=" + UrlEncode(m.browseKind)
+    if m.browseView <> "folders" then return
+    if request = invalid or request.path <> expectedPath then return
+    m.folderLoading = false
+    m.folderRoots = []
+    m.folderRootErrors = []
+    if data <> invalid and data.roots <> invalid then m.folderRoots = data.roots
+    if data <> invalid and data.errors <> invalid then m.folderRootErrors = data.errors
+    m.folderRootIndex = -1
+    m.folderSelectedRoot = invalid
+
+    if m.folderRoots.Count() = 0
+        m.folderStatusLabel.text = "No root folders are available for this library."
+        if m.folderRootErrors.Count() > 0
+            m.folderStatusLabel.text = "Root folders could not be refreshed for one or more sources."
+        end if
+        rebuildFolderBrowserContent()
+        showFolderBrowser()
+        return
+    end if
+
+    selectedIndex = 0
+    for i = 0 to m.folderRoots.Count() - 1
+        if folderRootAvailable(m.folderRoots[i])
+            selectedIndex = i
+            exit for
+        end if
+    end for
+    m.folderRootIndex = selectedIndex
+    m.folderSelectedRoot = m.folderRoots[selectedIndex]
+    rebuildFolderBrowserContent()
+    if not folderRootAvailable(m.folderSelectedRoot)
+        m.folderStatusLabel.text = folderUnavailableReason(m.folderSelectedRoot)
+        showFolderBrowser()
+        return
+    end if
+    loadFolderDirectory(false)
+end sub
+
+function folderRootAvailable(root as Dynamic) as Boolean
+    if root = invalid then return false
+    if root.available = invalid then return true
+    return root.available
+end function
+
+function folderUnavailableReason(root as Dynamic) as String
+    if root <> invalid and root.unavailable_reason <> invalid and root.unavailable_reason <> ""
+        return root.unavailable_reason
+    end if
+    return "This root folder is not currently available."
+end function
+
+sub selectFolderRoot(index as Integer)
+    if index < 0 or index >= m.folderRoots.Count() then return
+    m.folderRootIndex = index
+    m.folderSelectedRoot = m.folderRoots[index]
+    m.folderPath = ""
+    m.folderBreadcrumbs = []
+    m.folderEntries = []
+    m.folderTotal = 0
+    rebuildFolderBrowserContent()
+    if not folderRootAvailable(m.folderSelectedRoot)
+        m.folderLoading = false
+        m.folderStatusLabel.text = folderUnavailableReason(m.folderSelectedRoot)
+        return
+    end if
+    m.folderFocusEntriesAfterLoad = true
+    loadFolderDirectory(false)
+end sub
+
+sub loadFolderDirectory(append as Boolean)
+    if m.folderSelectedRoot = invalid then return
+    if not folderRootAvailable(m.folderSelectedRoot)
+        m.folderStatusLabel.text = folderUnavailableReason(m.folderSelectedRoot)
+        return
+    end if
+    offset = 0
+    action = "folderBrowse"
+    if append
+        offset = m.folderEntries.Count()
+        action = "folderBrowseMore"
+    else
+        m.folderEntries = []
+        m.folderTotal = 0
+    end if
+    m.folderLoading = true
+    if append
+        m.folderStatusLabel.text = "Loading more entries…"
+    else
+        m.folderStatusLabel.text = "Loading folder…"
+        rebuildFolderBrowserContent()
+    end if
+    rootId = JsonString(m.folderSelectedRoot.id)
+    path = "/api/v1/folders/" + UrlEncode(rootId)
+    path += "?path=" + UrlEncode(m.folderPath)
+    path += "&limit=" + m.folderPageSize.ToStr() + "&offset=" + offset.ToStr()
+    sendApi(action, "GET", path, invalid, true)
+end sub
+
+sub acceptFolderDirectory(data as Object, append as Boolean)
+    if m.browseView <> "folders" then return
+    if data = invalid or data.root = invalid or data.entries = invalid
+        m.folderLoading = false
+        m.folderStatusLabel.text = "This folder returned an invalid response."
+        rebuildFolderBrowserContent()
+        showFolderBrowser()
+        return
+    end if
+    if m.folderSelectedRoot = invalid then return
+    if JsonString(data.root.id) <> JsonString(m.folderSelectedRoot.id) then return
+    responsePath = ""
+    if data.path <> invalid then responsePath = data.path
+    if responsePath <> m.folderPath then return
+
+    if append
+        for each entry in data.entries
+            m.folderEntries.Push(entry)
+        end for
+    else
+        m.folderEntries = data.entries
+        m.folderBreadcrumbs = []
+        if data.breadcrumbs <> invalid then m.folderBreadcrumbs = data.breadcrumbs
+    end if
+    m.folderTotal = m.folderEntries.Count()
+    if data.total <> invalid then m.folderTotal = data.total
+    m.folderLoading = false
+    rebuildFolderBrowserContent()
+    if m.folderRootErrors.Count() > 0
+        m.folderStatusLabel.text = "Some source roots could not be refreshed; available folders are shown."
+    else
+        location = JsonString(m.folderSelectedRoot.name)
+        if m.folderPath <> "" then location += " / " + m.folderPath
+        m.folderStatusLabel.text = location
+    end if
+    if m.folderFocusEntriesAfterLoad and m.folderEntries.Count() > 0
+        m.folderFocusEntriesAfterLoad = false
+        m.folderBrowser.jumpToRowItem = [2, 0]
+    else if append and m.folderEntries.Count() > 0
+        focusIndex = m.folderFocusedIndex
+        if focusIndex < 0 then focusIndex = 0
+        if focusIndex >= m.folderEntries.Count() then focusIndex = m.folderEntries.Count() - 1
+        m.folderBrowser.jumpToRowItem = [2, focusIndex]
+    end if
+    showFolderBrowser()
+end sub
+
+sub rebuildFolderBrowserContent()
+    content = CreateObject("roSGNode", "ContentNode")
+
+    rootsRow = content.CreateChild("ContentNode")
+    rootsRow.title = "ROOT FOLDERS"
+    if m.folderRoots.Count() = 0
+        item = rootsRow.CreateChild("ContentNode")
+        item.title = "No root folders"
+        if m.folderLoading then item.title = "Loading roots…"
+        item.AddField("displayType", "string", false)
+        item.displayType = "root"
+        item.AddField("subtitle", "string", false)
+        item.subtitle = "No mounted roots were reported"
+        item.AddField("available", "boolean", false)
+        item.available = false
+    else
+        for i = 0 to m.folderRoots.Count() - 1
+            root = m.folderRoots[i]
+            item = rootsRow.CreateChild("ContentNode")
+            item.id = JsonString(root.id)
+            item.title = JsonString(root.name)
+            item.AddField("displayType", "string", false)
+            item.displayType = "root"
+            item.AddField("subtitle", "string", false)
+            subtitle = JsonString(root.source_name)
+            if i = m.folderRootIndex
+                if subtitle <> "" then subtitle = "Selected · " + subtitle else subtitle = "Selected"
+            else if not folderRootAvailable(root)
+                if subtitle <> "" then subtitle += " · Unavailable" else subtitle = "Unavailable"
+            end if
+            item.subtitle = subtitle
+            item.AddField("available", "boolean", false)
+            item.available = folderRootAvailable(root)
+        end for
+    end if
+
+    breadcrumbsRow = content.CreateChild("ContentNode")
+    breadcrumbsRow.title = "PATH"
+    if m.folderBreadcrumbs.Count() = 0
+        item = breadcrumbsRow.CreateChild("ContentNode")
+        item.title = "Root"
+        if m.folderSelectedRoot <> invalid then item.title = JsonString(m.folderSelectedRoot.name)
+        item.AddField("displayType", "string", false)
+        item.displayType = "breadcrumb"
+    else
+        for each breadcrumb in m.folderBreadcrumbs
+            item = breadcrumbsRow.CreateChild("ContentNode")
+            item.title = JsonString(breadcrumb.name)
+            item.AddField("displayType", "string", false)
+            item.displayType = "breadcrumb"
+        end for
+    end if
+
+    entriesRow = content.CreateChild("ContentNode")
+    entriesRow.title = "CONTENTS"
+    if m.folderEntries.Count() = 0
+        item = entriesRow.CreateChild("ContentNode")
+        item.title = "No folders or playable files"
+        if m.folderLoading then item.title = "Loading folder…"
+        item.AddField("displayType", "string", false)
+        item.displayType = "empty"
+        item.AddField("subtitle", "string", false)
+        item.subtitle = "Choose another root or breadcrumb"
+    else
+        for each entry in m.folderEntries
+            item = entriesRow.CreateChild("ContentNode")
+            item.id = JsonString(entry.path)
+            title = JsonString(entry.title)
+            if title = "" then title = JsonString(entry.name)
+            item.title = title
+            item.AddField("displayType", "string", false)
+            item.displayType = JsonString(entry.entry_type)
+            item.AddField("subtitle", "string", false)
+            item.subtitle = folderEntryMetadata(entry)
+            if item.displayType = "media"
+                item.hdPosterUrl = folderThumbnailUrl(entry)
+            end if
+        end for
+    end if
+    m.folderBrowser.content = content
+
+    total = m.folderEntries.Count()
+    if m.folderTotal <> invalid then total = Int(m.folderTotal)
+    if m.browseCountLabel <> invalid
+        m.browseCountLabel.text = formatCountWithCommas(total) + " ENTRIES"
+    end if
+end sub
+
+function folderThumbnailUrl(entry as Dynamic) as String
+    if entry = invalid then return ""
+    if entry.thumbnail_url <> invalid and entry.thumbnail_url <> ""
+        candidate = AbsoluteUrl(m.serverUrl, entry.thumbnail_url)
+        serverPrefix = m.serverUrl + "/"
+        if candidate.Left(serverPrefix.Len()) = serverPrefix then return candidate
+    end if
+    return ""
+end function
+
+function folderEntryMetadata(entry as Dynamic) as String
+    if entry = invalid then return ""
+    if JsonString(entry.entry_type) = "directory" then return "Folder · OK to open"
+    values = []
+    if entry.artist <> invalid and entry.artist <> "" then values.Push(entry.artist)
+    if entry.album <> invalid and entry.album <> "" then values.Push(entry.album)
+    if entry.container <> invalid and entry.container <> "" then values.Push(UCase(entry.container))
+    codecs = ""
+    if entry.video_codec <> invalid and entry.video_codec <> "" then codecs = UCase(entry.video_codec)
+    if entry.audio_codec <> invalid and entry.audio_codec <> ""
+        if codecs <> "" then codecs += " / "
+        codecs += UCase(entry.audio_codec)
+    end if
+    if codecs <> "" then values.Push(codecs)
+    if entry.width <> invalid and entry.height <> invalid
+        values.Push(entry.width.ToStr() + "×" + entry.height.ToStr())
+    end if
+    if entry.duration_ms <> invalid and entry.duration_ms >= 0
+        values.Push(formatPlaybackTime(entry.duration_ms / 1000))
+    end if
+    bitrate = formatFolderBitrate(entry.bitrate_bps)
+    if bitrate <> "" then values.Push(bitrate)
+    fileSize = formatFolderFileSize(entry.size_bytes)
+    if fileSize <> "" then values.Push(fileSize)
+    if entry.modified_at <> invalid and entry.modified_at.Len() >= 10
+        values.Push(entry.modified_at.Left(10))
+    end if
+    if JsonString(entry.media_file_id) = "" then values.Push("Unavailable")
+    return joinStrings(values, " · ")
+end function
+
+function formatFolderBitrate(value as Dynamic) as String
+    if value = invalid or value <= 0 then return ""
+    mbps = Int((value / 1000000.0) * 10 + 0.5) / 10.0
+    return mbps.ToStr() + " Mbps"
+end function
+
+function formatFolderFileSize(value as Dynamic) as String
+    if value = invalid or value < 0 then return ""
+    if value < 1024 then return value.ToStr() + " B"
+    units = ["KB", "MB", "GB", "TB"]
+    amount = value
+    unitIndex = -1
+    while amount >= 1024 and unitIndex < units.Count() - 1
+        amount = amount / 1024.0
+        unitIndex += 1
+    end while
+    rounded = Int(amount * 10 + 0.5) / 10.0
+    return rounded.ToStr() + " " + units[unitIndex]
+end function
+
+sub onFolderBrowserItemFocused(event as Object)
+    position = event.GetData()
+    if position = invalid or position.Count() < 2 then return
+    m.folderFocusedRow = position[0]
+    m.folderFocusedIndex = position[1]
+    if position[0] <> 2 then return
+    itemIndex = position[1]
+    moreAvailable = m.folderEntries.Count() < m.folderTotal
+    if moreAvailable and itemIndex >= m.folderEntries.Count() - 8 and not m.requestBusy
+        loadFolderDirectory(true)
+    end if
+end sub
+
+sub onFolderBrowserItemSelected(event as Object)
+    position = event.GetData()
+    if position = invalid or position.Count() < 2 then return
+    rowIndex = position[0]
+    itemIndex = position[1]
+    if rowIndex = 0
+        selectFolderRoot(itemIndex)
+        return
+    end if
+    if rowIndex = 1
+        if itemIndex < 0 or itemIndex >= m.folderBreadcrumbs.Count() then return
+        m.folderPath = JsonString(m.folderBreadcrumbs[itemIndex].path)
+        m.folderFocusEntriesAfterLoad = true
+        loadFolderDirectory(false)
+        return
+    end if
+    if rowIndex <> 2 or itemIndex < 0 or itemIndex >= m.folderEntries.Count() then return
+    entry = m.folderEntries[itemIndex]
+    if JsonString(entry.entry_type) = "directory"
+        m.folderPath = JsonString(entry.path)
+        m.folderFocusEntriesAfterLoad = true
+        loadFolderDirectory(false)
+        return
+    end if
+    mediaFileId = JsonString(entry.media_file_id)
+    if mediaFileId = ""
+        m.folderStatusLabel.text = "This media file is not currently playable."
+        return
+    end if
+    title = JsonString(entry.title)
+    if title = "" then title = JsonString(entry.name)
+    m.playbackEpisodeList = []
+    m.playbackEpisodeIndex = -1
+    requestPlayback(mediaFileId, "folders", title)
+end sub
+
+sub browseFolderParent()
+    if m.folderPath = "" then return
+    parentPath = ""
+    if m.folderBreadcrumbs.Count() > 1
+        parentPath = JsonString(m.folderBreadcrumbs[m.folderBreadcrumbs.Count() - 2].path)
+    end if
+    m.folderPath = parentPath
+    m.folderFocusEntriesAfterLoad = true
+    loadFolderDirectory(false)
 end sub
 
 ' Reflows browseGrid's column count/item box/spacing in place to match
@@ -2429,6 +2955,7 @@ end sub
 sub onBrowseKeyArtTimer()
     uri = m.browseKeyArtPendingUri
     if m.browseKeyArt = invalid then return
+    if m.browseView = "folders" then return
     if uri = invalid or uri = ""
         m.browseKeyArt.uri = ""
         m.browseKeyArt.visible = false
@@ -4744,12 +5271,15 @@ function flattenEpisodes(seasons as Object) as Object
     return flat
 end function
 
-sub requestPlayback(mediaFileId as String)
+sub requestPlayback(mediaFileId as String, origin = "detail" as String, title = "" as String)
     if mediaFileId = "" then return
     m.currentMediaFileId = mediaFileId
+    m.playbackOrigin = origin
+    m.playbackTitle = title
     config = AppConfig()
     path = "/api/v1/playback/" + UrlEncode(mediaFileId)
-    path += "?containers=mp4%2Cmkv%2Cm3u8&video_codecs=h264&audio_codecs=aac%2Cac3%2Ceac3"
+    path += "?containers=mp4%2Cmkv%2Cm3u8%2Cmp3%2Cflac%2Cm4a%2Cm4b%2Caac%2Cwav"
+    path += "&video_codecs=h264&audio_codecs=aac%2Cac3%2Ceac3%2Cmp3%2Cflac%2Calac%2Cpcm_s16le%2Cpcm_s24le"
     path += "&max_bitrate_bps=" + config.maxBitrateBps.ToStr()
     ' Stay on detail (or player chrome) while negotiating; no fullscreen Loading shell.
     sendApi("playback", "GET", path, invalid, true)
@@ -4757,17 +5287,24 @@ end sub
 
 sub startPlayback(data as Object)
     if data = invalid or data.url = invalid
-        ' Stay on detail chrome (no fullscreen status wall).
-        showOnly("detail")
-        m.top.screenState = "detail"
-        m.detailActions.SetFocus(true)
+        ' Stay on the originating product surface (no fullscreen status wall).
+        if m.playbackOrigin = "folders"
+            m.folderStatusLabel.text = "This file could not be played."
+            showFolderBrowser()
+        else
+            showOnly("detail")
+            m.top.screenState = "detail"
+            m.detailActions.SetFocus(true)
+        end if
         return
     end if
     content = CreateObject("roSGNode", "ContentNode")
     content.url = AbsoluteUrl(m.serverUrl, data.url)
-    content.title = m.selectedDetail.work.title
-    content.streamFormat = "mp4"
-    if data.mode = "hls" then content.streamFormat = "hls"
+    content.title = m.playbackTitle
+    if content.title = "" and m.selectedDetail <> invalid and m.selectedDetail.work <> invalid
+        content.title = JsonString(m.selectedDetail.work.title)
+    end if
+    content.streamFormat = playbackStreamFormat(data)
     content.httpHeaders = contentHeadersForUrl(content.url)
     content.httpCertificatesFile = "common:/certs/ca-bundle.crt"
     m.playbackSessionId = data.session_id
@@ -4812,6 +5349,18 @@ sub startPlayback(data as Object)
 
     sendPlaybackEvent({ kind: "start" })
 end sub
+
+function playbackStreamFormat(data as Object) as String
+    if data = invalid then return "mp4"
+    if JsonString(data.mode) = "hls" then return "hls"
+    mimeType = LCase(JsonString(data.mime_type))
+    if mimeType = "audio/mpeg" then return "mp3"
+    if mimeType = "audio/flac" then return "flac"
+    if mimeType = "audio/wav" then return "wav"
+    if Left(mimeType, 9) = "audio/ogg" then return "ogg"
+    if mimeType = "video/x-matroska" then return "mkv"
+    return "mp4"
+end function
 
 sub onVideoStateChanged()
     state = m.video.state
@@ -5034,9 +5583,13 @@ sub finishPlayback(reason as String)
     m.video.visible = false
     m.controlBarProgressTimer.control = "stop"
     m.playerAutoHideTimer.control = "stop"
-    m.top.screenState = "detail"
-    showOnly("detail")
-    m.detailActions.SetFocus(true)
+    if m.playbackOrigin = "folders"
+        showFolderBrowser()
+    else
+        m.top.screenState = "detail"
+        showOnly("detail")
+        m.detailActions.SetFocus(true)
+    end if
 end sub
 
 sub setListContent(list as Object, labels as Object)
@@ -5183,6 +5736,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return moveBrowseFiltersFocus(1)
     else if state = "browse" and m.browseFiltersMode and key = "OK"
         selectBrowseFilterOption()
+        return true
+    else if state = "browse" and m.browseView = "folders" and key = "options"
+        openBrowseFiltersPanel()
+        return true
+    else if state = "browse" and m.browseView = "folders" and key = "back" and m.folderPath <> ""
+        browseFolderParent()
         return true
     else if state = "browse" and m.browseFiltersButtonFocused and key = "back"
         focusBrowseAlphabetFromButton()

@@ -10,6 +10,8 @@ import io.playarr.shared.data.model.DownloadOptionsResponse
 import io.playarr.shared.data.model.DownloadQualityOption
 import io.playarr.shared.data.model.DownloadStatus
 import io.playarr.shared.data.model.DownloadTicketResponse
+import io.playarr.shared.data.model.FolderBrowseResponse
+import io.playarr.shared.data.model.FolderRootsResponse
 import io.playarr.shared.data.model.MediaChapter
 import io.playarr.shared.data.model.MediaMetadata
 import io.playarr.shared.data.model.MediaPlaybackOptionsResponse
@@ -149,6 +151,21 @@ interface PlayarrApi {
         @Path("id") id: String,
         @Query("limit") limit: Long? = null,
     ): List<Work>
+
+    // ---- folders -------------------------------------------------------------
+
+    @GET("api/v1/folders/roots")
+    suspend fun listFolderRoots(
+        @Query("kind") kind: String,
+    ): FolderRootsResponse
+
+    @GET("api/v1/folders/{root_id}")
+    suspend fun browseFolder(
+        @Path("root_id") rootId: String,
+        @Query("path") path: String? = null,
+        @Query("limit") limit: Long? = null,
+        @Query("offset") offset: Long? = null,
+    ): FolderBrowseResponse
 
     // ---- views ---------------------------------------------------------------
 

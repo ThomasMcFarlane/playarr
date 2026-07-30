@@ -301,6 +301,209 @@ public struct CatalogPage: Codable, Sendable {
     }
 }
 
+// MARK: - Folder browsing
+
+/// A root folder reported by one configured media-owning source. The server
+/// deliberately exposes an opaque `id`; the source's absolute filesystem path
+/// never crosses the API boundary.
+public struct FolderRoot: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let sourceInstanceID: UUID
+    public let sourceName: String
+    public let libraryKind: WorkKind
+    public let name: String
+    public let available: Bool
+    public let unavailableReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sourceInstanceID = "source_instance_id"
+        case sourceName = "source_name"
+        case libraryKind = "library_kind"
+        case name
+        case available
+        case unavailableReason = "unavailable_reason"
+    }
+
+    public init(
+        id: UUID,
+        sourceInstanceID: UUID,
+        sourceName: String,
+        libraryKind: WorkKind,
+        name: String,
+        available: Bool,
+        unavailableReason: String? = nil
+    ) {
+        self.id = id
+        self.sourceInstanceID = sourceInstanceID
+        self.sourceName = sourceName
+        self.libraryKind = libraryKind
+        self.name = name
+        self.available = available
+        self.unavailableReason = unavailableReason
+    }
+}
+
+public struct FolderRootError: Codable, Hashable, Sendable {
+    public let sourceInstanceID: UUID
+    public let sourceName: String
+    public let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case sourceInstanceID = "source_instance_id"
+        case sourceName = "source_name"
+        case message
+    }
+
+    public init(sourceInstanceID: UUID, sourceName: String, message: String) {
+        self.sourceInstanceID = sourceInstanceID
+        self.sourceName = sourceName
+        self.message = message
+    }
+}
+
+public struct FolderRootsResponse: Codable, Hashable, Sendable {
+    public let roots: [FolderRoot]
+    public let errors: [FolderRootError]
+
+    public init(roots: [FolderRoot], errors: [FolderRootError]) {
+        self.roots = roots
+        self.errors = errors
+    }
+}
+
+public struct FolderBreadcrumb: Codable, Identifiable, Hashable, Sendable {
+    public let name: String
+    public let path: String
+
+    public var id: String { path }
+
+    public init(name: String, path: String) {
+        self.name = name
+        self.path = path
+    }
+}
+
+public enum FolderEntryType: String, Codable, Hashable, Sendable {
+    case directory
+    case media
+}
+
+/// One immediate child of a browsed directory. Every optional metadata field
+/// is derived from the file/container itself by Playarr Server, never copied
+/// from a source application's catalogue.
+public struct FolderEntry: Codable, Identifiable, Hashable, Sendable {
+    public let entryType: FolderEntryType
+    public let name: String
+    public let path: String
+    public let mediaFileID: UUID?
+    public let mediaKind: WorkKind?
+    public let title: String?
+    public let artist: String?
+    public let album: String?
+    public let container: String?
+    public let videoCodec: String?
+    public let audioCodec: String?
+    public let durationMS: UInt64?
+    public let bitrateBPS: UInt64?
+    public let sizeBytes: UInt64?
+    public let width: UInt32?
+    public let height: UInt32?
+    public let modifiedAt: Date?
+    public let thumbnailURL: String?
+
+    public var id: String { "\(entryType.rawValue):\(path)" }
+
+    enum CodingKeys: String, CodingKey {
+        case entryType = "entry_type"
+        case name
+        case path
+        case mediaFileID = "media_file_id"
+        case mediaKind = "media_kind"
+        case title
+        case artist
+        case album
+        case container
+        case videoCodec = "video_codec"
+        case audioCodec = "audio_codec"
+        case durationMS = "duration_ms"
+        case bitrateBPS = "bitrate_bps"
+        case sizeBytes = "size_bytes"
+        case width
+        case height
+        case modifiedAt = "modified_at"
+        case thumbnailURL = "thumbnail_url"
+    }
+
+    public init(
+        entryType: FolderEntryType,
+        name: String,
+        path: String,
+        mediaFileID: UUID? = nil,
+        mediaKind: WorkKind? = nil,
+        title: String? = nil,
+        artist: String? = nil,
+        album: String? = nil,
+        container: String? = nil,
+        videoCodec: String? = nil,
+        audioCodec: String? = nil,
+        durationMS: UInt64? = nil,
+        bitrateBPS: UInt64? = nil,
+        sizeBytes: UInt64? = nil,
+        width: UInt32? = nil,
+        height: UInt32? = nil,
+        modifiedAt: Date? = nil,
+        thumbnailURL: String? = nil
+    ) {
+        self.entryType = entryType
+        self.name = name
+        self.path = path
+        self.mediaFileID = mediaFileID
+        self.mediaKind = mediaKind
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.container = container
+        self.videoCodec = videoCodec
+        self.audioCodec = audioCodec
+        self.durationMS = durationMS
+        self.bitrateBPS = bitrateBPS
+        self.sizeBytes = sizeBytes
+        self.width = width
+        self.height = height
+        self.modifiedAt = modifiedAt
+        self.thumbnailURL = thumbnailURL
+    }
+}
+
+public struct FolderBrowseResponse: Codable, Hashable, Sendable {
+    public let root: FolderRoot
+    public let path: String
+    public let breadcrumbs: [FolderBreadcrumb]
+    public let entries: [FolderEntry]
+    public let total: Int64
+    public let offset: Int
+    public let limit: Int
+
+    public init(
+        root: FolderRoot,
+        path: String,
+        breadcrumbs: [FolderBreadcrumb],
+        entries: [FolderEntry],
+        total: Int64,
+        offset: Int,
+        limit: Int
+    ) {
+        self.root = root
+        self.path = path
+        self.breadcrumbs = breadcrumbs
+        self.entries = entries
+        self.total = total
+        self.offset = offset
+        self.limit = limit
+    }
+}
+
 // MARK: - Viewer library state
 
 public enum WatchState: String, Codable, Sendable, CaseIterable, Hashable {

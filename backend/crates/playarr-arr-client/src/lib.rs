@@ -47,6 +47,26 @@ pub use whisparr::{
 };
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+/// The common subset of a root-folder resource returned by every
+/// media-owning *arr app.
+///
+/// The apps expose more fields (for example unmapped child folders), but
+/// root discovery only needs the source-native identity, physical path,
+/// accessibility and optional capacity information. Keeping this DTO
+/// shared prevents the five otherwise-identical wire formats drifting
+/// apart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrRootFolder {
+    pub id: i64,
+    pub path: String,
+    pub accessible: bool,
+    #[serde(default, rename = "freeSpace")]
+    pub free_space: Option<i64>,
+    #[serde(default, rename = "totalSpace")]
+    pub total_space: Option<i64>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArrClientError {

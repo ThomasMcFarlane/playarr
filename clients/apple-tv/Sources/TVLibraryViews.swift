@@ -934,6 +934,7 @@ struct TVLibraryKindView: View {
     @State private var items: [Work] = []
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
+    @State private var viewMode: TVLibraryViewMode = .library
 
     private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
 
@@ -958,53 +959,65 @@ struct TVLibraryKindView: View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 DesignTokens.Color.backgroundBase.ignoresSafeArea()
-                heroBackdrop(size: geo.size)
 
-                // Right frost panel (65%).
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                if viewMode == .folders, let workKind {
+                    TVFolderBrowserView(
+                        kindLabel: kindLabel,
+                        workKind: workKind,
+                        apiClient: environment.apiClient,
+                        onClose: { viewMode = .library }
                     )
-                    .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
-                }
-
-                libraryHeading
-                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
-                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
-                    .zIndex(10)
-
-                if let selected {
-                    libraryPreview(selected)
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
-                        .zIndex(7)
-                } else if didLoad {
-                    Text(emptyMessage)
-                        .font(TVTheme.bodyFont())
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                        .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                }
-
-                titleGrid(size: geo.size)
+                    .id(environment.serverURL)
                     .zIndex(5)
+                } else {
+                    heroBackdrop(size: geo.size)
 
-                alphabetRail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, 18)
-                    .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
-                    .padding(.bottom, 48)
-                    .zIndex(20)
+                    // Right frost panel (65%).
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
+                    }
+
+                    libraryHeading
+                        .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
+                        .padding(.top, DesignTokens.Shell.libraryHeadingTop)
+                        .zIndex(10)
+
+                    if let selected {
+                        libraryPreview(selected)
+                            .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                            .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                            .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
+                            .zIndex(7)
+                    } else if didLoad {
+                        Text(emptyMessage)
+                            .font(TVTheme.bodyFont())
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .padding(.leading, DesignTokens.Shell.titlePanelLeft)
+                            .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
+                    }
+
+                    titleGrid(size: geo.size)
+                        .zIndex(5)
+
+                    alphabetRail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .padding(.trailing, 18)
+                        .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
+                        .padding(.bottom, 48)
+                        .zIndex(20)
+                }
 
                 filterLauncher
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -1014,8 +1027,10 @@ struct TVLibraryKindView: View {
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
-            await loadItems()
+        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)-\(viewMode.rawValue)") {
+            if viewMode == .library {
+                await loadItems()
+            }
         }
     }
 
@@ -1296,11 +1311,52 @@ struct TVLibraryKindView: View {
     }
 
     private var filterLauncher: some View {
+        Group {
+            if parityMode {
+                filterLauncherLabel
+            } else {
+                Menu {
+                    Button {
+                        viewMode = .library
+                    } label: {
+                        Label(
+                            "Library",
+                            systemImage: viewMode == .library
+                                ? "checkmark"
+                                : TVLibraryViewMode.library.systemImage
+                        )
+                    }
+                    if workKind != nil {
+                        Button {
+                            viewMode = .folders
+                        } label: {
+                            Label(
+                                "Folders",
+                                systemImage: viewMode == .folders
+                                    ? "checkmark"
+                                    : TVLibraryViewMode.folders.systemImage
+                            )
+                        }
+                    }
+                } label: {
+                    filterLauncherLabel
+                }
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .accessibilityLabel("Filters. \(viewMode.label) view")
+            }
+        }
+    }
+
+    private var filterLauncherLabel: some View {
         VStack(spacing: 6) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 16, weight: .semibold))
             Text("Filters")
                 .font(TVTheme.font(size: 9, weight: .bold))
+            if viewMode == .folders {
+                Text("Folders")
+                    .font(TVTheme.font(size: 8, weight: .medium))
+            }
         }
         .foregroundStyle(DesignTokens.Color.textDisabled)
         .frame(width: DesignTokens.Shell.libraryFilterWidth, height: DesignTokens.Shell.libraryFilterHeight)

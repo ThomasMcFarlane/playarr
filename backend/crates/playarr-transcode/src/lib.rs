@@ -29,23 +29,26 @@
 //!
 //! The other bridge, optional and one-directional: `TranscodeOrchestrator`
 //! can hold an [`mpsc::Sender<MediaFileImportEvent>`] (see
-//! [`TranscodeOrchestrator::with_tdarr_notify`]) and fires one every time
+//! [`TranscodeOrchestrator::with_tdarr_notify`]) and fires one when
 //! [`TranscodeOrchestrator::spawn_on_demand_transcode`] starts a live
 //! session — the same channel `TdarrDispatcher` already consumes for real
-//! *arr import events. This is what turns "someone is watching this file
-//! right now via a temporary, TTL'd ffmpeg session" into "Tdarr goes and
-//! produces a durable, cached `Rendition` for it in the background" per
-//! this crate's own three-step lookup order above: once that `Rendition`
-//! is `Ready`, every subsequent playback request for the same file+profile
-//! hits step 2 instead of re-paying for step 3. Fire-and-forget
-//! (`try_send`, never awaited) so a full or absent channel (Tdarr not
-//! configured, or a worker-role process not running in this deployment)
-//! never affects playback itself — `TdarrDispatcher::dispatch_one` already
-//! re-checks for an existing `Ready` rendition before doing any real work,
-//! so redundant events from multiple concurrent on-demand sessions for the
-//! same file are naturally deduplicated on the receiving end.
+//! *arr import events. Descriptor-pinned sources are the security exception:
+//! their persisted pathname may later resolve to different content, so they
+//! must not enqueue an unpinned background reopen. For ordinary sources,
+//! this turns "someone is watching this file right now via a temporary,
+//! TTL'd ffmpeg session" into "Tdarr goes and produces a durable, cached
+//! `Rendition` for it in the background" per this crate's own three-step
+//! lookup order above: once that `Rendition` is `Ready`, every subsequent
+//! playback request for the same file+profile hits step 2 instead of
+//! re-paying for step 3. Fire-and-forget (`try_send`, never awaited) so a
+//! full or absent channel (Tdarr not configured, or a worker-role process
+//! not running in this deployment) never affects playback itself —
+//! `TdarrDispatcher::dispatch_one` already re-checks for an existing
+//! `Ready` rendition before doing any real work, so redundant events from
+//! multiple concurrent on-demand sessions for the same file are naturally
+//! deduplicated on the receiving end.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -53,11 +56,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_cache::CacheAndPubSub;
 use playarr_db::RenditionRepo;
 use playarr_model::{MediaFile, Rendition};
 use playarr_tdarr_client::{AlterWorkerLimitRequest, ScanIndividualFileRequest, TdarrClient};
+use serde::{Deserialize, Serialize};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
@@ -76,6 +79,8 @@ pub enum TranscodeError {
     Io(#[from] std::io::Error),
     #[error("failed to (de)serialize transcode session: {0}")]
     Serialize(#[from] serde_json::Error),
+    #[error("transcode cleanup task failed: {0}")]
+    CleanupTask(#[from] tokio::task::JoinError),
 }
 
 /// What a requesting client can play natively — the input to
@@ -469,6 +474,104 @@ impl ActiveSessionCounter {
     }
 }
 
+struct ActiveTranscodeProcess {
+    child: Child,
+    // The source path may point at `/proc/<api-pid>/fd/<fd>`. Keep the
+    // descriptor open in the API process until the transcode has stopped,
+    // otherwise ffmpeg can lose access to the pinned file mid-session.
+    _source_guard: Option<std::fs::File>,
+}
+
+impl ActiveTranscodeProcess {
+    async fn kill_and_reap(mut self) {
+        // `start_kill` can report that an already-finished child no longer
+        // needs a signal. Always wait as well so either path reaps it before
+        // the source descriptor guard is released.
+        let _ = self.child.start_kill();
+        let _ = self.child.wait().await;
+    }
+}
+
+#[derive(Clone)]
+struct LocalSessionReaper {
+    active_children: Arc<Mutex<HashMap<Uuid, ActiveTranscodeProcess>>>,
+    reaping_sessions: Arc<Mutex<HashSet<Uuid>>>,
+    session_lifecycle: Arc<Mutex<()>>,
+    playback_transcodes: Arc<Mutex<HashMap<Uuid, Uuid>>>,
+    active_sessions: ActiveSessionCounter,
+    output_root: PathBuf,
+}
+
+impl LocalSessionReaper {
+    async fn claim(&self, session_id: Uuid) -> bool {
+        // A cache-miss lookup, explicit Stop, and the expiry watchdog can
+        // converge on the same session. Exactly one of them owns cleanup at
+        // a time; followers can return because the owner has already taken
+        // responsibility for completing it.
+        self.reaping_sessions.lock().await.insert(session_id)
+    }
+
+    async fn reap_claimed(&self, session_id: Uuid) -> Result<(), TranscodeError> {
+        let result = self.reap_once(session_id).await;
+        self.reaping_sessions.lock().await.remove(&session_id);
+        result
+    }
+
+    fn spawn_claimed_reap(
+        &self,
+        session_id: Uuid,
+    ) -> tokio::task::JoinHandle<Result<(), TranscodeError>> {
+        let reaper = self.clone();
+        tokio::spawn(async move {
+            let result = reaper.reap_claimed(session_id).await;
+            if let Err(err) = &result {
+                tracing::warn!(
+                    %session_id,
+                    error = %err,
+                    "failed to finish claimed transcode session cleanup",
+                );
+            }
+            result
+        })
+    }
+
+    async fn reap_once(&self, session_id: Uuid) -> Result<(), TranscodeError> {
+        // Release the process-table mutex before waiting for the OS child.
+        // The separate `reaping_sessions` gate prevents another cleanup path
+        // from deleting output while this process may still be writing.
+        let active_process = self.active_children.lock().await.remove(&session_id);
+        if let Some(active_process) = active_process {
+            active_process.kill_and_reap().await;
+            self.active_sessions.decrement();
+        }
+
+        self.playback_transcodes
+            .lock()
+            .await
+            .retain(|_, transcode_session_id| *transcode_session_id != session_id);
+
+        match tokio::fs::remove_dir_all(self.output_root.join(session_id.to_string())).await {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(TranscodeError::Io(err)),
+        }
+
+        Ok(())
+    }
+}
+
+const SESSION_WATCHDOG_MIN_RECHECK: Duration = Duration::from_millis(10);
+const SESSION_WATCHDOG_CACHE_RETRY: Duration = Duration::from_millis(250);
+const SESSION_WATCHDOG_MAX_CACHE_ERRORS: usize = 3;
+
+fn session_watchdog_delay(expires_at: &DateTime<Utc>, maximum: Duration) -> Duration {
+    expires_at
+        .signed_duration_since(Utc::now())
+        .to_std()
+        .unwrap_or(Duration::ZERO)
+        .clamp(SESSION_WATCHDOG_MIN_RECHECK, maximum)
+}
+
 /// Decides, per playback request, whether the source file can be served
 /// as-is, whether an existing rendition covers it, or whether a new
 /// on-demand transcode needs to be started — and owns starting that
@@ -507,7 +610,13 @@ pub struct TranscodeOrchestrator {
     /// per-node control channel) once multi-node on-demand transcode is
     /// actually exercised — deferred, since today every node only ever
     /// expires sessions it owns.
-    active_children: Mutex<HashMap<Uuid, Child>>,
+    active_children: Arc<Mutex<HashMap<Uuid, ActiveTranscodeProcess>>>,
+    /// Serialises converging cleanup paths per session without keeping the
+    /// process-table mutex locked across child termination.
+    reaping_sessions: Arc<Mutex<HashSet<Uuid>>>,
+    /// Serialises cache lifecycle decisions (touch versus expiry) without
+    /// being held while a child is killed or waited.
+    session_lifecycle: Arc<Mutex<()>>,
     /// Links the durable/user-facing playback session id returned by the
     /// API to the ephemeral on-demand transcode process serving it. The
     /// ids are deliberately different domains: `PlaybackSession` is an
@@ -519,7 +628,7 @@ pub struct TranscodeOrchestrator {
     /// same playback session (for example after a quality change or a
     /// duplicate negotiation) expires the superseded process instead of
     /// leaving it running until its idle TTL.
-    playback_transcodes: Mutex<HashMap<Uuid, Uuid>>,
+    playback_transcodes: Arc<Mutex<HashMap<Uuid, Uuid>>>,
     /// See the module docs' "other bridge" section and
     /// [`Self::with_tdarr_notify`]. `None` (the default) means "don't
     /// notify Tdarr" — correct both when Tdarr isn't configured for this
@@ -541,8 +650,10 @@ impl TranscodeOrchestrator {
             output_root: std::env::temp_dir().join("playarr-transcode"),
             session_ttl: Duration::from_secs(60),
             max_concurrent_sessions: None,
-            active_children: Mutex::new(HashMap::new()),
-            playback_transcodes: Mutex::new(HashMap::new()),
+            active_children: Arc::new(Mutex::new(HashMap::new())),
+            reaping_sessions: Arc::new(Mutex::new(HashSet::new())),
+            session_lifecycle: Arc::new(Mutex::new(())),
+            playback_transcodes: Arc::new(Mutex::new(HashMap::new())),
             tdarr_notify: None,
         }
     }
@@ -684,8 +795,37 @@ impl TranscodeOrchestrator {
         start_position_ms: u64,
         audio_stream_index: Option<u32>,
     ) -> Result<TranscodeSession, TranscodeError> {
+        let source_path = playarr_model::resolve_media_path(&media_file.path);
+        self.spawn_on_demand_transcode_from_path_at_with_audio(
+            media_file,
+            &source_path,
+            None,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            audio_stream_index,
+        )
+        .await
+    }
+
+    /// Starts a short-lived HLS transcode from an already-resolved source
+    /// path. `source_path` is passed to ffmpeg verbatim, which permits API
+    /// callers to supply a descriptor-pinned path such as
+    /// `/proc/<api-pid>/fd/<fd>`. When present, `source_guard` owns that
+    /// descriptor for the complete active process lifetime.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn spawn_on_demand_transcode_from_path_at_with_audio(
+        &self,
+        media_file: &MediaFile,
+        source_path: &Path,
+        source_guard: Option<std::fs::File>,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        audio_stream_index: Option<u32>,
+    ) -> Result<TranscodeSession, TranscodeError> {
         if let Some(max) = self.max_concurrent_sessions {
-            let active = self.active_children.lock().await.len();
+            let active = self.active_sessions.get();
             if active >= max {
                 return Err(TranscodeError::NoCapacity);
             }
@@ -696,9 +836,8 @@ impl TranscodeOrchestrator {
         let output_dir = self.output_root.join(session_id.to_string());
         tokio::fs::create_dir_all(&output_dir).await?;
 
-        let source_path = playarr_model::resolve_media_path(&media_file.path);
         let args = build_ffmpeg_hls_args_at_with_audio(
-            &source_path,
+            source_path,
             &target_profile,
             &output_dir,
             start_position_ms,
@@ -716,6 +855,11 @@ impl TranscodeOrchestrator {
             .kill_on_drop(true);
 
         let child = command.spawn()?;
+        let source_is_descriptor_pinned = source_guard.is_some();
+        let active_process = ActiveTranscodeProcess {
+            child,
+            _source_guard: source_guard,
+        };
 
         let now = Utc::now();
         let session = TranscodeSession {
@@ -731,26 +875,28 @@ impl TranscodeOrchestrator {
         if let Err(err) = self.store_session(&session).await {
             // We already spawned a real process — don't leak it if we
             // can't record the session anywhere lookups will find it.
-            let mut child = child;
-            let _ = child.kill().await;
+            active_process.kill_and_reap().await;
             return Err(err);
         }
 
-        self.active_children.lock().await.insert(session.id, child);
+        self.active_children
+            .lock()
+            .await
+            .insert(session.id, active_process);
         self.active_sessions.increment();
+        self.spawn_session_watchdog(&session);
 
-        // Someone is watching this file right now via this temporary,
-        // TTL'd session -- tell Tdarr to go produce a durable `Rendition`
-        // for it in the background too, so a *future* request for the same
-        // file+profile hits the `find_existing_rendition` cache hit instead
-        // of paying for another on-demand transcode. `try_send`, never
-        // awaited: a full/closed channel (Tdarr not configured, or this
-        // node doesn't also run the worker role) must never affect
-        // playback itself -- see the module docs' "other bridge" section.
-        if let Some(tdarr_notify) = &self.tdarr_notify {
-            let _ = tdarr_notify.try_send(MediaFileImportEvent {
-                media_file: media_file.clone(),
-            });
+        // A descriptor-pinned source must never enqueue the persisted media
+        // path for Tdarr: that asynchronous reopen would be unpinned and
+        // could resolve to different content. Ordinary sources still notify
+        // Tdarr so a future request can use a durable rendition. `try_send`,
+        // never awaited: a full/closed channel must not affect playback.
+        if !source_is_descriptor_pinned {
+            if let Some(tdarr_notify) = &self.tdarr_notify {
+                let _ = tdarr_notify.try_send(MediaFileImportEvent {
+                    media_file: media_file.clone(),
+                });
+            }
         }
 
         Ok(session)
@@ -779,72 +925,202 @@ impl TranscodeOrchestrator {
         Ok(self.rendition_repo.get(id).await?)
     }
 
-    /// Looks up a live [`TranscodeSession`] by id -- and, if found, slides
-    /// its expiry forward by another full `session_ttl` from now.
+    /// Reads a live [`TranscodeSession`] without extending its idle expiry.
     ///
-    /// `session_ttl` is deliberately an *idle* deadline (see
-    /// [`TranscodeSession::expires_at`]'s doc comment), not a hard cap on
-    /// total session lifetime -- but until this method existed, nothing
-    /// ever re-touched a session's cache entry after `spawn_on_demand_transcode`
-    /// created it once, so every session (even one being actively watched
-    /// straight through) silently expired exactly `session_ttl` after
-    /// creation. Confirmed live: a real on-demand transcode played its
-    /// first few segments successfully, then started 404ing mid-playback
-    /// once the fixed 60s window elapsed -- indistinguishable from "can't
-    /// play anything" for any title longer than a minute. `playarr-api`'s
-    /// `serve_session_file_handler` (manifest + every segment request) is
-    /// the only caller, and gets called continuously by a real player for
-    /// the entire time it's actively watching -- exactly the activity this
-    /// needs to key off of, so no separate heartbeat/keepalive endpoint is
-    /// needed. An abandoned session (client stopped requesting: tab closed,
-    /// navigated away, network dropped) still naturally expires and frees
-    /// its capacity slot roughly `session_ttl` after the last real request.
+    /// Request paths that still need to authorise the caller must use this
+    /// method first, then call [`Self::touch_session`] only after access is
+    /// allowed. A missing cache entry also triggers owner-local process,
+    /// descriptor, capacity, and output cleanup.
+    pub async fn peek_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Option<TranscodeSession>, TranscodeError> {
+        let reaper = self.local_session_reaper();
+        let lifecycle = self.session_lifecycle.lock().await;
+        if self.reaping_sessions.lock().await.contains(&session_id) {
+            return Ok(None);
+        }
+
+        let key = Self::session_cache_key(session_id);
+        let Some(bytes) = self.cache.get(&key).await? else {
+            let claimed = reaper.claim(session_id).await;
+            let cleanup = claimed.then(|| reaper.spawn_claimed_reap(session_id));
+            drop(lifecycle);
+            if let Some(cleanup) = cleanup {
+                cleanup.await??;
+            }
+            return Ok(None);
+        };
+        let session = serde_json::from_slice(&bytes)?;
+        drop(lifecycle);
+        Ok(Some(session))
+    }
+
+    /// Extends an already-authorised session's idle expiry by one full
+    /// `session_ttl` and returns the refreshed value. The cache is re-read
+    /// first so authorisation that finishes after the old deadline cannot
+    /// resurrect an expired process.
+    pub async fn touch_session(
+        &self,
+        session: TranscodeSession,
+    ) -> Result<Option<TranscodeSession>, TranscodeError> {
+        let reaper = self.local_session_reaper();
+        let lifecycle = self.session_lifecycle.lock().await;
+        if self.reaping_sessions.lock().await.contains(&session.id) {
+            return Ok(None);
+        }
+
+        let key = Self::session_cache_key(session.id);
+        let Some(bytes) = self.cache.get(&key).await? else {
+            let claimed = reaper.claim(session.id).await;
+            let cleanup = claimed.then(|| reaper.spawn_claimed_reap(session.id));
+            drop(lifecycle);
+            if let Some(cleanup) = cleanup {
+                cleanup.await??;
+            }
+            return Ok(None);
+        };
+        let mut current: TranscodeSession = serde_json::from_slice(&bytes)?;
+        let same_session = current.id == session.id
+            && current.media_file_id == session.media_file_id
+            && current.profile == session.profile
+            && current.owning_node_id == session.owning_node_id;
+        if !same_session || current.expires_at <= Utc::now() {
+            self.cache.delete(&key).await?;
+            let claimed = reaper.claim(session.id).await;
+            let cleanup = claimed.then(|| reaper.spawn_claimed_reap(session.id));
+            drop(lifecycle);
+            if let Some(cleanup) = cleanup {
+                cleanup.await??;
+            }
+            return Ok(None);
+        }
+
+        current.expires_at = Utc::now()
+            + chrono::Duration::from_std(self.session_ttl).unwrap_or(chrono::Duration::zero());
+        self.store_session(&current).await?;
+        drop(lifecycle);
+        Ok(Some(current))
+    }
+
+    /// Compatibility lookup for callers that are already authorised: reads
+    /// the session and immediately renews its idle expiry. Pre-authorisation
+    /// request paths must use [`Self::peek_session`] instead.
     pub async fn lookup_session(
         &self,
         session_id: Uuid,
     ) -> Result<Option<TranscodeSession>, TranscodeError> {
-        let key = Self::session_cache_key(session_id);
-        let Some(bytes) = self.cache.get(&key).await? else {
+        let Some(session) = self.peek_session(session_id).await? else {
             return Ok(None);
         };
-        let mut session: TranscodeSession = serde_json::from_slice(&bytes)?;
-        session.expires_at = Utc::now()
-            + chrono::Duration::from_std(self.session_ttl).unwrap_or(chrono::Duration::zero());
-        self.store_session(&session).await?;
-        Ok(Some(session))
+        self.touch_session(session).await
     }
 
     /// Ends a [`TranscodeSession`]: removes it from the cache (so no
     /// further lookups find it) and, if this node owns the underlying
     /// process, kills it and releases its capacity slot.
     pub async fn expire_session(&self, session_id: Uuid) -> Result<(), TranscodeError> {
+        let reaper = self.local_session_reaper();
+        let lifecycle = self.session_lifecycle.lock().await;
         self.cache
             .delete(&Self::session_cache_key(session_id))
             .await?;
-
-        if let Some(mut child) = self.active_children.lock().await.remove(&session_id) {
-            // The process may have already exited on its own (transcode
-            // finished, or crashed) — `kill` erroring in that case is
-            // expected, not a failure of expiry itself.
-            let _ = child.kill().await;
-            self.active_sessions.decrement();
+        let claimed = reaper.claim(session_id).await;
+        let cleanup = claimed.then(|| reaper.spawn_claimed_reap(session_id));
+        drop(lifecycle);
+        if let Some(cleanup) = cleanup {
+            cleanup.await?
+        } else {
+            Ok(())
         }
+    }
 
-        self.playback_transcodes
-            .lock()
-            .await
-            .retain(|_, transcode_session_id| *transcode_session_id != session_id);
-
-        // HLS output is session-scoped and has no value once the process is
-        // stopped. Ignore a missing directory (the process may have failed
-        // before writing anything) but surface real filesystem errors.
-        match tokio::fs::remove_dir_all(self.session_output_dir(session_id)).await {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => return Err(TranscodeError::Io(err)),
+    fn local_session_reaper(&self) -> LocalSessionReaper {
+        LocalSessionReaper {
+            active_children: Arc::clone(&self.active_children),
+            reaping_sessions: Arc::clone(&self.reaping_sessions),
+            session_lifecycle: Arc::clone(&self.session_lifecycle),
+            playback_transcodes: Arc::clone(&self.playback_transcodes),
+            active_sessions: self.active_sessions.clone(),
+            output_root: self.output_root.clone(),
         }
+    }
 
-        Ok(())
+    fn spawn_session_watchdog(&self, session: &TranscodeSession) {
+        let cache = Arc::clone(&self.cache);
+        let reaper = self.local_session_reaper();
+        let session_id = session.id;
+        let key = Self::session_cache_key(session_id);
+        let maximum_delay = self.session_ttl.max(SESSION_WATCHDOG_MIN_RECHECK);
+        let mut delay = session_watchdog_delay(&session.expires_at, maximum_delay);
+
+        tokio::spawn(async move {
+            let mut consecutive_cache_errors = 0;
+            let cleanup_claimed = loop {
+                tokio::time::sleep(delay).await;
+                let lifecycle = reaper.session_lifecycle.lock().await;
+                match cache.get(&key).await {
+                    Ok(None) => {
+                        let claimed = reaper.claim(session_id).await;
+                        drop(lifecycle);
+                        break claimed;
+                    }
+                    Ok(Some(bytes)) => {
+                        consecutive_cache_errors = 0;
+                        match serde_json::from_slice::<TranscodeSession>(&bytes) {
+                            Ok(refreshed) if refreshed.expires_at > Utc::now() => {
+                                delay =
+                                    session_watchdog_delay(&refreshed.expires_at, maximum_delay);
+                                drop(lifecycle);
+                            }
+                            Ok(_) => {
+                                let _ = cache.delete(&key).await;
+                                let claimed = reaper.claim(session_id).await;
+                                drop(lifecycle);
+                                break claimed;
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    %session_id,
+                                    error = %err,
+                                    "reaping transcode session with invalid cached state",
+                                );
+                                let _ = cache.delete(&key).await;
+                                let claimed = reaper.claim(session_id).await;
+                                drop(lifecycle);
+                                break claimed;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        consecutive_cache_errors += 1;
+                        tracing::warn!(
+                            %session_id,
+                            error = %err,
+                            attempt = consecutive_cache_errors,
+                            "failed to check transcode session expiry",
+                        );
+                        if consecutive_cache_errors >= SESSION_WATCHDOG_MAX_CACHE_ERRORS {
+                            let claimed = reaper.claim(session_id).await;
+                            drop(lifecycle);
+                            break claimed;
+                        }
+                        delay = SESSION_WATCHDOG_CACHE_RETRY;
+                        drop(lifecycle);
+                    }
+                }
+            };
+
+            if cleanup_claimed {
+                if let Err(err) = reaper.reap_claimed(session_id).await {
+                    tracing::warn!(
+                        %session_id,
+                        error = %err,
+                        "failed to finish expired transcode session cleanup",
+                    );
+                }
+            }
+        });
     }
 
     /// Associates a user-facing playback session with its live ffmpeg
@@ -1516,6 +1792,411 @@ mod tests {
 
     mod session_lifecycle {
         use super::*;
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn explicit_source_path_is_forwarded_to_ffmpeg() {
+            use std::os::unix::fs::PermissionsExt;
+
+            let test_root = unique_tmp_dir();
+            std::fs::create_dir_all(&test_root).unwrap();
+            let captured_args_path = test_root.join("ffmpeg-args.txt");
+            let fake_ffmpeg_path = test_root.join("fake-ffmpeg");
+            std::fs::write(
+                &fake_ffmpeg_path,
+                format!(
+                    "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n",
+                    captured_args_path.display()
+                ),
+            )
+            .unwrap();
+            std::fs::set_permissions(&fake_ffmpeg_path, std::fs::Permissions::from_mode(0o700))
+                .unwrap();
+
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                ActiveSessionCounter::new(),
+            )
+            .with_ffmpeg_binary(fake_ffmpeg_path.to_string_lossy())
+            .with_output_root(test_root.join("output"));
+            let media_file = sample_media_file();
+            let source_path = Path::new("/proc/4242/fd/17");
+
+            let session = orchestrator
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    source_path,
+                    None,
+                    "h264-720p-4mbps",
+                    "node-a",
+                    12_345,
+                    Some(7),
+                )
+                .await
+                .unwrap();
+
+            let captured_args = tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if let Ok(args) = tokio::fs::read_to_string(&captured_args_path).await {
+                        break args;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("fake ffmpeg should capture its arguments");
+            let captured_args = captured_args.lines().collect::<Vec<_>>();
+            let input_index = captured_args
+                .iter()
+                .position(|arg| *arg == "-i")
+                .expect("ffmpeg args should contain an input flag");
+            assert_eq!(
+                captured_args[input_index + 1],
+                source_path.to_str().unwrap()
+            );
+
+            orchestrator.expire_session(session.id).await.unwrap();
+            std::fs::remove_dir_all(test_root).unwrap();
+        }
+
+        #[cfg(target_os = "linux")]
+        #[tokio::test]
+        async fn source_guard_is_retained_until_session_expiry() {
+            use std::os::fd::AsRawFd;
+
+            let test_root = unique_tmp_dir();
+            std::fs::create_dir_all(&test_root).unwrap();
+            let source_file_path = test_root.join("pinned-source.mkv");
+            let source_contents = b"descriptor-pinned source";
+            std::fs::write(&source_file_path, source_contents).unwrap();
+            let source_guard = std::fs::File::open(&source_file_path).unwrap();
+            let descriptor_path = PathBuf::from(format!(
+                "/proc/{}/fd/{}",
+                std::process::id(),
+                source_guard.as_raw_fd()
+            ));
+            std::fs::remove_file(&source_file_path).unwrap();
+
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                ActiveSessionCounter::new(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(test_root.join("output"));
+            let media_file = sample_media_file();
+
+            let session = orchestrator
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    &descriptor_path,
+                    Some(source_guard),
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read(&descriptor_path).unwrap(), source_contents);
+            {
+                let active_children = orchestrator.active_children.lock().await;
+                let active_process = active_children
+                    .get(&session.id)
+                    .expect("spawned session should retain its active process");
+                assert!(active_process._source_guard.is_some());
+            }
+
+            orchestrator.expire_session(session.id).await.unwrap();
+
+            assert_ne!(
+                std::fs::read(&descriptor_path).ok().as_deref(),
+                Some(source_contents.as_slice())
+            );
+            std::fs::remove_dir_all(test_root).unwrap();
+        }
+
+        #[cfg(target_os = "linux")]
+        #[tokio::test]
+        async fn watchdog_reaps_pinned_source_after_passive_expiry() {
+            use std::os::fd::AsRawFd;
+
+            let test_root = unique_tmp_dir();
+            std::fs::create_dir_all(&test_root).unwrap();
+            let source_file_path = test_root.join("passively-expiring-source.mkv");
+            let source_contents = b"passively expiring descriptor";
+            std::fs::write(&source_file_path, source_contents).unwrap();
+            let source_guard = std::fs::File::open(&source_file_path).unwrap();
+            let descriptor_path = PathBuf::from(format!(
+                "/proc/{}/fd/{}",
+                std::process::id(),
+                source_guard.as_raw_fd()
+            ));
+            std::fs::remove_file(&source_file_path).unwrap();
+
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(test_root.join("output"))
+            .with_session_ttl(Duration::from_millis(30));
+            let media_file = sample_media_file();
+
+            let session = orchestrator
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    &descriptor_path,
+                    Some(source_guard),
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    None,
+                )
+                .await
+                .unwrap();
+            let output_dir = orchestrator.session_output_dir(session.id);
+
+            assert_eq!(counter.get(), 1);
+            assert!(orchestrator
+                .active_children
+                .lock()
+                .await
+                .contains_key(&session.id));
+            assert_eq!(std::fs::read(&descriptor_path).unwrap(), source_contents);
+            assert!(output_dir.exists());
+
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let process_reaped = !orchestrator
+                        .active_children
+                        .lock()
+                        .await
+                        .contains_key(&session.id);
+                    let descriptor_released = std::fs::read(&descriptor_path).ok().as_deref()
+                        != Some(source_contents.as_slice());
+                    if process_reaped
+                        && descriptor_released
+                        && counter.get() == 0
+                        && !output_dir.exists()
+                    {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("watchdog should fully reap an idle pinned session");
+
+            std::fs::remove_dir_all(test_root).unwrap();
+        }
+
+        #[cfg(target_os = "linux")]
+        #[tokio::test]
+        async fn aborted_expiry_request_does_not_cancel_claimed_cleanup() {
+            use std::os::fd::AsRawFd;
+
+            let test_root = unique_tmp_dir();
+            std::fs::create_dir_all(&test_root).unwrap();
+            let source_file_path = test_root.join("cancelled-expiry-source.mkv");
+            let source_contents = b"cleanup must outlive its request";
+            std::fs::write(&source_file_path, source_contents).unwrap();
+            let source_guard = std::fs::File::open(&source_file_path).unwrap();
+            let descriptor_path = PathBuf::from(format!(
+                "/proc/{}/fd/{}",
+                std::process::id(),
+                source_guard.as_raw_fd()
+            ));
+            std::fs::remove_file(&source_file_path).unwrap();
+
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = Arc::new(
+                TranscodeOrchestrator::new(
+                    Arc::new(FakeRenditionRepo::default()),
+                    Arc::new(InMemory::new()),
+                    counter.clone(),
+                )
+                .with_ffmpeg_binary("/usr/bin/true")
+                .with_output_root(test_root.join("output")),
+            );
+            let media_file = sample_media_file();
+            let session = orchestrator
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    &descriptor_path,
+                    Some(source_guard),
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    None,
+                )
+                .await
+                .unwrap();
+            let output_dir = orchestrator.session_output_dir(session.id);
+
+            // Hold the process table so detached cleanup cannot finish before
+            // this test aborts the request that initiated expiry.
+            let active_children = orchestrator.active_children.lock().await;
+            let expiring_orchestrator = Arc::clone(&orchestrator);
+            let session_id = session.id;
+            let expiry_request =
+                tokio::spawn(async move { expiring_orchestrator.expire_session(session_id).await });
+
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if orchestrator
+                        .reaping_sessions
+                        .lock()
+                        .await
+                        .contains(&session.id)
+                    {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("expiry should claim cleanup before the request is aborted");
+
+            expiry_request.abort();
+            assert!(expiry_request.await.unwrap_err().is_cancelled());
+            drop(active_children);
+
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let process_reaped = !orchestrator
+                        .active_children
+                        .lock()
+                        .await
+                        .contains_key(&session.id);
+                    let claim_released = !orchestrator
+                        .reaping_sessions
+                        .lock()
+                        .await
+                        .contains(&session.id);
+                    let descriptor_released = std::fs::read(&descriptor_path).ok().as_deref()
+                        != Some(source_contents.as_slice());
+                    if process_reaped
+                        && claim_released
+                        && descriptor_released
+                        && counter.get() == 0
+                        && !output_dir.exists()
+                    {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("detached cleanup should finish after its request is aborted");
+
+            std::fs::remove_dir_all(test_root).unwrap();
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn descriptor_pinned_source_does_not_enqueue_tdarr_import() {
+            let test_root = unique_tmp_dir();
+            std::fs::create_dir_all(&test_root).unwrap();
+            let source_file_path = test_root.join("pinned-source.mkv");
+            std::fs::write(&source_file_path, b"source").unwrap();
+            let source_guard = std::fs::File::open(&source_file_path).unwrap();
+            let (tdarr_tx, mut tdarr_rx) = mpsc::channel(1);
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                ActiveSessionCounter::new(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(test_root.join("output"))
+            .with_tdarr_notify(tdarr_tx);
+            let media_file = sample_media_file();
+
+            let session = orchestrator
+                .spawn_on_demand_transcode_from_path_at_with_audio(
+                    &media_file,
+                    &source_file_path,
+                    Some(source_guard),
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert!(matches!(
+                tdarr_rx.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+
+            orchestrator.expire_session(session.id).await.unwrap();
+            std::fs::remove_dir_all(test_root).unwrap();
+        }
+
+        #[tokio::test]
+        async fn peek_does_not_extend_the_idle_deadline() {
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(unique_tmp_dir())
+            .with_session_ttl(Duration::from_millis(300));
+            let media_file = sample_media_file();
+            let session = orchestrator
+                .spawn_on_demand_transcode(&media_file, "h264-720p-4mbps", "node-a")
+                .await
+                .unwrap();
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            assert!(orchestrator
+                .peek_session(session.id)
+                .await
+                .unwrap()
+                .is_some());
+
+            // The original deadline is now past. A renewing lookup at 100ms
+            // would still be live here, but a non-touching peek must not be.
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            assert_eq!(orchestrator.peek_session(session.id).await.unwrap(), None);
+            assert_eq!(counter.get(), 0);
+        }
+
+        #[tokio::test]
+        async fn touch_does_not_resurrect_a_session_that_expired_during_authorisation() {
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(unique_tmp_dir())
+            .with_session_ttl(Duration::from_millis(30));
+            let media_file = sample_media_file();
+            let session = orchestrator
+                .spawn_on_demand_transcode(&media_file, "h264-720p-4mbps", "node-a")
+                .await
+                .unwrap();
+            let peeked = orchestrator
+                .peek_session(session.id)
+                .await
+                .unwrap()
+                .expect("new session should be visible before authorisation");
+
+            tokio::time::sleep(Duration::from_millis(150)).await;
+
+            assert_eq!(orchestrator.touch_session(peeked).await.unwrap(), None);
+            assert_eq!(orchestrator.peek_session(session.id).await.unwrap(), None);
+            assert_eq!(counter.get(), 0);
+        }
 
         #[tokio::test]
         async fn spawn_creates_a_lookupable_session_and_expire_removes_it() {

@@ -20,7 +20,7 @@ use playarr_catalog::CatalogService;
 use playarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use playarr_db::repo::{
     seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-    SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
+    SqlxFolderRepo, SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
     SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
     SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
     SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
@@ -28,16 +28,14 @@ use playarr_db::repo::{
     SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use playarr_db::{
-    CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
-    MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo, PeerLeafAvailabilityRepo,
-    PeerNodeRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo, RenditionRepo, RoutingRuleRepo,
-    SourceInstanceRepo, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
+    CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, FolderRepo, GroupLibraryRepo,
+    LibraryViewRepo, MediaFileRepo, NodeIdentityRepo, PeerGroupRepo, PeerJoinTokenRepo,
+    PeerLeafAvailabilityRepo, PeerNodeRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo,
+    RenditionRepo, RoutingRuleRepo, SourceInstanceRepo, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
     UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };
 use playarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
-use playarr_telemetry::analytics::{
-    AnalyticsCollector, InMemorySessionRegistry, SessionRegistry,
-};
+use playarr_telemetry::analytics::{AnalyticsCollector, InMemorySessionRegistry, SessionRegistry};
 use playarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
 
@@ -75,6 +73,7 @@ pub struct TestState {
     pub device_flow: Arc<dyn DeviceFlowHandler>,
     pub work_repo: Arc<dyn WorkRepo>,
     pub media_file_repo: Arc<dyn MediaFileRepo>,
+    pub folder_repo: Arc<dyn FolderRepo>,
     /// Same `EmbeddingRepo` `app.catalog` is built against (via
     /// `CatalogService::with_embedding_repo`) -- exposed here so tests can
     /// seed a `WorkEmbedding` directly to exercise `GET /api/v1/catalog/
@@ -452,6 +451,7 @@ pub async fn test_state() -> (Router, TestState) {
     let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
+    let folder_repo: Arc<dyn FolderRepo> = Arc::new(SqlxFolderRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
@@ -489,9 +489,8 @@ pub async fn test_state() -> (Router, TestState) {
     );
     let peer_sync_state_repo: Arc<dyn playarr_db::PeerSyncStateRepo> =
         Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone()));
-    let sync_conflict_log_repo: Arc<dyn playarr_db::SyncConflictLogRepo> = Arc::new(
-        playarr_db::repo::SqlxSyncConflictLogRepo::new(pool.clone()),
-    );
+    let sync_conflict_log_repo: Arc<dyn playarr_db::SyncConflictLogRepo> =
+        Arc::new(playarr_db::repo::SqlxSyncConflictLogRepo::new(pool.clone()));
     // Real boot parity -- production's `boot_api` seeds the two default
     // views right after migrations run, and test callers that assert on
     // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"
@@ -643,6 +642,14 @@ pub async fn test_state() -> (Router, TestState) {
         webhook,
         source_instances: source_instances.clone(),
         source_instance_repo,
+        folder_repo: folder_repo.clone(),
+        folder_root_refresh_gate: Arc::new(tokio::sync::Mutex::new(())),
+        folder_root_refresh_attempts: Arc::new(tokio::sync::Mutex::new(
+            std::collections::BTreeMap::new(),
+        )),
+        folder_root_refresh_failures: Arc::new(tokio::sync::Mutex::new(
+            std::collections::BTreeMap::new(),
+        )),
         library_view_repo,
         playlist_repo,
         work_repo: work_repo.clone(),
@@ -704,6 +711,7 @@ pub async fn test_state() -> (Router, TestState) {
             device_flow,
             work_repo,
             media_file_repo,
+            folder_repo,
             embedding_repo,
             rendition_repo,
             _trigger_rx: trigger_rx,

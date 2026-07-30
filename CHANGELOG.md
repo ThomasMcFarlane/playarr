@@ -9,7 +9,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-### Added
+- Path-safe **Folders** views for Movies, Series, Sites and Music, backed by
+  every configured media-owning *arr root folder. Playarr now navigates the
+  physical directory tree, probes metadata and thumbnails from each file
+  itself, and plays unsorted video or audio through the existing native
+  player pipeline without importing source-app catalogue metadata. Each
+  discovered root can have its own current-server path override, independently
+  replaceable or clearable without exposing physical paths to viewer clients.
 
 - Android release `0.2.13` (versionCode 2013) with the correct Playarr app
   icon and TV banner.
@@ -62,6 +68,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and a geometrically centred back arrow on the login stage.
 
 ### Fixed
+
+- Regenerated OpenAPI now distinguishes bearer-authenticated viewer routes
+  from signed peer routes, keeps public bootstrap routes unauthenticated,
+  drops stale playback-activity operations and accurately models artwork
+  style parameters.
 
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
   shared 240px default to a literal type.
@@ -1298,6 +1309,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   playback session rather than retaining a hidden player.
 
 ### Security
+
+- Pin every folder-backed source descriptor through metadata probing,
+  subtitle and thumbnail extraction, original delivery and live transcoding
+  so a writable media tree cannot redirect a validated path.
 
 - Ignore local runtime data, browser-automation helpers, embedding caches, and the local backend
   scratch runner so credentials, databases, downloaded models, and machine-specific paths cannot
