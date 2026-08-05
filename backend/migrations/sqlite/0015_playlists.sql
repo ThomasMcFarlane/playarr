@@ -1,9 +1,9 @@
--- `playlists`/`playlist_items` back `playarr_model::Playlist`/`PlaylistItem`
+-- `playlists`/`playlist_items` back `streamarr_model::Playlist`/`PlaylistItem`
 -- -- named, ordered lists of works, owned by one user (a personal
 -- playlist) or by nobody (`owner_user_id IS NULL` -- a "System" playlist,
 -- admin-managed and visible to every user). Playlists nest via
 -- `parent_playlist_id`, a self-reference, so e.g. "MCU" can have
--- "Sample Movie Golf" nested under it. See playarr_model::playlist for the
+-- "Sample Movie Golf" nested under it. See streamarr_model::playlist for the
 -- full rationale.
 --
 -- Portability note (same convention as 0012_library_views.sql): id/
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS playlists (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     -- NULL = a System playlist. No FK -- `users` rows can be deleted
-    -- (playarr_api::users::delete_user_handler) and a personal playlist
+    -- (streamarr_api::users::delete_user_handler) and a personal playlist
     -- orphaned that way is intentionally left in place rather than
     -- cascade-deleted (same "don't destroy content over an account
     -- change" reasoning as watch_progress in 0010_watch_progress.sql),

@@ -1,12 +1,12 @@
--- Catalog + device + rendition tables backing `playarr_model::{Work,
+-- Catalog + device + rendition tables backing `streamarr_model::{Work,
 -- Device, Rendition}` and the `WorkRepo`/`DeviceRepo`/`RenditionRepo` traits
--- in `playarr-db::repo`.
+-- in `streamarr-db::repo`.
 --
 -- Portability note (same convention as `0002_analytics.sql`): ids are TEXT
 -- (stringified UUIDs), timestamps are TEXT in ISO-8601 form, and the closed
 -- Rust enums (`WorkKind`, `Availability`, `RenditionStatus`, `ProducedBy`,
 -- `ClientPlatform`) are stored as their lowercase discriminant string — see
--- `playarr_db::codec` for the single place those mappings live — so the
+-- `streamarr_db::codec` for the single place those mappings live — so the
 -- same application-level SQL works unmodified against both engines.
 
 CREATE TABLE IF NOT EXISTS works (
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS works (
     genres TEXT NOT NULL DEFAULT '[]',
     tags TEXT NOT NULL DEFAULT '[]',
     added_at TEXT NOT NULL,
-    -- 0/1, not a SQL `BOOLEAN` column — see `playarr_db::codec::bool_to_i64`
+    -- 0/1, not a SQL `BOOLEAN` column — see `streamarr_db::codec::bool_to_i64`
     -- for why (the `sqlx::Any`-over-SQLite bridge can't decode a
     -- `BOOLEAN`-affinity column at all).
     monitored INTEGER NOT NULL DEFAULT 0,

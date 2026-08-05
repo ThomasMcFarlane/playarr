@@ -1,14 +1,14 @@
--- `policies` and `users` tables backing `playarr_model::{Policy, User}`
--- and the new `PolicyRepo`/`UserRepo` traits in `playarr-db::repo`.
+-- `policies` and `users` tables backing `streamarr_model::{Policy, User}`
+-- and the new `PolicyRepo`/`UserRepo` traits in `streamarr-db::repo`.
 --
--- This is the persistence half of moving Playarr Server off `trusted-network`
+-- This is the persistence half of moving Streamarr off `trusted-network`
 -- auto-admin (source-IP allowlist login) and onto real username/password
--- accounts (`PLAYARR_AUTH_MODE=full-account` in `playarr_auth::
--- AuthMode`). `playarr_auth::login::evaluate_login` already handles
+-- accounts (`STREAMARR_AUTH_MODE=full-account` in `streamarr_auth::
+-- AuthMode`). `streamarr_auth::login::evaluate_login` already handles
 -- `full-account` correctly, including real Argon2id password hashing
--- (`playarr_auth::login::hash_password` / `Argon2PasswordVerifier`) --
+-- (`streamarr_auth::login::hash_password` / `Argon2PasswordVerifier`) --
 -- what was missing is that every account today only lives in
--- `playarr_auth::login::InMemoryUserDirectory`, which starts empty on
+-- `streamarr_auth::login::InMemoryUserDirectory`, which starts empty on
 -- every boot. These two tables are that directory's real, durable backing
 -- store.
 --
@@ -21,7 +21,7 @@
 -- `created_at` is TEXT in ISO-8601 form, and every boolean
 -- (`can_transcode`, `can_download`, `can_delete`, `can_share_public`,
 -- `is_admin`, `disabled`) is `INTEGER` 0/1, not a SQL `BOOLEAN` column --
--- see `playarr_db::codec::bool_to_i64` for why (the `sqlx::Any`-over-
+-- see `streamarr_db::codec::bool_to_i64` for why (the `sqlx::Any`-over-
 -- SQLite bridge can't decode a `BOOLEAN`-affinity column at all).
 --
 -- `Policy`'s list/optional-list fields (`library_allow`, `blocked_folders`,
@@ -30,7 +30,7 @@
 -- single TEXT column via `serde_json` rather than separate join tables,
 -- since none of them are filtered/sorted on at the SQL level -- policy
 -- evaluation always loads the whole `Policy` and reasons about it in Rust
--- (see `playarr_auth::policy`). `access_schedule` has no `DEFAULT` (unlike
+-- (see `streamarr_auth::policy`). `access_schedule` has no `DEFAULT` (unlike
 -- the `Vec`-typed columns, which default to `'[]'`) because `None` (SQL
 -- `NULL`) and `Some(vec![])` are distinct, meaningful values on
 -- `Policy::access_schedule` -- "no schedule restriction" vs. "never
@@ -38,9 +38,9 @@
 -- distinction.
 --
 -- `password_hash` is plain `TEXT`: it already holds an Argon2id PHC hash
--- string produced by `playarr_auth::login::hash_password`, not a
+-- string produced by `streamarr_auth::login::hash_password`, not a
 -- plaintext secret, so no additional column-level protection is needed
--- beyond what `playarr_model::Sensitive<String>` already gives it on the
+-- beyond what `streamarr_model::Sensitive<String>` already gives it on the
 -- Rust side (keeping it out of `Debug`/`Display`/logs).
 
 CREATE TABLE IF NOT EXISTS policies (
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS policies (
     max_rating TEXT,
     blocked_tags TEXT NOT NULL DEFAULT '[]',
     allowed_tags TEXT NOT NULL DEFAULT '[]',
-    -- 0/1, not a SQL `BOOLEAN` column -- see `playarr_db::codec::bool_to_i64`
+    -- 0/1, not a SQL `BOOLEAN` column -- see `streamarr_db::codec::bool_to_i64`
     -- for why (the `sqlx::Any`-over-SQLite bridge can't decode a
     -- `BOOLEAN`-affinity column at all).
     can_transcode INTEGER NOT NULL DEFAULT 1,

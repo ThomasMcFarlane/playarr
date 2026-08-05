@@ -4,10 +4,10 @@
 -- `WorkKind::Movie` has no children.
 --
 -- These get their own migration/tables rather than living in
--- `playarr-db` because that crate's `WorkRepo` deliberately scopes them
+-- `streamarr-db` because that crate's `WorkRepo` deliberately scopes them
 -- out (see its doc comment: "Season/episode/album/track/book children ...
 -- get their own repositories once the catalog write path is built"); until
--- that write path exists, `playarr-catalog`'s `CatalogService::get_by_id`
+-- that write path exists, `streamarr-catalog`'s `CatalogService::get_by_id`
 -- is the only reader, so it owns the schema.
 --
 -- Portability note (same convention as `0002_analytics.sql`/`0003_catalog.sql`):

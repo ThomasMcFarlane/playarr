@@ -1,4 +1,4 @@
--- `tdarr_connection` backs `playarr_model::TdarrConnection` -- Playarr Server's
+-- `tdarr_connection` backs `streamarr_model::TdarrConnection` -- Streamarr's
 -- single connection to a Tdarr instance (see that type's doc comment for
 -- why this is a singleton, unlike `source_instances`). Always 0 or 1 rows,
 -- enforced at the application layer (`TdarrConnectionRepo::upsert` always

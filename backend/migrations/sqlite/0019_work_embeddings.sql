@@ -1,7 +1,7 @@
--- `work_embeddings` backs `playarr_model::WorkEmbedding` -- one cached
+-- `work_embeddings` backs `streamarr_model::WorkEmbedding` -- one cached
 -- semantic-similarity vector per work, generated locally by
--- `playarr_embeddings::Embedder` (see that crate's doc comment) and
--- consumed by `playarr_catalog::CatalogService::similar` via a
+-- `streamarr_embeddings::Embedder` (see that crate's doc comment) and
+-- consumed by `streamarr_catalog::CatalogService::similar` via a
 -- brute-force cosine-similarity scan over every row (no ANN index --
 -- the catalog is small enough that a full scan is already sub-10ms).
 --

@@ -1,8 +1,8 @@
--- `people`/`credits` back `playarr_model::{Person, Credit}` -- cast/crew
+-- `people`/`credits` back `streamarr_model::{Person, Credit}` -- cast/crew
 -- for a catalog work. Sourced only from Radarr's `/api/v3/credit`
 -- endpoint today (verified live: Sonarr/Lidarr/Readarr have no equivalent
 -- data), so in practice only movie `works` rows ever have credits -- see
--- `playarr_model::person`'s module doc comment.
+-- `streamarr_model::person`'s module doc comment.
 --
 -- Portability note (same convention as 0003_catalog.sql): ids are TEXT
 -- (stringified UUIDs), the closed `CreditRole` enum is stored as two

@@ -73,7 +73,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Restore the SQLite folder-media migration used by production deployments so
   newly built binaries can restart databases already upgraded to version 42;
   Cargo now rebuilds the embedded migration set whenever migration files
-  change.
+  change. Historical SQLite migrations are immutable again, with the Playarr
+  instance-name update applied in a new migration instead of rewriting applied
+  migration checksums.
 
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
   shared 240px default to a literal type.

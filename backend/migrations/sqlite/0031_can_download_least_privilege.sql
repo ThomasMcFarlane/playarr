@@ -1,20 +1,20 @@
 -- `can_download` (0007_users_policies.sql) shipped with `DEFAULT 1`, and
 -- every server-side policy-construction path (`default_policy` in
--- playarr-api's users.rs) assigned it `true` unconditionally -- in
+-- streamarr-api's users.rs) assigned it `true` unconditionally -- in
 -- practice every account, existing and new, had download access with no
 -- admin-visible way to see or change that, despite it being intended as a
 -- deliberate, opt-in-only grant (the same "no access by default" `library_
 -- allow`/`can_stream` already use). This resets existing rows to that
 -- deny-by-default state; `users.rs`'s `default_policy` now does the same
 -- for every newly created account going forward. Every real INSERT/UPDATE
--- of this table already binds `can_download` explicitly (see `playarr-db
+-- of this table already binds `can_download` explicitly (see `streamarr-db
 -- ::repo::policy::SqlxPolicyRepo`), so the column's own `DEFAULT 1` is
 -- never actually relied on by the application and is deliberately left
 -- as-is here rather than risking a full SQLite table-rebuild just to
 -- change it.
 --
 -- `is_admin` accounts are unaffected in practice -- `is_admin` bypasses
--- `can_download` entirely at enforcement time (see `playarr_model::
+-- `can_download` entirely at enforcement time (see `streamarr_model::
 -- Policy`'s doc comment) -- so this is a real behavior change only for
 -- non-admin accounts an operator has not already explicitly re-granted
 -- download access to via the admin UI.

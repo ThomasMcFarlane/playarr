@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 INSERT INTO system_settings (id, instance_name)
-VALUES ('00000000-0000-0000-0000-00000000a001', 'Playarr Server')
+VALUES ('00000000-0000-0000-0000-00000000a001', 'Streamarr')
 ON CONFLICT (id) DO NOTHING;
