@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The server maintenance CLI can reset a persisted administrator password from
+  standard input without exposing the password in process arguments or storing
+  anything except its Argon2id hash.
+
 ### Added
 
 - Android release `0.2.13` (versionCode 2013) with the correct Playarr app

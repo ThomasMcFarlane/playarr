@@ -27,6 +27,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use std::{env, io::Read};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use playarr_config::{Config, DeploymentTier};
@@ -142,6 +143,12 @@ enum Command {
         #[arg(long, value_enum, default_value_t = UpdateChannel::Stable)]
         channel: UpdateChannel,
     },
+    /// Reset an existing administrator's password from standard input.
+    ResetAdminPassword {
+        /// Administrator username to update.
+        #[arg(long, default_value = DEFAULT_BOOTSTRAP_ADMIN_USERNAME)]
+        username: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -171,7 +178,45 @@ async fn main() -> anyhow::Result<()> {
             yes,
             channel,
         } => update(check, yes, channel).await,
+        Command::ResetAdminPassword { username } => reset_admin_password(&username).await,
     }
+}
+
+/// Resets one persisted administrator account without exposing the new
+/// password in process arguments or shell history. The password is accepted
+/// only on standard input and the database stores only its Argon2id hash.
+async fn reset_admin_password(username: &str) -> anyhow::Result<()> {
+    let database_url =
+        env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?;
+    let pool = playarr_db::connect(&database_url).await?;
+
+    use playarr_db::{PolicyRepo as _, UserRepo as _};
+    let user_repo = playarr_db::repo::SqlxUserRepo::new(pool.clone());
+    let policy_repo = playarr_db::repo::SqlxPolicyRepo::new(pool);
+    let mut user = user_repo
+        .find_by_username(username)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("no user named {username}"))?;
+    let is_admin = policy_repo
+        .find_by_id(user.policy_id)
+        .await?
+        .is_some_and(|policy| policy.is_admin);
+    if !is_admin {
+        anyhow::bail!("user {username} is not an administrator");
+    }
+
+    let mut password = String::new();
+    std::io::stdin().read_to_string(&mut password)?;
+    let password = password.trim_end_matches(['\r', '\n']);
+    if password.len() < 12 {
+        anyhow::bail!("password must contain at least 12 characters");
+    }
+
+    user.password_hash =
+        playarr_model::Sensitive::new(playarr_auth::login::hash_password(password));
+    user_repo.upsert(&user).await?;
+    println!("reset password for administrator {username}");
+    Ok(())
 }
 
 async fn serve() -> anyhow::Result<()> {
