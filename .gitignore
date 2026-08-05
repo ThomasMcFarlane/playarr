@@ -43,6 +43,7 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 coverage/
+.wrangler/
 /clients/tv-web/web/public/vidaa-store/
 
 # ------------------------------------------------------------------------
@@ -142,6 +143,8 @@ desktop.ini
 *.swo
 *~
 .history/
+__pycache__/
+*.py[cod]
 
 # Local browser automation helpers and runtime state
 .chrome-mcp-extension/
@@ -165,4 +168,5 @@ secrets/
 # Local browser-automation scratch: MCP session state and ad-hoc TV-web
 # screenshots dropped at the repo root during manual UI checks.
 .playwright-mcp/
+/scratch/
 /tvweb_*.png

@@ -51,6 +51,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Ignore generated Python bytecode, Wrangler runtime state, and repository-root
+  scratch artefacts so local validation does not leave false source changes.
+
 - Playarr Web's Cloudflare deployment is pinned to the account that owns
   `playarr.app`, avoiding accidental deployment through another authenticated
   Wrangler account.
