@@ -70,6 +70,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   refresh sessions now use a sliding 30-day inactivity window instead of
   expiring 30 days after the original login.
 
+- Restore the SQLite folder-media migration used by production deployments so
+  newly built binaries can restart databases already upgraded to version 42.
+
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
   shared 240px default to a literal type.
 
