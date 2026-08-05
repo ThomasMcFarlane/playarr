@@ -47,6 +47,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Playarr Web's Cloudflare deployment is pinned to the account that owns
+  `playarr.app`, avoiding accidental deployment through another authenticated
+  Wrangler account.
+
 - Android TV device-link chrome is 1:1 with web `ThemeDropdown` /
   `LanguageDropdown`: stroke sun + globe icons, square triggers (theme min
   144 / language min 168), accent border + scale when open, custom square
