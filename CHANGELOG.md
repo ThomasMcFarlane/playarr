@@ -63,6 +63,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Server images build and co-host Playarr Admin at `/`; the consumer Playarr
+  Web app remains confined to its dedicated hosted origins.
+
+- Saved Web profiles restore their refresh session after reloads, and active
+  refresh sessions now use a sliding 30-day inactivity window instead of
+  expiring 30 days after the original login.
+
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
   shared 240px default to a literal type.
 

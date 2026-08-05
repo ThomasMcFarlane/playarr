@@ -438,7 +438,12 @@ mod tests {
         ));
         let devices: Arc<dyn DeviceRepo> = Arc::new(FakeDeviceRepo::default());
         let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-        let refresh = Arc::new(RefreshTokenService::new(store, devices, jwt));
+        let refresh = Arc::new(RefreshTokenService::new(
+            store,
+            devices,
+            jwt,
+            config.refresh_ttl,
+        ));
         let auth_store: Arc<dyn DeviceAuthorizationStore> =
             Arc::new(InMemoryDeviceAuthorizationStore::new());
         DashMapDeviceFlowHandler::new(auth_store, refresh, config)

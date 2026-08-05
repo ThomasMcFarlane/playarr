@@ -13,7 +13,7 @@
 # docker-compose.prod.yml, and the Helm chart under infra/kubernetes/ all
 # deploy from one artifact.
 #
-# This image also co-hosts the standalone Web app's built static assets
+# This image also co-hosts Playarr Admin's built static assets
 # (stage `web-builder` below, copied to /app/web in the runtime stage) --
 # `playarr-server` serves both the API and the UI on one origin/port, same as
 # every `*arr` app ships its own UI, rather than requiring a separately
@@ -40,7 +40,7 @@
 # whether started by `docker run`, docker-compose, or a Kubernetes Pod. See
 # infra/docker/README.md for the full rationale. PLAYARR_WEB_ASSETS_DIR
 # (see `web_assets_dir_from_env`) only needs setting to override where this
-# image already places the built Web UI (/app/web) -- not part of that core
+# image already places the built Admin UI (/app/web) -- not part of that core
 # contract, and left unset in this image's own compose/Helm config.
 # ==============================================================================
 
@@ -92,10 +92,10 @@ RUN cargo build --release --workspace --locked --bin playarr-server \
     && strip /build/out/playarr-server
 
 # ------------------------------------------------------------------------
-# Stage: web-builder -- builds the standalone Web app's static assets
-# (clients/tv-web/web/dist), so the runtime stage can co-host the UI on
+# Stage: web-builder -- builds Playarr Admin's static assets
+# (clients/tv-web/admin/dist), so the runtime stage can co-host the UI on
 # the same origin/port as the API (see the header comment above). Only
-# `@playarr-tv/web` and its actual workspace dependencies are built
+# `@playarr-tv/admin` and its actual workspace dependencies are built
 # (pnpm's `...` filter suffix) -- NOT `pnpm -r`, which would also try to
 # build the TV app shells (apps/tv-webos, apps/tv-tizen) and their
 # packaging steps (`ares-package`, Tizen Studio CLI) that this generic
@@ -107,10 +107,9 @@ FROM node:23-slim AS web-builder
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 COPY clients/tv-web/ ./clients/tv-web/
-COPY infra/vidaa-gateway/portal/ ./infra/vidaa-gateway/portal/
 WORKDIR /build/clients/tv-web
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @playarr-tv/web... run build
+RUN pnpm --filter @playarr-tv/admin... run build
 
 # ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-
@@ -158,7 +157,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN touch /.playarr-container && chmod 0444 /.playarr-container
 
 COPY --from=builder --chown=playarr:playarr /build/out/playarr-server /app/playarr-server
-COPY --from=web-builder --chown=playarr:playarr /build/clients/tv-web/web/dist /app/web
+COPY --from=web-builder --chown=playarr:playarr /build/clients/tv-web/admin/dist /app/web
 
 WORKDIR /app
 USER playarr:playarr

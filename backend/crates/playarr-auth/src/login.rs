@@ -330,7 +330,7 @@ mod tests {
         ));
         let devices: Arc<dyn DeviceRepo> = Arc::new(FakeDeviceRepo::default());
         let store = Arc::new(InMemoryRefreshTokenStore::new());
-        RefreshTokenService::new(store, devices, jwt)
+        RefreshTokenService::new(store, devices, jwt, Duration::days(30))
     }
 
     fn ctx(source_ip: IpAddr) -> LoginContext<'static> {

@@ -84,6 +84,7 @@ const PLAYARR_PLATFORM_HEADERS =
 
 const CURRENT_USER_NAME_STORAGE_KEY = "playarr.currentUserName";
 const SAVED_PROFILE_SESSIONS_STORAGE_KEY = "playarr.profileSessions.v4";
+const ACTIVE_PROFILE_STORAGE_KEY = "playarr.activeProfile.v1";
 const LEGACY_SAVED_PROFILE_SESSIONS_STORAGE_KEYS = [
   "playarr.profileSessions.v3",
   "playarr.profileSessions.v2",
@@ -94,13 +95,19 @@ function readStoredCurrentUserName(): string | undefined {
   return value || undefined;
 }
 
-interface StoredProfileSession {
+export interface StoredProfileSession {
   profileKey: string;
   apiBaseUrl: string;
   userId: string;
   name: string;
   deviceId: string;
   session: StoredSession;
+}
+
+export interface ActiveProfileMarker {
+  profileKey: string;
+  apiBaseUrl: string;
+  userId: string;
 }
 
 export interface SavedProfile {
@@ -185,6 +192,55 @@ function readStoredProfileSessions(fallbackApiBaseUrl: string): StoredProfileSes
 
 function writeStoredProfileSessions(profiles: StoredProfileSession[]): void {
   window.localStorage.setItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY, JSON.stringify(profiles));
+}
+
+function readActiveProfileMarker(): ActiveProfileMarker | undefined {
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY);
+    if (!raw) return undefined;
+    const marker = JSON.parse(raw) as Partial<ActiveProfileMarker>;
+    if (
+      typeof marker.profileKey !== "string" ||
+      typeof marker.apiBaseUrl !== "string" ||
+      typeof marker.userId !== "string"
+    ) {
+      return undefined;
+    }
+    return {
+      profileKey: marker.profileKey,
+      apiBaseUrl: publicIpv4RelayUrl(marker.apiBaseUrl),
+      userId: marker.userId,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeActiveProfileMarker(profile: ActiveProfileMarker): void {
+  window.localStorage.setItem(ACTIVE_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
+function clearActiveProfileMarker(): void {
+  window.localStorage.removeItem(ACTIVE_PROFILE_STORAGE_KEY);
+}
+
+export function selectRestorableProfileSession(
+  profiles: StoredProfileSession[],
+  apiBaseUrl: string,
+  activeMarker?: ActiveProfileMarker
+): StoredProfileSession | undefined {
+  const candidates = profiles.filter((profile) => profile.apiBaseUrl === apiBaseUrl);
+  if (activeMarker?.apiBaseUrl === apiBaseUrl) {
+    const marked = candidates.find(
+      (profile) =>
+        profile.profileKey === activeMarker.profileKey &&
+        profile.userId === activeMarker.userId
+    );
+    if (marked) return marked;
+  }
+  // Backwards compatibility for sessions saved before the active-profile
+  // marker existed. A sole profile is unambiguous and safe to restore.
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 function storedSessionsEqual(left: StoredSession, right: StoredSession): boolean {
@@ -532,11 +588,26 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   // config-file fetch) is the fallback -- see `resolveInitialApiBaseUrl` --
   // so this is a plain lazy initializer, not a `null`-until-resolved effect.
   const [apiBaseUrl, setApiBaseUrlState] = useState<string>(resolveInitialApiBaseUrl);
+  const initialStoredProfilesRef = useRef<StoredProfileSession[]>();
+  if (!initialStoredProfilesRef.current) {
+    initialStoredProfilesRef.current = readStoredProfileSessions(apiBaseUrl);
+  }
   // One `TokenStore` for the lifetime of this provider. A server change clears
   // its current value before reusing it so no token is sent to another instance.
   const tokenStoreRef = useRef<TokenStore>();
   if (!tokenStoreRef.current) {
     tokenStoreRef.current = new TokenStore();
+  }
+  if (!tokenStoreRef.current.get()) {
+    const restoredProfile = selectRestorableProfileSession(
+      initialStoredProfilesRef.current ?? [],
+      apiBaseUrl,
+      readActiveProfileMarker()
+    );
+    if (restoredProfile) {
+      tokenStoreRef.current.set(restoredProfile.session);
+      writeActiveProfileMarker(restoredProfile);
+    }
   }
 
   const applyApiBaseUrl = useCallback((value: string) => {
@@ -596,7 +667,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     readStoredCurrentUserName
   );
   const [storedProfileSessions, setStoredProfileSessions] = useState<StoredProfileSession[]>(() => {
-    const stored = readStoredProfileSessions(apiBaseUrl);
+    const stored = initialStoredProfilesRef.current ?? readStoredProfileSessions(apiBaseUrl);
     const activeSession = tokenStoreRef.current?.get();
     const activeUserId = activeSession
       ? decodeAccessTokenUserId(activeSession.accessToken)
@@ -666,6 +737,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       if (value === apiBaseUrl) return;
       tokenStoreRef.current?.clear();
       window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+      clearActiveProfileMarker();
       activeProfileRef.current = undefined;
       clearJoinedServerRegistry();
       setAuthFailed(false);
@@ -919,6 +991,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           name,
           deviceId: profileDeviceId,
         };
+        writeActiveProfileMarker(activeProfileRef.current);
         persistProfileSession(
           targetApiBaseUrl,
           profileKey,
@@ -1054,6 +1127,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         name,
         deviceId,
       };
+      writeActiveProfileMarker(activeProfileRef.current);
       persistProfileSession(
         targetApiBaseUrl,
         profileKey,
@@ -1153,6 +1227,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         setCurrentUserId(userId);
         setCurrentUserName(target.name);
         setAuthFailed(false);
+        writeActiveProfileMarker(activeProfileRef.current);
         // §7.1/§7.2: switch over to whichever address the retry actually
         // succeeded against -- see the primary client's `getAccessToken`
         // for the identical, more fully-commented check.
@@ -1185,6 +1260,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     const activeProfile = activeProfileRef.current;
     tokenStoreRef.current?.clear();
     window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+    clearActiveProfileMarker();
     activeProfileRef.current = undefined;
     clearJoinedServerRegistry();
     if (activeProfile) {
@@ -1210,6 +1286,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       if (isActiveProfile) {
         tokenStoreRef.current?.clear();
         window.localStorage.removeItem(CURRENT_USER_NAME_STORAGE_KEY);
+        clearActiveProfileMarker();
         activeProfileRef.current = undefined;
         clearJoinedServerRegistry();
         setAuthFailed(false);

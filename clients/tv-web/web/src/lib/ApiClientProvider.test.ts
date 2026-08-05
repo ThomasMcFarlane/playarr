@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LoginResponse, RefreshResponse } from "@playarr-tv/api-client";
 import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@playarr-tv/domain";
-import { createManagedApiClient, resolveInitialApiBaseUrl } from "./ApiClientProvider";
+import {
+  createManagedApiClient,
+  resolveInitialApiBaseUrl,
+  selectRestorableProfileSession,
+  type ActiveProfileMarker,
+  type StoredProfileSession,
+} from "./ApiClientProvider";
 
 /** Matches `knownServers.test.ts`'s own `localStorage` stub convention. */
 function createMemoryLocalStorage(): Storage {
@@ -58,6 +64,59 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+function savedProfile(
+  profileKey: string,
+  apiBaseUrl: string,
+  userId: string
+): StoredProfileSession {
+  return {
+    profileKey,
+    apiBaseUrl,
+    userId,
+    name: userId,
+    deviceId: `device-${userId}`,
+    session: {
+      accessToken: `access-${userId}`,
+      refreshToken: `refresh-${userId}`,
+      tokenType: "Bearer",
+      expiresAt: Date.now() - 1,
+    },
+  };
+}
+
+describe("selectRestorableProfileSession", () => {
+  it("restores the marked saved profile even when its access token has expired", () => {
+    const first = savedProfile("first", "https://server.example", "u1");
+    const second = savedProfile("second", "https://server.example", "u2");
+    const marker: ActiveProfileMarker = {
+      profileKey: second.profileKey,
+      apiBaseUrl: second.apiBaseUrl,
+      userId: second.userId,
+    };
+
+    expect(
+      selectRestorableProfileSession([first, second], "https://server.example", marker)
+    ).toEqual(second);
+  });
+
+  it("restores the sole matching legacy profile when no marker exists", () => {
+    const profile = savedProfile("legacy", "https://server.example", "u1");
+
+    expect(
+      selectRestorableProfileSession([profile], "https://server.example")
+    ).toEqual(profile);
+  });
+
+  it("does not guess between multiple profiles without an active marker", () => {
+    const first = savedProfile("first", "https://server.example", "u1");
+    const second = savedProfile("second", "https://server.example", "u2");
+
+    expect(
+      selectRestorableProfileSession([first, second], "https://server.example")
+    ).toBeUndefined();
+  });
 });
 
 // `docs/architecture/peer-groups.md`'s rollout invariant, restated in §7.3:

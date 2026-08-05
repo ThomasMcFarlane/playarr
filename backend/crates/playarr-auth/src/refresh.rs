@@ -115,6 +115,7 @@ pub struct RefreshTokenService {
     store: Arc<dyn RefreshTokenStore>,
     devices: Arc<dyn DeviceRepo>,
     jwt: Arc<JwtIssuer>,
+    refresh_ttl: Duration,
     /// Coalesces genuinely-concurrent [`Self::rotate`] calls that present
     /// the exact same still-current token for the same device -- see that
     /// method's doc comment for why this exists and why it's narrow enough
@@ -130,11 +131,13 @@ impl RefreshTokenService {
         store: Arc<dyn RefreshTokenStore>,
         devices: Arc<dyn DeviceRepo>,
         jwt: Arc<JwtIssuer>,
+        refresh_ttl: Duration,
     ) -> Self {
         Self {
             store,
             devices,
             jwt,
+            refresh_ttl,
             in_flight: DashMap::new(),
         }
     }
@@ -307,6 +310,11 @@ impl RefreshTokenService {
         record.current_hash = new_hash.clone();
         record.used_hashes.insert(new_hash);
         record.rotated_at = Some(now);
+        // A refresh family expires after inactivity, not after a fixed
+        // wall-clock period from the first login. Every legitimate use
+        // proves that this trusted device is still active, so slide the
+        // deadline forward while retaining rotation and reuse detection.
+        record.expires_at = now + self.refresh_ttl;
         self.store.put(record.clone()).await?;
 
         self.devices.touch_last_seen(device_id, now).await?;
@@ -348,7 +356,7 @@ mod tests {
         ));
         let devices: Arc<dyn DeviceRepo> = Arc::new(FakeDeviceRepo::default());
         let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-        RefreshTokenService::new(store, devices, jwt)
+        RefreshTokenService::new(store, devices, jwt, Duration::days(30))
     }
 
     fn device(user_id: Uuid) -> Device {
@@ -383,6 +391,24 @@ mod tests {
             "session id stays stable across rotation"
         );
         assert_eq!(session.user_id, user_id);
+    }
+
+    #[tokio::test]
+    async fn rotation_slides_the_refresh_expiry_forward() {
+        let service = service();
+        let user_id = Uuid::new_v4();
+        let (session, first) = service
+            .issue(device(user_id), Duration::days(30))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let (rotated, _) = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await
+            .unwrap();
+
+        assert!(rotated.expires_at > session.expires_at);
     }
 
     #[tokio::test]
@@ -480,6 +506,7 @@ mod tests {
             store,
             devices.clone(),
             jwt,
+            Duration::days(30),
         ));
 
         let (_, issued) = service.issue(d, Duration::days(30)).await.unwrap();
@@ -577,7 +604,7 @@ mod tests {
         ));
         let devices = Arc::new(FakeDeviceRepo::default());
         let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-        let service = RefreshTokenService::new(store, devices.clone(), jwt);
+        let service = RefreshTokenService::new(store, devices.clone(), jwt, Duration::days(30));
 
         let user_id = Uuid::new_v4();
         let d = device(user_id);

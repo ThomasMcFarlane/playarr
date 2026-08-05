@@ -141,19 +141,14 @@ To build Playarr Admin and point the server at it:
 ```bash
 cd clients/tv-web
 pnpm install                 # workspace install + version-catalogue resolution
-pnpm -r run build            # typechecks and builds every package in dependency order
+pnpm --filter @playarr-tv/admin... run build
 # the admin bundle lands in clients/tv-web/admin/dist, so:
 # PLAYARR_WEB_ASSETS_DIR=/absolute/path/to/clients/tv-web/admin/dist
 ```
 
-`pnpm -r run build` is the command the workspace's own README documents; the admin app
-(`@playarr-tv/admin`) depends on several workspace packages that must be built first, so building
-it in isolation is not enough.
-
-> The repository is inconsistent about this slot. `backend/src/main.rs` describes the co-hosted
-> assets directory as Playarr Admin, but `infra/docker/backend.Dockerfile` copies the built Playarr
-> **Web** client to `/app/web` instead. If you need the admin console specifically, build it and set
-> `PLAYARR_WEB_ASSETS_DIR` explicitly rather than relying on the image default.
+The trailing `...` builds the Admin app and its workspace dependencies. The official container
+image runs this filtered build and places the result in
+`/app/web`. Playarr Web remains a separate viewing application hosted at its own public origin.
 
 ## The authentication model available today
 

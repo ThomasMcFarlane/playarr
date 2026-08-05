@@ -542,6 +542,7 @@ pub async fn test_state() -> (Router, TestState) {
         refresh_store,
         device_repo,
         jwt.clone(),
+        Duration::days(30),
     ));
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),

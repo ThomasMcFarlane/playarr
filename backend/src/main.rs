@@ -1146,6 +1146,7 @@ async fn boot_api(
         refresh_store,
         device_repo,
         jwt.clone(),
+        chrono::Duration::days(30),
     ));
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),

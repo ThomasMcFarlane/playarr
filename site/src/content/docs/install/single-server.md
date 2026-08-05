@@ -385,7 +385,7 @@ PLAYARR_WEB_ASSETS_DIR=/var/lib/playarr/web
 sudo systemctl restart playarr.service
 ```
 
-Playarr, the viewing client, is a separate application, and `install.sh` never installs or serves it either. The same `PLAYARR_WEB_ASSETS_DIR` mechanism *can* serve Playarr Web's build instead, that is exactly what the official container image does with `clients/tv-web/web/dist`, but only one of the two can occupy `/` on a given server.
+Playarr, the viewing client, is a separate application, and `install.sh` never installs or serves it. The official container image also reserves this slot for Playarr Admin; Playarr Web is hosted independently at its public origins.
 
 ## Updating and backing up
 

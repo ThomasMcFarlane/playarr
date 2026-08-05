@@ -209,9 +209,7 @@ docker compose \
   build
 ```
 
-The build is four stages: `cargo-chef` dependency caching, the Rust compile of the `playarr` binary, a `node:23-slim` stage that runs `pnpm --filter @playarr-tv/web... run build` and copies `clients/tv-web/web/dist` into `/app/web`, and a `debian:bookworm-slim` runtime that installs `ca-certificates`, `curl`, `ffmpeg` and `tini`. The result runs as non-root uid/gid `10001`, exposes 8484 and 9090, and carries a `HEALTHCHECK` that curls `http://127.0.0.1:8484/healthz` every 30 seconds after a 20-second grace period.
-
-> **The assets baked into `/app/web` are the Playarr Web client, not the admin console.** `backend/src/main.rs` describes the co-hosted assets slot as Playarr Admin, but `infra/docker/backend.Dockerfile` fills it with the Playarr Web build. The repository is inconsistent here; the Dockerfile is what the image actually does. See [First sign-in](#first-sign-in) below for what that means in practice.
+The build is four stages: `cargo-chef` dependency caching, the Rust compile of the `playarr` binary, a `node:23-slim` stage that runs `pnpm --filter @playarr-tv/admin... run build` and copies `clients/tv-web/admin/dist` into `/app/web`, and a `debian:bookworm-slim` runtime that installs `ca-certificates`, `curl`, `ffmpeg` and `tini`. The result runs as non-root uid/gid `10001`, exposes 8484 and 9090, and carries a `HEALTHCHECK` that curls `http://127.0.0.1:8484/healthz` every 30 seconds after a 20-second grace period.
 
 The services set `pull_policy: build`, so `docker compose up` will build the image if it is missing. Building explicitly first just keeps the failure modes separate.
 
@@ -296,12 +294,14 @@ The username defaults to `admin`; the password is 64 random hex characters unles
   PLAYARR_BOOTSTRAP_ADMIN_PASSWORD: ${PLAYARR_BOOTSTRAP_ADMIN_PASSWORD:-}
 ```
 
-What the API containers serve at `/` is the **Playarr Web client**, and the bootstrap admin cannot sign in there. Login enforces the account's `can_stream` policy for every client platform except `playarr-admin`, and the bootstrap admin is created with `can_stream: false` deliberately, so those credentials return a 403 from Playarr Web rather than a token.
+The API containers serve **Playarr Admin** at `/`. Its login identifies itself as
+`playarr-admin`, so the non-streaming bootstrap administrator can sign in to the operator UI
+without being granted consumer playback access.
 
-Two ways forward, and you will probably want both:
+The image already serves Playarr Admin at `/`. Two ways forward:
 
 1. **Use the credentials against the API.** Post to `/api/v1/auth/login` with `"client_platform": "playarr-admin"`, which skips the streaming gate. [First run](/docs/first-run) walks through that request and what to do with the token.
-2. **Build Playarr Admin and serve it instead.** The admin console is a separate workspace package that the image does not build. From your checkout:
+2. **Override the bundled Admin build during development.** From your checkout:
 
    ```bash
    cd clients/tv-web
@@ -321,7 +321,7 @@ Two ways forward, and you will probably want both:
      - /absolute/path/to/playarr/clients/tv-web/admin/dist:/srv/playarr-admin:ro
    ```
 
-   Recreate the API containers and `/` now serves the admin console. If no `index.html` is found at the resolved path the server runs API-only and logs an informational line saying so, that log line is how you tell a bad path from a bad build.
+   Recreate the API containers and `/` serves your local admin build. If no `index.html` is found at the resolved path the server runs API-only and logs an informational line saying so, that log line is how you tell a bad path from a bad build.
 
 Either way, create a separate ordinary account with streaming access for actually watching things. The bootstrap admin is an operator account and nothing else.
 
@@ -349,7 +349,7 @@ Worth adding through the override file:
 | `PLAYARR_AUTH_MODE` | `full-account` | `trusted-network` auto-logs in any request from an allowed CIDR with no credentials. |
 | `PLAYARR_TRUSTED_NETWORK_CIDR` | RFC 1918 plus loopback | **Replaces** the default allowlist rather than extending it. Only relevant in `trusted-network` mode. |
 | `PLAYARR_SUBTITLE_CACHE_DIR` | temp directory | Otherwise extracted subtitles land in the container's tmpfs and are rebuilt after every restart. Must point at a volume mount, the root filesystem is read-only. |
-| `PLAYARR_WEB_ASSETS_DIR` | `web/` next to the binary, i.e. `/app/web` in this image | Which built UI is served at `/`. The image ships the Playarr Web build here; override it to serve Playarr Admin instead. |
+| `PLAYARR_WEB_ASSETS_DIR` | `web/` next to the binary, i.e. `/app/web` in this image | Which built UI is served at `/`. The image ships Playarr Admin here. |
 | `PLAYARR_MEDIA_REMOTE_ROOT` / `PLAYARR_MEDIA_LOCAL_ROOT` | unset | Prefix substitution when the path a library manager reports is not the path this host can read. Both required. |
 | `PLAYARR_BOOTSTRAP_ADMIN_USERNAME` / `_PASSWORD` | `admin` / random | First-boot admin only; ignored once any user exists. |
 | `PLAYARR_OTLP_ENDPOINT` | unset | OTLP collector. When unset, the OpenTelemetry layer is a no-op. |
