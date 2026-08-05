@@ -1612,16 +1612,12 @@ paths:
           type: string
       - name: style
         in: query
-        description: >
-          Optional server-side bake shared by every client. `original` (default)
-          or `stage` (TV key-art greyscale blend). Same semantics as work artwork.
+        description: 'Named bake: `original` (default) or `stage` (TV key-art greyscale blend).'
         required: false
         schema:
-          type: string
-          enum:
-          - original
-          - stage
-          default: original
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached album artwork (optionally style-baked)
@@ -1664,19 +1660,12 @@ paths:
           type: string
       - name: style
         in: query
-        description: >
-          Optional server-side bake shared by every client. `original` (default)
-          returns the raw cached source image. `stage` applies the dark-theme
-          TV key-art look (greyscale, contrast 0.82, brightness 0.6, opacity
-          0.72, soft right-edge fade) as a PNG so Roku and other native
-          clients need not re-implement CSS filters.
+        description: 'Named bake: `original` (default) or `stage` (TV key-art greyscale blend).'
         required: false
         schema:
-          type: string
-          enum:
-          - original
-          - stage
-          default: original
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Playarr Server-cached source artwork (optionally style-baked)

@@ -84,6 +84,31 @@ export type PlaybackSession = components["schemas"]["PlaybackSession"];
 export type ActiveSessionView = components["schemas"]["ActiveSessionView"];
 /** One historical session enriched with linked user/media context. */
 export type SessionHistoryView = components["schemas"]["SessionHistoryView"];
+/** One peer-group live session enriched with its origin server and effective library. */
+export type ActivityActiveSessionView = ActiveSessionView;
+/** One peer-group historical session enriched with its origin server and effective library. */
+export type ActivitySessionHistoryView = SessionHistoryView;
+/** Partial-result metadata for a connected server that could not be queried. */
+export type UnavailableActivityNode =
+  components["schemas"]["UnavailableNodeView"];
+/** Peer-group live sessions plus any connected servers omitted from the partial result. */
+export type ActivityActiveResponse =
+  components["schemas"]["PlaybackActivityActiveResponse"];
+/** One complete effective-library choice for the Activity filter. */
+export type ActivityLibraryFacet =
+  components["schemas"]["PlaybackActivityLibraryFacet"];
+/** Complete Activity filter choices independent of the current result page. */
+export type ActivityFacetsResponse =
+  components["schemas"]["PlaybackActivityFacetsResponse"];
+/** Exact JSON body accepted by the peer-group activity history search. */
+export type ActivityHistoryRequest = Partial<
+  components["schemas"]["PlaybackActivityHistoryRequest"]
+>;
+/** Peer-group history page plus availability and pagination metadata. */
+export type ActivityHistoryResponse =
+  components["schemas"]["PlaybackActivityHistoryResponse"];
+export type ActivityStopReasonFilter =
+  components["schemas"]["PlaybackActivityStopReason"];
 export type PlayMethod = components["schemas"]["PlayMethod"];
 export type StopReason = components["schemas"]["StopReason"];
 export type TranscodeReason = components["schemas"]["TranscodeReason"];
@@ -395,6 +420,9 @@ export class ApiError extends Error {
  * invalid token.
  */
 const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }> = [
+  { schemaPath: "/api/v1/admin/playback/activity/active", method: "GET" },
+  { schemaPath: "/api/v1/admin/playback/activity/facets", method: "GET" },
+  { schemaPath: "/api/v1/admin/playback/activity/history", method: "POST" },
   { schemaPath: "/api/v1/admin/playback/sessions/active", method: "GET" },
   { schemaPath: "/api/v1/admin/playback/sessions/history", method: "GET" },
   { schemaPath: "/api/v1/admin/playback/sessions/{session_id}/stop", method: "POST" },
@@ -1244,6 +1272,36 @@ export class ApiClient {
   // invalid token, 403 non-admin), same as the other `/api/v1/admin/*`
   // operations above.
   // ---------------------------------------------------------------------
+
+  /** Every active playback session across reachable connected servers, with partial-result metadata. */
+  async groupActiveSessions(): Promise<ActivityActiveResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/playback/activity/active", {})
+    );
+  }
+
+  /** Complete effective-library choices, independent of the currently loaded Activity rows. */
+  async getActivityFacets(): Promise<ActivityFacetsResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/playback/activity/facets", {})
+    );
+  }
+
+  /** Searches playback history across reachable connected servers. Continue with the opaque `next_cursor`; non-zero offsets are rejected. */
+  async searchGroupSessionHistory(
+    body: ActivityHistoryRequest
+  ): Promise<ActivityHistoryResponse> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/playback/activity/history", {
+        // The OpenAPI document correctly omits a `required` list because
+        // serde supplies every missing field from `Default`. openapi-typescript
+        // nevertheless promotes properties carrying `default` values to
+        // required, so keep that generator-specific assertion at this one
+        // boundary while preserving the sparse JSON body callers supplied.
+        body: body as components["schemas"]["PlaybackActivityHistoryRequest"],
+      })
+    );
+  }
 
   /** Every currently-active playback session, newest first. In-memory server-side state -- nothing here survives a restart. */
   async activeSessions(): Promise<ActiveSessionView[]> {

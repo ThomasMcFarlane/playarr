@@ -2431,3 +2431,404 @@ button {
   display: flex;
   gap: 0.75rem;
 }
+
+/* ==========================================================================
+   Activity
+   ========================================================================== */
+
+.activity-page {
+  min-width: 0;
+  padding-bottom: 2rem;
+}
+
+.activity-intro {
+  max-width: 680px;
+  margin: -0.75rem 0 1.5rem;
+}
+
+.activity-filter-panel {
+  position: relative;
+  z-index: 3;
+  margin-bottom: 0.5rem;
+}
+
+.activity-filter-heading,
+.activity-section-heading,
+.activity-filter-actions,
+.activity-multi-select-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.activity-filter-heading {
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.activity-filter-heading h2,
+.activity-section-heading h2 {
+  margin-bottom: 0.2rem;
+  font-size: 21px;
+  font-weight: 400;
+}
+
+.activity-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 1rem;
+}
+
+.activity-multi-select {
+  position: relative;
+  min-width: 0;
+}
+
+.activity-multi-select:focus-within {
+  z-index: 5;
+}
+
+.activity-multi-select-trigger {
+  width: 100%;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-multi-select-trigger:disabled {
+  background: var(--color-bg-input-disabled);
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.activity-multi-select-trigger.is-open {
+  border-color: var(--color-input-focus-border);
+  box-shadow: 0 0 0 3px var(--color-focus-glow);
+}
+
+.activity-multi-select-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-multi-select-chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+}
+
+.activity-multi-select-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 30;
+  width: 100%;
+  min-width: min(320px, calc(100vw - 3rem));
+  overflow: hidden;
+  border: 1px solid rgba(133, 133, 133, 0.45);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-chrome);
+  box-shadow: var(--card-shadow);
+}
+
+.activity-multi-select-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(133, 133, 133, 0.2);
+}
+
+.activity-multi-select-search input {
+  min-width: 0;
+  width: 100%;
+  height: 32px;
+  padding: 0 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-bg-raised);
+}
+
+.activity-multi-select-options {
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem 0;
+}
+
+.activity-multi-select-option {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+}
+
+.activity-multi-select-option:hover,
+.activity-multi-select-option:focus-within {
+  background: var(--color-bg-menu-item-hover);
+}
+
+.activity-multi-select-option > span {
+  min-width: 0;
+}
+
+.activity-multi-select-option strong,
+.activity-multi-select-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-multi-select-option strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.activity-multi-select-option small {
+  margin-top: 0.1rem;
+  color: var(--color-text-help);
+}
+
+.activity-multi-select-custom {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  color: var(--color-accent-hover);
+  text-align: left;
+  cursor: pointer;
+}
+
+.activity-multi-select-custom:hover {
+  background: var(--color-bg-menu-item-hover);
+}
+
+.activity-multi-select-message {
+  padding: 0.65rem 0.75rem;
+  font-size: var(--font-size-caption);
+}
+
+.activity-multi-select-actions {
+  padding: 0.55rem 0.75rem;
+  border-top: 1px solid rgba(133, 133, 133, 0.2);
+}
+
+.activity-multi-select-actions > span {
+  margin-right: auto;
+  font-size: var(--font-size-caption);
+}
+
+.activity-filter-ranges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.activity-range-filter {
+  min-width: 0;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(133, 133, 133, 0.35);
+  border-radius: var(--radius-card);
+}
+
+.activity-range-filter.is-error {
+  border-color: var(--color-danger);
+}
+
+.activity-range-filter legend {
+  padding: 0 0.35rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.activity-date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.activity-date-presets button {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(133, 133, 133, 0.45);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.activity-date-presets button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.activity-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.activity-numeric-range-inputs {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(95px, 0.6fr);
+}
+
+.activity-range-inputs label {
+  min-width: 0;
+}
+
+.activity-range-inputs label > span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.activity-range-inputs .input {
+  width: 100%;
+  min-width: 0;
+  color-scheme: dark;
+}
+
+.activity-range-filter .error-text {
+  margin-top: 0.65rem;
+  font-size: var(--font-size-caption);
+}
+
+.activity-range-help {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: var(--font-size-caption);
+}
+
+.activity-filter-actions {
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.activity-filter-dirty {
+  margin-right: auto;
+  color: var(--color-warning);
+  font-size: var(--font-size-caption);
+}
+
+.activity-filter-label-warning {
+  margin: 0 0 1.5rem;
+  font-size: var(--font-size-caption);
+}
+
+.activity-section {
+  min-width: 0;
+  margin-top: 2rem;
+}
+
+.activity-section-heading {
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.activity-message {
+  margin: 0.9rem 0;
+}
+
+.activity-partial-warning {
+  margin: 0.9rem 0;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--color-warning);
+  background: rgba(255, 165, 0, 0.08);
+  color: var(--color-text-primary);
+}
+
+.activity-partial-warning ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.activity-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(133, 133, 133, 0.25);
+  border-radius: var(--radius-card);
+}
+
+.activity-table {
+  width: max-content;
+  min-width: 100%;
+  background: var(--color-bg-raised);
+}
+
+.activity-table th,
+.activity-table td {
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.activity-table th:first-child,
+.activity-table td:first-child,
+.activity-table th:nth-child(3),
+.activity-table td:nth-child(3) {
+  min-width: 150px;
+}
+
+.activity-server {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.activity-method-detail {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: var(--font-size-caption);
+}
+
+.activity-load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+  .activity-filter-heading,
+  .activity-section-heading,
+  .activity-filter-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .activity-filter-heading .badge {
+    align-self: flex-start;
+  }
+
+  .activity-filter-dirty {
+    margin-right: 0;
+  }
+
+  .activity-numeric-range-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-range-unit {
+    grid-column: 1 / -1;
+  }
+
+  .activity-filter-actions .btn,
+  .activity-section-heading .btn {
+    width: 100%;
+  }
+}

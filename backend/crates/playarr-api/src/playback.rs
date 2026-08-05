@@ -2199,11 +2199,9 @@ mod tests {
             .app
             .analytics_store
             .list_sessions(&playarr_db::analytics::SessionFilter {
-                user_id: Some(user_id),
-                from: None,
-                to: None,
+                user_ids: vec![user_id],
                 limit: 10,
-                offset: 0,
+                ..Default::default()
             })
             .await
             .unwrap();

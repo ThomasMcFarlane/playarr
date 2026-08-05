@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiClient, ApiError, DEVICE_CODE_GRANT_TYPE, describeApiError } from "./index";
+import {
+  ApiClient,
+  ApiError,
+  DEVICE_CODE_GRANT_TYPE,
+  describeApiError,
+  type ActivityActiveResponse,
+  type ActivityFacetsResponse,
+  type ActivityHistoryRequest,
+  type ActivityHistoryResponse,
+} from "./index";
 
 /** Builds a `fetchImpl` matching openapi-fetch's `(input: Request) => Promise<Response>` contract. */
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
@@ -16,6 +25,207 @@ function jsonResponse(status: number, body: unknown): Response {
 const BASE_URL = "http://localhost:8484";
 
 describe("ApiClient", () => {
+  it("fetches the peer-group active-session envelope with origin metadata", async () => {
+    const responseBody: ActivityActiveResponse = {
+      sessions: [
+        {
+          session_id: "11111111-1111-4111-8111-111111111111",
+          user_id: "22222222-2222-4222-8222-222222222222",
+          device_id: "33333333-3333-4333-8333-333333333333",
+          media_file_id: "44444444-4444-4444-8444-444444444444",
+          work_id: "55555555-5555-4555-8555-555555555555",
+          media_title: "Voyage",
+          user_display_name: "Louise",
+          play_method: "direct_play" as const,
+          target_codec: "hevc",
+          target_container: "mkv",
+          client_platform: "web" as const,
+          client_version: "1.4.2",
+          started_at: "2026-07-29T08:30:00Z",
+          bytes_streamed: 104857600,
+          buffering_events: 0,
+          buffering_ms_total: 0,
+          peer_node_id: "66666666-6666-4666-8666-666666666666",
+          peer_node_name: "Living room server",
+          peer_node_is_self: true,
+          source_instance_id: "77777777-7777-4777-8777-777777777777",
+          source_instance_name: "Radarr",
+          library_id: "88888888-8888-4888-8888-888888888888",
+          library_name: "Films",
+          duration_ms: 90000,
+        },
+      ],
+      unavailable_nodes: [
+        {
+          peer_node_id: "99999999-9999-4999-8999-999999999999",
+          peer_node_name: "Bedroom server",
+          error: "request timed out",
+        },
+      ],
+    };
+    const getAccessToken = vi.fn(async () => "admin-token");
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(request.method).toBe("GET");
+      expect(url.pathname).toBe("/api/v1/admin/playback/activity/active");
+      expect(url.search).toBe("");
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      return jsonResponse(200, responseBody);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken,
+    });
+
+    await expect(client.groupActiveSessions()).resolves.toEqual(responseBody);
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
+  it("fetches complete activity library facets with admin authentication", async () => {
+    const responseBody: ActivityFacetsResponse = {
+      libraries: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          name: "Films",
+        },
+        {
+          id: "99999999-9999-4999-8999-999999999999",
+          name: "Standalone music",
+        },
+      ],
+    };
+    const getAccessToken = vi.fn(async () => "admin-token");
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(request.method).toBe("GET");
+      expect(url.pathname).toBe("/api/v1/admin/playback/activity/facets");
+      expect(url.search).toBe("");
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      return jsonResponse(200, responseBody);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken,
+    });
+
+    await expect(client.getActivityFacets()).resolves.toEqual(responseBody);
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
+  it("serialises every peer-group history filter as the exact POST JSON body", async () => {
+    const requestBody: ActivityHistoryRequest = {
+      user_ids: [
+        "11111111-1111-4111-8111-111111111111",
+        "22222222-2222-4222-8222-222222222222",
+      ],
+      play_methods: ["direct_play", "transcode"],
+      title_terms: ["arrival", "matrix"],
+      library_ids: ["33333333-3333-4333-8333-333333333333"],
+      peer_node_ids: ["44444444-4444-4444-8444-444444444444"],
+      stop_reasons: ["completed", "other", "in_progress"],
+      from: "2026-07-01T00:00:00Z",
+      to: "2026-07-29T23:59:59Z",
+      min_duration_ms: 30000,
+      max_duration_ms: 7200000,
+      min_bytes_streamed: 1048576,
+      max_bytes_streamed: 10737418240,
+      limit: 75,
+      cursor: "opaque-keyset-cursor",
+    };
+    const responseBody: ActivityHistoryResponse = {
+      sessions: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          user_id: "11111111-1111-4111-8111-111111111111",
+          device_id: "66666666-6666-4666-8666-666666666666",
+          media_file_id: "77777777-7777-4777-8777-777777777777",
+          started_at: "2026-07-20T18:42:00Z",
+          ended_at: "2026-07-20T20:19:12Z",
+          play_method: "transcode",
+          source_codec: "hevc",
+          source_container: "mkv",
+          target_codec: "h264",
+          target_container: "mp4",
+          client_platform: "android-tv",
+          client_version: "2.1.0",
+          bytes_streamed: 734003200,
+          buffering_events: 2,
+          buffering_ms_total: 1500,
+          stop_reason: "completed",
+          peer_node_id: "44444444-4444-4444-8444-444444444444",
+          peer_node_name: "Living room server",
+          peer_node_is_self: false,
+          source_instance_id: null,
+          source_instance_name: null,
+          library_id: "33333333-3333-4333-8333-333333333333",
+          library_name: "Films",
+          duration_ms: 5832000,
+        },
+      ],
+      unavailable_nodes: [],
+      has_more: true,
+      next_cursor: "next-opaque-keyset-cursor",
+      snapshot_to: "2026-07-29T23:59:59Z",
+    };
+    const fetchImpl = mockFetch(async (request) => {
+      expect(request.method).toBe("POST");
+      expect(new URL(request.url).pathname).toBe(
+        "/api/v1/admin/playback/activity/history"
+      );
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      expect(request.headers.get("content-type")).toContain("application/json");
+      await expect(request.json()).resolves.toEqual(requestBody);
+      return jsonResponse(200, responseBody);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "admin-token",
+    });
+
+    await expect(
+      client.searchGroupSessionHistory(requestBody)
+    ).resolves.toEqual(responseBody);
+  });
+
+  it("preserves a sparse peer-group history body without injecting defaults", async () => {
+    const requestBody: ActivityHistoryRequest = {
+      title_terms: ["dune"],
+      stop_reasons: ["in_progress"],
+    };
+    const fetchImpl = mockFetch(async (request) => {
+      expect(request.method).toBe("POST");
+      expect(new URL(request.url).pathname).toBe(
+        "/api/v1/admin/playback/activity/history"
+      );
+      await expect(request.json()).resolves.toEqual(requestBody);
+      return jsonResponse(200, {
+        sessions: [],
+        unavailable_nodes: [],
+        has_more: false,
+        next_cursor: null,
+        snapshot_to: "2026-07-29T12:00:00Z",
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "admin-token",
+    });
+
+    await expect(
+      client.searchGroupSessionHistory(requestBody)
+    ).resolves.toEqual({
+      sessions: [],
+      unavailable_nodes: [],
+      has_more: false,
+      next_cursor: null,
+      snapshot_to: "2026-07-29T12:00:00Z",
+    });
+  });
+
   it("browses the catalog and parses a real CatalogPageSchema response", async () => {
     const fetchImpl = mockFetch((request) => {
       const url = new URL(request.url);

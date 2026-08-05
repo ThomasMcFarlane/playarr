@@ -283,6 +283,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/playback/activity/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Group-wide live playback sessions. A peer outage is represented in
+         *     `unavailable_nodes`; it does not discard sessions returned by this node or
+         *     any other reachable peer.
+         */
+        get: operations["playback_activity_active_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playback/activity/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Complete library choices for the Activity filter. Unlike choices derived
+         *     from a history page, these remain available when the current filters return
+         *     no rows and include libraries known through peer synchronisation.
+         */
+        get: operations["playback_activity_facets_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/playback/activity/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Group-wide, filtered playback history. Each node applies storage filters
+         *     first, then scans deterministic batches until it has enough enriched
+         *     title/library/duration matches for correct global pagination.
+         */
+        post: operations["playback_activity_history_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/playback/sessions/active": {
         parameters: {
             query?: never;
@@ -1434,6 +1497,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/peer/playback/activity/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signed peer-local half of [`playback_activity_active_handler`]. It never
+         *     fans out again, preventing request loops.
+         */
+        get: operations["peer_playback_activity_active_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/playback/activity/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signed peer-local half of [`playback_activity_history_handler`]. */
+        post: operations["peer_playback_activity_history_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/peer/routing-rules": {
         parameters: {
             query?: never;
@@ -2037,6 +2137,15 @@ export interface components {
             client_version: string;
             /** Format: uuid */
             device_id: string;
+            /** Format: int64 */
+            duration_ms: number;
+            /**
+             * Format: uuid
+             * @description Group-wide library id when the source is mapped to one; otherwise the
+             *     node-local source-instance id is the effective standalone library id.
+             */
+            library_id?: string | null;
+            library_name?: string | null;
             /** Format: uuid */
             media_file_id: string;
             /**
@@ -2044,9 +2153,16 @@ export interface components {
              *     actual episode, track, or book rather than only its parent work.
              */
             media_title?: string | null;
+            /** Format: uuid */
+            peer_node_id: string;
+            peer_node_is_self: boolean;
+            peer_node_name: string;
             play_method: components["schemas"]["PlayMethod"];
             /** Format: uuid */
             session_id: string;
+            /** Format: uuid */
+            source_instance_id?: string | null;
+            source_instance_name?: string | null;
             /** Format: date-time */
             started_at: string;
             target_codec: string;
@@ -3085,6 +3201,108 @@ export interface components {
         };
         /** @enum {string} */
         PlayMethod: "direct_play" | "direct_stream" | "transcode";
+        PlaybackActivityActiveResponse: {
+            sessions: components["schemas"]["ActiveSessionView"][];
+            unavailable_nodes: components["schemas"]["UnavailableNodeView"][];
+        };
+        /**
+         * @description Filter choices whose completeness must not depend on the current Activity
+         *     result page.
+         */
+        PlaybackActivityFacetsResponse: {
+            libraries: components["schemas"]["PlaybackActivityLibraryFacet"][];
+        };
+        PlaybackActivityHistoryRequest: {
+            /**
+             * @description Opaque continuation returned as `next_cursor` by the previous page.
+             *     Leave unset for the first page.
+             * @default null
+             */
+            cursor: string | null;
+            /**
+             * Format: date-time
+             * @default null
+             */
+            from: string | null;
+            /** @default [] */
+            library_ids: string[];
+            /**
+             * Format: int64
+             * @default 100
+             */
+            limit: number;
+            /**
+             * Format: int64
+             * @default null
+             */
+            max_bytes_streamed: number | null;
+            /**
+             * Format: int64
+             * @default null
+             */
+            max_duration_ms: number | null;
+            /**
+             * Format: int64
+             * @default null
+             */
+            min_bytes_streamed: number | null;
+            /**
+             * Format: int64
+             * @default null
+             */
+            min_duration_ms: number | null;
+            /**
+             * Format: int64
+             * @description Legacy first-page compatibility field. Only zero is accepted; use
+             *     `cursor` for continuation.
+             * @default 0
+             */
+            offset: number;
+            /** @default [] */
+            peer_node_ids: string[];
+            /** @default [] */
+            play_methods: components["schemas"]["PlayMethod"][];
+            /** @default [] */
+            stop_reasons: components["schemas"]["PlaybackActivityStopReason"][];
+            /** @default [] */
+            title_terms: string[];
+            /**
+             * Format: date-time
+             * @default null
+             */
+            to: string | null;
+            /** @default [] */
+            user_ids: string[];
+        };
+        PlaybackActivityHistoryResponse: {
+            has_more: boolean;
+            /**
+             * @description Opaque keyset continuation. Send this with the same filters to request
+             *     the next page. `None` means the result has been exhausted.
+             */
+            next_cursor?: string | null;
+            sessions: components["schemas"]["SessionHistoryView"][];
+            /**
+             * Format: date-time
+             * @description Stable inclusive upper bound applied to every node for this cursor
+             *     sequence. This remains exposed for result labelling and compatibility;
+             *     callers should continue with `next_cursor`, not an offset.
+             */
+            snapshot_to: string;
+            unavailable_nodes: components["schemas"]["UnavailableNodeView"][];
+        };
+        /**
+         * @description One complete effective-library choice for the Activity filter. Grouped
+         *     sources collapse onto their portable group-library id; an ungrouped source
+         *     keeps its own source-instance id so standalone activity remains filterable.
+         */
+        PlaybackActivityLibraryFacet: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /** @enum {string} */
+        PlaybackActivityStopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | "other" | "in_progress";
         PlaybackAudioTrackOption: {
             /** Format: int32 */
             channels?: number | null;
@@ -3732,14 +3950,23 @@ export interface components {
             client_version: string;
             /** Format: uuid */
             device_id: string;
+            /** Format: int64 */
+            duration_ms: number;
             /** Format: date-time */
             ended_at?: string | null;
             /** Format: uuid */
             id: string;
             ip_address?: string | null;
             /** Format: uuid */
+            library_id?: string | null;
+            library_name?: string | null;
+            /** Format: uuid */
             media_file_id: string;
             media_title?: string | null;
+            /** Format: uuid */
+            peer_node_id: string;
+            peer_node_is_self: boolean;
+            peer_node_name: string;
             play_method: components["schemas"]["PlayMethod"];
             /** Format: uuid */
             rendition_id?: string | null;
@@ -3747,6 +3974,9 @@ export interface components {
             source_bitrate?: number | null;
             source_codec: string;
             source_container: string;
+            /** Format: uuid */
+            source_instance_id?: string | null;
+            source_instance_name?: string | null;
             /** Format: date-time */
             started_at: string;
             stop_reason?: null | components["schemas"]["StopReason"];
@@ -4011,6 +4241,17 @@ export interface components {
          */
         TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "audio_codec_not_supported" | "video_bitrate_exceeds_limit" | "resolution_exceeds_limit" | "subtitle_burn_in_required" | "server_policy" | {
             other: string;
+        };
+        /**
+         * @description A peer that could not contribute to a group-wide activity response.
+         *     Failures are row-level metadata rather than whole-request errors so an
+         *     administrator can still inspect every reachable node.
+         */
+        UnavailableNodeView: {
+            error: string;
+            /** Format: uuid */
+            peer_node_id: string;
+            peer_node_name: string;
         };
         UpdateMediaPlaybackPreferencesRequest: {
             audio_track_id?: string | null;
@@ -4887,6 +5128,126 @@ export interface operations {
             };
         };
     };
+    playback_activity_active_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live playback across the peer group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackActivityActiveResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    playback_activity_facets_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete effective library choices for playback activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackActivityFacetsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    playback_activity_history_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackActivityHistoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Filtered playback history across the peer group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackActivityHistoryResponse"];
+                };
+            };
+            /** @description Invalid range or pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Connected-server membership or availability changed during pagination */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_active_sessions_handler: {
         parameters: {
             query?: never;
@@ -4911,10 +5272,18 @@ export interface operations {
                      *         "client_platform": "web",
                      *         "client_version": "1.4.2",
                      *         "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                     *         "duration_ms": 42000,
+                     *         "library_id": "fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31",
+                     *         "library_name": "Movies",
                      *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
                      *         "media_title": "Sample Movie Kilo",
+                     *         "peer_node_id": "f29eaea2-5023-4a46-ae31-d84ea62f46c8",
+                     *         "peer_node_is_self": true,
+                     *         "peer_node_name": "Living Room",
                      *         "play_method": "direct_play",
                      *         "session_id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
+                     *         "source_instance_id": "3d33221e-a4f2-4317-8887-763c13e2474d",
+                     *         "source_instance_name": "Movies",
                      *         "started_at": "2026-07-20T18:42:00Z",
                      *         "target_codec": "h264",
                      *         "target_container": "mp4",
@@ -4973,16 +5342,24 @@ export interface operations {
                      *         "client_platform": "android-tv",
                      *         "client_version": "2.1.0",
                      *         "device_id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                     *         "duration_ms": 5832000,
                      *         "ended_at": "2026-07-20T20:19:12Z",
                      *         "id": "b3f1c2a4-6e8d-4a3b-9c1e-2f5d7a9b0c1d",
                      *         "ip_address": "192.168.1.42",
+                     *         "library_id": "fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31",
+                     *         "library_name": "Movies",
                      *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
                      *         "media_title": "Sample Movie Kilo",
+                     *         "peer_node_id": "f29eaea2-5023-4a46-ae31-d84ea62f46c8",
+                     *         "peer_node_is_self": true,
+                     *         "peer_node_name": "Living Room",
                      *         "play_method": "transcode",
                      *         "rendition_id": "6c9a5e2b-3d4f-4a8c-8e1b-7f2c9d3a5b6e",
                      *         "source_bitrate": 20000000,
                      *         "source_codec": "hevc",
                      *         "source_container": "mkv",
+                     *         "source_instance_id": "3d33221e-a4f2-4317-8887-763c13e2474d",
+                     *         "source_instance_name": "Movies",
                      *         "started_at": "2026-07-20T18:42:00Z",
                      *         "stop_reason": "completed",
                      *         "target_bitrate": 4000000,
@@ -6436,7 +6813,10 @@ export interface operations {
     };
     album_artwork_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                style?: string | null;
+            };
             header?: never;
             path: {
                 /** @description Artist work id */
@@ -6450,7 +6830,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Playarr Server-cached album artwork */
+            /** @description Playarr Server-cached album artwork (optionally style-baked) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6466,7 +6846,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unsupported artwork kind */
+            /** @description Unsupported artwork kind or style */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6494,6 +6874,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Source artwork could not be styled */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description The metadata-provider artwork could not be safely cached */
             502: {
                 headers: {
@@ -6505,7 +6892,10 @@ export interface operations {
     };
     work_artwork_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                style?: string | null;
+            };
             header?: never;
             path: {
                 /** @description Work id */
@@ -6517,7 +6907,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Playarr Server-cached source artwork */
+            /** @description Playarr Server-cached source artwork (optionally style-baked) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6533,7 +6923,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Unsupported artwork kind */
+            /** @description Unsupported artwork kind or style */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6556,6 +6946,13 @@ export interface operations {
             };
             /** @description Unknown work or unavailable artwork kind */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source artwork could not be styled */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8734,6 +9131,71 @@ export interface operations {
             };
             /** @description Unknown media file, or no local leaf resolves the given external ref */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_playback_activity_active_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This peer's live playback sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackActivityActiveResponse"];
+                };
+            };
+            /** @description Missing or invalid peer signature */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_playback_activity_history_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackActivityHistoryRequest"];
+            };
+        };
+        responses: {
+            /** @description This peer's filtered playback history prefix */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackActivityHistoryResponse"];
+                };
+            };
+            /** @description Invalid range or pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid peer signature */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

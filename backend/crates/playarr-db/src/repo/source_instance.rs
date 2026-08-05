@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use playarr_model::{Sensitive, SourceInstance};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{Sensitive, SourceInstance};
 use uuid::Uuid;
 
 use crate::codec::{
@@ -36,6 +36,10 @@ use crate::pool::{Backend, DbPool};
 #[async_trait]
 pub trait SourceInstanceRepo: Send + Sync {
     async fn list_all(&self) -> Result<Vec<SourceInstance>, DbError>;
+
+    /// One active source instance by id. Soft-deleted rows are absent, matching
+    /// [`Self::list_all`].
+    async fn get(&self, id: Uuid) -> Result<Option<SourceInstance>, DbError>;
 
     /// Insert-or-update by `SourceInstance::id`. Always stamps `updated_at`
     /// with the current server time, never a caller-supplied value.
@@ -149,6 +153,30 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
                     WHERE deleted_at IS NULL ORDER BY priority, name";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
         rows.iter().map(Self::from_row).collect()
+    }
+
+    async fn get(&self, id: Uuid) -> Result<Option<SourceInstance>, DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
+                 default_root_folder_id, folder_mappings, default_quality_profile_id, \
+                 best_effort, group_library_id FROM source_instances \
+                 WHERE id = ? AND deleted_at IS NULL"
+            }
+            Backend::Postgres => {
+                "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
+                 default_root_folder_id, folder_mappings, default_quality_profile_id, \
+                 best_effort, group_library_id FROM source_instances \
+                 WHERE id = $1 AND deleted_at IS NULL"
+            }
+        };
+        sqlx::query(sql)
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .as_ref()
+            .map(Self::from_row)
+            .transpose()
     }
 
     // `enabled_for_requests` still exists as a DB column (see
@@ -483,10 +511,12 @@ mod tests {
         let repo = SqlxSourceInstanceRepo::new(pool);
         let instance = sample_instance(SourceKind::Prowlarr, "Prowlarr");
         repo.upsert(&instance).await.unwrap();
+        assert_eq!(repo.get(instance.id).await.unwrap(), Some(instance.clone()));
 
         repo.delete(instance.id).await.unwrap();
         let all = repo.list_all().await.unwrap();
         assert!(all.is_empty());
+        assert_eq!(repo.get(instance.id).await.unwrap(), None);
     }
 
     #[tokio::test]
@@ -556,9 +586,7 @@ mod tests {
             deleted_at: None,
         };
 
-        repo.apply_synced(&instance, metadata.clone())
-            .await
-            .unwrap();
+        repo.apply_synced(&instance, metadata).await.unwrap();
 
         assert_eq!(repo.list_all().await.unwrap(), vec![instance.clone()]);
         assert_eq!(

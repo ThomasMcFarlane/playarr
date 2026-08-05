@@ -14,9 +14,9 @@ use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
+use playarr_model::{ClientPlatform, PlayMethod, PlaybackEvent, PlaybackSession, StopReason};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{ClientPlatform, PlaybackEvent, PlaybackSession, StopReason};
 use uuid::Uuid;
 
 use crate::codec::{
@@ -100,11 +100,47 @@ pub trait AnalyticsStore: Send + Sync {
 /// Filter/pagination parameters for [`AnalyticsStore::list_sessions`].
 #[derive(Debug, Clone, Default)]
 pub struct SessionFilter {
-    pub user_id: Option<Uuid>,
+    pub user_ids: Vec<Uuid>,
+    pub play_methods: Vec<PlayMethod>,
+    pub stop_reasons: Vec<SessionStopReasonFilter>,
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
+    pub min_bytes_streamed: Option<i64>,
+    pub max_bytes_streamed: Option<i64>,
     pub limit: i64,
     pub offset: i64,
+}
+
+/// Storage-level stop-reason facets for [`SessionFilter`]. The two synthetic
+/// variants represent groups of durable values rather than one
+/// [`StopReason`]: `InProgress` is a `NULL` stop reason, while `Other`
+/// matches every `other:<label>` value written by `stop_reason_to_str`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionStopReasonFilter {
+    Completed,
+    UserStopped,
+    Error,
+    DeviceDisconnected,
+    SessionRevoked,
+    ConcurrentLimitExceeded,
+    IdleTimeout,
+    Other,
+    InProgress,
+}
+
+impl SessionStopReasonFilter {
+    fn stored_value(self) -> Option<&'static str> {
+        match self {
+            Self::Completed => Some("completed"),
+            Self::UserStopped => Some("user_stopped"),
+            Self::Error => Some("error"),
+            Self::DeviceDisconnected => Some("device_disconnected"),
+            Self::SessionRevoked => Some("session_revoked"),
+            Self::ConcurrentLimitExceeded => Some("concurrent_limit_exceeded"),
+            Self::IdleTimeout => Some("idle_timeout"),
+            Self::Other | Self::InProgress => None,
+        }
+    }
 }
 
 pub struct SqlxAnalyticsStore {
@@ -186,6 +222,17 @@ impl SqlxAnalyticsStore {
             Backend::Sqlite => "?".to_string(),
             Backend::Postgres => format!("${index}"),
         }
+    }
+
+    fn placeholders(&self, count: usize, next_index: &mut usize) -> String {
+        (0..count)
+            .map(|_| {
+                let placeholder = self.placeholder(*next_index);
+                *next_index += 1;
+                placeholder
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -530,9 +577,32 @@ impl AnalyticsStore for SqlxAnalyticsStore {
         let mut conditions: Vec<String> = Vec::new();
         let mut next_index = 1;
 
-        if filter.user_id.is_some() {
-            conditions.push(format!("user_id = {}", self.placeholder(next_index)));
-            next_index += 1;
+        if !filter.user_ids.is_empty() {
+            let placeholders = self.placeholders(filter.user_ids.len(), &mut next_index);
+            conditions.push(format!("user_id IN ({placeholders})"));
+        }
+        if !filter.play_methods.is_empty() {
+            let placeholders = self.placeholders(filter.play_methods.len(), &mut next_index);
+            conditions.push(format!("play_method IN ({placeholders})"));
+        }
+        if !filter.stop_reasons.is_empty() {
+            let mut stop_conditions = Vec::with_capacity(filter.stop_reasons.len());
+            for reason in &filter.stop_reasons {
+                match reason {
+                    SessionStopReasonFilter::Other => {
+                        stop_conditions.push("stop_reason LIKE 'other:%'".to_string());
+                    }
+                    SessionStopReasonFilter::InProgress => {
+                        stop_conditions.push("stop_reason IS NULL".to_string());
+                    }
+                    _ => {
+                        stop_conditions
+                            .push(format!("stop_reason = {}", self.placeholder(next_index)));
+                        next_index += 1;
+                    }
+                }
+            }
+            conditions.push(format!("({})", stop_conditions.join(" OR ")));
         }
         if filter.from.is_some() {
             conditions.push(format!("started_at >= {}", self.placeholder(next_index)));
@@ -540,6 +610,20 @@ impl AnalyticsStore for SqlxAnalyticsStore {
         }
         if filter.to.is_some() {
             conditions.push(format!("started_at <= {}", self.placeholder(next_index)));
+            next_index += 1;
+        }
+        if filter.min_bytes_streamed.is_some() {
+            conditions.push(format!(
+                "bytes_streamed >= {}",
+                self.placeholder(next_index)
+            ));
+            next_index += 1;
+        }
+        if filter.max_bytes_streamed.is_some() {
+            conditions.push(format!(
+                "bytes_streamed <= {}",
+                self.placeholder(next_index)
+            ));
             next_index += 1;
         }
 
@@ -554,19 +638,34 @@ impl AnalyticsStore for SqlxAnalyticsStore {
 
         let sql = format!(
             "SELECT {} FROM playback_sessions {where_clause} \
-             ORDER BY started_at DESC LIMIT {limit_placeholder} OFFSET {offset_placeholder}",
+             ORDER BY started_at DESC, id ASC \
+             LIMIT {limit_placeholder} OFFSET {offset_placeholder}",
             Self::SESSION_COLUMNS,
         );
 
         let mut query = sqlx::query(&sql);
-        if let Some(user_id) = filter.user_id {
+        for user_id in &filter.user_ids {
             query = query.bind(user_id.to_string());
+        }
+        for play_method in &filter.play_methods {
+            query = query.bind(play_method_to_str(*play_method));
+        }
+        for stop_reason in &filter.stop_reasons {
+            if let Some(stored_value) = stop_reason.stored_value() {
+                query = query.bind(stored_value);
+            }
         }
         if let Some(from) = filter.from {
             query = query.bind(format_datetime(from));
         }
         if let Some(to) = filter.to {
             query = query.bind(format_datetime(to));
+        }
+        if let Some(min_bytes_streamed) = filter.min_bytes_streamed {
+            query = query.bind(min_bytes_streamed);
+        }
+        if let Some(max_bytes_streamed) = filter.max_bytes_streamed {
+            query = query.bind(max_bytes_streamed);
         }
         query = query.bind(filter.limit).bind(filter.offset);
 
@@ -827,11 +926,10 @@ mod tests {
         }
 
         let filter = SessionFilter {
-            user_id: Some(user_a),
-            from: None,
-            to: None,
+            user_ids: vec![user_a],
             limit: 10,
             offset: 0,
+            ..Default::default()
         };
         let results = store.list_sessions(&filter).await.unwrap();
         assert_eq!(results.len(), 2);
@@ -845,11 +943,10 @@ mod tests {
 
         let date_filtered = store
             .list_sessions(&SessionFilter {
-                user_id: None,
                 from: Some(now - chrono::Duration::minutes(90)),
-                to: None,
                 limit: 10,
                 offset: 0,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -858,15 +955,126 @@ mod tests {
 
         let limited = store
             .list_sessions(&SessionFilter {
-                user_id: None,
-                from: None,
-                to: None,
                 limit: 1,
                 offset: 0,
+                ..Default::default()
             })
             .await
             .unwrap();
         assert_eq!(limited.len(), 1);
         assert_eq!(limited[0].id, other_user.id);
+    }
+
+    #[tokio::test]
+    async fn list_sessions_combines_multi_value_facets_and_numeric_bounds() {
+        let pool = test_sqlite_pool().await;
+        let store = SqlxAnalyticsStore::new(pool);
+        let now = Utc::now();
+        let user_a = Uuid::new_v4();
+        let user_b = Uuid::new_v4();
+        let user_c = Uuid::new_v4();
+
+        let mut completed = sample_session(ClientPlatform::Web);
+        completed.user_id = user_a;
+        completed.started_at = now - chrono::Duration::minutes(3);
+        completed.ended_at = Some(now - chrono::Duration::minutes(2));
+        completed.bytes_streamed = 100;
+        completed.stop_reason = Some(StopReason::Completed);
+
+        let mut other = sample_session(ClientPlatform::Web);
+        other.user_id = user_b;
+        other.started_at = now - chrono::Duration::minutes(2);
+        other.ended_at = Some(now - chrono::Duration::minutes(1));
+        other.play_method = PlayMethod::Transcode;
+        other.bytes_streamed = 1_000;
+        other.stop_reason = Some(StopReason::Other("admin_stopped".to_string()));
+
+        let mut in_progress = sample_session(ClientPlatform::Web);
+        in_progress.user_id = user_c;
+        in_progress.started_at = now - chrono::Duration::minutes(1);
+        in_progress.play_method = PlayMethod::DirectStream;
+        in_progress.bytes_streamed = 500;
+
+        for session in [&completed, &other, &in_progress] {
+            store.record_session_start(session).await.unwrap();
+        }
+
+        let results = store
+            .list_sessions(&SessionFilter {
+                user_ids: vec![user_a, user_b],
+                play_methods: vec![PlayMethod::DirectPlay, PlayMethod::Transcode],
+                stop_reasons: vec![
+                    SessionStopReasonFilter::Completed,
+                    SessionStopReasonFilter::Other,
+                ],
+                // Inclusive on both sides: the matching row sits exactly on
+                // the shared minimum/maximum boundary.
+                min_bytes_streamed: Some(1_000),
+                max_bytes_streamed: Some(1_000),
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            results.iter().map(|session| session.id).collect::<Vec<_>>(),
+            vec![other.id]
+        );
+
+        let in_progress_results = store
+            .list_sessions(&SessionFilter {
+                stop_reasons: vec![SessionStopReasonFilter::InProgress],
+                limit: 10,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            in_progress_results
+                .iter()
+                .map(|session| session.id)
+                .collect::<Vec<_>>(),
+            vec![in_progress.id]
+        );
+    }
+
+    #[tokio::test]
+    async fn list_sessions_uses_id_as_a_stable_timestamp_tie_breaker() {
+        let pool = test_sqlite_pool().await;
+        let store = SqlxAnalyticsStore::new(pool);
+        let started_at = Utc::now();
+        let lower_id = Uuid::parse_str("00000000-0000-4000-8000-000000000001").unwrap();
+        let higher_id = Uuid::parse_str("00000000-0000-4000-8000-000000000002").unwrap();
+
+        let mut higher = sample_session(ClientPlatform::Web);
+        higher.id = higher_id;
+        higher.started_at = started_at;
+        let mut lower = sample_session(ClientPlatform::Web);
+        lower.id = lower_id;
+        lower.started_at = started_at;
+
+        // Insert in the opposite order to the expected result so row/insertion
+        // order cannot accidentally satisfy the assertion.
+        store.record_session_start(&higher).await.unwrap();
+        store.record_session_start(&lower).await.unwrap();
+
+        let first_page = store
+            .list_sessions(&SessionFilter {
+                limit: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let second_page = store
+            .list_sessions(&SessionFilter {
+                limit: 1,
+                offset: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(first_page[0].id, lower_id);
+        assert_eq!(second_page[0].id, higher_id);
     }
 }

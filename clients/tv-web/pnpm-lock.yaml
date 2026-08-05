@@ -96,6 +96,9 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 5.4.21(@types/node@24.13.3)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)
 
   apps/cast-receiver:
     dependencies:

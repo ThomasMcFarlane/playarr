@@ -660,8 +660,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Make Admin Activity peer-group-wide, with trusted connected-server attribution,
   partial-availability warnings, and searchable multi-select, date-time, session-length,
-  stop-reason, and bytes-streamed filters; replace group-history offsets with stable opaque
-  cursors that restart safely when peer membership or availability changes.
+  stop-reason, and bytes-streamed filters persisted in the URL; replace group-history offsets
+  with stable opaque cursors that restart safely when peer membership or availability changes.
 - Route VIDAA TV linking through the same hosted QR/link-code broker and first-contact flow used by Android TV.
 - Fix VIDAA custom-store installation on firmware that reports an absent custom-app list as a failed read.
 - Show Playarr's shared logo and language selector on the Android profile stage across phone and
