@@ -71,7 +71,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   expiring 30 days after the original login.
 
 - Restore the SQLite folder-media migration used by production deployments so
-  newly built binaries can restart databases already upgraded to version 42.
+  newly built binaries can restart databases already upgraded to version 42;
+  Cargo now rebuilds the embedded migration set whenever migration files
+  change.
 
 - Fresh Web builds accept custom numeric QR SVG sizes instead of narrowing the
   shared 240px default to a literal type.
