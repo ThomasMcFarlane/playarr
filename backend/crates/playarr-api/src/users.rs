@@ -98,6 +98,10 @@ pub struct CreateUserInvite {
     pub can_stream: bool,
     #[serde(default)]
     pub library_allow: Vec<Uuid>,
+    /// Exact expiry chosen by the administrator. Omitting it preserves the
+    /// existing 24-hour lifetime.
+    #[serde(default)]
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 /// Optional context supplied by the Playarr user requesting an invitation.
@@ -656,22 +660,25 @@ pub async fn create_user_handler(
     ))
 }
 
-/// Issues a 24-hour, one-use bearer invitation. The administrator console
-/// combines this token with its externally visible server origin when it
-/// builds the `playarr.app/signup` QR link.
+/// Issues a one-use bearer invitation. It lasts 24 hours unless the
+/// administrator supplies a future `expires_at`. The administrator console
+/// combines the token with its externally visible server origin when it builds
+/// the `playarr.app/signup` QR link.
 #[utoipa::path(
     post,
     path = "/api/v1/admin/user-invites",
     tag = "users",
     request_body(content = CreateUserInvite, example = json!({
         "can_stream": true,
-        "library_allow": ["11111111-1111-4111-8111-111111111111"]
+        "library_allow": ["11111111-1111-4111-8111-111111111111"],
+        "expires_at": "2026-07-28T12:00:00Z"
     })),
     responses(
         (status = 200, description = "Account invitation issued", body = UserInviteResponse, example = json!({
             "invite_token": "5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e",
             "expires_at": "2026-07-21T12:00:00Z"
         })),
+        (status = 400, description = "Expiry is not in the future"),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller is authenticated but not an admin")
     )
@@ -683,7 +690,12 @@ pub async fn create_user_invite_handler(
 ) -> Result<Json<UserInviteResponse>, ApiError> {
     let invite_token = playarr_auth::secret::opaque_token();
     let now = Utc::now();
-    let expires_at = now + USER_INVITE_TTL;
+    let expires_at = body.expires_at.unwrap_or(now + USER_INVITE_TTL);
+    if expires_at <= now {
+        return Err(ApiError::bad_request(
+            "invitation expiry must be in the future",
+        ));
+    }
     // Same admin-selected grant set that populates `library_allow`, mapped
     // through any granted `SourceInstance`'s `group_library_id` -- see
     // `docs/architecture/peer-groups.md` §2.5/§6.2.
@@ -1936,6 +1948,71 @@ apiVersion = "1"
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert!(json["expires_at"].is_string());
         json["invite_token"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn admin_invite_accepts_an_exact_future_expiry() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+        let expires_at = Utc::now() + Duration::days(7);
+        let body = serde_json::json!({
+            "can_stream": true,
+            "library_allow": [],
+            "expires_at": expires_at,
+        });
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/user-invites")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&admin_token))
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            DateTime::parse_from_rfc3339(json["expires_at"].as_str().unwrap()).unwrap(),
+            expires_at
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_invite_rejects_an_expiry_that_is_not_in_the_future() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+        let body = serde_json::json!({
+            "can_stream": true,
+            "library_allow": [],
+            "expires_at": Utc::now() - Duration::minutes(1),
+        });
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/user-invites")
+                    .header("content-type", "application/json")
+                    .header("Authorization", bearer_header(&admin_token))
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

@@ -1124,9 +1124,10 @@ paths:
       tags:
       - users
       summary: |-
-        Issues a 24-hour, one-use bearer invitation. The administrator console
-        combines this token with its externally visible server origin when it
-        builds the `playarr.app/signup` QR link.
+        Issues a one-use bearer invitation. It lasts 24 hours unless the
+        administrator supplies a future `expires_at`. The administrator console
+        combines the token with its externally visible server origin when it builds
+        the `playarr.app/signup` QR link.
       operationId: create_user_invite_handler
       requestBody:
         content:
@@ -1135,6 +1136,7 @@ paths:
               $ref: '#/components/schemas/CreateUserInvite'
             example:
               can_stream: true
+              expires_at: 2026-07-28T12:00:00Z
               library_allow:
               - 11111111-1111-4111-8111-111111111111
         required: true
@@ -1148,6 +1150,8 @@ paths:
               example:
                 expires_at: 2026-07-21T12:00:00Z
                 invite_token: 5f8a1c2e9b3d4f6a8c1e2b3d4f6a8c1e
+        '400':
+          description: Expiry is not in the future
         '401':
           description: Missing or invalid access token
         '403':
@@ -5374,6 +5378,14 @@ components:
       properties:
         can_stream:
           type: boolean
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: |-
+            Exact expiry chosen by the administrator. Omitting it preserves the
+            existing 24-hour lifetime.
         library_allow:
           type: array
           items:

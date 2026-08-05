@@ -518,6 +518,7 @@ describe("ApiClient", () => {
       await expect(request.json()).resolves.toEqual({
         can_stream: true,
         library_allow: ["11111111-1111-4111-8111-111111111111"],
+        expires_at: "2026-07-25T12:00:00Z",
       });
       return jsonResponse(200, {
         invite_token: "one-use-token",
@@ -529,6 +530,7 @@ describe("ApiClient", () => {
     const invite = await client.createUserInvite({
       can_stream: true,
       library_allow: ["11111111-1111-4111-8111-111111111111"],
+      expires_at: "2026-07-25T12:00:00Z",
     });
 
     expect(invite.invite_token).toBe("one-use-token");

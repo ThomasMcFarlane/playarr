@@ -938,7 +938,7 @@ export class ApiClient {
     return this.unwrap(await this.raw.POST("/api/v1/admin/users", { body }));
   }
 
-  /** Issues a 24-hour, one-use invitation for the Playarr sign-up flow. */
+  /** Issues a one-use invitation with the administrator-selected expiry. */
   async createUserInvite(body: CreateUserInvite): Promise<UserInviteResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/admin/user-invites", { body }));
   }

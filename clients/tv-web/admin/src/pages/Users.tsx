@@ -35,6 +35,24 @@ type InviteSetup = {
   request: UserInviteRequestResponse | null;
 };
 
+const DEFAULT_INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+/** Formats a real instant for a `datetime-local` input in the operator's timezone. */
+function toLocalDateTimeInput(date: Date): string {
+  const localTime = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localTime.toISOString().slice(0, 16);
+}
+
+function defaultInviteExpiry(): string {
+  return toLocalDateTimeInput(new Date(Date.now() + DEFAULT_INVITE_LIFETIME_MS));
+}
+
+/** Converts the timezone-less control value into the UTC instant sent to the API. */
+function inviteExpiryToUtc(localValue: string): string | null {
+  const date = new Date(localValue);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 /**
  * The source applications that can actually contribute playable works to
  * each top-level catalog Type. Bazarr/Prowlarr are intentionally absent:
@@ -311,6 +329,7 @@ export function UsersPage() {
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
   const [inviteSetup, setInviteSetup] = useState<InviteSetup | null>(null);
   const [inviteCanStream, setInviteCanStream] = useState(true);
+  const [inviteExpiry, setInviteExpiry] = useState(defaultInviteExpiry);
   const [inviteLibrarySelection, setInviteLibrarySelection] = useState<Set<string>>(new Set());
   const [inviteSetupError, setInviteSetupError] = useState<string | null>(null);
 
@@ -370,6 +389,7 @@ export function UsersPage() {
 
   function openInviteSetup(request: UserInviteRequestResponse | null) {
     setInviteCanStream(true);
+    setInviteExpiry(defaultInviteExpiry());
     setInviteLibrarySelection(new Set(request?.library_allow ?? []));
     setInviteSetupError(null);
     setInviteSetup({ request });
@@ -424,6 +444,12 @@ export function UsersPage() {
       return;
     }
 
+    const expiresAt = inviteExpiryToUtc(inviteExpiry);
+    if (!expiresAt || new Date(expiresAt).getTime() <= Date.now()) {
+      setInviteSetupError("Choose an invitation expiry in the future.");
+      return;
+    }
+
     setCreatingInvite(true);
     setInviteSetupError(null);
     setInviteCopied(false);
@@ -432,6 +458,7 @@ export function UsersPage() {
         client.createUserInvite({
           can_stream: inviteCanStream,
           library_allow: libraryAllow,
+          expires_at: expiresAt,
         }),
         resolveAdminInviteAddressBundle(),
       ]);
@@ -970,6 +997,23 @@ export function UsersPage() {
             />
             Playarr access
           </label>
+          {!inviteSetup.request ? (
+            <div className="modal-field">
+              <label className="form-label" htmlFor="user-invite-expiry">
+                Expires
+              </label>
+              <input
+                id="user-invite-expiry"
+                type="datetime-local"
+                className="input"
+                value={inviteExpiry}
+                min={toLocalDateTimeInput(new Date())}
+                onChange={(event) => setInviteExpiry(event.target.value)}
+                required
+              />
+              <span className="muted hint">Shown in your local timezone. Defaults to 24 hours.</span>
+            </div>
+          ) : null}
           {inviteSetupError ? (
             <p className="error-text hint" style={{ margin: 0 }}>{inviteSetupError}</p>
           ) : null}

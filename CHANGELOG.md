@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Playarr Admin can set an exact custom expiry when creating a one-use user
+  invitation; omitted API values retain the existing 24-hour default and
+  past expiry values are rejected.
+
 - The server maintenance CLI can reset a persisted administrator password from
   standard input without exposing the password in process arguments or storing
   anything except its Argon2id hash.

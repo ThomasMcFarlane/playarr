@@ -576,9 +576,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Issues a 24-hour, one-use bearer invitation. The administrator console
-         *     combines this token with its externally visible server origin when it
-         *     builds the `playarr.app/signup` QR link.
+         * Issues a one-use bearer invitation. It lasts 24 hours unless the
+         *     administrator supplies a future `expires_at`. The administrator console
+         *     combines the token with its externally visible server origin when it builds
+         *     the `playarr.app/signup` QR link.
          */
         post: operations["create_user_invite_handler"];
         delete?: never;
@@ -2253,6 +2254,12 @@ export interface components {
         /** @description Access attached to a direct administrator-issued invitation. */
         CreateUserInvite: {
             can_stream?: boolean;
+            /**
+             * Format: date-time
+             * @description Exact expiry chosen by the administrator. Omitting it preserves the
+             *     existing 24-hour lifetime.
+             */
+            expires_at?: string | null;
             library_allow?: string[];
         };
         /** @description Optional context supplied by the Playarr user requesting an invitation. */
@@ -5799,6 +5806,7 @@ export interface operations {
                 /**
                  * @example {
                  *       "can_stream": true,
+                 *       "expires_at": "2026-07-28T12:00:00Z",
                  *       "library_allow": [
                  *         "11111111-1111-4111-8111-111111111111"
                  *       ]
@@ -5822,6 +5830,13 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["UserInviteResponse"];
                 };
+            };
+            /** @description Expiry is not in the future */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Missing or invalid access token */
             401: {
