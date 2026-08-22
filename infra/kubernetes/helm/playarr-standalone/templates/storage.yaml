@@ -1,0 +1,44 @@
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+{{- if not .Values.persistence.local.create }}
+{{- fail "persistence.local.create must be true when persistence is enabled without an existingClaim" }}
+{{- end }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "playarr-standalone.localVolumeName" . }}
+  labels:
+    {{- include "playarr-standalone.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.local.size }}
+  volumeMode: Filesystem
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.persistence.local.storageClassName }}
+  local:
+    path: {{ required "persistence.local.path is required" .Values.persistence.local.path }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ required "persistence.local.nodeHostname is required" .Values.persistence.local.nodeHostname }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "playarr-standalone.claimName" . }}
+  labels:
+    {{- include "playarr-standalone.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  storageClassName: {{ .Values.persistence.local.storageClassName }}
+  volumeName: {{ include "playarr-standalone.localVolumeName" . }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.local.size }}
+{{- end }}

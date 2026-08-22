@@ -1,0 +1,16 @@
+{{- if .Values.route.enabled }}
+apiVersion: getambassador.io/v3alpha1
+kind: Mapping
+metadata:
+  name: {{ include "playarr-standalone.fullname" . }}
+  labels:
+    {{- include "playarr-standalone.labels" . | nindent 4 }}
+spec:
+  hostname: {{ required "route.hostname is required" .Values.route.hostname }}
+  prefix: /
+  service: {{ include "playarr-standalone.fullname" . }}:{{ .Values.service.port }}
+  allow_upgrade:
+    - websocket
+  timeout_ms: 0
+  idle_timeout_ms: 3600000
+{{- end }}

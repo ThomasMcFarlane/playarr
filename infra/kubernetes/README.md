@@ -1,13 +1,16 @@
 # infra/kubernetes
 
-Two independent ways to deploy Playarr Server to Kubernetes. Pick one per
+Three independent ways to deploy Playarr Server to Kubernetes. Pick one per
 cluster/environment - they are not meant to be layered on top of each
 other.
 
-1. **`helm/playarr/`** - a real Helm chart. This is the more complete,
+1. **`helm/playarr-standalone/`** - one `PLAYARR_ROLE=all` Pod for adopting an
+   existing SQLite instance in place. It supports a retained local volume,
+   fixed-node scheduling and optional Emissary routing without moving data.
+2. **`helm/playarr/`** - a real Helm chart. This is the more complete,
    more opinionated path (autoscaling, PDB, optional Prometheus
-   ServiceMonitor) and is the recommended default.
-2. **`base/` + `overlays/{dev,staging,prod}/`** - a plain kustomize
+   ServiceMonitor) and is the recommended default for new multi-node installs.
+3. **`base/` + `overlays/{dev,staging,prod}/`** - a plain kustomize
    skeleton, for teams that don't want a Helm release object in-cluster or
    that already standardise on kustomize elsewhere. Deliberately kept
    minimal (no HPA/PDB/ServiceMonitor yet) - see "kustomize skeleton" below
@@ -19,7 +22,7 @@ Emissary route needed for an experimental VIDAA launcher installation on a
 cluster that already runs the permanent LAN resolver. It is inert by default;
 see its [operator guide](./helm/vidaa-installer/README.md).
 
-Both paths deploy the same two workloads:
+The multi-node Helm and Kustomize paths deploy the same two workloads:
 
 - **`playarr-api`** - a Deployment running the `playarr` binary with
   `PLAYARR_ROLE=api`, fronted by a ClusterIP Service.
