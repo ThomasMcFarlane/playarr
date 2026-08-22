@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A single-node Helm chart can adopt an existing SQLite Playarr instance with
+  retained local storage, fixed-node scheduling and optional private Emissary
+  routing without copying or deleting source data.
+
 - Playarr Admin can set an exact custom expiry when creating a one-use user
   invitation; omitted API values retain the existing 24-hour default and
   past expiry values are rejected.

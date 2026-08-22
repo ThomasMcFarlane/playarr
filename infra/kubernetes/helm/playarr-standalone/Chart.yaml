@@ -1,0 +1,9 @@
+apiVersion: v2
+name: playarr-standalone
+description: Single-node Playarr deployment for adopting an existing SQLite instance
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/ThomasMcFarlane/playarr
+sources:
+  - https://github.com/ThomasMcFarlane/playarr
