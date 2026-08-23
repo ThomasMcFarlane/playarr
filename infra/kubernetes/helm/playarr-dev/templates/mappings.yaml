@@ -1,0 +1,24 @@
+{{- range $name, $workload := .Values.workloads }}
+{{- range $route := $workload.routes }}
+---
+apiVersion: getambassador.io/v2
+kind: Mapping
+metadata:
+  name: {{ $route.name }}
+  labels:
+    {{- include "playarr-dev.labels" $ | nindent 4 }}
+spec:
+  ambassador_id:
+    - --apiVersion-v3alpha1-only--default
+  host: {{ $route.host | quote }}
+  {{- with $route.hostRewrite }}
+  host_rewrite: {{ . | quote }}
+  {{- end }}
+  prefix: /
+  service: {{ printf "%s.%s:80" $name $.Release.Namespace | quote }}
+  {{- if $route.websocket }}
+  allow_upgrade:
+    - websocket
+  {{- end }}
+{{- end }}
+{{- end }}

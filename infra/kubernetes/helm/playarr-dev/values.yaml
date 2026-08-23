@@ -1,0 +1,94 @@
+# The defaults reproduce the four Playarr workloads currently running in the
+# dev-host dev namespace. All Kubernetes references are release-namespace relative.
+workloads:
+  playarr:
+    image: localhost:5000/playarr:ac6fcf2
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    command:
+      - node
+      - node_modules/vite/bin/vite.js
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    env:
+      - name: HOME
+        value: /tmp
+    workingDir: /repo/clients/tv-web/web
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+    hostPathVolumes:
+      - name: repo
+        path: /tmp/streamarr-unsorted-folders
+        type: Directory
+        mounts:
+          - mountPath: /repo
+    routes:
+      - name: playarr
+        host: playarr.localhost
+        websocket: true
+      - name: playarr-lan
+        host: playarr.dev.home.arpa
+        hostRewrite: playarr.localhost
+        websocket: true
+
+  playarr-admin:
+    image: localhost:5000/tv-web-admin:dev
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    routes:
+      - name: playarr-admin
+        host: playarr-admin.localhost
+      - name: playarr-admin-lan
+        host: playarr-admin.dev.home.arpa
+        hostRewrite: playarr-admin.localhost
+      - name: playarr-admin-public
+        host: playarr-admin.example.com
+        hostRewrite: playarr-admin.localhost
+
+  playarr-marketing:
+    image: localhost:5000/playarr-marketing:551e3b8
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    hostPathVolumes:
+      - name: site-src
+        path: /path/to/streamarr/site/src
+        type: Directory
+        mounts:
+          - mountPath: /app/src
+            readOnly: true
+      - name: site-public
+        path: /path/to/streamarr/site/public
+        type: Directory
+        mounts:
+          - mountPath: /app/public
+            readOnly: true
+    routes:
+      - name: playarr-marketing
+        host: playarr-marketing.localhost
+      - name: playarr-marketing-lan
+        host: playarr-marketing.dev.home.arpa
+        hostRewrite: playarr-marketing.localhost
+      - name: playarr-marketing-public
+        host: playarr-marketing.example.com
+        hostRewrite: playarr-marketing.localhost
+
+  playarr-nav-perf:
+    image: localhost:5000/playarr-nav-perf:609c39f
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    env:
+      - name: PLAYARR_DEV_API_PROXY
+        value: http://192.0.2.58:8484
+    routes:
+      - name: playarr-nav-perf
+        host: playarr-nav-perf.localhost
+      - name: playarr-nav-perf-lan
+        host: playarr-nav-perf.dev.home.arpa
+        hostRewrite: playarr-nav-perf.localhost

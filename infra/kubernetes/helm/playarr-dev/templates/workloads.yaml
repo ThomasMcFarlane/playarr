@@ -1,0 +1,88 @@
+{{- range $name, $workload := .Values.workloads }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+    {{- include "playarr-dev.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ $workload.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+        app.kubernetes.io/part-of: playarr
+    spec:
+      {{- with $workload.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: app
+          image: {{ $workload.image | quote }}
+          imagePullPolicy: {{ $workload.imagePullPolicy }}
+          {{- with $workload.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $workload.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $workload.workingDir }}
+          workingDir: {{ . | quote }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $workload.containerPort }}
+              protocol: TCP
+          resources: {}
+          {{- if $workload.hostPathVolumes }}
+          volumeMounts:
+            {{- range $volume := $workload.hostPathVolumes }}
+            {{- range $mount := $volume.mounts }}
+            - name: {{ $volume.name }}
+              mountPath: {{ $mount.mountPath | quote }}
+              {{- with $mount.readOnly }}
+              readOnly: {{ . }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+      {{- if $workload.hostPathVolumes }}
+      volumes:
+        {{- range $volume := $workload.hostPathVolumes }}
+        - name: {{ $volume.name }}
+          hostPath:
+            path: {{ $volume.path | quote }}
+            type: {{ $volume.type }}
+        {{- end }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+    {{- include "playarr-dev.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ $name }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: {{ $workload.containerPort }}
+      protocol: TCP
+{{- end }}
