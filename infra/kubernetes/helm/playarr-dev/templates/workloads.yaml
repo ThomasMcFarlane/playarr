@@ -23,6 +23,8 @@ spec:
         app: {{ $name }}
         app.kubernetes.io/part-of: playarr
     spec:
+      nodeSelector:
+        {{- toYaml $.Values.workloadNodeSelector | nindent 8 }}
       {{- with $workload.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}

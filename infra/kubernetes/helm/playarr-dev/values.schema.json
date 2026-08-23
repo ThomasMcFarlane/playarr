@@ -2,8 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["workloads", "regionalInstances"],
+  "required": ["workloadNodeSelector", "workloads", "regionalInstances"],
   "properties": {
+    "workloadNodeSelector": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string"}
+    },
     "workloads": {
       "type": "object",
       "minProperties": 1,

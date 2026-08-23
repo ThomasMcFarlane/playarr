@@ -14,6 +14,9 @@ helm upgrade --install playarr-dev ./infra/kubernetes/helm/playarr-dev \
 The chart contains no Secrets. Public and LAN DNS are external prerequisites;
 this chart manages only the matching Emissary routes.
 
+The four dev-host development workloads are pinned to `dev-node`. Their
+`localhost:5000` images and local hostPaths are not portable to region-a or region-b.
+
 Before enabling either regional Deployment, create its external runtime Secret
 in the release namespace:
 

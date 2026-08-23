@@ -14,6 +14,7 @@ test "$(grep -c '^kind: Mapping$' "$rendered")" -eq 12
 test "$(grep -c '^kind: PersistentVolumeClaim$' "$rendered")" -eq 2
 test "$(grep -c '^kind: ServiceAccount$' "$rendered")" -eq 2
 test "$(grep -c '^kind: Secret$' "$rendered")" -eq 0
+test "$(grep -c '^        kubernetes.io/hostname: dev-node$' "$rendered")" -eq 4
 grep -q 'service: "playarr.playarr:80"' "$rendered"
 grep -q 'service: "playarr-region-a.playarr:80"' "$rendered"
 grep -q 'service: "playarr-region-b.playarr:80"' "$rendered"

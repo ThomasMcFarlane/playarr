@@ -1,5 +1,8 @@
 # The defaults reproduce the four Playarr workloads currently running in the
 # dev-host dev namespace. All Kubernetes references are release-namespace relative.
+workloadNodeSelector:
+  kubernetes.io/hostname: dev-node
+
 workloads:
   playarr:
     image: localhost:5000/playarr:ac6fcf2
