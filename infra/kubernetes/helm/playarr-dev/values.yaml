@@ -92,3 +92,53 @@ workloads:
       - name: playarr-nav-perf-lan
         host: playarr-nav-perf.dev.home.arpa
         hostRewrite: playarr-nav-perf.localhost
+
+# Regional standalone servers currently deployed in separate namespaces. The
+# target release places both in one namespace while preserving their distinct
+# node-local state, runtime trees, security identities and public routes.
+regionalInstances:
+  playarr-region-a:
+    image: streamarr-runtime:26853ca
+    imagePullPolicy: Never
+    replicas: 1
+    nodeName: region-a
+    secretName: playarr-region-a-runtime
+    podSecurityContext:
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    persistence:
+      create: true
+      claimName: playarr-region-a
+      volumeName: playarr-region-a-data
+      storageClassName: playarr-region-a-local
+      size: 10Gi
+    mediaPath: /srv/media
+    runtimePath: /opt/streamarr-release-26853ca
+    routeHost: playarr-a.example.com
+
+  playarr-region-b:
+    image: streamarr-runtime:26853ca
+    imagePullPolicy: Never
+    replicas: 1
+    nodeName: region-b
+    secretName: playarr-region-b-runtime
+    podSecurityContext:
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    persistence:
+      create: true
+      claimName: playarr-region-b
+      volumeName: playarr-region-b-data
+      storageClassName: playarr-region-b-local
+      size: 10Gi
+    mediaPath: /srv/media
+    runtimePath: /opt/streamarr-release-26853ca
+    routeHost: playarr.example.com

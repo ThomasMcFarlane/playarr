@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their Services and ten Emissary routes, preserving existing images, mounts
   and routing without committing runtime secrets.
 
+- The Playarr development chart can consolidate the region-a and region-b standalone
+  servers into one namespace while retaining their node-local PVs and keeping
+  distinct runtime Secrets outside Git.
+
 - The VIDAA installer chart can manage its upstream TLSContext and public
   Playarr Mapping alongside DNS and installer routing in one namespace.
 

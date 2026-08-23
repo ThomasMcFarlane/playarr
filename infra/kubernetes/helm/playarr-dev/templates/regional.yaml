@@ -1,0 +1,178 @@
+{{- range $name, $instance := .Values.regionalInstances }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+automountServiceAccountToken: false
+{{- if $instance.persistence.create }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $instance.persistence.claimName }}
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $instance.persistence.size }}
+  storageClassName: {{ $instance.persistence.storageClassName }}
+  volumeMode: Filesystem
+  volumeName: {{ $instance.persistence.volumeName }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+spec:
+  replicas: {{ $instance.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: playarr-standalone
+      app.kubernetes.io/instance: {{ $name }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: playarr-standalone
+        app.kubernetes.io/instance: {{ $name }}
+    spec:
+      automountServiceAccountToken: false
+      serviceAccountName: {{ $name }}
+      terminationGracePeriodSeconds: 60
+      nodeSelector:
+        kubernetes.io/hostname: {{ $instance.nodeName }}
+      securityContext:
+        {{- toYaml $instance.podSecurityContext | nindent 8 }}
+      containers:
+        - name: playarr
+          image: {{ $instance.image | quote }}
+          imagePullPolicy: {{ $instance.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          env:
+            - name: PLAYARR_HTTP_BIND_ADDR
+              value: 0.0.0.0:8484
+            - name: PLAYARR_LOG
+              value: info
+            - name: PLAYARR_METRICS_BIND_ADDR
+              value: 0.0.0.0:9090
+            - name: PLAYARR_ROLE
+              value: all
+          envFrom:
+            - secretRef:
+                name: {{ $instance.secretName }}
+          ports:
+            - name: http
+              containerPort: 8484
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: state
+              mountPath: /data
+            - name: media
+              mountPath: /srv/media
+              readOnly: true
+            - name: runtime
+              mountPath: /opt/streamarr
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ $instance.persistence.claimName }}
+        - name: media
+          hostPath:
+            path: {{ $instance.mediaPath }}
+            type: Directory
+        - name: runtime
+          hostPath:
+            path: {{ $instance.runtimePath }}
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: playarr-standalone
+    app.kubernetes.io/instance: {{ $name }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: getambassador.io/v2
+kind: Mapping
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+spec:
+  ambassador_id:
+    - --apiVersion-v3alpha1-only--default
+  host: {{ $instance.routeHost | quote }}
+  prefix: /
+  service: {{ printf "%s.%s:80" $name $.Release.Namespace | quote }}
+  allow_upgrade:
+    - websocket
+  idle_timeout_ms: 3600000
+  timeout_ms: 0
+{{- end }}
