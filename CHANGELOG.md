@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A dedicated VIDAA verification Helm chart deploys the backend, PostgreSQL
+  and cluster-internal Services without storing runtime credentials or adding
+  a Headscale/Tailscale dependency.
+
 - A single-node Helm chart can adopt an existing SQLite Playarr instance with
   retained local storage, fixed-node scheduling and optional private Emissary
   routing without copying or deleting source data.

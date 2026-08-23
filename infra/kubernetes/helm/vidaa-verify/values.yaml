@@ -1,0 +1,45 @@
+nameOverride: ""
+fullnameOverride: ""
+
+existingSecret: vidaa-verify-runtime
+
+backend:
+  replicas: 1
+  image:
+    repository: ghcr.io/thomasmcfarlane/playarr-backend
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  config:
+    STREAMARR_ROLE: all
+    STREAMARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+    STREAMARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+    STREAMARR_LOG: info
+  secretEnv:
+    - DATABASE_URL
+    - STREAMARR_JWT_SECRET
+    - STREAMARR_BOOTSTRAP_ADMIN_USERNAME
+    - STREAMARR_BOOTSTRAP_ADMIN_PASSWORD
+  service:
+    type: ClusterIP
+    httpPort: 8484
+    metricsPort: 9090
+  resources: {}
+
+postgres:
+  replicas: 1
+  image:
+    repository: postgres
+    tag: 16-alpine
+    pullPolicy: IfNotPresent
+  secretEnv:
+    - POSTGRES_DB
+    - POSTGRES_USER
+    - POSTGRES_PASSWORD
+  service:
+    type: ClusterIP
+    port: 5432
+  resources: {}
+
+nodeSelector: {}
+affinity: {}
+tolerations: []

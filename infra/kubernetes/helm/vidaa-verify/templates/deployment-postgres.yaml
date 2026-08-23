@@ -1,0 +1,53 @@
+{{- $selector := dict "component" "postgres" "Release" .Release "Chart" .Chart "Values" .Values -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vidaa-verify.fullname" . }}-postgres
+  labels:
+    {{- include "vidaa-verify.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  replicas: {{ .Values.postgres.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vidaa-verify.selectorLabels" $selector | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vidaa-verify.selectorLabels" $selector | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: {{ printf "%s:%s" .Values.postgres.image.repository .Values.postgres.image.tag | quote }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          env:
+            {{- range .Values.postgres.secretEnv }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required" $.Values.existingSecret }}
+                  key: {{ . }}
+            {{- end }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

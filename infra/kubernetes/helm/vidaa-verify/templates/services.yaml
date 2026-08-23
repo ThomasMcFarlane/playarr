@@ -1,0 +1,36 @@
+{{- $backendSelector := dict "component" "backend" "Release" .Release "Chart" .Chart "Values" .Values -}}
+{{- $postgresSelector := dict "component" "postgres" "Release" .Release "Chart" .Chart "Values" .Values -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vidaa-verify.fullname" . }}-backend
+  labels:
+    {{- include "vidaa-verify.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: {{ .Values.backend.service.type }}
+  selector:
+    {{- include "vidaa-verify.selectorLabels" $backendSelector | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.backend.service.httpPort }}
+      targetPort: http
+    - name: metrics
+      port: {{ .Values.backend.service.metricsPort }}
+      targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vidaa-verify.fullname" . }}-postgres
+  labels:
+    {{- include "vidaa-verify.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: {{ .Values.postgres.service.type }}
+  selector:
+    {{- include "vidaa-verify.selectorLabels" $postgresSelector | nindent 4 }}
+  ports:
+    - name: postgres
+      port: {{ .Values.postgres.service.port }}
+      targetPort: postgres
