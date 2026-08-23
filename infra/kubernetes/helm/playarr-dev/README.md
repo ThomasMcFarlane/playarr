@@ -1,9 +1,9 @@
 # Playarr development Helm chart
 
-This chart captures the four development web surfaces previously maintained as
+This chart captures the six development web surfaces previously maintained as
 ad-hoc resources in the `dev` namespace and the standalone servers previously
-split between `playarr-region-a` and `playarr-region-b`. It creates six Deployments, six
-ClusterIP Services, twelve Emissary `Mapping` resources, two ServiceAccounts
+split between `playarr-region-a` and `playarr-region-b`. It creates eight Deployments, eight
+ClusterIP Services, sixteen Emissary `Mapping` resources, two ServiceAccounts
 and two pre-bound PVCs in the Helm release namespace.
 
 ```sh
@@ -14,7 +14,7 @@ helm upgrade --install playarr-dev ./infra/kubernetes/helm/playarr-dev \
 The chart contains no Secrets. Public and LAN DNS are external prerequisites;
 this chart manages only the matching Emissary routes.
 
-The four dev-host development workloads are pinned to `dev-node`. Their
+The six dev-host development workloads are pinned to `dev-node`. Their
 `localhost:5000` images and local hostPaths are not portable to region-a or region-b.
 
 Before enabling either regional Deployment, create its external runtime Secret

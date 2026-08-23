@@ -96,6 +96,39 @@ workloads:
         host: playarr-nav-perf.dev.home.arpa
         hostRewrite: playarr-nav-perf.localhost
 
+  tv-web:
+    image: localhost:5000/tv-web:b385a61
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    routes:
+      - name: tv-web
+        host: tv-web.localhost
+      - name: tv-web-lan
+        host: tv-web.dev.home.arpa
+        hostRewrite: tv-web.localhost
+      - name: tv-web-public
+        host: tv-web.example.com
+        hostRewrite: tv-web.localhost
+
+  tv-web-webos:
+    image: localhost:5000/tv-web:b385a61
+    imagePullPolicy: Always
+    replicas: 1
+    containerPort: 8080
+    command:
+      - pnpm
+      - exec
+      - vite
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    workingDir: /build/apps/tv-webos
+    routes:
+      - name: tv-web-webos
+        host: webos.tv-web.localhost
+
 # Regional standalone servers currently deployed in separate namespaces. The
 # target release places both in one namespace while preserving their distinct
 # node-local state, runtime trees, security identities and public routes.
