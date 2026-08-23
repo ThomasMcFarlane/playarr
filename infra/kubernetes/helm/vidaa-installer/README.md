@@ -2,8 +2,8 @@
 
 This chart supplies every app-owned VIDAA resource: an opt-in `vidaahub.com`
 DNS fragment, Emissary TLS routing to Playarr's hosted fixed-purpose installer,
-the upstream TLSContext and the optional public Playarr Mapping that consumes
-it. It does not deploy a DNS server or a second copy of the portal.
+and the upstream TLSContext used by that route. It does not deploy a DNS server,
+a second copy of the portal, or any general Playarr public route.
 
 Both features are disabled by default. DNS interception should be enabled only
 for the installation window and then returned to `disabled`.
@@ -48,18 +48,16 @@ ingress:
 upstream:
   enabled: true
   tlsSecretName: vidaa-portal-tls
-  publicRoute:
-    enabled: true
-    hostname: playarr.example.com
 ```
 
 The generated wildcard `Host` supplies the certificate to SNI and legacy
 no-SNI clients, but its label selector associates it only with this chart's
 exact `vidaahub.com` `Mapping`. Requests are forwarded to
 `https://playarr.app/vidaa-store/`; suffixes are preserved and the upstream
-Host is rewritten to `playarr.app`. The optional public Mapping uses the same
-upstream TLSContext and remains an ordinary Emissary route; neither resource
-requires Headscale or Tailscale.
+Host is rewritten to `playarr.app`. The installer Mapping uses the upstream
+TLSContext. Neither resource requires Headscale or Tailscale. The
+`playarr.example.com` Mapping belongs to the Playarr chart and must not be added
+to this release.
 
 Prefer a one-device allowlist during installation:
 

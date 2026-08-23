@@ -2,7 +2,7 @@ apiVersion: v2
 name: vidaa-installer
 description: Opt-in VIDAA launcher DNS interception and Emissary routing for Playarr
 type: application
-version: 0.2.0
+version: 0.3.0
 
 keywords:
   - playarr

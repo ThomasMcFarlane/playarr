@@ -70,6 +70,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The VIDAA installer chart no longer owns the `playarr.example.com` public
+  Mapping; that Playarr route now belongs exclusively to the Playarr chart.
+
 - Ignore generated Python bytecode, Wrangler runtime state, and repository-root
   scratch artefacts so local validation does not leave false source changes.
 

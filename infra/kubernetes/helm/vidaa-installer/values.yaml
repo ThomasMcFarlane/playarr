@@ -32,9 +32,3 @@ upstream:
   tlsContextName: vidaa-upstream
   tlsSecretName: ""
   hostname: playarr.app
-  publicRoute:
-    # -- Render the existing playarr.example.com Emissary Mapping alongside
-    # the VIDAA resources that own its upstream TLSContext.
-    enabled: false
-    name: playarr-public
-    hostname: playarr.example.invalid

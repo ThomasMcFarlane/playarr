@@ -10,21 +10,4 @@ spec:
     - {{ .Values.upstream.hostname | quote }}
   secret: {{ .Values.upstream.tlsSecretName }}
   sni: {{ .Values.upstream.hostname | quote }}
-{{- if .Values.upstream.publicRoute.enabled }}
----
-apiVersion: getambassador.io/v3alpha1
-kind: Mapping
-metadata:
-  name: {{ .Values.upstream.publicRoute.name }}
-  labels:
-    {{- include "vidaa-installer.labels" . | nindent 4 }}
-spec:
-  allow_upgrade:
-    - websocket
-  hostname: {{ .Values.upstream.publicRoute.hostname | quote }}
-  host_rewrite: {{ .Values.upstream.hostname | quote }}
-  prefix: /
-  service: {{ printf "https://%s:443" .Values.upstream.hostname | quote }}
-  tls: {{ .Values.upstream.tlsContextName }}
-{{- end }}
 {{- end }}

@@ -77,8 +77,7 @@
         "enabled",
         "tlsContextName",
         "tlsSecretName",
-        "hostname",
-        "publicRoute"
+        "hostname"
       ],
       "properties": {
         "enabled": {
@@ -98,31 +97,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 253
-        },
-        "publicRoute": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "enabled",
-            "name",
-            "hostname"
-          ],
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 253,
-              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
-            },
-            "hostname": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 253
-            }
-          }
         }
       }
     }
