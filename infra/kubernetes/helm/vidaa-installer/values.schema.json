@@ -69,11 +69,68 @@
           "maxLength": 253
         }
       }
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "tlsContextName",
+        "tlsSecretName",
+        "hostname",
+        "publicRoute"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "tlsContextName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "tlsSecretName": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "publicRoute": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "name",
+            "hostname"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "hostname": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            }
+          }
+        }
+      }
     }
   },
   "required": [
     "dns",
-    "ingress"
+    "ingress",
+    "upstream"
   ],
   "allOf": [
     {
@@ -91,6 +148,31 @@
       "then": {
         "properties": {
           "ingress": {
+            "properties": {
+              "tlsSecretName": {
+                "minLength": 1,
+                "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "upstream": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "upstream": {
             "properties": {
               "tlsSecretName": {
                 "minLength": 1,

@@ -26,6 +26,7 @@ disabled="$(helm template vidaa-installer "$chart_dir")"
 assert_not_contains "$disabled" 'lan-dns.example.com/enabled'
 assert_not_contains "$disabled" 'kind: Host'
 assert_not_contains "$disabled" 'kind: Mapping'
+assert_not_contains "$disabled" 'kind: TLSContext'
 
 empty_allowlist="$(helm template vidaa-installer "$chart_dir" \
   --set dns.mode=allowlist \
@@ -61,6 +62,26 @@ assert_contains "$ingress" 'rewrite: /vidaa-store/'
 assert_contains "$ingress" 'service: https://playarr.app:443'
 assert_contains "$ingress" 'host_rewrite: playarr.app'
 
+upstream="$(helm template vidaa-installer "$chart_dir" \
+  --set ingress.enabled=true \
+  --set ingress.tlsSecretName=vidaa-portal-tls \
+  --set upstream.enabled=true \
+  --set upstream.tlsSecretName=vidaa-portal-tls \
+  --set upstream.publicRoute.enabled=true \
+  --set upstream.publicRoute.hostname=playarr.example.com)"
+assert_contains "$upstream" 'kind: TLSContext'
+assert_contains "$upstream" 'name: vidaa-upstream'
+assert_contains "$upstream" 'secret: vidaa-portal-tls'
+assert_contains "$upstream" 'sni: "playarr.app"'
+assert_contains "$upstream" 'name: playarr-public'
+assert_contains "$upstream" 'hostname: "playarr.example.com"'
+assert_contains "$upstream" 'tls: vidaa-upstream'
+assert_contains "$upstream" 'allow_upgrade:'
+
+if grep -Eqi 'headscale|tailscale' <<<"$upstream"; then
+  fail 'render unexpectedly contains a Headscale or Tailscale dependency'
+fi
+
 if helm template vidaa-installer "$chart_dir" --set dns.mode=invalid >/dev/null 2>&1; then
   fail 'invalid DNS mode passed schema validation'
 fi
@@ -74,6 +95,10 @@ fi
 
 if helm template vidaa-installer "$chart_dir" --set ingress.enabled=true >/dev/null 2>&1; then
   fail 'enabled ingress without a TLS Secret name passed schema validation'
+fi
+
+if helm template vidaa-installer "$chart_dir" --set upstream.enabled=true >/dev/null 2>&1; then
+  fail 'enabled upstream TLS without a Secret name passed schema validation'
 fi
 
 printf 'VIDAA installer chart render checks passed\n'

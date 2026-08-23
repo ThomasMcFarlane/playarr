@@ -29,4 +29,7 @@ spec:
   rewrite: /vidaa-store/
   service: https://playarr.app:443
   host_rewrite: playarr.app
+  {{- if .Values.upstream.enabled }}
+  tls: {{ .Values.upstream.tlsContextName }}
+  {{- end }}
 {{- end }}

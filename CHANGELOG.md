@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The VIDAA installer chart can manage its upstream TLSContext and public
+  Playarr Mapping alongside DNS and installer routing in one namespace.
+
 - A dedicated VIDAA verification Helm chart deploys the backend, PostgreSQL
   and cluster-internal Services without storing runtime credentials or adding
   a Headscale/Tailscale dependency.

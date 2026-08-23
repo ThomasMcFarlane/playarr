@@ -24,3 +24,17 @@ ingress:
   # -- Name of a kubernetes.io/tls Secret in the release namespace containing
   # the certificate and private key accepted by the target television.
   tlsSecretName: ""
+
+upstream:
+  # -- Render the TLSContext used for HTTPS requests to the hosted Playarr
+  # service. The referenced Secret is provisioned out-of-band.
+  enabled: false
+  tlsContextName: vidaa-upstream
+  tlsSecretName: ""
+  hostname: playarr.app
+  publicRoute:
+    # -- Render the existing playarr.example.com Emissary Mapping alongside
+    # the VIDAA resources that own its upstream TLSContext.
+    enabled: false
+    name: playarr-public
+    hostname: playarr.example.invalid
