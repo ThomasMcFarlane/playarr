@@ -1,0 +1,149 @@
+name: Publish Android to Google Play internal testing
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver without the android-v prefix (e.g. 0.2.14)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-android-play-${{ github.ref }}-${{ github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build, sign and publish private Play bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release-android
+    defaults:
+      run:
+        working-directory: clients/android
+    env:
+      PLAYARR_APPLICATION_ID: app.playarr.mobile
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install Google Play publisher
+        run: gem install fastlane --version 2.238.0 --no-document
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#android-v}"
+          fi
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Expected a tag such as android-v1.2.3" >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( minor > 999 || patch > 999 )); then
+            echo "Minor and patch versions must be below 1000" >&2
+            exit 1
+          fi
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
+          echo "keystore_path=${{ runner.temp }}/playarr-android-release.jks" >> "$GITHUB_OUTPUT"
+          echo "publisher_path=${{ runner.temp }}/google-play-publisher.json" >> "$GITHUB_OUTPUT"
+
+      - name: Restore release signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
+        run: |
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "Android release-signing secrets are not configured" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          chmod 600 "$ANDROID_KEYSTORE_PATH"
+
+      - name: Restore Google Play publisher credential
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_PLAY_JSON_KEY: ${{ steps.version.outputs.publisher_path }}
+        run: |
+          if [[ -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" ]]; then
+            echo "Google Play publisher credential is not configured" >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" > "$GOOGLE_PLAY_JSON_KEY"
+          chmod 600 "$GOOGLE_PLAY_JSON_KEY"
+          jq -e '.type == "service_account" and (.client_email | length > 0) and (.private_key | length > 0)' "$GOOGLE_PLAY_JSON_KEY" >/dev/null
+
+      - name: Test and build signed app bundle
+        env:
+          PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
+          PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
+        run: >-
+          ./gradlew
+          :app:testDebugUnitTest
+          :app:bundleRelease
+
+      - name: Verify and package app bundle
+        shell: bash
+        env:
+          EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          app_bundle="$(find app/build/outputs/bundle/release -name '*.aab' -type f -print -quit)"
+          if [[ -z "$app_bundle" ]]; then
+            echo "Signed release app bundle output is missing" >&2
+            exit 1
+          fi
+          jarsigner -verify "$app_bundle"
+          actual_fingerprint="$(keytool -printcert -jarfile "$app_bundle" | awk -F': ' '/SHA256:/{gsub(":", "", $2); print tolower($2); exit}')"
+          expected_fingerprint="$(printf '%s' "$EXPECTED_ANDROID_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$expected_fingerprint" || "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "App bundle signing certificate does not match ANDROID_SIGNING_CERT_SHA256" >&2
+            exit 1
+          fi
+          mkdir -p release
+          cp "$app_bundle" release/playarr-android-play.aab
+          sha256sum release/playarr-android-play.aab > release/SHA256SUMS-play
+
+      - name: Upload workflow artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playarr-android-play-${{ steps.version.outputs.name }}
+          path: |
+            clients/android/release/playarr-android-play.aab
+            clients/android/release/SHA256SUMS-play
+          if-no-files-found: error
+
+      - name: Publish private internal test and store listing
+        env:
+          GOOGLE_PLAY_JSON_KEY: ${{ steps.version.outputs.publisher_path }}
+          PLAYARR_AAB: release/playarr-android-play.aab
+          PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: fastlane android internal

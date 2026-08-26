@@ -1,0 +1,20 @@
+default_platform(:android)
+
+platform :android do
+  desc "Publish the signed bundle and listing to private internal testing"
+  lane :internal do
+    upload_to_play_store(
+      json_key: ENV.fetch("GOOGLE_PLAY_JSON_KEY"),
+      package_name: ENV.fetch("PLAYARR_APPLICATION_ID"),
+      aab: ENV.fetch("PLAYARR_AAB"),
+      track: "internal",
+      release_status: "completed",
+      release_name: "Playarr #{ENV.fetch('PLAYARR_VERSION_NAME')}",
+      metadata_path: "fastlane/metadata/android",
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+      sync_image_upload: true,
+    )
+  end
+end

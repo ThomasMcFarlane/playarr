@@ -1,0 +1,13 @@
+Playarr is the native Android companion for the self-hosted Playarr Server.
+
+Browse films, series, music and books from the library you already run. Move from phone to tablet to Android TV or Google TV with one adaptive app, then play through Android's native Media3 pipeline.
+
+Playarr includes:
+• Native Compose interfaces for touchscreens and televisions
+• Direct and HLS playback through Media3
+• Search, libraries, title details, playlists and watch progress
+• Multiple profiles and server-controlled accounts
+• Remote-friendly television sign-in with a short code
+• Support for private LAN and HTTPS Playarr Server installations
+
+This app does not provide media. It connects to a Playarr Server that you operate and displays the catalogue and media already available there. A configured server and account are required.

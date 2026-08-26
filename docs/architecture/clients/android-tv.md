@@ -1,7 +1,9 @@
 # Client architecture: universal Android app on TV
 
 Android TV and Google TV run the same Playarr package and APK as phones
-and tablets: `clients/android/`, package `io.playarr.mobile`.
+and tablets: `clients/android/`, canonical Play package
+`app.playarr.mobile`. The legacy playarr.app sideload remains
+`io.playarr.mobile` during the package migration so installed APKs can update.
 
 **Product bar:** full native Compose + Media3 for the entire television
 experience, with behavioural parity to Playarr Web. See

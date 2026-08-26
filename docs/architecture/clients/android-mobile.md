@@ -1,7 +1,9 @@
 # Client architecture: universal Android app
 
-Playarr ships one APK for phones, tablets, Android TV, and Google TV.
-There is one package (`io.playarr.mobile`), one public download, and a single
+Playarr ships one application for phones, tablets, Android TV, and Google TV.
+Its canonical Google Play package is `app.playarr.mobile`; the playarr.app
+sideload channel temporarily retains `io.playarr.mobile` so existing APK
+installations remain updateable. Both builds share one source tree and a single
 product bar: native Compose + Media3 with full parity to Playarr Web (see
 [`../client-principles.md`](../client-principles.md) and
 [`android-web-parity.md`](android-web-parity.md)).

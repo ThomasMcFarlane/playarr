@@ -4,8 +4,10 @@ Applies to `clients/android/` (phones, tablets, **Android TV / Google TV**).
 
 ## Fully native. No WebView product path.
 
-- **Android TV is Jetpack Compose + Media3 only.** Same package as mobile
-  (`io.playarr.mobile`), adaptive UI via `isTelevision`.
+- **Android TV is Jetpack Compose + Media3 only.** Same application as mobile,
+  with the canonical Play ID `app.playarr.mobile` and adaptive UI via
+  `isTelevision`. The legacy sideload channel temporarily retains
+  `io.playarr.mobile` solely so installed APKs remain updateable.
 - **Never** mount a WebView / Chromium shell of Playarr Web for the signed-in
   television experience, pixel parity, AE=0 freezes, or "temporary" product
   shortcuts.

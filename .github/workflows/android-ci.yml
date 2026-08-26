@@ -31,6 +31,9 @@ jobs:
     # parsing the workflow (`Unrecognized named-value: 'runner'`), which
     # prevented tag-triggered publish runs from starting.
     env:
+      # Preserve the package identity of existing playarr.app sideloads while
+      # Google Play uses the canonical app.playarr.mobile application ID.
+      PLAYARR_APPLICATION_ID: io.playarr.mobile
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

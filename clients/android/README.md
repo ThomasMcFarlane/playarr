@@ -39,7 +39,10 @@ normally with push registration disabled.
 
 ## Responsive application contract
 
-- The package is `io.playarr.mobile` on every Android device.
+- The canonical Google Play package is `app.playarr.mobile` on every Android
+  device. The playarr.app sideload channel temporarily retains the legacy
+  `io.playarr.mobile` ID so existing APK installations remain updateable; the
+  two IDs install side by side during this migration.
 - The manifest exposes both normal and Leanback launcher categories.
 - Runtime UI-mode detection selects `android-mobile` or `android-tv` request
   headers without changing the package or APK.
@@ -67,6 +70,11 @@ Release tags use `android-v<semver>`. The release build requires the four
 checksum and update manifest at:
 
 - `https://playarr.app/downloads/android/playarr-android.apk`
+
+The same tag also builds an AAB with the canonical `app.playarr.mobile` ID and
+publishes it privately to Google Play's internal-testing track. A manual
+workflow dispatch can publish a semver without creating a tag. Fastlane keeps
+the English store listing and branded Play assets in `fastlane/metadata/android`.
 
 The `release-android` GitHub environment must also define the non-secret
 `ANDROID_SIGNING_CERT_SHA256` variable with the release certificate's SHA-256 fingerprint. The

@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A private Google Play internal-testing pipeline now builds and verifies the
+  canonical `app.playarr.mobile` AAB, publishes release tags automatically,
+  and keeps the Play listing, icon, feature graphic, and TV artwork in source
+  control. Existing `io.playarr.mobile` sideloads retain compatible updates.
+
 - A repository task board now tracks the pending private Google Play Android
   release and GitHub Actions publishing setup.
 

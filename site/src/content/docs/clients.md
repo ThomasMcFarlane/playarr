@@ -44,7 +44,7 @@ There is no download, no packaging step and no review gate: a new build is live 
 
 ## Android, Available
 
-One project, one package, one artefact. The same APK installs on phones, tablets, Android TV and Google TV; the manifest exposes both the normal and `LEANBACK_LAUNCHER` categories, and the app picks touch or remote navigation at runtime. The package is `io.playarr.mobile` on every device, and the minimum is **Android 8.0 (API 26)**.
+One project and one adaptive application. The same build installs on phones, tablets, Android TV and Google TV; the manifest exposes both the normal and `LEANBACK_LAUNCHER` categories, and the app picks touch or remote navigation at runtime. Google Play uses the canonical `app.playarr.mobile` package. The published APK temporarily retains `io.playarr.mobile` so existing sideloaded installations remain updateable; both IDs can coexist during the migration. The minimum is **Android 8.0 (API 26)**.
 
 ### Install the published APK
 
