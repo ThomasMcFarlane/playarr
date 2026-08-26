@@ -63,15 +63,22 @@ on a private LAN. Public deployments should use HTTPS.
 ## Publishing
 
 Release tags use `android-v<semver>`. The release build requires the four
-`ANDROID_KEYSTORE_*` environment variables and publishes one signed APK plus a
-checksum and update manifest at:
+`ANDROID_KEYSTORE_*` environment variables. It publishes the signed Android App
+Bundle privately to Google Play's internal testing track, then publishes the
+existing signed APK, checksum, and update manifest at:
 
 - `https://playarr.app/downloads/android/playarr-android.apk`
 
 The `release-android` GitHub environment must also define the non-secret
 `ANDROID_SIGNING_CERT_SHA256` variable with the release certificate's SHA-256 fingerprint. The
 publisher rejects missing, mismatched, multi-signer, or Android debug certificates and validates
-the APK package and version against the release tag before uploading anything.
+the APK package, bundle certificate, and version against the release tag before uploading anything.
+
+The same environment must define the `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` secret.
+The service account is limited to `io.playarr.mobile` and the **View app
+information (read-only)** and **Release apps to testing tracks** permissions.
+See [`docs/deployment/android-google-play.md`](../../docs/deployment/android-google-play.md)
+for the one-time Play Console bootstrap and tester setup.
 
 The first production signing certificate is permanent: later APKs signed with a different
 certificate cannot update existing installations.
