@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A repository task board now tracks the pending private Google Play Android
+  release and GitHub Actions publishing setup.
+
 - A namespace-safe Helm chart for the four dev-host Playarr development surfaces,
   their Services and ten Emissary routes, preserving existing images, mounts
   and routing without committing runtime secrets.
