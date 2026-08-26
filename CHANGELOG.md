@@ -81,6 +81,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android APK and private Google Play publishing now use the repository-scoped
+  `playarr-runners` pool on the self-hosted ARC cluster and install the pinned
+  Android SDK packages on each ephemeral runner.
+
 - The VIDAA installer chart no longer owns the `playarr.example.com` public
   Mapping; that Playarr route now belongs exclusively to the Playarr chart.
 

@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build-and-publish:
     name: Build, sign and publish private Play bundle
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     timeout-minutes: 45
     environment: release-android
     defaults:
@@ -39,6 +39,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37 build-tools;36.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
 
