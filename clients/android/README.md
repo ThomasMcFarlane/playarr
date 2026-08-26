@@ -75,6 +75,12 @@ The same tag also builds an AAB with the canonical `app.playarr.mobile` ID and
 publishes it privately to Google Play's internal-testing track. A manual
 workflow dispatch can publish a semver without creating a tag. Fastlane keeps
 the English store listing and branded Play assets in `fastlane/metadata/android`.
+The Play channel has its own upload certificate and uses Play App Signing;
+the legacy sideload certificate and update chain remain untouched.
+The `release-android` environment stores that upload identity as
+`ANDROID_PLAY_KEYSTORE_BASE64`, `ANDROID_PLAY_KEYSTORE_PASSWORD`,
+`ANDROID_PLAY_KEY_ALIAS`, and `ANDROID_PLAY_KEY_PASSWORD`, with its public
+fingerprint in `ANDROID_PLAY_SIGNING_CERT_SHA256`.
 
 The `release-android` GitHub environment must also define the non-secret
 `ANDROID_SIGNING_CERT_SHA256` variable with the release certificate's SHA-256 fingerprint. The

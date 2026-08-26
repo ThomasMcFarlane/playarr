@@ -29,9 +29,9 @@ jobs:
         working-directory: clients/android
     env:
       PLAYARR_APPLICATION_ID: app.playarr.mobile
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PLAY_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_PLAY_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_PLAY_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +77,7 @@ jobs:
       - name: Restore release signing key
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_PLAY_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
@@ -114,7 +114,7 @@ jobs:
       - name: Verify and package app bundle
         shell: bash
         env:
-          EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+          EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_PLAY_SIGNING_CERT_SHA256 }}
         run: |
           app_bundle="$(find app/build/outputs/bundle/release -name '*.aab' -type f -print -quit)"
           if [[ -z "$app_bundle" ]]; then

@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A dedicated Google Play upload certificate keeps Play App Signing separate
+  from the existing sideload APK certificate and update chain.
+
 - A private Google Play internal-testing pipeline now builds and verifies the
   canonical `app.playarr.mobile` AAB, publishes release tags automatically,
   and keeps the Play listing, icon, feature graphic, and TV artwork in source

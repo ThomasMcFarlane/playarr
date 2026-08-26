@@ -9,7 +9,7 @@ is the current-work board. Newest and most active work goes first.
 
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
-| 1 | Publish the native Android app privately through Google Play with automatic GitHub Actions delivery | in progress — CI and listing ready; first internal release pending | codex-20260827-google-play | Google Play uses `app.playarr.mobile` while the existing sideload channel temporarily retains `io.playarr.mobile` for compatible updates. The app-scoped publisher credential is stored in the `release-android` GitHub environment. CI builds and verifies a signed AAB, uploads the branded listing, and publishes manual releases plus every later `android-v*` tag to Internal testing. Remaining proof: complete the first API upload, obtain the opt-in URL, and verify installation/update on phone and Android TV/Google TV. |
+| 1 | Publish the native Android app privately through Google Play with automatic GitHub Actions delivery | in progress — `0.2.14` published; tester install pending | codex-20260827-google-play | Google Play uses `app.playarr.mobile` while the existing sideload channel temporarily retains `io.playarr.mobile` for compatible updates. Internal release versionCode `2014`, the Play listing, and every required phone/TV asset are committed. The app-scoped publisher credential and dedicated Play upload identity are stored in the `release-android` GitHub environment; CI publishes manual releases and every later `android-v*` tag. Remaining owner actions: clear the GitHub Actions billing/spending-limit block, select or create the internal tester email list in Play Console, then verify the opt-in install/update on phone and Android TV/Google TV. |
 
 ## Conventions
 
