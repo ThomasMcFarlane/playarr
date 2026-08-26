@@ -1,0 +1,166 @@
+import { createSign } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+
+const packageName = process.env.PLAYARR_APPLICATION_ID;
+const credentialPath = process.env.GOOGLE_PLAY_JSON_KEY;
+const bundlePath = process.env.PLAYARR_AAB;
+const versionName = process.env.PLAYARR_VERSION_NAME;
+const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/android/en-US';
+const locale = 'en-US';
+
+if (!packageName || !credentialPath || !bundlePath || !versionName) {
+  throw new Error(
+    'PLAYARR_APPLICATION_ID, GOOGLE_PLAY_JSON_KEY, PLAYARR_AAB, and PLAYARR_VERSION_NAME are required',
+  );
+}
+
+const credential = JSON.parse(await readFile(credentialPath, 'utf8'));
+if (credential.type !== 'service_account' || !credential.client_email || !credential.private_key) {
+  throw new Error('GOOGLE_PLAY_JSON_KEY must contain a Google service-account credential');
+}
+
+const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+const now = Math.floor(Date.now() / 1000);
+const unsignedAssertion = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
+  iss: credential.client_email,
+  scope: 'https://www.googleapis.com/auth/androidpublisher',
+  aud: 'https://oauth2.googleapis.com/token',
+  iat: now,
+  exp: now + 3600,
+})}`;
+const signer = createSign('RSA-SHA256');
+signer.update(unsignedAssertion);
+signer.end();
+const assertion = `${unsignedAssertion}.${signer.sign(credential.private_key).toString('base64url')}`;
+
+const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  method: 'POST',
+  headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion,
+  }),
+});
+const tokenBody = await tokenResponse.json();
+if (!tokenResponse.ok || !tokenBody.access_token) {
+  throw new Error(`Google OAuth token exchange failed (${tokenResponse.status})`);
+}
+
+async function request(url, options = {}) {
+  let response;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          authorization: `Bearer ${tokenBody.access_token}`,
+          ...options.headers,
+        },
+      });
+      break;
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+    }
+  }
+
+  const text = await response.text();
+  let body;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { message: text.slice(0, 500) };
+    }
+  }
+  if (!response.ok) {
+    const message = body?.error?.message ?? body?.message ?? 'request failed';
+    throw new Error(`${options.method ?? 'GET'} ${url} failed (${response.status}): ${message}`);
+  }
+  return body;
+}
+
+const apiRoot = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}`;
+const edit = await request(`${apiRoot}/edits`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: '{}',
+});
+const editId = edit.id;
+
+try {
+  const bundle = await request(
+    `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/bundles?uploadType=media`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: await readFile(bundlePath),
+    },
+  );
+  console.log(`Uploaded AAB versionCode=${bundle.versionCode}`);
+
+  await request(`${apiRoot}/edits/${editId}/tracks/internal`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      track: 'internal',
+      releases: [
+        {
+          name: `Playarr ${versionName}`,
+          versionCodes: [String(bundle.versionCode)],
+          status: 'completed',
+        },
+      ],
+    }),
+  });
+
+  const [title, shortDescription, fullDescription] = await Promise.all([
+    readFile(`${metadataRoot}/title.txt`, 'utf8'),
+    readFile(`${metadataRoot}/short_description.txt`, 'utf8'),
+    readFile(`${metadataRoot}/full_description.txt`, 'utf8'),
+  ]);
+  await request(`${apiRoot}/edits/${editId}/listings/${locale}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      title: title.trim(),
+      shortDescription: shortDescription.trim(),
+      fullDescription: fullDescription.trim(),
+    }),
+  });
+
+  const screenshotTypes = ['phoneScreenshots', 'tvScreenshots'];
+  const imagePaths = [
+    ['icon', `${metadataRoot}/images/icon.png`],
+    ['featureGraphic', `${metadataRoot}/images/featureGraphic.png`],
+    ['tvBanner', `${metadataRoot}/images/tvBanner.png`],
+  ];
+  for (const imageType of screenshotTypes) {
+    const filenames = (await readdir(`${metadataRoot}/images/${imageType}`)).sort();
+    for (const filename of filenames) {
+      imagePaths.push([imageType, `${metadataRoot}/images/${imageType}/${filename}`]);
+    }
+  }
+
+  for (const imageType of [...new Set(imagePaths.map(([type]) => type))]) {
+    await request(`${apiRoot}/edits/${editId}/listings/${locale}/${imageType}`, {
+      method: 'DELETE',
+    });
+  }
+  for (const [imageType, path] of imagePaths) {
+    await request(
+      `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/listings/${locale}/${imageType}?uploadType=media`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'image/png' },
+        body: await readFile(path),
+      },
+    );
+  }
+
+  await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
+  console.log(`Published Playarr ${versionName} to Google Play internal testing`);
+} catch (error) {
+  await request(`${apiRoot}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});
+  throw error;
+}

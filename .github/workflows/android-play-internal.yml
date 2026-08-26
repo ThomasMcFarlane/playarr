@@ -46,12 +46,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/setup-node@v4
         with:
-          ruby-version: '3.3'
-
-      - name: Install Google Play publisher
-        run: gem install fastlane --version 2.238.0 --no-document
+          node-version: '20'
 
       - name: Resolve release version
         id: version
@@ -103,7 +100,7 @@ jobs:
           fi
           printf '%s' "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" > "$GOOGLE_PLAY_JSON_KEY"
           chmod 600 "$GOOGLE_PLAY_JSON_KEY"
-          jq -e '.type == "service_account" and (.client_email | length > 0) and (.private_key | length > 0)' "$GOOGLE_PLAY_JSON_KEY" >/dev/null
+          node -e 'const credential = JSON.parse(require("node:fs").readFileSync(process.env.GOOGLE_PLAY_JSON_KEY, "utf8")); if (credential.type !== "service_account" || !credential.client_email || !credential.private_key) process.exit(1)'
 
       - name: Test and build signed app bundle
         env:
@@ -150,4 +147,4 @@ jobs:
           GOOGLE_PLAY_JSON_KEY: ${{ steps.version.outputs.publisher_path }}
           PLAYARR_AAB: release/playarr-android-play.aab
           PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
-        run: fastlane android internal
+        run: node scripts/publish-google-play.mjs
