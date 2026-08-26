@@ -9,9 +9,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Android tags now build a signed Android App Bundle and publish it privately
-  to Google Play's internal testing track through an app-scoped service account.
-
 - A namespace-safe Helm chart for the four dev-host Playarr development surfaces,
   their Services and ten Emissary routes, preserving existing images, mounts
   and routing without committing runtime secrets.

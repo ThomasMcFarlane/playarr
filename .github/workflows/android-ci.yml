@@ -1,4 +1,4 @@
-name: Publish Android release
+name: Publish Android APK
 
 on:
   push:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build-and-publish:
-    name: Build, sign and publish Android release
+    name: Build, sign and publish Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release-android
@@ -85,7 +85,7 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
           chmod 600 "$ANDROID_KEYSTORE_PATH"
 
-      - name: Test and build signed Android release
+      - name: Test and build signed APK
         env:
           PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
           PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
@@ -94,9 +94,8 @@ jobs:
           ./gradlew
           :app:testDebugUnitTest
           :app:assembleRelease
-          :app:bundleRelease
 
-      - name: Verify and package Android release
+      - name: Verify and package APK
         id: package
         shell: bash
         env:
@@ -104,13 +103,8 @@ jobs:
           ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
         run: |
           mobile_apk="$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
-          mobile_aab="$(find app/build/outputs/bundle/release -name '*.aab' -type f -print -quit)"
           if [[ -z "$mobile_apk" ]]; then
             echo "Signed release APK output is missing" >&2
-            exit 1
-          fi
-          if [[ -z "$mobile_aab" ]]; then
-            echo "Signed release app bundle output is missing" >&2
             exit 1
           fi
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
@@ -123,16 +117,8 @@ jobs:
             "io.playarr.mobile" \
             "${{ steps.version.outputs.name }}" \
             "${{ steps.version.outputs.code }}"
-          jarsigner -verify "$mobile_aab"
-          expected_cert="$(printf '%s' "$EXPECTED_ANDROID_SIGNING_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          bundle_cert="$(keytool -printcert -jarfile "$mobile_aab" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          if [[ -z "$bundle_cert" || "$bundle_cert" != "$expected_cert" ]]; then
-            echo "Android app bundle signing certificate does not match ANDROID_SIGNING_CERT_SHA256" >&2
-            exit 1
-          fi
           mkdir -p release
           cp "$mobile_apk" release/playarr-android.apk
-          cp "$mobile_aab" release/playarr-android.aab
           sha256sum release/*.apk > release/SHA256SUMS
           apk_sha256="$(sha256sum release/playarr-android.apk | cut -d ' ' -f 1)"
           printf '{"version_name":"%s","version_code":%s,"apk_url":"https://playarr.app/downloads/android/releases/%s/playarr-android.apk","sha256":"%s"}\n' \
@@ -148,16 +134,6 @@ jobs:
           name: playarr-android-${{ steps.version.outputs.name }}
           path: clients/android/release/
           if-no-files-found: error
-
-      - name: Publish privately to Google Play internal testing
-        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: io.playarr.mobile
-          releaseFiles: clients/android/release/playarr-android.aab
-          tracks: internal
-          status: completed
-          releaseName: ${{ steps.version.outputs.name }}
 
       - name: Upload versioned and latest APK to Cloudflare R2
         shell: bash
