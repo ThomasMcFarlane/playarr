@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android release `0.2.15` (versionCode 2015) was built and published to
+  private Google Play internal testing by the self-hosted `playarr-runners`
+  CI pool, including the committed phone and television store listing assets.
+
 - A dedicated Google Play upload certificate keeps Play App Signing separate
   from the existing sideload APK certificate and update chain.
 
