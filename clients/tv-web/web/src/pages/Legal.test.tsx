@@ -7,6 +7,7 @@ import { LanguageProvider } from "../lib/i18n/LanguageProvider";
 import { ThemeProvider } from "../lib/theme";
 import {
   AcceptableUsePage,
+  AccountDeletionPage,
   LicencesPage,
   PrivacyPolicyPage,
   TermsPage,
@@ -28,6 +29,7 @@ describe("public legal pages", () => {
     ["/legal/terms", <TermsPage />, "Terms of use"],
     ["/legal/acceptable-use", <AcceptableUsePage />, "Acceptable use"],
     ["/legal/licences", <LicencesPage />, "Licences and attribution"],
+    ["/legal/account-deletion", <AccountDeletionPage />, "Account deletion"],
   ])("renders %s in the signed-out auth stage", (path, page, heading) => {
     const markup = renderLegalPage(path, page);
 
@@ -46,5 +48,16 @@ describe("public legal pages", () => {
 
     expect(privacyRoute).toBeGreaterThan(-1);
     expect(authenticatedShell).toBeGreaterThan(privacyRoute);
+  });
+
+  it("mounts public legal routes outside signed-in data providers", () => {
+    const source = readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
+    const publicBranch = source.indexOf("{isPublicLegalRoute ? (");
+    const apiProvider = source.indexOf("<ApiClientProvider>");
+    const downloadsProvider = source.indexOf("<DownloadsProvider>");
+
+    expect(publicBranch).toBeGreaterThan(-1);
+    expect(apiProvider).toBeGreaterThan(publicBranch);
+    expect(downloadsProvider).toBeGreaterThan(publicBranch);
   });
 });

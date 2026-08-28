@@ -8,6 +8,7 @@ const LEGAL_ROUTES = [
   ["/legal/terms", "Terms"],
   ["/legal/acceptable-use", "Acceptable use"],
   ["/legal/licences", "Licences"],
+  ["/legal/account-deletion", "Account deletion"],
 ] as const;
 
 function LegalPage({
@@ -109,11 +110,12 @@ export function PrivacyPolicyPage() {
       <section>
         <h2>Notifications and Google services</h2>
         <p>
-          If you enable invite notifications in the Android app, Google Firebase Cloud Messaging
-          processes an app-installation identifier, push token and the notification payload needed
-          to deliver that feature. The push token is also registered with your selected Playarr
-          Server. Playarr does not use Firebase Analytics, advertising SDKs or cross-app tracking.
-          Google's handling of Firebase data is governed by its own terms and privacy policy.
+          In production Android builds configured for invite notifications, Google Firebase Cloud
+          Messaging creates an app-installation identifier and push token after you sign in. The
+          token is registered with your selected Playarr Server so it can deliver invitation
+          notifications; notification permission controls whether Android displays them. Playarr
+          does not use Firebase Analytics, advertising SDKs or cross-app tracking. Google's
+          handling of Firebase data is governed by its own terms and privacy policy.
         </p>
       </section>
 
@@ -121,21 +123,41 @@ export function PrivacyPolicyPage() {
         <h2>Website and operational data</h2>
         <p>
           playarr.app does not use advertising cookies, analytics pixels or behavioural profiling.
-          The site stores only local interface preferences in your browser. Hosting and network
-          providers may process ordinary request information such as an IP address, timestamp,
-          requested path and user agent for delivery, reliability and abuse prevention. Playarr
-          does not sell personal data.
+          The signed-in web app can store server addresses, device identifiers, names, access and
+          refresh tokens, interface preferences, download records and media, and playback progress
+          waiting to sync in your browser. Hosting and network providers may process ordinary
+          request information such as an IP address, timestamp, requested path and user agent for
+          delivery, reliability and abuse prevention. Playarr does not sell personal data.
         </p>
       </section>
 
       <section>
-        <h2>Your choices and contact</h2>
+        <h2>Security, retention and deletion</h2>
+        <p>
+          The hosted playarr.app service uses HTTPS. Connections to a self-hosted Playarr Server use
+          the HTTP or HTTPS address chosen by you or your administrator, so only use an unencrypted
+          address on a network you trust. Local records remain until removed in the app, cleared by
+          the operating system or removed by uninstalling. Server-side records and backups follow
+          the server operator's retention policy. Device-link records expire automatically as
+          described above.
+        </p>
+        <p>
+          To request deletion of an account and associated server-side data, follow the
+          <NavLink to="/legal/account-deletion"> account-deletion instructions</NavLink>. Signing
+          out does not itself delete a server account or all local records.
+        </p>
+      </section>
+
+      <section>
+        <h2>Your choices and privacy contact</h2>
         <p>
           You can avoid the hosted linking service by entering a server address and signing in
           directly. You can disable notifications, remove downloads, sign out, clear app storage or
-          uninstall the app at any time. For privacy questions, contact the developer using the
-          support email shown on Playarr's Google Play listing. Do not put passwords, tokens or
-          other private information in a public issue.
+          uninstall the app at any time. Playarr is developed by Thomas McFarlane. For privacy
+          questions, use the contact method on the
+          <a href="https://github.com/ThomasMcFarlane/playarr"> Playarr repository</a> or the support
+          email on its Google Play listing. Do not put passwords, tokens or private information in a
+          public issue.
         </p>
       </section>
 
@@ -259,18 +281,18 @@ export function LicencesPage() {
       <section>
         <h2>FFmpeg</h2>
         <p>
-          Playarr Server container images bundle FFmpeg under the GNU General Public Licence
-          version 2 or later. FFmpeg runs as a separate server process and is not embedded in the
-          Playarr Android application. FFmpeg is a trademark of Fabrice Bellard; Playarr is not
-          affiliated with or endorsed by the FFmpeg project.
+          This software uses libraries from the FFmpeg project under the GNU General Public Licence
+          version 2 or later. FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg
+          project. Playarr is not affiliated with, endorsed by, or the owner of FFmpeg. FFmpeg runs
+          as a separate server process and is not embedded in the Playarr Android application.
         </p>
       </section>
       <section>
         <h2>TMDB</h2>
         <p>
-          This product uses the TMDB API but is not endorsed or certified by TMDB. Metadata and
-          artwork may reach a self-hosted Playarr Server through library-management tools selected
-          by its operator.
+          This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise
+          approved by TMDB. Metadata and artwork may reach a self-hosted Playarr Server through
+          library-management tools selected by its operator.
         </p>
       </section>
       <section>
@@ -279,6 +301,44 @@ export function LicencesPage() {
           Playarr is independent and is not affiliated with or endorsed by Sonarr, Radarr, Lidarr,
           Bazarr, Prowlarr, Readarr, Tdarr, Plex, Jellyfin, Emby, Apple, Google, LG, Samsung,
           Hisense, Roku or TMDB. Their trademarks belong to their respective owners.
+        </p>
+      </section>
+    </LegalPage>
+  );
+}
+
+export function AccountDeletionPage() {
+  return (
+    <LegalPage
+      title="Account deletion"
+      description="How to request deletion of a Playarr account and its associated data."
+    >
+      <section>
+        <h2>Request deletion from your server operator</h2>
+        <p>
+          Playarr accounts belong to the self-hosted Playarr Server on which they were created.
+          Contact that server's administrator and ask them to delete your user account, profiles,
+          sessions, push registrations, playback history, playlists and other associated data. Give
+          them the server address and username, but never send a password, access token or profile
+          PIN.
+        </p>
+      </section>
+      <section>
+        <h2>Remove data from your devices</h2>
+        <p>
+          After the administrator confirms deletion, sign out, remove downloaded media, then clear
+          Playarr's app storage or uninstall it on every device. In a browser, clear site data for
+          the Playarr web app. Signing out alone does not delete the server account or every local
+          record.
+        </p>
+      </section>
+      <section>
+        <h2>Need help identifying the operator?</h2>
+        <p>
+          The server address shown in Playarr identifies the independently operated service that
+          controls the account. If playarr.app itself retained a short-lived device-link record, it
+          expires automatically within minutes as described in the
+          <NavLink to="/legal/privacy"> privacy policy</NavLink>.
         </p>
       </section>
     </LegalPage>

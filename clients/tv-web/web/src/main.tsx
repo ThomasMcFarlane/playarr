@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, HashRouter } from "react-router-dom";
+import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
 import { App } from "./App";
 import { ApiClientProvider } from "./lib/ApiClientProvider";
 import { DownloadsProvider } from "./lib/DownloadsProvider";
@@ -16,6 +16,13 @@ import {
   readTvCrossEngine,
 } from "./lib/parityMode";
 import { installCrossEngineHook } from "./lib/crossEngineAssets";
+import {
+  AcceptableUsePage,
+  AccountDeletionPage,
+  LicencesPage,
+  PrivacyPolicyPage,
+  TermsPage,
+} from "./pages/Legal";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -40,21 +47,35 @@ if (parityMode !== "off" && !tvCrossEngine) {
 }
 
 const Router = IS_PACKAGED_TV ? HashRouter : BrowserRouter;
+const isPublicLegalRoute =
+  !IS_PACKAGED_TV && /^\/legal\/(privacy|terms|acceptable-use|licences|account-deletion)\/?$/.test(
+    window.location.pathname
+  );
 
 createRoot(container).render(
   <StrictMode>
     <Router>
       <LanguageProvider>
         <ThemeProvider>
-          <HomeViewProvider>
-            <ApiClientProvider>
-              <ToastProvider>
-                <DownloadsProvider>
-                  <App />
-                </DownloadsProvider>
-              </ToastProvider>
-            </ApiClientProvider>
-          </HomeViewProvider>
+          {isPublicLegalRoute ? (
+            <Routes>
+              <Route path="/legal/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/legal/terms" element={<TermsPage />} />
+              <Route path="/legal/acceptable-use" element={<AcceptableUsePage />} />
+              <Route path="/legal/licences" element={<LicencesPage />} />
+              <Route path="/legal/account-deletion" element={<AccountDeletionPage />} />
+            </Routes>
+          ) : (
+            <HomeViewProvider>
+              <ApiClientProvider>
+                <ToastProvider>
+                  <DownloadsProvider>
+                    <App />
+                  </DownloadsProvider>
+                </ToastProvider>
+              </ApiClientProvider>
+            </HomeViewProvider>
+          )}
         </ThemeProvider>
       </LanguageProvider>
     </Router>

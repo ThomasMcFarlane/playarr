@@ -697,4 +697,20 @@ describe("public legal page meta tags", () => {
     expect(html).toContain("<title>Terms of use · Playarr</title>");
     expect(html).toContain('content="https://playarr.app/legal/terms"');
   });
+
+  it("serves account-deletion guidance with a canonical public URL", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/legal/account-deletion"),
+      env
+    );
+    const html = await response.text();
+
+    expect(html).toContain("<title>Account deletion · Playarr</title>");
+    expect(html).toContain('content="https://playarr.app/legal/account-deletion"');
+  });
 });

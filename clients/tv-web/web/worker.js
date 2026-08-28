@@ -101,6 +101,10 @@ const LEGAL_SOCIAL_COPY = new Map([
     title: "Licences and attribution",
     description: "Open-source licensing, required notices and third-party attribution for Playarr.",
   }],
+  ["/legal/account-deletion", {
+    title: "Account deletion",
+    description: "How to request deletion of a Playarr account and its associated data.",
+  }],
 ]);
 
 function escapeHtml(value) {

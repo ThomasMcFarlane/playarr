@@ -124,6 +124,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Public legal routes now mount without the signed-in API and download providers,
+  accurately disclose browser and notification processing, include account-deletion
+  guidance, and run through the Worker before the SPA asset fallback.
+- The production web deployment now builds workspace dependencies before running
+  the web test suite on a clean self-hosted runner.
+
 - Repository-wide Linux CI and the production `playarr.app` deployment now
   use the dedicated self-hosted `playarr-runners` pool, avoiding hosted-runner
   billing failures before jobs can start.

@@ -43,6 +43,7 @@ import { NotFoundPage } from "./pages/NotFound";
 import { ClientsPage } from "./pages/Clients";
 import {
   AcceptableUsePage,
+  AccountDeletionPage,
   LicencesPage,
   PrivacyPolicyPage,
   TermsPage,
@@ -591,6 +592,7 @@ export function App() {
       <Route path="/legal/terms" element={<TermsPage />} />
       <Route path="/legal/acceptable-use" element={<AcceptableUsePage />} />
       <Route path="/legal/licences" element={<LicencesPage />} />
+      <Route path="/legal/account-deletion" element={<AccountDeletionPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
