@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android release `0.2.16` (versionCode 2016) was built and published to the
+  private Google Play internal track by the self-hosted `playarr-runners` CI
+  pool, with icons and listing artwork verified in every configured language.
+
 - Public privacy, terms, acceptable-use, and licence pages now live directly
   on `playarr.app` outside the sign-in guard, using the signed-out auth-stage
   design without any profile, library, account, or other user content.
@@ -88,6 +92,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   key-art, cached as a PNG derivative so every client reuses one bake.
 
 ### Changed
+
+- Google Play and sideload Android builds now use separate product flavours:
+  the Play build is HTTPS-only and excludes APK self-update permissions, while
+  the sideload build retains LAN HTTP support and signed APK updates.
 
 - Web CI now builds every shared workspace package before the recursive
   typecheck, so clean self-hosted runners can resolve generated package types
