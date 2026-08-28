@@ -134,6 +134,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Cloudflare's Worker bundle now renders device-link QR PNGs with Worker-native
   web APIs instead of importing Node filesystem code rejected at deployment.
 
+- Google Play Android builds now exclude the sideload APK self-updater and
+  restricted install-package permission, require HTTPS server connections,
+  and expose public privacy and account-deletion links in Settings. The legacy
+  `io.playarr.mobile` sideload flavour retains LAN HTTP and signed APK updates.
+
 - Cast request tests no longer import the browser-only playback engine merely
   to read the downloaded-quality identifier, removing a clean-runner race on
   the global `navigator` object.

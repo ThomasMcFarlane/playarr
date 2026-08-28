@@ -25,12 +25,16 @@ Use JDK 21:
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 cd clients/android
-./gradlew :app:testDebugUnitTest \
-  :app:assembleDebug \
-  :app:lintDebug
+./gradlew :app:testPlayDebugUnitTest \
+  :app:testSideloadDebugUnitTest \
+  :app:assemblePlayDebug \
+  :app:assembleSideloadDebug \
+  :app:lintPlayDebug \
+  :app:lintSideloadDebug
 ```
 
-The APK is written to `clients/android/app/build/outputs/apk/debug/`.
+The APKs are written below `clients/android/app/build/outputs/apk/play/debug/`
+and `clients/android/app/build/outputs/apk/sideload/debug/`.
 
 Firebase invite notifications accept the public Android project values through
 the `firebaseApiKey`, `firebaseMobileApplicationId`, `firebaseProjectId`, and
@@ -60,8 +64,9 @@ normally with push registration disabled.
   form factor. Do not reintroduce `PlayarrTvWebShell` or SPA AE freeze gates
   for television "parity" (see `clients/android/AGENTS.md`).
 
-Cleartext HTTP is permitted because self-hosted Playarr Server instances commonly run
-on a private LAN. Public deployments should use HTTPS.
+Google Play builds reject cleartext HTTP server connections. The sideload flavour
+continues to permit HTTP because self-hosted Playarr Server instances commonly run
+on a private LAN without TLS.
 
 ## Publishing
 
@@ -71,12 +76,15 @@ checksum and update manifest at:
 
 - `https://playarr.app/downloads/android/playarr-android.apk`
 
-The same tag also builds an AAB with the canonical `app.playarr.mobile` ID and
+The same tag also builds the `play` flavour AAB with the canonical
+`app.playarr.mobile` ID and
 publishes it privately to Google Play's internal-testing track. A manual
 workflow dispatch can publish a semver without creating a tag. Fastlane keeps
 the English store listing and branded Play assets in `fastlane/metadata/android`.
-The Play channel has its own upload certificate and uses Play App Signing;
-the legacy sideload certificate and update chain remain untouched.
+The Play channel excludes the sideload APK installer and its restricted
+`REQUEST_INSTALL_PACKAGES` permission. It has its own upload certificate and uses
+Play App Signing; the legacy `sideload` flavour, certificate, updater and update
+chain remain untouched.
 The `release-android` environment stores that upload identity as
 `ANDROID_PLAY_KEYSTORE_BASE64`, `ANDROID_PLAY_KEYSTORE_PASSWORD`,
 `ANDROID_PLAY_KEY_ALIAS`, and `ANDROID_PLAY_KEY_PASSWORD`, with its public

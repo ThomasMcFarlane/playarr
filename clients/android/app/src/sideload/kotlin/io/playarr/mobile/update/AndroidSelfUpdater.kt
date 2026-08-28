@@ -36,15 +36,6 @@ internal data class AndroidReleaseManifest(
     @SerialName("sha256") val sha256: String,
 )
 
-internal sealed interface AndroidUpdateEvent {
-    data object Checking : AndroidUpdateEvent
-    data class UpToDate(val versionName: String) : AndroidUpdateEvent
-    data class Downloading(val versionName: String, val progress: Int?) : AndroidUpdateEvent
-    data class PermissionRequired(val versionName: String) : AndroidUpdateEvent
-    data class Installing(val versionName: String) : AndroidUpdateEvent
-    data class Error(val message: String) : AndroidUpdateEvent
-}
-
 internal fun decodeAndroidReleaseManifest(body: String): AndroidReleaseManifest =
     releaseJson.decodeFromString(body)
 
@@ -91,13 +82,13 @@ internal class AndroidSelfUpdater(
     private val scope: CoroutineScope,
     private val onEvent: (AndroidUpdateEvent) -> Unit,
     private val httpClient: OkHttpClient = OkHttpClient(),
-) {
+) : AndroidSelfUpdateController {
     private var updateJob: Job? = null
     private var pendingInstall: Pair<File, String>? = null
     private var waitingForInstallPermission = false
     private var installerWasLaunched = false
 
-    fun checkForUpdates() {
+    override fun checkForUpdates() {
         if (updateJob?.isActive == true) return
         updateJob = scope.launch {
             pendingInstall?.takeIf { (file, _) -> file.isFile }?.let { (file, versionName) ->
@@ -126,7 +117,7 @@ internal class AndroidSelfUpdater(
         }
     }
 
-    fun resumePendingInstall() {
+    override fun resumePendingInstall() {
         if (installerWasLaunched) {
             installerWasLaunched = false
             onEvent(

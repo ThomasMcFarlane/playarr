@@ -17,7 +17,6 @@ val firebaseSenderId = providers.gradleProperty("firebaseSenderId").orElse("")
 val castReceiverAppId = providers.gradleProperty("castReceiverAppId").orElse("")
 val playarrVersionCode = providers.environmentVariable("PLAYARR_VERSION_CODE").map(String::toInt).orElse(1)
 val playarrVersionName = providers.environmentVariable("PLAYARR_VERSION_NAME").orElse("0.1.0")
-val playarrApplicationId = providers.environmentVariable("PLAYARR_APPLICATION_ID").orElse("app.playarr.mobile")
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS")
@@ -34,10 +33,6 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        // Google Play uses the canonical reverse-domain ID. The legacy
-        // sideload workflow overrides this to io.playarr.mobile so existing
-        // APK installations keep receiving compatible updates.
-        applicationId = playarrApplicationId.get()
         // Android 8.0+, per docs/architecture/overview.md's client table.
         minSdk = 26
         targetSdk = 37
@@ -59,6 +54,18 @@ android {
         // core-data's ServerConfigStore + the Settings screen), not a
         // value baked into the build -- a client must be able to point at
         // an arbitrary operator-run instance.
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+            applicationId = "app.playarr.mobile"
+        }
+        create("sideload") {
+            dimension = "distribution"
+            applicationId = "io.playarr.mobile"
+        }
     }
 
     signingConfigs {

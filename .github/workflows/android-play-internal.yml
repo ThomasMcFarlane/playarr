@@ -70,8 +70,13 @@ jobs:
             echo "Minor and patch versions must be below 1000" >&2
             exit 1
           fi
+          version_code=$((major * 1000000 + minor * 1000 + patch))
+          if (( version_code <= 2015 )); then
+            echo "Google Play already contains versionCode 2015; choose a version newer than 0.2.15" >&2
+            exit 1
+          fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
-          echo "code=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
+          echo "code=$version_code" >> "$GITHUB_OUTPUT"
           echo "keystore_path=${{ runner.temp }}/playarr-android-release.jks" >> "$GITHUB_OUTPUT"
           echo "publisher_path=${{ runner.temp }}/google-play-publisher.json" >> "$GITHUB_OUTPUT"
 
@@ -109,15 +114,15 @@ jobs:
           ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
         run: >-
           ./gradlew
-          :app:testDebugUnitTest
-          :app:bundleRelease
+          :app:testPlayDebugUnitTest
+          :app:bundlePlayRelease
 
       - name: Verify and package app bundle
         shell: bash
         env:
           EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_PLAY_SIGNING_CERT_SHA256 }}
         run: |
-          app_bundle="$(find app/build/outputs/bundle/release -name '*.aab' -type f -print -quit)"
+          app_bundle="$(find app/build/outputs/bundle/playRelease -name '*.aab' -type f -print -quit)"
           if [[ -z "$app_bundle" ]]; then
             echo "Signed release app bundle output is missing" >&2
             exit 1

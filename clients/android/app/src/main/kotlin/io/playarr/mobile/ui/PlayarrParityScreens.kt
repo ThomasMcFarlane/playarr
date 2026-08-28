@@ -95,6 +95,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -118,8 +119,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.playarr.mobile.BuildConfig
 import io.playarr.mobile.connected.PlayarrServerClientProvider
 import io.playarr.mobile.di.PrimaryPlayarrApi
-import io.playarr.mobile.update.AndroidSelfUpdater
 import io.playarr.mobile.update.AndroidUpdateEvent
+import io.playarr.mobile.update.createAndroidSelfUpdateController
 import io.playarr.shared.auth.ConnectedServerSessionManager
 import io.playarr.shared.auth.ConnectedServerSessionStore
 import io.playarr.shared.auth.KnownServerGroupStore
@@ -1496,6 +1497,7 @@ internal fun resolveProfileAction(
 }
 
 private data class ProfilesUpdateControl(
+    val available: Boolean,
     val event: AndroidUpdateEvent?,
     val check: () -> Unit,
 )
@@ -1507,13 +1509,21 @@ private fun rememberProfilesUpdateControl(enabled: Boolean): ProfilesUpdateContr
     val scope = rememberCoroutineScope()
     val updater = remember(activity, scope, enabled) {
         if (enabled && activity != null) {
-            AndroidSelfUpdater(activity = activity, scope = scope, onEvent = { event = it })
+            createAndroidSelfUpdateController(
+                activity = activity,
+                scope = scope,
+                onEvent = { event = it },
+            )
         } else {
             null
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { updater?.resumePendingInstall() }
-    return ProfilesUpdateControl(event) { updater?.checkForUpdates() }
+    return ProfilesUpdateControl(
+        available = updater != null,
+        event = event,
+        check = { updater?.checkForUpdates() },
+    )
 }
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -1919,19 +1929,21 @@ private fun TelevisionProfilesStage(
                 .padding(start = 40.dp, bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            ProfilesGlassPill(
-                onClick = updateControl.check,
-                enabled = !busy,
-            ) {
-                Text(
-                    label,
-                    color = WebInkSoft,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            if (event is AndroidUpdateEvent.Error) {
-                Text(event.message, color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
+            if (updateControl.available) {
+                ProfilesGlassPill(
+                    onClick = updateControl.check,
+                    enabled = !busy,
+                ) {
+                    Text(
+                        label,
+                        color = WebInkSoft,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                if (event is AndroidUpdateEvent.Error) {
+                    Text(event.message, color = MaterialTheme.colorScheme.error, fontSize = 10.sp)
+                }
             }
             actionError?.let {
                 Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
@@ -2932,6 +2944,7 @@ private enum class SettingsSection(val label: PlayarrString) {
     Server(PlayarrString.SettingsServer),
     Lock(PlayarrString.SettingsProfileLock),
     Invite(PlayarrString.SettingsInvite),
+    Legal(PlayarrString.SettingsLegal),
 }
 
 @Composable
@@ -3047,6 +3060,7 @@ private fun SettingsSectionContent(
     viewModel: ParitySettingsViewModel,
 ) {
     val display = LocalPlayarrDisplayPreferences.current
+    val uriHandler = LocalUriHandler.current
     var localNotice by remember(section) { mutableStateOf<PlayarrString?>(null) }
     val displayName = snapshot.userName.ifBlank { playarrString(PlayarrString.ProfileViewerFallback) }
     val description = when (section) {
@@ -3059,6 +3073,7 @@ private fun SettingsSectionContent(
             "name" to displayName,
         )
         SettingsSection.Invite -> playarrString(PlayarrString.SettingsInviteDescription)
+        SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
         else -> null
     }
     SettingsCard(playarrString(section.label), description) {
@@ -3326,6 +3341,20 @@ private fun SettingsSectionContent(
                     }
                 }
                 PlayarrApprovalNotifications()
+            }
+            SettingsSection.Legal -> {
+                OutlinedButton(
+                    onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(playarrString(PlayarrString.SettingsPrivacyNotice))
+                }
+                OutlinedButton(
+                    onClick = { uriHandler.openUri(PLAYARR_ACCOUNT_DELETION_URL) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(playarrString(PlayarrString.SettingsAccountDeletion))
+                }
             }
         }
         localNotice?.let { notice ->

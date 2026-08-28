@@ -733,6 +733,7 @@ internal enum class PlayarrString(
     SettingsServer("Server connection", "การเชื่อมต่อเซิร์ฟเวอร์", "サーバー接続"),
     SettingsProfileLock("Profile lock", "การล็อกโปรไฟล์", "プロフィールロック"),
     SettingsInvite("Invite a friend", "เชิญเพื่อน", "友達を招待"),
+    SettingsLegal("Privacy and account", "ความเป็นส่วนตัวและบัญชี", "プライバシーとアカウント"),
     SettingsAppearanceDescription(
         "Choose this device's theme and home screen artwork.",
         "เลือกธีมและภาพอาร์ตเวิร์กหน้าแรกสำหรับอุปกรณ์นี้",
@@ -852,6 +853,13 @@ internal enum class PlayarrString(
         "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Playarr Server ของคุณ",
         "Playarr Serverの管理者に友達招待用のQRコードを1枚依頼してください。",
     ),
+    SettingsLegalDescription(
+        "Read Playarr's privacy notice or request account and data deletion.",
+        "อ่านประกาศความเป็นส่วนตัวของ Playarr หรือขอลบบัญชีและข้อมูล",
+        "Playarrのプライバシー通知を確認するか、アカウントとデータの削除を申請できます。",
+    ),
+    SettingsPrivacyNotice("Privacy notice", "ประกาศความเป็นส่วนตัว", "プライバシー通知"),
+    SettingsAccountDeletion("Delete account and data", "ลบบัญชีและข้อมูล", "アカウントとデータを削除"),
     SettingsInviteStatusNone(
         "You have not requested an invite yet.",
         "คุณยังไม่ได้ขอคำเชิญ",

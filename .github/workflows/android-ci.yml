@@ -31,9 +31,6 @@ jobs:
     # parsing the workflow (`Unrecognized named-value: 'runner'`), which
     # prevented tag-triggered publish runs from starting.
     env:
-      # Preserve the package identity of existing playarr.app sideloads while
-      # Google Play uses the canonical app.playarr.mobile application ID.
-      PLAYARR_APPLICATION_ID: io.playarr.mobile
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -75,8 +72,13 @@ jobs:
             echo "Minor and patch versions must be below 1000" >&2
             exit 1
           fi
+          version_code=$((major * 1000000 + minor * 1000 + patch))
+          if (( version_code <= 2015 )); then
+            echo "Published Android builds already use versionCode 2015; choose a version newer than 0.2.15" >&2
+            exit 1
+          fi
           echo "name=$version" >> "$GITHUB_OUTPUT"
-          echo "code=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
+          echo "code=$version_code" >> "$GITHUB_OUTPUT"
           echo "keystore_path=${{ runner.temp }}/playarr-android-release.jks" >> "$GITHUB_OUTPUT"
 
       - name: Restore release signing key
@@ -99,8 +101,8 @@ jobs:
           ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
         run: >-
           ./gradlew
-          :app:testDebugUnitTest
-          :app:assembleRelease
+          :app:testSideloadDebugUnitTest
+          :app:assembleSideloadRelease
 
       - name: Verify and package APK
         id: package
@@ -109,7 +111,7 @@ jobs:
           EXPECTED_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
           ANDROID_KEYSTORE_PATH: ${{ steps.version.outputs.keystore_path }}
         run: |
-          mobile_apk="$(find app/build/outputs/apk/release -name '*.apk' -type f -print -quit)"
+          mobile_apk="$(find app/build/outputs/apk/sideload/release -name '*.apk' -type f -print -quit)"
           if [[ -z "$mobile_apk" ]]; then
             echo "Signed release APK output is missing" >&2
             exit 1
