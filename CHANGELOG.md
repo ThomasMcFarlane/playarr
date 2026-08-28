@@ -124,6 +124,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Repository-wide Linux CI and the production `playarr.app` deployment now
+  use the dedicated self-hosted `playarr-runners` pool, avoiding hosted-runner
+  billing failures before jobs can start.
+
 - Google Play publishing now applies the icon and other visual listing assets
   to every configured language, including the app's default `en-GB` listing,
   instead of leaving non-`en-US` Console and Store pages without branding.

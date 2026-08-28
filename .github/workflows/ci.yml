@@ -51,7 +51,7 @@ jobs:
   # ---------------------------------------------------------------------
   changes:
     name: Detect changed platforms
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
       pull-requests: read
@@ -89,7 +89,7 @@ jobs:
     name: Backend checks (fmt, clippy, test, deny)
     needs: changes
     if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     defaults:
@@ -130,7 +130,7 @@ jobs:
     name: Android build
     needs: changes
     if: needs.changes.outputs.android == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     steps:
@@ -140,6 +140,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -181,7 +185,7 @@ jobs:
     name: Xbox core build & test
     needs: changes
     if: needs.changes.outputs.xbox == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     defaults:
@@ -214,7 +218,7 @@ jobs:
     name: HarmonyOS client checks (validate, core tests)
     needs: changes
     if: needs.changes.outputs.harmony == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     defaults:
@@ -245,7 +249,7 @@ jobs:
     name: tv-web lint & typecheck
     needs: changes
     if: needs.changes.outputs.tv-web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     defaults:
@@ -289,7 +293,7 @@ jobs:
     name: OpenAPI contract diff
     needs: changes
     if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     steps:
@@ -325,7 +329,7 @@ jobs:
       - tv-web-check
       - openapi-contract-check
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     steps:
       - name: Verify no required job failed
         env:
