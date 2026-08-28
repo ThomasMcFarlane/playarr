@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Public privacy, terms, acceptable-use, and licence pages now live directly
+  on `playarr.app` outside the sign-in guard, using the signed-out auth-stage
+  design without any profile, library, account, or other user content.
+
 - Android release `0.2.15` (versionCode 2015) was built and published to
   private Google Play internal testing by the self-hosted `playarr-runners`
   CI pool, including the committed phone and television store listing assets.

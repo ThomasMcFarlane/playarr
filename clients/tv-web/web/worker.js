@@ -84,6 +84,25 @@ const CLIENTS_SOCIAL_COPY = new Map([
   }],
 ]);
 
+const LEGAL_SOCIAL_COPY = new Map([
+  ["/legal/privacy", {
+    title: "Privacy policy",
+    description: "How the Playarr Android app, web app, self-hosted server and public linking service handle data.",
+  }],
+  ["/legal/terms", {
+    title: "Terms of use",
+    description: "The conditions that apply when you use Playarr software and the public playarr.app service.",
+  }],
+  ["/legal/acceptable-use", {
+    title: "Acceptable use",
+    description: "The rules for using Playarr software and its public linking service.",
+  }],
+  ["/legal/licences", {
+    title: "Licences and attribution",
+    description: "Open-source licensing, required notices and third-party attribution for Playarr.",
+  }],
+]);
+
 function escapeHtml(value) {
   return value
     .replace(/&/g, "&amp;")
@@ -106,10 +125,10 @@ function escapeHtml(value) {
  * anywhere -- including this project's plain-Node vitest suite, with no
  * Workers runtime polyfill needed just to test it.
  */
-function renderClientMeta(html, clientId, copy, url) {
-  const title = escapeHtml(`Playarr for ${copy.name}`);
-  const description = escapeHtml(copy.description);
-  const canonicalUrl = escapeHtml(new URL(`/clients/${clientId}`, url).toString());
+function renderPageMeta(html, titleText, descriptionText, canonicalPath, url) {
+  const title = escapeHtml(titleText);
+  const description = escapeHtml(descriptionText);
+  const canonicalUrl = escapeHtml(new URL(canonicalPath, url).toString());
 
   return html
     .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
@@ -128,6 +147,11 @@ function renderClientMeta(html, clientId, copy, url) {
       /(<meta\s+name="twitter:description"\s+content=")[^"]*(")/,
       `$1${description}$2`
     );
+}
+
+function renderClientMeta(html, clientId, copy, url) {
+  const title = `Playarr for ${copy.name}`;
+  return renderPageMeta(html, title, copy.description, `/clients/${clientId}`, url);
 }
 
 /** The bare /clients index redirects to this client's own page client-side (see ClientsPage in Clients.tsx) -- a crawler never runs that redirect, so this is what it should see instead. */
@@ -156,6 +180,22 @@ async function clientPageResponse(clientId, url, env, request) {
     statusText: response.statusText,
     headers,
   });
+}
+
+async function legalPageResponse(pathname, copy, url, env, request) {
+  const response = await env.ASSETS.fetch(new Request(url, { method: request.method }));
+  const html = await response.text();
+  const headers = new Headers(response.headers);
+  headers.delete("Content-Length");
+  headers.delete("Content-Encoding");
+  return new Response(
+    renderPageMeta(html, `${copy.title} · Playarr`, copy.description, pathname, url),
+    {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }
+  );
 }
 
 function json(body, init = {}) {
@@ -447,6 +487,11 @@ export default {
       // meta tags a crawler sees, not what a real visitor's browser renders.
       const clientId = url.pathname.slice("/clients/".length).replace(/\/+$/, "");
       return clientPageResponse(clientId, url, env, request);
+    }
+    const legalPath = url.pathname.replace(/\/+$/, "") || "/";
+    const legalCopy = LEGAL_SOCIAL_COPY.get(legalPath);
+    if (legalCopy) {
+      return legalPageResponse(legalPath, legalCopy, url, env, request);
     }
     if (url.pathname === "/cast") {
       return new Response(null, {

@@ -41,6 +41,12 @@ import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
 import { ClientsPage } from "./pages/Clients";
+import {
+  AcceptableUsePage,
+  LicencesPage,
+  PrivacyPolicyPage,
+  TermsPage,
+} from "./pages/Legal";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import { TvEmptyState } from "./components/tv/TvEmptyState";
@@ -581,6 +587,10 @@ export function App() {
       <Route path="/clients/:clientId?" element={<ClientsPage />} />
       <Route path="/download" element={<Navigate to="/clients" replace />} />
       <Route path="/install" element={<Navigate to="/clients" replace />} />
+      <Route path="/legal/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/legal/terms" element={<TermsPage />} />
+      <Route path="/legal/acceptable-use" element={<AcceptableUsePage />} />
+      <Route path="/legal/licences" element={<LicencesPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/downloads" element={<DownloadsPage />} />

@@ -9422,6 +9422,111 @@ html.is-native-scroll-root .profile-auth-scroll {
   border-radius: 999px;
 }
 
+/* Public legal pages use the signed-out auth stage without profile, library,
+ * artwork, account, server or other user-derived content. */
+.legal-profile-page {
+  height: auto;
+  min-height: var(--viewport-height);
+  overflow: visible;
+}
+
+.legal-profile-page .profile-auth-scroll {
+  position: relative;
+  inset: auto;
+  min-height: var(--viewport-height);
+  overflow: visible;
+}
+
+.legal-profile-page .profile-auth-panel {
+  width: min(100%, 920px);
+  text-align: left;
+}
+
+.legal-heading {
+  text-align: center;
+}
+
+.legal-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0 auto 2rem;
+}
+
+.legal-navigation-link {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 720;
+  text-decoration: none;
+  backdrop-filter: blur(18px);
+}
+
+.legal-navigation-link:hover,
+.legal-navigation-link:focus-visible,
+.legal-navigation-link.is-active {
+  outline: 0;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: var(--bg);
+}
+
+.legal-copy {
+  padding: clamp(24px, 4vw, 52px);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: clamp(20px, 2.2vw, 32px);
+  background: color-mix(in srgb, var(--surface-strong) 68%, transparent);
+  box-shadow: 0 24px 70px rgba(31, 14, 20, 0.1);
+  backdrop-filter: blur(24px) saturate(120%);
+}
+
+.legal-copy section + section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.legal-copy h2 {
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+  font-weight: 620;
+  letter-spacing: -0.035em;
+}
+
+.legal-copy p,
+.legal-copy li {
+  color: var(--ink-soft);
+  font-size: clamp(0.88rem, 1vw, 1rem);
+  line-height: 1.7;
+}
+
+.legal-copy a {
+  color: var(--ink);
+  text-decoration-color: #cf3157;
+  text-underline-offset: 0.2em;
+}
+
+.legal-copy code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+
+.legal-effective-date {
+  margin-bottom: 2rem;
+  color: #cf3157 !important;
+  font-size: 0.64rem !important;
+  font-weight: 780;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 @keyframes profile-auth-panel-in {
   from {
     opacity: 0;

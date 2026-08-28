@@ -657,3 +657,44 @@ describe("client page meta tags", () => {
     expect(html).toContain('content="https://playarr.app/clients/vidaa"');
   });
 });
+
+describe("public legal page meta tags", () => {
+  it("serves the privacy route anonymously with privacy-specific metadata", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/legal/privacy"),
+      env
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("<title>Privacy policy · Playarr</title>");
+    expect(html).toContain(
+      'content="How the Playarr Android app, web app, self-hosted server and public linking service handle data."'
+    );
+    expect(html).toContain('content="https://playarr.app/legal/privacy"');
+    expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
+  });
+
+  it("normalises a trailing slash to the canonical legal URL", async () => {
+    const env = environment(null);
+    env.ASSETS.fetch.mockResolvedValueOnce(
+      new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
+    );
+
+    const response = await worker.fetch(
+      new Request("https://playarr.app/legal/terms/"),
+      env
+    );
+    const html = await response.text();
+
+    expect(html).toContain("<title>Terms of use · Playarr</title>");
+    expect(html).toContain('content="https://playarr.app/legal/terms"');
+  });
+});
