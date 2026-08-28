@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   user-started offline download, ongoing data-sync notification, and pause
   control without exposing private library content or credentials.
 
+- Android release `0.2.17` (versionCode 2017) was built, signed, and published
+  to the completed private Google Play internal track through the Android
+  Publisher API by the self-hosted `playarr-runners` CI pool.
+
 - Android release `0.2.16` (versionCode 2016) was built and published to the
   private Google Play internal track by the self-hosted `playarr-runners` CI
   pool, with icons and listing artwork verified in every configured language.
