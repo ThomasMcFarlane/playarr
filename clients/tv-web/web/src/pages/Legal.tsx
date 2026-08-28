@@ -134,12 +134,12 @@ export function PrivacyPolicyPage() {
       <section>
         <h2>Security, retention and deletion</h2>
         <p>
-          The hosted playarr.app service uses HTTPS. Connections to a self-hosted Playarr Server use
-          the HTTP or HTTPS address chosen by you or your administrator, so only use an unencrypted
-          address on a network you trust. Local records remain until removed in the app, cleared by
-          the operating system or removed by uninstalling. Server-side records and backups follow
-          the server operator's retention policy. Device-link records expire automatically as
-          described above.
+          The hosted playarr.app service and the Google Play Android app require HTTPS. Sideloaded
+          builds can also connect to an HTTP address chosen by you or your administrator, so only
+          use an unencrypted address on a network you trust. Local records remain until removed in
+          the app, cleared by the operating system or removed by uninstalling. Server-side records
+          and backups follow the server operator's retention policy. Device-link records expire
+          automatically as described above.
         </p>
         <p>
           To request deletion of an account and associated server-side data, follow the
@@ -154,10 +154,10 @@ export function PrivacyPolicyPage() {
           You can avoid the hosted linking service by entering a server address and signing in
           directly. You can disable notifications, remove downloads, sign out, clear app storage or
           uninstall the app at any time. Playarr is developed by Thomas McFarlane. For privacy
-          questions, use the contact method on the
-          <a href="https://github.com/ThomasMcFarlane/playarr"> Playarr repository</a> or the support
-          email on its Google Play listing. Do not put passwords, tokens or private information in a
-          public issue.
+          questions, email <a href="mailto:support@playarr.app">support@playarr.app</a>. You can
+          also use the contact method on the
+          <a href="https://github.com/ThomasMcFarlane/playarr"> Playarr repository</a>. Do not put
+          passwords, tokens or private information in a public issue.
         </p>
       </section>
 

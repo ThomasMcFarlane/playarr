@@ -433,6 +433,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 4.7.0(supports-color@10.2.2)(vite@5.4.21(@types/node@22.20.1))
+      esbuild:
+        specifier: 0.21.5
+        version: 0.21.5
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

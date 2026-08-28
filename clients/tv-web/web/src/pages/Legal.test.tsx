@@ -60,4 +60,11 @@ describe("public legal pages", () => {
     expect(apiProvider).toBeGreaterThan(publicBranch);
     expect(downloadsProvider).toBeGreaterThan(publicBranch);
   });
+
+  it("publishes the verified privacy contact directly on the privacy policy", () => {
+    const markup = renderLegalPage("/legal/privacy", <PrivacyPolicyPage />);
+
+    expect(markup).toContain('href="mailto:support@playarr.app"');
+    expect(markup).toContain("Google Play Android app require HTTPS");
+  });
 });

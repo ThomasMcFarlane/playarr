@@ -56,12 +56,13 @@ jobs:
       - name: Test web client
         run: pnpm --filter @playarr-tv/web run test
 
+      - name: Bundle Cloudflare Worker
+        run: >-
+          pnpm --filter @playarr-tv/web exec esbuild worker.js --bundle
+          --format=esm --platform=node --target=es2022 --outfile=dist-worker.mjs
+
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '4'
-          packageManager: pnpm
-          workingDirectory: clients/tv-web/web
-          command: deploy
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node web/scripts/deploy-cloudflare-api.mjs
