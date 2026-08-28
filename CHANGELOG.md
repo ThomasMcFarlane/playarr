@@ -93,8 +93,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   typecheck, so clean self-hosted runners can resolve generated package types
   and unblock production legal-page deployments.
 
-- Cloudflare deployment explicitly uses pnpm when installing Wrangler, avoiding
-  npm's unsupported handling of this workspace's `workspace:*` dependencies.
+- Cloudflare deployment uses Node.js 22 and explicitly installs Wrangler with
+  pnpm, satisfying Wrangler's runtime floor without npm attempting to process
+  this workspace's unsupported `workspace:*` dependency URLs.
 
 - Android APK and private Google Play publishing now use the repository-scoped
   `playarr-runners` pool on the self-hosted ARC cluster and install the pinned
