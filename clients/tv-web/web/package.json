@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && vite",
     "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build && node scripts/copy-cast-receiver.mjs",
-    "deploy:cloudflare": "pnpm --filter @playarr-tv/web... run build && esbuild worker.js --bundle --format=esm --platform=node --target=es2022 --outfile=dist-worker.mjs && node scripts/deploy-cloudflare-api.mjs",
+    "deploy:cloudflare": "pnpm --filter @playarr-tv/web... run build && esbuild worker.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist-worker.mjs && node scripts/deploy-cloudflare-api.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",

@@ -1,6 +1,4 @@
-// Deep import bypasses qrcode's package.json "browser" field, which remaps
-// the default entry to a canvas/DOM renderer with no toBuffer() export.
-import * as QRCode from "qrcode/lib/server.js";
+import * as QRCode from "qrcode/lib/core/qrcode.js";
 
 const DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
@@ -282,22 +280,87 @@ async function linkQrPng(value) {
     return json({ error: "invalid_value" }, { status: 400 });
   }
   const width = PLAYARR_QR_STYLE.contentSize * PLAYARR_QR_STYLE.renderScale;
-  const png = await QRCode.toBuffer(value, {
-    type: "png",
+  const qr = QRCode.create(value, {
     errorCorrectionLevel: PLAYARR_QR_STYLE.errorCorrectionLevel,
-    margin: PLAYARR_QR_STYLE.marginModules,
-    width,
-    color: {
-      dark: PLAYARR_QR_STYLE.dark,
-      light: PLAYARR_QR_STYLE.light,
-    },
   });
+  const png = await renderQrPng(qr.modules, width, PLAYARR_QR_STYLE.marginModules);
   return new Response(png, {
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": "no-store",
     },
   });
+}
+
+function pngCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeUint32(bytes, offset, value) {
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(offset, value);
+}
+
+function pngChunk(type, data = new Uint8Array()) {
+  const typeBytes = new TextEncoder().encode(type);
+  const chunk = new Uint8Array(12 + data.length);
+  writeUint32(chunk, 0, data.length);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  writeUint32(chunk, 8 + data.length, pngCrc32(chunk.subarray(4, 8 + data.length)));
+  return chunk;
+}
+
+async function renderQrPng(modules, width, margin) {
+  const scanlines = new Uint8Array((width + 1) * width);
+  const moduleCount = modules.size + margin * 2;
+  const scale = Math.floor(width / moduleCount);
+  const symbolWidth = modules.size * scale;
+  const symbolOffset = Math.floor((width - symbolWidth) / 2);
+
+  scanlines.fill(255);
+  for (let y = 0; y < width; y += 1) {
+    const rowOffset = y * (width + 1);
+    scanlines[rowOffset] = 0;
+    const moduleY = Math.floor((y - symbolOffset) / scale);
+    if (moduleY < 0 || moduleY >= modules.size) continue;
+    for (let x = 0; x < width; x += 1) {
+      const moduleX = Math.floor((x - symbolOffset) / scale);
+      if (moduleX >= 0 && moduleX < modules.size && modules.get(moduleY, moduleX)) {
+        scanlines[rowOffset + x + 1] = 0;
+      }
+    }
+  }
+
+  const compressed = new Uint8Array(
+    await new Response(
+      new Blob([scanlines]).stream().pipeThrough(new CompressionStream("deflate")),
+    ).arrayBuffer(),
+  );
+  const header = new Uint8Array(13);
+  writeUint32(header, 0, width);
+  writeUint32(header, 4, width);
+  header.set([8, 0, 0, 0, 0], 8);
+
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", compressed),
+    pngChunk("IEND"),
+  ];
+  const png = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    png.set(part, offset);
+    offset += part.length;
+  }
+  return png;
 }
 
 function isHttpUrl(value) {
