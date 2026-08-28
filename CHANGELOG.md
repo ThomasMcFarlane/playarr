@@ -124,6 +124,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Repository-wide web CI now builds internal workspace packages before its
+  recursive typecheck on a clean self-hosted runner.
+
 - Public legal routes now mount without the signed-in API and download providers,
   accurately disclose browser and notification processing, include account-deletion
   guidance, and run through the Worker before the SPA asset fallback.
