@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Playarr foreground-service demonstration</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #160f0e; color: #fff8f5; }
+    main { box-sizing: border-box; width: min(100%, 62rem); margin: auto; padding: 2rem 1rem 4rem; }
+    h1 { margin: 0 0 .75rem; font-size: clamp(1.8rem, 5vw, 3.5rem); line-height: 1; }
+    p { max-width: 48rem; color: #d9cbc6; line-height: 1.55; }
+    video { display: block; width: min(100%, 27rem); max-height: 78vh; margin: 2rem auto; background: #000; border-radius: 1.25rem; box-shadow: 0 1rem 4rem #0008; }
+    code { color: #ffb6ce; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Playarr data-sync foreground service</h1>
+    <p>
+      Google Play review demonstration for <code>FOREGROUND_SERVICE_DATA_SYNC</code>.
+      It shows a user starting an offline media download, Android displaying the
+      ongoing foreground-service notification while Playarr is in the background,
+      and the user returning to Playarr to pause the transfer.
+    </p>
+    <video controls playsinline preload="metadata">
+      <source src="foreground-service-data-sync-demo.mp4" type="video/mp4">
+      Your browser does not support MP4 video.
+    </video>
+  </main>
+</body>
+</html>

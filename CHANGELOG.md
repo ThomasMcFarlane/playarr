@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A public Google Play policy-review video demonstrates the Android app's
+  user-started offline download, ongoing data-sync notification, and pause
+  control without exposing private library content or credentials.
+
 - Android release `0.2.16` (versionCode 2016) was built and published to the
   private Google Play internal track by the self-hosted `playarr-runners` CI
   pool, with icons and listing artwork verified in every configured language.
