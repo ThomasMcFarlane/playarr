@@ -34,9 +34,10 @@ import {
 import { useDownloads, type LocalPlaybackSource } from "./DownloadsProvider";
 import { useOnlineStatus } from "./useOnlineStatus";
 import { IS_TIZEN } from "./clientPlatform";
+import { DOWNLOADED_QUALITY_ID } from "./qualityIds";
 
 /** Selector id for the synthetic "Downloaded" quality option a completed local copy adds to `qualityOptions` -- never a real server rendition profile. */
-export const DOWNLOADED_QUALITY_ID = "downloaded";
+export { DOWNLOADED_QUALITY_ID } from "./qualityIds";
 
 const initialNegotiations = new WeakMap<
   ApiClient,

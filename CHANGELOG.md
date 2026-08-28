@@ -124,6 +124,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Cast request tests no longer import the browser-only playback engine merely
+  to read the downloaded-quality identifier, removing a clean-runner race on
+  the global `navigator` object.
+
 - Repository-wide web CI now builds internal workspace packages before its
   recursive typecheck on a clean self-hosted runner.
 

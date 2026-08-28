@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { PlayarrCastLoadRequest } from "@playarr-tv/cast-protocol";
 import type { PlayerPlaylistItem } from "../../components/player/PlayerSurface";
-import { DOWNLOADED_QUALITY_ID } from "../usePlaybackEngine";
+import { DOWNLOADED_QUALITY_ID } from "../qualityIds";
 import { buildPlayarrCastLoadRequest, requestPlayarrCastLoad } from "./castLoad";
 
 // `chrome.cast.media.*` only exist at runtime once the real CAF sender

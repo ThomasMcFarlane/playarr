@@ -15,7 +15,7 @@ import {
   type PlayarrCastQueueEntry,
 } from "@playarr-tv/cast-protocol";
 import type { PlayerPlaylistItem } from "../../components/player/PlayerSurface";
-import { DOWNLOADED_QUALITY_ID } from "../usePlaybackEngine";
+import { DOWNLOADED_QUALITY_ID } from "../qualityIds";
 
 /** This build's own identity on the custom channel -- mirrors `ApiClientProvider.tsx`'s web-platform login identity, duplicated locally rather than imported (that constant is private to that module). */
 const CAST_SENDER_DEVICE_NAME = "Playarr Web";
