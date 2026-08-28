@@ -89,6 +89,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web CI now builds every shared workspace package before the recursive
+  typecheck, so clean self-hosted runners can resolve generated package types
+  and unblock production legal-page deployments.
+
 - Android APK and private Google Play publishing now use the repository-scoped
   `playarr-runners` pool on the self-hosted ARC cluster and install the pinned
   Android SDK 37.0 packages on each ephemeral runner. Google Play publishing

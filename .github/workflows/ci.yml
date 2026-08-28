@@ -272,7 +272,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web workspace dependencies
-        run: pnpm --filter @playarr-tv/web^... run build
+        run: pnpm --filter './packages/**' run build
 
       # These delegate to the workspace root's own scripts (see
       # clients/tv-web/package.json: "lint": "pnpm -r --if-present run
