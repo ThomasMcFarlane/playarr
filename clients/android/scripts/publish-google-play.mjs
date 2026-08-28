@@ -6,7 +6,7 @@ const credentialPath = process.env.GOOGLE_PLAY_JSON_KEY;
 const bundlePath = process.env.PLAYARR_AAB;
 const versionName = process.env.PLAYARR_VERSION_NAME;
 const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/android/en-US';
-const locale = 'en-US';
+const metadataLocale = process.env.PLAYARR_METADATA_LOCALE ?? 'en-US';
 
 if (!packageName || !credentialPath || !bundlePath || !versionName) {
   throw new Error(
@@ -33,7 +33,22 @@ signer.update(unsignedAssertion);
 signer.end();
 const assertion = `${unsignedAssertion}.${signer.sign(credential.private_key).toString('base64url')}`;
 
-const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+async function fetchWithRetry(url, options = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+  throw lastError;
+}
+
+const tokenResponse = await fetchWithRetry('https://oauth2.googleapis.com/token', {
   method: 'POST',
   headers: { 'content-type': 'application/x-www-form-urlencoded' },
   body: new URLSearchParams({
@@ -47,22 +62,13 @@ if (!tokenResponse.ok || !tokenBody.access_token) {
 }
 
 async function request(url, options = {}) {
-  let response;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
-    try {
-      response = await fetch(url, {
-        ...options,
-        headers: {
-          authorization: `Bearer ${tokenBody.access_token}`,
-          ...options.headers,
-        },
-      });
-      break;
-    } catch (error) {
-      if (attempt === 4) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-    }
-  }
+  const response = await fetchWithRetry(url, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${tokenBody.access_token}`,
+      ...options.headers,
+    },
+  });
 
   const text = await response.text();
   let body;
@@ -89,6 +95,18 @@ const edit = await request(`${apiRoot}/edits`, {
 const editId = edit.id;
 
 try {
+  const [details, existingListings] = await Promise.all([
+    request(`${apiRoot}/edits/${editId}/details`),
+    request(`${apiRoot}/edits/${editId}/listings`),
+  ]);
+  const listingLocales = [
+    ...new Set([
+      metadataLocale,
+      details.defaultLanguage,
+      ...(existingListings.listings ?? []).map((listing) => listing.language),
+    ].filter(Boolean)),
+  ];
+
   const bundle = await request(
     `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/bundles?uploadType=media`,
     {
@@ -119,15 +137,18 @@ try {
     readFile(`${metadataRoot}/short_description.txt`, 'utf8'),
     readFile(`${metadataRoot}/full_description.txt`, 'utf8'),
   ]);
-  await request(`${apiRoot}/edits/${editId}/listings/${locale}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      title: title.trim(),
-      shortDescription: shortDescription.trim(),
-      fullDescription: fullDescription.trim(),
-    }),
-  });
+  const textLocales = [...new Set([metadataLocale, details.defaultLanguage].filter(Boolean))];
+  for (const locale of textLocales) {
+    await request(`${apiRoot}/edits/${editId}/listings/${locale}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: title.trim(),
+        shortDescription: shortDescription.trim(),
+        fullDescription: fullDescription.trim(),
+      }),
+    });
+  }
 
   const screenshotTypes = ['phoneScreenshots', 'tvScreenshots'];
   const imagePaths = [
@@ -142,24 +163,28 @@ try {
     }
   }
 
-  for (const imageType of [...new Set(imagePaths.map(([type]) => type))]) {
-    await request(`${apiRoot}/edits/${editId}/listings/${locale}/${imageType}`, {
-      method: 'DELETE',
-    });
-  }
-  for (const [imageType, path] of imagePaths) {
-    await request(
-      `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/listings/${locale}/${imageType}?uploadType=media`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'image/png' },
-        body: await readFile(path),
-      },
-    );
+  for (const locale of listingLocales) {
+    for (const imageType of [...new Set(imagePaths.map(([type]) => type))]) {
+      await request(`${apiRoot}/edits/${editId}/listings/${locale}/${imageType}`, {
+        method: 'DELETE',
+      });
+    }
+    for (const [imageType, path] of imagePaths) {
+      await request(
+        `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/listings/${locale}/${imageType}?uploadType=media`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'image/png' },
+          body: await readFile(path),
+        },
+      );
+    }
   }
 
   await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
-  console.log(`Published Playarr ${versionName} to Google Play internal testing`);
+  console.log(
+    `Published Playarr ${versionName} to Google Play internal testing with assets for ${listingLocales.join(', ')}`,
+  );
 } catch (error) {
   await request(`${apiRoot}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});
   throw error;

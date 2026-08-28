@@ -124,6 +124,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Google Play publishing now applies the icon and other visual listing assets
+  to every configured language, including the app's default `en-GB` listing,
+  instead of leaving non-`en-US` Console and Store pages without branding.
+
 - Server images build and co-host Playarr Admin at `/`; the consumer Playarr
   Web app remains confined to its dedicated hosted origins.
 
