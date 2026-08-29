@@ -1,0 +1,60 @@
+# Google Play review server
+
+This Cloudflare Worker is a sterile compatibility target for Google Play's
+review team. It is not a hosted Playarr product and it provides no registration,
+account provisioning, media uploads, library management or access to a private
+Playarr Server.
+
+The Worker implements the Android client's real login, refresh, catalogue,
+profile, detail and direct-play response shapes. Fixed reviewer credentials are
+stored only as Cloudflare Worker secrets. Every API route requires a signed,
+expiring bearer token except health/version and the login/refresh endpoints.
+The stream route additionally accepts a short-lived, signed playback capability
+created by the negotiation endpoint.
+
+The catalogue contains exactly one title: **Big Buck Bunny**, copyright 2008
+Blender Foundation, published under
+[Creative Commons Attribution 3.0](https://peach.blender.org/about/). The fixed
+640×360 Wikimedia Commons rendition URL is compiled into the Worker as the only
+permitted upstream media resource. Arbitrary media IDs and URLs are rejected.
+
+## Test
+
+```sh
+cd clients/tv-web
+pnpm --filter @playarr-tv/play-review-server test
+```
+
+## Deploy
+
+Deployment uses the Cloudflare REST API directly; Wrangler and browser login are
+not used.
+
+Required environment values:
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN` with `Workers Scripts Write` for the Playarr account
+- `PLAY_REVIEW_USERNAME` (at least 12 characters)
+- `PLAY_REVIEW_PASSWORD` (at least 20 characters)
+- `PLAY_REVIEW_TOKEN_SIGNING_SECRET` (at least 32 characters)
+
+The GitHub environment must also define `PLAY_REVIEW_DEPLOY_ENABLED=true`.
+Until that explicit enablement exists, both automatic and manual deployment
+jobs are skipped so an incomplete credential bootstrap cannot publish or fail.
+
+```sh
+cd clients/tv-web
+pnpm --filter @playarr-tv/play-review-server deploy:cloudflare
+```
+
+The deploy script uploads `playarr-google-play-review`, attaches
+`review.playarr.app`, then proves health, authentication, the one-item catalogue,
+playback negotiation and a real video byte-range response. It never prints the
+credentials or signing secret.
+
+## Play Console instructions
+
+Under **App content → Sign-in details**, declare that functionality is restricted
+and provide the server URL plus the operator-issued reviewer credentials. State
+that Playarr itself does not offer accounts and that these credentials exist
+only for Google's isolated review environment.

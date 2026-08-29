@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An isolated Google Play review Worker implements the native Android client's
+  authentication, catalogue and direct-play contract using one CC BY 3.0 sample
+  video, with secret-backed credentials, no registration or downloads, focused
+  isolation tests and direct Cloudflare API deployment from self-hosted CI.
+
 - A public Google Play policy-review video demonstrates the Android app's
   user-started offline download, ongoing data-sync notification, and pause
   control without exposing private library content or credentials.
