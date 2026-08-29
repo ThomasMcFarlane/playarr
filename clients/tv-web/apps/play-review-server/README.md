@@ -38,9 +38,9 @@ Required environment values:
 - `PLAY_REVIEW_PASSWORD` (at least 20 characters)
 - `PLAY_REVIEW_TOKEN_SIGNING_SECRET` (at least 32 characters)
 
-The GitHub environment must also define `PLAY_REVIEW_DEPLOY_ENABLED=true`.
-Until that explicit enablement exists, both automatic and manual deployment
-jobs are skipped so an incomplete credential bootstrap cannot publish or fail.
+The workflow becomes operational only after all five values exist in the
+protected `google-play-review` GitHub environment. It can then be dispatched
+manually and deploys automatically after a successful `main` CI run.
 
 ```sh
 cd clients/tv-web
