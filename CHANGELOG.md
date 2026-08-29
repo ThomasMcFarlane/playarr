@@ -105,6 +105,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Google Play review tracking now records that the app-access gate requires a
+  sterile review server or offline demo, not a Playarr-provided user account.
+
 - Google Play listing copy now describes operator-supplied server access
   without suggesting that Playarr provides user accounts.
 
