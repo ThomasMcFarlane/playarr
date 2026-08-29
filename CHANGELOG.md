@@ -18,8 +18,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Publisher API by the self-hosted `playarr-runners` CI pool.
 
 - The same Android release is staged on the private closed-testing track for
-  first-app review once Google Play's required App content setup clears the
-  app-level draft state.
+  first-app review; Google Play requires the one-time dashboard preview and
+  confirmation because Publisher API validation cannot activate a draft app.
 
 - Android release `0.2.16` (versionCode 2016) was built and published to the
   private Google Play internal track by the self-hosted `playarr-runners` CI
