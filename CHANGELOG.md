@@ -105,6 +105,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The live task board separately tracks Google Play release-note automation,
+  native symbol packaging, and Play-only R8 optimisation rather than treating
+  the first closed-test rollout as the end of Android release hardening.
+
 - Android release CI targets the private Google Play closed-testing `alpha`
   track by default, while retaining an explicit track override for controlled
   release workflows after the one-time draft-app confirmation.
