@@ -105,6 +105,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Google Play listing copy now describes operator-supplied server access
+  without suggesting that Playarr provides user accounts.
+
 - Google Play review tracking now distinguishes the already-completed no-ads
   declaration from the separate Advertising ID declaration and states clearly
   that server operators—not Playarr—provide and manage user access.

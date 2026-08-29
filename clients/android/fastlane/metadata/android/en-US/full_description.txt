@@ -2,7 +2,7 @@ Playarr is a native Android client for a Playarr Server operated by you, your ho
 
 Use Playarr to:
 • Connect securely to a Playarr Server using its HTTPS address.
-• Sign in with an account created and managed by the server operator.
+• Enter the server URL and access details supplied by the server operator.
 • Browse films, television series, music, books, sites and playlists.
 • Search the catalogue and view titles, seasons, episodes and media details.
 • Stream supported video and audio using Android's native Media3 player, including direct and HLS playback.
@@ -11,4 +11,4 @@ Use Playarr to:
 • Switch between profiles managed by your Playarr Server.
 • Use a remote-friendly native interface and short-code sign-in on Android TV and Google TV.
 
-Playarr does not provide or sell media, streaming subscriptions, cloud storage or a public catalogue. You need access to a reachable Playarr Server and a valid account supplied by that server's operator. Available libraries and features depend on the server configuration and your account permissions.
+Playarr does not provide or sell media, streaming subscriptions, cloud storage, user accounts or a public catalogue. You need access to a reachable Playarr Server. The person or organisation operating that server supplies and controls access. Available libraries and features depend on the server configuration and the access granted by its operator.
