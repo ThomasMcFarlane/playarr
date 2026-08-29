@@ -21,6 +21,30 @@ const JSON_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
+const ALLOWED_WEB_ORIGINS = new Set(["https://playarr.app"]);
+const CORS_METHODS = "GET, HEAD, POST, PUT, PATCH, OPTIONS";
+const CORS_REQUEST_HEADERS = [
+  "Accept",
+  "Authorization",
+  "Content-Type",
+  "If-Modified-Since",
+  "If-None-Match",
+  "If-Range",
+  "Range",
+  "X-Playarr-Client-Platform",
+  "X-Playarr-Client-Version",
+];
+const CORS_EXPOSE_HEADERS = [
+  "Accept-Ranges",
+  "Content-Length",
+  "Content-Range",
+  "Content-Type",
+  "ETag",
+  "Last-Modified",
+].join(", ");
+const ALLOWED_CORS_METHODS = new Set(CORS_METHODS.split(", ").map((method) => method.toLowerCase()));
+const ALLOWED_CORS_HEADERS = new Set(CORS_REQUEST_HEADERS.map((header) => header.toLowerCase()));
+
 const WORK = Object.freeze({
   id: WORK_ID,
   kind: "movie",
@@ -71,6 +95,48 @@ function empty(status = 204, headers = {}) {
 
 function error(code, status) {
   return json({ error: code }, status);
+}
+
+function corsHeaders(origin) {
+  if (!origin || !ALLOWED_WEB_ORIGINS.has(origin)) return null;
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Expose-Headers": CORS_EXPOSE_HEADERS,
+    Vary: "Origin",
+  };
+}
+
+function withCors(response, origin) {
+  const allowedHeaders = corsHeaders(origin);
+  if (!allowedHeaders) return response;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(allowedHeaders)) headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function corsPreflight(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin || !ALLOWED_WEB_ORIGINS.has(origin)) return error("cors_origin_not_allowed", 403);
+  const method = request.headers.get("Access-Control-Request-Method")?.toLowerCase();
+  if (!method || !ALLOWED_CORS_METHODS.has(method)) return error("cors_method_not_allowed", 405);
+  const requestedHeaders = (request.headers.get("Access-Control-Request-Headers") ?? "")
+    .split(",")
+    .map((header) => header.trim().toLowerCase())
+    .filter(Boolean);
+  if (requestedHeaders.some((header) => !ALLOWED_CORS_HEADERS.has(header))) {
+    return error("cors_header_not_allowed", 403);
+  }
+  return empty(204, {
+    "Access-Control-Allow-Headers": CORS_REQUEST_HEADERS.join(", "),
+    "Access-Control-Allow-Methods": CORS_METHODS,
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+  });
 }
 
 function base64Url(bytes) {
@@ -506,4 +572,9 @@ export const reviewServerInternals = Object.freeze({
   WORK_ID,
 });
 
-export default { fetch: handle };
+async function fetchRequest(request, env) {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  return withCors(await handle(request, env), request.headers.get("Origin"));
+}
+
+export default { fetch: fetchRequest };

@@ -190,6 +190,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The Google Play review Worker now accepts strict cross-origin requests from
+  the hosted `playarr.app` client, including login preflights and ranged media,
+  instead of surfacing a misleading Local Network Access error.
+
 - Cloudflare's Worker bundle now renders device-link QR PNGs with Worker-native
   web APIs instead of importing Node filesystem code rejected at deployment.
 

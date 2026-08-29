@@ -12,6 +12,10 @@ expiring bearer token except health/version and the login/refresh endpoints.
 The stream route additionally accepts a short-lived, signed playback capability
 created by the negotiation endpoint.
 
+Browser access is restricted to `https://playarr.app` through an explicit CORS
+allow-list. Its login preflight, bearer-authenticated API requests, artwork and
+ranged media responses are supported; arbitrary web origins are rejected.
+
 The catalogue contains exactly one title: **Big Buck Bunny**, copyright 2008
 Blender Foundation, published under
 [Creative Commons Attribution 3.0](https://peach.blender.org/about/). The fixed

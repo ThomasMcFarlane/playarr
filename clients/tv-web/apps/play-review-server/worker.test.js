@@ -88,6 +88,59 @@ describe("review authentication", () => {
   });
 });
 
+describe("hosted Playarr Web CORS", () => {
+  it("accepts the hosted app's browser preflight", async () => {
+    const response = await worker.fetch(
+      new Request("https://review.playarr.app/api/v1/auth/login", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://playarr.app",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type, x-playarr-client-platform",
+        },
+      }),
+      ENV,
+    );
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://playarr.app");
+    assert.match(response.headers.get("Access-Control-Allow-Methods"), /POST/);
+    assert.match(response.headers.get("Access-Control-Allow-Headers"), /Content-Type/);
+  });
+
+  it("adds CORS headers to an actual hosted-app login response", async () => {
+    const response = await worker.fetch(
+      new Request("https://review.playarr.app/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "https://playarr.app" },
+        body: JSON.stringify({
+          device_id: "review-device",
+          username: ENV.REVIEW_USERNAME,
+          password: ENV.REVIEW_PASSWORD,
+        }),
+      }),
+      ENV,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://playarr.app");
+  });
+
+  it("does not grant arbitrary web origins access", async () => {
+    const response = await worker.fetch(
+      new Request("https://review.playarr.app/api/v1/auth/login", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://attacker.example",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type",
+        },
+      }),
+      ENV,
+    );
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.has("Access-Control-Allow-Origin"), false);
+  });
+});
+
 describe("single-item review catalogue", () => {
   it("requires a signed access token", async () => {
     const response = await worker.fetch(new Request("https://review.playarr.app/api/v1/catalog"), ENV);
@@ -157,7 +210,11 @@ describe("single allow-listed video", () => {
 
     const response = await worker.fetch(
       new Request(new URL(playback.url, "https://review.playarr.app"), {
-        headers: { Range: "bytes=0-3", Authorization: "Bearer must-not-reach-upstream" },
+        headers: {
+          Range: "bytes=0-3",
+          Authorization: "Bearer must-not-reach-upstream",
+          Origin: "https://playarr.app",
+        },
       }),
       ENV,
     );
@@ -167,6 +224,8 @@ describe("single allow-listed video", () => {
     assert.equal(requestedHeaders.get("Accept"), "video/*");
     assert.match(requestedHeaders.get("User-Agent"), /^Playarr-Google-Play-Review\//);
     assert.equal(requestedHeaders.has("Authorization"), false);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://playarr.app");
+    assert.match(response.headers.get("Access-Control-Expose-Headers"), /Content-Range/);
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [0, 1, 2, 3]);
   });
 

@@ -90,9 +90,24 @@ async function verifyDeployment() {
         signal: AbortSignal.timeout(15_000),
       });
       if (health.status !== 200) throw new Error(`health returned HTTP ${health.status}`);
+      const preflight = await fetch(`https://${hostname}/api/v1/auth/login`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://playarr.app",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type",
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (
+        preflight.status !== 204 ||
+        preflight.headers.get("Access-Control-Allow-Origin") !== "https://playarr.app"
+      ) {
+        throw new Error(`hosted-app CORS preflight returned HTTP ${preflight.status}`);
+      }
       const login = await fetch(`https://${hostname}/api/v1/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Origin: "https://playarr.app" },
         body: JSON.stringify({
           device_id: "deployment-verification",
           device_name: "Deployment verification",
@@ -104,6 +119,9 @@ async function verifyDeployment() {
         signal: AbortSignal.timeout(15_000),
       });
       if (login.status !== 200) throw new Error(`login returned HTTP ${login.status}`);
+      if (login.headers.get("Access-Control-Allow-Origin") !== "https://playarr.app") {
+        throw new Error("login response omitted the hosted-app CORS allow-origin header");
+      }
       const session = await login.json();
       const catalogue = await fetch(`https://${hostname}/api/v1/catalog?kind=movie`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -122,10 +140,14 @@ async function verifyDeployment() {
         throw new Error("playback negotiation failed");
       }
       const video = await fetch(new URL(source.url, `https://${hostname}`), {
-        headers: { Range: "bytes=0-1023" },
+        headers: { Range: "bytes=0-1023", Origin: "https://playarr.app" },
         signal: AbortSignal.timeout(30_000),
       });
-      if (![200, 206].includes(video.status) || !video.headers.get("Content-Type")?.startsWith("video/")) {
+      if (
+        ![200, 206].includes(video.status) ||
+        !video.headers.get("Content-Type")?.startsWith("video/") ||
+        video.headers.get("Access-Control-Allow-Origin") !== "https://playarr.app"
+      ) {
         throw new Error(`video probe returned HTTP ${video.status}`);
       }
       await video.body?.cancel();
