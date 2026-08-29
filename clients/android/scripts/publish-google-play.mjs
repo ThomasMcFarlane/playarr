@@ -8,10 +8,13 @@ const versionName = process.env.PLAYARR_VERSION_NAME;
 const releaseTrack = process.env.PLAYARR_PLAY_TRACK ?? 'alpha';
 const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/android/en-US';
 const metadataLocale = process.env.PLAYARR_METADATA_LOCALE ?? 'en-US';
+const listingImagesOnly = process.env.PLAYARR_LISTING_IMAGES_ONLY === 'true';
 
-if (!packageName || !credentialPath || !bundlePath || !versionName) {
+if (!packageName || !credentialPath || (!listingImagesOnly && (!bundlePath || !versionName))) {
   throw new Error(
-    'PLAYARR_APPLICATION_ID, GOOGLE_PLAY_JSON_KEY, PLAYARR_AAB, and PLAYARR_VERSION_NAME are required',
+    listingImagesOnly
+      ? 'PLAYARR_APPLICATION_ID and GOOGLE_PLAY_JSON_KEY are required'
+      : 'PLAYARR_APPLICATION_ID, GOOGLE_PLAY_JSON_KEY, PLAYARR_AAB, and PLAYARR_VERSION_NAME are required',
   );
 }
 
@@ -102,61 +105,67 @@ try {
   ]);
   const listingLocales = [
     ...new Set([
-      metadataLocale,
-      details.defaultLanguage,
+      ...(listingImagesOnly ? [] : [metadataLocale, details.defaultLanguage]),
       ...(existingListings.listings ?? []).map((listing) => listing.language),
     ].filter(Boolean)),
   ];
+  if (listingLocales.length === 0) {
+    throw new Error('Google Play has no existing listing locales to update');
+  }
 
-  const bundle = await request(
-    `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/bundles?uploadType=media`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/octet-stream' },
-      body: await readFile(bundlePath),
-    },
-  );
-  console.log(`Uploaded AAB versionCode=${bundle.versionCode}`);
+  if (!listingImagesOnly) {
+    const bundle = await request(
+      `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/bundles?uploadType=media`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: await readFile(bundlePath),
+      },
+    );
+    console.log(`Uploaded AAB versionCode=${bundle.versionCode}`);
 
-  await request(`${apiRoot}/edits/${editId}/tracks/${encodeURIComponent(releaseTrack)}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      track: releaseTrack,
-      releases: [
-        {
-          name: `Playarr ${versionName}`,
-          versionCodes: [String(bundle.versionCode)],
-          status: 'completed',
-        },
-      ],
-    }),
-  });
-
-  const [title, shortDescription, fullDescription] = await Promise.all([
-    readFile(`${metadataRoot}/title.txt`, 'utf8'),
-    readFile(`${metadataRoot}/short_description.txt`, 'utf8'),
-    readFile(`${metadataRoot}/full_description.txt`, 'utf8'),
-  ]);
-  const textLocales = [...new Set([metadataLocale, details.defaultLanguage].filter(Boolean))];
-  for (const locale of textLocales) {
-    await request(`${apiRoot}/edits/${editId}/listings/${locale}`, {
+    await request(`${apiRoot}/edits/${editId}/tracks/${encodeURIComponent(releaseTrack)}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        title: title.trim(),
-        shortDescription: shortDescription.trim(),
-        fullDescription: fullDescription.trim(),
+        track: releaseTrack,
+        releases: [
+          {
+            name: `Playarr ${versionName}`,
+            versionCodes: [String(bundle.versionCode)],
+            status: 'completed',
+          },
+        ],
       }),
     });
+
+    const [title, shortDescription, fullDescription] = await Promise.all([
+      readFile(`${metadataRoot}/title.txt`, 'utf8'),
+      readFile(`${metadataRoot}/short_description.txt`, 'utf8'),
+      readFile(`${metadataRoot}/full_description.txt`, 'utf8'),
+    ]);
+    const textLocales = [...new Set([metadataLocale, details.defaultLanguage].filter(Boolean))];
+    for (const locale of textLocales) {
+      await request(`${apiRoot}/edits/${editId}/listings/${locale}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          shortDescription: shortDescription.trim(),
+          fullDescription: fullDescription.trim(),
+        }),
+      });
+    }
   }
 
   const screenshotTypes = ['phoneScreenshots', 'tvScreenshots'];
-  const imagePaths = [
-    ['icon', `${metadataRoot}/images/icon.png`],
-    ['featureGraphic', `${metadataRoot}/images/featureGraphic.png`],
-    ['tvBanner', `${metadataRoot}/images/tvBanner.png`],
-  ];
+  const imagePaths = listingImagesOnly
+    ? []
+    : [
+        ['icon', `${metadataRoot}/images/icon.png`],
+        ['featureGraphic', `${metadataRoot}/images/featureGraphic.png`],
+        ['tvBanner', `${metadataRoot}/images/tvBanner.png`],
+      ];
   for (const imageType of screenshotTypes) {
     const filenames = (await readdir(`${metadataRoot}/images/${imageType}`)).sort();
     for (const filename of filenames) {
@@ -180,12 +189,31 @@ try {
         },
       );
     }
+    if (listingImagesOnly) {
+      for (const imageType of screenshotTypes) {
+        const expectedCount = imagePaths.filter(([type]) => type === imageType).length;
+        const uploaded = await request(`${apiRoot}/edits/${editId}/listings/${locale}/${imageType}`);
+        if ((uploaded.images ?? []).length !== expectedCount) {
+          throw new Error(
+            `${locale} ${imageType} verification failed: expected ${expectedCount}, got ${(uploaded.images ?? []).length}`,
+          );
+        }
+      }
+    }
   }
 
-  await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
-  console.log(
-    `Published Playarr ${versionName} to Google Play ${releaseTrack} with assets for ${listingLocales.join(', ')}`,
-  );
+  if (listingImagesOnly) {
+    await request(`${apiRoot}/edits/${editId}:validate`, { method: 'POST' });
+    await request(`${apiRoot}/edits/${editId}:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW`, {
+      method: 'POST',
+    });
+    console.log(`Published Google Play listing screenshots for ${listingLocales.join(', ')}`);
+  } else {
+    await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
+    console.log(
+      `Published Playarr ${versionName} to Google Play ${releaseTrack} with assets for ${listingLocales.join(', ')}`,
+    );
+  }
 } catch (error) {
   await request(`${apiRoot}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});
   throw error;

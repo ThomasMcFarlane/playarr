@@ -115,6 +115,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Big Buck Bunny artwork so the native Android app displays a genuine populated
   catalogue and detail view for reviewer and store-listing captures.
 
+- Google Play listing screenshots can now be replaced transactionally without
+  uploading a bundle or changing a testing track, while retaining the existing
+  all-locale release publishing path.
+
 - The Google Play review Worker now proxies a stable Internet Archive MP4
   rendition with an explicit service user agent after Wikimedia rejected the
   Cloudflare-originated video request.
