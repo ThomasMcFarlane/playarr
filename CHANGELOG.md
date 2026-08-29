@@ -111,6 +111,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Google Play review catalogue now uses authenticated, allow-listed raster
+  Big Buck Bunny artwork so the native Android app displays a genuine populated
+  catalogue and detail view for reviewer and store-listing captures.
+
 - The Google Play review Worker now proxies a stable Internet Archive MP4
   rendition with an explicit service user agent after Wikimedia rejected the
   Cloudflare-originated video request.

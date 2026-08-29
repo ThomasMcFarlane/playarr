@@ -176,6 +176,37 @@ describe("single-item review catalogue", () => {
     assert.equal(profiles.length, 1);
     assert.equal(profiles[0].id, reviewServerInternals.USER_ID);
   });
+
+  it("proxies only the fixed raster artwork without forwarding credentials", async () => {
+    let requestedUrl;
+    let requestedHeaders;
+    globalThis.fetch = async (url, init) => {
+      requestedUrl = url;
+      requestedHeaders = new Headers(init.headers);
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: { "Content-Type": "image/png", ETag: '"artwork"' },
+      });
+    };
+
+    const response = await authorised(`/api/v1/artwork/work/${reviewServerInternals.WORK_ID}/backdrop`, {
+      headers: { Origin: "https://playarr.app" },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(requestedUrl, reviewServerInternals.DEMO_BACKDROP_URL);
+    assert.match(requestedHeaders.get("Accept"), /image\/png/);
+    assert.match(requestedHeaders.get("User-Agent"), /^Playarr-Google-Play-Review\//);
+    assert.equal(requestedHeaders.has("Authorization"), false);
+    assert.equal(response.headers.get("Content-Type"), "image/png");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://playarr.app");
+  });
+
+  it("fails closed when the fixed artwork source is unavailable", async () => {
+    globalThis.fetch = async () => new Response("unavailable", { status: 403 });
+    const response = await authorised(`/api/v1/artwork/work/${reviewServerInternals.WORK_ID}/poster`);
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), { error: "demo_artwork_unavailable" });
+  });
 });
 
 describe("single allow-listed video", () => {

@@ -23,6 +23,13 @@ Blender Foundation, published under
 only permitted upstream media resource. Arbitrary media IDs and URLs are
 rejected.
 
+The poster and backdrop are fixed raster files from Wikimedia Commons rather
+than generated marketing graphics. Both are Big Buck Bunny artwork published
+under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) and are proxied
+unchanged through the same authenticated, allow-listed surface so the native
+Android image pipeline can display the real catalogue. Attribution: `(c)
+copyright Blender Foundation | www.bigbuckbunny.org`.
+
 ## Test
 
 ```sh

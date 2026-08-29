@@ -15,6 +15,15 @@ const VIDEO_DURATION_MS = 596_410;
 const DEMO_VIDEO_URL =
   "https://archive.org/download/BigBuckBunny_328/BigBuckBunny_512kb.mp4";
 
+// The Android client deliberately uses a raster-only image pipeline. These
+// fixed Wikimedia Commons files are frames/artwork from Big Buck Bunny and are
+// licensed CC BY 3.0 by the Blender Foundation. Keeping the URLs allow-listed
+// prevents the review server from becoming an arbitrary image proxy.
+const DEMO_POSTER_URL =
+  "https://upload.wikimedia.org/wikipedia/commons/c/c5/Big_buck_bunny_poster_big.jpg";
+const DEMO_BACKDROP_URL =
+  "https://upload.wikimedia.org/wikipedia/commons/5/5f/BBB-Bunny.png";
+
 const JSON_HEADERS = {
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=utf-8",
@@ -52,19 +61,19 @@ const WORK = Object.freeze({
   title: "Big Buck Bunny",
   sort_title: "Big Buck Bunny",
   overview:
-    "An openly licensed Blender Foundation short film, included only so Google Play reviewers can verify Playarr's native catalogue and playback experience. CC BY 3.0; copyright 2008 Blender Foundation.",
+    "An openly licensed Blender Foundation short film, included only so Google Play reviewers can verify Playarr's native catalogue and playback experience. Licensed CC BY 3.0. Attribution: (c) copyright Blender Foundation | www.bigbuckbunny.org.",
   images: [
     {
       kind: "poster",
       url: `/api/v1/artwork/work/${WORK_ID}/poster`,
-      width: 600,
-      height: 900,
+      width: 1500,
+      height: 2122,
     },
     {
       kind: "backdrop",
       url: `/api/v1/artwork/work/${WORK_ID}/backdrop`,
-      width: 1600,
-      height: 900,
+      width: 1280,
+      height: 720,
     },
   ],
   genres: ["Animation", "Open movie"],
@@ -422,18 +431,35 @@ async function proxyVideo(request) {
   });
 }
 
-function artwork(kind) {
-  const landscape = kind === "backdrop";
-  const width = landscape ? 1600 : 600;
-  const height = 900;
-  const titleY = landscape ? 400 : 370;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#150d2d"/><stop offset="1" stop-color="#f04583"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="${landscape ? 1240 : 300}" cy="210" r="115" fill="#fff" opacity=".12"/><text x="50%" y="${titleY}" fill="#fff" font-family="system-ui,sans-serif" font-size="${landscape ? 92 : 58}" font-weight="700" text-anchor="middle">Big Buck Bunny</text><text x="50%" y="${titleY + 75}" fill="#fff" font-family="system-ui,sans-serif" font-size="28" text-anchor="middle">Blender Foundation · CC BY 3.0</text><text x="50%" y="${height - 70}" fill="#fff" opacity=".72" font-family="system-ui,sans-serif" font-size="22" text-anchor="middle">Google Play review sample</text></svg>`;
-  return new Response(svg, {
-    headers: {
-      "Cache-Control": "public, max-age=86400",
-      "Content-Type": "image/svg+xml; charset=utf-8",
-      "X-Content-Type-Options": "nosniff",
-    },
+async function artwork(kind) {
+  const url = kind === "backdrop" ? DEMO_BACKDROP_URL : DEMO_POSTER_URL;
+  let upstream;
+  try {
+    upstream = await fetch(url, {
+      headers: {
+        Accept: "image/jpeg,image/png,image/*",
+        "User-Agent": "Playarr-Google-Play-Review/1.0 (https://playarr.app/legal/privacy)",
+      },
+      redirect: "follow",
+    });
+  } catch {
+    return error("demo_artwork_unavailable", 502);
+  }
+  const contentType = upstream.headers.get("Content-Type") ?? "";
+  if (upstream.status !== 200 || !/^image\/(?:jpeg|png)(?:;|$)/i.test(contentType)) {
+    return error("demo_artwork_unavailable", 502);
+  }
+  const responseHeaders = new Headers();
+  for (const name of ["Content-Length", "Content-Type", "ETag", "Last-Modified"]) {
+    const value = upstream.headers.get(name);
+    if (value) responseHeaders.set(name, value);
+  }
+  responseHeaders.set("Cache-Control", "public, max-age=86400");
+  responseHeaders.set("Content-Disposition", `inline; filename="big-buck-bunny-${kind}.${kind === "backdrop" ? "png" : "jpg"}"`);
+  responseHeaders.set("X-Content-Type-Options", "nosniff");
+  return new Response(upstream.body, {
+    status: 200,
+    headers: responseHeaders,
   });
 }
 
@@ -566,6 +592,8 @@ async function handle(request, env) {
 }
 
 export const reviewServerInternals = Object.freeze({
+  DEMO_BACKDROP_URL,
+  DEMO_POSTER_URL,
   DEMO_VIDEO_URL,
   MEDIA_FILE_ID,
   USER_ID,
