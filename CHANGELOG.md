@@ -117,7 +117,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Google Play listing screenshots can now be replaced transactionally without
   uploading a bundle or changing a testing track, while retaining the existing
-  all-locale release publishing path.
+  all-locale release publishing path; the transaction relies on the commit
+  endpoint's validation so it also works for service accounts that cannot call
+  the optional standalone edit-validation endpoint.
 
 - The Google Play review Worker now proxies a stable Internet Archive MP4
   rendition with an explicit service user agent after Wikimedia rejected the

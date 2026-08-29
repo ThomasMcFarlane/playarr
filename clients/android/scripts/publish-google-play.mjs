@@ -203,7 +203,6 @@ try {
   }
 
   if (listingImagesOnly) {
-    await request(`${apiRoot}/edits/${editId}:validate`, { method: 'POST' });
     await request(`${apiRoot}/edits/${editId}:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW`, {
       method: 'POST',
     });
