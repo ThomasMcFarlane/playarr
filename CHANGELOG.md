@@ -105,6 +105,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Play review documentation delivery recovered from a transient local DNS
+  failure without weakening GitHub SSH host-key verification.
+
 - The Google Play listing now clearly describes Playarr's self-hosted server
   requirement, supported Android form factors, native browsing and playback
   features, profiles, progress, and permitted offline downloads.
