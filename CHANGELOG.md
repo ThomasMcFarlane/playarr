@@ -105,6 +105,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Google Play review tracking now distinguishes the already-completed no-ads
+  declaration from the separate Advertising ID declaration and states clearly
+  that server operators—not Playarr—provide and manage user access.
+
 - Play review documentation delivery recovered from a transient local DNS
   failure without weakening GitHub SSH host-key verification.
 
