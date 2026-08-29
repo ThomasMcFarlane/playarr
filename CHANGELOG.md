@@ -111,6 +111,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Google Play review Worker now proxies a stable Internet Archive MP4
+  rendition with an explicit service user agent after Wikimedia rejected the
+  Cloudflare-originated video request.
+
 - Google Play review tracking now records that the app-access gate requires a
   sterile review server or offline demo, not a Playarr-provided user account.
 

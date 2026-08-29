@@ -6,14 +6,14 @@ const USER_ID = "22222222-2222-4222-8222-222222222222";
 const WORK_ID = "77777777-7777-4777-8777-777777777777";
 const MEDIA_FILE_ID = "33333333-3333-4333-8333-333333333333";
 const PLAYBACK_SESSION_ID = "99999999-9999-4999-8999-999999999999";
-const VIDEO_DURATION_MS = 634_553;
+const VIDEO_DURATION_MS = 596_410;
 
 // Big Buck Bunny is an open movie published by the Blender Foundation under
-// CC BY 3.0. Wikimedia Commons publishes this seekable 640x360 MPEG-4
+// CC BY 3.0. Internet Archive publishes this seekable 427x240 MPEG-4
 // rendition of the film. This fixed allow-listed URL is the only upstream
 // media resource the review server can ever return or proxy.
 const DEMO_VIDEO_URL =
-  "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.360p.mpeg4.mov";
+  "https://archive.org/download/BigBuckBunny_328/BigBuckBunny_512kb.mp4";
 
 const JSON_HEADERS = {
   "Cache-Control": "no-store",
@@ -268,7 +268,7 @@ function playbackOptions(preferences = {}) {
         id: "original",
         label: "Original",
         profile: null,
-        height: 360,
+        height: 240,
         video_bitrate_bps: null,
       },
     ],
@@ -293,7 +293,7 @@ async function playbackInfo(env) {
     mode: "direct",
     url: `/api/v1/media/${MEDIA_FILE_ID}/stream?playback_session_id=${encodeURIComponent(playbackToken)}`,
     session_id: PLAYBACK_SESSION_ID,
-    mime_type: "video/quicktime",
+    mime_type: "video/mp4",
     duration_ms: VIDEO_DURATION_MS,
     source_offset_ms: 0,
     audio_tracks: playbackOptions().audio_tracks,
@@ -326,7 +326,10 @@ async function streamAuthorised(request, url, env) {
 }
 
 async function proxyVideo(request) {
-  const headers = new Headers();
+  const headers = new Headers({
+    Accept: "video/*",
+    "User-Agent": "Playarr-Google-Play-Review/1.0 (https://playarr.app/legal/privacy)",
+  });
   for (const name of ["Range", "If-Range", "If-None-Match", "If-Modified-Since"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
@@ -344,7 +347,7 @@ async function proxyVideo(request) {
     if (value) responseHeaders.set(name, value);
   }
   responseHeaders.set("Cache-Control", "private, max-age=3600");
-  responseHeaders.set("Content-Disposition", 'inline; filename="big-buck-bunny.mov"');
+  responseHeaders.set("Content-Disposition", 'inline; filename="big-buck-bunny.mp4"');
   responseHeaders.set("X-Content-Type-Options", "nosniff");
   return new Response(request.method === "HEAD" ? null : upstream.body, {
     status: upstream.status,

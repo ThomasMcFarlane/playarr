@@ -131,7 +131,7 @@ describe("single allow-listed video", () => {
     assert.equal(response.status, 200);
     const playback = await response.json();
     assert.equal(playback.mode, "direct");
-    assert.equal(playback.mime_type, "video/quicktime");
+    assert.equal(playback.mime_type, "video/mp4");
     assert.match(playback.url, new RegExp(`^/api/v1/media/${reviewServerInternals.MEDIA_FILE_ID}/stream\\?`));
 
     const unknown = await authorised("/api/v1/playback/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
@@ -150,7 +150,7 @@ describe("single allow-listed video", () => {
         headers: {
           "Accept-Ranges": "bytes",
           "Content-Range": "bytes 0-3/4",
-          "Content-Type": "video/quicktime",
+          "Content-Type": "video/mp4",
         },
       });
     };
@@ -164,6 +164,8 @@ describe("single allow-listed video", () => {
     assert.equal(response.status, 206);
     assert.equal(requestedUrl, reviewServerInternals.DEMO_VIDEO_URL);
     assert.equal(requestedHeaders.get("Range"), "bytes=0-3");
+    assert.equal(requestedHeaders.get("Accept"), "video/*");
+    assert.match(requestedHeaders.get("User-Agent"), /^Playarr-Google-Play-Review\//);
     assert.equal(requestedHeaders.has("Authorization"), false);
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [0, 1, 2, 3]);
   });

@@ -15,8 +15,9 @@ created by the negotiation endpoint.
 The catalogue contains exactly one title: **Big Buck Bunny**, copyright 2008
 Blender Foundation, published under
 [Creative Commons Attribution 3.0](https://peach.blender.org/about/). The fixed
-640×360 Wikimedia Commons rendition URL is compiled into the Worker as the only
-permitted upstream media resource. Arbitrary media IDs and URLs are rejected.
+427×240 Internet Archive MP4 rendition URL is compiled into the Worker as the
+only permitted upstream media resource. Arbitrary media IDs and URLs are
+rejected.
 
 ## Test
 
