@@ -105,6 +105,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Google Play listing now clearly describes Playarr's self-hosted server
+  requirement, supported Android form factors, native browsing and playback
+  features, profiles, progress, and permitted offline downloads.
+
+- Repository agents must add every discovered work item to the MC3-style live
+  task board immediately and keep its status, ownership, and evidence current
+  throughout implementation.
+
 - The live task board separately tracks Google Play release-note automation,
   native symbol packaging, and Play-only R8 optimisation rather than treating
   the first closed-test rollout as the end of Android release hardening.

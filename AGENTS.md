@@ -51,6 +51,17 @@ It overrides weaker or older wording elsewhere in the tree.
 - A commit whose only purpose is to maintain `CHANGELOG.md` does not need to describe itself in
   the changelog.
 
+## Task tracking
+
+- Add every newly discovered unit of work to `TASKS.md` immediately, using the numbered MC3-style
+  table pattern. Do not leave blockers, follow-up work, or acceptance gaps only in chat, logs, or
+  hand-off notes.
+- Update each active row's status, owner, notes, and concrete evidence as work starts, progresses,
+  becomes blocked, or completes. Keep the board current during the work rather than reconciling it
+  only at the end.
+- Any agent working in this repository must read and maintain `TASKS.md`; when delegating work,
+  include the relevant task number and require status/evidence to be returned for the board.
+
 ## Safety before committing or pushing
 
 - Inspect the complete staged diff with `git diff --cached` and run `git diff --cached --check`.

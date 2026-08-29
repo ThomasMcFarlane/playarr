@@ -1,13 +1,14 @@
-Playarr is the native Android companion for the self-hosted Playarr Server.
+Playarr is a native Android client for a Playarr Server operated by you, your household or your organisation. It provides one adaptive experience for Android phones, tablets, Android TV and Google TV.
 
-Browse films, series, music and books from the library you already run. Move from phone to tablet to Android TV or Google TV with one adaptive app, then play through Android's native Media3 pipeline.
+Use Playarr to:
+• Connect securely to a Playarr Server using its HTTPS address.
+• Sign in with an account created and managed by the server operator.
+• Browse films, television series, music, books, sites and playlists.
+• Search the catalogue and view titles, seasons, episodes and media details.
+• Stream supported video and audio using Android's native Media3 player, including direct and HLS playback.
+• Resume playback with server-synchronised watch progress.
+• Download permitted media for offline playback on supported mobile devices.
+• Switch between profiles managed by your Playarr Server.
+• Use a remote-friendly native interface and short-code sign-in on Android TV and Google TV.
 
-Playarr includes:
-• Native Compose interfaces for touchscreens and televisions
-• Direct and HLS playback through Media3
-• Search, libraries, title details, playlists and watch progress
-• Multiple profiles and server-controlled accounts
-• Remote-friendly television sign-in with a short code
-• Support for private LAN and HTTPS Playarr Server installations
-
-This app does not provide media. It connects to a Playarr Server that you operate and displays the catalogue and media already available there. A configured server and account are required.
+Playarr does not provide or sell media, streaming subscriptions, cloud storage or a public catalogue. You need access to a reachable Playarr Server and a valid account supplied by that server's operator. Available libraries and features depend on the server configuration and your account permissions.
