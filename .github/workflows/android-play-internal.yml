@@ -1,4 +1,4 @@
-name: Publish Android to Google Play internal testing
+name: Publish Android to Google Play closed testing
 
 on:
   push:
@@ -29,6 +29,7 @@ jobs:
         working-directory: clients/android
     env:
       PLAYARR_APPLICATION_ID: app.playarr.mobile
+      PLAYARR_PLAY_TRACK: alpha
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PLAY_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_PLAY_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_PLAY_KEY_PASSWORD }}
@@ -147,7 +148,7 @@ jobs:
             clients/android/release/SHA256SUMS-play
           if-no-files-found: error
 
-      - name: Publish private internal test and store listing
+      - name: Publish private closed test and store listing
         env:
           GOOGLE_PLAY_JSON_KEY: ${{ steps.version.outputs.publisher_path }}
           PLAYARR_AAB: release/playarr-android-play.aab

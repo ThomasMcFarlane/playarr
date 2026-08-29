@@ -5,6 +5,7 @@ const packageName = process.env.PLAYARR_APPLICATION_ID;
 const credentialPath = process.env.GOOGLE_PLAY_JSON_KEY;
 const bundlePath = process.env.PLAYARR_AAB;
 const versionName = process.env.PLAYARR_VERSION_NAME;
+const releaseTrack = process.env.PLAYARR_PLAY_TRACK ?? 'alpha';
 const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/android/en-US';
 const metadataLocale = process.env.PLAYARR_METADATA_LOCALE ?? 'en-US';
 
@@ -117,11 +118,11 @@ try {
   );
   console.log(`Uploaded AAB versionCode=${bundle.versionCode}`);
 
-  await request(`${apiRoot}/edits/${editId}/tracks/internal`, {
+  await request(`${apiRoot}/edits/${editId}/tracks/${encodeURIComponent(releaseTrack)}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      track: 'internal',
+      track: releaseTrack,
       releases: [
         {
           name: `Playarr ${versionName}`,
@@ -183,7 +184,7 @@ try {
 
   await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
   console.log(
-    `Published Playarr ${versionName} to Google Play internal testing with assets for ${listingLocales.join(', ')}`,
+    `Published Playarr ${versionName} to Google Play ${releaseTrack} with assets for ${listingLocales.join(', ')}`,
   );
 } catch (error) {
   await request(`${apiRoot}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});

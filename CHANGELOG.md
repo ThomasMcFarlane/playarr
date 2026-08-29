@@ -105,6 +105,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android release CI targets the private Google Play closed-testing `alpha`
+  track by default, while retaining an explicit track override for controlled
+  release workflows after the one-time draft-app confirmation.
+
 - Google Play and sideload Android builds now use separate product flavours:
   the Play build is HTTPS-only and excludes APK self-update permissions, while
   the sideload build retains LAN HTTP support and signed APK updates.
