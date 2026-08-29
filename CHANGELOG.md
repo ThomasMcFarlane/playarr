@@ -17,6 +17,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to the completed private Google Play internal track through the Android
   Publisher API by the self-hosted `playarr-runners` CI pool.
 
+- The same Android release is staged on the private closed-testing track for
+  first-app review once Google Play's required App content setup clears the
+  app-level draft state.
+
 - Android release `0.2.16` (versionCode 2016) was built and published to the
   private Google Play internal track by the self-hosted `playarr-runners` CI
   pool, with icons and listing artwork verified in every configured language.
