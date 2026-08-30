@@ -21,6 +21,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Live Cloudflare analytics confirm the retired Google Play review Worker stopped
+  receiving requests at `2026-08-30T13:09:10Z`; subsequent account-wide usage
+  belongs to other active Workers, primarily the hosted `playarr-web` client.
 - Self-hosted Play run `<id>` accepted the R8-hardened Android bundle as
   versionCode and reported it `IN_REVIEW`; the authoritative track
   lifecycle now reports the preceding replay-storm fix,, as
