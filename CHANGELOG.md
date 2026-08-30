@@ -21,6 +21,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Self-hosted Play run `<id>` accepted the R8-hardened Android bundle as
+  versionCode and reported it `IN_REVIEW`; the authoritative track
+  lifecycle now reports the preceding replay-storm fix,, as
+  `PUBLISHED` to private testers.
 - Google Play publishing now distinguishes a committed `completed` track edit
   from the post-commit release lifecycle, claiming tester availability only
   when the live lifecycle API reports `PUBLISHED` rather than `IN_REVIEW`, and
