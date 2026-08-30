@@ -293,6 +293,8 @@ async function refresh(request, env) {
     refresh_token: refreshToken,
     token_type: "Bearer",
     expires_in: ACCESS_TOKEN_TTL_SECONDS,
+    user_id: USER_ID,
+    peer_addresses: null,
   });
 }
 

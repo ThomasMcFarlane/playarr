@@ -7,6 +7,8 @@ import io.playarr.shared.download.db.PendingProgressEntity
 import java.time.Instant
 import javax.inject.Inject
 
+internal const val MAX_PENDING_PROGRESS_REPLAY_BATCH = 25
+
 /**
  * Buffers `PUT /api/v1/playback/{media_file_id}/progress` updates that
  * can't reach the server immediately -- the expected case while watching a
@@ -50,7 +52,7 @@ class DefaultOfflineProgressRepository @Inject constructor(
     }
 
     override suspend fun flushPending() {
-        dao.getAll().forEach { pending ->
+        for (pending in dao.getBatch(MAX_PENDING_PROGRESS_REPLAY_BATCH)) {
             val occurredAt = Instant.ofEpochMilli(pending.occurredAtEpochMillis).toString()
             val succeeded = runCatching {
                 api.updateWatchProgress(
@@ -58,7 +60,8 @@ class DefaultOfflineProgressRepository @Inject constructor(
                     UpdateWatchProgressRequest(pending.positionMs, pending.durationMs, pending.completed, occurredAt),
                 )
             }.isSuccess
-            if (succeeded) dao.delete(pending.id)
+            if (!succeeded) break
+            dao.delete(pending.id)
         }
     }
 }

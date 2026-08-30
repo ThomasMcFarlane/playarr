@@ -7,6 +7,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Android limits each pending watch-progress replay batch and stops after its
+  first failed request, preventing malformed refresh responses or unavailable
+  operator servers from causing an unbounded authentication request storm.
+- The retired Google Play review stub's refresh response now includes the
+  required user identity fields, with contract coverage matching Android's
+  strict response model.
+
 ### Changed
 
 - The temporary Google Play review Worker is retired after unexpected usage,

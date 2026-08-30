@@ -75,7 +75,10 @@ describe("review authentication", () => {
       ENV,
     );
     assert.equal(refreshed.status, 200);
-    assert.equal((await refreshed.json()).token_type, "Bearer");
+    const body = await refreshed.json();
+    assert.equal(body.token_type, "Bearer");
+    assert.equal(body.user_id, reviewServerInternals.USER_ID);
+    assert.equal(body.peer_addresses, null);
   });
 
   it("does not provide a registration endpoint", async () => {

@@ -29,6 +29,9 @@ interface PendingProgressDao {
     @Query("SELECT * FROM pending_progress ORDER BY id ASC")
     suspend fun getAll(): List<PendingProgressEntity>
 
+    @Query("SELECT * FROM pending_progress ORDER BY id ASC LIMIT :limit")
+    suspend fun getBatch(limit: Int): List<PendingProgressEntity>
+
     @Insert
     suspend fun insert(entity: PendingProgressEntity): Long
 
