@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV hosted pairing now makes one cancellable five-minute attempt at a
+  minimum five-second polling interval, stops when the app backgrounds or the
+  pairing screen closes, and requires an explicit retry after expiry instead
+  of continuously creating codes and polling Playarr while unattended.
 - Android Play CD checks out full Git history before deriving its automatic
   version suffix, preventing shallow-clone builds from repeatedly resolving to
   the same Play version code.

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -88,6 +89,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.graphics.createBitmap
@@ -118,7 +121,9 @@ import java.net.URI
 import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -290,6 +295,7 @@ internal class LoginViewModel @Inject constructor(
     val state: StateFlow<LoginState> = _state.asStateFlow()
     private val _pairing = MutableStateFlow<PairingState>(PairingState.Idle)
     val pairing: StateFlow<PairingState> = _pairing.asStateFlow()
+    private var pairingJob: Job? = null
 
     fun login(serverUrl: String, username: String, password: String, isTelevision: Boolean) {
         if (_state.value == LoginState.Submitting) return
@@ -322,33 +328,48 @@ internal class LoginViewModel @Inject constructor(
     }
 
     fun pairTelevision() {
-        if (_pairing.value == PairingState.Requesting) return
-        viewModelScope.launch {
+        if (pairingJob?.isActive == true) return
+        val job = viewModelScope.launch {
             _pairing.value = PairingState.Requesting
-            runCatching {
+            val code = try {
                 hostedDeviceLinkClient.requestCode(ClientPlatform.AndroidTv)
-            }.onFailure {
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
                 _pairing.value = PairingState.Failed(
                     PairingFailure.Localized(PlayarrString.DeviceLoginStartFailed),
                 )
-            }.onSuccess { code ->
-                _pairing.value = PairingState.Waiting(code)
-                hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
-                    // Ignore stale polls after a manual/auto refresh started a new code.
-                    if (_pairing.value !is PairingState.Waiting) return@collect
-                    when (result) {
-                        HostedLinkPollResult.AuthorizationPending -> Unit
-                        HostedLinkPollResult.Expired -> {
-                            // Match web /login/qr: renew immediately instead of trapping the user.
-                            pairTelevision()
-                        }
-                        is HostedLinkPollResult.Failed -> {
-                            _pairing.value = PairingState.Failed(PairingFailure.Message(result.message))
-                        }
-                        is HostedLinkPollResult.Approved -> completeHostedPairing(result)
+                return@launch
+            }
+            _pairing.value = PairingState.Waiting(code)
+            hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
+                val waiting = _pairing.value as? PairingState.Waiting
+                if (waiting?.code?.deviceCode != code.deviceCode) return@collect
+                when (result) {
+                    HostedLinkPollResult.AuthorizationPending -> Unit
+                    HostedLinkPollResult.Expired -> {
+                        _pairing.value = PairingState.Failed(
+                            PairingFailure.Localized(PlayarrString.DeviceLoginSessionExpired),
+                        )
                     }
+                    is HostedLinkPollResult.Failed -> {
+                        _pairing.value = PairingState.Failed(PairingFailure.Message(result.message))
+                    }
+                    is HostedLinkPollResult.Approved -> completeHostedPairing(result)
                 }
             }
+        }
+        pairingJob = job
+        job.invokeOnCompletion {
+            if (pairingJob === job) pairingJob = null
+        }
+    }
+
+    fun cancelTelevisionPairing() {
+        pairingJob?.cancel()
+        pairingJob = null
+        if (_pairing.value is PairingState.Requesting || _pairing.value is PairingState.Waiting) {
+            _pairing.value = PairingState.Idle
         }
     }
 
@@ -541,7 +562,19 @@ private fun LoginScreen(
     var televisionManualLogin by remember { mutableStateOf(false) }
 
     if (isTelevision) {
-        LaunchedEffect(Unit) { viewModel.pairTelevision() }
+        LaunchedEffect(televisionManualLogin) {
+            if (televisionManualLogin) viewModel.cancelTelevisionPairing()
+            else viewModel.pairTelevision()
+        }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+            if (!televisionManualLogin) viewModel.pairTelevision()
+        }
+        LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+            viewModel.cancelTelevisionPairing()
+        }
+        DisposableEffect(viewModel) {
+            onDispose(viewModel::cancelTelevisionPairing)
+        }
         AuthTokensProvider {
             if (televisionManualLogin) {
                 TelevisionManualLoginScreen(
@@ -916,7 +949,6 @@ private fun TelevisionPairingScreen(
                                 delay(1_000)
                                 secondsRemaining -= 1
                             }
-                            onStart()
                         }
 
                         PlayarrQrCode(

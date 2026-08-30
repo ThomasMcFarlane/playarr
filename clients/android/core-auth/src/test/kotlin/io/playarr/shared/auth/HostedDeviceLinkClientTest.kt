@@ -18,7 +18,7 @@ class HostedDeviceLinkClientTest {
     fun `requests a hosted code for the selected Android platform`() = runBlocking {
         var requested: HostedLinkCodeRequest? = null
         val response = HostedLinkCodeResponse("secret", "ABCD-2345", "https://playarr.app/link", "https://playarr.app/link?user_code=ABCD-2345", 600, 0)
-        val client = HostedDeviceLinkClient(object : HostedDeviceLinkApi {
+        val client = testClient(object : HostedDeviceLinkApi {
             override suspend fun requestCode(body: HostedLinkCodeRequest): HostedLinkCodeResponse {
                 requested = body
                 return response
@@ -35,7 +35,7 @@ class HostedDeviceLinkClientTest {
     fun `polls pending hosted link until the server claim arrives`() = runBlocking {
         var polls = 0
         val claim = HostedLinkClaim("http://playarr.lan:8484", "server-secret", listOf("http://playarr.lan:8484"))
-        val client = HostedDeviceLinkClient(object : HostedDeviceLinkApi {
+        val client = testClient(object : HostedDeviceLinkApi {
             override suspend fun requestCode(body: HostedLinkCodeRequest): HostedLinkCodeResponse = error("not used")
 
             override suspend fun poll(deviceCode: String): Response<HostedLinkPollResponse> {
@@ -54,4 +54,35 @@ class HostedDeviceLinkClientTest {
             client.pollUntilResolved(code).toList(),
         )
     }
+
+    @Test
+    fun `stops pending polling at five minutes without renewing the code`() = runBlocking {
+        var nowMillis = 0L
+        var polls = 0
+        val client = HostedDeviceLinkClient(
+            api = object : HostedDeviceLinkApi {
+                override suspend fun requestCode(body: HostedLinkCodeRequest): HostedLinkCodeResponse = error("not used")
+
+                override suspend fun poll(deviceCode: String): Response<HostedLinkPollResponse> {
+                    polls += 1
+                    return Response.success(202, HostedLinkPollResponse(error = "authorization_pending"))
+                }
+            },
+            wait = { nowMillis += it },
+            monotonicTimeMillis = { nowMillis },
+        )
+        val code = HostedLinkCodeResponse("secret", "ABCD-2345", "", "", 600, 2)
+
+        val results = client.pollUntilResolved(code).toList()
+
+        assertEquals(59, polls)
+        assertEquals(HostedLinkPollResult.Expired, results.last())
+    }
+
+    private fun testClient(api: HostedDeviceLinkApi): HostedDeviceLinkClient =
+        HostedDeviceLinkClient(
+            api = api,
+            wait = {},
+            monotonicTimeMillis = { 0L },
+        )
 }
