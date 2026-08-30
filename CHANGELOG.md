@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android Play CD checks out full Git history before deriving its automatic
+  version suffix, preventing shallow-clone builds from repeatedly resolving to
+  the same Play version code.
 - Android limits each pending watch-progress replay batch and stops after its
   first failed request, preventing malformed refresh responses or unavailable
   operator servers from causing an unbounded authentication request storm.

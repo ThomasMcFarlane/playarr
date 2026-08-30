@@ -40,6 +40,8 @@ jobs:
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_PLAY_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
