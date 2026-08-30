@@ -25,6 +25,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Self-hosted Play run `<id>` committed the bounded Android TV pairing
+  fix as `0.2.18-main.715`, versionCode, to private `alpha`; Google
+  Play currently reports the release lifecycle as `IN_REVIEW`.
 - Live Cloudflare analytics confirm the retired Google Play review Worker stopped
   receiving requests at `2026-08-30T13:09:10Z`; subsequent account-wide usage
   belongs to other active Workers, primarily the hosted `playarr-web` client.
