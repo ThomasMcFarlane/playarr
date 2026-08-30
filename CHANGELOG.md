@@ -7,6 +7,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The temporary Google Play review Worker is retired after unexpected usage,
+  and its custom domain, deployment credentials, GitHub environment and
+  dedicated workflow are removed entirely so CI/CD cannot recreate the
+  service. Cloudflare analytics identified an Android refresh/progress replay
+  loop—not public media scraping—as the dominant traffic source.
+
 ### Added
 
 - An isolated Google Play review Worker implements the native Android client's

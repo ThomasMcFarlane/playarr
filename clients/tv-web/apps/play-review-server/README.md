@@ -1,5 +1,10 @@
 # Google Play review server
 
+> **Retired:** this temporary review environment is not deployed. Its Cloudflare
+> Worker, custom domain, deployment token, GitHub environment, secrets and
+> CI/CD workflow were removed on 2026-08-30. Do not recreate or automate it
+> without new, explicit authorisation.
+
 This Cloudflare Worker is a sterile compatibility target for Google Play's
 review team. It is not a hosted Playarr product and it provides no registration,
 account provisioning, media uploads, library management or access to a private
@@ -37,7 +42,7 @@ cd clients/tv-web
 pnpm --filter @playarr-tv/play-review-server test
 ```
 
-## Deploy
+## Historical manual deployment
 
 Deployment uses the Cloudflare REST API directly; Wrangler and browser login are
 not used.
@@ -50,9 +55,9 @@ Required environment values:
 - `PLAY_REVIEW_PASSWORD` (at least 20 characters)
 - `PLAY_REVIEW_TOKEN_SIGNING_SECRET` (at least 32 characters)
 
-The workflow becomes operational only after all five values exist in the
-protected `google-play-review` GitHub environment. It can then be dispatched
-manually and deploys automatically after a successful `main` CI run.
+There is deliberately no deployment workflow or GitHub environment for this
+retired temporary service. The command below is retained only to document the
+historical direct-API implementation; it must not be run as CI/CD.
 
 ```sh
 cd clients/tv-web
