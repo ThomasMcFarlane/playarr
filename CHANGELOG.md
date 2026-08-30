@@ -18,6 +18,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Relevant Android changes merged to `main` now automatically build, sign,
+  test and publish to the private Google Play closed-testing track on the
+  self-hosted `playarr-runners` pool. Each build receives a monotonic Play
+  version code, source-controlled localised release notes, and Publisher API
+  read-back verification after commit.
 - The temporary Google Play review Worker is retired after unexpected usage,
   and its custom domain, deployment credentials, GitHub environment and
   dedicated workflow are removed entirely so CI/CD cannot recreate the

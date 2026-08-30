@@ -5,16 +5,23 @@ const packageName = process.env.PLAYARR_APPLICATION_ID;
 const credentialPath = process.env.GOOGLE_PLAY_JSON_KEY;
 const bundlePath = process.env.PLAYARR_AAB;
 const versionName = process.env.PLAYARR_VERSION_NAME;
+const versionCode = process.env.PLAYARR_VERSION_CODE;
+const releaseNotesVersion = process.env.PLAYARR_RELEASE_NOTES_VERSION;
 const releaseTrack = process.env.PLAYARR_PLAY_TRACK ?? 'alpha';
 const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/android/en-US';
+const releaseNotesRoot = process.env.PLAYARR_RELEASE_NOTES_ROOT ?? 'fastlane/metadata/android';
 const metadataLocale = process.env.PLAYARR_METADATA_LOCALE ?? 'en-US';
 const listingImagesOnly = process.env.PLAYARR_LISTING_IMAGES_ONLY === 'true';
 
-if (!packageName || !credentialPath || (!listingImagesOnly && (!bundlePath || !versionName))) {
+if (
+  !packageName ||
+  !credentialPath ||
+  (!listingImagesOnly && (!bundlePath || !versionName || !versionCode || !releaseNotesVersion))
+) {
   throw new Error(
     listingImagesOnly
       ? 'PLAYARR_APPLICATION_ID and GOOGLE_PLAY_JSON_KEY are required'
-      : 'PLAYARR_APPLICATION_ID, GOOGLE_PLAY_JSON_KEY, PLAYARR_AAB, and PLAYARR_VERSION_NAME are required',
+      : 'PLAYARR_APPLICATION_ID, GOOGLE_PLAY_JSON_KEY, PLAYARR_AAB, PLAYARR_VERSION_NAME, PLAYARR_VERSION_CODE, and PLAYARR_RELEASE_NOTES_VERSION are required',
   );
 }
 
@@ -114,6 +121,19 @@ try {
   }
 
   if (!listingImagesOnly) {
+    const releaseNotes = await Promise.all(
+      listingLocales.map(async (locale) => {
+        const text = (
+          await readFile(`${releaseNotesRoot}/${locale}/changelogs/${releaseNotesVersion}.txt`, 'utf8')
+        ).trim();
+        if (text.length === 0 || text.length > 500) {
+          throw new Error(
+            `${locale} release notes for ${releaseNotesVersion} must contain 1 to 500 characters`,
+          );
+        }
+        return { language: locale, text };
+      }),
+    );
     const bundle = await request(
       `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${packageName}/edits/${editId}/bundles?uploadType=media`,
       {
@@ -123,6 +143,9 @@ try {
       },
     );
     console.log(`Uploaded AAB versionCode=${bundle.versionCode}`);
+    if (String(bundle.versionCode) !== String(versionCode)) {
+      throw new Error(`Uploaded AAB versionCode=${bundle.versionCode}; expected ${versionCode}`);
+    }
 
     await request(`${apiRoot}/edits/${editId}/tracks/${encodeURIComponent(releaseTrack)}`, {
       method: 'PUT',
@@ -134,6 +157,7 @@ try {
             name: `Playarr ${versionName}`,
             versionCodes: [String(bundle.versionCode)],
             status: 'completed',
+            releaseNotes,
           },
         ],
       }),
@@ -212,6 +236,39 @@ try {
     console.log(
       `Published Playarr ${versionName} to Google Play ${releaseTrack} with assets for ${listingLocales.join(', ')}`,
     );
+
+    const verificationEdit = await request(`${apiRoot}/edits`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    try {
+      const publishedTrack = await request(
+        `${apiRoot}/edits/${verificationEdit.id}/tracks/${encodeURIComponent(releaseTrack)}`,
+      );
+      const publishedRelease = (publishedTrack.releases ?? []).find((release) =>
+        (release.versionCodes ?? []).includes(String(versionCode)),
+      );
+      if (!publishedRelease || publishedRelease.status !== 'completed') {
+        throw new Error(
+          `Google Play ${releaseTrack} verification did not find completed versionCode ${versionCode}`,
+        );
+      }
+      const publishedLanguages = new Set(
+        (publishedRelease.releaseNotes ?? []).map((releaseNote) => releaseNote.language),
+      );
+      const missingLanguages = listingLocales.filter((locale) => !publishedLanguages.has(locale));
+      if (missingLanguages.length > 0) {
+        throw new Error(
+          `Google Play ${releaseTrack} verification is missing release notes for ${missingLanguages.join(', ')}`,
+        );
+      }
+      console.log(
+        `Verified Google Play ${releaseTrack} versionCode=${versionCode}, status=completed, releaseNotes=${listingLocales.join(',')}`,
+      );
+    } finally {
+      await request(`${apiRoot}/edits/${verificationEdit.id}`, { method: 'DELETE' }).catch(() => {});
+    }
   }
 } catch (error) {
   await request(`${apiRoot}/edits/${editId}`, { method: 'DELETE' }).catch(() => {});

@@ -1,0 +1,1 @@
+Improves reliability when reconnecting to an operator-managed Playarr server. Pending watch-progress updates are replayed in bounded batches and stop after the first network or authentication failure, preventing repeated background requests while a server is unavailable or returns an invalid refresh response.
