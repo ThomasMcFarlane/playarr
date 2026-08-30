@@ -15,9 +15,9 @@
 # Playarr Cast: PlayarrCastOptionsProvider is reflectively instantiated by
 # the Cast framework via AndroidManifest.xml's OPTIONS_PROVIDER_CLASS_NAME
 # meta-data. Without this, R8 (isMinifyEnabled/isShrinkResources are both on
-# for release, see app/build.gradle.kts) can strip or rename the class or
-# its no-arg constructor, and Cast init then fails only in release, silently,
-# never in debug.
+# for the Play release, see app/build.gradle.kts) can strip or rename the class
+# or its no-arg constructor, and Cast init then fails only in release,
+# silently, never in debug.
 #
 # Verified by inspecting the play-services-cast-framework-22.3.1.aar's own
 # bundled proguard.txt (automatically merged by AGP's consumerProguardFiles

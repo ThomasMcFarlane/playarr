@@ -1,6 +1,12 @@
 import { createSign } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 
+import {
+  findInReviewVersionCodes,
+  formatReleaseLifecycleEvidence,
+  waitForReleaseLifecycle,
+} from './release-lifecycle.mjs';
+
 const packageName = process.env.PLAYARR_APPLICATION_ID;
 const credentialPath = process.env.GOOGLE_PLAY_JSON_KEY;
 const bundlePath = process.env.PLAYARR_AAB;
@@ -98,6 +104,17 @@ async function request(url, options = {}) {
 }
 
 const apiRoot = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}`;
+if (!listingImagesOnly) {
+  const currentLifecycle = await request(
+    `${apiRoot}/tracks/${encodeURIComponent(releaseTrack)}/releases`,
+  );
+  const inReviewVersionCodes = findInReviewVersionCodes(currentLifecycle.releases);
+  if (inReviewVersionCodes.length > 0) {
+    throw new Error(
+      `Google Play ${releaseTrack} already has versionCode ${inReviewVersionCodes.join(',')} in review; refusing to cancel or replace that review`,
+    );
+  }
+}
 const edit = await request(`${apiRoot}/edits`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
@@ -232,7 +249,10 @@ try {
     });
     console.log(`Published Google Play listing screenshots for ${listingLocales.join(', ')}`);
   } else {
-    await request(`${apiRoot}/edits/${editId}:commit`, { method: 'POST' });
+    await request(
+      `${apiRoot}/edits/${editId}:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW`,
+      { method: 'POST' },
+    );
     console.log(
       `Published Playarr ${versionName} to Google Play ${releaseTrack} with assets for ${listingLocales.join(', ')}`,
     );
@@ -264,10 +284,27 @@ try {
         );
       }
       console.log(
-        `Verified Google Play ${releaseTrack} versionCode=${versionCode}, status=completed, releaseNotes=${listingLocales.join(',')}`,
+        `Verified committed edit configuration for Google Play ${releaseTrack}: versionCode=${versionCode}, status=completed, releaseNotes=${listingLocales.join(',')}`,
       );
     } finally {
       await request(`${apiRoot}/edits/${verificationEdit.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+
+    const lifecycleState = await waitForReleaseLifecycle(
+      async () => {
+        const releaseLifecycle = await request(
+          `${apiRoot}/tracks/${encodeURIComponent(releaseTrack)}/releases`,
+        );
+        return releaseLifecycle.releases;
+      },
+      versionCode,
+    );
+    if (!lifecycleState) {
+      console.warn(
+        `Google Play ${releaseTrack} versionCode=${versionCode}, lifecycle=UNAVAILABLE after retry; this does not prove tester availability`,
+      );
+    } else {
+      console.log(formatReleaseLifecycleEvidence(releaseTrack, versionCode, lifecycleState));
     }
   }
 } catch (error) {

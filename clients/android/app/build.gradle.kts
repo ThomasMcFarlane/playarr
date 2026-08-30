@@ -61,6 +61,15 @@ android {
         create("play") {
             dimension = "distribution"
             applicationId = "app.playarr.mobile"
+            // Preserve available native symbol tables for Play crash reports.
+            // AGP cannot reconstruct symbols stripped from dependency AARs.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
         create("sideload") {
             dimension = "distribution"
@@ -116,6 +125,19 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+androidComponents {
+    // Optimise only the Play release. The sideload release must remain a
+    // complete, unshrunk APK for compatibility with Android TV installers.
+    beforeVariants(
+        selector()
+            .withBuildType("release")
+            .withFlavor("distribution", "play"),
+    ) { variantBuilder ->
+        variantBuilder.isMinifyEnabled = true
+        variantBuilder.shrinkResources = true
     }
 }
 

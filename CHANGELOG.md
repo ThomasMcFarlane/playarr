@@ -21,6 +21,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Google Play publishing now distinguishes a committed `completed` track edit
+  from the post-commit release lifecycle, claiming tester availability only
+  when the live lifecycle API reports `PUBLISHED` rather than `IN_REVIEW`, and
+  refuses to cancel an existing review when committing a newer build.
+- The private Play workflow uses supported Node 24-based GitHub Action majors
+  and retains the Play-only ReTrace mapping as a checksummed workflow artefact.
+- Google Play release bundles now enable Play-only R8 code and resource
+  optimisation, embed ReTrace mapping metadata, and package available native
+  symbol tables; sideload APK releases remain unshrunk for Android TV installer
+  compatibility. Native dependency symbols stripped upstream cannot be
+  reconstructed.
 - Relevant Android changes merged to `main` now automatically build, sign,
   test and publish to the private Google Play closed-testing track on the
   self-hosted `playarr-runners` pool. Each build receives a monotonic Play

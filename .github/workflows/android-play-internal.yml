@@ -39,11 +39,11 @@ jobs:
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_PLAY_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_PLAY_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -52,11 +52,17 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
+          package-manager-cache: false
+
+      - name: Test Google Play publisher helpers
+        run: node --test scripts/release-lifecycle.test.mjs
 
       - name: Resolve release version
         id: version
@@ -156,16 +162,29 @@ jobs:
             echo "App bundle signing certificate does not match ANDROID_SIGNING_CERT_SHA256" >&2
             exit 1
           fi
+          mapping_file="app/build/outputs/mapping/playRelease/mapping.txt"
+          if [[ ! -s "$mapping_file" ]]; then
+            echo "Play release ReTrace mapping output is missing" >&2
+            exit 1
+          fi
+          mapping_entries="$(unzip -Z1 "$app_bundle" | awk '$0 == "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map" { count += 1 } END { print count + 0 }')"
+          if [[ "$mapping_entries" -ne 1 ]]; then
+            echo "Play app bundle does not contain embedded ReTrace metadata" >&2
+            exit 1
+          fi
           mkdir -p release
           cp "$app_bundle" release/playarr-android-play.aab
-          sha256sum release/playarr-android-play.aab > release/SHA256SUMS-play
+          cp "$mapping_file" release/mapping.txt
+          cd release
+          sha256sum playarr-android-play.aab mapping.txt > SHA256SUMS-play
 
       - name: Upload workflow artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playarr-android-play-${{ steps.version.outputs.name }}
           path: |
             clients/android/release/playarr-android-play.aab
+            clients/android/release/mapping.txt
             clients/android/release/SHA256SUMS-play
           if-no-files-found: error
 
