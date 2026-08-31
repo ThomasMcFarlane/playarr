@@ -35,5 +35,5 @@ spec:
       volumes:
         - name: repo
           hostPath:
-            path: /path/to/streamarr
+            path: /path/to/playarr
             type: Directory

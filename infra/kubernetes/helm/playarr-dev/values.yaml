@@ -25,7 +25,7 @@ workloads:
       runAsGroup: 1000
     hostPathVolumes:
       - name: repo
-        path: /tmp/streamarr-unsorted-folders
+        path: /path/to/playarr
         type: Directory
         mounts:
           - mountPath: /repo
@@ -60,13 +60,13 @@ workloads:
     containerPort: 8080
     hostPathVolumes:
       - name: site-src
-        path: /path/to/streamarr/site/src
+        path: /path/to/playarr/site/src
         type: Directory
         mounts:
           - mountPath: /app/src
             readOnly: true
       - name: site-public
-        path: /path/to/streamarr/site/public
+        path: /path/to/playarr/site/public
         type: Directory
         mounts:
           - mountPath: /app/public

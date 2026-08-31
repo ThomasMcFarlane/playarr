@@ -38,9 +38,9 @@ spec:
         # the correct trade-off for a local-only dev convenience layer.
         - name: site-src
           hostPath:
-            path: /path/to/streamarr/site/src
+            path: /path/to/playarr/site/src
             type: Directory
         - name: site-public
           hostPath:
-            path: /path/to/streamarr/site/public
+            path: /path/to/playarr/site/public
             type: Directory

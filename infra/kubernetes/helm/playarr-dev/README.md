@@ -34,10 +34,11 @@ Secret names distinct.
 
 Two defaults deliberately preserve the current dev-host development behaviour:
 
-- `playarr` requires `/tmp/streamarr-unsorted-folders` to exist as a directory
-  on the scheduled node.
-- `playarr-marketing` requires the two configured `/path/to/streamarr/site`
-  directories on the scheduled node.
+- `playarr` requires the canonical
+  `/path/to/playarr`
+  checkout to exist on the scheduled node.
+- `playarr-marketing` requires that checkout's `site/src` and `site/public`
+  directories.
 
 If those paths do not exist, Kubernetes leaves the Pods in
 `ContainerCreating` with `FailedMount`, as it does in the source deployment.

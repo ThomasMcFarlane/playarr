@@ -25,6 +25,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- dev-host development workloads now mount the canonical Storage-backed Playarr
+  main checkout instead of the retired Projects filesystem.
 - Self-hosted Play run `<id>` committed the bounded Android TV pairing
   fix as `0.2.18-main.715`, versionCode, to private `alpha`; Google
   Play currently reports the release lifecycle as `IN_REVIEW`.
