@@ -30,12 +30,8 @@ workloads:
         mounts:
           - mountPath: /repo
     routes:
-      - name: playarr
-        host: playarr.localhost
-        websocket: true
-      - name: playarr-lan
-        host: playarr.dev.home.arpa
-        hostRewrite: playarr.localhost
+      - name: playarr-public
+        host: playarr.example.com
         websocket: true
 
   playarr-admin:
@@ -44,14 +40,9 @@ workloads:
     replicas: 1
     containerPort: 8080
     routes:
-      - name: playarr-admin
-        host: playarr-admin.localhost
-      - name: playarr-admin-lan
-        host: playarr-admin.dev.home.arpa
-        hostRewrite: playarr-admin.localhost
       - name: playarr-admin-public
         host: playarr-admin.example.com
-        hostRewrite: playarr-admin.localhost
+        hostRewrite: playarr-admin.example.com
 
   playarr-marketing:
     image: localhost:5000/playarr-marketing:551e3b8
@@ -72,14 +63,9 @@ workloads:
           - mountPath: /app/public
             readOnly: true
     routes:
-      - name: playarr-marketing
-        host: playarr-marketing.localhost
-      - name: playarr-marketing-lan
-        host: playarr-marketing.dev.home.arpa
-        hostRewrite: playarr-marketing.localhost
       - name: playarr-marketing-public
         host: playarr-marketing.example.com
-        hostRewrite: playarr-marketing.localhost
+        hostRewrite: playarr-marketing.example.com
 
   playarr-nav-perf:
     image: localhost:5000/playarr-nav-perf:609c39f
@@ -90,11 +76,8 @@ workloads:
       - name: PLAYARR_DEV_API_PROXY
         value: http://192.0.2.58:8484
     routes:
-      - name: playarr-nav-perf
-        host: playarr-nav-perf.localhost
-      - name: playarr-nav-perf-lan
-        host: playarr-nav-perf.dev.home.arpa
-        hostRewrite: playarr-nav-perf.localhost
+      - name: playarr-nav-perf-public
+        host: playarr-nav-perf.example.com
 
   tv-web:
     image: localhost:5000/tv-web:b385a61
@@ -102,14 +85,9 @@ workloads:
     replicas: 1
     containerPort: 8080
     routes:
-      - name: tv-web
-        host: tv-web.localhost
-      - name: tv-web-lan
-        host: tv-web.dev.home.arpa
-        hostRewrite: tv-web.localhost
       - name: tv-web-public
         host: tv-web.example.com
-        hostRewrite: tv-web.localhost
+        hostRewrite: tv-web.example.com
 
   tv-web-webos:
     image: localhost:5000/tv-web:b385a61
@@ -127,7 +105,7 @@ workloads:
     workingDir: /build/apps/tv-webos
     routes:
       - name: tv-web-webos
-        host: webos.tv-web.localhost
+        host: webos.tv-web.example.com
 
 # Regional standalone servers currently deployed in separate namespaces. The
 # target release places both in one namespace while preserving their distinct
