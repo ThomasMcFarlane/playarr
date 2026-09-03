@@ -29,10 +29,9 @@ workloads:
         type: Directory
         mounts:
           - mountPath: /repo
-    routes:
-      - name: playarr-public
-        host: playarr.example.com
-        websocket: true
+    # playarr.example.com is served by the playarr-region-b regional instance
+    # (see regionalInstances below); the dev instance has no direct route.
+    routes: []
 
   playarr-admin:
     image: localhost:5000/tv-web-admin:dev
