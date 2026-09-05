@@ -61,6 +61,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Planned tasks 46–61 for unified discovery/watchlists, phone remote and
+  playback handoff, household/child controls, and playback health diagnostics.
+  Recorded integration dependencies, enforcement and privacy requirements,
+  and real-device acceptance; implementation remains pending.
+
 - Planned tasks 21–45 for Games libraries with Moonlight-compatible and Steam
   streaming, local/network TV tuners and PVR, immutable PlayarrOS, and Server/OS
   clients-hub listings. Recorded dependencies, account isolation, provider/media
