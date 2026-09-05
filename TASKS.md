@@ -5,6 +5,58 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Planned: Games, TV/PVR, PlayarrOS and clients hub (2026-09-05)
+
+Planning only: all implementation below is pending and unassigned. Parent epics
+close only after their delivery tasks meet acceptance. Track evidence, blockers and
+capability gaps in each row as work progresses; required capabilities are not
+complete merely because a fallback exists.
+
+### Games Library
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 21 | Epic: Games Library | pending | Unassigned | Connect Steam accounts and streaming hosts; browse and launch games from Playarr. Acceptance: tasks 22–25 pass, including real interactive streaming through both routes. |
+| 22 | Add Games library contracts and catalogue integration | pending | Unassigned | Parent: 21. Extend existing source/library models, permissions and native client surfaces. Support account linking, artwork, search, ownership and host availability. Handle private/unavailable Steam libraries explicitly; catalogue linking does not imply streaming authorisation. Acceptance: authorised users can configure and browse Games libraries without exposing another account’s data. |
+| 23 | Integrate Moonlight-compatible streaming hosts | pending | Unassigned | Parent: 21. Depends on 22. Discover or manually add Sunshine-compatible hosts, pair securely, map advertised games and launch interactive streams. Acceptance: real gameplay with controller, keyboard/mouse and audio; disconnect/reconnect, session termination and return to Playarr. Moonlight is the client, Sunshine is the reference host: https://moonlight-stream.org/. |
+| 24 | Integrate Steam accounts and Steam Remote Play | pending | Unassigned | Parent: 21. Depends on 22. Support Steam as a separate streaming route and catalogue source. Investigate supported authentication and launch interfaces first; record unavailable interfaces as blockers. Acceptance: link an account and stream a real owned game through Steam independently of task 23. |
+| 25 | Validate Games across clients | pending | Unassigned | Parent: 21. Depends on 22–24. Verify shared catalogue parity and platform streaming capabilities, multiple accounts/hosts, duplicate games, offline hosts and credential isolation. Acceptance: real gameplay, input and session termination on supported clients; document genuine platform capability gaps. Catalogue display alone is insufficient. |
+
+### Live TV and PVR
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 26 | Epic: Live TV and PVR | pending | Unassigned | Local and network tuners, channel management, guide, live viewing, timeshift and recordings. Acceptance: tasks 27–30 pass, including physical tuner evidence. |
+| 27 | Integrate local and network tuner sources | pending | Unassigned | Parent: 26. Evaluate Tvheadend first, with USB/PCIe tuners attached to Playarr Server or PlayarrOS and network tuners such as HDHomeRun/SAT>IP. Acceptance: discovery/manual setup, scanning, channel mapping and signal diagnostics with local and network devices. Record supported broadcast standards and driver requirements. Reference: https://tvheadend.org/p/about. |
+| 28 | Add TV guide and live playback | pending | Unassigned | Parent: 26. Depends on 27. Add channel ordering/favourites, programme metadata, now/next, guide browsing, channel switching, subtitles and audio selection. Acceptance: remote navigation and playback work; missing guide data, signal loss and concurrent tuner limits produce clear states. |
+| 29 | Add timeshift and recording management | pending | Unassigned | Parent: 26. Depends on 27–28. Pause/rewind live TV; schedule individual and series recordings; manage conflicts, padding, retention and storage limits. Acceptance: schedules survive restart, completed recordings play, and failed/partial recordings and full storage are surfaced accurately. |
+| 30 | Validate TV/PVR end to end | pending | Unassigned | Parent: 26. Depends on 27–29. Demonstrate local and network tuner reception, guide ingestion, concurrent viewing/recording, timeshift and playback of completed recordings. Verify permissions and native client parity. Acceptance: physical hardware evidence; simulated reception alone does not close tuner-dependent gates. |
+
+### PlayarrOS
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 31 | Epic: PlayarrOS | pending | Unassigned | Immutable Linux television OS with native Playarr experience, isolated accounts, external apps, device inputs and graphical installation. Acceptance: tasks 32–42 pass. Required provider/media capabilities remain explicit blockers until proven; fallbacks do not silently reduce the requested scope. |
+| 32 | Select the immutable OS foundation | pending | Unassigned | Parent: 31. Compare Bazzite/Fedora Atomic against an immutable Arch option, provisionally favouring Bazzite. Assess native session customisation, drivers, codecs, HDR, updates/rollback, LiveUSB installation, maintenance and redistribution. Acceptance: justified recorded decision before foundation implementation, with capability blockers and dependencies. Reference: https://bazzite.gg/. |
+| 33 | Build the OS image and lifecycle | pending | Unassigned | Parent: 31. Depends on 32. Initial target: x86-64 UEFI. Provide reproducible images, protected system state, persistent user data, verified updates, rollback and recovery. Acceptance: interrupted updates recover safely and account/settings data survives update and rollback. |
+| 34 | Integrate Playarr login and isolated account switching | pending | Unassigned | Parent: 31. Depends on 33. Use existing Playarr server/account and pairing flows for normal OS sign-in. Isolate external app credentials, Steam sessions, settings and local data per user. Support fast switching, locking, logout and previously authorised offline access. Acceptance: define and verify revocation/local recovery behaviour and prove cross-account isolation, including after switching and reboot. |
+| 35 | Build the native Playarr TV session | pending | Unassigned | Parent: 31. Depends on 33–34. Deliver a native Linux launcher and complete Playarr client experience with controller/remote navigation, accessibility, on-screen keyboard and reliable return from external apps. Acceptance: native client product parity and real couch navigation; no Playarr WebView shell. |
+| 36 | Add external apps and homepage sources | pending | Unassigned | Parent: 31. Depends on 34–35. Launch Steam, YouTube, Netflix and user-added applications in TV mode. Provide per-user installation/configuration, homepage placement and app lifecycle handling. Acceptance: launch and return to Playarr reliably while retaining the correct user’s app session. |
+| 37 | Integrate external continue-watching and resume | pending | Unassigned | Parent: 31. Depends on 36. Discover supported provider interfaces for programme identity, progress and deep links. Acceptance: resume the correct Netflix title and account from Playarr’s homepage. An app shortcut does not fulfil resume acceptance; unavailable interfaces remain explicit blockers. Track Linux/provider restrictions separately: https://help.netflix.com/en/node/30081. |
+| 38 | Add capture inputs and picture-in-picture | pending | Unassigned | Parent: 31. Depends on 33 and 35. Discover supported capture devices, label inputs, handle hotplug/signal loss and provide low-latency audio/video playback. Add PiP positioning, resizing, swapping, focus and audio selection. Acceptance: real capture-card HDMI input and supported PiP combinations work with measured latency and synchronisation. Record protected-input restrictions; bypassing protection is not an implementation route. |
+| 39 | Add television device controls | pending | Unassigned | Parent: 31. Depends on 33–35. Cover remote pairing/key mapping, HDMI-CEC where supported, power/sleep/wake, idle screensaver, Wi-Fi/Ethernet, Bluetooth controllers/audio, display modes, refresh-rate matching, audio output/lip-sync, subtitles and accessibility settings. Acceptance: supported controls function and persist across reboot/account switching; device capability gaps are explicit. |
+| 40 | Qualify codecs, HDR and premium audio/video | pending | Unassigned | Parent: 31. Depends on 32–35; coordinate with 38–39. Maintain a codec/container, hardware decode, HDR (including Dolby Vision), colour and audio-passthrough matrix for actual GPU/driver/display/receiver combinations. Track DRM/provider certification separately. Acceptance: real hardware playback evidence for claimed capabilities; required unsupported combinations remain blockers. SDR fallback does not prove Dolby Vision support. |
+| 41 | Build graphical LiveUSB installation | pending | Unassigned | Parent: 31. Depends on 33–35. Boot a usable live environment and provide a polished installer covering language, networking, disk selection, explicit erase confirmation, progress, failure recovery and first-run account setup. Initial install scope: selected whole disk, preserving other disks. Acceptance: complete live boot, install and installed-system reboot; verify cancellation/failure and protection of unselected disks. |
+| 42 | Provide an accessible VM and hardware acceptance environment | pending | Unassigned | Parent: 31. VM setup follows 33; final acceptance depends on 34–41. Demonstrate LiveUSB boot, installation, reboot, account switching, launcher and update/rollback in a resource-bounded VM. Supply an authenticated, remotely reachable graphical console usable from the user’s device and leave it available for review. Acceptance: user can connect/view; separately verify GPU/display/capture/CEC/media capabilities on physical hardware. VM success does not close hardware gates. Check host headroom and verify per-workload memory limits before starting workloads. |
+
+### Clients hub
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 43 | Epic: Expand the clients hub | pending | Unassigned | Add Playarr Server and PlayarrOS to https://playarr.app/clients with truthful availability and working detail routes. Acceptance: tasks 44–45 pass; this documentation change does not publish either listing. |
+| 44 | Add Playarr Server listing | pending | Unassigned | Parent: 43. Independent of PlayarrOS delivery. Add a clearly identified server entry with supported installation methods, requirements and setup/download actions. Acceptance: verify exact detail and action destinations, distinguish the server from playback clients, and test remote/keyboard navigation and responsive layout. |
+| 45 | Add PlayarrOS listing | pending | Unassigned | Parent: 43. Initial Coming soon listing is independent of OS delivery; download availability depends on 33 and 40–42. Add an OS entry/detail page with installation requirements and capability status. Acceptance: truthful Coming soon state before release; enable download actions only with a real image and installation evidence, linking LiveUSB instructions and verified release artefacts. Verify exact routes/downloads and remote/keyboard navigation. |
+
 ## Active — private Google Play publishing (2026-08-27)
 
 | # | Task | Status | Picked up by | Notes |

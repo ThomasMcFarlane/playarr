@@ -61,6 +61,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Planned tasks 21–45 for Games libraries with Moonlight-compatible and Steam
+  streaming, local/network TV tuners and PVR, immutable PlayarrOS, and Server/OS
+  clients-hub listings. Recorded dependencies, account isolation, provider/media
+  feasibility gates, graphical LiveUSB installation and remotely viewable VM plus
+  physical-hardware acceptance. All implementation remains pending.
+
 - An isolated Google Play review Worker implements the native Android client's
   authentication, catalogue and direct-play contract using one CC BY 3.0 sample
   video, with secret-backed credentials, no registration or downloads, focused
