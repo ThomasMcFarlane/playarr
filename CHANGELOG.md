@@ -61,6 +61,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Planned tasks 62–71 as separate server backup/recovery and portable per-user
+  library export/import workstreams. Recorded complete data coverage,
+  readable JSON/CSV exports, cross-server matching, safe merge semantics
+  and recovery/round-trip acceptance; implementation remains pending.
+
 - Planned tasks 46–61 for unified discovery/watchlists, phone remote and
   playback handoff, household/child controls, and playback health diagnostics.
   Recorded integration dependencies, enforcement and privacy requirements,
