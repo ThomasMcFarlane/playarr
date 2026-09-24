@@ -16,6 +16,9 @@ this chart manages only the matching Emissary routes.
 
 The six dev-host development workloads are pinned to `dev-node`. Their
 `localhost:5000` images and local hostPaths are not portable to region-a or region-b.
+Each serves its readiness, liveness and startup checks from its HTTP root;
+the marketing Astro probe sends the hostname required by its explicit Vite
+host allowlist.
 
 Before enabling either regional Deployment, create its external runtime Secret
 in the release namespace:

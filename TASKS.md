@@ -5,6 +5,12 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active — development web workload health probes (2026-09-24)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 72 | Add native health probes to six development web workloads | review PR open | /srv/work | Added startup, readiness and liveness probes to six dev-host web Deployments. `bash infra/kubernetes/helm/playarr-dev/tests/render.sh`, `git diff --check` and staged gitleaks passed. Review: PR 31 |
+
 ## Planned: Server backups and portable user exports (2026-09-05)
 
 Two separate capabilities: administrator recovery of all server library/user

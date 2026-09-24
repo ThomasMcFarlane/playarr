@@ -48,6 +48,7 @@ workloads:
     imagePullPolicy: Always
     replicas: 1
     containerPort: 8080
+    probeHost: playarr-marketing.example.com
     hostPathVolumes:
       - name: site-src
         path: /path/to/playarr/site/src
