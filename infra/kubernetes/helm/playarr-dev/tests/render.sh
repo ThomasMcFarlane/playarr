@@ -25,6 +25,7 @@ grep -q 'service: "playarr-marketing.playarr:80"' "$rendered"
 grep -q 'service: "playarr-nav-perf.playarr:80"' "$rendered"
 grep -q 'service: "tv-web.playarr:80"' "$rendered"
 grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
+grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 grep -q 'service: "playarr-region-a.playarr:80"' "$rendered"
 grep -q 'service: "playarr-region-b.playarr:80"' "$rendered"
 if grep -Eq 'service: ".*\.dev:80"' "$rendered"; then
