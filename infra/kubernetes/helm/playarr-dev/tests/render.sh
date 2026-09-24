@@ -13,7 +13,7 @@ test "$(grep -c '^          startupProbe:$' "$rendered")" -eq 6
 test "$(grep -c '^          readinessProbe:$' "$rendered")" -eq 8
 test "$(grep -c '^          livenessProbe:$' "$rendered")" -eq 8
 test "$(grep -c '^              path: /$' "$rendered")" -eq 18
-grep -q 'value: playarr-marketing.example.com' "$rendered"
+grep -q 'value: "playarr-marketing.example.com"' "$rendered"
 test "$(grep -c '^kind: Service$' "$rendered")" -eq 8
 test "$(grep -c '^kind: Mapping$' "$rendered")" -eq 7
 test "$(grep -c '^kind: PersistentVolumeClaim$' "$rendered")" -eq 2

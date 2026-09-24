@@ -9,7 +9,7 @@ is the current-work board. Newest and most active work goes first.
 
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
-| 72 | Add native health probes to six development web workloads | in progress | /srv/work | Add application-specific HTTP startup, readiness and liveness checks to the six dev-host web Deployments in `infra/kubernetes/helm/playarr-dev`; validate chart rendering and push a review PR. |
+| 72 | Add native health probes to six development web workloads | review PR open | /srv/work | Added startup, readiness and liveness probes to six dev-host web Deployments. `bash infra/kubernetes/helm/playarr-dev/tests/render.sh`, `git diff --check` and staged gitleaks passed. Review: PR 31 |
 
 ## Planned: Server backups and portable user exports (2026-09-05)
 
