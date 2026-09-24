@@ -105,7 +105,7 @@ workloads:
     workingDir: /build/apps/tv-webos
     routes:
       - name: tv-web-webos
-        host: webos.tv-web.example.com
+        host: tv-web-webos.example.com
 
 # Regional standalone servers currently deployed in separate namespaces. The
 # target release places both in one namespace while preserving their distinct
