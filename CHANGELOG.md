@@ -10,7 +10,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - The development webOS route now uses `tv-web-webos.example.com`, which is
-  covered by the existing `*.example.com` certificate.
+  covered by the existing `*.example.com` certificate. A chart render
+  assertion prevents regression to a hostname outside that coverage.
 
 - The six active development web surfaces now use HTTP startup, readiness and
   liveness probes against their served root page. The marketing Astro probe
