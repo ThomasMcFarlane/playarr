@@ -9,6 +9,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The six active development web surfaces now use HTTP startup, readiness and
+  liveness probes against their served root page. The marketing Astro probe
+  sends the hostname required by its explicit Vite host allowlist.
+
 - Android TV hosted pairing now makes one cancellable five-minute attempt at a
   minimum five-second polling interval, stops when the app backgrounds or the
   pairing screen closes, and requires an explicit retry after expiry instead
