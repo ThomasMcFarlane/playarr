@@ -1,9 +1,0 @@
-apiVersion: v2
-name: vidaa-verify
-description: Playarr backend and PostgreSQL workloads for VIDAA verification
-type: application
-version: 0.1.0
-appVersion: "0.1.0"
-home: https://github.com/ThomasMcFarlane/playarr
-sources:
-  - https://github.com/ThomasMcFarlane/playarr
