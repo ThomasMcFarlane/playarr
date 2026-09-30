@@ -5,6 +5,17 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Planned: Release calendar and availability tracking (2026-10-01)
+
+Documentation only: implementation is pending and unassigned.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 74 | Epic: Aggregated release calendar | pending | Unassigned | In-app calendar aggregating upcoming releases from connected integrations (Radarr, Sonarr and similar arr services), available on every client: web, mobile and TV mode. Acceptance: tasks 75–77 pass. |
+| 75 | Aggregate integration calendars into an in-app calendar page | pending | Unassigned | Parent: 74. Pull calendar data from each configured integration (Radarr, Sonarr, etc.), normalise and deduplicate into one feed with source attribution, respecting user permissions. Build month/week/agenda views for web, mobile (touch) and TV (remote/D-pad navigation). Acceptance: entries from every configured integration appear correctly on all clients; unreachable integrations are reported, not silently dropped. |
+| 76 | External calendar subscription link | pending | Unassigned | Parent: 74. Depends on 75. Expose a per-user iCal (ICS) subscription URL usable in external calendar apps, with a revocable/regenerable token scoped to the user's permissions. Acceptance: subscribes in Google/Apple/Outlook calendars, updates reflect new/changed releases, revoked tokens stop working. |
+| 77 | Track average time until availability per series | pending | Unassigned | Parent: 74. Depends on 75. Record air/release date versus the time an item becomes available in the library, and show the average lag per series (e.g. on the series page and calendar entries). Acceptance: lag is computed from real grab/import events, excludes items backfilled long after airing or clearly marks them, and handles missing data explicitly. |
+
 ## Active — infrastructure reliability (2026-09-24)
 
 | # | Task | Status | Picked up by | Notes |
