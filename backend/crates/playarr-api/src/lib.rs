@@ -43,6 +43,7 @@ pub mod peer;
 pub mod peer_extractor;
 mod physical_path;
 pub mod playback;
+pub mod playback_health;
 pub mod playlists;
 pub mod readiness;
 pub mod refresh;
@@ -258,6 +259,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(playback::by_external_ref_playback_info_handler))
         .routes(routes!(playback::peer_playback_info_handler))
         .routes(routes!(playback::record_playback_event_handler))
+        .routes(routes!(playback_health::playback_health_handler))
+        .routes(routes!(playback_health::connection_test_handler))
         .routes(routes!(playback::list_watch_progress_handler))
         .routes(routes!(
             playback::get_watch_progress_handler,

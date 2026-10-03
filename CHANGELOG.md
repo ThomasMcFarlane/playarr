@@ -31,6 +31,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the household and child controls design (rating/tag gates, timezone schedules, server-counted
   daily budgets, guardian approvals, PIN lockout, offline limits) in
   `docs/architecture/household-controls.md`, tracked as tasks 103-114.
+- Playback health API: `POST /api/v1/playback/sessions/{session_id}/health` explains how a
+  session is delivered (direct play or transcode and why, HDR to SDR, audio) from the stored
+  negotiation plus client-reported and client-measured values, labels each fact measured,
+  reported or unknown, never infers Dolby Vision or passthrough from advertisements, and returns
+  a redacted export. `GET /api/v1/playback/connection-test` serves a bounded (default 1 MiB, max
+  4 MiB, four at once) payload for a cancellable connection test. Design in
+  `docs/architecture/playback-health.md` (tasks 58-61).
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.

@@ -3772,6 +3772,35 @@ paths:
           description: No peer in the group currently reports this title available
       security:
       - bearer_auth: []
+  /api/v1/playback/connection-test:
+    get:
+      tags:
+      - playback
+      operationId: connection_test_handler
+      parameters:
+      - name: bytes
+        in: query
+        description: Payload size in bytes. Default 1 MiB, clamped to 4 MiB.
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: A bounded zero-filled payload for measuring latency and download rate
+          content:
+            application/octet-stream: {}
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '429':
+          description: Too many connection tests are running
+      security:
+      - bearer_auth: []
   /api/v1/playback/progress:
     get:
       tags:
@@ -3825,6 +3854,40 @@ paths:
       responses:
         '204':
           description: Event recorded
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: session_id does not belong to the caller
+        '404':
+          description: Unknown or already-closed session_id
+      security:
+      - bearer_auth: []
+  /api/v1/playback/sessions/{session_id}/health:
+    post:
+      tags:
+      - playback
+      operationId: playback_health_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: PlaybackSession id, from PlaybackInfoResponse.session_id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientPlaybackReport'
+        required: true
+      responses:
+        '200':
+          description: Readable explanation of how this session is being played, with provenance for every fact and a redacted export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybackHealthReport'
         '401':
           description: Missing or invalid access token
         '403':
@@ -5441,6 +5504,13 @@ components:
       - harmony-mobile
       - harmony-tv
       - playarr-admin
+    ClientPlaybackReport:
+      type: object
+      properties:
+        measured:
+          $ref: '#/components/schemas/MeasuredPlayback'
+        reported:
+          $ref: '#/components/schemas/ReportedCapabilities'
     CompatibilityEntry:
       type: object
       description: |-
@@ -6074,6 +6144,92 @@ components:
         updated_at:
           type: string
           format: date-time
+    HealthExportFact:
+      type: object
+      required:
+      - key
+      - provenance
+      properties:
+        key:
+          type: string
+        provenance:
+          $ref: '#/components/schemas/HealthProvenance'
+        value:
+          type:
+          - string
+          - 'null'
+    HealthFact:
+      type: object
+      required:
+      - key
+      - label
+      - provenance
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        provenance:
+          $ref: '#/components/schemas/HealthProvenance'
+        source:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HealthSource'
+        value:
+          type:
+          - string
+          - 'null'
+    HealthFinding:
+      type: object
+      required:
+      - code
+      - severity
+      - title
+      - detail
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        next_action:
+          type:
+          - string
+          - 'null'
+        severity:
+          $ref: '#/components/schemas/HealthSeverity'
+        title:
+          type: string
+    HealthProvenance:
+      type: string
+      enum:
+      - measured
+      - reported
+      - unknown
+    HealthQualification:
+      type: object
+      required:
+      - status
+      - note
+      properties:
+        note:
+          type: string
+        status:
+          type: string
+          description: |-
+            `not_assessed` until the hardware qualification matrix (TASK 40)
+            exists. Hardware advertisements never move this to a pass.
+    HealthSeverity:
+      type: string
+      enum:
+      - ok
+      - info
+      - warning
+      - problem
+    HealthSource:
+      type: string
+      enum:
+      - server
+      - client
     ImageAsset:
       type: object
       required:
@@ -6406,6 +6562,74 @@ components:
         user_id:
           type: string
           format: uuid
+    MeasuredPlayback:
+      type: object
+      properties:
+        audio_channels:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        audio_codec:
+          type:
+          - string
+          - 'null'
+        audio_passthrough:
+          type:
+          - boolean
+          - 'null'
+          description: Only `Some(true)` when the player confirmed bitstream passthrough.
+        decoder_kind:
+          type:
+          - string
+          - 'null'
+          description: '`hardware` or `software`.'
+        dropped_frames:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        hdr_active:
+          type:
+          - boolean
+          - 'null'
+          description: Only `Some(true)` when the player confirmed an HDR output mode.
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        rebuffer_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        rebuffer_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        throughput_bps:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        video_codec:
+          type:
+          - string
+          - 'null'
+        width:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
     MediaChapter:
       type: object
       description: |-
@@ -7526,6 +7750,75 @@ components:
         tagged enum rather than a generic `{kind: String, payload: Value}` bag
         so the analytics rollup code (`playarr-telemetry::analytics::rollup`)
         can exhaustively match every event type the compiler knows about.
+    PlaybackHealthExport:
+      type: object
+      description: |-
+        Redacted evidence safe to copy or share: no identifiers, titles, paths,
+        URLs, addresses or tokens.
+      required:
+      - schema
+      - generated_at
+      - client_platform
+      - client_version
+      - play_method
+      - facts
+      - finding_codes
+      - redaction
+      properties:
+        client_platform:
+          type: string
+        client_version:
+          type: string
+        facts:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthExportFact'
+        finding_codes:
+          type: array
+          items:
+            type: string
+        generated_at:
+          type: string
+          format: date-time
+        play_method:
+          $ref: '#/components/schemas/PlayMethod'
+        redaction:
+          type: string
+        schema:
+          type: string
+        transcode_reason:
+          type:
+          - string
+          - 'null'
+    PlaybackHealthReport:
+      type: object
+      required:
+      - headline
+      - severity
+      - play_method
+      - facts
+      - findings
+      - qualification
+      - export
+      properties:
+        export:
+          $ref: '#/components/schemas/PlaybackHealthExport'
+        facts:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthFact'
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthFinding'
+        headline:
+          type: string
+        play_method:
+          $ref: '#/components/schemas/PlayMethod'
+        qualification:
+          $ref: '#/components/schemas/HealthQualification'
+        severity:
+          $ref: '#/components/schemas/HealthSeverity'
     PlaybackInfoResponse:
       type: object
       description: |-
@@ -8212,6 +8505,40 @@ components:
             Every item id currently on this playlist, in the desired new order.
             An id that isn't actually one of this playlist's items is silently
             ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
+    ReportedCapabilities:
+      type: object
+      properties:
+        audio_codecs:
+          type: array
+          items:
+            type: string
+        audio_output:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Audio output the device advertises, e.g. `stereo`, `surround`,
+            `passthrough`.
+        display_hdr_formats:
+          type: array
+          items:
+            type: string
+          description: HDR formats the connected display advertises.
+        hdr_formats:
+          type: array
+          items:
+            type: string
+          description: 'Decoder-side HDR formats: `hdr10`, `hlg`, `dolby_vision`.'
+        max_height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        video_codecs:
+          type: array
+          items:
+            type: string
     ReviewUserInviteRequest:
       type: object
       required:
