@@ -15,6 +15,7 @@ internal enum class PlayarrSearchMediaType(
     Site("site", PlayarrString.SearchFilterSites, WorkKind.Site),
     Artist("artist", PlayarrString.SearchFilterMusic, WorkKind.Artist),
     Playlist("playlist", PlayarrString.SearchFilterPlaylists),
+    Game("game", PlayarrString.SearchFilterGames),
 }
 
 internal data class PlayarrSearchResults(
@@ -38,7 +39,7 @@ internal fun filterPlayarrSearchWorks(
     libraryWorkIds: Set<String>? = null,
 ): List<Work> = works
     .asSequence()
-    .filter { mediaType != PlayarrSearchMediaType.Playlist }
+    .filter { mediaType != PlayarrSearchMediaType.Playlist && mediaType != PlayarrSearchMediaType.Game }
     .filter { it.kind in playarrSearchWorkKinds }
     .filter { it.id in availableWorkIds }
     .filter { mediaType.workKind == null || it.kind == mediaType.workKind }

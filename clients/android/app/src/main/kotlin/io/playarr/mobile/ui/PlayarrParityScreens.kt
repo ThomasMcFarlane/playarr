@@ -3688,7 +3688,7 @@ private fun <T> SettingChoiceOptions(
 }
 
 @Composable
-private fun ParityLoading(label: String) {
+internal fun ParityLoading(label: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             CircularProgressIndicator(color = WebPink)
@@ -3698,7 +3698,7 @@ private fun ParityLoading(label: String) {
 }
 
 @Composable
-private fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
+internal fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(playarrText(message), color = MaterialTheme.colorScheme.error)
         Button(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {

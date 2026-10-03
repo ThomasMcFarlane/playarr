@@ -93,6 +93,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (daily, keep the newest 3 and anything under 7 days, artwork capped at 1 GiB). Only the age public
   recovery key is in values; the schema rejects enabling backups without a valid public key.
   `tests/backup.sh` covers rendering, optionality and schema rejection.
+- Playarr Android (phone, tablet and TV): Watchlist destination with Resume/Play that opens the exact
+  media file, Request and explained unavailable actions; watchlist toggle on title pages; "Other
+  sources" results and a Games filter in Search with provider status.
 - Request from discovery: Radarr/Sonarr catalogue lookup feeds `GET /api/v1/discover` as
   requestable titles, and `POST /api/v1/discover/request` adds a title to the provider's default
   root folder and quality profile. Admins can request by default; set

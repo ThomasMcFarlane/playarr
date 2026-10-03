@@ -12,6 +12,7 @@ import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.CreatePlaylistRequest
 import io.playarr.shared.data.model.CreateDownloadTicketRequest
 import io.playarr.shared.data.model.CreateUserInviteRequest
+import io.playarr.shared.data.model.DiscoverResponse
 import io.playarr.shared.data.model.DownloadOptionsResponse
 import io.playarr.shared.data.model.DownloadQualityOption
 import io.playarr.shared.data.model.DownloadStatus
@@ -21,6 +22,10 @@ import io.playarr.shared.data.model.MediaMetadata
 import io.playarr.shared.data.model.MediaPlaybackOptionsResponse
 import io.playarr.shared.data.model.PeerAddressBundle
 import io.playarr.shared.data.model.PlayerPreferences
+import io.playarr.shared.data.model.RequestResult
+import io.playarr.shared.data.model.ResolvedTitle
+import io.playarr.shared.data.model.TitleSnapshot
+import io.playarr.shared.data.model.WatchlistResponse
 import io.playarr.shared.data.model.OptionalUserInviteRequest
 import io.playarr.shared.data.model.Playlist
 import io.playarr.shared.data.model.PlaylistItem
@@ -365,6 +370,30 @@ interface PlayarrApi {
 
     @POST("api/v1/users/me/user-invite-request/generate")
     suspend fun generateApprovedUserInvite(): UserInvite
+
+    // ---- discovery and watchlist -----------------------------------------
+
+    @GET("api/v1/discover")
+    suspend fun discover(
+        @Query("q") query: String,
+        @Query("scope") scope: String? = null,
+        @Query("limit") limit: Long? = null,
+    ): DiscoverResponse
+
+    @POST("api/v1/discover/resolve")
+    suspend fun resolveTitle(@Body snapshot: TitleSnapshot): ResolvedTitle
+
+    @POST("api/v1/discover/request")
+    suspend fun requestTitle(@Body snapshot: TitleSnapshot): RequestResult
+
+    @GET("api/v1/watchlist")
+    suspend fun listWatchlist(): WatchlistResponse
+
+    @POST("api/v1/watchlist")
+    suspend fun addToWatchlist(@Body snapshot: TitleSnapshot): ResolvedTitle
+
+    @DELETE("api/v1/watchlist/{titleKey}")
+    suspend fun removeFromWatchlist(@Path("titleKey", encoded = false) titleKey: String): Response<ResponseBody>
 
     // ---- playlists --------------------------------------------------------
 

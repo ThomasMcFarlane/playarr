@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Download
@@ -655,7 +657,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             if (debounce) delay(SEARCH_DEBOUNCE_MS)
             _search.value = ExperienceLoad.Loading
             try {
-                val includesWorks = mediaType != PlayarrSearchMediaType.Playlist
+                val includesWorks = mediaType != PlayarrSearchMediaType.Playlist &&
+                    mediaType != PlayarrSearchMediaType.Game
                 val worksRequest = async {
                     if (!includesWorks) return@async emptyList()
                     when (val result = searchCatalog(normalised, limit = SEARCH_LIMIT)) {
@@ -834,6 +837,7 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
     ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
     ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
+    ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.Bookmark),
 )
 
 internal fun visibleExperienceDestinations(
@@ -853,7 +857,7 @@ internal fun televisionDestinationGroups(
 ): List<List<ExperienceDestination>> = listOf(
     destinations.filter { it.route in setOf("downloads", "search") },
     destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "calendar") },
-    destinations.filter { it.route == "playlists" },
+    destinations.filter { it.route == "playlists" || it.route == "watchlist" },
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
@@ -1630,6 +1634,21 @@ private fun ExperienceNavHost(
                 )
             }
         }
+        composable("watchlist") {
+            ExperienceOnlineGate(isOnline, isTelevision, "watchlist") {
+                ExperienceWatchlistScreen(
+                    isTelevision = isTelevision,
+                    navController = navController,
+                    onPlay = { mediaFileId, title ->
+                        viewModel.startPlayback(
+                            mediaFileId,
+                            listOf(PlayarrPlaybackQueueItem(mediaFileId = mediaFileId, title = title)),
+                        )
+                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    },
+                )
+            }
+        }
         composable("playlists") {
             ExperienceOnlineGate(isOnline, isTelevision, "playlists") {
                 ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
@@ -1696,7 +1715,7 @@ internal fun restorableExperienceRoute(
     mediaFileId: String? = null,
     playlistId: String? = null,
 ): String? = when (route) {
-    "home", "search", "series", "movies", "sites", "music", "calendar", "playlists", "settings", "downloads" -> route
+    "home", "search", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist", "settings", "downloads" -> route
     "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
         buildString {
             append("experience-detail/")
@@ -2625,6 +2644,11 @@ private fun ExperienceSearchScreen(
     val activeLibrary = views.firstOrNull { it.id == libraryId }
     val selectedWork = searchResults?.works?.firstOrNull { "work:${it.id}" == selectedResultKey }
     val selectedPlaylist = searchResults?.playlists?.firstOrNull { "playlist:${it.id}" == selectedResultKey }
+    val extrasEligible = libraryId == null && mediaFilter in setOf(
+        PlayarrSearchMediaType.All,
+        PlayarrSearchMediaType.Movie,
+        PlayarrSearchMediaType.Series,
+    )
     fun submitSearch(debounce: Boolean) {
         viewModel.search(query, mediaFilter, libraryId, debounce)
     }
@@ -2786,7 +2810,14 @@ private fun ExperienceSearchScreen(
                     playarrString(PlayarrString.SearchIdleTitle),
                     playarrString(PlayarrString.SearchEmptyPrompt),
                 )
-            } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty()) {
+            } else if (mediaFilter == PlayarrSearchMediaType.Game) {
+                DiscoveryExtrasSection(
+                    query = query.trim(),
+                    gamesOnly = true,
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize().padding(top = 22.dp),
+                )
+            } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
                 ExperienceEmpty(
                     playarrString(PlayarrString.SearchNoResultsTitle),
                     playarrString(PlayarrString.SearchNoResultsDescription),
@@ -2817,6 +2848,15 @@ private fun ExperienceSearchScreen(
                             selected = selectedResultKey == "playlist:${playlist.id}",
                             onSelected = { selectedResultKey = "playlist:${playlist.id}" },
                         )
+                    }
+                    if (extrasEligible) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "discovery-extras") {
+                            DiscoveryExtrasSection(
+                                query = query.trim(),
+                                gamesOnly = false,
+                                navController = navController,
+                            )
+                        }
                     }
                 }
             }
@@ -3965,6 +4005,7 @@ private fun VideoDetailActions(
             Icon(Icons.Outlined.Add, contentDescription = null)
             Text(playarrString(PlayarrString.ContextAddToPlaylist))
         }
+        WatchlistToggleButton(work)
         onPlaybackSettings?.let { openSettings ->
             HeroOutlinedButton(onClick = openSettings) { Text(playarrString(PlayarrString.DetailPlayback)) }
         }
