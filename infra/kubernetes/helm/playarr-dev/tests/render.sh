@@ -29,6 +29,9 @@ grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 # Regional servers pull a self-contained image from the registry: no hostPath runtime.
 test "$(grep -c 'image: "registry.example.com/playarr-regional:' "$rendered")" -eq 2
 ! grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never' "$rendered"
+# Declarative source-instance URLs reach both regional servers as one env var.
+test "$(grep -c '^            - name: PLAYARR_SOURCE_INSTANCE_URLS$' "$rendered")" -eq 2
+grep -q 'radarr=http://radarr.media.svc.cluster.local:7878,' "$rendered"
 test "$(grep -c '^            - name: PLAYARR_WEB_ASSETS_DIR$' "$rendered")" -eq 2
 # TLS instances: Emissary originates TLS to the pod on the https Service port.
 grep -q 'service: "https://playarr-region-a.playarr:443"' "$rendered"

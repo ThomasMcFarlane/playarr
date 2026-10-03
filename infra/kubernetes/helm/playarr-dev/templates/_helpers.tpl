@@ -9,3 +9,12 @@ app.kubernetes.io/name: playarr-standalone
 app.kubernetes.io/instance: {{ .name }}
 {{ include "playarr-dev.labels" .context }}
 {{- end }}
+
+{{/* kind[/name]=url pairs, comma separated, in stable key order. */}}
+{{- define "playarr-dev.sourceInstanceUrls" -}}
+{{- $pairs := list -}}
+{{- range $selector, $url := . -}}
+{{- $pairs = append $pairs (printf "%s=%s" $selector $url) -}}
+{{- end -}}
+{{- join "," $pairs -}}
+{{- end -}}

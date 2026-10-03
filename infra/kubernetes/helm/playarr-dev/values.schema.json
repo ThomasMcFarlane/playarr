@@ -204,6 +204,13 @@
             "type": "integer",
             "minimum": 1
           },
+          "sourceInstanceUrls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^https?://"
+            }
+          },
           "resources": {
             "type": "object"
           },

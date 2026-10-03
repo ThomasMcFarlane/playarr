@@ -40,6 +40,7 @@ mod acme_cache;
 mod multi_cert;
 mod relay;
 mod relay_acme;
+mod source_urls;
 
 const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibility.toml");
 
@@ -1340,6 +1341,7 @@ async fn boot_api(
     // way in was `POST /api/v1/admin/source-instances` on the running
     // process. Read-then-upsert, not a bulk "replace" -- keeps this in
     // step with `admin.rs`'s handlers, which write through the same repo.
+    source_urls::reconcile_from_env(&source_instance_repo).await;
     match source_instance_repo.list_all().await {
         Ok(instances) => {
             let hydrated_count = instances.len();
@@ -2527,6 +2529,7 @@ async fn boot_worker(
             let mut interval = tokio::time::interval(Duration::from_secs(10));
             interval.tick().await; // first tick fires immediately; hydrate from the DB below before the loop starts reacting to changes
 
+            source_urls::reconcile_from_env(&source_instance_repo).await;
             match source_instance_repo.list_all().await {
                 Ok(instances) => {
                     for instance in instances {

@@ -128,6 +128,15 @@ regionalInstances:
     # limit was too small; 4 GiB leaves room for
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
+    # In-cluster Service URLs for the *arr apps (media namespace); the public
+    # host ports on the node are closed. Prowlarr has no in-cluster Service
+    # (only a cloudflared tunnel), so it is intentionally left as registered.
+    sourceInstanceUrls:
+      radarr: http://radarr.media.svc.cluster.local:7878
+      sonarr: http://sonarr.media.svc.cluster.local:8989
+      lidarr: http://lidarr.media.svc.cluster.local:8686
+      whisparr: http://whisparr.media.svc.cluster.local:6969
+      bazarr: http://bazarr.media.svc.cluster.local:6767
     resources:
       requests:
         cpu: 100m
@@ -197,6 +206,15 @@ regionalInstances:
     # limit was too small; 4 GiB leaves room for
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
+    # In-cluster Service URLs for the *arr apps (media namespace); the public
+    # host ports on the node are closed. Prowlarr has no in-cluster Service
+    # (only a cloudflared tunnel), so it is intentionally left as registered.
+    sourceInstanceUrls:
+      radarr: http://radarr.media.svc.cluster.local:7878
+      sonarr: http://sonarr.media.svc.cluster.local:8989
+      lidarr: http://lidarr.media.svc.cluster.local:8686
+      whisparr: http://whisparr.media.svc.cluster.local:6969
+      bazarr: http://bazarr.media.svc.cluster.local:6767
     resources:
       requests:
         cpu: 100m
