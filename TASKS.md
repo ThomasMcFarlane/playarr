@@ -23,9 +23,9 @@ Owner decision (4 October 2026): Dubarr (AI dubbing manager, `ThomasMcFarlane/du
 
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
-| 190 | Server: Dubarr source type (`dubarr` source kind, client, change-feed poller), dub tracks offered in playback audio options, HLS transcode with external audio | in progress | dubarr-integration | Branch `task/dubarr-source`. Selecting a dub forces an on-demand HLS transcode (source video plus the dub as audio); direct play of a dub is not possible. Parent: Dubarr D-07. |
-| 191 | Clients: show dub tracks in the audio picker | open | Unassigned | Clients already render `audio_tracks` from playback info; verify the labels and language display on web, Android, iOS, tvOS, Roku, Xbox, Harmony. No client change is expected. |
-| 192 | Dubarr direct-play alternate audio (remux or muxed rendition) without transcoding video | open | Unassigned | Today a dub means a video transcode. A cheaper path is `-c:v copy` HLS with the dub as audio when the client can play the video codec. |
+| 195 | Server: Dubarr source type (`dubarr` source kind, client, change-feed poller), dub tracks offered in playback audio options, HLS transcode with external audio | in progress | dubarr-integration | Branch `task/dubarr-source`. Selecting a dub forces an on-demand HLS transcode (source video plus the dub as audio); direct play of a dub is not possible. Parent: Dubarr D-07. |
+| 196 | Clients: show dub tracks in the audio picker | open | Unassigned | Clients already render `audio_tracks` from playback info; verify the labels and language display on web, Android, iOS, tvOS, Roku, Xbox, Harmony. No client change is expected. |
+| 197 | Dubarr direct-play alternate audio (remux or muxed rendition) without transcoding video | open | Unassigned | Today a dub means a video transcode. A cheaper path is `-c:v copy` HLS with the dub as audio when the client can play the video codec. |
 
 ## Active: Public Playarr Server releases (2026-10-04)
 
