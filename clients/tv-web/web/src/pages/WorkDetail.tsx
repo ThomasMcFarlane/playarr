@@ -1,3 +1,5 @@
+import { WatchlistToggle } from "../components/WatchlistToggle";
+import { snapshotFromWork } from "../lib/discovery";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import type {
@@ -1816,6 +1818,13 @@ export function WorkDetailPage() {
             {t("pages.workDetail.unavailable")}
           </span>
         ) : null}
+        <div className="tv-detail-actions tv-detail-watchlist">
+          <WatchlistToggle
+            snapshot={snapshotFromWork(work)}
+            className="tv-detail-download"
+            focusKey={`detail:${work.id}:watchlist`}
+          />
+        </div>
       </aside>
 
       {episodic && hasSeriesTracks ? (

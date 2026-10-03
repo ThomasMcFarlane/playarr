@@ -11720,4 +11720,105 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   padding: 0.75rem 1rem;
   border: 1px solid var(--line);
   background: var(--surface);
+/* Unified discovery and watchlist */
+.tv-discovery-extras {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: clamp(20px, 2.4vw, 36px);
+}
+
+.tv-discovery-extras h2 {
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, 0.58vw, 0.68rem);
+  font-weight: 720;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tv-discovery-note {
+  color: var(--ink-muted);
+  font-size: clamp(0.55rem, 0.6vw, 0.75rem);
+}
+
+.tv-discovery-list,
+.tv-watchlist-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-discovery-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(12px, 1.2vw, 18px);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+
+.tv-discovery-item:focus-within {
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+}
+
+.tv-discovery-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.tv-discovery-copy small,
+.tv-watchlist-reason {
+  color: var(--ink-muted);
+}
+
+.tv-watchlist-toggle,
+.tv-watchlist-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 76%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tv-watchlist-toggle:hover,
+.tv-watchlist-toggle:focus-visible,
+.tv-watchlist-primary:hover,
+.tv-watchlist-primary:focus-visible {
+  outline: 2px solid #cf3157;
+  outline-offset: 2px;
+}
+
+.tv-watchlist-toggle[aria-pressed="true"] {
+  border-color: #cf3157;
+}
+
+.tv-watchlist-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tv-watchlist-error {
+  color: #cf3157;
+  font-size: 0.82em;
+}
+
+.tv-watchlist-row .tv-download-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tv-detail-watchlist {
+  margin-top: 0.75rem;
 }

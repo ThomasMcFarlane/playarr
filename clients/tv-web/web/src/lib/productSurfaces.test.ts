@@ -43,6 +43,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "sites",
       "music",
       "playlists",
+      "watchlist",
       "player",
       "settings",
       "settings-appearance",
@@ -73,6 +74,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "/sites",
       "/music",
       "/playlists",
+      "/watchlist",
     ]);
   });
 

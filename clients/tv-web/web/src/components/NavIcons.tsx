@@ -113,6 +113,15 @@ export function PlaylistsIcon({ className }: IconProps) {
   );
 }
 
+export function WatchlistIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_PROPS} className={className}>
+      <path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.5L5 21V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M12 7.5v5M9.5 10h5" />
+    </svg>
+  );
+}
+
 export function SettingsIcon({ className }: IconProps) {
   return (
     <svg {...ICON_PROPS} className={className}>

@@ -227,6 +227,19 @@ export type LibraryViewResponse = components["schemas"]["LibraryViewResponse"];
 export type ViewSummary = components["schemas"]["ViewSummary"];
 
 export type PlaylistResponse = components["schemas"]["PlaylistResponse"];
+export type DiscoverResponse = components["schemas"]["DiscoverResponse"];
+export type DiscoverTitle = components["schemas"]["DiscoverTitle"];
+export type DiscoveryTitle = components["schemas"]["DiscoveryTitle"];
+export type DiscoveryKind = components["schemas"]["DiscoveryKind"];
+export type DiscoveryScope = components["schemas"]["DiscoveryScope"];
+export type TitleSource = components["schemas"]["TitleSource"];
+export type TitleAction = components["schemas"]["TitleAction"];
+export type TitleSnapshot = components["schemas"]["TitleSnapshot"];
+export type ProviderStatus = components["schemas"]["ProviderStatus"];
+export type ResolvedTitle = components["schemas"]["ResolvedTitle"];
+export type RequestResult = components["schemas"]["RequestResult"];
+export type WatchlistEntry = components["schemas"]["WatchlistEntry"];
+export type WatchlistResponse = components["schemas"]["WatchlistResponse"];
 export type CreatePlaylistRequest = components["schemas"]["CreatePlaylistRequest"];
 export type UpdatePlaylistRequest = components["schemas"]["UpdatePlaylistRequest"];
 export type PlaylistItemResponse = components["schemas"]["PlaylistItemResponse"];
@@ -554,6 +567,12 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/views/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/views", method: "GET" },
   { schemaPath: "/api/v1/views/{id}/resolve", method: "GET" },
+  { schemaPath: "/api/v1/discover", method: "GET" },
+  { schemaPath: "/api/v1/discover/resolve", method: "POST" },
+  { schemaPath: "/api/v1/discover/request", method: "POST" },
+  { schemaPath: "/api/v1/watchlist", method: "GET" },
+  { schemaPath: "/api/v1/watchlist", method: "POST" },
+  { schemaPath: "/api/v1/watchlist/{title_key}", method: "DELETE" },
   { schemaPath: "/api/v1/playlists", method: "GET" },
   { schemaPath: "/api/v1/playlists", method: "POST" },
   { schemaPath: "/api/v1/admin/playlists", method: "GET" },
@@ -1327,6 +1346,42 @@ export class ApiClient {
   // playlist as a non-admin) -- see backend/crates/playarr-api/src/
   // playlists.rs's module doc comment.
   // ---------------------------------------------------------------------
+
+  /** Unified discovery: merged, source-attributed titles plus a status per provider. */
+  async discover(
+    q: string,
+    options: { scope?: DiscoveryScope; kind?: DiscoveryKind; limit?: number } = {}
+  ): Promise<DiscoverResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/discover", { params: { query: { q, ...options } } })
+    );
+  }
+
+  /** Re-resolve one title for the caller: library match, watchlist membership and actions. */
+  async resolveTitle(body: TitleSnapshot): Promise<ResolvedTitle> {
+    return this.unwrap(await this.raw.POST("/api/v1/discover/resolve", { body }));
+  }
+
+  /** Ask the configured request provider (Radarr/Sonarr) to add and search for a title. */
+  async requestTitle(body: TitleSnapshot): Promise<RequestResult> {
+    return this.unwrap(await this.raw.POST("/api/v1/discover/request", { body }));
+  }
+
+  async listWatchlist(): Promise<WatchlistResponse> {
+    return this.unwrap(await this.raw.GET("/api/v1/watchlist", {}));
+  }
+
+  async addToWatchlist(body: TitleSnapshot): Promise<ResolvedTitle> {
+    return this.unwrap(await this.raw.POST("/api/v1/watchlist", { body }));
+  }
+
+  async removeFromWatchlist(titleKey: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/watchlist/{title_key}", {
+        params: { path: { title_key: titleKey } },
+      })
+    );
+  }
 
   /** Every playlist visible to the caller: their own personal playlists plus every System playlist. */
   async listPlaylists(): Promise<PlaylistResponse[]> {

@@ -1,0 +1,211 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  describeApiError,
+  type TitleAction,
+  type WatchlistEntry,
+} from "@playarr-tv/api-client";
+import { RequestButton } from "../components/RequestButton";
+import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { useApiClient } from "../lib/ApiClientProvider";
+import {
+  actionLabelKey,
+  discoveryUnsupportedByServer,
+  explainedDisabledActions,
+  libraryDetailRoute,
+  playerTargetFor,
+  primaryAction,
+  sourceChipKey,
+  uniqueSourceKinds,
+} from "../lib/discovery";
+import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
+
+type State =
+  | { status: "loading" }
+  | { status: "ready"; items: WatchlistEntry[] }
+  | { status: "error"; message: string };
+
+export function WatchlistPage() {
+  const { t } = useLanguage();
+  useDocumentTitle(t("pages.watchlist.title"));
+  const client = useApiClient();
+  const [state, setState] = useState<State>({ status: "loading" });
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void client
+      .listWatchlist()
+      .then((response) => {
+        if (!cancelled) setState({ status: "ready", items: response.items });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            status: "error",
+            message: discoveryUnsupportedByServer(error)
+              ? t("discovery.serverUnsupported")
+              : describeApiError(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, t]);
+
+  const remove = useCallback(
+    async (entry: WatchlistEntry) => {
+      setRemoveError(null);
+      try {
+        await client.removeFromWatchlist(entry.title.title_key);
+        setState((current) =>
+          current.status === "ready"
+            ? {
+                status: "ready",
+                items: current.items.filter(
+                  (item) => item.title.title_key !== entry.title.title_key
+                ),
+              }
+            : current
+        );
+      } catch (error) {
+        setRemoveError(describeApiError(error));
+      }
+    },
+    [client]
+  );
+
+  return (
+    <TvStageShell className="tv-library tv-downloads tv-watchlist" ariaLabel={t("pages.watchlist.title")}>
+      <header className="tv-library-heading">
+        <Link to="/" className="tv-page-back" aria-label={t("pages.watchlist.backToHome")}>
+          <span aria-hidden="true">←</span>
+        </Link>
+        <h1>{t("pages.watchlist.title")}</h1>
+      </header>
+      <TvRailSurface
+        className="tv-rail-panel tv-library-grid-panel tv-downloads-panel"
+        mode="content"
+        ariaLabel={t("pages.watchlist.title")}
+      >
+        <div
+          className="tv-downloads-content"
+          data-tv-scroll-container
+          data-tv-scroll-axis="vertical"
+          data-navigation-scroll-key="watchlist:list"
+        >
+          {state.status === "loading" ? (
+            <p className="tv-discovery-note" role="status">
+              {t("pages.watchlist.loading")}
+            </p>
+          ) : state.status === "error" ? (
+            <TvEmptyState
+              graphic="details"
+              variant="page"
+              tone="error"
+              title={t("pages.watchlist.errorTitle")}
+              description={state.message}
+            />
+          ) : state.items.length === 0 ? (
+            <TvEmptyState
+              graphic="details"
+              variant="page"
+              title={t("pages.watchlist.emptyTitle")}
+              description={t("pages.watchlist.emptyDescription")}
+            />
+          ) : (
+            <ul className="tv-watchlist-list">
+              {state.items.map((entry) => (
+                <WatchlistRow key={entry.title.title_key} entry={entry} onRemove={remove} />
+              ))}
+            </ul>
+          )}
+          {removeError ? (
+            <p className="tv-watchlist-error" role="alert">
+              {removeError}
+            </p>
+          ) : null}
+        </div>
+      </TvRailSurface>
+    </TvStageShell>
+  );
+}
+
+function actionLabel(action: TitleAction, t: ReturnType<typeof useLanguage>["t"]): string {
+  return t(actionLabelKey(action.action));
+}
+
+export function WatchlistRow({
+  entry,
+  onRemove,
+}: {
+  entry: WatchlistEntry;
+  onRemove: (entry: WatchlistEntry) => void;
+}) {
+  const { t } = useLanguage();
+  const { title, actions } = entry;
+  const primary = primaryAction(actions);
+  const target = primary ? playerTargetFor(primary) : null;
+  const detail = libraryDetailRoute(title);
+  const explained = explainedDisabledActions(actions);
+  const key = title.title_key;
+  return (
+    <li className="tv-download-row tv-watchlist-row" data-navigation-focus-key={`watchlist:${key}`}>
+      <div className="tv-download-row-copy">
+        {detail ? (
+          <Link to={detail} data-navigation-focus-key={`watchlist:${key}:open`}>
+            <strong>{title.title}</strong>
+          </Link>
+        ) : (
+          <strong>{title.title}</strong>
+        )}
+        <span className="tv-download-row-meta">
+          {title.year ? <span>{title.year}</span> : null}
+          {uniqueSourceKinds(title.sources).map((kind) => (
+            <span key={kind}>{t(sourceChipKey(kind))}</span>
+          ))}
+        </span>
+        {explained.map((action) => (
+          <small key={action.action} className="tv-watchlist-reason">
+            {actionLabel(action, t)}: {action.reason}
+          </small>
+        ))}
+      </div>
+      <div className="tv-download-row-actions">
+        {primary && target ? (
+          <Link
+            to={target}
+            state={{ title: title.title, backTo: "/watchlist", mediaFileId: primary.media_file_id }}
+            className="tv-watchlist-primary"
+            data-tv-focus-default
+            data-navigation-focus-key={`watchlist:${key}:primary`}
+          >
+            {actionLabel(primary, t)}
+          </Link>
+        ) : primary?.action === "request" ? (
+          <RequestButton
+            snapshot={{
+              kind: title.kind,
+              title: title.title,
+              year: title.year ?? null,
+              work_id: null,
+              external_refs: title.external_refs,
+              poster_url: title.poster_url ?? null,
+            }}
+            focusKey={`watchlist:${key}:primary`}
+          />
+        ) : null}
+        <button
+          type="button"
+          data-navigation-focus-key={`watchlist:${key}:remove`}
+          onClick={() => onRemove(entry)}
+        >
+          {t("discovery.watchlist.remove")}
+        </button>
+      </div>
+    </li>
+  );
+}

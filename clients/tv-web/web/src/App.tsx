@@ -39,6 +39,7 @@ import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
+import { WatchlistPage } from "./pages/Watchlist";
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
@@ -61,6 +62,7 @@ import {
   MusicIcon,
   MoviesIcon,
   PlaylistsIcon,
+  WatchlistIcon,
   SearchIcon,
   SeriesIcon,
   SitesIcon,
@@ -135,6 +137,7 @@ const NAV_ICONS: Record<string, ComponentType> = {
   "/sites": SitesIcon,
   "/music": MusicIcon,
   "/playlists": PlaylistsIcon,
+  "/watchlist": WatchlistIcon,
 };
 
 /** Shell nav hierarchy from productSurfaces (shared with tv-vidaa parity tests). */
@@ -621,6 +624,7 @@ export function App() {
         <Route path="/sites/:workId" element={<WorkDetailPage />} />
         <Route path="/music" element={<LibraryPage kind="artist" />} />
         <Route path="/music/:workId" element={<MusicDetailPage />} />
+        <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />

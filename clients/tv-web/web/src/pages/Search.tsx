@@ -16,6 +16,7 @@ import {
   type WorkKind,
 } from "@playarr-tv/api-client";
 import type { AppShellOutletContext } from "../App";
+import { DiscoveryExtras } from "../components/DiscoveryExtras";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import {
   indexWatchProgressByWork,
@@ -46,7 +47,8 @@ type SearchMediaType =
   | "series"
   | "site"
   | "artist"
-  | "playlist";
+  | "playlist"
+  | "game";
 
 type SearchResult =
   | { type: "work"; id: string; work: Work }
@@ -63,6 +65,7 @@ const SEARCH_TYPES: ReadonlyArray<{
   { value: "site", labelKey: "pages.search.filterTypeSites", workKind: "site" },
   { value: "artist", labelKey: "pages.search.filterTypeMusic", workKind: "artist" },
   { value: "playlist", labelKey: "pages.search.filterTypePlaylists" },
+  { value: "game", labelKey: "pages.search.filterTypeGames" },
 ];
 
 function isSupportedWork(work: Work): boolean {
@@ -214,7 +217,8 @@ export function SearchPage() {
     if (
       availableWorkKinds === null ||
       requestedMediaType === "all" ||
-      requestedMediaType === "playlist"
+      requestedMediaType === "playlist" ||
+      requestedMediaType === "game"
     ) {
       return;
     }
@@ -315,7 +319,8 @@ export function SearchPage() {
       return;
     }
 
-    const includesWorks = requestedMediaType !== "playlist";
+    const includesWorks =
+      requestedMediaType !== "playlist" && requestedMediaType !== "game";
     const includesPlaylists =
       !requestedLibraryId &&
       (requestedMediaType === "all" || requestedMediaType === "playlist");
@@ -848,7 +853,7 @@ export function SearchPage() {
                 title={t("pages.search.idleTitle")}
                 variant="rail"
               />
-            ) : results.length === 0 ? (
+            ) : results.length === 0 && requestedMediaType === "game" ? null : results.length === 0 ? (
               <TvEmptyState
                 announce={false}
                 graphic="search"
@@ -977,6 +982,17 @@ export function SearchPage() {
                 })}
               </div>
             )}
+            {state.status === "ready" &&
+            (requestedMediaType === "game" ||
+              (!requestedLibraryId &&
+                (requestedMediaType === "all" ||
+                  requestedMediaType === "movie" ||
+                  requestedMediaType === "series"))) ? (
+              <DiscoveryExtras
+                query={requestedQuery}
+                gamesOnly={requestedMediaType === "game"}
+              />
+            ) : null}
           </div>
         </div>
       </TvRailSurface>

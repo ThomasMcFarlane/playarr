@@ -989,6 +989,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_calendar_feed_handler"];
+        put?: never;
+        post: operations["create_calendar_feed_handler"];
+        delete: operations["revoke_calendar_feed_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calendar/feed/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["calendar_feed_ics_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -1051,6 +1083,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_work_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{id}/availability-lag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["availability_lag_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2819,6 +2867,51 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description Average time until availability for one series, movie, artist or author. */
+        AvailabilityLag: {
+            /**
+             * Format: int64
+             * @description Mean seconds from release to first grab over the same samples.
+             */
+            average_grab_seconds?: number | null;
+            /**
+             * Format: int64
+             * @description Mean seconds from air/release to first import; `null` with no samples.
+             */
+            average_seconds?: number | null;
+            /**
+             * Format: int32
+             * @description Items first imported more than `backfill_threshold_days` after release:
+             *     counted here and excluded from the average.
+             */
+            backfill_count: number;
+            /** Format: int32 */
+            backfill_threshold_days: number;
+            /**
+             * Format: int32
+             * @description Items that contributed to `average_seconds`.
+             */
+            sample_count: number;
+            /** @description Most recent samples, newest first (at most 20). */
+            samples: components["schemas"]["AvailabilityLagSample"][];
+            /**
+             * Format: int32
+             * @description Items with no release time, or imported before it aired: excluded.
+             */
+            unknown_count: number;
+        };
+        AvailabilityLagSample: {
+            /** Format: date-time */
+            air_at: string;
+            /** Format: int64 */
+            episode_number?: number | null;
+            /** Format: date-time */
+            imported_at: string;
+            /** Format: int64 */
+            lag_seconds: number;
+            /** Format: int64 */
+            season_number?: number | null;
+        };
         /** @description Response body for [`availability_handler`]. */
         AvailabilityResponse: {
             rows: components["schemas"]["PeerAvailabilityRow"][];
@@ -2999,6 +3092,21 @@ export interface components {
             source_instance_id: string;
             source_kind: components["schemas"]["SourceKind"];
             source_name: string;
+        };
+        CalendarFeedCreated: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description The secret path component, shown once. */
+            token: string;
+            /** @description Full subscription URL, shown once. */
+            url: string;
+        };
+        CalendarFeedStatus: {
+            active: boolean;
+            /** Format: date-time */
+            created_at?: string | null;
+            /** Format: date-time */
+            last_used_at?: string | null;
         };
         /** @enum {string} */
         CalendarMediaKind: "episode" | "movie" | "album" | "book";
@@ -8820,6 +8928,136 @@ export interface operations {
             };
         };
     };
+    get_calendar_feed_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether the caller has an active subscription token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedStatus"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller may not view the catalog */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_calendar_feed_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new subscription URL; any previous token stops working. The token is returned only here. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedCreated"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller may not view the catalog */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revoke_calendar_feed_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subscription token is revoked (idempotent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller may not view the catalog */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    calendar_feed_ics_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The subscription token followed by `.ics` */
+                file: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description iCalendar (RFC 5545) feed of the owner's releases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": string;
+                };
+            };
+            /** @description Unknown or revoked token */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     browse_catalog_handler: {
         parameters: {
             query?: {
@@ -9101,6 +9339,50 @@ export interface operations {
                 content?: never;
             };
             /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No work with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    availability_lag_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Average time from release to availability, from real grab/import events. Backfills and items without release data are counted but excluded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailabilityLag"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller may not view the catalog */
             403: {
                 headers: {
                     [name: string]: unknown;

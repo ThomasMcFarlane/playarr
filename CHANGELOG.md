@@ -122,6 +122,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an RFC 5545 feed (14 days back, 180 ahead) limited to the owner's current libraries. Only a SHA-256 of
   the token is stored, regenerating revokes the old URL, and unknown or revoked tokens return 404.
   New `calendar_feed_tokens` migration (SQLite 0046, Postgres 0047).
+- Playarr Web (and the TV shells that share it): a Watchlist page and nav item with Resume/Play
+  that opens the exact media file and explained unavailable actions, a watchlist toggle on title
+  pages, "Other sources" results (peers) in Search and a Games filter with provider status.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

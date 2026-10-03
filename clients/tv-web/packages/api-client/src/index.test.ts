@@ -1359,6 +1359,42 @@ describe("ApiClient", () => {
   });
 });
 
+describe("discovery and watchlist", () => {
+  it("sends bearer-authenticated discover, watchlist and resolve requests", async () => {
+    const requests: Array<{ method: string; url: string; auth: string | null; body: string }> = [];
+    const fetchImpl = mockFetch(async (request) => {
+      requests.push({
+        method: request.method,
+        url: request.url,
+        auth: request.headers.get("authorization"),
+        body: await request.clone().text(),
+      });
+      if (request.method === "DELETE") return new Response(null, { status: 204 });
+      if (request.url.includes("/api/v1/discover?")) {
+        return jsonResponse(200, { titles: [], providers: [] });
+      }
+      return jsonResponse(200, { items: [], title: {}, in_watchlist: true, actions: [] });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: async () => "viewer-token",
+    });
+    await client.discover("heat", { scope: "games", limit: 5 });
+    await client.listWatchlist();
+    const snapshot = { kind: "movie" as const, title: "Orbit", external_refs: [] };
+    await client.addToWatchlist(snapshot);
+    await client.resolveTitle(snapshot);
+    await client.requestTitle(snapshot);
+    await client.removeFromWatchlist("tmdb:movie:949");
+    expect(requests.map((r) => r.method)).toEqual(["GET", "GET", "POST", "POST", "POST", "DELETE"]);
+    expect(requests.every((r) => r.auth === "Bearer viewer-token")).toBe(true);
+    expect(requests[0].url).toContain("q=heat");
+    expect(requests[0].url).toContain("scope=games");
+    expect(requests[5].url).toContain("/api/v1/watchlist/tmdb%3Amovie%3A949");
+  });
+});
+
 describe("describeApiError", () => {
   it("describes a 401 ApiError distinctly as a sign-in problem", () => {
     expect(describeApiError(new ApiError(401, "Unauthorized", undefined))).toMatch(/sign-in required/i);
