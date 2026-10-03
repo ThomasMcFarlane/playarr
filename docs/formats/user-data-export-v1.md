@@ -172,7 +172,7 @@ For each ItemRef the importer resolves a work, then a leaf:
 2. **Work by title (fallback).** Only when no identifier matched anything and
    the package supplied no identifiers or none are known here. Titles are
    compared after Unicode NFKC normalisation, case folding, removal of
-   punctuation and a leading article, and whitespace collapse. An exact
+   punctuation (`&` is read as "and") and a leading article, and whitespace collapse. An exact
    normalised equality of the same `kind` whose `year` agrees (or is unknown on
    either side) is a match when it is the only candidate. A fuzzy similarity of
    at least 0.92 (normalised Levenshtein/Jaro-Winkler blend) with agreeing year

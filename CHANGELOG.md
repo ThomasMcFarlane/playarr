@@ -20,6 +20,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Helm install methods, and the optional playarr.app HTTPS relay. It states that no
   binaries or public image are published yet and offers no download. English, Thai and
   Japanese; covered by `Clients.test.tsx`.
+- New `playarr-portability` crate: the versioned portable user-data package (canonical JSON,
+  CSV views, README and JSON Schema in a ZIP), a hardened reader (size, entry, path, symlink,
+  version and text limits) and identifier/fuzzy title matching, with unit tests (task 68).
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

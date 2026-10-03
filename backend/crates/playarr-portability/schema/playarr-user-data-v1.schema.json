@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "playarr-user-data-v1.schema.json",
+  "title": "Playarr portable user data, version 1",
+  "type": "object",
+  "required": ["format", "schema_version", "generated_at"],
+  "properties": {
+    "format": { "const": "playarr.user-data" },
+    "schema_version": { "const": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "generator": { "type": "object" },
+    "source": { "type": "object", "properties": { "instance_name": { "type": "string" } } },
+    "owner": { "type": "object", "properties": { "display_name": { "type": "string" } } },
+    "preferences": { "type": "object", "properties": { "preferred_audio_language": { "type": "string" } } },
+    "watch_progress": { "type": "array", "items": { "$ref": "#/$defs/watch" } },
+    "playback_preferences": { "type": "array", "items": { "$ref": "#/$defs/playbackPreference" } },
+    "playlists": { "type": "array", "items": { "$ref": "#/$defs/playlist" } },
+    "ratings": { "type": "array" },
+    "watchlist": { "type": "array" },
+    "unmatched": { "type": "array", "items": { "$ref": "#/$defs/unmatched" } }
+  },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "required": ["kind", "title"],
+      "properties": {
+        "kind": { "type": "string" },
+        "title": { "type": "string" },
+        "year": { "type": ["integer", "null"] },
+        "external_ids": { "type": "object", "additionalProperties": { "type": "string" } },
+        "season_number": { "type": "integer" },
+        "episode_number": { "type": "integer" },
+        "episode_title": { "type": "string" },
+        "album_title": { "type": "string" },
+        "disc_number": { "type": "integer" },
+        "track_number": { "type": "integer" },
+        "track_title": { "type": "string" },
+        "book_title": { "type": "string" },
+        "playarr": {
+          "type": "object",
+          "required": ["work_id"],
+          "properties": { "work_id": { "type": "string", "format": "uuid" }, "leaf_id": { "type": ["string", "null"], "format": "uuid" } }
+        }
+      }
+    },
+    "watch": {
+      "type": "object",
+      "required": ["item", "state"],
+      "properties": {
+        "item": { "$ref": "#/$defs/item" },
+        "state": { "enum": ["part_watched", "watched"] },
+        "position_ms": { "type": "integer", "minimum": 0 },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "updated_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "playbackPreference": {
+      "type": "object",
+      "required": ["item"],
+      "properties": {
+        "item": { "$ref": "#/$defs/item" },
+        "quality_id": { "type": "string" },
+        "audio_track_id": { "type": ["string", "null"] },
+        "subtitle_track_id": { "type": ["string", "null"] }
+      }
+    },
+    "playlist": {
+      "type": "object",
+      "required": ["id", "name", "created_at", "updated_at"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "media_type": { "enum": ["video", "audio"] },
+        "parent_id": { "type": ["string", "null"], "format": "uuid" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["added_at", "item"],
+            "properties": {
+              "position": { "type": "integer", "minimum": 0 },
+              "added_at": { "type": "string", "format": "date-time" },
+              "item": { "$ref": "#/$defs/item" }
+            }
+          }
+        }
+      }
+    },
+    "unmatched": {
+      "type": "object",
+      "required": ["section", "reason", "record"],
+      "properties": {
+        "section": { "enum": ["watch_progress", "playback_preferences", "playlist_item"] },
+        "reason": { "enum": ["no_match", "ambiguous", "unsupported_kind", "not_accessible"] },
+        "playlist_name": { "type": ["string", "null"] },
+        "record": {}
+      }
+    }
+  }
+}

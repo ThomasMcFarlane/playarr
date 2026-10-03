@@ -16,6 +16,7 @@ members = [
     "crates/playarr-transcode",
     "crates/playarr-auth",
     "crates/playarr-telemetry",
+    "crates/playarr-portability",
     "crates/playarr-api",
 ]
 
