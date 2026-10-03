@@ -135,12 +135,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the token is stored, regenerating revokes the old URL, and unknown or revoked tokens return 404.
   New `calendar_feed_tokens` migration (SQLite 0046, Postgres 0047).
 <<<<<<< HEAD
-<<<<<<< HEAD
 - Playarr Web (and the TV shells that share it): a Watchlist page and nav item with Resume/Play
   that opens the exact media file and explained unavailable actions, a watchlist toggle on title
   pages, "Other sources" results (peers) in Search and a Games filter with provider status.
 <<<<<<< HEAD
-=======
+<<<<<<< HEAD
 =======
 =======
 - Playarr Web (and the webOS/Tizen shells that share it) now has a Calendar page in the main navigation
@@ -152,7 +151,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   series detail page shows "Usually available about X after release" with an honest no-data state and
   the excluded backfill/unknown counts (tasks 75-77). Includes English, Thai and Japanese strings.
 >>>>>>> (feat(web): add release calendar page, subscription and availability lag)
->>>>>>> (feat(web): add release calendar page, subscription and availability lag)
 - Shared web API client methods and types for the release calendar (`getCalendar`, feed status, create,
   regenerate and revoke, and `getAvailabilityLag`), with unit tests (tasks 75-77).
 >>>>>>> (feat(api-client): add release calendar, feed and availability-lag methods)
@@ -163,6 +161,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by an explicit Apply, with a download of anything that could not be matched. TV identities show
   an honest message instead, as they have no file picker. English, Japanese and Thai strings.
 >>>>>>> (feat(web): add Your data export and import to settings)
+=======
+- Android settings has a native Compose "Your data" section (task 131): prepare an export of your
+  own watch progress, playlists and preferences and save it with the system file dialog, or pick a
+  package, review exactly what an import would change, then apply it; unmatched records can be
+  saved for a later import. Android TV, which has no document picker, says so instead of showing
+  dead controls. English, Thai and Japanese strings, with unit tests.
+>>>>>>> (feat(android): add Your data export and import to settings)
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

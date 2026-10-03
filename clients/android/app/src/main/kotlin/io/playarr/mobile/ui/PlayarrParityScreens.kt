@@ -175,7 +175,7 @@ internal sealed interface ParityLoad<out T> {
     data class Failed(val message: PlayarrMessage) : ParityLoad<Nothing>
 }
 
-private enum class PlayarrFailureSubject(val key: PlayarrString) {
+internal enum class PlayarrFailureSubject(val key: PlayarrString) {
     Playlists(PlayarrString.ErrorSubjectPlaylists),
     Playlist(PlayarrString.ErrorSubjectPlaylist),
     Profiles(PlayarrString.ErrorSubjectProfiles),
@@ -183,6 +183,7 @@ private enum class PlayarrFailureSubject(val key: PlayarrString) {
     Settings(PlayarrString.ErrorSubjectSettings),
     ProfileLock(PlayarrString.ErrorSubjectProfileLock),
     Invitation(PlayarrString.ErrorSubjectInvitation),
+    YourData(PlayarrString.ErrorSubjectYourData),
     ServerConnection(PlayarrString.ErrorSubjectServerConnection),
     ServerGroup(PlayarrString.ErrorSubjectServerGroup),
 }
@@ -2989,6 +2990,7 @@ private enum class SettingsSection(val label: PlayarrString) {
     Lock(PlayarrString.SettingsProfileLock),
     Invite(PlayarrString.SettingsInvite),
     Remote(PlayarrString.SettingsRemote),
+    YourData(PlayarrString.SettingsYourData),
     Legal(PlayarrString.SettingsLegal),
 }
 
@@ -3119,6 +3121,7 @@ private fun SettingsSectionContent(
         )
         SettingsSection.Invite -> playarrString(PlayarrString.SettingsInviteDescription)
         SettingsSection.Remote -> playarrString(PlayarrString.RemoteDescription)
+        SettingsSection.YourData -> playarrString(PlayarrString.SettingsYourDataDescription)
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
         else -> null
     }
@@ -3389,6 +3392,7 @@ private fun SettingsSectionContent(
                 PlayarrApprovalNotifications()
             }
             SettingsSection.Remote -> RemoteSettingsPanel()
+            SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
             SettingsSection.Legal -> {
                 OutlinedButton(
                     onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },
@@ -3712,7 +3716,7 @@ private fun ParityEmpty(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(message, color = WebInkMuted) }
 }
 
-private fun Throwable.playarrMessage(subject: PlayarrFailureSubject): PlayarrMessage = when (this) {
+internal fun Throwable.playarrMessage(subject: PlayarrFailureSubject): PlayarrMessage = when (this) {
     is retrofit2.HttpException -> when (code()) {
         401 -> PlayarrMessage.Localized(PlayarrString.ErrorSessionExpired)
         403 -> PlayarrMessage.Localized(

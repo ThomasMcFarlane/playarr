@@ -42,6 +42,9 @@ import io.playarr.shared.data.model.UpdatePlaylistRequest
 import io.playarr.shared.data.model.UpdateProfileAvatarRequest
 import io.playarr.shared.data.model.UpdateProfilePinRequest
 import io.playarr.shared.data.model.UpdateWatchProgressRequest
+import io.playarr.shared.data.model.UserDataExportJob
+import io.playarr.shared.data.model.UserDataImportPreview
+import io.playarr.shared.data.model.UserDataImportResult
 import io.playarr.shared.data.model.UserInvite
 import io.playarr.shared.data.model.UserInviteRequest
 import io.playarr.shared.data.model.VerifyProfilePinRequest
@@ -55,6 +58,7 @@ import io.playarr.shared.data.model.WorkDetail
 import io.playarr.shared.data.model.WorkKind
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.Serializable
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -361,6 +365,40 @@ interface PlayarrApi {
 
     @PUT("api/v1/users/me/profile-avatar")
     suspend fun updateProfileAvatar(@Body request: UpdateProfileAvatarRequest): ProfileAvatarSetting
+
+    // ---- portable user data (the signed-in account's own data only) ----------
+
+    @POST("api/v1/users/me/data-exports")
+    suspend fun startUserDataExport(): UserDataExportJob
+
+    @GET("api/v1/users/me/data-exports/{id}")
+    suspend fun getUserDataExport(@Path("id") id: String): UserDataExportJob
+
+    @Streaming
+    @GET("api/v1/users/me/data-exports/{id}/download")
+    suspend fun downloadUserDataExport(@Path("id") id: String): ResponseBody
+
+    @POST("api/v1/users/me/data-imports/preview")
+    suspend fun previewUserDataImport(
+        @Body body: RequestBody,
+        @Query("include_preferences") includePreferences: Boolean,
+        @Query("progress_conflicts") progressConflicts: String,
+    ): UserDataImportPreview
+
+    @POST("api/v1/users/me/data-imports")
+    suspend fun applyUserDataImport(
+        @Body body: RequestBody,
+        @Query("package_sha256") packageSha256: String,
+        @Query("include_preferences") includePreferences: Boolean,
+        @Query("progress_conflicts") progressConflicts: String,
+    ): UserDataImportResult
+
+    @Streaming
+    @POST("api/v1/users/me/data-imports/unmatched")
+    suspend fun downloadUnmatchedUserData(
+        @Body body: RequestBody,
+        @Query("progress_conflicts") progressConflicts: String,
+    ): ResponseBody
 
     @GET("api/v1/users/me/user-invite-request")
     suspend fun getMyUserInviteRequest(): OptionalUserInviteRequest
