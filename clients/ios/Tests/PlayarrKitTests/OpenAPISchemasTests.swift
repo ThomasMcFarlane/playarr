@@ -5,7 +5,7 @@ import XCTest
 final class OpenAPISchemasTests: XCTestCase {
     func testDecodesVersionCompatibilityUsingWireKeys() throws {
         let json = Data(
-            """
+            #"""
             {
               "server_version": "0.9.0",
               "api_version": "v1",
@@ -20,7 +20,7 @@ final class OpenAPISchemasTests: XCTestCase {
                 }
               ]
             }
-            """.utf8
+            """#.utf8
         )
 
         let envelope = try JSONDecoder().decode(VersionEnvelope.self, from: json)
@@ -42,13 +42,13 @@ final class OpenAPISchemasTests: XCTestCase {
             .map { #"{"platform": "\#($0.rawValue)", "latest_version": "1.0.0", "min_supported_version": "1.0.0"}"# }
             .joined(separator: ",")
         let json = Data(
-            """
+            #"""
             {
               "server_version": "0.9.0",
               "api_version": "v1",
               "compatibility": [\#(compatibility)]
             }
-            """.utf8
+            """#.utf8
         )
 
         let envelope = try JSONDecoder().decode(VersionEnvelope.self, from: json)

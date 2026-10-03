@@ -14,8 +14,8 @@ Owner requirement (3 October 2026): when media finishes, show a UI with exit, re
 | 78 | Epic: End-of-playback screen and up-next countdown on all clients | in progress | agent | Spec on branch `task/end-screen-web`. Per-client rows 79-85 must follow the spec; return evidence here. |
 | 79 | End screen: Web, webOS, Tizen, VIDAA fallback, Cast receiver | review PR open | agent | Branch `task/end-screen-web`. Parent: 78. Web/webOS/Tizen share `EndScreen.tsx`; VIDAA legacy player has minimal Replay/Back; Cast receiver renders no player end UI so nothing added. Typecheck and 435 web vitest tests pass. |
 | 80 | End screen: Android (phone, tablet, TV) | implemented, PR PR 44 | agent | Parent: 78. Branch `task/android-end-screen` (stacked on PR 39). Pure state machine `PlayarrEndOfPlayback.kt` with `PlayarrEndOfPlaybackTest`; `:app:testSideloadDebugUnitTest :core-player:testDebugUnitTest :app:assembleSideloadRelease` pass. Not verified on a device. |
-| 81 | End screen: iOS / iPadOS | pending | agent | Parent: 78. |
-| 82 | End screen: tvOS | pending | agent | Parent: 78. |
+| 81 | End screen: iOS / iPadOS | implemented, PR PR 45 | agent | Parent: 78. Branch `task/end-screen-apple`. `EndOfPlaybackMachine`, `EndOfPlaybackController` and `PlaybackQueueBuilder` in `PlayarrKit` with `EndOfPlaybackTests`; iOS unit tests run in `apple-ci.yml` on hosted macOS. Not built locally (no Xcode on Linux). |
+| 82 | End screen: tvOS | implemented, PR PR 45 | agent | Parent: 78. Shared `PlayarrKit` logic as row 81 plus the tvOS overlay (focus section, Menu = Back to details, Play/Pause = primary action). The tvOS target is not compiled in CI (shared Apple workflow has no tvOS destination); not built locally. |
 | 83 | End screen: Roku | pending | agent | Parent: 78. |
 | 84 | End screen: Xbox | implemented, PR PR 42 | agent | Parent: 78. Branch `task/end-screen-xbox`. `EndOfPlaybackMachine` and queue helpers in `Playarr.Core` (`dotnet test`: 56 passed). UWP head (`PlayerPage`, `PlayerViewModel`) not compiled here (needs Windows/UWP SDK); verify on a dev-mode console. |
 | 85 | End screen: HarmonyOS | pending | agent | Parent: 78. |

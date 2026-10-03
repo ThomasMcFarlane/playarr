@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0C97FF1D2C239D4199B02257 /* KnownServerGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */; };
+		76C5D9B38F7CCD2AA3ACD1B0 /* EndOfPlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A013FE69C7592477831D1D0 /* EndOfPlaybackTests.swift */; };
 		12DDD6DBB72468965DC3CD6A /* ProfilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */; };
 		222079C5091027E9F5CC005E /* LoginServerURLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF359DCD71A0DB1DFE371F7B /* LoginServerURLTests.swift */; };
 		2803A8AB28DD8487529C6C88 /* WorkDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8525AEDD13C65F22CAA667F /* WorkDetailViewModel.swift */; };
@@ -39,6 +40,7 @@
 		C5E38504D5673A40DC4FF774 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256FA958B3E9337D14D9356B /* KeychainTokenStore.swift */; };
 		CA4C4FB65BAB102B1789FF4E /* PlayarrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 508755099FF1F485A8C85771 /* PlayarrKit */; };
 		CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */; };
+		8D3499FB09698273DF7FC721 /* EndOfPlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD829AFB7E4361822926692 /* EndOfPlaybackView.swift */; };
 		CD51D8C6FC0C2D5E06A16560 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */; };
 		DD318ADEA8BFDA815A74313C /* DownloadsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35AF6777DC968621F0FE12E7 /* DownloadsViewModel.swift */; };
 		E1389984B8C1516C94B36CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1A5D5A4D38A5841E26E836 /* SettingsView.swift */; };
@@ -93,8 +95,10 @@
 		CF359DCD71A0DB1DFE371F7B /* LoginServerURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginServerURLTests.swift; sourceTree = "<group>"; };
 		D2EA71A178219F9CBB095F37 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
 		DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnownServerGroupTests.swift; sourceTree = "<group>"; };
+		6A013FE69C7592477831D1D0 /* EndOfPlaybackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndOfPlaybackTests.swift; sourceTree = "<group>"; };
 		E69E796E082CEDAAF64DE76A /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		BAD829AFB7E4361822926692 /* EndOfPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndOfPlaybackView.swift; sourceTree = "<group>"; };
 		FF473E7FBA8AF8F108E8681D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -124,6 +128,7 @@
 				7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */,
 				530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */,
 				DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */,
+				6A013FE69C7592477831D1D0 /* EndOfPlaybackTests.swift */,
 				22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */,
 			);
 			name = PlayarrKitTests;
@@ -197,6 +202,7 @@
 				2A73338120C9A2894BEBC4E8 /* LoginView.swift */,
 				0DE220C6ECB3C9B272667EDE /* PlayarrComponents.swift */,
 				F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */,
+				BAD829AFB7E4361822926692 /* EndOfPlaybackView.swift */,
 				5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */,
 				9343AADF6E982DB2A8A53515 /* PreviewSupport.swift */,
 				238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */,
@@ -362,6 +368,7 @@
 				AB32471D52552A3BA995A453 /* LoginView.swift in Sources */,
 				9109CB34833A61572E4D9198 /* PlayarrComponents.swift in Sources */,
 				CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */,
+				8D3499FB09698273DF7FC721 /* EndOfPlaybackView.swift in Sources */,
 				3D9C69CD0BE2BE5CC8DFCA08 /* PlayerViewModel.swift in Sources */,
 				CD51D8C6FC0C2D5E06A16560 /* PlaylistsView.swift in Sources */,
 				529F02E697DC075CF33EDAD5 /* PreviewSupport.swift in Sources */,
@@ -383,6 +390,7 @@
 				4D5B51C84C335C7AA2F963D1 /* APIClientAuthenticationTests.swift in Sources */,
 				FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */,
 				0C97FF1D2C239D4199B02257 /* KnownServerGroupTests.swift in Sources */,
+				76C5D9B38F7CCD2AA3ACD1B0 /* EndOfPlaybackTests.swift in Sources */,
 				37478F9C0FAA2B8BA6F84F30 /* OpenAPISchemasTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

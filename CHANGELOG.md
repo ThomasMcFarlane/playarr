@@ -142,6 +142,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   further playable episodes, a 10-second up-next countdown (Play now, Cancel,
   Replay, Back to details). Its state machine lives in `Playarr.Core` with 20
   new unit tests (56 total); the UWP head is unverified until built on Windows.
+- iOS and Apple TV players now show an end-of-playback screen when media
+  finishes: an end card with Replay, Exit and "More like this" suggestions
+  from `/api/v1/catalog/{id}/similar`, or, when a next episode or album track
+  is queued, a ten-second up-next countdown with Play now, Cancel, Exit and
+  suggestions. The shared `EndOfPlaybackMachine` in `PlayarrKit` carries unit
+  tests; the tvOS overlay is focus-engine and Siri Remote friendly.
 
 - Planned tasks 62–71 as separate server backup/recovery and portable per-user
   library export/import workstreams. Recorded complete data coverage,

@@ -60,6 +60,14 @@ public final class PlayerViewModel {
     public private(set) var selectedQualityID = "original"
     public private(set) var selectedAudioTrackID: String?
     public private(set) var selectedSubtitleTrackID: String?
+    /// Title of whatever is currently loaded (changes when the queue advances).
+    public private(set) var currentTitle = ""
+    /// Series and `S{n}:E{m}` (or album) line for the loaded item.
+    public private(set) var currentSubtitle: String?
+    /// End card / up-next countdown state; see `EndOfPlaybackMachine`.
+    public let endOfPlayback = EndOfPlaybackController()
+    /// Invoked when the user taps Exit on the end card or countdown.
+    @ObservationIgnored public var onExit: () -> Void = {}
 
     /// Exposed purely so `PlayerView` can hand it to SwiftUI's
     /// `VideoPlayer` for rendering. See the doc comment on
@@ -96,6 +104,9 @@ public final class PlayerViewModel {
     @ObservationIgnored private var activeMediaFileID: UUID?
     @ObservationIgnored private var activeSessionID: UUID?
     @ObservationIgnored private var activeTitle = ""
+    /// Survives `completeActiveSession()` (which clears `activeMediaFileID`)
+    /// so Replay knows what to restart.
+    @ObservationIgnored private var lastMediaFileID: UUID?
     @ObservationIgnored private var qualityOverrideID: String?
 
     public init(
@@ -109,6 +120,17 @@ public final class PlayerViewModel {
         self.downloadRepository = downloadRepository
         self.castCoordinator = castCoordinator
         bind()
+        endOfPlayback.perform = { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .none: break
+            case .play(let entry):
+                self.currentSubtitle = entry.subtitle
+                Task { await self.play(mediaFileID: entry.mediaFileID, title: entry.title) }
+            case .replay: Task { await self.replay() }
+            case .exit: self.onExit()
+            }
+        }
         // "Last registrant wins": whichever `PlayerViewModel` is
         // constructed most recently is the one a subsequent cast handoff
         // acts on -- see `CastSessionCoordinator.onReadyToLoad`'s doc
@@ -127,20 +149,23 @@ public final class PlayerViewModel {
     /// ever reaching the network `playbackInfo()` negotiation below.
     /// `title` is display-only (the API has nothing else to show while
     /// negotiating/loading).
-    public func play(mediaFileID: UUID, title: String) async {
+    public func play(mediaFileID: UUID, title: String, startFromBeginning: Bool = false) async {
         await finishActiveSession(reason: "user_stopped")
+        endOfPlayback.playbackResumed()
+        currentTitle = title
+        lastMediaFileID = mediaFileID
         loadState = .loadingPlaybackInfo
         errorMessage = nil
         isPlayingLocalFile = false
 
         if let localFileURL = downloadRepository.localFileURL(forMediaFileID: mediaFileID) {
-            await playLocalFile(localFileURL, mediaFileID: mediaFileID, title: title)
+            await playLocalFile(localFileURL, mediaFileID: mediaFileID, title: title, startFromBeginning: startFromBeginning)
             return
         }
 
         do {
             let defaults = NativePlayerDefaults.read()
-            let progress = try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
+            let progress = startFromBeginning ? nil : try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
             let requestedProfile: String?
             if let qualityOverrideID {
                 requestedProfile = qualityOptions.first(where: { $0.id == qualityOverrideID })?.profile
@@ -176,7 +201,7 @@ public final class PlayerViewModel {
                 id: mediaFileID,
                 streamURL: streamURL,
                 title: title,
-                startPositionSeconds: progress.map { Double($0.positionMS) / 1_000 } ?? 0,
+                startPositionSeconds: progress.map { Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000 } ?? 0,
                 preferredAudioLanguageCode: defaults.audioLanguage,
                 preferredSubtitleLanguageCode: defaults.subtitleMode == "off" ? nil : defaults.subtitleLanguage,
                 httpHeaders: requestHeaders
@@ -208,10 +233,10 @@ public final class PlayerViewModel {
     /// and skips every server-playback-session call (`recordPlaybackEvent`)
     /// since there is no `PlaybackInfoResponse.sessionID` for a purely
     /// local play.
-    private func playLocalFile(_ fileURL: URL, mediaFileID: UUID, title: String) async {
+    private func playLocalFile(_ fileURL: URL, mediaFileID: UUID, title: String, startFromBeginning: Bool = false) async {
         isPlayingLocalFile = true
         let defaults = NativePlayerDefaults.read()
-        let progress = try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
+        let progress = startFromBeginning ? nil : try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
         playbackMode = .direct
         activeMediaFileID = mediaFileID
         activeSessionID = nil
@@ -228,7 +253,7 @@ public final class PlayerViewModel {
             id: mediaFileID,
             streamURL: fileURL,
             title: title,
-            startPositionSeconds: progress.map { Double($0.positionMS) / 1_000 } ?? 0,
+            startPositionSeconds: progress.map { Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000 } ?? 0,
             preferredAudioLanguageCode: defaults.audioLanguage,
             preferredSubtitleLanguageCode: defaults.subtitleMode == "off" ? nil : defaults.subtitleLanguage
         )
@@ -243,6 +268,18 @@ public final class PlayerViewModel {
             errorMessage = error.localizedDescription
             loadState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Items that follow the current one; drives the up-next countdown.
+    public func setQueue(_ entries: [PlaybackQueueEntry], advance: EndOfPlaybackMachine.Advance = .countdown, subtitle: String? = nil) {
+        endOfPlayback.setQueue(entries, advance: advance)
+        currentSubtitle = subtitle
+    }
+
+    /// Restarts the finished item from the beginning (end card "Replay").
+    public func replay() async {
+        guard let mediaFileID = lastMediaFileID else { return }
+        await play(mediaFileID: mediaFileID, title: currentTitle, startFromBeginning: true)
     }
 
     public func togglePlayPause() {
@@ -299,6 +336,10 @@ public final class PlayerViewModel {
     /// not kill an active cast session (casting keeps playing on the
     /// receiver regardless of what the sender app is showing).
     public func viewDidDisappear() {
+        // Leaving the screen (including to a suggestion) is an explicit
+        // action: the countdown stops and does not restart.
+        endOfPlayback.cancelCountdown()
+        endOfPlayback.stopTimer()
         guard !isCasting else { return }
         stop()
     }
@@ -350,11 +391,14 @@ public final class PlayerViewModel {
                 self.engineState = state
                 switch state {
                 case .ended:
+                    self.endOfPlayback.mediaEnded()
                     Task { await self.completeActiveSession() }
                 case .failed(let message):
                     self.errorMessage = message
                     self.loadState = .failed(message)
                     Task { await self.failActiveSession(message: message) }
+                case .playing:
+                    self.endOfPlayback.playbackResumed()
                 default:
                     break
                 }
@@ -507,6 +551,8 @@ public final class PlayerViewModel {
     private func beginCasting() async {
         guard let mediaFileID = activeMediaFileID, !isCasting, !isPlayingLocalFile else { return }
         let resumePosition = currentTime
+        // Casting cancels any running countdown; the receiver owns the queue.
+        endOfPlayback.playbackResumed()
         await finishActiveSession(reason: "user_stopped")
         engine.pause()
         isCasting = true

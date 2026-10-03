@@ -181,7 +181,15 @@ final class TVPlayerViewModel {
 
     private(set) var state: State = .idle
     private(set) var playbackMode: PlaybackMode?
+    private(set) var currentTitle = ""
+    private(set) var currentSubtitle: String?
     let engine: PlayerEngine
+    /// End card / up-next countdown; see `EndOfPlaybackMachine`.
+    let endOfPlayback = EndOfPlaybackController()
+    /// Invoked when the viewer chooses Exit on the end card or countdown.
+    @ObservationIgnored var onExit: () -> Void = {}
+    @ObservationIgnored private var stateObservation: AnyCancellable?
+    @ObservationIgnored private var lastMediaFileID: UUID?
 
     // `PlayerEngine.avPlayer` was relaxed to `AVPlayer?` for the iOS Cast
     // sender build (a Cast-backed engine has no local `AVPlayer` at all) --
@@ -197,9 +205,42 @@ final class TVPlayerViewModel {
     init(apiClient: PlayarrAPIClient, engine: PlayerEngine = AVPlayerEngine()) {
         self.apiClient = apiClient
         self.engine = engine
+        endOfPlayback.perform = { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .none: break
+            case .play(let entry):
+                self.currentSubtitle = entry.subtitle
+                Task { await self.play(mediaFileID: entry.mediaFileID, title: entry.title) }
+            case .replay: Task { await self.replay() }
+            case .exit: self.onExit()
+            }
+        }
+        stateObservation = engine.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] playback in
+                Task { @MainActor in self?.handle(playback) }
+            }
+    }
+
+    private func handle(_ playback: PlayerPlaybackState) {
+        switch playback {
+        case .ended: endOfPlayback.mediaEnded()
+        case .playing: endOfPlayback.playbackResumed()
+        default: break
+        }
+    }
+
+    /// Restarts the finished item from the start (end card "Replay").
+    func replay() async {
+        guard let mediaFileID = lastMediaFileID else { return }
+        await play(mediaFileID: mediaFileID, title: currentTitle)
     }
 
     func play(mediaFileID: UUID, title: String) async {
+        endOfPlayback.playbackResumed()
+        currentTitle = title
+        lastMediaFileID = mediaFileID
         state = .negotiating
         do {
             let info = try await apiClient.playbackInfo(
@@ -225,7 +266,13 @@ final class TVPlayerViewModel {
         }
     }
 
+    func setSubtitle(_ subtitle: String?) { currentSubtitle = subtitle }
+
     func stop() {
+        // Leaving the screen (including to a suggestion) is explicit: the
+        // countdown stops and does not restart.
+        endOfPlayback.cancelCountdown()
+        endOfPlayback.stopTimer()
         engine.stop()
         state = .idle
     }

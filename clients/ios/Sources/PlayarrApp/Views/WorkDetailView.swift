@@ -269,7 +269,8 @@ struct WorkDetailView: View {
                             apiClient: apiClient,
                             downloadRepository: downloadRepository,
                             initialMediaFileID: mediaFileID.uuidString,
-                            initialTitle: detail.work.title
+                            initialTitle: detail.work.title,
+                            suggestionsWorkID: detail.work.id
                         )
                     } label: {
                         Label("Play", systemImage: "play.fill").frame(minWidth: 112)
@@ -412,7 +413,11 @@ struct WorkDetailView: View {
                                 apiClient: apiClient,
                                 downloadRepository: downloadRepository,
                                 initialMediaFileID: mediaFileID.uuidString,
-                                initialTitle: first.track.title
+                                initialTitle: first.track.title,
+                                suggestionsWorkID: viewModel.detail?.work.id,
+                                queue: PlaybackQueueBuilder.tracks(after: first.id, in: selected.tracks, albumTitle: selected.album.title),
+                                advance: .immediate,
+                                subtitle: selected.album.title
                             )
                         } label: { Label("Play", systemImage: "play.fill") }
                             .buttonStyle(PlayarrPrimaryButtonStyle())
@@ -431,7 +436,7 @@ struct WorkDetailView: View {
                 VStack(spacing: 0) {
                     let playableTracks = selected.tracks.filter { $0.mediaFileID != nil }
                     ForEach(Array(playableTracks.enumerated()), id: \.element.id) { index, track in
-                        musicTrackRow(track)
+                        musicTrackRow(track, following: PlaybackQueueBuilder.tracks(after: track.id, in: playableTracks, albumTitle: selected.album.title), album: selected.album.title)
                         if index < playableTracks.count - 1 {
                             Divider().overlay(PlayarrStyle.line)
                         }
@@ -441,6 +446,12 @@ struct WorkDetailView: View {
                 .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(PlayarrStyle.line, lineWidth: 1) }
             }
         }
+    }
+
+    /// Next episodes in series order (rest of season, then later seasons).
+    private func episodeFollowing(_ episodeID: UUID) -> [PlaybackQueueEntry] {
+        guard let detail = viewModel.detail, case .series(let seasons) = detail.children else { return [] }
+        return PlaybackQueueBuilder.episodes(after: episodeID, seriesTitle: detail.work.title, seasons: seasons)
     }
 
     private func seasonEpisodeTrack(_ season: SeasonDetail) -> some View {
@@ -495,7 +506,14 @@ struct WorkDetailView: View {
                         apiClient: apiClient,
                         downloadRepository: downloadRepository,
                         initialMediaFileID: mediaFileID.uuidString,
-                        initialTitle: title
+                        initialTitle: title,
+                        suggestionsWorkID: viewModel.detail?.work.id,
+                        queue: episodeFollowing(detail.id),
+                        subtitle: PlaybackQueueBuilder.episodeSubtitle(
+                            series: viewModel.detail?.work.title ?? "",
+                            season: seasonNumber,
+                            episode: episode.episodeNumber
+                        )
                     )
                 } label: {
                     episodeCardLabel(title: title, label: label, playable: true)
@@ -554,14 +572,18 @@ struct WorkDetailView: View {
     }
 
     @ViewBuilder
-    private func musicTrackRow(_ detail: TrackDetail) -> some View {
+    private func musicTrackRow(_ detail: TrackDetail, following: [PlaybackQueueEntry], album: String) -> some View {
         if let mediaFileID = detail.mediaFileID {
             NavigationLink {
                 PlayerView(
                     apiClient: apiClient,
                     downloadRepository: downloadRepository,
                     initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: detail.track.title
+                    initialTitle: detail.track.title,
+                    suggestionsWorkID: viewModel.detail?.work.id,
+                    queue: following,
+                    advance: .immediate,
+                    subtitle: album
                 )
             } label: {
                 HStack(spacing: 14) {
@@ -613,7 +635,8 @@ struct WorkDetailView: View {
                     apiClient: apiClient,
                     downloadRepository: downloadRepository,
                     initialMediaFileID: mediaFileID.uuidString,
-                    initialTitle: title
+                    initialTitle: title,
+                    suggestionsWorkID: viewModel.detail?.work.id
                 )
             } label: {
                 rowLabel(title: title, subtitle: subtitle, playable: true)

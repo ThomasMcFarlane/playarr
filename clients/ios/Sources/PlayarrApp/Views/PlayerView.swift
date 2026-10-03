@@ -1,6 +1,7 @@
 import AVKit
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 struct PlayerView: View {
     let apiClient: PlayarrAPIClient
@@ -14,7 +15,20 @@ struct PlayerView: View {
     /// same case if it's ever reached some other way.
     let isOfflinePlayback: Bool
 
+    /// Work whose `/similar` results fill the end-of-playback suggestions
+    /// rail; `nil` hides the rail (for example offline downloads).
+    let suggestionsWorkID: UUID?
+    /// Items that follow this one (next episodes, album tracks).
+    let queue: [PlaybackQueueEntry]
+    /// `.immediate` for music queues (tracks chain with no card).
+    let advance: EndOfPlaybackMachine.Advance
+    /// Series and `S{n}:E{m}` line for the first item.
+    let subtitle: String?
+
     @State private var viewModel: PlayerViewModel?
+    @State private var suggestions: [Work] = []
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var controlsVisible = true
     private let castCoordinator = CastSessionCoordinator.shared
 
@@ -23,8 +37,16 @@ struct PlayerView: View {
         downloadRepository: DownloadRepository,
         initialMediaFileID: String = "",
         initialTitle: String = "",
-        isOfflinePlayback: Bool = false
+        isOfflinePlayback: Bool = false,
+        suggestionsWorkID: UUID? = nil,
+        queue: [PlaybackQueueEntry] = [],
+        advance: EndOfPlaybackMachine.Advance = .countdown,
+        subtitle: String? = nil
     ) {
+        self.suggestionsWorkID = suggestionsWorkID
+        self.queue = queue
+        self.advance = advance
+        self.subtitle = subtitle
         self.apiClient = apiClient
         self.downloadRepository = downloadRepository
         self.mediaFileID = UUID(uuidString: initialMediaFileID)
@@ -77,7 +99,20 @@ struct PlayerView: View {
                     }
                 }
             }
+
+            if let viewModel, viewModel.endOfPlayback.phase != .playing {
+                EndOfPlaybackView(
+                    controller: viewModel.endOfPlayback,
+                    title: viewModel.currentTitle.isEmpty ? title : viewModel.currentTitle,
+                    subtitle: viewModel.currentSubtitle,
+                    suggestions: suggestions,
+                    apiClient: apiClient,
+                    downloadRepository: downloadRepository
+                )
+                .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel?.endOfPlayback.phase)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
@@ -92,11 +127,40 @@ struct PlayerView: View {
         }
         .task {
             if viewModel == nil {
-                viewModel = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository, castCoordinator: castCoordinator)
+                let model = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository, castCoordinator: castCoordinator)
+                model.setQueue(queue, advance: advance, subtitle: subtitle)
+                model.onExit = { dismiss() }
+                viewModel = model
             }
-            if case .idle = viewModel?.loadState { startPlayback() }
+            // Returning from a suggestion's detail page must not restart a
+            // finished item behind the end card.
+            if case .idle = viewModel?.loadState, viewModel?.endOfPlayback.phase == .playing { startPlayback() }
         }
-        .onDisappear { viewModel?.viewDidDisappear() }
+        .task(id: viewModel?.endOfPlayback.phase == .playing) { @MainActor in
+            guard viewModel?.endOfPlayback.phase != .playing, suggestions.isEmpty, let suggestionsWorkID else { return }
+            let similar = (try? await apiClient.fetchSimilarWorks(id: suggestionsWorkID, limit: 13)) ?? []
+            suggestions = Array(similar.filter { $0.id != suggestionsWorkID }.prefix(12))
+        }
+        // Countdown pauses (does not reset) while the app is backgrounded.
+        .onChange(of: scenePhase) { _, phase in
+            guard let controller = viewModel?.endOfPlayback else { return }
+            if phase == .active { controller.resumeTimer() } else { controller.stopTimer() }
+        }
+        // Keep the screen awake while the end card or countdown is up so the
+        // countdown is not cut by the screensaver; released after 60 s idle
+        // on a plain end card, and on exit.
+        .task(id: viewModel?.endOfPlayback.phase) { @MainActor in
+            let phase = viewModel?.endOfPlayback.phase ?? .playing
+            UIApplication.shared.isIdleTimerDisabled = phase != .playing
+            if phase == .endCard {
+                try? await Task.sleep(for: .seconds(60))
+                if !Task.isCancelled { UIApplication.shared.isIdleTimerDisabled = false }
+            }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            viewModel?.viewDidDisappear()
+        }
     }
 
     private var showsCastAffordance: Bool {

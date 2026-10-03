@@ -154,7 +154,8 @@ struct TVWorkDetailView: View {
                                 TVPlayerView(
                                     mediaFileID: mediaFileID,
                                     title: detail.work.title,
-                                    apiClient: apiClient
+                                    apiClient: apiClient,
+                                    suggestionsWorkID: work.id
                                 )
                             } label: {
                                 detailChromeLabel("Play", primary: true)
@@ -333,6 +334,12 @@ struct TVWorkDetailView: View {
         }
     }
 
+    /// Next episodes in series order (rest of season, then later seasons).
+    private func episodeFollowing(_ episodeID: UUID) -> [PlaybackQueueEntry] {
+        guard let detail = viewModel.detail, case .series(let seasons) = detail.children else { return [] }
+        return PlaybackQueueBuilder.episodes(after: episodeID, seriesTitle: work.title, seasons: seasons)
+    }
+
     private func seriesSeasonTrack(_ season: SeasonDetail) -> some View {
         let episodes = season.episodes.filter { $0.mediaFileID != nil }
         let playable = episodes.isEmpty ? season.episodes : episodes
@@ -349,7 +356,8 @@ struct TVWorkDetailView: View {
                         seriesEpisodeCard(
                             episode,
                             seasonNumber: season.season.seasonNumber,
-                            isLeading: index == 0
+                            isLeading: index == 0,
+                            following: episodeFollowing(episode.id)
                         )
                     }
                 }
@@ -361,7 +369,8 @@ struct TVWorkDetailView: View {
     private func seriesEpisodeCard(
         _ episode: EpisodeDetail,
         seasonNumber: Int32,
-        isLeading: Bool = false
+        isLeading: Bool = false,
+        following: [PlaybackQueueEntry] = []
     ) -> some View {
         let ep = episode.episode
         let title = ep.title ?? "Episode \(ep.episodeNumber)"
@@ -405,7 +414,10 @@ struct TVWorkDetailView: View {
                     TVPlayerView(
                         mediaFileID: mediaFileID,
                         title: title,
-                        apiClient: apiClient
+                        apiClient: apiClient,
+                        suggestionsWorkID: work.id,
+                        queue: following,
+                        subtitle: PlaybackQueueBuilder.episodeSubtitle(series: work.title, season: seasonNumber, episode: ep.episodeNumber)
                     )
                 } label: {
                     card
@@ -630,7 +642,9 @@ struct TVWorkDetailView: View {
                         playbackRow(
                             mediaFileID: episode.mediaFileID,
                             title: episode.episode.title ?? "Episode \(episode.episode.episodeNumber)",
-                            label: "\(episode.episode.episodeNumber). \(episode.episode.title ?? "Episode")"
+                            label: "\(episode.episode.episodeNumber). \(episode.episode.title ?? "Episode")",
+                            queue: episodeFollowing(episode.id),
+                            subtitle: PlaybackQueueBuilder.episodeSubtitle(series: work.title, season: season.season.seasonNumber, episode: episode.episode.episodeNumber)
                         )
                     }
                 }
@@ -645,7 +659,10 @@ struct TVWorkDetailView: View {
                         playbackRow(
                             mediaFileID: track.mediaFileID,
                             title: track.track.title,
-                            label: "\(track.track.trackNumber). \(track.track.title)"
+                            label: "\(track.track.trackNumber). \(track.track.title)",
+                            queue: PlaybackQueueBuilder.tracks(after: track.id, in: album.tracks, albumTitle: album.album.title),
+                            advance: .immediate,
+                            subtitle: album.album.title
                         )
                     }
                 }
@@ -667,10 +684,25 @@ struct TVWorkDetailView: View {
     }
 
     @ViewBuilder
-    private func playbackRow(mediaFileID: UUID?, title: String, label: String) -> some View {
+    private func playbackRow(
+        mediaFileID: UUID?,
+        title: String,
+        label: String,
+        queue: [PlaybackQueueEntry] = [],
+        advance: EndOfPlaybackMachine.Advance = .countdown,
+        subtitle: String? = nil
+    ) -> some View {
         if let mediaFileID {
             NavigationLink {
-                TVPlayerView(mediaFileID: mediaFileID, title: title, apiClient: apiClient)
+                TVPlayerView(
+                    mediaFileID: mediaFileID,
+                    title: title,
+                    apiClient: apiClient,
+                    suggestionsWorkID: work.id,
+                    queue: queue,
+                    advance: advance,
+                    subtitle: subtitle
+                )
             } label: {
                 Label(label, systemImage: "play.fill")
                     .font(TVTheme.bodyFont())
