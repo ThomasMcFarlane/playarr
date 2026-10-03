@@ -74,6 +74,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Frame thumbnails (`GET /api/v1/media/{id}/thumbnail`) now run at most two ffmpeg extractions at a
+  time (`PLAYARR_THUMBNAIL_CONCURRENCY`, default 2) and skip the queue for cached frames. A chapter
+  rail requests a dozen frames at once; each UHD grab holds about 0.5 GiB, so four in parallel
+  exceeded the 2 GiB pod limit and the kernel OOM-killed the whole server.
 - The `playarr-dev` chart can restore the public relay for the regional servers that moved from
   systemd to k3s pods. An optional per-instance `acme` block builds on the existing
   `hostExposure` (hostPort 8484 on the node's public address, the only published port: no port 80

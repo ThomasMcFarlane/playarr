@@ -892,12 +892,38 @@ fn shift_webvtt(input: &str, source_offset_ms: u64) -> Result<String, ApiError> 
     Ok(format!("{}\n", output_blocks.join("\n\n")))
 }
 
+/// Maximum simultaneous ffmpeg thumbnail extractions
+/// (`PLAYARR_THUMBNAIL_CONCURRENCY`, default 2, minimum 1).
+fn thumbnail_permits() -> &'static tokio::sync::Semaphore {
+    static PERMITS: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
+    PERMITS.get_or_init(|| {
+        let limit = std::env::var("PLAYARR_THUMBNAIL_CONCURRENCY")
+            .ok()
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(2)
+            .max(1);
+        tokio::sync::Semaphore::new(limit)
+    })
+}
+
 async fn ensure_media_thumbnail(
     media_file_id: Uuid,
     source_path: &FsPath,
     position_ms: u64,
 ) -> Result<std::path::PathBuf, ApiError> {
     let output_path = thumbnail_cache_path(media_file_id, position_ms);
+    if tokio::fs::try_exists(&output_path).await.unwrap_or(false) {
+        return Ok(output_path);
+    }
+    // Each ffmpeg frame grab of a UHD source holds ~0.5 GiB. A chapter rail
+    // asks for a dozen frames at once, so bound the fan-out or the pod's
+    // memory cgroup OOM-kills the whole server (observed on region-b: four
+    // parallel grabs against a 2 GiB limit). Waiters re-check the cache in
+    // `ensure_media_thumbnail_at` once admitted.
+    let _permit = thumbnail_permits()
+        .acquire()
+        .await
+        .map_err(|_| ApiError::internal("thumbnail limiter closed"))?;
     let binary = std::env::var("PLAYARR_FFMPEG_BINARY").unwrap_or_else(|_| "ffmpeg".to_string());
     ensure_media_thumbnail_at(
         media_file_id,
