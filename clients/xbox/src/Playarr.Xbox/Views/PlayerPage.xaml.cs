@@ -1,7 +1,14 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
+using Windows.System.Display;
+using Windows.UI.Xaml.Automation;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
+using Playarr.Core.Models;
+using Playarr.Core.Playback;
 using Playarr.Xbox;
 using Playarr.Xbox.ViewModels;
 
@@ -32,6 +39,11 @@ namespace Playarr.Xbox.Views
     public sealed partial class PlayerPage : Page
     {
         private PlayerViewModel? _viewModel;
+        private PlayerNavigationParameter? _parameter;
+        private EndOfPlaybackPhase _lastEndPhase = EndOfPlaybackPhase.Playing;
+        private IList<Work>? _renderedSuggestions;
+        private DisplayRequest? _displayRequest;
+        private DispatcherTimer? _idleTimer;
 
         public PlayerPage()
         {
@@ -52,38 +64,119 @@ namespace Playarr.Xbox.Views
                 return;
             }
 
+            StartSession(parameter);
+        }
+
+        /// <summary>
+        /// Builds a ViewModel for one queue item. Called for the initial item,
+        /// for each up-next advance, and for a replay that needs a fresh
+        /// negotiation; the page itself (and its back-stack entry) stays put.
+        /// </summary>
+        private void StartSession(PlayerNavigationParameter parameter)
+        {
+            TearDownSession();
+            _parameter = parameter;
+            _lastEndPhase = EndOfPlaybackPhase.Playing;
+            _renderedSuggestions = null;
+
             _viewModel = new PlayerViewModel(
                 App.Environment,
                 parameter.MediaFileId,
                 parameter.ResumePositionMs,
-                parameter.Title);
+                parameter.Title,
+                parameter.WorkId,
+                parameter.UpNext.Count > 0 ? parameter.UpNext[0] : null);
 
             PlayerElement.SetMediaPlayer(_viewModel.Player);
+            Window.Current.VisibilityChanged += Window_VisibilityChanged;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+            _viewModel.NextRequested += ViewModel_NextRequested;
+            _viewModel.ExitRequested += ViewModel_ExitRequested;
+            _viewModel.RestartRequested += ViewModel_RestartRequested;
             Render();
         }
 
-        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        private void TearDownSession()
         {
-            if (_viewModel != null)
+            if (_viewModel is null)
             {
-                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-
-                // Pause before tearing anything else down -- the same
-                // "pause before navigating away" judgment call this task
-                // asked for, mirroring App.xaml.cs's own remarks on Back
-                // handling.
-                _viewModel.PauseForNavigatingAway();
-
-                PlayerElement.SetMediaPlayer(null);
-                _viewModel.Dispose();
-                _viewModel = null;
+                return;
             }
 
+            Window.Current.VisibilityChanged -= Window_VisibilityChanged;
+            ReleaseKeepAwake();
+            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            _viewModel.NextRequested -= ViewModel_NextRequested;
+            _viewModel.ExitRequested -= ViewModel_ExitRequested;
+            _viewModel.RestartRequested -= ViewModel_RestartRequested;
+
+            // Pause before tearing anything else down -- the same
+            // "pause before navigating away" judgment call this task
+            // asked for, mirroring App.xaml.cs's own remarks on Back
+            // handling.
+            _viewModel.PauseForNavigatingAway();
+
+            PlayerElement.SetMediaPlayer(null);
+            _viewModel.Dispose();
+            _viewModel = null;
+        }
+
+        private void RunOnUi(Action action)
+        {
+            if (Dispatcher.HasThreadAccess)
+            {
+                action();
+            }
+            else
+            {
+                _ = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => action());
+            }
+        }
+
+        private void ViewModel_NextRequested(object sender, PlaybackQueueItem next) => RunOnUi(() =>
+        {
+            if (_parameter is null)
+            {
+                return;
+            }
+
+            var remaining = new List<PlaybackQueueItem>(_parameter.UpNext);
+            if (remaining.Count > 0)
+            {
+                remaining.RemoveAt(0);
+            }
+
+            StartSession(new PlayerNavigationParameter(
+                next.MediaFileId,
+                title: next.Title,
+                workId: next.WorkId ?? _parameter.WorkId,
+                upNext: remaining));
+        });
+
+        private void ViewModel_ExitRequested(object sender, EventArgs e) => RunOnUi(() =>
+        {
+            if (App.Navigation.CanGoBack)
+            {
+                App.Navigation.GoBack();
+            }
+        });
+
+        private void ViewModel_RestartRequested(object sender, EventArgs e) => RunOnUi(() =>
+        {
+            if (_parameter is { } current)
+            {
+                StartSession(new PlayerNavigationParameter(
+                    current.MediaFileId, title: current.Title, workId: current.WorkId, upNext: current.UpNext));
+            }
+        });
+
+        protected override void OnNavigatedFrom(NavigationEventArgs e)
+        {
+            TearDownSession();
             base.OnNavigatedFrom(e);
         }
 
-        private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e) => Render();
+        private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e) => RunOnUi(Render);
 
         /// <summary>
         /// Pushes the ViewModel's current state onto this page's named
@@ -114,6 +207,141 @@ namespace Playarr.Xbox.Views
                 : Visibility.Visible;
 
             RenderTrackLists();
+            RenderEndPanel(isLoading || isFailed);
+        }
+
+        /// <summary>
+        /// Shows the end-of-playback panel for the state machine's phase and
+        /// moves gamepad focus onto its primary action when it first appears.
+        /// </summary>
+        private void RenderEndPanel(bool hidden)
+        {
+            var machine = _viewModel!.EndOfPlayback;
+            var phase = hidden ? EndOfPlaybackPhase.Playing : machine.Phase;
+            var showing = phase != EndOfPlaybackPhase.Playing;
+
+            EndPanel.Visibility = showing ? Visibility.Visible : Visibility.Collapsed;
+            UpdateKeepAwake(phase);
+            TracksButton.Visibility = showing || hidden ? Visibility.Collapsed : Visibility.Visible;
+            TracksPanel.Visibility = showing ? Visibility.Collapsed : TracksPanel.Visibility;
+            if (!showing)
+            {
+                _lastEndPhase = phase;
+                return;
+            }
+
+            var next = machine.Next;
+            var upNext = phase == EndOfPlaybackPhase.UpNext;
+            EndHeadingText.Text = upNext
+                ? $"Up next in {machine.SecondsRemaining}"
+                : (_viewModel.Title.Length > 0 ? $"Finished: {_viewModel.Title}" : "Finished");
+            EndDetailText.Text = next?.Title ?? string.Empty;
+            AutomationProperties.SetName(
+                EndPanel,
+                upNext ? $"Up next: {next?.Title}" : $"Finished playing {_viewModel.Title}");
+            EndDetailText.Visibility = string.IsNullOrEmpty(next?.Title) ? Visibility.Collapsed : Visibility.Visible;
+
+            PlayNextButton.Content = upNext ? "Play now" : "Play next";
+            PlayNextButton.Visibility = next is null ? Visibility.Collapsed : Visibility.Visible;
+            CancelCountdownButton.Visibility = upNext ? Visibility.Visible : Visibility.Collapsed;
+            ReplayButton.Visibility = Visibility.Visible;
+
+            RenderSuggestions();
+
+            if (_lastEndPhase == EndOfPlaybackPhase.Playing)
+            {
+                (next is null ? ReplayButton : PlayNextButton).Focus(FocusState.Programmatic);
+            }
+            else if (_lastEndPhase == EndOfPlaybackPhase.UpNext && !upNext)
+            {
+                // Countdown cancelled: Cancel just disappeared, so keep focus on a live control.
+                (next is null ? ReplayButton : PlayNextButton).Focus(FocusState.Programmatic);
+            }
+
+            _lastEndPhase = phase;
+        }
+
+        /// <summary>
+        /// Keeps the screen awake while the end card or countdown shows, and
+        /// lets it idle after 60 s on a plain ended card (spec section 10).
+        /// </summary>
+        private void UpdateKeepAwake(EndOfPlaybackPhase phase)
+        {
+            if (phase == EndOfPlaybackPhase.Playing)
+            {
+                ReleaseKeepAwake();
+                return;
+            }
+
+            _displayRequest ??= new DisplayRequest();
+            if (!_keepAwakeHeld)
+            {
+                _displayRequest.RequestActive();
+                _keepAwakeHeld = true;
+            }
+
+            if (phase == EndOfPlaybackPhase.EndCard && _idleTimer is null)
+            {
+                _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+                _idleTimer.Tick += (s, e) => ReleaseKeepAwake();
+                _idleTimer.Start();
+            }
+        }
+
+        private bool _keepAwakeHeld;
+
+        private void ReleaseKeepAwake()
+        {
+            _idleTimer?.Stop();
+            _idleTimer = null;
+            if (_keepAwakeHeld)
+            {
+                _displayRequest?.RequestRelease();
+                _keepAwakeHeld = false;
+            }
+        }
+
+        private void Window_VisibilityChanged(object sender, VisibilityChangedEventArgs e) =>
+            _viewModel?.SetCountdownPaused(!e.Visible);
+
+        private void RenderSuggestions()
+        {
+            var suggestions = _viewModel!.Suggestions;
+            if (ReferenceEquals(suggestions, _renderedSuggestions))
+            {
+                return;
+            }
+
+            _renderedSuggestions = suggestions;
+            SuggestionsList.Items.Clear();
+            foreach (var work in suggestions)
+            {
+                var posterUrl = work.Image(ImageKind.Poster)?.Url;
+                var posterUri = string.IsNullOrEmpty(posterUrl)
+                    ? null
+                    : App.Environment.ApiClient.ResolveUrl(posterUrl!);
+                SuggestionsList.Items.Add(CatalogTileFactory.CreateTile(work, posterUri));
+            }
+
+            var any = suggestions.Count > 0;
+            SuggestionsHeading.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            SuggestionsList.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void PlayNextButton_Click(object sender, RoutedEventArgs e) => _viewModel?.PlayNextNow();
+
+        private void CancelCountdownButton_Click(object sender, RoutedEventArgs e) => _viewModel?.CancelCountdown();
+
+        private void ReplayButton_Click(object sender, RoutedEventArgs e) => _viewModel?.Replay();
+
+        private void ExitButton_Click(object sender, RoutedEventArgs e) => _viewModel?.Exit();
+
+        private void SuggestionsList_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (e.ClickedItem is FrameworkElement { Tag: Guid workId })
+            {
+                App.Navigation.NavigateReplacingCurrent(typeof(WorkDetailPage), workId);
+            }
         }
 
         /// <summary>

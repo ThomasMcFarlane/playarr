@@ -31,6 +31,22 @@ namespace Playarr.Xbox.Services
 
         public bool Navigate(Type pageType, object parameter) => _frame.Navigate(pageType, parameter);
 
+        /// <summary>
+        /// Navigates, then drops the page being left from the back stack, so
+        /// Back skips it. Used when leaving the finished player for a
+        /// suggestion: returning to it would restart playback.
+        /// </summary>
+        public bool NavigateReplacingCurrent(Type pageType, object parameter)
+        {
+            var navigated = _frame.Navigate(pageType, parameter);
+            if (navigated && _frame.BackStack.Count > 0)
+            {
+                _frame.BackStack.RemoveAt(_frame.BackStack.Count - 1);
+            }
+
+            return navigated;
+        }
+
         public void GoBack()
         {
             if (_frame.CanGoBack)

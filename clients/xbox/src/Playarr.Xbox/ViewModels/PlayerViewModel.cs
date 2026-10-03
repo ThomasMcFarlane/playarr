@@ -69,6 +69,10 @@ namespace Playarr.Xbox.ViewModels
         private readonly Guid _mediaFileId;
         private readonly long? _resumePositionMs;
 
+        private readonly Guid? _workId;
+        private Timer? _countdownTimer;
+        private bool _suggestionsRequested;
+        private IList<Work> _suggestions = new List<Work>();
         private Timer? _progressTimer;
         private MediaPlaybackItem? _playbackItem;
         private bool _disposed;
@@ -79,14 +83,23 @@ namespace Playarr.Xbox.ViewModels
         private string? _selectedAudioTrackId;
         private string? _selectedSubtitleTrackId;
 
-        public PlayerViewModel(XboxAppEnvironment environment, Guid mediaFileId, long? resumePositionMs, string? title)
+        public PlayerViewModel(
+            XboxAppEnvironment environment,
+            Guid mediaFileId,
+            long? resumePositionMs,
+            string? title,
+            Guid? workId = null,
+            PlaybackQueueItem? next = null)
         {
+            _workId = workId;
+            EndOfPlayback = new EndOfPlaybackMachine(next);
             _environment = environment ?? throw new ArgumentNullException(nameof(environment));
             _mediaFileId = mediaFileId;
             _resumePositionMs = resumePositionMs;
             Title = title ?? string.Empty;
 
             Player = new MediaPlayer { AutoPlay = true };
+            Player.MediaEnded += Player_MediaEnded;
             ConfigureSystemMediaTransportControls();
 
             // Fire-and-forget -- see the type-level remarks. The page
@@ -104,6 +117,25 @@ namespace Playarr.Xbox.ViewModels
         /// on this instance without further ViewModel or page involvement.
         /// </summary>
         public MediaPlayer Player { get; }
+
+        /// <summary>End-of-playback state machine (end card / up-next countdown).</summary>
+        public EndOfPlaybackMachine EndOfPlayback { get; }
+
+        /// <summary>Similar works shown on the end screen; empty until loaded or when none.</summary>
+        public IList<Work> Suggestions
+        {
+            get => _suggestions;
+            private set => SetProperty(ref _suggestions, value);
+        }
+
+        /// <summary>Raised when the next queued item should start. Not guaranteed to be on the UI thread.</summary>
+        public event EventHandler<PlaybackQueueItem>? NextRequested;
+
+        /// <summary>Raised when the viewer chose Exit on the end screen.</summary>
+        public event EventHandler? ExitRequested;
+
+        /// <summary>Raised on Replay: the page restarts the item with a fresh playback negotiation (a new play), never a seek on the ended one.</summary>
+        public event EventHandler? RestartRequested;
 
         /// <summary>Display title, for the on-screen overlay. May be empty.</summary>
         public string Title { get; }
@@ -140,6 +172,141 @@ namespace Playarr.Xbox.ViewModels
         /// until then); <c>null</c> means "off".
         /// </summary>
         public string? SelectedSubtitleTrackId => _selectedSubtitleTrackId;
+
+        private void Player_MediaEnded(MediaPlayer sender, object args)
+        {
+            if (EndOfPlayback.Phase != EndOfPlaybackPhase.Playing)
+            {
+                return;
+            }
+
+            EndOfPlayback.OnEnded();
+            _ = ReportFinishedAsync();
+            RaiseEndStateChanged();
+
+            if (EndOfPlayback.CountdownRunning)
+            {
+                _countdownTimer?.Dispose();
+                _countdownTimer = new Timer(
+                    _ => OnCountdownTick(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            }
+
+            _ = LoadSuggestionsAsync();
+        }
+
+        private void OnCountdownTick()
+        {
+            var command = EndOfPlayback.Tick();
+            RaiseEndStateChanged();
+            if (command != EndOfPlaybackCommand.None)
+            {
+                StopCountdown();
+                Perform(command);
+            }
+        }
+
+        private void StopCountdown()
+        {
+            _countdownTimer?.Dispose();
+            _countdownTimer = null;
+        }
+
+        private void RaiseEndStateChanged() => OnPropertyChanged(nameof(EndOfPlayback));
+
+        private void Perform(EndOfPlaybackCommand command)
+        {
+            switch (command)
+            {
+                case EndOfPlaybackCommand.PlayNext when EndOfPlayback.Next != null:
+                    NextRequested?.Invoke(this, EndOfPlayback.Next);
+                    break;
+                case EndOfPlaybackCommand.Exit:
+                    ExitRequested?.Invoke(this, EventArgs.Empty);
+                    break;
+                case EndOfPlaybackCommand.Replay:
+                    // docs/architecture/end-of-playback.md: Replay starts a fresh
+                    // playback negotiation (a new play), never a raw seek back
+                    // to zero on the ended item.
+                    RestartRequested?.Invoke(this, EventArgs.Empty);
+                    break;
+            }
+        }
+
+        /// <summary>Play now (skip the countdown), or Play next from the end card.</summary>
+        public void PlayNextNow()
+        {
+            StopCountdown();
+            Perform(EndOfPlayback.PlayNow());
+        }
+
+        /// <summary>Cancel the up-next countdown and stay on the end card.</summary>
+        public void CancelCountdown()
+        {
+            StopCountdown();
+            EndOfPlayback.CancelCountdown();
+            RaiseEndStateChanged();
+        }
+
+        /// <summary>Pauses (or resumes) the up-next countdown while the app is backgrounded.</summary>
+        public void SetCountdownPaused(bool paused) => EndOfPlayback.Paused = paused;
+
+        public void Replay()
+        {
+            StopCountdown();
+            var command = EndOfPlayback.Replay();
+            RaiseEndStateChanged();
+            Perform(command);
+        }
+
+        public void Exit()
+        {
+            StopCountdown();
+            Perform(EndOfPlayback.Exit());
+        }
+
+        private async Task LoadSuggestionsAsync()
+        {
+            if (_suggestionsRequested || _workId is not { } workId)
+            {
+                return;
+            }
+
+            _suggestionsRequested = true;
+            try
+            {
+                var similar = await _environment.ApiClient
+                    .GetSimilarWorksAsync(workId, 20)
+                    .ConfigureAwait(false);
+                Suggestions = PlaybackQueue.Suggestions(similar, workId);
+            }
+            catch (Exception)
+            {
+                // Suggestions are decoration; the end screen works without them.
+            }
+        }
+
+        /// <summary>Marks the item finished server-side so it counts as watched.</summary>
+        private async Task ReportFinishedAsync()
+        {
+            var info = PlaybackInfo;
+            if (info is null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _environment.ApiClient
+                    .UpdateWatchProgressAsync(
+                        _mediaFileId,
+                        new UpdateWatchProgressRequest { PositionMs = info.DurationMs, DurationMs = info.DurationMs })
+                    .ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Best-effort, like every other progress report.
+            }
+        }
 
         /// <summary>Re-runs <see cref="LoadAsync"/> after a failed negotiation.</summary>
         public void Retry()
@@ -428,7 +595,7 @@ namespace Playarr.Xbox.ViewModels
         /// </summary>
         private void AttachResumeSeek(PlaybackInfoResponse info)
         {
-            var resumeFrom = _resumePositionMs ?? 0;
+            var resumeFrom = PlaybackResume.Normalise(_resumePositionMs, info.DurationMs) ?? 0;
             if (resumeFrom <= info.SourceOffsetMs)
             {
                 return;
@@ -537,16 +704,24 @@ namespace Playarr.Xbox.ViewModels
         /// not get.
         /// </summary>
         /// <remarks>
-        /// <c>NextBehavior</c>/<c>PreviousBehavior</c> are explicitly
-        /// disabled: this screen plays exactly one file with no
-        /// playlist/queue concept, so a "next track" media-remote button
-        /// press should do nothing rather than silently failing or, worse,
-        /// unexpectedly navigating.
+        /// <c>PreviousBehavior</c> is disabled. <c>NextBehavior</c> routes to
+        /// the end screen's Play now (see end-of-playback.md section 6); a
+        /// press while the video is still playing does nothing.
         /// </remarks>
         private void ConfigureSystemMediaTransportControls()
         {
             Player.CommandManager.IsEnabled = true;
-            Player.CommandManager.NextBehavior.EnablingRule = MediaCommandEnablingRule.Never;
+            // Next-track is only meaningful on the end screen, where it equals
+            // "Play now" when a next item exists; otherwise it is swallowed.
+            Player.CommandManager.NextBehavior.EnablingRule = MediaCommandEnablingRule.Always;
+            Player.CommandManager.NextReceived += (sender, args) =>
+            {
+                args.Handled = true;
+                if (EndOfPlayback.Phase != EndOfPlaybackPhase.Playing && EndOfPlayback.Next != null)
+                {
+                    PlayNextNow();
+                }
+            };
             Player.CommandManager.PreviousBehavior.EnablingRule = MediaCommandEnablingRule.Never;
 
             var updater = Player.SystemMediaTransportControls.DisplayUpdater;
@@ -563,6 +738,8 @@ namespace Playarr.Xbox.ViewModels
             }
 
             _disposed = true;
+            StopCountdown();
+            Player.MediaEnded -= Player_MediaEnded;
             _progressTimer?.Dispose();
             _progressTimer = null;
 

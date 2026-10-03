@@ -307,3 +307,16 @@ Until a package is built and sideloaded through Xbox Developer Mode, or a
 Store submission is approved, the Edge-on-Xbox browser route described in
 [`docs/clients/xbox.md`](../../clients/xbox.md) is the only way a Playarr Server
 user can actually use Playarr on an Xbox today.
+
+## End of playback
+
+Implements [`end-of-playback.md`](../end-of-playback.md). `Playarr.Core`
+holds the logic (`EndOfPlaybackMachine`, `PlaybackQueue`, `PlaybackResume`);
+`PlayerViewModel` feeds it `MediaPlayer.MediaEnded` and a one-second timer, and
+`PlayerPage` renders the ended card or 10-second up-next countdown over the
+video with plain `Button`s so gamepad XY focus reaches them. Back (B) leaves to
+the work's details. Suggestions use `/api/v1/catalog/{id}/similar`; the row is
+hidden when the call fails or is empty (the queue/continue-watching fallbacks
+are not implemented). Xbox has no autoplay preference, so autoplay is on.
+Telemetry is omitted (no analytics channel). The system next-track key maps to
+Play now on the end screen.

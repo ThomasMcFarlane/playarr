@@ -17,7 +17,7 @@ Owner requirement (3 October 2026): when media finishes, show a UI with exit, re
 | 81 | End screen: iOS / iPadOS | pending | agent | Parent: 78. |
 | 82 | End screen: tvOS | pending | agent | Parent: 78. |
 | 83 | End screen: Roku | pending | agent | Parent: 78. |
-| 84 | End screen: Xbox | pending | agent | Parent: 78. |
+| 84 | End screen: Xbox | implemented, PR PR 42 | agent | Parent: 78. Branch `task/end-screen-xbox`. `EndOfPlaybackMachine` and queue helpers in `Playarr.Core` (`dotnet test`: 56 passed). UWP head (`PlayerPage`, `PlayerViewModel`) not compiled here (needs Windows/UWP SDK); verify on a dev-mode console. |
 | 85 | End screen: HarmonyOS | pending | agent | Parent: 78. |
 
 ## Planned: Release calendar and availability tracking (2026-10-01)

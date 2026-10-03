@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Playarr.Core.Models;
 using Playarr.Core.Networking;
+using Playarr.Core.Playback;
 using Playarr.Xbox;
 
 namespace Playarr.Xbox.ViewModels
@@ -121,6 +122,33 @@ namespace Playarr.Xbox.ViewModels
         public Guid? PlayableMediaFileId => IsSeries ? SelectedEpisode?.MediaFileId : _detail?.MediaFileId;
 
         public bool CanPlay => PlayableMediaFileId.HasValue;
+
+        /// <summary>The work whose similar titles the end-of-playback screen suggests.</summary>
+        public Guid WorkId => _workId;
+
+        /// <summary>
+        /// The playable episodes that follow <see cref="SelectedEpisode"/>
+        /// (across seasons) -- the up-next queue handed to the player.
+        /// Empty for a movie or when the selection is the last playable one.
+        /// </summary>
+        public IList<PlaybackQueueItem> UpNextQueue
+        {
+            get
+            {
+                if (!IsSeries || SelectedEpisode is null)
+                {
+                    return new List<PlaybackQueueItem>();
+                }
+
+                var queue = PlaybackQueue.FromSeries(_workId, Title, Seasons, SelectedEpisode.Episode.Id);
+                if (queue.Count > 0 && queue[0].MediaFileId == SelectedEpisode.MediaFileId)
+                {
+                    queue.RemoveAt(0);
+                }
+
+                return queue;
+            }
+        }
 
         /// <summary>
         /// Loads the work once. Fire-and-forget from the page's

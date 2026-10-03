@@ -61,6 +61,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Xbox core CI job installs the .NET SDK under the job temp directory so
+  the self-hosted runner no longer fails writing to `/usr/share/dotnet`.
 - dev-host development workloads now mount the canonical Storage-backed Playarr
   main checkout instead of the retired Projects filesystem.
 - Self-hosted Play run `<id>` committed the bounded Android TV pairing
@@ -102,6 +104,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now, Cancel, Replay, Back to details) when a next episode follows, direct
   chaining for album tracks, and a "More like this" row from the catalogue
   similar-titles endpoint, all driven by the remote. Contract tests cover it.
+
+- Xbox now shows the end-of-playback experience from
+  `docs/architecture/end-of-playback.md`: an ended card (Replay, Back to details,
+  "More like this" from `/api/v1/catalog/{id}/similar`) or, for a series with
+  further playable episodes, a 10-second up-next countdown (Play now, Cancel,
+  Replay, Back to details). Its state machine lives in `Playarr.Core` with 20
+  new unit tests (56 total); the UWP head is unverified until built on Windows.
 
 - Planned tasks 62–71 as separate server backup/recovery and portable per-user
   library export/import workstreams. Recorded complete data coverage,

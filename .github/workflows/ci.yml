@@ -203,9 +203,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The self-hosted runner user cannot write to /usr/share/dotnet, so
+      # install the SDK under the per-job temp directory instead.
       - uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           dotnet-version: '8.0.x'
+
+      - name: Put the SDK on PATH
+        run: echo "$RUNNER_TEMP/dotnet" >> "$GITHUB_PATH"
 
       - name: dotnet build (Playarr.Core)
         run: dotnet build src/Playarr.Core/Playarr.Core.csproj

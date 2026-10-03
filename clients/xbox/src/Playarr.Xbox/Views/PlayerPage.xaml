@@ -61,6 +61,57 @@
             Margin="0,0,48,140"
             Click="TracksButton_Click" />
 
+        <!--
+            End-of-playback screen (docs/architecture/end-of-playback.md): shown over
+            the finished video. UpNext phase shows a countdown with Play now /
+            Cancel / Exit; EndCard phase shows Replay / Exit (and Play next when a
+            queued item remains). Suggestions come from /catalog/{id}/similar.
+            Plain Buttons so the gamepad's XY focus navigation reaches them.
+        -->
+        <Grid x:Name="EndPanel" Visibility="Collapsed" Background="#E6000000" AutomationProperties.LandmarkType="Custom" AutomationProperties.LocalizedLandmarkType="dialog">
+            <StackPanel VerticalAlignment="Center" Margin="64,0" Spacing="20">
+                <TextBlock
+                    x:Name="EndHeadingText"
+                    Style="{StaticResource TitleTextBlockStyle}"
+                    Foreground="White" />
+                <TextBlock
+                    x:Name="EndDetailText"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Foreground="White"
+                    Opacity="0.85"
+                    TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="16" XYFocusKeyboardNavigation="Enabled">
+                    <Button x:Name="PlayNextButton" Content="Play now" Click="PlayNextButton_Click" />
+                    <Button x:Name="CancelCountdownButton" Content="Cancel" Click="CancelCountdownButton_Click" />
+                    <Button x:Name="ReplayButton" Content="Replay" Click="ReplayButton_Click" />
+                    <Button x:Name="ExitButton" Content="Back to details" Click="ExitButton_Click" />
+                </StackPanel>
+                <TextBlock
+                    x:Name="SuggestionsHeading"
+                    Text="More like this"
+                    AutomationProperties.HeadingLevel="Level2"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Foreground="White"
+                    Visibility="Collapsed" />
+                <ListView
+                    x:Name="SuggestionsList"
+                    SelectionMode="None"
+                    IsItemClickEnabled="True"
+                    ItemClick="SuggestionsList_ItemClick"
+                    Visibility="Collapsed"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    ScrollViewer.HorizontalScrollMode="Enabled"
+                    ScrollViewer.VerticalScrollMode="Disabled"
+                    Height="340">
+                    <ListView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsStackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListView.ItemsPanel>
+                </ListView>
+            </StackPanel>
+        </Grid>
+
         <!-- Loading overlay, visible while PlayerViewModel.LoadState is Loading. -->
         <StackPanel
             x:Name="LoadingPanel"

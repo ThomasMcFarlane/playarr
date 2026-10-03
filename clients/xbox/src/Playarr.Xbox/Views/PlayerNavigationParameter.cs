@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Playarr.Core.Playback;
 
 namespace Playarr.Xbox.Views
 {
@@ -16,12 +18,25 @@ namespace Playarr.Xbox.Views
     /// </remarks>
     public sealed class PlayerNavigationParameter
     {
-        public PlayerNavigationParameter(Guid mediaFileId, long? resumePositionMs = null, string? title = null)
+        public PlayerNavigationParameter(
+            Guid mediaFileId,
+            long? resumePositionMs = null,
+            string? title = null,
+            Guid? workId = null,
+            IList<PlaybackQueueItem>? upNext = null)
         {
+            WorkId = workId;
+            UpNext = upNext ?? new List<PlaybackQueueItem>();
             MediaFileId = mediaFileId;
             ResumePositionMs = resumePositionMs;
             Title = title;
         }
+
+        /// <summary>The work being played, used to fetch end-of-playback suggestions. Optional.</summary>
+        public Guid? WorkId { get; }
+
+        /// <summary>Items queued after this one (next episodes). Empty means a plain end card.</summary>
+        public IList<PlaybackQueueItem> UpNext { get; }
 
         /// <summary>The media file to negotiate and play.</summary>
         public Guid MediaFileId { get; }

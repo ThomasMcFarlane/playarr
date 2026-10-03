@@ -174,7 +174,11 @@ namespace Playarr.Xbox.Views
                 // (start from the beginning): this screen doesn't fetch
                 // IPlayarrApiClient.ListWatchProgressAsync, which is out
                 // of this screen's scope as requested.
-                var parameter = new PlayerNavigationParameter(mediaFileId.Value, title: _viewModel.Title);
+                var parameter = new PlayerNavigationParameter(
+                    mediaFileId.Value,
+                    title: _viewModel.Title,
+                    workId: _viewModel.WorkId,
+                    upNext: _viewModel.UpNextQueue);
                 App.Navigation.Navigate(typeof(PlayerPage), parameter);
             }
         }
