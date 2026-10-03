@@ -74,6 +74,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Thumbnail ffmpeg processes are killed when the request that started them is dropped (for example a client
+  scrolled past a chapter tile), so abandoned grabs no longer pile up memory behind the concurrency limit.
 - Frame thumbnails (`GET /api/v1/media/{id}/thumbnail`) now run at most two ffmpeg extractions at a
   time (`PLAYARR_THUMBNAIL_CONCURRENCY`, default 2) and skip the queue for cached frames. A chapter
   rail requests a dozen frames at once; each UHD grab holds about 0.5 GiB, so four in parallel

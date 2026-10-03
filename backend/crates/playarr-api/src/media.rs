@@ -1004,6 +1004,7 @@ async fn ensure_media_thumbnail_at(
                 "-y",
             ])
             .arg(&temp_path)
+            .kill_on_drop(true)
             .output(),
     )
     .await
@@ -1032,6 +1033,7 @@ async fn ensure_media_thumbnail_at(
                     "-y",
                 ])
                 .arg(&temp_path)
+                .kill_on_drop(true)
                 .output(),
         )
         .await
