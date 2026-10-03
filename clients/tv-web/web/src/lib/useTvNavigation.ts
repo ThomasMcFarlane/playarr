@@ -6,6 +6,16 @@ import {
   shouldNavigateFromFormControl,
 } from "./arrowNavigationPolicy";
 import { findClosestItemInNextTrack } from "./trackNavigation";
+import {
+  type Direction,
+  type FocusRect,
+  detectEqualRowColumns,
+  focusCentre,
+  focusRectFromDOMRect,
+  hasHorizontalNeighbourToRight,
+  pickBestDirectionalTarget,
+  titleGridNeighbourIndex,
+} from "./focusGeometry";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -16,22 +26,423 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-type Direction = "up" | "down" | "left" | "right";
+/** Element list may be reused until the DOM structure changes. */
+const FOCUSABLE_LIST_TTL_MS = 2_000;
 
-function visibleFocusables(requestedScope?: Document | HTMLElement): HTMLElement[] {
+interface FocusableEntry {
+  element: HTMLElement;
+  rect: FocusRect;
+}
+
+interface FocusableSnapshot {
+  scopeKey: Document | HTMLElement;
+  listBuiltAt: number;
+  elements: HTMLElement[];
+  rectsDirty: boolean;
+  entries: FocusableEntry[] | null;
+  rectByElement: WeakMap<HTMLElement, FocusRect>;
+}
+
+let focusableSnapshot: FocusableSnapshot | null = null;
+let cacheInvalidationInstalled = false;
+
+function invalidateFocusableSnapshot(): void {
+  focusableSnapshot = null;
+}
+
+function markFocusableRectsDirty(): void {
+  if (focusableSnapshot) focusableSnapshot.rectsDirty = true;
+}
+
+/**
+ * Structure changes drop the element list. Scroll only dirties rects so dense
+ * libraries do not re-query the whole document on every remote press.
+ */
+function ensureFocusableCacheInvalidation(): void {
+  if (cacheInvalidationInstalled || typeof window === "undefined") return;
+  cacheInvalidationInstalled = true;
+
+  let structureFrame = 0;
+  const invalidateStructure = () => {
+    if (structureFrame) return;
+    structureFrame = window.requestAnimationFrame(() => {
+      structureFrame = 0;
+      invalidateFocusableSnapshot();
+    });
+  };
+  window.addEventListener("scroll", markFocusableRectsDirty, {
+    capture: true,
+    passive: true,
+  });
+  window.addEventListener("resize", markFocusableRectsDirty, { passive: true });
+
+  if (typeof MutationObserver !== "undefined" && document.body) {
+    // Do NOT watch `class` / `style`: is-selected toggles and artwork loads
+    // would thrash the list cache on every focus under dense catalogues.
+    new MutationObserver(invalidateStructure).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "tabindex", "aria-hidden", "aria-modal", "hidden"],
+    });
+  }
+}
+
+/**
+ * Visibility without per-element getComputedStyle (forced style recalc).
+ * Zero-size covers display:none; aria-hidden is filtered when collecting.
+ */
+function isFocusableVisible(_element: HTMLElement, rect: FocusRect): boolean {
+  return rect.width > 0 && rect.height > 0;
+}
+
+function rebuildElementList(scope: Document | HTMLElement): HTMLElement[] {
+  const nodes = scope.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+  const elements: HTMLElement[] = [];
+  for (let index = 0; index < nodes.length; index += 1) {
+    const element = nodes[index]!;
+    if (element.closest('[aria-hidden="true"]')) continue;
+    elements.push(element);
+  }
+  return elements;
+}
+
+function refreshRects(elements: HTMLElement[]): {
+  entries: FocusableEntry[];
+  rectByElement: WeakMap<HTMLElement, FocusRect>;
+} {
+  const entries: FocusableEntry[] = [];
+  const rectByElement = new WeakMap<HTMLElement, FocusRect>();
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (!element.isConnected) continue;
+    const rect = focusRectFromDOMRect(element.getBoundingClientRect());
+    if (!isFocusableVisible(element, rect)) continue;
+    entries.push({ element, rect });
+    rectByElement.set(element, rect);
+  }
+  return { entries, rectByElement };
+}
+
+function collectVisibleFocusables(
+  requestedScope?: Document | HTMLElement
+): FocusableEntry[] {
+  ensureFocusableCacheInvalidation();
   const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
   const scope: Document | HTMLElement = modal ?? requestedScope ?? document;
-  return Array.from(scope.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((element) => {
-    const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
-    return (
-      rect.width > 0 &&
-      rect.height > 0 &&
-      style.visibility !== "hidden" &&
-      style.display !== "none" &&
-      !element.closest('[aria-hidden="true"]')
-    );
-  });
+  const now =
+    typeof performance !== "undefined" ? performance.now() : Date.now();
+
+  if (
+    !focusableSnapshot ||
+    focusableSnapshot.scopeKey !== scope ||
+    now - focusableSnapshot.listBuiltAt >= FOCUSABLE_LIST_TTL_MS
+  ) {
+    const elements = rebuildElementList(scope);
+    const { entries, rectByElement } = refreshRects(elements);
+    focusableSnapshot = {
+      scopeKey: scope,
+      listBuiltAt: now,
+      elements,
+      rectsDirty: false,
+      entries,
+      rectByElement,
+    };
+    return entries;
+  }
+
+  if (focusableSnapshot.rectsDirty || !focusableSnapshot.entries) {
+    const { entries, rectByElement } = refreshRects(focusableSnapshot.elements);
+    focusableSnapshot.entries = entries;
+    focusableSnapshot.rectByElement = rectByElement;
+    focusableSnapshot.rectsDirty = false;
+  }
+
+  return focusableSnapshot.entries;
+}
+
+function visibleFocusables(requestedScope?: Document | HTMLElement): HTMLElement[] {
+  return collectVisibleFocusables(requestedScope).map((entry) => entry.element);
+}
+
+function rectFor(
+  element: HTMLElement,
+  rectByElement?: WeakMap<HTMLElement, FocusRect>
+): FocusRect {
+  const cached = rectByElement?.get(element);
+  if (cached) return cached;
+  return focusRectFromDOMRect(element.getBoundingClientRect());
+}
+
+type EnsureLibraryIndexFn = (index: number) => void;
+
+function ensureLibraryIndexMounted(
+  grid: HTMLElement,
+  index: number
+): HTMLElement | null {
+  const existing = grid.querySelector<HTMLElement>(
+    `[data-library-index="${index}"]`
+  );
+  if (existing) return existing;
+  // Only flushSync-expand when the target card is not in the DOM. Pre-warming
+  // headroom on every key remounts large prefixes and dominates 50× throttle.
+  const ensure = (
+    grid as HTMLElement & { __tvEnsureLibraryIndex?: EnsureLibraryIndexFn }
+  ).__tvEnsureLibraryIndex;
+  ensure?.(index);
+  return grid.querySelector<HTMLElement>(`[data-library-index="${index}"]`);
+}
+
+/**
+ * In-memory library focus for O(1) neighbour steps.
+ * Under remote: skip native focus() mid-hold (dominant Vidaa lag source —
+ * style/layout + React onFocus). Mark with is-remote-active and commit
+ * focus only after the hold settles so Enter/OK and stage selection still work.
+ */
+let remoteFocusElement: HTMLElement | null = null;
+let remoteFocusIndex = -1;
+let remoteFocusGrid: HTMLElement | null = null;
+let remoteFocusSettleTimer = 0;
+let remoteCachedCols = 0;
+let remoteCachedRowHeight = 0;
+let remoteCachedClientHeight = 0;
+let remoteCachedGrid: HTMLElement | null = null;
+
+function readLibraryGridMetrics(grid: HTMLElement): {
+  cols: number;
+  rowHeight: number;
+  clientHeight: number;
+} {
+  if (remoteCachedGrid === grid && remoteCachedCols > 0) {
+    return {
+      cols: remoteCachedCols,
+      rowHeight: remoteCachedRowHeight,
+      clientHeight: remoteCachedClientHeight,
+    };
+  }
+  const cols = Number.parseInt(grid.dataset.libraryCols ?? "", 10);
+  const rowHeight = Number.parseInt(grid.dataset.libraryRowHeight ?? "", 10);
+  remoteCachedGrid = grid;
+  remoteCachedCols = Number.isFinite(cols) && cols > 0 ? cols : 1;
+  remoteCachedRowHeight =
+    Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 0;
+  remoteCachedClientHeight = grid.clientHeight;
+  return {
+    cols: remoteCachedCols,
+    rowHeight: remoteCachedRowHeight,
+    clientHeight: remoteCachedClientHeight,
+  };
+}
+
+function setRemoteActiveMarker(element: HTMLElement | null): void {
+  if (
+    remoteFocusElement &&
+    remoteFocusElement !== element &&
+    remoteFocusElement.isConnected
+  ) {
+    remoteFocusElement.classList.remove("is-remote-active");
+  }
+  if (element) element.classList.add("is-remote-active");
+}
+
+function markRemoteLibraryFocus(
+  grid: HTMLElement,
+  element: HTMLElement,
+  index: number,
+  _direction?: Direction
+): void {
+  setRemoteActiveMarker(element);
+  remoteFocusElement = element;
+  remoteFocusIndex = index;
+  remoteFocusGrid = grid;
+
+  const remote = document.body.dataset.inputMode === "remote";
+  if (!remote) {
+    window.clearTimeout(remoteFocusSettleTimer);
+    element.focus({ preventScroll: true });
+    return;
+  }
+
+  // No focus() during the hold — Vidaa reflows and React onFocus on every key.
+  window.clearTimeout(remoteFocusSettleTimer);
+  remoteFocusSettleTimer = window.setTimeout(() => {
+    if (document.body.dataset.inputMode !== "remote") return;
+    if (!element.isConnected) return;
+    element.focus({ preventScroll: true });
+  }, 320);
+}
+
+function clearRemoteLibraryFocus(): void {
+  window.clearTimeout(remoteFocusSettleTimer);
+  setRemoteActiveMarker(null);
+  remoteFocusElement = null;
+  remoteFocusIndex = -1;
+  remoteFocusGrid = null;
+  remoteCachedGrid = null;
+  remoteCachedCols = 0;
+  remoteCachedRowHeight = 0;
+  remoteCachedClientHeight = 0;
+}
+
+/** Activate the virtual remote focus target (Enter/OK while focus is deferred). */
+function activateRemoteFocusTarget(): boolean {
+  const target = remoteFocusElement;
+  if (!target?.isConnected) return false;
+  if (document.body.dataset.inputMode !== "remote") return false;
+  // Commit real focus then click so React Router Link activation works.
+  target.focus({ preventScroll: true });
+  target.click();
+  return true;
+}
+
+function libraryCardAt(
+  grid: HTMLElement,
+  index: number,
+  from: HTMLElement | null,
+  fromIndex: number
+): HTMLElement | null {
+  // Prefer sibling walks for left/right — no querySelector on the hot path.
+  if (from && from.isConnected) {
+    if (index === fromIndex + 1) {
+      const sibling = from.nextElementSibling;
+      if (
+        sibling instanceof HTMLElement &&
+        sibling.dataset.libraryIndex === String(index)
+      ) {
+        return sibling;
+      }
+    }
+    if (index === fromIndex - 1) {
+      const sibling = from.previousElementSibling;
+      if (
+        sibling instanceof HTMLElement &&
+        sibling.dataset.libraryIndex === String(index)
+      ) {
+        return sibling;
+      }
+    }
+  }
+  return grid.querySelector<HTMLElement>(`[data-library-index="${index}"]`);
+}
+
+function titleGridColumns(grid: HTMLElement): number {
+  const fromData = Number.parseInt(grid.dataset.libraryCols ?? "", 10);
+  if (Number.isFinite(fromData) && fromData > 0) return fromData;
+  const content =
+    grid.querySelector<HTMLElement>(".tv-title-grid-content") ?? grid;
+  const cards = content.querySelectorAll<HTMLElement>(".tv-title-card");
+  if (cards.length === 0) return 1;
+  const tops: number[] = [];
+  const firstTop = cards[0]!.offsetTop;
+  for (let index = 0; index < cards.length; index += 1) {
+    const top = cards[index]!.offsetTop;
+    if (index > 0 && top > firstTop + 2) break;
+    tops.push(top);
+  }
+  return detectEqualRowColumns(tops);
+}
+
+/**
+ * O(1) neighbour step on dense Movies/Series/Sites/Music title grids.
+ * Avoids whole-document focus scans on the hot library path.
+ */
+function focusWithinTitleGrid(
+  current: HTMLElement,
+  direction: Direction
+): boolean {
+  // Prefer in-memory remote focus; fall back to the event target card.
+  let grid =
+    remoteFocusGrid && remoteFocusGrid.isConnected
+      ? remoteFocusGrid
+      : current.closest<HTMLElement>(".tv-title-grid");
+  if (!grid) return false;
+  // Cover-flow uses the horizontal rail path instead.
+  if (grid.dataset.tvScrollAxis === "horizontal") return false;
+
+  let index = remoteFocusGrid === grid && remoteFocusIndex >= 0
+    ? remoteFocusIndex
+    : Number.parseInt(current.dataset.libraryIndex ?? "", 10);
+  if (!Number.isFinite(index) || index < 0) {
+    if (!current.matches(".tv-title-card")) return false;
+    index = Number.parseInt(current.dataset.libraryIndex ?? "", 10);
+  }
+  if (!Number.isFinite(index) || index < 0) return false;
+
+  const length = Number.parseInt(grid.dataset.libraryCount ?? "", 10);
+  if (!Number.isFinite(length) || length <= 0) return false;
+  const metrics = readLibraryGridMetrics(grid);
+  const columns =
+    metrics.cols > 1 ? metrics.cols : titleGridColumns(grid);
+  if (columns !== metrics.cols) {
+    remoteCachedCols = columns;
+  }
+
+  const nextIndex = titleGridNeighbourIndex(index, length, columns, direction);
+
+  if (nextIndex === null) {
+    clearRemoteLibraryFocus();
+    if (direction === "right") {
+      const activeLetter =
+        document.querySelector<HTMLElement>(".tv-alphabet button.is-active") ??
+        document.querySelector<HTMLElement>(".tv-alphabet button");
+      if (activeLetter) {
+        activeLetter.focus({ preventScroll: true });
+        return true;
+      }
+    }
+    if (direction === "left") {
+      const navItems = document.querySelectorAll<HTMLElement>(".app-nav-link");
+      const currentNav =
+        document.querySelector<HTMLElement>(".app-nav-link[aria-current='page']") ??
+        navItems.item(0);
+      if (currentNav) {
+        currentNav.focus({ preventScroll: true });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const fromEl =
+    remoteFocusElement && remoteFocusElement.isConnected
+      ? remoteFocusElement
+      : current.matches(".tv-title-card")
+        ? current
+        : null;
+  let next = libraryCardAt(grid, nextIndex, fromEl, index);
+  if (!next) {
+    next = ensureLibraryIndexMounted(grid, nextIndex);
+  }
+  if (!next) return false;
+
+  // Vertical scroll using cached metrics only (no getBoundingClientRect /
+  // clientHeight per key). Interior holds usually stay in view — skip write.
+  if (
+    (direction === "up" || direction === "down") &&
+    metrics.rowHeight > 0
+  ) {
+    const nextRow = Math.floor(nextIndex / columns);
+    const targetTop = nextRow * metrics.rowHeight;
+    const viewTop = grid.scrollTop;
+    const clientHeight = metrics.clientHeight || grid.clientHeight;
+    const viewBottom = viewTop + clientHeight;
+    const verticalInset = Math.min(40, Math.max(24, clientHeight * 0.05));
+    if (targetTop < viewTop + verticalInset) {
+      grid.scrollTop = Math.max(0, targetTop - verticalInset);
+    } else if (targetTop + metrics.rowHeight > viewBottom - verticalInset) {
+      grid.scrollTop = Math.max(
+        0,
+        targetTop + metrics.rowHeight - clientHeight + verticalInset
+      );
+    }
+  }
+
+  markRemoteLibraryFocus(grid, next, nextIndex, direction);
+  return true;
+}
+
+function remoteScrollBehavior(): ScrollBehavior {
+  return document.body.dataset.inputMode === "remote" ? "auto" : "smooth";
 }
 
 export function shouldAutoFocusViewDefault({
@@ -53,62 +464,30 @@ export function shouldAutoFocusViewDefault({
   );
 }
 
-function visibleOnPerpendicularAxis(element: HTMLElement, direction: Direction): boolean {
+function visibleOnPerpendicularAxis(
+  element: HTMLElement,
+  direction: Direction,
+  elementRect: FocusRect
+): boolean {
   const container = element.closest<HTMLElement>("[data-tv-scroll-axis]");
   if (!container) return true;
 
   const axis = container.dataset.tvScrollAxis;
-  const rect = element.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
+  const containerRect = focusRectFromDOMRect(container.getBoundingClientRect());
 
   if ((direction === "up" || direction === "down") && axis === "horizontal") {
-    return rect.right > containerRect.left + 2 && rect.left < containerRect.right - 2;
+    return (
+      elementRect.right > containerRect.left + 2 &&
+      elementRect.left < containerRect.right - 2
+    );
   }
   if ((direction === "left" || direction === "right") && axis === "vertical") {
-    return rect.bottom > containerRect.top + 2 && rect.top < containerRect.bottom - 2;
+    return (
+      elementRect.bottom > containerRect.top + 2 &&
+      elementRect.top < containerRect.bottom - 2
+    );
   }
   return true;
-}
-
-function centre(rect: DOMRect): { x: number; y: number } {
-  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-}
-
-function scoreCandidate(from: DOMRect, to: DOMRect, direction: Direction): number | null {
-  const a = centre(from);
-  const b = centre(to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const isVertical = direction === "up" || direction === "down";
-  const forward =
-    direction === "up"
-      ? dy < -2
-      : direction === "down"
-        ? dy > 2
-        : direction === "left"
-          ? dx < -2
-          : dx > 2;
-  if (!forward) return null;
-
-  const primary = Math.abs(isVertical ? dy : dx);
-  const lateral = Math.abs(isVertical ? dx : dy);
-  const overlap =
-    isVertical
-      ? Math.max(0, Math.min(from.right, to.right) - Math.max(from.left, to.left))
-      : Math.max(0, Math.min(from.bottom, to.bottom) - Math.max(from.top, to.top));
-
-  // A directional press must remain primarily directional. Without this
-  // cone, an element far to the right but a few pixels lower can win an
-  // ArrowDown search simply because no perfectly aligned item is nearby.
-  // Cross-axis overlap identifies the same visual row/column; otherwise
-  // reject targets whose diagonal drift is larger than their forward move.
-  const crossAxisSize = isVertical
-    ? Math.min(from.width, to.width)
-    : Math.min(from.height, to.height);
-  const coneAllowance = primary * 0.85 + crossAxisSize * 0.2;
-  if (overlap <= 0 && lateral > coneAllowance) return null;
-
-  return primary + lateral * 4 - Math.min(overlap, 180) * 0.55;
 }
 
 function focusWithinScrollContainer(
@@ -119,6 +498,7 @@ function focusWithinScrollContainer(
   const container = current.closest<HTMLElement>('[data-tv-scroll-axis="horizontal"]');
   if (!container) return false;
 
+  // Local rail scan: only focusables inside this track, not the whole page.
   const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     (node) => !node.hasAttribute("disabled")
   );
@@ -151,6 +531,7 @@ function focusWithinScrollContainer(
   const pageScrollTop = pageScroller?.scrollTop;
   const pageScrollLeft = pageScroller?.scrollLeft;
   next.focus({ preventScroll: true });
+  markFocusableRectsDirty();
   revealFullyWithinHorizontalContainer(container, next);
   if (pageScroller && pageScrollTop !== undefined) {
     pageScroller.scrollTop = pageScrollTop;
@@ -168,7 +549,8 @@ interface VerticalTrackNavigation {
 function navigationWithinVerticalTracks(
   current: HTMLElement,
   direction: Direction,
-  nodes: HTMLElement[]
+  entries: FocusableEntry[],
+  rectByElement: WeakMap<HTMLElement, FocusRect>
 ): VerticalTrackNavigation | undefined {
   if (direction !== "up" && direction !== "down") return undefined;
 
@@ -186,11 +568,11 @@ function navigationWithinVerticalTracks(
   if (currentTrackIndex < 0) return undefined;
 
   const itemsByTrack = tracks.map((track) =>
-    nodes
-      .filter((node) => track.contains(node))
-      .map((node) => ({
-        value: node,
-        centreX: centre(node.getBoundingClientRect()).x,
+    entries
+      .filter((entry) => track.contains(entry.element))
+      .map((entry) => ({
+        value: entry.element,
+        centreX: focusCentre(entry.rect).x,
       }))
   );
 
@@ -200,7 +582,7 @@ function navigationWithinVerticalTracks(
     target: findClosestItemInNextTrack(
       itemsByTrack,
       currentTrackIndex,
-      centre(current.getBoundingClientRect()).x,
+      focusCentre(rectFor(current, rectByElement)).x,
       direction
     ),
   };
@@ -242,7 +624,7 @@ function snapToVerticalTrackBoundary({
       trackHeight: trackRect.height,
       trackTop: trackRect.top,
     }),
-    behavior: "smooth",
+    behavior: remoteScrollBehavior(),
   });
 }
 
@@ -264,7 +646,11 @@ function focusExplicitEdgeTarget(
   if (horizontalContainer) {
     revealFullyWithinHorizontalContainer(horizontalContainer, target);
   } else if (target.closest<HTMLElement>('[data-tv-scroll-axis="vertical"]')) {
-    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    target.scrollIntoView({
+      behavior: remoteScrollBehavior(),
+      block: "nearest",
+      inline: "nearest",
+    });
   }
   return true;
 }
@@ -315,7 +701,7 @@ function revealFullyWithinHorizontalContainer(
   const targetScrollLeft = Math.max(0, Math.min(maxScrollLeft, container.scrollLeft + delta));
   container.scrollTo({
     left: targetScrollLeft,
-    behavior: "smooth",
+    behavior: remoteScrollBehavior(),
   });
 }
 
@@ -371,13 +757,17 @@ function scrollVerticalContainer(
       scrollTop: element.scrollTop,
     });
     if (Math.abs(target - element.scrollTop) < 1) continue;
-    element.scrollTo({ top: target, behavior: "smooth" });
+    element.scrollTo({ top: target, behavior: remoteScrollBehavior() });
     return true;
   }
   return false;
 }
 
-function focusActiveAlphabet(current: HTMLElement, direction: Direction): boolean {
+function focusActiveAlphabet(
+  current: HTMLElement,
+  direction: Direction,
+  currentRect: FocusRect
+): boolean {
   const activeLetter =
     document.querySelector<HTMLElement>(".tv-alphabet button.is-active") ??
     document.querySelector<HTMLElement>(".tv-alphabet button");
@@ -391,37 +781,155 @@ function focusActiveAlphabet(current: HTMLElement, direction: Direction): boolea
   const grid = current.closest<HTMLElement>(".tv-title-grid");
   if (!grid || direction !== "right") return false;
 
-  const currentRect = current.getBoundingClientRect();
-  const hasCardToRight = Array.from(
-    grid.querySelectorAll<HTMLElement>(".tv-title-card")
-  ).some((card) => {
-    if (card === current) return false;
-    const rect = card.getBoundingClientRect();
+  // Cheap same-row check: only measure cards until one neighbour is found.
+  const cards = grid.querySelectorAll<HTMLElement>(".tv-title-card");
+  const neighbourRects: FocusRect[] = [];
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index]!;
+    if (card === current) continue;
+    const rect = focusRectFromDOMRect(card.getBoundingClientRect());
     const verticalOverlap = Math.max(
       0,
       Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top)
     );
-    return (
-      centre(rect).x > centre(currentRect).x + 2 &&
-      verticalOverlap >= Math.min(currentRect.height, rect.height) * 0.45
-    );
-  });
-  if (hasCardToRight) return false;
+    if (verticalOverlap < Math.min(currentRect.height, rect.height) * 0.45) continue;
+    neighbourRects.push(rect);
+    if (hasHorizontalNeighbourToRight(currentRect, neighbourRects)) return false;
+  }
 
   activeLetter.focus({ preventScroll: true });
   return true;
 }
 
+/**
+ * Home-rail step: sibling L/R, adjacent-rail U/D.
+ * Under remote: same deferred-focus path as the library grid.
+ */
+function focusWithinHomeRails(
+  current: HTMLElement,
+  direction: Direction
+): boolean {
+  const card =
+    remoteFocusElement?.isConnected &&
+    remoteFocusElement.classList.contains("tv-home-card")
+      ? remoteFocusElement
+      : current.classList.contains("tv-home-card")
+        ? current
+        : current.closest<HTMLElement>(".tv-home-card");
+  if (!card) return false;
+  const home = card.closest<HTMLElement>(".tv-home");
+  if (!home) return false;
+  const remote = document.body.dataset.inputMode === "remote";
+
+  const commit = (target: HTMLElement) => {
+    setRemoteActiveMarker(target);
+    remoteFocusElement = target;
+    remoteFocusIndex = -1;
+    remoteFocusGrid = null;
+    if (!remote) {
+      window.clearTimeout(remoteFocusSettleTimer);
+      target.focus({ preventScroll: true });
+      return;
+    }
+    window.clearTimeout(remoteFocusSettleTimer);
+    remoteFocusSettleTimer = window.setTimeout(() => {
+      if (document.body.dataset.inputMode !== "remote") return;
+      if (!target.isConnected) return;
+      target.focus({ preventScroll: true });
+    }, 320);
+  };
+
+  if (direction === "left" || direction === "right") {
+    const sibling =
+      direction === "right"
+        ? card.nextElementSibling
+        : card.previousElementSibling;
+    if (
+      sibling instanceof HTMLElement &&
+      sibling.classList.contains("tv-home-card")
+    ) {
+      commit(sibling);
+      // Skip scrollLeft reads mid-hold under remote (layout thrash).
+      if (!remote) {
+        const rail = sibling.closest<HTMLElement>("[data-tv-scroll-container]");
+        if (rail && rail.dataset.tvScrollAxis === "horizontal") {
+          const targetLeft = Math.max(
+            0,
+            sibling.offsetLeft - Math.max(24, rail.clientWidth * 0.05)
+          );
+          const viewLeft = rail.scrollLeft;
+          const viewRight = viewLeft + rail.clientWidth;
+          if (
+            sibling.offsetLeft < viewLeft + 24 ||
+            sibling.offsetLeft + sibling.offsetWidth > viewRight - 24
+          ) {
+            rail.scrollLeft = targetLeft;
+          }
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  const currentRail = card.closest<HTMLElement>("[data-tv-scroll-container]");
+  if (!currentRail) return false;
+  const rails = home.querySelectorAll<HTMLElement>(
+    '[data-tv-scroll-container][data-tv-scroll-axis="horizontal"]'
+  );
+  let railIndex = -1;
+  for (let i = 0; i < rails.length; i += 1) {
+    if (rails[i] === currentRail) {
+      railIndex = i;
+      break;
+    }
+  }
+  if (railIndex < 0) return false;
+  const nextRailIndex = direction === "down" ? railIndex + 1 : railIndex - 1;
+  if (nextRailIndex < 0 || nextRailIndex >= rails.length) return false;
+  const nextRail = rails[nextRailIndex]!;
+  const cards = nextRail.querySelectorAll<HTMLElement>(".tv-home-card");
+  if (cards.length === 0) return false;
+  let cardIndex = 0;
+  const siblings = currentRail.querySelectorAll<HTMLElement>(".tv-home-card");
+  for (let i = 0; i < siblings.length; i += 1) {
+    if (siblings[i] === card) {
+      cardIndex = i;
+      break;
+    }
+  }
+  const target =
+    cards[Math.min(cardIndex, cards.length - 1)] ?? cards[0]!;
+  commit(target);
+  return true;
+}
+
 function moveFocus(direction: Direction): void {
-  const nodes = visibleFocusables();
-  if (nodes.length === 0) return;
+  // Fast path: library title grids never need a whole-document scan.
+  // Prefer in-memory remote focus so holds never re-query the DOM.
+  const active =
+    (remoteFocusElement && remoteFocusElement.isConnected
+      ? remoteFocusElement
+      : null) ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (active && focusWithinTitleGrid(active, direction)) return;
+  if (active && focusWithinHomeRails(active, direction)) return;
+
+  const entries = collectVisibleFocusables();
+  if (entries.length === 0) return;
+
+  const rectByElement =
+    focusableSnapshot?.rectByElement ?? new WeakMap<HTMLElement, FocusRect>();
+  const nodes = entries.map((entry) => entry.element);
 
   const current =
-    document.activeElement instanceof HTMLElement && nodes.includes(document.activeElement)
-      ? document.activeElement
+    active && nodes.includes(active)
+      ? active
       : null;
   if (!current) {
-    (nodes.find((node) => node.hasAttribute("data-tv-focus-default")) ?? nodes[0])?.focus({
+    (
+      nodes.find((node) => node.hasAttribute("data-tv-focus-default")) ?? nodes[0]
+    )?.focus({
       preventScroll: true,
     });
     return;
@@ -449,34 +957,37 @@ function moveFocus(direction: Direction): void {
     return;
   }
 
+  const currentRect = rectFor(current, rectByElement);
+
   if (focusExplicitEdgeTarget(current, direction)) return;
-  if (focusActiveAlphabet(current, direction)) return;
+  if (focusActiveAlphabet(current, direction, currentRect)) return;
   if (focusWithinScrollContainer(current, direction)) return;
 
-  const currentRect = current.getBoundingClientRect();
-  const candidates = nodes.filter((node) => !node.closest(".app-user-identity"));
+  const candidateEntries = entries.filter(
+    (entry) => !entry.element.closest(".app-user-identity")
+  );
   const verticalTrackNavigation = navigationWithinVerticalTracks(
     current,
     direction,
-    candidates
+    candidateEntries,
+    rectByElement
   );
   if (verticalTrackNavigation && !verticalTrackNavigation.target) {
     snapToVerticalTrackBoundary(verticalTrackNavigation);
     return;
   }
+
+  const geometricCandidates = candidateEntries
+    .filter(
+      (entry) =>
+        entry.element !== current &&
+        visibleOnPerpendicularAxis(entry.element, direction, entry.rect)
+    )
+    .map((entry) => ({ item: entry.element, rect: entry.rect }));
+
   const next =
     verticalTrackNavigation?.target ??
-    candidates
-      .filter((node) => node !== current && visibleOnPerpendicularAxis(node, direction))
-      .map((node) => ({
-        node,
-        score: scoreCandidate(currentRect, node.getBoundingClientRect(), direction),
-      }))
-      .filter(
-        (candidate): candidate is { node: HTMLElement; score: number } =>
-          candidate.score !== null
-      )
-      .sort((a, b) => a.score - b.score)[0]?.node;
+    pickBestDirectionalTarget(currentRect, geometricCandidates, direction);
 
   if (next) {
     const homeMove = Boolean(current.closest(".tv-home") || next.closest(".tv-home"));
@@ -486,6 +997,7 @@ function moveFocus(direction: Direction): void {
     const pageScrollTop = pageScroller?.scrollTop;
     const pageScrollLeft = pageScroller?.scrollLeft;
     next.focus({ preventScroll: true });
+    markFocusableRectsDirty();
     const scrollContainer = next.closest<HTMLElement>("[data-tv-scroll-container]");
     if (scrollContainer) {
       const isVerticalRail = scrollContainer.dataset.tvScrollAxis === "vertical";
@@ -521,11 +1033,15 @@ function moveFocus(direction: Direction): void {
         scrollContainer.scrollTo({
           left: scrollContainer.scrollLeft + horizontalDelta,
           top: scrollContainer.scrollTop + verticalDelta,
-          behavior: "smooth",
+          behavior: remoteScrollBehavior(),
         });
       }
     } else if (!homeMove) {
-      next.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      next.scrollIntoView({
+        behavior: remoteScrollBehavior(),
+        block: "nearest",
+        inline: "nearest",
+      });
     }
     if (pageScroller && pageScrollTop !== undefined) {
       pageScroller.scrollTop = pageScrollTop;
@@ -587,6 +1103,21 @@ export function tvBackNavigationTarget(
 }
 
 function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
+  // Enter/OK while virtual remote focus is ahead of native focus.
+  if (
+    event.key === "Enter" ||
+    event.key === " " ||
+    event.key === "Spacebar" ||
+    event.keyCode === 13 ||
+    event.keyCode === 23 // Android TV DPAD_CENTER / common OK
+  ) {
+    if (activateRemoteFocusTarget()) {
+      event.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
   const direction: Direction | undefined =
     event.key === "ArrowUp"
       ? "up"
@@ -718,11 +1249,31 @@ export function useTvNavigation(
     const handlePointer = () => {
       userInteracted = true;
       document.body.dataset.inputMode = "pointer";
+      // Commit deferred remote marker when leaving remote mode.
+      if (remoteFocusElement?.isConnected) {
+        window.clearTimeout(remoteFocusSettleTimer);
+        remoteFocusElement.classList.remove("is-remote-active");
+        remoteFocusElement.focus({ preventScroll: true });
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("pointerdown", handlePointer, { passive: true });
-    const defaultFocusObserver = new MutationObserver(focusViewDefault);
+    // Debounce default-focus scans. A raw childList observer on `.app-main`
+    // re-ran full focusable collection on every artwork mount, which is the
+    // dominant long-task source under 4K + CPU throttle while rails hydrate.
+    let defaultFocusFrame = 0;
+    const scheduleFocusViewDefault = () => {
+      // Never re-scan defaults during a remote hold — DOM mutations from
+      // virtualisation would schedule full focusable walks mid-key.
+      if (document.body.dataset.inputMode === "remote") return;
+      if (defaultFocusFrame) return;
+      defaultFocusFrame = window.requestAnimationFrame(() => {
+        defaultFocusFrame = 0;
+        focusViewDefault();
+      });
+    };
+    const defaultFocusObserver = new MutationObserver(scheduleFocusViewDefault);
     defaultFocusObserver.observe(view, {
       attributes: true,
       attributeFilter: ["data-tv-focus-default"],
@@ -733,6 +1284,7 @@ export function useTvNavigation(
 
     return () => {
       window.clearTimeout(initialFocus);
+      if (defaultFocusFrame) window.cancelAnimationFrame(defaultFocusFrame);
       defaultFocusObserver.disconnect();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);

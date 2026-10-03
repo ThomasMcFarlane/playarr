@@ -6326,6 +6326,37 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   transform: translateY(-5px) scale(1.015);
 }
 
+/* Vidaa / limited TV CPUs: drop transition cost during remote holds. */
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card,
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card-art,
+body[data-input-mode="remote"] .tv-home-card,
+body[data-input-mode="remote"] .tv-home-card-art {
+  transition: none !important;
+  animation: none !important;
+}
+/* Virtual remote focus (no native focus mid-hold — avoids Vidaa reflow thrash). */
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card.is-remote-active,
+body[data-input-mode="remote"] .tv-home-card.is-remote-active {
+  z-index: 2;
+  outline: 0;
+  /* Outline ring via box-shadow instead of lift transforms (cheaper on TV GPUs). */
+}
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card.is-remote-active .tv-title-card-art,
+body[data-input-mode="remote"] .tv-home-card.is-remote-active .tv-home-card-art {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent, #c4a484) 90%, white),
+    0 18px 36px rgba(56, 38, 33, 0.28),
+    0 8px 16px rgba(56, 38, 33, 0.16);
+}
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+  contain: layout style;
+}
+body[data-input-mode="pointer"] .is-remote-active {
+  /* safety: never leave remote marker styles when pointer is back */
+}
+
 .tv-title-grid .tv-title-card-art {
   aspect-ratio: 16 / 9;
   border-radius: clamp(8px, 0.65vw, 13px);

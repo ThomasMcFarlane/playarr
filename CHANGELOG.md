@@ -1034,6 +1034,56 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   partial-availability warnings, and searchable multi-select, date-time, session-length,
   stop-reason, and bytes-streamed filters persisted in the URL; replace group-history offsets
   with stable opaque cursors that restart safely when peer membership or availability changes.
+
+### Fixed
+
+- Add design-parity tests that gate Home/Library/WorkDetail/Search chrome against origin/main (1:1 visual restore).
+
+- Restore Playarr TV Web Home/Library layout and hover/active chrome to match main (drop virtualisation and remote CSS that changed stage insets and motion).
+
+### Fixed
+
+- Restore Home after load: remote-selection debounce refs were declared after
+  early returns (Rules of Hooks crash → blank home on TV).
+
+### Performance
+
+- Cut Vidaa / limited-TV library lag further: expand-only grid mount (initial
+  48 cards), debounce stage selection under remote holds (focus-visible chrome
+  stays live), skip alphabet/scroll-edge re-renders mid-hold, drop transitions
+  during remote input, and delegate context menus off per-card props.
+- Defer native focus during remote D-pad holds (is-remote-active marker + settle
+  focus); activate via Enter/OK on the virtual target so Vidaa avoids per-key
+  focus reflows.
+- Make Playarr TV Web directional navigation lag-free under 4K + limited-CPU
+  emulation: cache focusable geometry, pure O(n) scoring, debounce default-focus
+  scans, defer selection-driven stage re-renders, and isolate card layout work
+  without changing the 1:1 visual design.
+- Speed dense library remote focus with O(1) title-grid stepping, remote instant
+  scroll, coalesced selection updates, and off-screen card paint skipping.
+- Derive the library virtualisation window and alphabet active letter from a
+  single anchor/selection source of truth (no scroll/effect-synced mirror state),
+  and skip remote focus transforms so dense catalogues do less work per key.
+- Grow the library mount prefix expand-only under remote navigation so key holds
+  do not slide/remount the virtual window mid-sequence.
+- Defer native focus during remote library holds (overlay ring + sibling walks),
+  freeze scroll-edge remeasures, and drop per-card context-menu props from the
+  dense key path so 4K multi× throttle stays under the nav latency budget.
+- Coalesce the remote focus ring to one rAF paint, cache library grid metrics,
+  skip ResizeObserver work mid-hold, drop content-visibility re-layout thrash,
+  and step Home rails without a full focus scan under remote input.
+- Restore hover and active chrome on remote nav: keep pointer :hover styles,
+  paint a deferred focus ring / `is-remote-active` marker per key, and settle
+  stage selection after idle instead of dropping it while remote.
+- Keep library/home stage insets 1:1 with main: stop virtualisation spacers from
+  zeroing `--library-rail-*` padding, and drop always-on content-visibility that
+  altered card geometry.
+
+### Changed
+
+- Prefer derived React state over `useEffect` → `setState` mirrors across the
+  repo (documented in `AGENTS.md`); library prefs reset on kind change during
+  render instead of a sync effect.
 - Route VIDAA TV linking through the same hosted QR/link-code broker and first-contact flow used by Android TV.
 - Fix VIDAA custom-store installation on firmware that reports an absent custom-app list as a failed read.
 - Show Playarr's shared logo and language selector on the Android profile stage across phone and

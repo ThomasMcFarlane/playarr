@@ -18,13 +18,17 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Allow devdeploy / Emissary hostnames (Vite host-check blocks otherwise).
+    allowedHosts: true,
     // Production Playarr is hosted at playarr.app and connects directly to
     // the server selected by the viewer. Proxying here keeps local development
     // convenient against a backend listening on the standard development port.
     proxy: {
-      "/api": "http://localhost:8484",
-      "/healthz": "http://localhost:8484",
-      "/readyz": "http://localhost:8484",
+      // Dense local mock for 4K nav-perf measurement (see goal worktree).
+      // Production / default local backend remains localhost:8484.
+      "/api": process.env.PLAYARR_DEV_API_PROXY ?? "http://localhost:8484",
+      "/healthz": process.env.PLAYARR_DEV_API_PROXY ?? "http://localhost:8484",
+      "/readyz": process.env.PLAYARR_DEV_API_PROXY ?? "http://localhost:8484",
     },
   },
   build: {

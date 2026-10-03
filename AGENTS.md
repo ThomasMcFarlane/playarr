@@ -95,3 +95,22 @@ It overrides weaker or older wording elsewhere in the tree.
   leave the field after an on-screen keyboard closes. Preserve Left and Right for caret movement,
   and preserve native arrow behaviour for textareas, selects, number inputs, and range inputs.
 - Add regression coverage whenever the shared scroll-root or form-control arrow policy changes.
+
+## React — prefer derived state over effects
+
+Follow [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect). This is a
+performance rule as well as a correctness rule: every `useEffect` → `setState` pair is an extra
+render (and under TV remote navigation, often a long task).
+
+- If a value can be computed from props or existing state, **derive it during render** (or with
+  `useMemo` when expensive). Do not store it in `useState` and sync it from an effect.
+- `useEffect` is for **synchronising with external systems** only (network, subscriptions, DOM
+  measurement APIs, timers, imperative third-party widgets). It is not for chaining React state.
+- Event handlers (and focus/scroll handlers), not effects, should drive state that changes because
+  the user did something.
+- When props reset local UI (e.g. route `kind` changes), adjust state **during render** with the
+  “store previous prop” pattern, or remount with `key={...}`. Do not `useEffect(() => setX(...), [prop])`.
+- Prefer one source of truth (focused index, selected id, filter) and derive windows, labels,
+  “is-selected”, empty/loading flags, and secondary chrome from it.
+- Reach for `useEffect` only after ruling out: derived value, `useMemo`, event handler, `key` reset,
+  or lifting state up.

@@ -48,6 +48,7 @@ import {
   PrivacyPolicyPage,
   TermsPage,
 } from "./pages/Legal";
+import { NavPerfHarnessPage } from "./pages/NavPerfHarness";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
 import { TvEmptyState } from "./components/tv/TvEmptyState";
@@ -593,6 +594,10 @@ export function App() {
       <Route path="/legal/acceptable-use" element={<AcceptableUsePage />} />
       <Route path="/legal/licences" element={<LicencesPage />} />
       <Route path="/legal/account-deletion" element={<AccountDeletionPage />} />
+      {/* Dense focus grid for 4K / limited-CPU nav measurement (dev only). */}
+      {import.meta.env.DEV ? (
+        <Route path="/__nav-perf" element={<NavPerfHarnessPage />} />
+      ) : null}
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/downloads" element={<DownloadsPage />} />

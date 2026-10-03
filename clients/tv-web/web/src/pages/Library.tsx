@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { flushSync } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   describeApiError,
@@ -14,6 +24,10 @@ import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
 import {
+  libraryExpandMountedEnd,
+  libraryWindowContains,
+} from "../lib/focusGeometry";
+import {
   isNavigationLayerRestoring,
   useNavigationLayer,
 } from "../lib/navigationLayer";
@@ -22,6 +36,9 @@ import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+
+/** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
+const INITIAL_MOUNTED = 48;
 
 const PAGE_SIZE = 200;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"] as const;
@@ -141,6 +158,8 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [order, setOrder] = useState<SortOrder>(() => storedOrder(kind));
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
+  // Expand-only virtual mount: grow DOM prefix as focus moves, never shrink.
+  const [mountedEnd, setMountedEnd] = useState(INITIAL_MOUNTED);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -150,6 +169,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const requestRef = useRef<Promise<Work[]> | null>(null);
   const generationRef = useRef(0);
   const loadedKindRef = useRef(kind);
+  const selectTimerRef = useRef(0);
+  const pendingSelectIdRef = useRef<string | null>(null);
+  const gridMetricsRef = useRef({ cols: 3, rowHeight: 180 });
+  const mountedEndRef = useRef(mountedEnd);
+  mountedEndRef.current = mountedEnd;
   const scrollEdges = useScrollEdges(
     gridRef,
     view === "cover-flow" ? "horizontal" : "vertical",
@@ -264,7 +288,86 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     setOrder(nextOrder);
   }
 
+  const itemCount = items?.length ?? 0;
+  // Expand-only: start fixed at 0 so we never remount sliding windows mid-hold.
+  const renderWindow = useMemo(() => {
+    if (view === "cover-flow") return { start: 0, end: itemCount };
+    return {
+      start: 0,
+      end: Math.min(itemCount, Math.max(mountedEnd, INITIAL_MOUNTED)),
+    };
+  }, [itemCount, mountedEnd, view]);
+  const renderWindowRef = useRef(renderWindow);
+  renderWindowRef.current = renderWindow;
+
+  // Publish grid metrics for O(1) remote title-grid nav (no layout change).
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || view === "cover-flow") return;
+    const content = grid.querySelector<HTMLElement>(".tv-title-grid-content");
+    const sample = content?.querySelector<HTMLElement>(".tv-title-card");
+    if (!content || !sample) return;
+    const styles = window.getComputedStyle(content);
+    const colCount = Math.max(
+      1,
+      styles.gridTemplateColumns.split(" ").filter(Boolean).length
+    );
+    const gap = Number.parseFloat(styles.rowGap || styles.gap || "0") || 0;
+    const rowHeight = Math.max(120, sample.offsetHeight + gap);
+    gridMetricsRef.current = { cols: colCount, rowHeight };
+    grid.dataset.libraryCols = String(colCount);
+    grid.dataset.libraryRowHeight = String(rowHeight);
+  }, [items, view, renderWindow.end]);
+
+  // Grow mount prefix when remote nav leaves the mounted set.
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || view === "cover-flow") return;
+    const ensure = (index: number) => {
+      const totalItems = itemsRef.current.length;
+      if (index < 0 || index >= totalItems) return;
+      if (libraryWindowContains(renderWindowRef.current, index)) return;
+      const cols = Math.max(1, gridMetricsRef.current.cols);
+      const nextEnd = libraryExpandMountedEnd(
+        mountedEndRef.current,
+        index,
+        totalItems,
+        cols,
+        18
+      );
+      if (nextEnd <= mountedEndRef.current) return;
+      flushSync(() => {
+        setMountedEnd(nextEnd);
+      });
+    };
+    (
+      grid as HTMLElement & {
+        __tvEnsureLibraryIndex?: (index: number) => void;
+      }
+    ).__tvEnsureLibraryIndex = ensure;
+    return () => {
+      delete (
+        grid as HTMLElement & {
+          __tvEnsureLibraryIndex?: (index: number) => void;
+        }
+      ).__tvEnsureLibraryIndex;
+    };
+  }, [view, kind, itemCount]);
+
+  // Reset mount prefix when the catalogue kind changes.
+  useEffect(() => {
+    setMountedEnd(INITIAL_MOUNTED);
+  }, [kind]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(selectTimerRef.current);
+    };
+  }, []);
+
   const updateActiveLetter = useCallback(() => {
+    // Alphabet chrome re-renders the filter strip — skip mid remote hold.
+    if (document.body.dataset.inputMode === "remote") return;
     const grid = gridRef.current;
     if (!grid) return;
 
@@ -562,19 +665,105 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           className="tv-title-grid"
           ref={gridRef}
           onScroll={updateActiveLetter}
+          onContextMenu={(event) => {
+            const card = (event.target as Element | null)?.closest<HTMLElement>(
+              ".tv-title-card"
+            );
+            if (!card) return;
+            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
+            const work = Number.isFinite(index) ? items[index] : undefined;
+            if (!work) return;
+            mediaContext
+              .itemProps({
+                work,
+                detailRoute: `${routeBase}/${work.id}`,
+                parentRoute: routeBase,
+                progress: progressByWork.get(work.id),
+              })
+              .onContextMenu(event);
+          }}
+          onKeyDown={(event) => {
+            const card = event.target;
+            if (
+              !(card instanceof HTMLElement) ||
+              !card.classList.contains("tv-title-card")
+            ) {
+              return;
+            }
+            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
+            const work = Number.isFinite(index) ? items[index] : undefined;
+            if (!work) return;
+            mediaContext
+              .itemProps({
+                work,
+                detailRoute: `${routeBase}/${work.id}`,
+                parentRoute: routeBase,
+                progress: progressByWork.get(work.id),
+              })
+              .onKeyDown(event);
+          }}
+          onKeyUp={(event) => {
+            const card = event.target;
+            if (
+              !(card instanceof HTMLElement) ||
+              !card.classList.contains("tv-title-card")
+            ) {
+              return;
+            }
+            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
+            const work = Number.isFinite(index) ? items[index] : undefined;
+            if (!work) return;
+            mediaContext
+              .itemProps({
+                work,
+                detailRoute: `${routeBase}/${work.id}`,
+                parentRoute: routeBase,
+                progress: progressByWork.get(work.id),
+              })
+              .onKeyUp(event);
+          }}
           data-tv-scroll-container
           data-tv-scroll-axis={view === "cover-flow" ? "horizontal" : "vertical"}
           data-navigation-scroll-key={`library:${kind}:grid`}
+          data-library-count={items.length}
           aria-busy={refreshing}
         >
-          <div className="tv-title-grid-content">
-            {items.map((work, index) => {
+          <div
+            className="tv-title-grid-content"
+            style={(() => {
+              // Only additive bottom spacer when more rows exist off-mount.
+              // Never write paddingTop: 0 — that wipes --library-rail-top.
+              if (view === "cover-flow") return undefined;
+              const cols = Math.max(1, gridMetricsRef.current.cols);
+              const rowHeight = gridMetricsRef.current.rowHeight;
+              const spacerBottom = Math.max(
+                0,
+                (Math.ceil(items.length / cols) -
+                  Math.ceil(renderWindow.end / cols)) *
+                  rowHeight
+              );
+              if (spacerBottom <= 0) return undefined;
+              const style: CSSProperties = {
+                paddingBottom: `calc(var(--library-rail-bottom) + ${spacerBottom}px)`,
+              };
+              return style;
+            })()}
+          >
+            {(view === "cover-flow"
+              ? items
+              : items.slice(renderWindow.start, renderWindow.end)
+            ).map((work, sliceIndex) => {
+              const index =
+                view === "cover-flow"
+                  ? sliceIndex
+                  : renderWindow.start + sliceIndex;
               const imageKinds =
                 view === "cover" || view === "cover-flow"
                   ? (["poster", "backdrop"] as const)
                   : (["backdrop", "poster"] as const);
               const letter = workLetter(work);
-              const isFirstForLetter = index === 0 || workLetter(items[index - 1]!) !== letter;
+              const isFirstForLetter =
+                index === 0 || workLetter(items[index - 1]!) !== letter;
               const isSelected = work.id === selected.id;
               const coverFlowOffset =
                 view === "cover-flow"
@@ -604,16 +793,30 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     }
                   }}
                   onFocus={(event) => {
-                    setSelectedId(work.id);
+                    const remote =
+                      document.body.dataset.inputMode === "remote";
+                    // Remote: debounce stage React work so holds stay lag-free.
+                    // Card chrome uses :focus-visible; preview settles after idle.
+                    pendingSelectIdRef.current = work.id;
+                    window.clearTimeout(selectTimerRef.current);
+                    selectTimerRef.current = window.setTimeout(() => {
+                      const id = pendingSelectIdRef.current;
+                      if (!id) return;
+                      startTransition(() => {
+                        setSelectedId(id);
+                      });
+                    }, remote ? 280 : 0);
                     if (view === "cover-flow" && !isNavigationLayerRestoring()) {
                       const card = event.currentTarget;
                       const grid = gridRef.current;
                       if (grid) {
                         const targetLeft =
-                          card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
+                          card.offsetLeft +
+                          card.offsetWidth / 2 -
+                          grid.clientWidth / 2;
                         grid.scrollTo({
                           left: Math.max(0, targetLeft),
-                          behavior: "smooth",
+                          behavior: remote ? "auto" : "smooth",
                         });
                       }
                     }
@@ -622,16 +825,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                     }
                   }}
                   data-library-letter={letter}
+                  data-library-index={index}
                   data-tv-focus-default={index === 0 ? true : undefined}
                   data-navigation-focus-key={`library:${kind}:${work.id}`}
                   onClick={navigationLayer.captureLink}
                   aria-label={t("pages.library.openWork", { title: work.title })}
-                  {...mediaContext.itemProps({
-                    work,
-                    detailRoute: `${routeBase}/${work.id}`,
-                    parentRoute: routeBase,
-                    progress: progressByWork.get(work.id),
-                  })}
                 >
                   <span className="tv-title-card-art">
                     <CachedArtworkImage
@@ -639,6 +837,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
                       kinds={imageKinds}
                       alt=""
                       loading="lazy"
+                      decoding="async"
                       fallback={<span>{work.title}</span>}
                     />
                     <WatchStateOverlay

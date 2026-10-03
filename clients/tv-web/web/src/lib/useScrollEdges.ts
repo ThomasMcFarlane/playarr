@@ -45,6 +45,8 @@ export function useScrollEdges<T extends HTMLElement>(
     let stopped = false;
     const scheduleMeasure = () => {
       if (stopped || frame !== null) return;
+      // Remote holds: skip edge chrome setState (long-task source under TV CPU).
+      if (document.body.dataset.inputMode === "remote") return;
       frame = window.requestAnimationFrame(() => {
         frame = null;
         measure();
@@ -52,29 +54,17 @@ export function useScrollEdges<T extends HTMLElement>(
     };
 
     const resizeObserver = new ResizeObserver(scheduleMeasure);
-    const observeSizes = () => {
-      resizeObserver.disconnect();
-      resizeObserver.observe(element);
-      for (const child of element.children) {
-        if (child instanceof HTMLElement) resizeObserver.observe(child);
-      }
-    };
-    observeSizes();
+    // Observe the scroller only — per-child observers thrash on dense grids.
+    resizeObserver.observe(element);
 
-    const mutationObserver = new MutationObserver(() => {
-      observeSizes();
-      scheduleMeasure();
-    });
+    const mutationObserver = new MutationObserver(scheduleMeasure);
     mutationObserver.observe(element, {
       childList: true,
-      subtree: true,
-      characterData: true,
+      subtree: false,
     });
 
     element.addEventListener("scroll", scheduleMeasure, { passive: true });
-    element.addEventListener("load", scheduleMeasure, true);
     window.addEventListener("resize", scheduleMeasure, { passive: true });
-    void document.fonts?.ready.then(scheduleMeasure);
     scheduleMeasure();
 
     return () => {
@@ -83,7 +73,6 @@ export function useScrollEdges<T extends HTMLElement>(
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       element.removeEventListener("scroll", scheduleMeasure);
-      element.removeEventListener("load", scheduleMeasure, true);
       window.removeEventListener("resize", scheduleMeasure);
     };
   }, [measure, ref, refreshKey]);

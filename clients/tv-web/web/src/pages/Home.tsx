@@ -167,6 +167,10 @@ export function HomePage() {
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   const railsRef = useRef<HTMLDivElement>(null);
   const focusedRailRef = useRef<HomeRailId | null>(null);
+  const homeSelectTimerRef = useRef(0);
+  const pendingHomeSelectRef = useRef<{ rail: HomeRailId; id: string } | null>(
+    null
+  );
   const handleProgressChanged = useCallback(
     (workId: string, updated: WatchProgress[]) => {
       const updatedIds = new Set(updated.map((progress) => progress.media_file_id));
@@ -412,13 +416,22 @@ export function HomePage() {
   function focusFromRail(rail: HomeRailId, id: string, section: HTMLElement) {
     const enteredNewRail = focusedRailRef.current !== rail;
     focusedRailRef.current = rail;
-    selectFromRail(rail, id);
+    const remote = document.body.dataset.inputMode === "remote";
+    // Debounce stage selection under remote holds so React does not re-render
+    // the whole home stage on every key (dominant lag on limited TV CPUs).
+    pendingHomeSelectRef.current = { rail, id };
+    window.clearTimeout(homeSelectTimerRef.current);
+    homeSelectTimerRef.current = window.setTimeout(() => {
+      const pending = pendingHomeSelectRef.current;
+      if (!pending) return;
+      selectFromRail(pending.rail, pending.id);
+    }, remote ? 280 : 0);
     if (!enteredNewRail || isNavigationLayerRestoring()) return;
 
     window.requestAnimationFrame(() => {
       const container = railsRef.current;
       if (container && section.isConnected) {
-        centreHomeRail(container, section, "smooth");
+        centreHomeRail(container, section, remote ? "auto" : "smooth");
       }
     });
   }
