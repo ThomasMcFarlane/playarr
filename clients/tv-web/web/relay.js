@@ -378,25 +378,83 @@ export function relayConfigured(env) {
   return Boolean(env?.RELAY_HMAC_SECRET && env?.RELAY_CF_API_TOKEN && env?.RELAY_ZONE_ID);
 }
 
-/** Plain-HTTP callback. Redirects are not followed and the body is capped. */
-export async function verifyCallback(ip, token, deps = {}) {
-  const doFetch = deps.fetch ?? ((...args) => fetch(...args));
+const CALLBACK_MAX_RESPONSE_BYTES = 4096;
+
+async function defaultConnect(address, options) {
+  // Resolved at runtime: `cloudflare:sockets` only exists inside workerd.
+  const { connect } = await import("cloudflare:sockets");
+  return connect(address, options);
+}
+
+/** Reads until EOF; returns null when the size cap is hit first. */
+async function readCapped(readable, maxBytes) {
+  const reader = readable.getReader();
+  const chunks = [];
+  let total = 0;
   try {
-    const response = await doFetch(
-      `http://${ip}:${RELAY_CALLBACK_PORT}/.well-known/playarr-relay/${token}`,
-      {
-        method: "GET",
-        redirect: "manual",
-        headers: { Accept: "text/plain" },
-        signal: AbortSignal.timeout(deps.callbackTimeoutMs ?? CALLBACK_TIMEOUT_MS),
-      }
-    );
-    if (response.status !== 200) return false;
-    const length = Number(response.headers.get("Content-Length") ?? "0");
-    if (length > 1024) return false;
-    return (await response.text()).slice(0, 1024).trim() === token;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > maxBytes) return null;
+      chunks.push(value);
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return bytes;
+}
+
+/**
+ * Plain-HTTP callback over a raw TCP socket: Workers `fetch` refuses bare IP
+ * hostnames (error 1003), so the request is written by hand. Redirects are
+ * never followed and the response is capped at 4 KiB.
+ */
+export async function verifyCallback(ip, token, deps = {}) {
+  const connect = deps.connect ?? defaultConnect;
+  const timeoutMs = deps.callbackTimeoutMs ?? CALLBACK_TIMEOUT_MS;
+  let socket;
+  let timer;
+  try {
+    const exchange = (async () => {
+      socket = await connect({ hostname: ip, port: RELAY_CALLBACK_PORT }, { secureTransport: "off", allowHalfOpen: false });
+      const writer = socket.writable.getWriter();
+      await writer.write(
+        encoder.encode(
+          `GET /.well-known/playarr-relay/${token} HTTP/1.1\r\nHost: ${ip}:${RELAY_CALLBACK_PORT}\r\n` +
+            "Accept: text/plain\r\nConnection: close\r\n\r\n"
+        )
+      );
+      writer.releaseLock();
+      return readCapped(socket.readable, CALLBACK_MAX_RESPONSE_BYTES);
+    })();
+    exchange.catch(() => {});
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    const bytes = await Promise.race([exchange, timeout]);
+    if (!bytes) return false;
+    const text = new TextDecoder().decode(bytes);
+    const split = text.indexOf("\r\n\r\n");
+    if (split < 0) return false;
+    const statusLine = text.slice(0, text.indexOf("\r\n"));
+    if (!/^HTTP\/1\.[01] 200(?: |$)/.test(statusLine)) return false;
+    return text.slice(split + 4).trim() === token;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
+    try {
+      socket?.close().catch(() => {});
+    } catch {
+      // already closed
+    }
   }
 }
 

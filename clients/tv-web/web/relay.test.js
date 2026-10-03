@@ -106,16 +106,27 @@ function dependencies(cloudflare, { callback = "echo" } = {}) {
     now: () => NOW,
     sleep: async () => {},
     deleteDelayMs: 0,
-    fetch: async (input, init) => {
-      const text = String(input);
-      if (text.startsWith("http://")) {
-        const token = decodeURIComponent(text.split("/.well-known/playarr-relay/")[1]);
-        if (callback === "echo") return new Response(token);
-        if (callback === "wrong") return new Response("nope");
-        if (callback === "redirect") return new Response(null, { status: 308, headers: { Location: "https://x" } });
-        throw new TypeError("connect timeout");
-      }
-      return cloudflare.fetchImpl(input, init);
+    fetch: async (input, init) => cloudflare.fetchImpl(input, init),
+    connect: async (address) => {
+      if (callback === "down") throw new TypeError("connect timeout");
+      const received = [];
+      const writable = new WritableStream({ write: (chunk) => void received.push(new TextDecoder().decode(chunk)) });
+      const readable = new ReadableStream({
+        async start(controller) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          const token = received.join("").split("/.well-known/playarr-relay/")[1].split(" ")[0];
+          const reply = (status, body, extra = "") =>
+            `HTTP/1.1 ${status}\r\nContent-Length: ${body.length}\r\nConnection: close\r\n${extra}\r\n${body}`;
+          let text;
+          if (callback === "echo") text = reply("200 OK", token);
+          else if (callback === "wrong") text = reply("200 OK", "nope");
+          else if (callback === "redirect") text = reply("308 Permanent Redirect", "", "Location: https://x\r\n");
+          else text = reply("200 OK", token + "x".repeat(5000));
+          controller.enqueue(new TextEncoder().encode(text));
+          controller.close();
+        },
+      });
+      return { readable, writable, close: async () => {}, address };
     },
   };
 }
@@ -314,7 +325,7 @@ describe("POST /api/relay/register", () => {
     expect(cloudflare.records[0].comment).toContain(`seen=${NOW + 7 * 3600}`);
   });
 
-  it.each(["wrong", "redirect", "down"])("does not touch DNS when the callback fails (%s)", async (mode) => {
+  it.each(["wrong", "redirect", "down", "oversize"])("does not touch DNS when the callback fails (%s)", async (mode) => {
     const identity = await newIdentity();
     const cloudflare = fakeCloudflare();
     const { challenge } = await issue(identity, dependencies(cloudflare));
@@ -327,15 +338,20 @@ describe("POST /api/relay/register", () => {
     expect(cloudflare.calls).toHaveLength(0);
   });
 
-  it("calls back over plain HTTP on 8484 with the token in the path", async () => {
+  it("calls back over a raw TCP socket on 8484 with the token in the path", async () => {
     const identity = await newIdentity();
     const cloudflare = fakeCloudflare();
     const deps = dependencies(cloudflare);
-    const urls = [];
-    const spying = { ...deps, fetch: async (input, init) => (urls.push(String(input)), deps.fetch(input, init)) };
+    const addresses = [];
+    const spying = { ...deps, connect: async (address, ...rest) => (addresses.push(address), deps.connect(address, ...rest)) };
     const { challenge } = await issue(identity, spying);
-    await handleRelayRequest(await signedRequest(identity, "POST", "/api/relay/register", { challenge }), ENV, spying);
-    expect(urls[0]).toBe(`http://${IP}:8484/.well-known/playarr-relay/${challenge}`);
+    const response = await handleRelayRequest(
+      await signedRequest(identity, "POST", "/api/relay/register", { challenge }),
+      ENV,
+      spying
+    );
+    expect(response.status).toBe(200);
+    expect(addresses[0]).toEqual({ hostname: IP, port: 8484 });
   });
 
   it("rejects a challenge issued to a different server key", async () => {

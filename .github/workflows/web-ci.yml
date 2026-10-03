@@ -59,7 +59,7 @@ jobs:
       - name: Bundle Cloudflare Worker
         run: >-
           pnpm --filter @playarr-tv/web exec esbuild worker.js --bundle
-          --format=esm --platform=browser --target=es2022 --outfile=dist-worker.mjs
+          --format=esm --platform=browser --target=es2022 --external:cloudflare:sockets --outfile=dist-worker.mjs
 
       - name: Deploy to Cloudflare Workers
         env:
