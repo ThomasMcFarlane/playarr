@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Regional region-a now runs image `<image>`, which adds the phone remote and playback handoff API
+  (tasks 50-53; region-b follows after verification).
 - Regional region-a now runs image `<image>`, which adds the discovery and watchlist API (region-b follows after
   region-a is verified).
 - Playback info and playback options now list sidecar subtitles
