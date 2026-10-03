@@ -1026,6 +1026,8 @@ async fn boot_api(
         );
     }
     let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
+    let watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo> =
+        Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone()));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -1272,6 +1274,7 @@ async fn boot_api(
         source_instance_repo,
         library_view_repo,
         playlist_repo,
+        watchlist_repo,
         work_repo,
         credit_repo,
         tdarr_connection_repo,

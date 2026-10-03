@@ -31,6 +31,7 @@ pub mod artwork;
 pub mod auth_extractor;
 pub mod catalog;
 pub mod credits;
+pub mod discovery;
 pub mod downloads;
 pub mod error;
 pub mod health;
@@ -202,7 +203,11 @@ impl Modify for SecurityAddon {
 #[openapi(
     info(title = "Playarr Server API", version = "0.1.0"),
     modifiers(&SecurityAddon),
-    components(schemas(playarr_model::PlaybackSession)),
+    components(schemas(
+        playarr_model::PlaybackSession,
+        playarr_model::discovery::DiscoveryScope,
+        playarr_model::discovery::DiscoveryKind
+    )),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),
         (name = "auth", description = "Session login and access-token issuance"),
@@ -213,6 +218,7 @@ impl Modify for SecurityAddon {
         (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
         (name = "users", description = "User account management and signed-in player preferences"),
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
+        (name = "discovery", description = "Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
         (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
@@ -364,6 +370,13 @@ fn api_router() -> OpenApiRouter<AppState> {
             playlists::list_playlists_handler,
             playlists::create_playlist_handler
         ))
+        .routes(routes!(discovery::discover_handler))
+        .routes(routes!(discovery::resolve_title_handler))
+        .routes(routes!(
+            discovery::list_watchlist_handler,
+            discovery::add_watchlist_handler
+        ))
+        .routes(routes!(discovery::remove_watchlist_handler))
         .routes(routes!(playlists::list_admin_playlists_handler))
         .routes(routes!(
             playlists::get_playlist_handler,
@@ -463,6 +476,8 @@ pub struct AppState {
     /// `PlaylistItem` -- backs `playlists.rs`'s user + System playlist CRUD
     /// and item-membership endpoints.
     pub playlist_repo: Arc<dyn playarr_db::repo::PlaylistRepo>,
+    /// Per-profile watchlist storage -- `discovery.rs`.
+    pub watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo>,
     /// The real, durable persistence layer for `playarr_model::Work` --
     /// `credits.rs`'s `person_works_handler` uses this for a cheap
     /// `Work`-only fetch per credited work id, rather than going through

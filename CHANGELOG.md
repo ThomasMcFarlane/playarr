@@ -45,6 +45,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a redacted export. `GET /api/v1/playback/connection-test` serves a bounded (default 1 MiB, max
   4 MiB, four at once) payload for a cancellable connection test. Design in
   `docs/architecture/playback-health.md` (tasks 58-61).
+- Unified discovery API: `GET /api/v1/discover` merges library and peer results by external
+  identity (with editions and per-source attribution), reports a status per provider and keeps
+  games behind `scope=games`; `POST /api/v1/discover/resolve` returns server-computed Play, Resume,
+  Request, Record and Launch actions with reasons when disabled.
+- Per-profile watchlist: `GET/POST /api/v1/watchlist`, `DELETE /api/v1/watchlist/{title_key}`
+  (migration `watchlist_items`), re-resolved against the library on every read.
+- Documented the unified discovery and watchlist design (title identity, source attribution,
+  provider status, per-profile watchlist, source-aware actions) in
+  `docs/architecture/discovery-watchlist.md`, tracked as tasks 46-49 and 49a-49e.
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.

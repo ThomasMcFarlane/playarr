@@ -37,6 +37,7 @@ mod user;
 mod user_invite;
 mod user_invite_request;
 mod watch_progress;
+mod watchlist;
 mod work;
 
 pub use credit::{CreditRepo, SqlxCreditRepo};
@@ -71,4 +72,5 @@ pub use user::{SqlxUserRepo, SyncMetadata, UserRepo};
 pub use user_invite::{SqlxUserInviteRepo, UserInviteRepo};
 pub use user_invite_request::{SqlxUserInviteRequestRepo, UserInviteRequestRepo};
 pub use watch_progress::{SqlxWatchProgressRepo, WatchProgressRepo};
+pub use watchlist::{SqlxWatchlistRepo, WatchlistRepo};
 pub use work::{SqlxWorkRepo, WorkRepo};

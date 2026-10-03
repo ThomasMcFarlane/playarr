@@ -2266,6 +2266,80 @@ paths:
           description: No work with this id, or it has no cached embedding yet
       security:
       - bearer_auth: []
+  /api/v1/discover:
+    get:
+      tags:
+      - discovery
+      operationId: discover_handler
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: scope
+        in: query
+        description: '`media` (default), `games` or `all`.'
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/DiscoveryScope'
+      - name: kind
+        in: query
+        description: Restrict to one kind.
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/DiscoveryKind'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      responses:
+        '200':
+          description: Merged, source-attributed titles plus provider status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverResponse'
+        '400':
+          description: Query too long
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
+  /api/v1/discover/resolve:
+    post:
+      tags:
+      - discovery
+      operationId: resolve_title_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TitleSnapshot'
+        required: true
+      responses:
+        '200':
+          description: Title resolved for the caller with source-aware actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolvedTitle'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
   /api/v1/downloads:
     get:
       tags:
@@ -4989,6 +5063,70 @@ paths:
           description: No view with this id
       security:
       - bearer_auth: []
+  /api/v1/watchlist:
+    get:
+      tags:
+      - discovery
+      operationId: list_watchlist_handler
+      responses:
+        '200':
+          description: The caller's watchlist, newest first, with current actions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - discovery
+      operationId: add_watchlist_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TitleSnapshot'
+        required: true
+      responses:
+        '200':
+          description: Added (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolvedTitle'
+        '400':
+          description: Empty title
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
+  /api/v1/watchlist/{title_key}:
+    delete:
+      tags:
+      - discovery
+      operationId: remove_watchlist_handler
+      parameters:
+      - name: title_key
+        in: path
+        description: Identity key from the watchlist entry
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Removed (idempotent)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
   /webhooks/{instance_id}:
     post:
       tags:
@@ -5052,6 +5190,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PeerUserRow'
+    ActionKind:
+      type: string
+      enum:
+      - play
+      - resume
+      - request
+      - record
+      - launch
     ActiveSessionView:
       type: object
       description: |-
@@ -5756,6 +5902,92 @@ components:
             Must be [`DEVICE_CODE_GRANT_TYPE`] -- any other value is rejected
             with `unsupported_grant_type` before the device code is even looked
             up, per RFC 6749 §5.2.
+    DiscoverResponse:
+      type: object
+      required:
+      - titles
+      - providers
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderStatus'
+        titles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoverTitle'
+    DiscoverTitle:
+      allOf:
+      - $ref: '#/components/schemas/DiscoveryTitle'
+      - type: object
+        required:
+        - in_watchlist
+        properties:
+          in_watchlist:
+            type: boolean
+    DiscoveryKind:
+      type: string
+      description: |-
+        What a discovery title is. Games are deliberately separate from
+        [`crate::WorkKind`]: they have their own filter and launch semantics.
+      enum:
+      - movie
+      - series
+      - artist
+      - author
+      - site
+      - programme
+      - game
+    DiscoveryScope:
+      type: string
+      description: Which search scope a caller wants. Games only appear for `Games`/`All`.
+      enum:
+      - media
+      - games
+      - all
+    DiscoveryTitle:
+      type: object
+      description: A merged real-world title.
+      required:
+      - title_key
+      - kind
+      - title
+      - external_refs
+      - editions
+      - sources
+      properties:
+        editions:
+          type: array
+          items:
+            type: string
+        external_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalRef'
+        kind:
+          $ref: '#/components/schemas/DiscoveryKind'
+        overview:
+          type:
+          - string
+          - 'null'
+        poster_url:
+          type:
+          - string
+          - 'null'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/TitleSource'
+        title:
+          type: string
+        title_key:
+          type: string
+          description: Stable identity, see [`identity_key`].
+        year:
+          type:
+          - integer
+          - 'null'
+          format: int32
     DownloadOptionsResponse:
       type: object
       required:
@@ -8400,6 +8632,27 @@ components:
       properties:
         pin_locked:
           type: boolean
+    ProviderState:
+      type: string
+      description: One provider's health for a search.
+      enum:
+      - ok
+      - unavailable
+      - stale
+    ProviderStatus:
+      type: object
+      required:
+      - provider
+      - state
+      properties:
+        provider:
+          $ref: '#/components/schemas/SourceKindTag'
+        reason:
+          type:
+          - string
+          - 'null'
+        state:
+          $ref: '#/components/schemas/ProviderState'
     RefreshRequest:
       type: object
       required:
@@ -8539,6 +8792,21 @@ components:
           type: array
           items:
             type: string
+    ResolvedTitle:
+      type: object
+      required:
+      - title
+      - in_watchlist
+      - actions
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TitleAction'
+        in_watchlist:
+          type: boolean
+        title:
+          $ref: '#/components/schemas/DiscoveryTitle'
     ReviewUserInviteRequest:
       type: object
       required:
@@ -8964,6 +9232,13 @@ components:
           type: string
         username:
           type: string
+    SourceAvailability:
+      type: string
+      enum:
+      - available
+      - requestable
+      - upcoming
+      - unavailable
     SourceFolderMappingsRequest:
       type: object
       description: Complete per-node root mapping for one ordinary Source instance.
@@ -9191,6 +9466,14 @@ components:
       - prowlarr
       - readarr
       - whisparr
+    SourceKindTag:
+      type: string
+      enum:
+      - library
+      - peer
+      - request
+      - live_tv
+      - game
     SourceMatrixFileResponse:
       type: object
       required:
@@ -9396,6 +9679,110 @@ components:
           type: integer
           format: int32
           minimum: 0
+    TitleAction:
+      type: object
+      description: |-
+        A source-aware thing the viewer can do with a title. Disabled actions are
+        listed with a reason so clients can explain rather than hide them.
+      required:
+      - action
+      - enabled
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionKind'
+        enabled:
+          type: boolean
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        position_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        provider_instance_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reason:
+          type:
+          - string
+          - 'null'
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    TitleSnapshot:
+      type: object
+      description: |-
+        A title snapshot as sent by clients (from a search result or a title
+        page) to the watchlist and resolve endpoints.
+      required:
+      - kind
+      - title
+      properties:
+        external_refs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalRef'
+        kind:
+          $ref: '#/components/schemas/DiscoveryKind'
+        poster_url:
+          type:
+          - string
+          - 'null'
+        title:
+          type: string
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        year:
+          type:
+          - integer
+          - 'null'
+          format: int32
+    TitleSource:
+      type: object
+      description: One source's claim on a title.
+      required:
+      - source
+      - label
+      - availability
+      properties:
+        availability:
+          $ref: '#/components/schemas/SourceAvailability'
+        edition:
+          type:
+          - string
+          - 'null'
+        label:
+          type: string
+          description: Human label, for example the library or peer name.
+        provider_instance_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Provider instance (for example a Radarr source instance) for requests.
+        reason:
+          type:
+          - string
+          - 'null'
+        source:
+          $ref: '#/components/schemas/SourceKindTag'
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Local work id when this source is the library.
     TokenResponseSchema:
       type: object
       description: Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`].
@@ -9932,6 +10319,25 @@ components:
       - unseen
       - part_watched
       - watched
+    WatchlistEntry:
+      allOf:
+      - $ref: '#/components/schemas/ResolvedTitle'
+      - type: object
+        required:
+        - added_at
+        properties:
+          added_at:
+            type: string
+            format: date-time
+    WatchlistResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WatchlistEntry'
     Weekday:
       type: string
       enum:
@@ -10160,6 +10566,8 @@ tags:
   description: User account management and signed-in player preferences
 - name: views
   description: Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves
+- name: discovery
+  description: Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions
 - name: playlists
   description: User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks
 - name: credits

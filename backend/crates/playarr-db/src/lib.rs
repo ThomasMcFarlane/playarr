@@ -25,7 +25,7 @@ pub use repo::{
     SourceInstanceRepo, SqlxCreditRepo, SqlxDownloadTicketRepo, SqlxEmbeddingRepo,
     SqlxLibraryViewRepo, SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
     SqlxRefreshTokenRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SyncConflictLog, SyncConflictLogRepo,
-    SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo,
-    UserRepo, WatchProgressRepo, WorkRepo,
+    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SqlxWatchlistRepo, SyncConflictLog,
+    SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
+    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
 };

@@ -11,6 +11,7 @@
 //! [`VersionEnvelope`] and its friends). Left off by default so downstream
 //! crates that don't serve HTTP (workers, CLI) don't pull in utoipa.
 
+pub mod discovery;
 pub mod download;
 pub mod embedding;
 pub mod group_library;
