@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Regional servers now run image `<image>`, adding batched external-reference loading for catalogue browse (task 100).
 - Regional servers now run image `<image>`, which carries the catalogue latency fix, sidecar subtitles and the Radarr release-date mapping (tasks 95, 98, 100).
 
 ### Added
