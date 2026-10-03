@@ -123,6 +123,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -715,17 +716,30 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     private suspend fun loadAvailableSearchWorkIds(): Set<String> = searchAvailabilityMutex.withLock {
         availableSearchWorkIds?.let { return@withLock it }
-        val ids = mutableSetOf<String>()
-        var offset = 0L
-        while (true) {
-            val page = api.browseCatalog(
-                availableOnly = true,
-                limit = SEARCH_AVAILABILITY_PAGE_SIZE,
-                offset = offset,
-            )
-            page.items.mapTo(ids, Work::id)
-            offset += page.items.size
-            if (page.items.isEmpty() || page.total?.let { offset >= it } == true) break
+        // Every catalogue call costs the server a roughly fixed few seconds whatever the page size
+        // (measured on a 2.7k-title library: 3 s at limit=1, 4.5 s at limit=1000), so walking the
+        // index page by page took 6+ sequential round trips. Ask for a big first page, then fetch
+        // whatever is left concurrently using the page size the server actually honoured.
+        val first = api.browseCatalog(availableOnly = true, limit = SEARCH_AVAILABILITY_PAGE_SIZE, offset = 0L)
+        val ids = first.items.mapTo(mutableSetOf(), Work::id)
+        val total = first.total
+        if (first.items.isNotEmpty() && total != null && first.items.size < total) {
+            val pageSize = first.items.size.toLong()
+            val offsets = generateSequence(pageSize) { it + pageSize }.takeWhile { it < total }.toList()
+            kotlinx.coroutines.coroutineScope {
+                offsets.map { offset ->
+                    async { api.browseCatalog(availableOnly = true, limit = pageSize, offset = offset) }
+                }.awaitAll()
+            }.forEach { page -> page.items.mapTo(ids, Work::id) }
+        } else if (total == null && first.items.size.toLong() >= SEARCH_AVAILABILITY_PAGE_SIZE) {
+            // No total reported: walk on sequentially until a short page.
+            var offset = first.items.size.toLong()
+            while (true) {
+                val page = api.browseCatalog(availableOnly = true, limit = SEARCH_AVAILABILITY_PAGE_SIZE, offset = offset)
+                page.items.mapTo(ids, Work::id)
+                offset += page.items.size
+                if (page.items.size < SEARCH_AVAILABILITY_PAGE_SIZE) break
+            }
         }
         ids.toSet().also { availableSearchWorkIds = it }
     }
@@ -850,7 +864,7 @@ internal fun mergeLibraryPage(loaded: List<Work>, page: List<Work>): List<Work> 
 }
 private const val SEARCH_LIMIT = 60L
 private const val SEARCH_LIBRARY_LIMIT = 500L
-private const val SEARCH_AVAILABILITY_PAGE_SIZE = 500L
+private const val SEARCH_AVAILABILITY_PAGE_SIZE = 3000L
 private val LocalPlayarrServerAccessResolver = staticCompositionLocalOf<PlayarrServerAccessResolver?> { null }
 
 @Composable
@@ -965,6 +979,42 @@ internal fun PlayarrExperience(
     LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, playbackQueue.canNext) {
         if (shouldAutoAdvancePlayarrMusic(playbackState.hasEnded, activePlaybackItem, playbackQueue.canNext)) {
             viewModel.movePlayback(1)
+        }
+    }
+    // End of playback while minimised: no card is drawn here, but playback must not just stop.
+    // Continue with the next video, or expand the player so the ended card (Replay, Back to
+    // details, suggestions) appears. The expanded player raises its own card from the ended state.
+    val castingMediaFileId by playerViewModel.castingMediaFileId.collectAsState()
+    var minimisedEndArmedFor by remember { mutableStateOf<String?>(null) }
+    val minimisedNextItem = playbackQueue.items.getOrNull(playbackQueue.currentIndex + 1)
+        ?.takeIf { playbackQueue.canNext }
+    LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, isPlayer, castingMediaFileId) {
+        val item = activePlaybackItem
+        if (!playbackState.hasEnded) {
+            minimisedEndArmedFor = item?.mediaFileId
+            return@LaunchedEffect
+        }
+        when (
+            playarrMinimisedEndAction(
+                hasEnded = true,
+                armed = item != null && minimisedEndArmedFor == item.mediaFileId,
+                isPlayerRoute = isPlayer,
+                item = item,
+                nextItem = minimisedNextItem,
+                casting = castingMediaFileId != null,
+                hasError = playbackState.error != null,
+            )
+        ) {
+            PlayarrMinimisedEndAction.AdvanceToNext -> {
+                minimisedEndArmedFor = null
+                android.util.Log.i("PlayarrPlaybackStats", playarrEndScreenAutoplayLogLine(item?.mediaFileId))
+                viewModel.movePlayback(1)
+            }
+            PlayarrMinimisedEndAction.ExpandPlayer -> {
+                minimisedEndArmedFor = null
+                navController.navigate("experience-player/${Uri.encode(item!!.mediaFileId)}")
+            }
+            PlayarrMinimisedEndAction.None -> Unit
         }
     }
     LaunchedEffect(persistentPlayerState, activePlaybackItem?.mediaFileId) {
@@ -4250,6 +4300,10 @@ private fun MovieDetailBrowser(
                                         accessToken = accessToken,
                                         contentDescription = "",
                                         positionMs = chapter.startMs,
+                                        fallbackLabel = chapter.title ?: playarrString(
+                                            PlayarrString.DetailChapterNumber,
+                                            "number" to chapter.index + 1,
+                                        ),
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                     Text(
@@ -6234,9 +6288,14 @@ internal fun AuthenticatedArtwork(
 ) {
     val context = LocalContext.current
     val serverAccess = rememberPlayarrWorkServerAccess(work.id, serverUrl, accessToken)
-    val image = kinds.firstNotNullOfOrNull { kind -> work.images.firstOrNull { it.kind == kind } }
-    val resolved = serverAccess?.let { access -> image?.url?.let { resolveArtworkUrl(access.serverUrl, it) } }
-    if (resolved == null) {
+    // Per kind: the server artwork endpoint (cached, authenticated), then the provider URL; a
+    // failed load moves on to the next candidate instead of leaving the hero/tile empty.
+    val candidates = remember(work.id, work.images, kinds, serverAccess?.serverUrl) {
+        serverAccess?.let { playarrArtworkCandidates(work.id, work.images, kinds, it.serverUrl) }.orEmpty()
+    }
+    var failed by remember(candidates) { mutableStateOf(0) }
+    val resolved = candidates.getOrNull(failed)
+    if (serverAccess == null || resolved == null) {
         Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
             Text(work.title, color = WebInkMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
         }
@@ -6261,6 +6320,7 @@ internal fun AuthenticatedArtwork(
         model = request,
         contentDescription = work.title,
         contentScale = contentScale,
+        onError = { failed += 1 },
         modifier = modifier,
         colorFilter = if (heroStyle) heroArtFilter(webIsDark) else null,
         alpha = if (heroStyle) heroArtOpacity(webIsDark) else 1f,
@@ -6277,11 +6337,15 @@ private fun AuthenticatedMediaThumbnail(
     positionMs: Long? = null,
     /** Overrides the frame-thumbnail URL (e.g. the episode still); receives the resolved server URL. */
     artworkUrl: ((String) -> String)? = null,
+    /** Shown centred behind the image while it loads and when it fails, so a tile is never an empty box. */
+    fallbackLabel: String? = null,
 ) {
     val context = LocalContext.current
     val serverAccess = rememberPlayarrMediaServerAccess(mediaFileId, serverUrl, accessToken)
     if (serverAccess == null) {
-        Box(modifier.background(WebSurfaceSoft))
+        Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
+            fallbackLabel?.let { ThumbnailFallbackLabel(it) }
+        }
         return
     }
     val url = remember(serverAccess.serverUrl, mediaFileId, positionMs) {
@@ -6303,11 +6367,37 @@ private fun AuthenticatedMediaThumbnail(
             }
             .build()
     }
-    AsyncImage(
-        model = request,
-        contentDescription = contentDescription,
-        contentScale = ContentScale.Crop,
-        modifier = modifier,
+    if (fallbackLabel == null) {
+        AsyncImage(
+            model = request,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
+    } else {
+        Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
+            ThumbnailFallbackLabel(fallbackLabel)
+            AsyncImage(
+                model = request,
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThumbnailFallbackLabel(label: String) {
+    Text(
+        label,
+        color = Color.White.copy(alpha = 0.85f),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.Center,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(12.dp),
     )
 }
 

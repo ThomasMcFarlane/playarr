@@ -80,6 +80,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time (`PLAYARR_THUMBNAIL_CONCURRENCY`, default 2) and skip the queue for cached frames. A chapter
   rail requests a dozen frames at once; each UHD grab holds about 0.5 GiB, so four in parallel
   exceeded the 2 GiB pod limit and the kernel OOM-killed the whole server.
+- Android: movie chapter thumbnails no longer stay blank. Frame thumbnails load at most two at a time with a
+  retry and longer timeouts (an unbounded burst made the server run out of memory), and a tile shows the
+  chapter title while loading or after a failure instead of an empty box. Hero and poster art also falls
+  back between the server artwork endpoint and the provider URL.
+- Android: the audio menu names tracks "English · AAC 2.0" (language, commentary/title, codec, channels)
+  instead of repeating "eng", and the Subtitles control is always shown, saying "No subtitle tracks
+  available" when the file has none.
+- Android: API calls use 20 s connect / 45 s read timeouts and the playback negotiation retries network
+  failures, so a cold first Play after sign-in no longer reports "Can't reach the Playarr Server".
+- Android: Search builds its availability index with one large request plus concurrent pages instead of
+  sequential 500-title pages (about 27 s down to about 4 s on a 2.7k-title library).
+- Android: when a video ends while the player is minimised, playback continues with the next queued video or
+  the player expands to the ended card instead of silently stopping.
 - The `playarr-dev` chart can restore the public relay for the regional servers that moved from
   systemd to k3s pods. An optional per-instance `acme` block builds on the existing
   `hostExposure` (hostPort 8484 on the node's public address, the only published port: no port 80

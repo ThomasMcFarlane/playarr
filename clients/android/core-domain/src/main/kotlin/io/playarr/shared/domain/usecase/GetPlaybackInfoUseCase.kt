@@ -2,7 +2,7 @@ package io.playarr.shared.domain.usecase
 
 import io.playarr.shared.data.model.PlaybackInfoResponse
 import io.playarr.shared.domain.model.PlayarrResult
-import io.playarr.shared.domain.model.runCatchingPlayarr
+import io.playarr.shared.domain.model.runCatchingPlayarrRetrying
 import io.playarr.shared.domain.repository.PlaybackRepository
 import javax.inject.Inject
 
@@ -27,7 +27,7 @@ class GetPlaybackInfoUseCase @Inject constructor(
         startPositionMs: Long? = null,
         audioStreamIndex: Int? = null,
         ignoreSavedPreferences: Boolean? = null,
-    ): PlayarrResult<PlaybackInfoResponse> = runCatchingPlayarr {
+    ): PlayarrResult<PlaybackInfoResponse> = runCatchingPlayarrRetrying {
         playbackRepository.getPlaybackInfo(
             mediaFileId = mediaFileId,
             containers = containers,

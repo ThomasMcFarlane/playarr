@@ -219,4 +219,38 @@ class PlayarrEndOfPlaybackTest {
         assertFalse(playarrPrewarmUsable("m2", 0L, "m2", 5_000L, hasLaunchSettings = false))
         assertFalse(playarrPrewarmUsable("m2", 0L, "m2", 0L, hasLaunchSettings = true))
     }
+
+    private fun queueItem(id: String, music: Boolean = false) = PlayarrPlaybackQueueItem(mediaFileId = id, title = id, music = music)
+
+    private fun minimised(
+        hasEnded: Boolean = true,
+        armed: Boolean = true,
+        isPlayerRoute: Boolean = false,
+        item: PlayarrPlaybackQueueItem? = queueItem("m1"),
+        nextItem: PlayarrPlaybackQueueItem? = null,
+        casting: Boolean = false,
+        hasError: Boolean = false,
+    ) = playarrMinimisedEndAction(hasEnded, armed, isPlayerRoute, item, nextItem, casting, hasError)
+
+    @Test
+    fun `minimised end with a next video continues with it`() {
+        assertEquals(PlayarrMinimisedEndAction.AdvanceToNext, minimised(nextItem = queueItem("m2")))
+    }
+
+    @Test
+    fun `minimised end with nothing queued expands the player to the ended card`() {
+        assertEquals(PlayarrMinimisedEndAction.ExpandPlayer, minimised())
+        assertEquals(PlayarrMinimisedEndAction.ExpandPlayer, minimised(nextItem = queueItem("t2", music = true)))
+    }
+
+    @Test
+    fun `minimised end ignores stale ended state, the expanded player, music, casting and errors`() {
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(hasEnded = false))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(armed = false, nextItem = queueItem("m2")))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(isPlayerRoute = true))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(item = queueItem("t1", music = true), nextItem = queueItem("t2", music = true)))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(casting = true))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(hasError = true))
+        assertEquals(PlayarrMinimisedEndAction.None, minimised(item = null))
+    }
 }

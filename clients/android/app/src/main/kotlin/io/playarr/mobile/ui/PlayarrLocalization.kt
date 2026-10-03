@@ -592,6 +592,12 @@ internal enum class PlayarrString(
     PlayerSubtitlesHeading("Subtitles", "คำบรรยาย", "字幕"),
     PlayerOff("Off", "ปิด", "オフ"),
     PlayerNoSubtitles("No subtitles", "ไม่มีคำบรรยาย", "字幕なし"),
+    PlayerNoSubtitleTracksAvailable(
+        "No subtitle tracks available",
+        "ไม่มีแทร็กคำบรรยายให้เลือก",
+        "利用できる字幕トラックはありません",
+    ),
+    PlayerSubtitleForced("Forced", "บังคับ", "強制"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
     PlayerPlaylistLabelSingular(

@@ -613,16 +613,16 @@ private fun PlayarrPlayerControlBar(
                     onMenu(PlayarrPlayerMenu.Audio)
                 }
             }
-            if (controls.subtitleTracks.isNotEmpty()) {
-                PlayerMenuButton(
-                    Icons.Outlined.Subtitles,
-                    playarrString(PlayarrString.PlayerSubtitlesHeading),
-                    isTelevision,
-                    !controls.switching,
-                    playarrString(PlayarrString.PlayerSubtitleTrackMenuLabel),
-                ) {
-                    onMenu(PlayarrPlayerMenu.Subtitles)
-                }
+            // Always offered (as on web): with no text tracks the menu says so instead of the
+            // control silently disappearing.
+            PlayerMenuButton(
+                Icons.Outlined.Subtitles,
+                playarrString(PlayarrString.PlayerSubtitlesHeading),
+                isTelevision,
+                !controls.switching,
+                playarrString(PlayarrString.PlayerSubtitleTrackMenuLabel),
+            ) {
+                onMenu(PlayarrPlayerMenu.Subtitles)
             }
             if (controls.qualityOptions.isNotEmpty()) {
                 PlayerMenuButton(
@@ -811,6 +811,7 @@ private fun PlayarrPlayerOptionsDialog(
     onAudio: (String) -> Unit,
     onSubtitle: (String?) -> Unit,
 ) {
+    val locale = LocalPlayarrLanguage.current.locale
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -831,7 +832,13 @@ private fun PlayarrPlayerOptionsDialog(
                     item {
                         PlayerDialogOption(
                             label = playarrString(PlayarrString.PlayerOff),
-                            detail = playarrString(PlayarrString.PlayerNoSubtitles),
+                            detail = playarrString(
+                                if (controls.subtitleTracks.isEmpty()) {
+                                    PlayarrString.PlayerNoSubtitleTracksAvailable
+                                } else {
+                                    PlayarrString.PlayerNoSubtitles
+                                },
+                            ),
                             selected = controls.selectedSubtitleTrackId == null,
                         ) { onSubtitle(null) }
                     }
@@ -848,16 +855,16 @@ private fun PlayarrPlayerOptionsDialog(
                     PlayarrPlayerMenu.Audio -> items(controls.audioTracks.size) { index ->
                         val track = controls.audioTracks[index]
                         PlayerDialogOption(
-                            label = track.label,
-                            detail = track.language,
+                            label = playarrAudioTrackLabel(track, locale),
+                            detail = null,
                             selected = track.id == (controls.selectedAudioTrackId ?: controls.audioTracks.firstOrNull()?.id),
                         ) { onAudio(track.id) }
                     }
                     PlayarrPlayerMenu.Subtitles -> items(controls.subtitleTracks.size) { index ->
                         val track = controls.subtitleTracks[index]
                         PlayerDialogOption(
-                            label = track.label,
-                            detail = track.language,
+                            label = playarrSubtitleTrackLabel(track, locale, playarrString(PlayarrString.PlayerSubtitleForced)),
+                            detail = null,
                             selected = track.id == controls.selectedSubtitleTrackId,
                         ) { onSubtitle(track.id) }
                     }

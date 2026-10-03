@@ -9,11 +9,15 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.HiltAndroidApp
 import io.playarr.mobile.download.KeepUntilSweepWorker
+import io.playarr.mobile.ui.newPlayarrImageLoader
 import io.playarr.shared.auth.TokenStore
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -25,7 +29,7 @@ import kotlinx.coroutines.launch
 
 /** Hilt entry point for the mobile app; every `@Inject`/`@AndroidEntryPoint` site roots here. */
 @HiltAndroidApp
-class PlayarrMobileApp : Application(), Configuration.Provider {
+class PlayarrMobileApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
     @Inject lateinit var tokenStore: TokenStore
 
     /**
@@ -42,6 +46,8 @@ class PlayarrMobileApp : Application(), Configuration.Provider {
         get() = Configuration.Builder().setWorkerFactory(hiltWorkerFactory).build()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader = newPlayarrImageLoader(context)
 
     override fun onCreate() {
         super.onCreate()

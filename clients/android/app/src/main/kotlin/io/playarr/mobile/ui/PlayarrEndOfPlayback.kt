@@ -192,6 +192,37 @@ internal fun playarrArtworkCandidates(
     )
 }.distinct()
 
+/** What to do when a video ends while the player is minimised (docs/architecture/end-of-playback.md section 10). */
+internal enum class PlayarrMinimisedEndAction {
+    None,
+
+    /** A video follows in the queue: continue with it; the card is only drawn when expanded. */
+    AdvanceToNext,
+
+    /** Nothing follows: bring the player back so the viewer gets the ended card, not a silent stop. */
+    ExpandPlayer,
+}
+
+/**
+ * [armed] is true once the engine has been seen not-ended for [item]; it stops the stale ENDED
+ * state of the previous item (still reported for a frame after "play next") from re-triggering.
+ * Music keeps its own silent queue advance.
+ */
+internal fun playarrMinimisedEndAction(
+    hasEnded: Boolean,
+    armed: Boolean,
+    isPlayerRoute: Boolean,
+    item: PlayarrPlaybackQueueItem?,
+    nextItem: PlayarrPlaybackQueueItem?,
+    casting: Boolean,
+    hasError: Boolean,
+): PlayarrMinimisedEndAction = when {
+    !hasEnded || !armed || isPlayerRoute -> PlayarrMinimisedEndAction.None
+    !shouldShowPlayarrEndCard(item, casting, hasError) -> PlayarrMinimisedEndAction.None
+    nextItem != null && !nextItem.music -> PlayarrMinimisedEndAction.AdvanceToNext
+    else -> PlayarrMinimisedEndAction.ExpandPlayer
+}
+
 /** Suggestion tiles are 16:9: prefer landscape art, then portrait, then banner. */
 internal val PLAYER_SUGGESTION_ARTWORK_KINDS = listOf(
     io.playarr.shared.data.model.ImageKind.Backdrop,

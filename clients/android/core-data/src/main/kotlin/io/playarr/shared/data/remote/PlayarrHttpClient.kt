@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.util.concurrent.TimeUnit
 import retrofit2.Retrofit
 
 /**
@@ -67,6 +68,12 @@ object PlayarrHttpClient {
         enableHttpLogging: Boolean = false,
     ): PlayarrApi {
         val okHttpClient = OkHttpClient.Builder()
+            // OkHttp's 10 s defaults are too tight for a cold TLS connection over a
+            // long-haul/relay path, and for server-side work behind a request (playback
+            // negotiation probes the source file; catalogue pages take seconds on a busy
+            // node). A timeout here surfaces as "Can't reach the Playarr Server".
+            .connectTimeout(API_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(API_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .addInterceptor(dynamicBaseUrlInterceptor(baseUrlProvider))
             .addInterceptor(platformHeaderInterceptor(clientPlatform, clientVersion))
             .addInterceptor { chain ->
@@ -114,6 +121,9 @@ object PlayarrHttpClient {
                 .build()
             chain.proceed(request)
         }
+
+    internal const val API_CONNECT_TIMEOUT_SECONDS = 20L
+    internal const val API_READ_TIMEOUT_SECONDS = 45L
 
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */
     private const val PLACEHOLDER_BASE_URL = "http://playarr.invalid/"

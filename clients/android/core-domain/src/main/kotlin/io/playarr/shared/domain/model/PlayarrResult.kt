@@ -35,3 +35,25 @@ suspend fun <T> runCatchingPlayarr(block: suspend () -> T): PlayarrResult<T> = t
 } catch (e: Exception) {
     PlayarrResult.Failure(PlayarrError.Unknown(e))
 }
+
+/**
+ * [runCatchingPlayarr] that retries [PlayarrError.Network] failures (connect/read timeout, TLS or
+ * DNS hiccup on a cold connection) up to [attempts] times in total, waiting [backoffMs] between
+ * tries (the last entry repeats). HTTP and other errors are returned at once. Only for idempotent
+ * reads: a timed-out request may still have reached the server.
+ */
+suspend fun <T> runCatchingPlayarrRetrying(
+    attempts: Int = 3,
+    backoffMs: List<Long> = listOf(400L, 1_200L),
+    block: suspend () -> T,
+): PlayarrResult<T> {
+    var result = runCatchingPlayarr(block)
+    var tried = 1
+    while (tried < attempts && result is PlayarrResult.Failure && result.error is PlayarrError.Network) {
+        val wait = backoffMs.getOrElse(tried - 1) { backoffMs.lastOrNull() ?: 0L }
+        if (wait > 0L) kotlinx.coroutines.delay(wait)
+        result = runCatchingPlayarr(block)
+        tried++
+    }
+    return result
+}
