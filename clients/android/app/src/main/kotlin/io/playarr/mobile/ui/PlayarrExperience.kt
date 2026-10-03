@@ -428,6 +428,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val tokenStore: TokenStore,
     private val api: PlayarrApi,
     val serverAccessResolver: PlayarrServerAccessResolver,
+    val remoteController: io.playarr.mobile.remote.RemoteController,
 ) : ViewModel() {
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
@@ -978,6 +979,30 @@ internal fun PlayarrExperience(
             playerViewModel.play(it.mediaFileId, playerDefaults, it.startPositionMs, it.launchSettings)
         }
     }
+    // Phone remote and playback handoff (docs/architecture/remote-control.md).
+    val remoteContext = LocalContext.current
+    val remotePlayerControls = remember(viewModel, playerViewModel) {
+        ExperienceRemotePlayerControls(
+            queue = { viewModel.playbackQueue.value },
+            playerViewModel = playerViewModel,
+            experience = viewModel,
+        )
+    }
+    PlayarrRemoteHostEffect(
+        controller = viewModel.remoteController,
+        playerActive = activePlaybackItem != null,
+        signedIn = currentUserId != null,
+        activity = { remoteContext as? android.app.Activity ?: (remoteContext as? android.content.ContextWrapper)?.baseContext as? android.app.Activity },
+        navController = navController,
+        startPlayback = { mediaFileId, positionMs ->
+            viewModel.startPlayback(
+                mediaFileId,
+                listOf(PlayarrPlaybackQueueItem(mediaFileId, "", fallbackTitle = PlayarrString.PlayerNowPlaying)),
+                positionMs,
+            )
+        },
+        playerControls = { remotePlayerControls.takeIf { viewModel.playbackQueue.value.currentItem != null } },
+    )
     LaunchedEffect(playbackState.hasEnded, activePlaybackItem?.mediaFileId, playbackQueue.canNext) {
         if (shouldAutoAdvancePlayarrMusic(playbackState.hasEnded, activePlaybackItem, playbackQueue.canNext)) {
             viewModel.movePlayback(1)
@@ -5746,13 +5771,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         return PlayarrPlayerTimeline(positionMs, durationMs, bufferedPositionMs)
     }
 
-    private fun currentSourcePositionMs(): Long = playarrSourcePositionMs(
+    internal fun currentSourcePositionMs(): Long = playarrSourcePositionMs(
         enginePositionMs = player.rawPlayer.currentPosition,
         sourceOffsetMs = activeSourceOffsetMs,
         sourceDurationMs = currentSourceDurationMs(),
     )
 
-    private fun currentSourceDurationMs(): Long =
+    internal fun currentSourceDurationMs(): Long =
         playarrSourceDurationMs(activeSourceDurationMs, player.rawPlayer.duration, activeSourceOffsetMs)
 
     private fun recordEvent(sessionId: String, event: PlaybackEventRequest) {
@@ -5858,6 +5883,7 @@ private fun ExperiencePlayerScreen(
     val playbackState by viewModel.player.state.collectAsState()
     val castConnection by viewModel.castConnection.collectAsState()
     val castRoutes by viewModel.castRoutes.collectAsState()
+    var showPlayOnDevice by remember { mutableStateOf(false) }
     val castingMediaFileId by viewModel.castingMediaFileId.collectAsState()
     val language = LocalPlayarrLanguage.current
     val suggestions by viewModel.suggestions.collectAsState()
@@ -5995,7 +6021,9 @@ private fun ExperiencePlayerScreen(
                     onSelectRoute = viewModel::selectCastRoute,
                     onStopCasting = viewModel::stopCasting,
                 ),
+                onPlayOnDevice = { showPlayOnDevice = true },
             )
+            if (showPlayOnDevice) PlayOnDeviceDialog(onDismiss = { showPlayOnDevice = false })
         } else {
             IconButton(
                 onClick = onBack,

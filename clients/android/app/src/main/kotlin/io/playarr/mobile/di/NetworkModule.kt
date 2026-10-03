@@ -21,6 +21,7 @@ import io.playarr.shared.data.config.ServerConfigStore
 import io.playarr.shared.data.model.ClientPlatform
 import io.playarr.shared.data.remote.PlayarrApi
 import io.playarr.shared.data.remote.PlayarrHttpClient
+import io.playarr.shared.data.remote.PlayarrRemoteApi
 import io.playarr.shared.data.remote.PlayarrServerAccessResolver
 import javax.inject.Qualifier
 import javax.inject.Singleton
@@ -60,6 +61,29 @@ object NetworkModule {
             runBlocking { sessionRefresher.refreshAccessToken(rejectedToken) }
         },
         // Access tokens and private catalogue responses must not reach logcat.
+        enableHttpLogging = false,
+    )
+
+    /** Phone remote and handoff endpoints; always the signed-in primary server. */
+    @Provides
+    @Singleton
+    fun providePlayarrRemoteApi(
+        @ApplicationContext context: Context,
+        serverConfigStore: ServerConfigStore,
+        tokenStore: TokenStore,
+        sessionRefresher: SessionRefresher,
+    ): PlayarrRemoteApi = PlayarrHttpClient.createRemote(
+        baseUrlProvider = { runBlocking { serverConfigStore.baseUrl.first() } },
+        clientPlatform = if (isTelevision(context)) {
+            ClientPlatform.AndroidTv
+        } else {
+            ClientPlatform.AndroidMobile
+        },
+        clientVersion = BuildConfig.VERSION_NAME,
+        accessTokenProvider = { runBlocking { tokenStore.accessToken.first() } },
+        refreshAccessToken = { rejectedToken ->
+            runBlocking { sessionRefresher.refreshAccessToken(rejectedToken) }
+        },
         enableHttpLogging = false,
     )
 

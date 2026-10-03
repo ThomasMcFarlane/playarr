@@ -2988,6 +2988,7 @@ private enum class SettingsSection(val label: PlayarrString) {
     Server(PlayarrString.SettingsServer),
     Lock(PlayarrString.SettingsProfileLock),
     Invite(PlayarrString.SettingsInvite),
+    Remote(PlayarrString.SettingsRemote),
     Legal(PlayarrString.SettingsLegal),
 }
 
@@ -3117,6 +3118,7 @@ private fun SettingsSectionContent(
             "name" to displayName,
         )
         SettingsSection.Invite -> playarrString(PlayarrString.SettingsInviteDescription)
+        SettingsSection.Remote -> playarrString(PlayarrString.RemoteDescription)
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
         else -> null
     }
@@ -3386,6 +3388,7 @@ private fun SettingsSectionContent(
                 }
                 PlayarrApprovalNotifications()
             }
+            SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.Legal -> {
                 OutlinedButton(
                     onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },

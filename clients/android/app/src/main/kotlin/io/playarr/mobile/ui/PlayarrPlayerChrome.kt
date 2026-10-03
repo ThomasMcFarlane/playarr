@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.MusicNote
@@ -130,6 +131,7 @@ internal fun PlayarrPlayerChrome(
     onAudio: (String) -> Unit,
     onSubtitle: (String?) -> Unit,
     cast: PlayarrPlayerCastState = PlayarrPlayerCastState(),
+    onPlayOnDevice: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(true) }
@@ -245,6 +247,15 @@ internal fun PlayarrPlayerChrome(
                     isTelevision = isTelevision,
                     onClick = { showControls(); onMinimise() },
                 )
+                if (onPlayOnDevice != null) {
+                    PlayarrPlayerTopButton(
+                        icon = Icons.Outlined.Devices,
+                        label = playarrString(PlayarrString.RemotePlayOnButton),
+                        accessibilityLabel = playarrString(PlayarrString.RemotePlayOnTitle),
+                        isTelevision = isTelevision,
+                        onClick = { showControls(); onPlayOnDevice() },
+                    )
+                }
                 if (cast.visible) {
                     val connected = cast.connectionState is PlayarrCastConnectionState.Connected
                     val connecting = cast.connectionState is PlayarrCastConnectionState.Connecting

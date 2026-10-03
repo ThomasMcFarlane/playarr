@@ -38,6 +38,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   limits with a next action for each, a "technical detail" view that labels every value measured,
   reported by the device or not available, a short cancellable connection test, and an explicit
   Copy/Save of a redacted diagnostics export (tasks 58-60).
+- Playarr for Android (phone, tablet and Android TV, native Compose) now works as a phone remote
+  and playback-handoff client. Settings has a "Phone remote" section: allow this device to be
+  controlled (on by default on Android TV), pair with another device of your account, drive it with
+  a D-pad, text entry and transport controls, and revoke pairings. A TV shows an on-screen approval
+  prompt with a verification code first. The player has "Play on another device", which moves the
+  title at the current position and stops locally only after the other device confirms playback.
 - Playarr Web (and the webOS/Tizen/Android TV web surfaces that share it) now works as a phone
   remote and playback-handoff client. Settings has a new "Phone remote" page: allow this device to
   be controlled, pair with another device of your account, drive it with a D-pad, text entry and

@@ -66,7 +66,40 @@ object PlayarrHttpClient {
         accessTokenProvider: () -> String? = { null },
         refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
         enableHttpLogging: Boolean = false,
-    ): PlayarrApi {
+    ): PlayarrApi = buildRetrofit(
+        baseUrlProvider,
+        clientPlatform,
+        clientVersion,
+        accessTokenProvider,
+        refreshAccessToken,
+        enableHttpLogging,
+    ).create(PlayarrApi::class.java)
+
+    /** Same transport, auth and base-URL handling as [create], for the `/api/v1/remote endpoints` endpoints. */
+    fun createRemote(
+        baseUrlProvider: () -> String,
+        clientPlatform: ClientPlatform,
+        clientVersion: String,
+        accessTokenProvider: () -> String? = { null },
+        refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
+        enableHttpLogging: Boolean = false,
+    ): PlayarrRemoteApi = buildRetrofit(
+        baseUrlProvider,
+        clientPlatform,
+        clientVersion,
+        accessTokenProvider,
+        refreshAccessToken,
+        enableHttpLogging,
+    ).create(PlayarrRemoteApi::class.java)
+
+    private fun buildRetrofit(
+        baseUrlProvider: () -> String,
+        clientPlatform: ClientPlatform,
+        clientVersion: String,
+        accessTokenProvider: () -> String? = { null },
+        refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
+        enableHttpLogging: Boolean = false,
+    ): Retrofit {
         val okHttpClient = OkHttpClient.Builder()
             // OkHttp's 10 s defaults are too tight for a cold TLS connection over a
             // long-haul/relay path, and for server-side work behind a request (playback
@@ -110,7 +143,7 @@ object PlayarrHttpClient {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
 
-        return retrofit.create(PlayarrApi::class.java)
+        return retrofit
     }
 
     private fun platformHeaderInterceptor(platform: ClientPlatform, version: String): Interceptor =
