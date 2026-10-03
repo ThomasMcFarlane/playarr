@@ -105,3 +105,21 @@ same validator also pins a handful of architectural rules: the literal
 the pure resolver both `AppConfig.ts` and its unit tests call into); and
 `pages/*.ets` may never import `net/` or `auth/` directly, only `data/`
 repositories.
+
+## End of playback
+
+Implements [`end-of-playback.md`](../end-of-playback.md). `core/EndOfPlayback.ts`
+holds the state machine (`EndOfPlaybackMachine`), queue builders for
+episodes and tracks, suggestion filtering and resume normalisation, all
+unit-tested under `just harmony-test`. `pages/Player.ets` closes the playback
+session as `completed` when the engine ends, then shows
+`player/EndScreen.ets` instead of popping: the ended card, or a 10-second
+countdown when a next item is queued (Detail passes the queue in
+`PlayerRouteParams.queue`). Replay and Play next negotiate a fresh session in
+the same page. Suggestions come from `getSimilarWorks` (with its existing
+genre fallback), capped at 12 and hidden when empty. Back, and the
+play/pause and next-track keys, follow spec section 6; touch targets are 48 vp
+or larger. Audio tracks chain with no card until the queue ends. Not
+implemented: the queue/continue-watching suggestion fallbacks, an autoplay
+preference (autoplay is on), telemetry (no analytics channel) and keep-awake
+changes (the player page does not manage them today).

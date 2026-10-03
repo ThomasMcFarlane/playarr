@@ -108,31 +108,46 @@
 import { window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { media } from '@kit.MediaKit';
+import { image } from '@kit.ImageKit';
 import { audio } from '@kit.AudioKit';
 
 import { negotiatePlayback } from '../data/PlaybackRepository';
 import type { PlaybackNegotiationOptions } from '../data/PlaybackRepository';
-import { getWorkDetail } from '../data/CatalogRepository';
+import { getWorkDetail, getSimilarWorks } from '../data/CatalogRepository';
+import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
 
 import { AvPlayerController } from '../player/AvPlayerController';
 import type { AvPlayerControllerCallbacks } from '../player/AvPlayerController';
 import { PlaybackSessionReporter } from '../player/PlaybackSessionReporter';
 import type { PlaybackTeardownOutcome } from '../player/PlaybackSessionReporter';
 import { PlayerChrome } from '../player/PlayerChrome';
+import { EndScreen } from '../player/EndScreen';
+import { MediaRail } from '../design/components/MediaRail';
+import type { MediaRailItem } from '../design/components/MediaRail';
+import { PosterCard } from '../design/components/PosterCard';
 import { resolvePlayerAction, SEEK_STEP_MS } from '../player/PlayerInput';
 import type { PlayerAction } from '../player/PlayerInput';
 
 import { resolveDurationMs, reportedPositionMs, clampSeekTargetMs } from '../core/PlaybackMath.ts';
 import type { PlaybackInfoResponse, SubtitleTrack } from '../core/Types/Playback.ts';
+import type { Work } from '../core/Types/Work.ts';
+import {
+  EndOfPlaybackMachine,
+  pickSuggestions,
+  END_SCREEN_MAX_SUGGESTIONS,
+  END_SCREEN_COUNTDOWN_SECONDS,
+} from '../core/EndOfPlayback.ts';
+import type { QueueItem } from '../core/EndOfPlayback.ts';
 import type { DeviceProfile } from '../core/DeviceProfile.ts';
 import { Spacing, Radii } from '../core/Tokens';
 import type { RgbaColor } from '../core/Tokens';
 
 import { toResourceColor, toResourceColorWithAlpha } from '../design/Theme';
-import { isTvMetrics, tv } from '../design/Metrics';
+import { isTvMetrics, tv, TvGeometry, TouchGeometry } from '../design/Metrics';
 
-import type { PlayerRouteParams } from '../navigation/Routes';
-import { getNavStack, popRoute } from '../navigation/NavStack';
+import { ROUTES } from '../navigation/Routes';
+import type { PlayerRouteParams, DetailRouteParams } from '../navigation/Routes';
+import { getNavStack, popRoute, replaceRoute } from '../navigation/NavStack';
 
 import { DEVICE_PROFILE_STORAGE_KEY } from '../device/DeviceProfileService';
 
@@ -187,6 +202,14 @@ const PLAYER_TEXT_PRIMARY: RgbaColor = { r: 255, g: 255, b: 255, a: 1 };
  * in prepared/playing"). */
 type PlayerPhase = 'loading' | 'error' | 'ready';
 
+/** One tile of the end screen's "More like this" row. */
+interface SuggestionRow {
+  id: string;
+  title: string;
+  subtitle: string;
+  artwork: image.PixelMap | undefined;
+}
+
 @Component
 struct Player {
   @Prop mediaFileId: string = '';
@@ -195,6 +218,8 @@ struct Player {
    * `player/AvPlayerController.ets#attachSource`'s own
    * `startPositionMs > 0` threshold for whether a local seek applies. */
   @Prop startPositionMs: number = 0;
+  /** Items queued after the current one (next episodes / tracks). */
+  @Prop queue: QueueItem[] = [];
 
   /** One instance for this page's whole lifetime; `attachSource` may be
    * called on it more than once (initial load, then any renegotiation) --
@@ -210,6 +235,21 @@ struct Player {
   @State private isPlaying: boolean = false;
   @State private keepAliveSignal: number = 0;
   @State private subtitleCueText: string = '';
+
+  // -- End of playback (docs/architecture/end-of-playback.md) --
+  /** Own copies of the route params: they change as the queue advances. */
+  private activeMediaFileId: string = '';
+  private activeWorkId: string = '';
+  private upNext: QueueItem[] = [];
+  private currentWork: Work | null = null;
+  private endMachine: EndOfPlaybackMachine = new EndOfPlaybackMachine(false);
+  private endTimerHandle: number | null = null;
+  /** Bumped per item so a late suggestions response for a previous item is dropped. */
+  private suggestionsGeneration: number = 0;
+  @State private endPhase: string = 'playing';
+  @State private endSeconds: number = 0;
+  @State private endNextTitle: string = '';
+  @State private suggestions: SuggestionRow[] = [];
 
   private reporter: PlaybackSessionReporter | null = null;
   private currentInfo: PlaybackInfoResponse | null = null;
@@ -249,6 +289,10 @@ struct Player {
   private windowHandle: window.Window | null = null;
 
   aboutToAppear(): void {
+    this.activeMediaFileId = this.mediaFileId;
+    this.activeWorkId = this.workId;
+    this.upNext = this.queue.slice();
+    this.resetEndMachine();
     const profile = AppStorage.get<DeviceProfile>(DEVICE_PROFILE_STORAGE_KEY);
     if (profile !== undefined && profile.inputMode === 'dpad') {
       // brief 6.3: the focus ring is hidden by default; the first D-pad
@@ -265,6 +309,7 @@ struct Player {
 
   aboutToDisappear(): void {
     this.clearUiTicker();
+    this.clearEndTimer();
     void this.exitImmersiveMode();
     // Safety net, matching player/AvPlayerController.ets's own
     // handleSurfaceDestroyed philosophy: if this page is torn down through
@@ -280,11 +325,13 @@ struct Player {
   /** See this file's header comment, "Immersive mode", for why this is
    * ALSO wired to NavDestination's `.onShown()` in `build()` below. */
   onPageShow(): void {
+    this.endMachine.paused = false;
     void this.enterImmersiveMode();
   }
 
   /** See this file's header comment, "Immersive mode". */
   onPageHide(): void {
+    this.endMachine.paused = true;
     void this.exitImmersiveMode();
   }
 
@@ -324,9 +371,13 @@ struct Player {
   // -- Title (best-effort, never blocks negotiation/playback start) --------
 
   private async loadTitle(): Promise<void> {
-    const result = await getWorkDetail(this.workId);
-    if (result.kind === 'ok') {
-      this.title = result.value.work.title;
+    const workId = this.activeWorkId;
+    const result = await getWorkDetail(workId);
+    if (result.kind === 'ok' && workId === this.activeWorkId) {
+      this.currentWork = result.value.work;
+      if (this.title.length === 0) {
+        this.title = result.value.work.title;
+      }
     }
   }
 
@@ -395,7 +446,7 @@ struct Player {
     this.bufferedPositionMs = 0;
     this.isPlaying = false;
 
-    const result = await negotiatePlayback(this.mediaFileId, options);
+    const result = await negotiatePlayback(this.activeMediaFileId, options);
     if (result.kind !== 'ok') {
       this.phase = 'error';
       if (result.kind === 'network_failure') {
@@ -420,7 +471,7 @@ struct Player {
     const reporter = new PlaybackSessionReporter(
       info.session_id,
       info.source_offset_ms,
-      this.mediaFileId,
+      this.activeMediaFileId,
       initialDurationMs
     );
     this.reporter = reporter;
@@ -544,11 +595,188 @@ struct Player {
   }
 
   private handleBack(): void {
+    if (this.endPhase !== 'playing') {
+      this.handleEndExit();
+      return;
+    }
     void this.teardownAndExit({ kind: 'stop', reason: 'user_stopped' });
   }
 
+  /** Engine ended (spec section 2): save the item as watched, then show the
+   * ended card or up-next countdown instead of leaving the player. The
+   * session is closed here; Replay and Play next each negotiate a new one. */
   private handleEndOfStream(): void {
-    void this.teardownAndExit({ kind: 'stop', reason: 'completed' });
+    if (this.hasExited || this.endPhase !== 'playing') {
+      return;
+    }
+    void this.finishItemAndShowEndScreen();
+  }
+
+  private async finishItemAndShowEndScreen(): Promise<void> {
+    this.clearHeartbeatTimer();
+    const reporter = this.reporter;
+    this.reporter = null;
+    if (reporter !== null) {
+      await reporter.teardown({ kind: 'stop', reason: 'completed' }, this.controller.getCurrentPositionMs());
+    }
+    if (this.hasExited) {
+      return;
+    }
+    const command = this.endMachine.onEnded();
+    if (command === 'playNext') {
+      void this.playNextItem();
+      return;
+    }
+    this.syncEndState();
+    this.startEndTimerIfNeeded();
+    void this.loadSuggestions();
+  }
+
+  private resetEndMachine(): void {
+    const next = this.upNext.length > 0 ? this.upNext[0] : null;
+    this.endMachine = new EndOfPlaybackMachine(
+      next !== null,
+      true,
+      END_SCREEN_COUNTDOWN_SECONDS,
+      next !== null && next.immediate
+    );
+    this.endPhase = 'playing';
+    this.endSeconds = 0;
+    this.endNextTitle = next !== null ? next.title : '';
+    this.suggestions = [];
+    this.suggestionsGeneration = this.suggestionsGeneration + 1;
+  }
+
+  private syncEndState(): void {
+    this.endPhase = this.endMachine.phase;
+    this.endSeconds = this.endMachine.secondsRemaining;
+  }
+
+  private startEndTimerIfNeeded(): void {
+    this.clearEndTimer();
+    if (!this.endMachine.countdownRunning()) {
+      return;
+    }
+    this.endTimerHandle = setInterval((): void => {
+      const command = this.endMachine.tick();
+      this.syncEndState();
+      if (command === 'playNext') {
+        this.clearEndTimer();
+        void this.playNextItem();
+      }
+    }, 1000);
+  }
+
+  private clearEndTimer(): void {
+    if (this.endTimerHandle !== null) {
+      clearInterval(this.endTimerHandle);
+      this.endTimerHandle = null;
+    }
+  }
+
+  private handleEndPlayNow(): void {
+    this.clearEndTimer();
+    if (this.endMachine.playNow() === 'playNext') {
+      void this.playNextItem();
+    }
+  }
+
+  private handleEndCancel(): void {
+    this.clearEndTimer();
+    this.endMachine.cancelCountdown();
+    this.syncEndState();
+  }
+
+  private handleEndReplay(): void {
+    this.clearEndTimer();
+    if (this.endMachine.replay() !== 'replay') {
+      return;
+    }
+    this.syncEndState();
+    this.suggestions = [];
+    this.suggestionsGeneration = this.suggestionsGeneration + 1;
+    void this.negotiateAndAttach({});
+  }
+
+  /** Back to details (spec section 5): leave the player; hardware Back maps here too. */
+  private handleEndExit(): void {
+    this.clearEndTimer();
+    void this.teardownAndExit({ kind: 'stop', reason: 'user_stopped' });
+  }
+
+  private async playNextItem(): Promise<void> {
+    const next = this.upNext.length > 0 ? this.upNext[0] : null;
+    if (next === null) {
+      return;
+    }
+    this.upNext = this.upNext.slice(1);
+    const workChanged = next.workId !== this.activeWorkId;
+    this.activeMediaFileId = next.mediaFileId;
+    this.activeWorkId = next.workId;
+    this.title = next.title;
+    if (workChanged) {
+      this.currentWork = null;
+      void this.loadTitle();
+    }
+    this.resetEndMachine();
+    await this.negotiateAndAttach({});
+  }
+
+  /** Spec section 5: `/similar` for the finished work (with the repository's
+   * own genre fallback), minus the finished work, capped at 12. Hidden when
+   * empty or failing; never blocks the primary actions. */
+  private async loadSuggestions(): Promise<void> {
+    const generation = this.suggestionsGeneration;
+    let work = this.currentWork;
+    if (work === null) {
+      const detail = await getWorkDetail(this.activeWorkId);
+      if (detail.kind !== 'ok') {
+        return;
+      }
+      work = detail.value.work;
+      this.currentWork = work;
+    }
+    const result = await getSimilarWorks(work, END_SCREEN_MAX_SUGGESTIONS + 1);
+    if (result.kind !== 'ok' || generation !== this.suggestionsGeneration) {
+      return;
+    }
+    const picked = pickSuggestions(result.value, work.id, END_SCREEN_MAX_SUGGESTIONS);
+    const rows: SuggestionRow[] = [];
+    for (const item of picked) {
+      const row: SuggestionRow = { id: item.id, title: item.title, subtitle: '', artwork: undefined };
+      rows.push(row);
+    }
+    this.suggestions = rows;
+    for (const item of picked) {
+      const art = await fetchWorkArtworkByPriority(item.id, COVER_ARTWORK_PRIORITY);
+      if (art.kind === 'ok' && generation === this.suggestionsGeneration) {
+        const updated: SuggestionRow[] = [];
+        for (const row of this.suggestions) {
+          const copy: SuggestionRow = {
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle,
+            artwork: row.id === item.id ? art.value : row.artwork,
+          };
+          updated.push(copy);
+        }
+        this.suggestions = updated;
+      }
+    }
+  }
+
+  /** A suggestion opens that work's details; the finished player is replaced
+   * so Back does not land on a dead player. */
+  private handleSelectSuggestion(workId: string): void {
+    this.clearEndTimer();
+    void this.openSuggestion(workId);
+  }
+
+  private async openSuggestion(workId: string): Promise<void> {
+    await this.teardownSessionOnly({ kind: 'stop', reason: 'user_stopped' });
+    const stack = getNavStack();
+    const params: DetailRouteParams = { workId: workId };
+    replaceRoute(stack, ROUTES.Detail, params);
   }
 
   private handlePlaybackError(message: string): void {
@@ -775,6 +1003,28 @@ struct Player {
     // scope). The key is still stopped by the caller below.
   }
 
+  /** Returns true when the key was consumed by the end screen. */
+  private dispatchEndScreenAction(action: PlayerAction): boolean {
+    if (action === 'back' || action === 'stop') {
+      this.handleEndExit();
+      return true;
+    }
+    if (action === 'togglePlayPause' || action === 'play' || action === 'pause') {
+      if (this.endMachine.playNow() === 'playNext') {
+        this.handleEndPlayNow();
+      } else {
+        this.handleEndReplay();
+      }
+      return true;
+    }
+    if (action === 'next') {
+      this.handleEndPlayNow();
+      return true;
+    }
+    // Fast-forward / rewind are ignored on the card.
+    return false;
+  }
+
   private overlayTextSize(): number {
     return isTvMetrics() ? tv(OVERLAY_TEXT_SIZE_TV) : OVERLAY_TEXT_SIZE_TOUCH;
   }
@@ -817,6 +1067,92 @@ struct Player {
     .backgroundColor(toResourceColor(PLAYER_BG))
   }
 
+  /** The ended card / up-next countdown (spec sections 1, 5, 6). */
+  @Builder
+  private endScreenOverlay(): void {
+    const suggestionsBuilder = this.suggestionItem;
+    const suggestionItems: MediaRailItem[] = this.suggestions;
+    const running = this.endMachine.countdownRunning();
+    const tvMode = isTvMetrics();
+    const itemGap = tvMode ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap;
+    const headingSize = tvMode ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize;
+
+    // Hoisted into locals: see `build()`'s note on `checks/arkts.mjs`'s `:\s*this\b` scan.
+    const phase = this.endPhase;
+    const finishedTitle = this.title;
+    const nextTitle = this.endNextTitle;
+    const seconds = this.endSeconds;
+    const hasSuggestions = this.suggestions.length > 0;
+
+    EndScreen({
+      phase: phase,
+      finishedTitle: finishedTitle,
+      nextTitle: nextTitle,
+      secondsRemaining: seconds,
+      countdownRunning: running,
+      hasSuggestions: hasSuggestions,
+      onPlayNow: () => {
+        this.handleEndPlayNow();
+      },
+      onCancel: () => {
+        this.handleEndCancel();
+      },
+      onReplay: () => {
+        this.handleEndReplay();
+      },
+      onExit: () => {
+        this.handleEndExit();
+      },
+    }) {
+      MediaRail({
+        railId: 'end-screen-suggestions',
+        heading: '',
+        itemGap: itemGap,
+        headingSize: headingSize,
+        items: suggestionItems,
+        itemBuilder: suggestionsBuilder,
+      })
+    }
+  }
+
+  @Builder
+  private suggestionItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
+    const row = item as SuggestionRow;
+    const tvMode = isTvMetrics();
+    const width = tvMode ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover;
+    if (tvMode) {
+      PosterCard({
+        variant: 'home',
+        title: row.title,
+        subtitle: row.subtitle,
+        artwork: row.artwork,
+        width: width,
+        height: Math.round((width * 3) / 2),
+        artworkRadius: Radii.homeCardArtworkTv,
+        activeRailFactor: activeRailFactor,
+        onSelect: () => {
+          this.handleSelectSuggestion(row.id);
+        },
+      })
+    } else {
+      PosterCard({
+        variant: 'home',
+        title: row.title,
+        subtitle: row.subtitle,
+        artwork: row.artwork,
+        width: width,
+        height: Math.round((width * 3) / 2),
+        artworkRadius: Radii.homeCardArtworkTouch,
+        titleFontSize: 12,
+        subtitleFontSize: 10,
+        activeRailFactor: activeRailFactor,
+        onSelect: () => {
+          this.handleSelectSuggestion(row.id);
+        },
+      })
+    }
+  }
+
   build() {
     // `surfaceController` is read into a local first, rather than inlining
     // `this.controller.surfaceController` directly into the object literal
@@ -855,7 +1191,7 @@ struct Player {
             .focusable(false)
         }
 
-        if (this.phase === 'ready') {
+        if (this.phase === 'ready' && this.endPhase === 'playing') {
           // Every prop below is read into a local first, rather than
           // inlining `this.<field>` directly into the object literal --
           // see this method's own comment above `surfaceController` for
@@ -888,6 +1224,10 @@ struct Player {
             },
           })
         }
+
+        if (this.phase === 'ready' && this.endPhase !== 'playing') {
+          this.endScreenOverlay()
+        }
       }
       .width('100%')
       .height('100%')
@@ -905,6 +1245,15 @@ struct Player {
         if (action === undefined) {
           return;
         }
+        if (this.endPhase !== 'playing') {
+          // Spec section 6: the end card owns the screen. Back leaves,
+          // play/pause and next-track hit the primary action; everything
+          // else (OK, D-pad) is left to focus traversal and the buttons.
+          if (this.dispatchEndScreenAction(action)) {
+            event.stopPropagation();
+          }
+          return;
+        }
         this.dispatchPlayerAction(action);
         event.stopPropagation();
       })
@@ -913,9 +1262,11 @@ struct Player {
     .onShown(() => {
       // See this file's header comment, "Immersive mode", for why both
       // this and onPageShow()/onPageHide() above call the same pair.
+      this.endMachine.paused = false;
       void this.enterImmersiveMode();
     })
     .onHidden(() => {
+      this.endMachine.paused = true;
       void this.exitImmersiveMode();
     })
     .onBackPressed(() => {
@@ -944,5 +1295,11 @@ struct Player {
 export function PlayerBuilder(name: string, param: Object): void {
   const params = param as PlayerRouteParams;
   const startPositionMs = params.startPositionMs ?? 0;
-  Player({ mediaFileId: params.mediaFileId, workId: params.workId, startPositionMs: startPositionMs });
+  const queue = params.queue ?? [];
+  Player({
+    mediaFileId: params.mediaFileId,
+    workId: params.workId,
+    startPositionMs: startPositionMs,
+    queue: queue,
+  });
 }

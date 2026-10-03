@@ -140,6 +140,8 @@ import { tv, isTvMetrics, TvGeometry, TouchGeometry } from '../design/Metrics';
 import { Spacing, Radii } from '../core/Tokens';
 import type { RgbaColor } from '../core/Tokens';
 import type { DeviceProfile } from '../core/DeviceProfile';
+import { buildSeriesQueue, buildAlbumQueue } from '../core/EndOfPlayback.ts';
+import type { QueueItem } from '../core/EndOfPlayback.ts';
 
 import { ROUTES } from '../navigation/Routes';
 import type { DetailRouteParams, PlayerRouteParams } from '../navigation/Routes';
@@ -687,8 +689,31 @@ struct Detail {
     }
     const currentWorkId = this.workId;
     const stack = getNavStack();
-    const params: PlayerRouteParams = { mediaFileId: mediaFileId, workId: currentWorkId };
+    const upNext = this.upNextQueueAfter(mediaFileId);
+    const params: PlayerRouteParams = {
+      mediaFileId: mediaFileId,
+      workId: currentWorkId,
+      queue: upNext,
+    };
     pushRoute(stack, ROUTES.Player, params);
+  }
+
+  /** Playable episodes after `mediaFileId` (series only; empty for movies,
+   * albums and books), handed to the Player as its up-next queue. */
+  private upNextQueueAfter(mediaFileId: string): QueueItem[] {
+    const detail = this.detail;
+    if (detail === null || typeof detail.children === 'string') {
+      return [];
+    }
+    const asSeries = detail.children as WorkChildrenSeries;
+    if (asSeries.Series !== undefined) {
+      return buildSeriesQueue(detail.work.id, detail.work.title, asSeries.Series, mediaFileId);
+    }
+    const asArtist = detail.children as WorkChildrenArtist;
+    if (asArtist.Artist !== undefined) {
+      return buildAlbumQueue(detail.work.id, asArtist.Artist, mediaFileId);
+    }
+    return [];
   }
 
   /** Dispatches a row selection: a playable leaf jumps to Player, a
@@ -699,7 +724,12 @@ struct Detail {
     const stack = getNavStack();
     if (row.mediaFileId !== null) {
       const currentWorkId = this.workId;
-      const params: PlayerRouteParams = { mediaFileId: row.mediaFileId, workId: currentWorkId };
+      const upNext = this.upNextQueueAfter(row.mediaFileId);
+      const params: PlayerRouteParams = {
+        mediaFileId: row.mediaFileId,
+        workId: currentWorkId,
+        queue: upNext,
+      };
       pushRoute(stack, ROUTES.Player, params);
       return;
     }

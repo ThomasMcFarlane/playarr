@@ -143,6 +143,7 @@ import type { Work } from '../core/Types/Work';
 
 import { ROUTES } from '../navigation/Routes';
 import type { DetailRouteParams, LibraryRouteParams, PlayerRouteParams } from '../navigation/Routes';
+import { normaliseResumeMs } from '../core/EndOfPlayback.ts';
 import { getNavStack, pushRoute, replaceRoute } from '../navigation/NavStack';
 
 import { logWarn } from '../util/Log';
@@ -582,7 +583,10 @@ export struct Home {
       const firstEntry = continueWatchingEntries[0];
       if (firstEntry !== undefined) {
         this.heroResumeMediaFileId = firstEntry.progress.media_file_id;
-        this.heroResumeStartPositionMs = firstEntry.progress.position_ms;
+        this.heroResumeStartPositionMs = normaliseResumeMs(
+          firstEntry.progress.position_ms,
+          firstEntry.progress.duration_ms
+        );
       }
     } else {
       this.heroResumeMediaFileId = null;

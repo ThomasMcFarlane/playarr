@@ -148,6 +148,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is queued, a ten-second up-next countdown with Play now, Cancel, Exit and
   suggestions. The shared `EndOfPlaybackMachine` in `PlayarrKit` carries unit
   tests; the tvOS overlay is focus-engine and Siri Remote friendly.
+- HarmonyOS now shows the end-of-playback experience from
+  `docs/architecture/end-of-playback.md` (phone, tablet and TV): an ended card
+  (Replay, Back to details, "More like this" from `/api/v1/catalog/{id}/similar`)
+  or, when episodes follow, a 10-second up-next countdown (Play now, Cancel,
+  Replay, Back to details). Audio tracks chain without a card until the queue
+  ends. The state machine lives in `core/EndOfPlayback.ts` with 15 new unit
+  tests; ArkUI rendering is unverified until run on a device.
 
 - Planned tasks 62–71 as separate server backup/recovery and portable per-user
   library export/import workstreams. Recorded complete data coverage,

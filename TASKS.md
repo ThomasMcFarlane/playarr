@@ -18,7 +18,7 @@ Owner requirement (3 October 2026): when media finishes, show a UI with exit, re
 | 82 | End screen: tvOS | implemented, PR PR 45 | agent | Parent: 78. Shared `PlayarrKit` logic as row 81 plus the tvOS overlay (focus section, Menu = Back to details, Play/Pause = primary action). The tvOS target is not compiled in CI (shared Apple workflow has no tvOS destination); not built locally. |
 | 83 | End screen: Roku | pending | agent | Parent: 78. |
 | 84 | End screen: Xbox | implemented, PR PR 42 | agent | Parent: 78. Branch `task/end-screen-xbox`. `EndOfPlaybackMachine` and queue helpers in `Playarr.Core` (`dotnet test`: 56 passed). UWP head (`PlayerPage`, `PlayerViewModel`) not compiled here (needs Windows/UWP SDK); verify on a dev-mode console. |
-| 85 | End screen: HarmonyOS | pending | agent | Parent: 78. |
+| 85 | End screen: HarmonyOS | implemented, PR PR 46 | agent | Parent: 78. Branch `task/end-screen-harmony`. `core/EndOfPlayback.ts` (state machine, queue builders, resume rule) with unit tests; `player/EndScreen.ets` renders it. `just harmony-test`: 241 passed; `node scripts/validate.mjs` passes. HAP build and on-device focus/touch not run (needs OpenHarmony SDK). |
 
 ## Active: Android high-latency direct-play throughput (2026-10-03)
 
@@ -44,7 +44,6 @@ Documentation only: implementation is pending and unassigned.
 | 87 | Admin-only server capabilities endpoint | review PR open | task/server-capabilities | `GET /api/v1/admin/system/capabilities` reports ffmpeg, ffprobe, key encoders and GPU devices on the serving node with impact and install hints. Peer aggregation is not implemented: each node reports itself. Evidence: `cargo test -p playarr-api` 328 passed. |
 | 88 | Admin "Server capabilities" page | review PR open | task/server-capabilities | System nav page with prominent missing-item banner, status filter persisted in the URL, light and dark tokens. |
 | 89 | Regional runtime image with ffmpeg and rollout runbook | review PR open | task/server-capabilities | `infra/docker/regional-runtime.Dockerfile` plus runbook in the playarr-dev README. The live image tag is deliberately not bumped until the image exists on region-a and region-b (owner approval needed). |
-
 ## Active — infrastructure reliability (2026-09-24)
 
 | # | Task | Status | Picked up by | Notes |

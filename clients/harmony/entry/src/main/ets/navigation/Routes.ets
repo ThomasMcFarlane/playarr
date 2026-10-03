@@ -27,6 +27,8 @@
  * step.
  */
 
+import type { QueueItem } from '../core/EndOfPlayback.ts';
+
 /** `pages/Index.ets`. The single boot/root page: owns the shared
  * `NavPathStack` and drives the connect -> pair -> profiles -> home state
  * machine. No navigation parameters. */
@@ -104,4 +106,6 @@ export interface PlayerRouteParams {
   mediaFileId: string;
   workId: string;
   startPositionMs?: number;
+  /** Items queued after this one (next episodes); absent or empty means a plain ended card. */
+  queue?: QueueItem[];
 }
