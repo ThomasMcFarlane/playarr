@@ -20,6 +20,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Removed merge conflict markers left in the changelog, web routes and navigation by the calendar merge,
+  and restored a missing closing brace in the web stylesheet's `.remote-pairing-row` rule.
 - Phone remote on Android: the TV approval dialog now takes focus so a TV remote can press Allow, remote
   D-pad commands are delivered as D-pad key events (they were ignored), a remote stop leaves the player
   screen, and a handoff destination acknowledges only once playback has really started and catches up to
