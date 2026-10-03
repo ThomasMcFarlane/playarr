@@ -295,3 +295,32 @@ is `Released` and still points at the correct node/path; remove only its stale
 removing the old route. Never delete or recreate the PV object, and never have
 old and new Deployments writing the same volume concurrently.
 
+## Server backups
+
+Each regional instance has an optional `backup` block that turns on encrypted
+server backups (design: `docs/architecture/server-backups.md`):
+
+```yaml
+backup:
+  enabled: true
+  dir: /data/backups        # on the state volume; bounded by retention
+  recipients: [age1...]     # age PUBLIC keys only
+  mode: full                # or database (labelled partial)
+  intervalHours: 24         # 0 = manual only
+  keepLast: 3
+  keepDays: 7
+  maxAssetMiB: 1024
+```
+
+Only public keys live in the chart. The matching recovery identity is created
+offline with `playarr-server backup keygen --out <file>` and held by the
+administrator; the server cannot decrypt its own backups. The state volume is
+the same disk as the database, so it protects against corruption and mistakes,
+not against losing the node: download backups from Admin, Backups (or copy
+`/data/backups`) to another location. A run refuses to start when free space is
+below twice the database size, and retention never removes the last complete
+backup.
+
+Restore only ever targets a replacement or scratch instance, with the server
+stopped: `playarr-server backup restore --archive <file> --identity-file <key>`.
+Never restore over a live server's data for testing.

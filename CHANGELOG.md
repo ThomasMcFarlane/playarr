@@ -46,6 +46,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   destination acknowledges, with idempotency keys, replay protection and expiry. Design in
   `docs/architecture/remote-control.md`; migrations 0045 (SQLite) and 0046 (Postgres); OpenAPI
   updated.
+- playarr-dev chart: per-instance `backup` block (enabled for region-a and region-b) that sets the
+  `PLAYARR_BACKUP_*` variables for encrypted server backups to `/data/backups` on the state volume
+  (daily, keep the newest 3 and anything under 7 days, artwork capped at 1 GiB). Only the age public
+  recovery key is in values; the schema rejects enabling backups without a valid public key.
+  `tests/backup.sh` covers rendering, optionality and schema rejection.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

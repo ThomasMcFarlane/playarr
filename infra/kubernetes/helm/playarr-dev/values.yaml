@@ -143,6 +143,19 @@ regionalInstances:
       size: 10Gi
     mediaPath: /srv/media
     routeHost: playarr-a.example.com
+    # Encrypted server backups to the state volume, bounded by retention. Only
+    # the age PUBLIC recovery key is stored here; the matching identity is held
+    # offline by the administrator (see docs/architecture/server-backups.md).
+    backup:
+      enabled: true
+      dir: /data/backups
+      recipients:
+        - age1lqvam645epf2neruygeschkr8zmz7pfsm4srcmwhsk36xt8xdlrspmafgz
+      mode: full
+      intervalHours: 24
+      keepLast: 3
+      keepDays: 7
+      maxAssetMiB: 1024
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:
@@ -199,6 +212,19 @@ regionalInstances:
       size: 10Gi
     mediaPath: /srv/media
     routeHost: playarr.example.com
+    # Encrypted server backups to the state volume, bounded by retention. Only
+    # the age PUBLIC recovery key is stored here; the matching identity is held
+    # offline by the administrator (see docs/architecture/server-backups.md).
+    backup:
+      enabled: true
+      dir: /data/backups
+      recipients:
+        - age1lqvam645epf2neruygeschkr8zmz7pfsm4srcmwhsk36xt8xdlrspmafgz
+      mode: full
+      intervalHours: 24
+      keepLast: 3
+      keepDays: 7
+      maxAssetMiB: 1024
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:

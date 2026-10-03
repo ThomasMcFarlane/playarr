@@ -5,6 +5,8 @@
 {{- $acmeOn := $acme.enabled | default false }}
 {{- /* The pod speaks HTTPS when either a static (cert-manager) certificate or the relay ACME certificate is configured. */}}
 {{- $httpsOn := or $tlsOn $acmeOn }}
+{{- $backup := $instance.backup | default dict }}
+{{- $backupOn := $backup.enabled | default false }}
 {{- if and $acmeOn (not $instance.hostExposure) }}
 {{- fail (printf "regionalInstances.%s.acme.enabled requires hostExposure (the relay registers its public address)" $name) }}
 {{- end }}
@@ -118,6 +120,26 @@ spec:
             # value (/opt/streamarr/web) that the runtime Secret still carries.
             - name: PLAYARR_WEB_ASSETS_DIR
               value: /app/web
+            {{- if $backupOn }}
+            # Encrypted server backups (docs/architecture/server-backups.md).
+            # Only the age PUBLIC key is configured here; the recovery
+            # identity is held offline by the administrator, never in Git or
+            # in the cluster Secret that this pod reads.
+            - name: PLAYARR_BACKUP_DIR
+              value: {{ $backup.dir | quote }}
+            - name: PLAYARR_BACKUP_RECIPIENTS
+              value: {{ join "," $backup.recipients | quote }}
+            - name: PLAYARR_BACKUP_MODE
+              value: {{ $backup.mode | default "full" | quote }}
+            - name: PLAYARR_BACKUP_INTERVAL_HOURS
+              value: {{ $backup.intervalHours | default 24 | quote }}
+            - name: PLAYARR_BACKUP_KEEP_LAST
+              value: {{ $backup.keepLast | default 7 | quote }}
+            - name: PLAYARR_BACKUP_KEEP_DAYS
+              value: {{ $backup.keepDays | default 30 | quote }}
+            - name: PLAYARR_BACKUP_MAX_ASSET_MIB
+              value: {{ $backup.maxAssetMiB | default 4096 | quote }}
+            {{- end }}
             {{- if $tlsOn }}
             - name: PLAYARR_TLS_CERT_PATH
               value: /tls/tls.crt
