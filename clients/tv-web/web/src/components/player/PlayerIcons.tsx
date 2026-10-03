@@ -89,6 +89,16 @@ export function PlaylistIcon({ className }: IconProps) {
   );
 }
 
+export function HealthIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_PROPS} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.8" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function VolumeHighIcon({ className }: IconProps) {
   return (
     <svg {...ICON_PROPS} className={className}>

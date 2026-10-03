@@ -21,6 +21,7 @@ import {
   PauseIcon,
   PlayIcon,
   PlaylistIcon,
+  HealthIcon,
   PreviousIcon,
   SubtitlesIcon,
   VolumeHighIcon,
@@ -79,6 +80,8 @@ export interface PlayerControlsProps {
   castConnected?: boolean;
   castDeviceName?: string | null;
   onToggleCast?: () => Promise<void>;
+  /** Opens the playback health panel; the button is hidden when omitted. */
+  onOpenHealth?: () => void;
 }
 
 function formatTime(totalSeconds: number): string {
@@ -140,6 +143,7 @@ export function PlayerControls({
   castConnected = false,
   castDeviceName,
   onToggleCast,
+  onOpenHealth,
 }: PlayerControlsProps) {
   const { t } = useLanguage();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -152,6 +156,7 @@ export function PlayerControls({
   const playlistButtonRef = useRef<HTMLButtonElement>(null);
   const qualityButtonRef = useRef<HTMLButtonElement>(null);
   const castButtonRef = useRef<HTMLButtonElement>(null);
+  const healthButtonRef = useRef<HTMLButtonElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
   const qualityOptionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const audioOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -443,6 +448,7 @@ export function PlayerControls({
         playlistButtonRef.current,
         qualityButtonRef.current,
         castButtonRef.current,
+        healthButtonRef.current,
         fullscreenButtonRef.current,
       ].filter(
         (control): control is HTMLButtonElement =>
@@ -1154,6 +1160,26 @@ export function PlayerControls({
             deviceName={castDeviceName}
             onToggleCast={onToggleCast}
           />
+        )}
+
+        {onOpenHealth && (
+          <button
+            ref={healthButtonRef}
+            type="button"
+            className="player-btn player-tool-button"
+            data-player-health-button
+            aria-label={t("components.playbackHealth.open")}
+            aria-haspopup="dialog"
+            onClick={(event) => {
+              event.stopPropagation();
+              setQualityMenuOpen(false);
+              setAudioMenuOpen(false);
+              setSubtitleMenuOpen(false);
+              onOpenHealth();
+            }}
+          >
+            <HealthIcon />
+          </button>
         )}
 
         {!systemVolumeOnly && (

@@ -82,8 +82,8 @@ share/copy it on an explicit action.
 run at once server-wide; extra callers get `429`. The client measures time to
 first byte and throughput, caps the whole test at a few seconds, and cancels by
 aborting the request. It runs a single request, so it cannot saturate a link
-the way a parallel test would, and clients refuse to start it while a video is
-actively playing and not paused unless the user confirms.
+the way a parallel test would, and clients tell the viewer that playback may
+stutter briefly while it runs.
 
 ## Clients
 

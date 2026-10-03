@@ -27,6 +27,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New `playarr-portability` crate: the versioned portable user-data package (canonical JSON,
   CSV views, README and JSON Schema in a ZIP), a hardened reader (size, entry, path, symlink,
   version and text limits) and identifier/fuzzy title matching, with unit tests (task 68).
+- Playarr Web (and the TV layouts that share it) has a Playback health panel in the player
+  controls: a plain-language explanation of direct play versus transcoding, HDR to SDR and audio
+  limits with a next action for each, a "technical detail" view that labels every value measured,
+  reported by the device or not available, a short cancellable connection test, and an explicit
+  Copy/Save of a redacted diagnostics export (tasks 58-60).
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

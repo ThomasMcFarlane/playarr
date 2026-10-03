@@ -1724,6 +1724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/playback/connection-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["connection_test_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playback/progress": {
         parameters: {
             query?: never;
@@ -1750,6 +1766,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["record_playback_event_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions/{session_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["playback_health_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2379,6 +2411,10 @@ export interface components {
          * @enum {string}
          */
         ClientPlatform: "android-mobile" | "android-tv" | "ios" | "web" | "tv-webos" | "tv-tizen" | "tv-vidaa" | "cast" | "tv-fire" | "xbox" | "harmony-mobile" | "harmony-tv" | "playarr-admin";
+        ClientPlaybackReport: {
+            measured?: components["schemas"]["MeasuredPlayback"];
+            reported?: components["schemas"]["ReportedCapabilities"];
+        };
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -2716,6 +2752,39 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        HealthExportFact: {
+            key: string;
+            provenance: components["schemas"]["HealthProvenance"];
+            value?: string | null;
+        };
+        HealthFact: {
+            key: string;
+            label: string;
+            provenance: components["schemas"]["HealthProvenance"];
+            source?: null | components["schemas"]["HealthSource"];
+            value?: string | null;
+        };
+        HealthFinding: {
+            code: string;
+            detail: string;
+            next_action?: string | null;
+            severity: components["schemas"]["HealthSeverity"];
+            title: string;
+        };
+        /** @enum {string} */
+        HealthProvenance: "measured" | "reported" | "unknown";
+        HealthQualification: {
+            note: string;
+            /**
+             * @description `not_assessed` until the hardware qualification matrix (TASK 40)
+             *     exists. Hardware advertisements never move this to a pass.
+             */
+            status: string;
+        };
+        /** @enum {string} */
+        HealthSeverity: "ok" | "info" | "warning" | "problem";
+        /** @enum {string} */
+        HealthSource: "server" | "client";
         ImageAsset: {
             /** Format: int32 */
             height?: number | null;
@@ -2877,6 +2946,30 @@ export interface components {
             token_type: string;
             /** Format: uuid */
             user_id: string;
+        };
+        MeasuredPlayback: {
+            /** Format: int32 */
+            audio_channels?: number | null;
+            audio_codec?: string | null;
+            /** @description Only `Some(true)` when the player confirmed bitstream passthrough. */
+            audio_passthrough?: boolean | null;
+            /** @description `hardware` or `software`. */
+            decoder_kind?: string | null;
+            /** Format: int64 */
+            dropped_frames?: number | null;
+            /** @description Only `Some(true)` when the player confirmed an HDR output mode. */
+            hdr_active?: boolean | null;
+            /** Format: int32 */
+            height?: number | null;
+            /** Format: int32 */
+            rebuffer_count?: number | null;
+            /** Format: int64 */
+            rebuffer_ms?: number | null;
+            /** Format: int64 */
+            throughput_bps?: number | null;
+            video_codec?: string | null;
+            /** Format: int32 */
+            width?: number | null;
         };
         /**
          * @description One real chapter embedded in a media container, as reported by ffprobe.
@@ -3466,6 +3559,31 @@ export interface components {
             message: string;
         };
         /**
+         * @description Redacted evidence safe to copy or share: no identifiers, titles, paths,
+         *     URLs, addresses or tokens.
+         */
+        PlaybackHealthExport: {
+            client_platform: string;
+            client_version: string;
+            facts: components["schemas"]["HealthExportFact"][];
+            finding_codes: string[];
+            /** Format: date-time */
+            generated_at: string;
+            play_method: components["schemas"]["PlayMethod"];
+            redaction: string;
+            schema: string;
+            transcode_reason?: string | null;
+        };
+        PlaybackHealthReport: {
+            export: components["schemas"]["PlaybackHealthExport"];
+            facts: components["schemas"]["HealthFact"][];
+            findings: components["schemas"]["HealthFinding"][];
+            headline: string;
+            play_method: components["schemas"]["PlayMethod"];
+            qualification: components["schemas"]["HealthQualification"];
+            severity: components["schemas"]["HealthSeverity"];
+        };
+        /**
          * @description TODO(streaming): `url` today is a well-known, stable path convention
          *     (`/api/v1/media/{media_file_id}/stream` for direct-play,
          *     `/api/v1/media/renditions/{rendition_id}/playlist.m3u8` for a ready
@@ -3865,6 +3983,21 @@ export interface components {
              *     ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
              */
             item_ids: string[];
+        };
+        ReportedCapabilities: {
+            audio_codecs?: string[];
+            /**
+             * @description Audio output the device advertises, e.g. `stereo`, `surround`,
+             *     `passthrough`.
+             */
+            audio_output?: string | null;
+            /** @description HDR formats the connected display advertises. */
+            display_hdr_formats?: string[];
+            /** @description Decoder-side HDR formats: `hdr10`, `hlg`, `dolby_vision`. */
+            hdr_formats?: string[];
+            /** Format: int32 */
+            max_height?: number | null;
+            video_codecs?: string[];
         };
         ReviewUserInviteRequest: {
             /** @description `true` grants exactly one generation; `false` denies this request. */
@@ -9762,6 +9895,50 @@ export interface operations {
             };
         };
     };
+    connection_test_handler: {
+        parameters: {
+            query?: {
+                /** @description Payload size in bytes. Default 1 MiB, clamped to 4 MiB. */
+                bytes?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A bounded zero-filled payload for measuring latency and download rate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many connection tests are running */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_watch_progress_handler: {
         parameters: {
             query?: never;
@@ -9837,6 +10014,54 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description session_id does not belong to the caller */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or already-closed session_id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    playback_health_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description PlaybackSession id, from PlaybackInfoResponse.session_id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientPlaybackReport"];
+            };
+        };
+        responses: {
+            /** @description Readable explanation of how this session is being played, with provenance for every fact and a redacted export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackHealthReport"];
+                };
             };
             /** @description Missing or invalid access token */
             401: {

@@ -23,6 +23,8 @@ import {
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
 import { PlayerControls } from "./PlayerControls";
+import { PlaybackHealthPanel } from "./PlaybackHealthPanel";
+import { WEB_PLAYBACK_CAPABILITIES } from "../../lib/playbackCapabilities";
 import {
   BackIcon,
   ErrorIcon,
@@ -534,6 +536,7 @@ export function PlayerSurface({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsPinned, setControlsPinned] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
   const activePlaylistItem = playlistItems[activePlaylistIndex];
   const musicContext = activePlaylistItem?.music;
   const activateMusicVisualiser = useMusicAudioVisualiser(
@@ -545,6 +548,7 @@ export function PlayerSurface({
   const playlistContext = useMediaContextMenu();
   const interactionPinned =
     controlsPinned ||
+    healthOpen ||
     playlistOpen ||
     playlistContext.isOpen ||
     qualitySwitching ||
@@ -1312,6 +1316,22 @@ export function PlayerSurface({
           castConnected={castConnected}
           castDeviceName={castDeviceName}
           onToggleCast={onToggleCast}
+          onOpenHealth={inlineMusic ? undefined : () => setHealthOpen(true)}
+        />
+      )}
+      {healthOpen && (
+        <PlaybackHealthPanel
+          getSessionId={player.getSessionId}
+          videoRef={videoRef}
+          capabilities={WEB_PLAYBACK_CAPABILITIES}
+          onClose={() => {
+            setHealthOpen(false);
+            window.requestAnimationFrame(() =>
+              shellRef.current
+                ?.querySelector<HTMLElement>("[data-player-health-button]")
+                ?.focus({ preventScroll: true })
+            );
+          }}
         />
       )}
     </div>

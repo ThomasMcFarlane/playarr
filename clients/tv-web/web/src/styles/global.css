@@ -11595,3 +11595,88 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
     transition: none;
   }
 }
+
+/* Playback health panel (docs/architecture/playback-health.md). Sits over the
+   always-dark player surface, so it uses fixed light-on-dark values. */
+.playback-health-panel {
+  position: absolute;
+  z-index: 70;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 92vw);
+  display: grid;
+  align-content: start;
+  gap: 1.1rem;
+  padding: clamp(20px, 3vw, 40px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  color: #f6f1f3;
+  background: rgba(18, 14, 17, 0.96);
+  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.5);
+  font-size: clamp(0.9rem, 1.1vw, 1.1rem);
+}
+.playback-health-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.playback-health-panel h2 { margin: 0; font-size: 1.35em; }
+.playback-health-panel h3 { margin: 0; font-size: 1em; color: rgba(246, 241, 243, 0.72); }
+.playback-health-panel header p { margin: 0 0 0.2rem; opacity: 0.7; font-size: 0.85em; }
+.playback-health-panel button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  font: inherit;
+  cursor: pointer;
+}
+.playback-health-panel button:hover { background: rgba(255, 255, 255, 0.16); }
+.playback-health-panel button:focus-visible,
+.playback-health-export:focus-visible {
+  outline: 3px solid #ffd27a;
+  outline-offset: 2px;
+}
+.playback-health-status { margin: 0; }
+.playback-health-status.is-error { color: #ffb4a8; }
+.playback-health-findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+.playback-health-findings li {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.8rem 1rem;
+  border-left: 4px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.playback-health-findings li[data-severity="ok"] { border-left-color: #6fcf97; }
+.playback-health-findings li[data-severity="info"] { border-left-color: #7fb7ff; }
+.playback-health-findings li[data-severity="warning"] { border-left-color: #ffd27a; }
+.playback-health-findings li[data-severity="problem"] { border-left-color: #ff7a6b; }
+.playback-health-findings em { font-style: normal; color: #ffe2a8; }
+.playback-health-facts { display: grid; gap: 0.5rem; margin: 0.8rem 0 0; }
+.playback-health-facts > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.2rem 1rem; }
+.playback-health-facts dt { color: rgba(246, 241, 243, 0.72); }
+.playback-health-facts dd { margin: 0; display: grid; justify-items: end; text-align: right; overflow-wrap: anywhere; }
+.playback-health-facts small { opacity: 0.65; font-size: 0.8em; }
+.playback-health-facts [data-provenance="unknown"] dd { opacity: 0.6; }
+.playback-health-note { margin: 0.4rem 0 0; opacity: 0.75; font-size: 0.9em; }
+.playback-health-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem; }
+.playback-health-export {
+  max-height: 14rem;
+  margin: 0.8rem 0 0;
+  padding: 0.7rem;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 0.78em;
+  white-space: pre-wrap;
+}
+@media (max-width: 640px) {
+  .playback-health-panel { width: 100vw; }
+}

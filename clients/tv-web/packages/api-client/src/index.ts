@@ -67,6 +67,22 @@ export type PlaybackInfo = components["schemas"]["PlaybackInfoResponse"];
 export type PlaybackMode = components["schemas"]["PlaybackMode"];
 export type PlaybackQualityOption = components["schemas"]["PlaybackQualityOption"];
 export type PlaybackEventKind = components["schemas"]["PlaybackEventKind"];
+export type ClientPlaybackReport = components["schemas"]["ClientPlaybackReport"];
+export type PlaybackHealthReport = components["schemas"]["PlaybackHealthReport"];
+export type HealthFact = components["schemas"]["HealthFact"];
+export type HealthFinding = components["schemas"]["HealthFinding"];
+export type HealthSeverity = components["schemas"]["HealthSeverity"];
+export type HealthProvenance = components["schemas"]["HealthProvenance"];
+export type PlaybackHealthExport = components["schemas"]["PlaybackHealthExport"];
+
+/** Outcome of one bounded connection test request. */
+export interface ConnectionTestResult {
+  bytes: number;
+  /** Time from request start until response headers arrived. */
+  latencyMs: number;
+  /** Download rate over the body transfer, bits per second. */
+  throughputBps: number;
+}
 export type MediaChapter = components["schemas"]["MediaChapter"];
 export type MediaMetadata = components["schemas"]["MediaMetadata"];
 export type MediaPlaybackOptions =
@@ -505,6 +521,8 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/media/{media_file_id}/thumbnail", method: "GET" },
   { schemaPath: "/api/v1/playback/{media_file_id}", method: "GET" },
   { schemaPath: "/api/v1/playback/sessions/{session_id}/events", method: "POST" },
+  { schemaPath: "/api/v1/playback/sessions/{session_id}/health", method: "POST" },
+  { schemaPath: "/api/v1/playback/connection-test", method: "GET" },
   { schemaPath: "/api/v1/playback/progress", method: "GET" },
   { schemaPath: "/api/v1/playback/{media_file_id}/progress", method: "GET" },
   { schemaPath: "/api/v1/playback/{media_file_id}/progress", method: "PUT" },
@@ -1413,6 +1431,55 @@ export class ApiClient {
         body: event,
       })
     );
+  }
+
+  /**
+   * Explains how an active session is being played. `report` carries what the
+   * client reports (capabilities) and measures (player telemetry); every
+   * field is optional and unknown values must be omitted, never guessed.
+   */
+  async getPlaybackHealth(
+    sessionId: string,
+    report: ClientPlaybackReport
+  ): Promise<PlaybackHealthReport> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/playback/sessions/{session_id}/health", {
+        params: { path: { session_id: sessionId } },
+        body: report,
+      })
+    );
+  }
+
+  /**
+   * One bounded download (default 1 MiB, server cap 4 MiB) timed for latency
+   * and throughput. Aborting `signal` cancels the transfer immediately.
+   */
+  async runConnectionTest(options: {
+    bytes?: number;
+    signal?: AbortSignal;
+  } = {}): Promise<ConnectionTestResult> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const bytes = options.bytes ?? 1024 * 1024;
+    const request = new Request(
+      this.resolveUrl(`/api/v1/playback/connection-test?bytes=${Math.floor(bytes)}`),
+      { method: "GET", headers, cache: "no-store", signal: options.signal }
+    );
+    const started = performance.now();
+    const response = await this.rawFetch(request);
+    const headersAt = performance.now();
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText, undefined);
+    }
+    const body = await response.arrayBuffer();
+    const finished = performance.now();
+    const seconds = Math.max((finished - headersAt) / 1000, 0.001);
+    return {
+      bytes: body.byteLength,
+      latencyMs: Math.round(headersAt - started),
+      throughputBps: Math.round((body.byteLength * 8) / seconds),
+    };
   }
 
   /** Real chapters embedded in the source media container; empty when the file has none. */

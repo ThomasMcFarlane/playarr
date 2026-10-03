@@ -924,6 +924,50 @@ describe("ApiClient", () => {
     });
   });
 
+  it("posts a playback health report with streaming authentication", async () => {
+    const fetchImpl = mockFetch(async (request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/playback/sessions/session-1/health");
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      expect(await request.json()).toEqual({ measured: { dropped_frames: 3 } });
+      return jsonResponse(200, { headline: "Playing well", findings: [], facts: [] });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+    const report = await client.getPlaybackHealth("session-1", {
+      measured: { dropped_frames: 3 },
+    });
+    expect(report.headline).toBe("Playing well");
+  });
+
+  it("times a bounded connection test and propagates cancellation", async () => {
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe("/api/v1/playback/connection-test");
+      expect(url.searchParams.get("bytes")).toBe("2048");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      if (request.signal.aborted) throw new DOMException("aborted", "AbortError");
+      return new Response(new Uint8Array(2048), { status: 200 });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+    const result = await client.runConnectionTest({ bytes: 2048 });
+    expect(result.bytes).toBe(2048);
+    expect(result.throughputBps).toBeGreaterThan(0);
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      client.runConnectionTest({ bytes: 2048, signal: controller.signal })
+    ).rejects.toThrow();
+  });
+
   it("fetches real embedded media chapters with streaming authentication", async () => {
     const fetchImpl = mockFetch((request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/media/media-file-1/chapters");

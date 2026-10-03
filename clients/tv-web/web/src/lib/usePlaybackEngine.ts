@@ -198,6 +198,8 @@ export interface PlaybackEngineController {
   retryNegotiation: () => void;
   /** Starts a fresh playback session from 0 (end-of-playback Replay). */
   restart: () => void;
+  /** The active server playback session id, or null before negotiation / offline. */
+  getSessionId: () => string | null;
 }
 
 export interface PlaybackLaunchSettings {
@@ -1503,5 +1505,6 @@ export function usePlaybackEngine(
     selectQuality,
     retryNegotiation,
     restart,
+    getSessionId: () => activeSessionIdRef.current,
   };
 }
