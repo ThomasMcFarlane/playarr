@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Regional region-b now runs image `<image>` as well (phone remote and playback handoff API; discovery and
+  watchlist API), after region-a was verified.
 - Regional region-a now runs image `<image>`, which adds the phone remote and playback handoff API
   (tasks 50-53; region-b follows after verification).
 - Regional region-a now runs image `<image>`, which adds the discovery and watchlist API (region-b follows after
