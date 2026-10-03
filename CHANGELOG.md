@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Regional region-a now runs image `<image>`, which adds the discovery and watchlist API (region-b follows after
+  region-a is verified).
 - Playback info and playback options now list sidecar subtitles
   (`<video>.<lang>[.forced|.sdh].srt/.ass/.ssa/.vtt` next to the media file) in
   `subtitle_tracks`, served as WebVTT through the existing subtitle endpoint with
