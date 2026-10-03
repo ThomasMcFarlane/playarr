@@ -896,8 +896,8 @@ export const ja: Translations = {
   "pages.clients.firetv.name": "Fire TV",
   "pages.clients.firetv.platform": "Amazon Fire TVデバイス",
   "pages.clients.firetv.description": "Fire TV向けネイティブクライアントは開発中です。署名済みパッケージとしてインストールされるため、ダウンロードできるリリースはまだありません。",
-  "pages.clients.status.sourceBuild":
-    "ソースからビルド · 公開ダウンロードはまだありません",
+  "pages.clients.status.serverRelease":
+    "リリース {{version}} · LinuxとDocker",
   "pages.clients.server.name":
     "Playarr Server",
   "pages.clients.server.platform":
@@ -911,7 +911,17 @@ export const ja: Translations = {
   "pages.clients.serverPage.description":
     "Playarr Serverは、すでに運用しているSonarr、Radarr、Lidarr、Bazarr、Prowlarr、Readarrからライブラリをカタログ化し、サムネイルの生成、音声・字幕トラックの解析、オンデマンドのトランスコードを行います。このページのすべてのPlayarrクライアントがこのサーバーに接続します。メディアはお客様自身のハードウェアに残ります。",
   "pages.clients.serverPage.packageNote":
-    "リリースバイナリと公開コンテナイメージはまだ公開されていないため、ダウンロードボタンはありません。以下はPlayarrのソースツリーが対応するインストール方法で、Playarrのソースチェックアウトからビルドまたはインストールします。",
+    "リリースごとに、ビルド済みのLinux用tarball（x86-64とARM64）と公開コンテナイメージを提供します。tarballにはサーバー、管理UI、ライセンス、systemdユニットの例が入っています。お使いのCPUに合うビルドを選んでください。",
+  "pages.clients.serverPage.downloadAmd64":
+    "Linux x86-64をダウンロード (.tar.gz)",
+  "pages.clients.serverPage.downloadArm64":
+    "Linux ARM64をダウンロード (.tar.gz)",
+  "pages.clients.serverPage.checksumLabel":
+    "最新リリースのSHA-256チェックサム",
+  "pages.clients.serverPage.checksumFile":
+    "SHA-256チェックサムファイル",
+  "pages.clients.serverPage.verifyNote":
+    "実行前にsha256sumでダウンロードを確認してください。glibc 2.39以降の64ビットLinux（Debian 13、Ubuntu 24.04以降）とPATH上のffmpegが必要です。コンテナイメージには必要なものがすべて含まれています。",
   "pages.clients.serverPage.requirementsKicker":
     "インストール前に",
   "pages.clients.serverPage.requirementsTitle":
@@ -937,19 +947,23 @@ export const ja: Translations = {
   "pages.clients.serverPage.installTitle":
     "いずれか1つを選択",
   "pages.clients.serverPage.installDescription":
-    "Playarrのソースチェックアウトのルートでコマンドを実行してください。どの方法でも同じ単一のオールインワンサーバープロセスが動作します。",
+    "いずれか1つを選んでください。どの方法も同じ単一のオールインワンサーバープロセスを実行します。Dockerのコマンドは公開イメージを取得し、他の方法はダウンロードしたtarballか独自のchart値を使います。",
   "pages.clients.serverPage.dockerTitle":
-    "Docker Compose",
+    "Docker",
   "pages.clients.serverPage.dockerDescription":
-    "ffmpegを含むサーバーイメージをビルドし、SQLiteの状態を名前付きボリュームに保存する1つのコンテナを起動します。PLAYARR_JWT_SECRETを設定した場合のみ、再起動後もセッションが維持されます。",
+    "ffmpeg入りのマルチアーキテクチャイメージを取得し、SQLiteの状態を名前付きボリュームに置いた1つのコンテナを起動します。生成したPLAYARR_JWT_SECRETにより再起動後もセッションが維持されます。コンテナを作り直す場合は控えておいてください。",
+  "pages.clients.serverPage.composeTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.composeDescription":
+    "同じイメージをcomposeファイルで使います。シークレットを長いランダム文字列に置き換えて起動し、ポート8484を開いてください。",
   "pages.clients.serverPage.systemdTitle":
     "Linuxホスト上のsystemd",
   "pages.clients.serverPage.systemdDescription":
-    "playarr-serverバイナリ、権限のないplayarrユーザー、ユニットファイルをインストールします。ユーザーが有効化するまで何も起動しません。先にenvファイルのDATABASE_URLを設定してください。",
+    "tarballを展開し、install.shでplayarr-serverバイナリ、管理UI、権限のないplayarrユーザー、ユニットファイルをインストールします。有効化や起動は自分で行うまで実行されません。先にenvファイルのDATABASE_URLを設定してください（例: sqlite:///var/lib/playarr/playarr.db）。",
   "pages.clients.serverPage.helmTitle":
     "Kubernetes(Helmチャート)",
   "pages.clients.serverPage.helmDescription":
-    "playarr-standaloneチャートは、SQLiteを使う単一サーバー用にRecreate戦略で1つのPodを実行します。コンテナイメージ、既存のSecret、永続ストレージはご自身で用意してください。チャートはSecretを作成せず、移行や削除のフックもありません。適用前にレンダリングして内容を確認してください。",
+    "playarr-standalone chartは、SQLite構成の単一サーバー用にRecreate戦略で1つのPodを実行します。公開イメージ、既存のSecret、永続ストレージを指定します。chartはSecretを作成せず、マイグレーションや削除のフックもありません。適用前にレンダリングして確認してください。",
   "pages.clients.serverPage.connectKicker":
     "クライアントを接続",
   "pages.clients.serverPage.connectTitle":

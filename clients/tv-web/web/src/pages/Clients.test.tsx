@@ -375,7 +375,7 @@ describe("ClientsPage", () => {
       }
     });
 
-    it("lists Playarr Server as a server with truthful install methods", () => {
+    it("lists Playarr Server with per-architecture downloads and image instructions", () => {
       const markup = renderClientRoute("/clients/server");
       const text = markup.replace(/<[^>]+>/g, " ");
 
@@ -383,19 +383,31 @@ describe("ClientsPage", () => {
       expect(markup).toMatch(/class="client-choice is-experimental is-server is-active"/);
       expect(markup).toContain('data-client-icon="server"');
       expect(markup).toContain("Server, not a playback app");
-      expect(markup).toContain("Build from source · No public download yet");
-      expect(markup).toContain("have not been published yet");
-      // No fabricated download, and no link into the private repository.
-      expect(markup).not.toContain("download=");
+      // Release version replaces the old "Build from source" status.
+      expect(markup).toContain("Release 0.1.0 · Linux and Docker");
+      expect(markup).not.toContain("Build from source");
+      expect(markup).not.toContain("have not been published yet");
+      // Same-origin tarball downloads per architecture, with checksum files.
+      expect(markup).toContain(
+        'href="https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz"'
+      );
+      expect(markup).toContain(
+        'href="https://playarr.app/downloads/server/playarr-server-linux-arm64.tar.gz"'
+      );
+      expect(markup).toContain(
+        'href="https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz.sha256"'
+      );
+      expect(text).toContain("Download Linux x86-64");
+      expect(text).toContain("Download Linux ARM64");
+      // No link into the private repository.
       expect(markup).not.toContain("github.com");
-      expect(markup).not.toContain("/downloads/server");
       expect(text).toContain("ffmpeg and ffprobe");
       expect(text).toContain("Docker Compose");
       expect(text).toContain("systemd on a Linux host");
       expect(text).toContain("Kubernetes (Helm chart)");
-      expect(markup).toContain(
-        "docker compose -f infra/docker/docker-compose.standalone.yml up -d --build"
-      );
+      expect(markup).toContain("docker pull ghcr.io/thomasmcfarlane/playarr-server:latest");
+      expect(markup).toContain("image: ghcr.io/thomasmcfarlane/playarr-server:latest");
+      expect(markup).toContain("sudo ./systemd/install.sh");
       expect(markup).toContain("sudo systemctl enable --now playarr.service");
       expect(markup).toContain("infra/kubernetes/helm/playarr-standalone");
       expect(markup).toContain("PLAYARR_RELAY_REGISTER=true");

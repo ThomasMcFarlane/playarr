@@ -7,6 +7,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Public Playarr Server releases (tag `backend-v*`): Linux x86-64 and ARM64 tarballs with SHA-256 checksums served from `playarr.app/downloads/server/`, and a multi-arch image at `ghcr.io/thomasmcfarlane/playarr-server`. The Clients hub server page now has per-architecture Download buttons, checksums and Docker pull/run/compose snippets. See `docs/deployment/server-releases.md`.
+
 ### Changed
 
 - Rolled the region-a regional server to image `<image>`, which adds encrypted server backups (enabled by the chart: daily, state volume, bounded retention). region-b follows once region-a is verified.

@@ -12,7 +12,7 @@ compose file here assume.
 
 | File | Purpose |
 |---|---|
-| `backend.Dockerfile` | Multi-stage Rust build (`cargo-chef` for layer caching) of the `playarr` binary from `backend/Cargo.toml`'s workspace, into a slim non-root runtime image. |
+| `backend.Dockerfile` | Multi-stage Rust build (`cargo-chef` for layer caching) of the `playarr` binary from `backend/Cargo.toml`'s workspace, into a slim non-root runtime image. Cross-compiles for `linux/arm64` on an x86-64 builder (no QEMU compile); `--target binary` / `--target web` export just the stripped binary or the Admin UI, which the release workflow packs into tarballs. Released as `ghcr.io/thomasmcfarlane/playarr-server` (see [`docs/deployment/server-releases.md`](../../docs/deployment/server-releases.md)). |
 | `docker-compose.dev.yml` | Local dev stack: Postgres 16 + Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr, plus a real `playarr` service (`PLAYARR_ROLE=all`) built from `backend.Dockerfile`. |
 | `docker-compose.ci.yml` | Same dependency stack, tuned for CI (tmpfs instead of named volumes, fast healthchecks), plus a `playarr` service built from `backend.Dockerfile`. |
 | `docker-compose.mock.yml` | WireMock stand-ins for the six *arr APIs (`mocks/wiremock/<app>/mappings/*.json`), same service names/ports as `docker-compose.dev.yml`, for fast tests of code that consumes those APIs without booting six real .NET apps. |

@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { TvStageChrome } from "../components/tv/TvStage";
 import {
@@ -121,8 +121,8 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     icon: "firetv",
   },
   {
-    // Not a playback client: the server every client above connects to. It
-    // has no download action because no server package is published yet.
+    // Not a playback client: the server every client above connects to. Its
+    // downloads (per-architecture tarballs) live on the server page itself.
     id: "server",
     nameKey: "pages.clients.server.name",
     platformKey: "pages.clients.server.platform",
@@ -741,18 +741,43 @@ function SmartTvInstallGuide({
   );
 }
 
-const SERVER_INSTALL_COMMANDS: Record<"docker" | "systemd" | "helm" | "relay", readonly string[]> = {
+const SERVER_IMAGE = "ghcr.io/thomasmcfarlane/playarr-server";
+
+const SERVER_DOCKER_COMPOSE = `services:
+  playarr:
+    image: ${SERVER_IMAGE}:latest
+    container_name: playarr
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    environment:
+      DATABASE_URL: sqlite:///data/playarr.db
+      PLAYARR_JWT_SECRET: change-me-to-a-long-random-string
+    volumes:
+      - playarr-data:/data
+volumes:
+  playarr-data:`;
+
+const SERVER_INSTALL_COMMANDS: Record<
+  "docker" | "compose" | "systemd" | "helm" | "relay",
+  readonly string[]
+> = {
   docker: [
-    "docker compose -f infra/docker/docker-compose.standalone.yml up -d --build",
-    "docker compose -f infra/docker/docker-compose.standalone.yml logs -f",
+    `docker pull ${SERVER_IMAGE}:latest`,
+    `docker run -d --name playarr --restart unless-stopped -p 8484:8484 -v playarr-data:/data -e DATABASE_URL=sqlite:///data/playarr.db -e PLAYARR_JWT_SECRET="$(openssl rand -hex 32)" ${SERVER_IMAGE}:latest`,
+    "curl http://localhost:8484/healthz",
   ],
+  compose: [SERVER_DOCKER_COMPOSE, "docker compose up -d"],
   systemd: [
-    "sudo ./infra/systemd/install.sh /path/to/playarr-server",
+    "tar -xzf playarr-server-linux-amd64.tar.gz",
+    "cd playarr-server-*-linux-amd64",
+    "sudo ./systemd/install.sh",
     "sudoedit /etc/playarr/playarr.env",
     "sudo systemctl enable --now playarr.service",
     "journalctl -u playarr.service -f",
   ],
   helm: [
+    `# set image.repository to ${SERVER_IMAGE} and image.tag to a release version`,
     "helm template playarr infra/kubernetes/helm/playarr-standalone --values my-values.yaml",
   ],
   relay: [
@@ -763,8 +788,63 @@ const SERVER_INSTALL_COMMANDS: Record<"docker" | "systemd" | "helm" | "relay", r
   ],
 };
 
+type ServerArch = "amd64" | "arm64";
+
+interface ServerReleaseAsset {
+  url: string;
+  sha256: string;
+}
+
+interface ServerRelease {
+  version: string;
+  assets: Partial<Record<ServerArch, ServerReleaseAsset>>;
+}
+
+const SERVER_ARCHES: readonly ServerArch[] = ["amd64", "arm64"];
+const SERVER_RELEASE_MANIFEST = `${PLAYARR_PUBLIC_ORIGIN}/downloads/server/latest.json`;
+
+/** Shown until the live manifest loads; bump with each server release. */
+const SERVER_FALLBACK_VERSION = "0.1.0";
+
+function serverDownloadUrl(arch: ServerArch) {
+  return `${PLAYARR_PUBLIC_ORIGIN}/downloads/server/playarr-server-linux-${arch}.tar.gz`;
+}
+
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+function parseServerRelease(value: unknown): ServerRelease | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { version, assets } = value as { version?: unknown; assets?: unknown };
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+[0-9A-Za-z.-]*$/.test(version)) return null;
+  if (typeof assets !== "object" || assets === null) return null;
+  const parsed: ServerRelease["assets"] = {};
+  for (const arch of SERVER_ARCHES) {
+    const asset = (assets as Record<string, { url?: unknown; sha256?: unknown } | undefined>)[arch];
+    if (typeof asset?.url === "string" && typeof asset.sha256 === "string" && SHA256_PATTERN.test(asset.sha256)) {
+      parsed[arch] = { url: asset.url, sha256: asset.sha256 };
+    }
+  }
+  return { version, assets: parsed };
+}
+
+/** Reads the latest-release manifest the release workflow publishes; null until it loads (or if it cannot). */
+function useServerRelease(): ServerRelease | null {
+  const [release, setRelease] = useState<ServerRelease | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(SERVER_RELEASE_MANIFEST, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => setRelease(parseServerRelease(body)))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+  return release;
+}
+
 function ServerInstallDetails({ client }: { client: PlayarrClient }) {
   const { t } = useLanguage();
+  const release = useServerRelease();
+  const version = release?.version ?? SERVER_FALLBACK_VERSION;
   const commands = (id: keyof typeof SERVER_INSTALL_COMMANDS, label: string) => (
     <ul className="smart-tv-commands" aria-label={label}>
       {SERVER_INSTALL_COMMANDS[id].map((command) => (
@@ -794,10 +874,44 @@ function ServerInstallDetails({ client }: { client: PlayarrClient }) {
           {t("pages.clients.serverPage.description")}
         </p>
         <span className="client-details-status">
-          {t("pages.clients.status.sourceBuild")}
+          {t("pages.clients.status.serverRelease", { version })}
         </span>
         <p className="smart-tv-package-note" id="server-package-note">
           {t("pages.clients.serverPage.packageNote")}
+        </p>
+        <div className="android-download-actions smart-tv-download-actions server-download-actions">
+          {SERVER_ARCHES.map((arch) => (
+            <a
+              key={arch}
+              id={`server-download-${arch}`}
+              className="profile-action-button"
+              href={serverDownloadUrl(arch)}
+              download
+              data-navigation-focus-key={`clients:server:download:${arch}`}
+            >
+              <strong>{t(`pages.clients.serverPage.download${arch === "amd64" ? "Amd64" : "Arm64"}`)}</strong>
+            </a>
+          ))}
+        </div>
+        <ul className="server-checksums" aria-label={t("pages.clients.serverPage.checksumLabel")}>
+          {SERVER_ARCHES.map((arch) => {
+            const sha256 = release?.assets[arch]?.sha256;
+            return (
+              <li key={arch}>
+                <span>{`linux-${arch}`}</span>
+                {sha256 ? (
+                  <code data-server-sha256={arch}>{`SHA-256 ${sha256}`}</code>
+                ) : (
+                  <a href={`${serverDownloadUrl(arch)}.sha256`} download>
+                    {t("pages.clients.serverPage.checksumFile")}
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="smart-tv-package-note">
+          {t("pages.clients.serverPage.verifyNote")}
         </p>
       </section>
 
@@ -842,7 +956,7 @@ function ServerInstallDetails({ client }: { client: PlayarrClient }) {
           {t("pages.clients.serverPage.installDescription")}
         </p>
         <ol>
-          {(["docker", "systemd", "helm"] as const).map((method, index) => (
+          {(["docker", "compose", "systemd", "helm"] as const).map((method, index) => (
             <li key={method}>
               <span>0{index + 1}</span>
               <div>

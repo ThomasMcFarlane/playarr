@@ -7,7 +7,20 @@ const DOWNLOADS = new Map([
   ["/downloads/roku/playarr-roku.zip", "roku/playarr-roku.zip"],
   ["/downloads/webos/playarr-webos.ipk", "webos/playarr-webos.ipk"],
   ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
+  // Playarr Server release tarballs: stable "latest" aliases (overwritten on
+  // every release) plus the manifest the Clients hub reads for the version
+  // and checksums. Versioned, immutable copies are matched below.
+  ["/downloads/server/latest.json", "server/latest.json"],
+  ["/downloads/server/playarr-server-linux-amd64.tar.gz", "server/playarr-server-linux-amd64.tar.gz"],
+  ["/downloads/server/playarr-server-linux-amd64.tar.gz.sha256", "server/playarr-server-linux-amd64.tar.gz.sha256"],
+  ["/downloads/server/playarr-server-linux-arm64.tar.gz", "server/playarr-server-linux-arm64.tar.gz"],
+  ["/downloads/server/playarr-server-linux-arm64.tar.gz.sha256", "server/playarr-server-linux-arm64.tar.gz.sha256"],
 ]);
+
+// /downloads/server/playarr-server-<version>-linux-<arch>.tar.gz (and its
+// .sha256, plus playarr-server-<version>-SHA256SUMS) is immutable per version.
+const VERSIONED_SERVER_DOWNLOAD =
+  /^\/downloads\/server\/(playarr-server-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)-(?:linux-(?:amd64|arm64)\.tar\.gz(?:\.sha256)?|SHA256SUMS))$/;
 
 const VERSIONED_ANDROID_DOWNLOAD =
   /^\/downloads\/android\/releases\/(\d+\.\d+\.\d+)\/(playarr-android\.apk|SHA256SUMS)$/;
@@ -509,7 +522,9 @@ function downloadKey(pathname) {
   const stableKey = DOWNLOADS.get(pathname);
   if (stableKey) return stableKey;
   const versioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
-  return versioned ? `android/releases/${versioned[1]}/${versioned[2]}` : undefined;
+  if (versioned) return `android/releases/${versioned[1]}/${versioned[2]}`;
+  const server = pathname.match(VERSIONED_SERVER_DOWNLOAD);
+  return server ? `server/releases/${server[2]}/${server[1]}` : undefined;
 }
 
 export default {
@@ -612,18 +627,20 @@ export default {
     const isIpk = filename.endsWith(".ipk");
     const isWgt = filename.endsWith(".wgt");
     const isZip = filename.endsWith(".zip");
+    const isTarball = filename.endsWith(".tar.gz");
     const isJson = filename.endsWith(".json");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set(
       "Cache-Control",
-      VERSIONED_ANDROID_DOWNLOAD.test(url.pathname)
+      VERSIONED_ANDROID_DOWNLOAD.test(url.pathname) ||
+        VERSIONED_SERVER_DOWNLOAD.test(url.pathname)
         ? "public, max-age=31536000, immutable"
         : "public, max-age=300"
     );
     headers.set(
       "Content-Disposition",
-      `${isApk || isIpk || isWgt || isZip ? "attachment" : "inline"}; filename="${filename}"`
+      `${isApk || isIpk || isWgt || isZip || isTarball ? "attachment" : "inline"}; filename="${filename}"`
     );
     headers.set("Content-Length", String(object.size));
     headers.set(
@@ -636,6 +653,8 @@ export default {
             ? "application/widget"
             : isZip
               ? "application/zip"
+            : isTarball
+              ? "application/gzip"
             : isJson
               ? "application/json; charset=utf-8"
               : "text/plain; charset=utf-8"

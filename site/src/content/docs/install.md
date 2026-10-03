@@ -10,7 +10,7 @@ Playarr is a single compiled Rust binary called `playarr`. The same artefact ser
 
 Read this page, pick a tier, then follow the linked walkthrough. Every tier ends in the same place: [First run](/docs/first-run).
 
-> **No released version yet.** There is no tagged backend release, no published container image and no published Helm chart repository. Everything below installs from a repository checkout or a binary you build yourself. Treat the shipped systemd units, Compose files and Helm chart as reviewed but not yet verified end to end on live hardware.
+> **Prebuilt releases.** Linux x86-64 and ARM64 tarballs (binary, Admin UI, example systemd units) and a multi-arch container image, `ghcr.io/thomasmcfarlane/playarr-server`, are published with each server release; get them, with SHA-256 checksums, from [playarr.app/clients/server](https://playarr.app/clients/server). There is still no published Helm chart repository, and the walkthroughs below install from a repository checkout. Treat the shipped systemd units, Compose files and Helm chart as reviewed but not yet verified end to end on live hardware.
 
 ## The three tiers
 

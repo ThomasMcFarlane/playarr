@@ -164,6 +164,60 @@ describe("client package downloads", () => {
     await expect(response.text()).resolves.toContain("has not been published yet");
   });
 
+  it("serves Playarr Server tarballs, checksums and the latest manifest", async () => {
+    const env = environment({
+      body: new Uint8Array([1]),
+      httpEtag: '"release-etag"',
+      size: 1,
+      writeHttpMetadata() {},
+    });
+    const get = async (path) =>
+      worker.fetch(new Request(`https://playarr.app${path}`), env);
+
+    const stable = await get("/downloads/server/playarr-server-linux-arm64.tar.gz");
+    expect(stable.headers.get("Content-Type")).toBe("application/gzip");
+    expect(stable.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="playarr-server-linux-arm64.tar.gz"'
+    );
+    expect(stable.headers.get("Cache-Control")).toBe("public, max-age=300");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "server/playarr-server-linux-arm64.tar.gz"
+    );
+
+    const manifest = await get("/downloads/server/latest.json");
+    expect(manifest.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith("server/latest.json");
+
+    const versioned = await get(
+      "/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz"
+    );
+    expect(versioned.headers.get("Cache-Control")).toContain("immutable");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz"
+    );
+
+    await get("/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz.sha256");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz.sha256"
+    );
+    await get("/downloads/server/playarr-server-0.2.0-rc.1-SHA256SUMS");
+    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
+      "server/releases/0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS"
+    );
+  });
+
+  it("does not expose other server R2 object paths", async () => {
+    const env = environment(null);
+    for (const path of [
+      "/downloads/server/releases/0.1.0/anything",
+      "/downloads/server/playarr-server-0.1.0-linux-riscv.tar.gz",
+      "/downloads/server/playarr-server-..%2F..-linux-amd64.tar.gz",
+    ]) {
+      await worker.fetch(new Request(`https://playarr.app${path}`), env);
+    }
+    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+  });
+
   it("does not expose arbitrary R2 object paths", async () => {
     const env = environment(null);
     await worker.fetch(

@@ -54,7 +54,14 @@ ARG DEBIAN_CODENAME=trixie
 # Stage 1: chef -- base image with cargo-chef installed once, reused by
 # both the planner and builder stages below so its own compile is cached.
 # ------------------------------------------------------------------------
-FROM rust:${RUST_VERSION}-slim-${DEBIAN_CODENAME} AS chef
+#
+# The whole Rust build runs on the *build* platform and cross-compiles to the
+# requested target (`docker buildx build --platform linux/arm64` compiles
+# natively on an x86-64 builder with the aarch64 GNU cross toolchain instead of
+# emulating the compiler under QEMU, which is many times slower). Only the
+# tiny runtime stage below ever executes under emulation.
+FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-slim-${DEBIAN_CODENAME} AS chef
+ARG TARGETARCH
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
@@ -62,6 +69,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libssl-dev \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# Cross toolchain (only when the target architecture differs from the build
+# host) plus the Rust target and a cargo config that points at it. For a
+# same-architecture build nothing extra is installed and cargo is untouched.
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) triple=x86_64-unknown-linux-gnu;  gnu=x86_64-linux-gnu;  pkgs="gcc-x86-64-linux-gnu g++-x86-64-linux-gnu libc6-dev-amd64-cross" ;; \
+      arm64) triple=aarch64-unknown-linux-gnu; gnu=aarch64-linux-gnu; pkgs="gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross" ;; \
+      *) echo "unsupported TARGETARCH ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    echo "$triple" > /rust-target; \
+    rustup target add "$triple"; \
+    if [ "$(dpkg --print-architecture)" != "${TARGETARCH:-amd64}" ]; then \
+      dpkg --add-architecture "${TARGETARCH}"; \
+      apt-get update && apt-get install -y --no-install-recommends $pkgs "libssl-dev:${TARGETARCH}" \
+      && rm -rf /var/lib/apt/lists/*; \
+      us="$(echo $triple | tr - _)"; \
+      printf '#!/bin/sh\nPKG_CONFIG_LIBDIR=/usr/lib/%s/pkgconfig:/usr/share/pkgconfig exec pkg-config "$@"\n' "$gnu" \
+        > "/usr/local/bin/$gnu-pkg-config"; \
+      chmod +x "/usr/local/bin/$gnu-pkg-config"; \
+      mkdir -p /usr/local/cargo; \
+      printf '[target.%s]\nlinker = "%s-gcc"\n[env]\nCC_%s = "%s-gcc"\nCXX_%s = "%s-g++"\nAR_%s = "%s-ar"\nPKG_CONFIG_%s = "/usr/local/bin/%s-pkg-config"\n' \
+        "$triple" "$gnu" "$us" "$gnu" "$us" "$gnu" "$us" "$gnu" "$us" "$gnu" \
+        >> /usr/local/cargo/config.toml; \
+      echo "$gnu" > /strip-prefix; \
+    else \
+      echo "" > /strip-prefix; \
+    fi
 RUN cargo install cargo-chef --locked
 
 # ------------------------------------------------------------------------
@@ -87,12 +121,14 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 WORKDIR /build/backend
 COPY --from=planner /build/backend/recipe.json ./recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --target "$(cat /rust-target)" --recipe-path recipe.json
 COPY backend/ ./
-RUN cargo build --release --workspace --locked --bin playarr-server \
-    && mkdir -p /build/out \
-    && cp target/release/playarr-server /build/out/playarr-server \
-    && strip /build/out/playarr-server
+RUN set -eux; \
+    triple="$(cat /rust-target)"; prefix="$(cat /strip-prefix)"; \
+    cargo build --release --workspace --locked --target "$triple" --bin playarr-server; \
+    mkdir -p /build/out; \
+    cp "target/$triple/release/playarr-server" /build/out/playarr-server; \
+    "${prefix:+$prefix-}strip" /build/out/playarr-server
 
 # ------------------------------------------------------------------------
 # Stage: web-builder -- builds Playarr Admin's static assets
@@ -106,13 +142,26 @@ RUN cargo build --release --workspace --locked --bin playarr-server \
 # planner/builder stages above -- BuildKit runs this concurrently with
 # them, not after.
 # ------------------------------------------------------------------------
-FROM node:23-slim AS web-builder
+FROM --platform=$BUILDPLATFORM node:23-slim AS web-builder
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 COPY clients/tv-web/ ./clients/tv-web/
 WORKDIR /build/clients/tv-web
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @playarr-tv/admin... run build
+
+# ------------------------------------------------------------------------
+# Export-only stages. `docker buildx build --target binary --platform
+# linux/arm64 -o type=local,dest=out .` writes just the stripped server binary
+# (and `--target web` just the Admin UI) to `out/`; the release workflow packs
+# these into the bare-metal tarballs so the tarball binary is byte-identical to
+# the one inside the container image.
+# ------------------------------------------------------------------------
+FROM scratch AS binary
+COPY --from=builder /build/out/playarr-server /playarr-server
+
+FROM scratch AS web
+COPY --from=web-builder /build/clients/tv-web/admin/dist/ /web/
 
 # ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-

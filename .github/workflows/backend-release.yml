@@ -1,26 +1,23 @@
 # =============================================================================
-# Playarr Server Backend Release
+# Playarr Server release
 # =============================================================================
 #
-# Triggered by pushing a tag like `backend-v1.4.2` (or a pre-release such as
-# `backend-v1.4.2-rc.1`). This workflow is scoped to the Rust backend
-# service only -- client releases are handled by their own per-platform
-# *-ci.yml workflows, and release-client-compat-bot.yml reacts to those tags
-# to keep backend/config/client-compatibility.toml in sync.
+# Triggered by pushing a tag such as `backend-v0.1.0` (or a pre-release such as
+# `backend-v0.2.0-rc.1`). The repository is private; only build artefacts are
+# published, never source:
 #
-# Stages:
-#   1. build-binaries       - cross-compiled release binaries (x86_64 +
-#                              aarch64), attached to the GitHub Release.
-#   2. build-and-push-image - multi-arch (linux/amd64 + linux/arm64) Docker
-#                              image pushed to GHCR, signed with cosign
-#                              (keyless/OIDC), with an attached SBOM.
-#   3. publish-release      - creates the GitHub Release with the binaries.
-#      Gated behind the `release-backend` GitHub Environment -- configure
-#      that environment (Settings -> Environments -> release-backend) with
-#      required reviewers so a human approves before the release is
-#      published. This is the ONLY job gated that way; build-binaries and
-#      build-and-push-image run unattended so reviewers have real
-#      artifacts/a real image digest to inspect before approving.
+#   * Linux x86-64 and ARM64 tarballs (binary + Admin UI + LICENSE + example
+#     systemd units) and SHA-256 checksums, uploaded to the private R2 bucket
+#     `playarr-client-downloads` and served same-origin by the playarr.app
+#     Worker under /downloads/server/ (see docs/deployment/playarr-cloudflare.md).
+#   * A multi-arch container image, ghcr.io/thomasmcfarlane/playarr-server,
+#     tagged <version> and `latest` (pre-releases only get the version tag),
+#     with an SBOM and provenance attestation. The GHCR package must be public
+#     for anonymous `docker pull`; see scripts/ghcr-make-public.sh.
+#
+# Everything is built by infra/docker/backend.Dockerfile on a GitHub-hosted
+# runner. The Rust build cross-compiles natively on the x86-64 runner (no QEMU
+# compile), so the tarball binary is byte-identical to the one in the image.
 # =============================================================================
 
 name: Backend Release
@@ -29,95 +26,64 @@ on:
   push:
     tags:
       - 'backend-v*'
+  workflow_dispatch:
+    # Run against an existing tag ("Use workflow from" = the tag) to re-publish.
+
+concurrency:
+  group: backend-release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  CARGO_TERM_COLOR: always
+  IMAGE: ghcr.io/thomasmcfarlane/playarr-server
 
 jobs:
-  build-binaries:
-    name: Build binary (${{ matrix.target }})
+  build:
+    name: Build binaries and image
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: backend -> target
-          key: ${{ matrix.target }}
-
-      # cargo-zigbuild is used instead of a QEMU-backed `cross` image: it's
-      # faster and doesn't need Docker-in-Docker on the hosted runner. Swap
-      # for `cargo install cross && cross build` if zig linking ever
-      # becomes a problem for a particular dependency (e.g. one with a C
-      # build script zig can't handle).
-      - name: Install cargo-zigbuild
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-zigbuild
-
-      - name: Build release binary
-        working-directory: backend
-        run: cargo zigbuild --release --target ${{ matrix.target }} --bin playarr-server
-
-      - name: Package binary
-        working-directory: backend
-        run: |
-          set -euo pipefail
-          bin_path="target/${{ matrix.target }}/release/playarr-server"
-          mkdir -p dist
-          tar -C "$(dirname "$bin_path")" -czf "dist/playarr-${{ matrix.target }}.tar.gz" "$(basename "$bin_path")"
-          shasum -a 256 "dist/playarr-${{ matrix.target }}.tar.gz" > "dist/playarr-${{ matrix.target }}.tar.gz.sha256"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: playarr-${{ matrix.target }}
-          path: backend/dist/*
-          if-no-files-found: error
-          retention-days: 14
-
-  build-and-push-image:
-    name: Build & push multi-arch Docker image
-    runs-on: ubuntu-latest
+    timeout-minutes: 150
     permissions:
       contents: read
       packages: write
-      id-token: write # required for cosign keyless (OIDC) signing
     outputs:
-      image: ${{ steps.image.outputs.name }}
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
-      # GHCR/Docker repository names must be lowercase; github.repository
-      # isn't guaranteed to be (org/user names can be mixed case).
-      - name: Compute image name
-        id: image
+      - name: Resolve and validate the version
+        id: version
+        shell: bash
         run: |
-          echo "name=ghcr.io/$(echo '${{ github.repository_owner }}/playarr-backend' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          case "$GITHUB_REF_NAME" in
+            backend-v*) ;;
+            *) echo "Run this workflow from a backend-v* tag, not '$GITHUB_REF_NAME'." >&2; exit 1 ;;
+          esac
+          version="${GITHUB_REF_NAME#backend-v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "Tag version '$version' is not semver." >&2; exit 1
+          fi
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/Cargo.toml | head -n 1)"
+          if [[ "${version%%-*}" != "$crate" ]]; then
+            echo "Tag version $version does not match backend crate version $crate (backend/Cargo.toml)." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
 
-      - name: Docker metadata (semver + digest/sha tags)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          tags: |
-            type=match,pattern=backend-v(.*),group=1
-            type=sha,format=long
+      - name: Free disk space
+        run: |
+          # Deleted in the background so a slow filesystem cannot stall the job.
+          sudo sh -c 'rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc' >/dev/null 2>&1 &
+          df -h /
 
       - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -127,13 +93,76 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Dockerfile is owned by the Docker infra scaffolding (task-scoped to
-      # infra/). Build context is the repo root since the Dockerfile is
-      # expected to COPY backend/ (and possibly the workspace lockfile) in
-      # from there; the image does its own cross-arch compilation via
-      # buildx/QEMU, independent of the cargo-zigbuild binaries built above
-      # (those are for the bare-metal/systemd release path, not the image).
-      - name: Build and push
+      # One BuildKit builder serves every build below, so the Rust layers are
+      # compiled once per architecture and reused by the image build.
+      - name: Build server binaries and Admin UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            docker buildx build --target binary --platform "linux/$arch" \
+              -f infra/docker/backend.Dockerfile -o "type=local,dest=build/$arch" .
+          done
+          docker buildx build --target web --platform linux/amd64 \
+            -f infra/docker/backend.Dockerfile -o type=local,dest=build/web .
+          file build/amd64/playarr-server build/arm64/playarr-server
+
+      - name: Package tarballs and checksums
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            scripts/package-server-release.sh "$VERSION" "$arch" "build/$arch/playarr-server" build/web/web dist
+          done
+          (cd dist && sha256sum playarr-server-*.tar.gz > "playarr-server-${VERSION}-SHA256SUMS" && cat "playarr-server-${VERSION}-SHA256SUMS")
+
+      - name: Smoke-test the amd64 tarball
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          tar -xzf "dist/playarr-server-${VERSION}-linux-amd64.tar.gz" -C "$tmp"
+          dir="$tmp/playarr-server-${VERSION}-linux-amd64"
+          mkdir "$tmp/data"
+          DATABASE_URL="sqlite://$tmp/data/playarr.db" PLAYARR_HTTP_BIND_ADDR=127.0.0.1:18484 \
+            PLAYARR_METRICS_BIND_ADDR=127.0.0.1:19090 "$dir/playarr-server" serve > "$tmp/server.log" 2>&1 &
+          pid=$!
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18484/healthz; then echo; break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18484/healthz >/dev/null || { cat "$tmp/server.log"; exit 1; }
+          curl -fsS http://127.0.0.1:18484/ | grep -qi '<!doctype html' || { echo "Admin UI not served" >&2; exit 1; }
+          kill "$pid"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-server-dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Image tags
+        id: tags
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE}:${VERSION}"
+            if [[ "$PRERELEASE" != "true" ]]; then echo "${IMAGE}:latest"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push multi-arch image
         id: push
         uses: docker/build-push-action@v6
         with:
@@ -141,65 +170,88 @@ jobs:
           file: infra/docker/backend.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.tags }}
+          sbom: true
+          provenance: true
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign image (keyless/OIDC)
-        run: cosign sign --yes "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
-
-      - name: Generate SBOM (CycloneDX via syft)
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
-          format: cyclonedx-json
-          output-file: sbom-backend.cdx.json
-
-      - name: Attach + sign SBOM
-        run: |
-          cosign attach sbom --sbom sbom-backend.cdx.json "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
-          cosign sign --yes --attachment-tag sbom "${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sbom-backend
-          path: sbom-backend.cdx.json
-          retention-days: 90
-
-  publish-release:
-    name: Publish GitHub Release
-    needs: [build-binaries, build-and-push-image]
+  publish:
+    name: Publish downloads
+    needs: build
     runs-on: ubuntu-latest
-    # Requires reviewer approval before running -- configure the
-    # `release-backend` environment's protection rules in repo Settings.
-    environment: release-backend
+    timeout-minutes: 30
+    # Holds the Cloudflare credentials used for the Android APK uploads.
+    environment: release-android
     permissions:
       contents: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      PRERELEASE: ${{ needs.build.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: playarr-*
+          name: playarr-server-dist
           path: dist
-          merge-multiple: true
 
-      - name: Create GitHub Release
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum -c "playarr-server-${VERSION}-SHA256SUMS"
+
+      - name: Write the latest manifest
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          asset() {
+            local arch="$1" file="playarr-server-${VERSION}-linux-$1.tar.gz"
+            jq -n --arg url "https://playarr.app/downloads/server/${file}" \
+              --arg sha "$(cut -d ' ' -f 1 "dist/${file}.sha256")" \
+              --argjson size "$(stat -c %s "dist/${file}")" \
+              '{url: $url, sha256: $sha, size: $size}'
+          }
+          jq -n --arg version "$VERSION" \
+            --arg image "${IMAGE}:${VERSION}" --arg digest "$IMAGE_DIGEST" \
+            --arg released "$(date -u +%FT%TZ)" \
+            --argjson amd64 "$(asset amd64)" --argjson arm64 "$(asset arm64)" \
+            --arg sums "https://playarr.app/downloads/server/playarr-server-${VERSION}-SHA256SUMS" \
+            '{version: $version, released_at: $released, image: $image, image_digest: $digest, sha256sums_url: $sums, assets: {amd64: $amd64, arm64: $arm64}}' \
+            > dist/latest.json
+          cat dist/latest.json
+
+      - name: Create GitHub release (private repository)
         uses: softprops/action-gh-release@v2
         with:
-          name: Backend ${{ github.ref_name }}
+          name: Playarr Server ${{ env.VERSION }}
           generate_release_notes: true
-          files: dist/**
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          prerelease: ${{ env.PRERELEASE == 'true' }}
+          files: |
+            dist/playarr-server-*.tar.gz
+            dist/playarr-server-*.sha256
+            dist/playarr-server-*-SHA256SUMS
+            dist/latest.json
           body: |
-            Container image: `${{ needs.build-and-push-image.outputs.image }}@${{ needs.build-and-push-image.outputs.digest }}`
+            Container image: `${{ env.IMAGE }}:${{ env.VERSION }}` (`${{ needs.build.outputs.digest }}`)
 
-            This image is signed (cosign, keyless/OIDC) and has an attached CycloneDX SBOM. Verify with:
+            Downloads: https://playarr.app/clients/server
 
-            ```
-            cosign verify --certificate-identity-regexp 'https://github.com/${{ github.repository }}/.*' \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-              ${{ needs.build-and-push-image.outputs.image }}@${{ needs.build-and-push-image.outputs.digest }}
-            ```
+      - name: Upload to Cloudflare R2
+        shell: bash
+        env:
+          # The Workers deploy token (CLOUDFLARE_API_TOKEN) has no R2 access, so
+          # this needs its own token with Workers R2 Storage Edit.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            msg="CLOUDFLARE_R2_API_TOKEN is not set in the release-android environment, so the downloads were NOT uploaded to R2. Run scripts/upload-server-release.sh with the dist artefact, or add the secret (scripts/server-release-owner-setup.sh) and re-run this workflow on the tag."
+            echo "::warning::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          scripts/upload-server-release.sh dist "$VERSION" "$PRERELEASE"

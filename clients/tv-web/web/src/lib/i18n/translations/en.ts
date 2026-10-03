@@ -988,8 +988,8 @@ export const en = {
   "pages.clients.firetv.platform": "Amazon Fire TV devices",
   "pages.clients.firetv.description":
     "The native Fire TV client is in development. It will install as a signed package, so no release is available to download yet.",
-  "pages.clients.status.sourceBuild":
-    "Build from source · No public download yet",
+  "pages.clients.status.serverRelease":
+    "Release {{version}} · Linux and Docker",
   "pages.clients.server.name":
     "Playarr Server",
   "pages.clients.server.platform":
@@ -1003,7 +1003,17 @@ export const en = {
   "pages.clients.serverPage.description":
     "Playarr Server catalogues your library from the Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr instances you already run, generates thumbnails, probes audio and subtitle tracks and transcodes on demand. Every Playarr client on this page connects to it. Your media stays on your own hardware.",
   "pages.clients.serverPage.packageNote":
-    "Release binaries and a public container image have not been published yet, so there is no download button. The methods below are the install layouts the Playarr source tree supports; they build or install from a Playarr source checkout.",
+    "Prebuilt Linux tarballs (x86-64 and ARM64) and a public container image are published with every release. Each tarball holds the server, the Admin UI, the licence and example systemd units. Pick the build for your CPU.",
+  "pages.clients.serverPage.downloadAmd64":
+    "Download Linux x86-64 (.tar.gz)",
+  "pages.clients.serverPage.downloadArm64":
+    "Download Linux ARM64 (.tar.gz)",
+  "pages.clients.serverPage.checksumLabel":
+    "SHA-256 checksums of the latest release",
+  "pages.clients.serverPage.checksumFile":
+    "SHA-256 checksum file",
+  "pages.clients.serverPage.verifyNote":
+    "Check the download with sha256sum before you run it. Needs 64-bit Linux with glibc 2.39 or newer (Debian 13, Ubuntu 24.04 or newer) and ffmpeg on the PATH; the container image has everything included.",
   "pages.clients.serverPage.requirementsKicker":
     "Before you install",
   "pages.clients.serverPage.requirementsTitle":
@@ -1029,19 +1039,23 @@ export const en = {
   "pages.clients.serverPage.installTitle":
     "Choose one",
   "pages.clients.serverPage.installDescription":
-    "Run the commands from the root of a Playarr source checkout. Each method runs the same single all-in-one server process.",
+    "Pick one. Each method runs the same single all-in-one server process. The Docker commands pull the public image; the other methods use the downloaded tarball or your own chart values.",
   "pages.clients.serverPage.dockerTitle":
-    "Docker Compose",
+    "Docker",
   "pages.clients.serverPage.dockerDescription":
-    "Builds the server image, with ffmpeg included, and starts one container with SQLite state in a named volume. Sessions survive restarts only if you set PLAYARR_JWT_SECRET.",
+    "Pulls the multi-arch image, ffmpeg included, and starts one container with SQLite state in a named volume. The generated PLAYARR_JWT_SECRET keeps sessions across restarts; save it if you recreate the container.",
+  "pages.clients.serverPage.composeTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.composeDescription":
+    "The same image as a compose file. Replace the secret with a long random string, then start it and open port 8484.",
   "pages.clients.serverPage.systemdTitle":
     "systemd on a Linux host",
   "pages.clients.serverPage.systemdDescription":
-    "Installs the playarr-server binary, an unprivileged playarr user and the unit files. It does not enable or start anything until you do. Fill in DATABASE_URL in the env file first.",
+    "Unpack the tarball, then install.sh installs the playarr-server binary, the Admin UI, an unprivileged playarr user and the unit files. It does not enable or start anything until you do. Set DATABASE_URL in the env file first, for example sqlite:///var/lib/playarr/playarr.db.",
   "pages.clients.serverPage.helmTitle":
     "Kubernetes (Helm chart)",
   "pages.clients.serverPage.helmDescription":
-    "The playarr-standalone chart runs one Pod with a Recreate strategy for a single SQLite-backed server. You supply the container image, an existing Secret and persistent storage. The chart never creates Secrets and has no migration or deletion hooks. Render and review it before applying.",
+    "The playarr-standalone chart runs one Pod with a Recreate strategy for a single SQLite-backed server. Point it at the public image, an existing Secret and persistent storage. The chart never creates Secrets and has no migration or deletion hooks. Render and review it before applying.",
   "pages.clients.serverPage.connectKicker":
     "Connect your clients",
   "pages.clients.serverPage.connectTitle":

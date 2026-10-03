@@ -618,6 +618,7 @@
 
 .smart-tv-commands code {
   display: block;
+  white-space: pre-wrap;
   padding: 0.62rem 0.72rem;
   border: 1px solid color-mix(in srgb, var(--line-strong) 52%, transparent);
   border-radius: 10px;
@@ -706,4 +707,38 @@
   .client-choice {
     transition: none;
   }
+}
+
+.server-checksums {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem auto 0;
+  max-width: 44rem;
+  list-style: none;
+  text-align: left;
+}
+
+.server-checksums li {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.server-checksums span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.server-checksums code {
+  display: block;
+  font-family: var(--mono);
+  font-size: clamp(0.6rem, 0.72vw, 0.74rem);
+  overflow-wrap: anywhere;
+  user-select: all;
 }

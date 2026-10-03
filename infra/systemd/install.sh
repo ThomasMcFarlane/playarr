@@ -7,7 +7,9 @@
 #   1. Creates the playarr system user/group (if missing).
 #   2. Creates /etc/playarr, /var/lib/playarr, /var/log/playarr with
 #      correct ownership/permissions.
-#   3. Copies the playarr-server binary to /usr/local/bin/playarr-server.
+#   3. Copies the playarr-server binary to /usr/local/bin/playarr-server and,
+#      when a web/ directory sits beside the binary (as in the release
+#      tarball), the Admin UI to /var/lib/playarr/web.
 #   4. Seeds /etc/playarr/playarr.env from playarr.env.example if it
 #      doesn't already exist (never overwrites an existing env file).
 #   5. Copies the three unit files to /etc/systemd/system/.
@@ -25,13 +27,22 @@
 #   sudo ./install.sh [path-to-playarr-server-binary]
 #
 # If no binary path is given, defaults to ./playarr-server relative to this
-# script's directory.
+# script's directory, then ../playarr-server (the release tarball layout:
+# the binary and web/ at the top, this script under systemd/).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-BINARY_SRC="${1:-${SCRIPT_DIR}/playarr-server}"
+if [[ -n "${1:-}" ]]; then
+  BINARY_SRC="$1"
+elif [[ -f "${SCRIPT_DIR}/playarr-server" ]]; then
+  BINARY_SRC="${SCRIPT_DIR}/playarr-server"
+else
+  BINARY_SRC="${SCRIPT_DIR}/../playarr-server"
+fi
+WEB_SRC="$(dirname -- "${BINARY_SRC}")/web"
+WEB_DEST="/var/lib/playarr/web"
 INSTALL_BIN_DIR="/usr/local/bin"
 INSTALL_BIN_PATH="${INSTALL_BIN_DIR}/playarr-server"
 CONFIG_DIR="/etc/playarr"
@@ -103,6 +114,18 @@ install_binary() {
   install -o root -g root -m 0755 "${BINARY_SRC}" "${INSTALL_BIN_PATH}"
 }
 
+install_web() {
+  if [[ ! -f "${WEB_SRC}/index.html" ]]; then
+    log "no web/ directory beside the binary, skipping the Admin UI (the server will serve the API only)"
+    return
+  fi
+  log "installing Admin UI: ${WEB_SRC} -> ${WEB_DEST}"
+  rm -rf "${WEB_DEST}"
+  cp -r "${WEB_SRC}" "${WEB_DEST}"
+  chown -R root:root "${WEB_DEST}"
+  chmod -R u=rwX,go=rX "${WEB_DEST}"
+}
+
 seed_env_file() {
   if [[ -f "${ENV_FILE}" ]]; then
     log "${ENV_FILE} already exists, leaving it untouched"
@@ -138,7 +161,8 @@ Install complete. Nothing has been enabled or started.
 Next steps:
   1. Review and fill in real values:
        sudoedit ${ENV_FILE}
-     (at minimum DATABASE_URL and REDIS_URL are required)
+     (at minimum DATABASE_URL is required; for a single host use
+      sqlite:///var/lib/playarr/playarr.db)
 
   2. Enable and start the main service:
        sudo systemctl enable --now playarr.service
@@ -161,6 +185,7 @@ main() {
   ensure_user
   ensure_dirs
   install_binary
+  install_web
   seed_env_file
   install_units
   reload_systemd

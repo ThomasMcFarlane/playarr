@@ -17,6 +17,10 @@ than splitting API and worker into separate processes/Deployments.
 
 ## Installing
 
+From a release tarball (`https://playarr.app/downloads/server/`), unpack it and run
+`sudo ./systemd/install.sh`: it finds `../playarr-server` and installs `web/` (the Admin UI) to
+`/var/lib/playarr/web`. The command below is the same script run from a source checkout.
+
 ```sh
 sudo ./install.sh /path/to/playarr-server    # or place ./playarr-server next to this script and omit the arg
 ```

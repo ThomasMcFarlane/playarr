@@ -900,8 +900,8 @@ export const th: Translations = {
   "pages.clients.firetv.name": "Fire TV",
   "pages.clients.firetv.platform": "อุปกรณ์ Amazon Fire TV",
   "pages.clients.firetv.description": "ไคลเอนต์ Fire TV แบบเนทีฟกำลังอยู่ระหว่างการพัฒนา โดยจะติดตั้งเป็นแพ็กเกจที่ลงลายเซ็นแล้ว จึงยังไม่มีรุ่นให้ดาวน์โหลด",
-  "pages.clients.status.sourceBuild":
-    "สร้างจากซอร์ส · ยังไม่มีไฟล์ดาวน์โหลดสาธารณะ",
+  "pages.clients.status.serverRelease":
+    "รุ่น {{version}} · Linux และ Docker",
   "pages.clients.server.name":
     "Playarr Server",
   "pages.clients.server.platform":
@@ -915,7 +915,17 @@ export const th: Translations = {
   "pages.clients.serverPage.description":
     "Playarr Server จัดทำแคตตาล็อกคลังของคุณจากอินสแตนซ์ Sonarr, Radarr, Lidarr, Bazarr, Prowlarr และ Readarr ที่คุณใช้อยู่ สร้างภาพขนาดย่อ ตรวจสอบแทร็กเสียงและคำบรรยาย และแปลงรหัสตามต้องการ ไคลเอนต์ Playarr ทุกตัวในหน้านี้เชื่อมต่อกับเซิร์ฟเวอร์นี้ สื่อของคุณอยู่บนฮาร์ดแวร์ของคุณเอง",
   "pages.clients.serverPage.packageNote":
-    "ยังไม่มีการเผยแพร่ไบนารีรุ่นเผยแพร่และอิมเมจคอนเทนเนอร์สาธารณะ จึงยังไม่มีปุ่มดาวน์โหลด วิธีด้านล่างคือรูปแบบการติดตั้งที่ซอร์สของ Playarr รองรับ โดยสร้างหรือติดตั้งจากซอร์สของ Playarr ที่ checkout ไว้",
+    "ทุกรุ่นเผยแพร่ไฟล์ tarball สำหรับ Linux (x86-64 และ ARM64) ที่สร้างไว้แล้วพร้อมอิมเมจคอนเทนเนอร์สาธารณะ แต่ละ tarball มีเซิร์ฟเวอร์ UI ผู้ดูแล ใบอนุญาต และตัวอย่างยูนิต systemd เลือกบิลด์ให้ตรงกับ CPU ของคุณ",
+  "pages.clients.serverPage.downloadAmd64":
+    "ดาวน์โหลด Linux x86-64 (.tar.gz)",
+  "pages.clients.serverPage.downloadArm64":
+    "ดาวน์โหลด Linux ARM64 (.tar.gz)",
+  "pages.clients.serverPage.checksumLabel":
+    "ค่า SHA-256 ของรุ่นล่าสุด",
+  "pages.clients.serverPage.checksumFile":
+    "ไฟล์ checksum SHA-256",
+  "pages.clients.serverPage.verifyNote":
+    "ตรวจไฟล์ที่ดาวน์โหลดด้วย sha256sum ก่อนเรียกใช้ ต้องใช้ Linux 64 บิตที่มี glibc 2.39 ขึ้นไป (Debian 13, Ubuntu 24.04 ขึ้นไป) และมี ffmpeg ใน PATH ส่วนอิมเมจคอนเทนเนอร์มีทุกอย่างครบแล้ว",
   "pages.clients.serverPage.requirementsKicker":
     "ก่อนติดตั้ง",
   "pages.clients.serverPage.requirementsTitle":
@@ -941,19 +951,23 @@ export const th: Translations = {
   "pages.clients.serverPage.installTitle":
     "เลือกหนึ่งวิธี",
   "pages.clients.serverPage.installDescription":
-    "รันคำสั่งจากรูทของซอร์ส Playarr ที่ checkout ไว้ ทุกวิธีรันกระบวนการเซิร์ฟเวอร์แบบรวมตัวเดียวกัน",
+    "เลือกวิธีใดวิธีหนึ่ง ทุกวิธีรันกระบวนการเซิร์ฟเวอร์แบบรวมเดียวกัน คำสั่ง Docker ดึงอิมเมจสาธารณะ ส่วนวิธีอื่นใช้ tarball ที่ดาวน์โหลดหรือค่า chart ของคุณเอง",
   "pages.clients.serverPage.dockerTitle":
-    "Docker Compose",
+    "Docker",
   "pages.clients.serverPage.dockerDescription":
-    "สร้างอิมเมจเซิร์ฟเวอร์ที่รวม ffmpeg และเริ่มคอนเทนเนอร์เดียวโดยเก็บสถานะ SQLite ใน named volume เซสชันจะคงอยู่หลังรีสตาร์ทก็ต่อเมื่อคุณตั้งค่า PLAYARR_JWT_SECRET",
+    "ดึงอิมเมจหลายสถาปัตยกรรมที่มี ffmpeg รวมอยู่ และเริ่มคอนเทนเนอร์เดียวโดยเก็บสถานะ SQLite ไว้ในวอลุ่มที่ตั้งชื่อ ค่า PLAYARR_JWT_SECRET ที่สร้างขึ้นทำให้เซสชันคงอยู่หลังรีสตาร์ต โปรดเก็บไว้หากต้องสร้างคอนเทนเนอร์ใหม่",
+  "pages.clients.serverPage.composeTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.composeDescription":
+    "อิมเมจเดียวกันในรูปแบบไฟล์ compose เปลี่ยนค่า secret เป็นสตริงสุ่มที่ยาว จากนั้นเริ่มรันแล้วเปิดพอร์ต 8484",
   "pages.clients.serverPage.systemdTitle":
     "systemd (โฮสต์ Linux)",
   "pages.clients.serverPage.systemdDescription":
-    "ติดตั้งไบนารี playarr-server ผู้ใช้ playarr แบบไม่มีสิทธิ์พิเศษ และไฟล์ unit โดยจะไม่เปิดใช้งานหรือเริ่มทำงานจนกว่าคุณจะสั่ง กรอก DATABASE_URL ในไฟล์ env ก่อน",
+    "แตกไฟล์ tarball จากนั้น install.sh จะติดตั้งไบนารี playarr-server, UI ผู้ดูแล, ผู้ใช้ playarr ที่ไม่มีสิทธิ์พิเศษ และไฟล์ยูนิต โดยไม่เปิดหรือเริ่มบริการให้จนกว่าคุณจะสั่ง ตั้งค่า DATABASE_URL ในไฟล์ env ก่อน เช่น sqlite:///var/lib/playarr/playarr.db",
   "pages.clients.serverPage.helmTitle":
     "Kubernetes (Helm chart)",
   "pages.clients.serverPage.helmDescription":
-    "ชาร์ต playarr-standalone รันหนึ่ง Pod ด้วยกลยุทธ์ Recreate สำหรับเซิร์ฟเวอร์ SQLite เครื่องเดียว คุณต้องจัดหาอิมเมจคอนเทนเนอร์ Secret ที่มีอยู่ และพื้นที่จัดเก็บถาวร ชาร์ตไม่สร้าง Secret และไม่มี hook สำหรับย้ายหรือลบข้อมูล เรนเดอร์และตรวจสอบก่อนนำไปใช้",
+    "chart playarr-standalone รันหนึ่ง Pod ด้วยกลยุทธ์ Recreate สำหรับเซิร์ฟเวอร์ที่ใช้ SQLite เพียงตัวเดียว ชี้ไปที่อิมเมจสาธารณะ Secret ที่มีอยู่ และที่เก็บข้อมูลถาวร chart ไม่สร้าง Secret และไม่มี hook สำหรับ migration หรือการลบ ควร render และตรวจทานก่อนใช้งาน",
   "pages.clients.serverPage.connectKicker":
     "เชื่อมต่อไคลเอนต์",
   "pages.clients.serverPage.connectTitle":

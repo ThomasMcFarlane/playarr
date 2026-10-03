@@ -5,6 +5,17 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active: Public Playarr Server releases (2026-10-04)
+
+Owner decision (4 October 2026): publish public Playarr Server releases from the private repository, artefacts only. See [`docs/deployment/server-releases.md`](docs/deployment/server-releases.md).
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 176 | Release workflow: Linux x86-64 and ARM64 tarballs plus a multi-arch GHCR image on tag `backend-v*` | in progress | server-release | `backend-release.yml` rewritten; `backend.Dockerfile` cross-compiles arm64 natively (no QEMU compile) and gains `binary`/`web` export targets; `scripts/package-server-release.sh`. First tag `backend-v0.1.0`. |
+| 177 | Serve server tarballs and checksums from the private R2 bucket via the playarr.app Worker | in progress | server-release | `/downloads/server/*` routes in `worker.js` (stable aliases, immutable versioned paths, `latest.json`). |
+| 178 | Clients hub `/clients/server`: Download buttons per architecture, checksums, GHCR snippets, release version status (en/th/ja) | in progress | server-release | Replaces "Build from source" status from PR 68. |
+| 179 | Make the GHCR package `playarr-server` public | blocked on one owner click | Owner | GitHub's API cannot change package visibility. Run `scripts/ghcr-make-public.sh` for the exact step; verify with an anonymous `docker pull`. |
+
 ## Active: End-of-playback experience on every client (2026-10-03)
 
 Owner requirement (3 October 2026): when media finishes, show a UI with exit, replay and suggestions, or a countdown to the next item in a playlist with Play now, exit and suggestions. Spec: [`docs/architecture/end-of-playback.md`](docs/architecture/end-of-playback.md).

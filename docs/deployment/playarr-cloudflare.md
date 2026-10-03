@@ -17,6 +17,11 @@ continuing to serve ordinary application routes from Static Assets. Android rele
 a short-lived latest-version manifest and an immutable, versioned APK route used by the native
 television self-update action.
 
+Playarr Server release tarballs use the same bucket and Worker: `/downloads/server/latest.json`,
+`/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (stable aliases) and the immutable
+`/downloads/server/playarr-server-<version>-linux-<arch>.tar.gz` (plus `.sha256` and `-SHA256SUMS`)
+map to `server/...` keys in R2. See [Playarr Server releases](server-releases.md).
+
 The Worker also owns the short-lived first-contact broker under `/api/link/*`. Each
 generated code is isolated in a Durable Object and expires after five minutes. The record contains
 only the requesting device secret, the selected Playarr Server addresses, and a single-use
