@@ -92,6 +92,15 @@ export type MediaPlaybackPreferences =
 export type UpdateMediaPlaybackPreferencesRequest =
   components["schemas"]["UpdateMediaPlaybackPreferencesRequest"];
 export type WatchProgress = components["schemas"]["WatchProgress"];
+export type RemoteTarget = components["schemas"]["RemoteTargetResponse"];
+export type RemotePairing = components["schemas"]["PairingResponse"];
+export type RemoteCommandRequest = components["schemas"]["CommandRequest"];
+export type RemoteCommandStatus = components["schemas"]["CommandStatusResponse"];
+export type RemoteInboxEvent = components["schemas"]["InboxEvent"];
+export type RemoteInbox = components["schemas"]["InboxResponse"];
+export type RemotePlaybackSnapshot = components["schemas"]["PlaybackSnapshot"];
+export type RemoteHandoff = components["schemas"]["HandoffResponse"];
+export type RemoteCreateHandoffRequest = components["schemas"]["CreateHandoffRequest"];
 export type WatchState = components["schemas"]["WatchState"];
 
 /** One playback attempt from start to finish -- `playback_sessions` row shape, verbatim. */
@@ -660,7 +669,8 @@ export class ApiClient {
   private async requestJson<T>(
     method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
-    body?: unknown
+    body?: unknown,
+    signal?: AbortSignal
   ): Promise<T> {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = {};
@@ -670,6 +680,7 @@ export class ApiClient {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
     const response = await this.rawFetch(request);
     if (!response.ok) {
@@ -1617,6 +1628,123 @@ export class ApiClient {
         params: { path: { media_file_id: mediaFileId } },
       })
     );
+  }
+
+  // ---------------------------------------------------------------------
+  // phone remote and playback handoff (docs/architecture/remote-control.md)
+  // ---------------------------------------------------------------------
+
+  /** Registers this device as a remotely controllable target with advertised capabilities. */
+  async registerRemoteTarget(body: {
+    name: string;
+    platform?: string;
+    capabilities: string[];
+  }): Promise<RemoteTarget> {
+    return this.requestJson("PUT", "/api/v1/remote/target", body);
+  }
+
+  async unregisterRemoteTarget(): Promise<void> {
+    await this.requestJson("DELETE", "/api/v1/remote/target");
+  }
+
+  async listRemoteTargets(): Promise<RemoteTarget[]> {
+    return this.requestJson("GET", "/api/v1/remote/targets");
+  }
+
+  /** Reports what this target is playing (fresh state is used for handoff). */
+  async reportRemoteState(state: Record<string, unknown>): Promise<void> {
+    await this.requestJson("PUT", "/api/v1/remote/target/state", { state });
+  }
+
+  async requestRemotePairing(body: {
+    targetDeviceId: string;
+    scopes?: string[];
+    controllerName?: string;
+  }): Promise<RemotePairing> {
+    return this.requestJson("POST", "/api/v1/remote/pairings", {
+      target_device_id: body.targetDeviceId,
+      scopes: body.scopes,
+      controller_name: body.controllerName,
+    });
+  }
+
+  async listRemotePairings(): Promise<RemotePairing[]> {
+    return this.requestJson("GET", "/api/v1/remote/pairings");
+  }
+
+  async getRemotePairing(id: string): Promise<RemotePairing> {
+    return this.requestJson("GET", `/api/v1/remote/pairings/${encodeURIComponent(id)}`);
+  }
+
+  async approveRemotePairing(id: string, scopes?: string[]): Promise<RemotePairing> {
+    return this.requestJson(
+      "POST",
+      `/api/v1/remote/pairings/${encodeURIComponent(id)}/approve`,
+      { scopes }
+    );
+  }
+
+  async denyRemotePairing(id: string): Promise<RemotePairing> {
+    return this.requestJson("POST", `/api/v1/remote/pairings/${encodeURIComponent(id)}/deny`);
+  }
+
+  async revokeRemotePairing(id: string): Promise<void> {
+    await this.requestJson("DELETE", `/api/v1/remote/pairings/${encodeURIComponent(id)}`);
+  }
+
+  async sendRemoteCommand(
+    pairingId: string,
+    command: RemoteCommandRequest
+  ): Promise<{ command_id: string; seq: number }> {
+    return this.requestJson(
+      "POST",
+      `/api/v1/remote/pairings/${encodeURIComponent(pairingId)}/commands`,
+      command
+    );
+  }
+
+  async getRemoteCommandStatus(commandId: string): Promise<RemoteCommandStatus> {
+    return this.requestJson("GET", `/api/v1/remote/commands/${encodeURIComponent(commandId)}`);
+  }
+
+  /** Long-polls this target's inbox for up to `wait` seconds (server caps at 25). */
+  async pollRemoteInbox(after: number, wait: number, signal?: AbortSignal): Promise<RemoteInbox> {
+    return this.requestJson(
+      "GET",
+      `/api/v1/remote/inbox?after=${Math.max(0, Math.trunc(after))}&wait=${Math.trunc(wait)}`,
+      undefined,
+      signal
+    );
+  }
+
+  async ackRemoteEvent(
+    eventId: string,
+    status: "ok" | "failed" | "unsupported",
+    detail?: string
+  ): Promise<void> {
+    await this.requestJson("POST", `/api/v1/remote/events/${encodeURIComponent(eventId)}/ack`, {
+      status,
+      detail,
+    });
+  }
+
+  async createRemoteHandoff(body: RemoteCreateHandoffRequest): Promise<RemoteHandoff> {
+    return this.requestJson("POST", "/api/v1/remote/handoffs", body);
+  }
+
+  async getRemoteHandoff(id: string): Promise<RemoteHandoff> {
+    return this.requestJson("GET", `/api/v1/remote/handoffs/${encodeURIComponent(id)}`);
+  }
+
+  async ackRemoteHandoff(
+    id: string,
+    body: { status: "playing" | "failed"; position_ms?: number; reason?: string }
+  ): Promise<RemoteHandoff> {
+    return this.requestJson("POST", `/api/v1/remote/handoffs/${encodeURIComponent(id)}/ack`, body);
+  }
+
+  async cancelRemoteHandoff(id: string): Promise<RemoteHandoff> {
+    return this.requestJson("POST", `/api/v1/remote/handoffs/${encodeURIComponent(id)}/cancel`);
   }
 
   /** Persists a heartbeat, pause/stop position, or completed playback. */

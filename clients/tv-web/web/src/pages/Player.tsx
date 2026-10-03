@@ -33,6 +33,8 @@ import { advanceMusicPlaybackLifecycle } from "../lib/musicPlaybackLifecycle";
 import { CastProvider, useCast } from "../lib/cast/CastProvider";
 import { CastUnavailableError } from "../lib/cast/castSdk";
 import { ensureDelegatedCastCredentials, persistRotatedDelegatedCastCredentials } from "../lib/cast/delegatedDeviceAuth";
+import { setRemotePlayer } from "../lib/remote/playerBridge";
+import { PlayOnDeviceDialog } from "../components/remote/PlayOnDeviceDialog";
 import { buildPlayarrCastLoadRequest, requestPlayarrCastLoad } from "../lib/cast/castLoad";
 import {
   sendPlayarrCastMessage,
@@ -389,6 +391,72 @@ function PlayerPageInner({
     const next = playlistItems[activePlaylistIndex + 1];
     if (next) navigateToPlaylistItem(next);
   }, [activePlaylistIndex, navigateToPlaylistItem, playlistItems]);
+
+  // Phone remote and handoff (docs/architecture/remote-control.md): expose this
+  // player to the remote host so commands can drive it and its position can be
+  // reported/handed off. Only the home server's playback is controllable.
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const nextRef = useRef(handleNext);
+  nextRef.current = handleNext;
+  const previousRef = useRef(handlePrevious);
+  previousRef.current = handlePrevious;
+  const hasNextRef = useRef(activePlaylistIndex < playlistItems.length - 1);
+  hasNextRef.current = activePlaylistIndex < playlistItems.length - 1;
+  const hasPreviousRef = useRef(activePlaylistIndex > 0);
+  hasPreviousRef.current = activePlaylistIndex > 0;
+  const remoteServerUrl = locationState?.serverUrl;
+  useEffect(() => {
+    if (!mediaFileId || remoteServerUrl) return;
+    const engine = () => playerRef.current.engineState;
+    const pickTrack = <T extends { id: string; language?: string }>(
+      tracks: T[],
+      language: string
+    ) =>
+      tracks.find((track) => track.language?.toLowerCase().startsWith(language.toLowerCase()));
+    setRemotePlayer({
+      mediaFileId,
+      snapshot: () => ({
+        positionMs: Math.round(engine().currentTimeSeconds * 1000),
+        durationMs: Math.round(engine().durationSeconds * 1000),
+        paused: engine().state !== "playing" && engine().state !== "buffering",
+      }),
+      isReady: () =>
+        engine().durationSeconds > 0 &&
+        ["ready", "playing", "paused", "buffering"].includes(engine().state),
+      play: () => playerRef.current.play(),
+      pause: () => playerRef.current.pause(),
+      seekToMs: (ms) => playerRef.current.seek(ms / 1000),
+      setVolume: (volume) => playerRef.current.setVolume(volume),
+      stop: () => closeRef.current(),
+      next: () => {
+        if (hasNextRef.current) nextRef.current();
+      },
+      previous: () => {
+        if (hasPreviousRef.current) previousRef.current();
+      },
+      setAudioLanguage: (language) => {
+        const track = pickTrack(playerRef.current.audioTracks, language);
+        if (!track) return false;
+        playerRef.current.selectAudioTrack(track.id);
+        return true;
+      },
+      setSubtitleLanguage: (language) => {
+        if (language === null) {
+          playerRef.current.selectSubtitleTrack(null);
+          return true;
+        }
+        const track = pickTrack(playerRef.current.subtitleTracks, language);
+        if (!track) return false;
+        playerRef.current.selectSubtitleTrack(track.id);
+        return true;
+      },
+    });
+    return () => setRemotePlayer(null);
+  }, [mediaFileId, remoteServerUrl]);
+  const [playOnOpen, setPlayOnOpen] = useState(false);
 
   useEffect(() => {
     const nextPlaybackState = advanceMusicPlaybackLifecycle(
@@ -783,7 +851,9 @@ function PlayerPageInner({
         castDeviceName={castDeviceName}
         castState={castState}
         onToggleCast={handleToggleCast}
+        onPlayOnDevice={minimised || remoteServerUrl ? undefined : () => setPlayOnOpen(true)}
       />
+      {playOnOpen && <PlayOnDeviceDialog onClose={() => setPlayOnOpen(false)} />}
       {endScreenKind && (
         <EndScreen
           kind={endScreenKind}

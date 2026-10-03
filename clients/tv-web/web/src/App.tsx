@@ -31,6 +31,8 @@ import { SettingsServerPage } from "./pages/settings/Server";
 import { SettingsProfileLockPage } from "./pages/settings/ProfileLock";
 import { SettingsInvitePage } from "./pages/settings/Invite";
 import { SettingsRequestLatencyPage } from "./pages/settings/RequestLatency";
+import { SettingsRemotePage } from "./pages/settings/Remote";
+import { RemoteProvider } from "./lib/remote/RemoteProvider";
 import { SettingsProfileAvatarPage } from "./pages/settings/ProfileAvatar";
 import { LoginPage, QrLoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
@@ -371,6 +373,11 @@ function AppShell() {
     location.pathname === activePlayerBackTo;
 
   return (
+    <RemoteProvider
+      playerActive={activePlayerSession !== null}
+      startPlayerSession={startPlayerSession}
+      goHome={() => navigate("/")}
+    >
     <div
       className={`app-shell${isPlayerRoute ? " is-player-route" : ""}`}
     >
@@ -529,6 +536,7 @@ function AppShell() {
         </div>
       )}
     </div>
+    </RemoteProvider>
   );
 }
 
@@ -626,6 +634,7 @@ export function App() {
           <Route path="profile-lock" element={<SettingsProfileLockPage />} />
           <Route path="invite" element={<SettingsInvitePage />} />
           <Route path="request-latency" element={<SettingsRequestLatencyPage />} />
+          <Route path="remote" element={<SettingsRemotePage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

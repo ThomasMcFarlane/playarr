@@ -82,6 +82,8 @@ export interface PlayerControlsProps {
   onToggleCast?: () => Promise<void>;
   /** Opens the playback health panel; the button is hidden when omitted. */
   onOpenHealth?: () => void;
+  /** Opens "Play on another device" (phone remote handoff); hidden when omitted. */
+  onPlayOnDevice?: () => void;
 }
 
 function formatTime(totalSeconds: number): string {
@@ -142,6 +144,7 @@ export function PlayerControls({
   castAvailable = false,
   castConnected = false,
   castDeviceName,
+  onPlayOnDevice,
   onToggleCast,
   onOpenHealth,
 }: PlayerControlsProps) {
@@ -157,6 +160,7 @@ export function PlayerControls({
   const qualityButtonRef = useRef<HTMLButtonElement>(null);
   const castButtonRef = useRef<HTMLButtonElement>(null);
   const healthButtonRef = useRef<HTMLButtonElement>(null);
+  const playOnButtonRef = useRef<HTMLButtonElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
   const qualityOptionRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const audioOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -449,6 +453,7 @@ export function PlayerControls({
         qualityButtonRef.current,
         castButtonRef.current,
         healthButtonRef.current,
+        playOnButtonRef.current,
         fullscreenButtonRef.current,
       ].filter(
         (control): control is HTMLButtonElement =>
@@ -1179,6 +1184,23 @@ export function PlayerControls({
             }}
           >
             <HealthIcon />
+          </button>
+        )}
+
+        {onPlayOnDevice && (
+          <button
+            ref={playOnButtonRef}
+            type="button"
+            className="player-btn"
+            onClick={onPlayOnDevice}
+            aria-label={t("remote.playOn.button")}
+            title={t("remote.playOn.button")}
+          >
+            <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2.5" y="5" width="13" height="9" rx="1.2" />
+              <path d="M6 18h6M9 14v4" />
+              <rect x="17" y="9" width="5" height="10" rx="1.2" />
+            </svg>
           </button>
         )}
 

@@ -479,6 +479,7 @@ export function PlayerSurface({
   castDeviceName,
   castState = null,
   onToggleCast,
+  onPlayOnDevice,
 }: {
   player: PlaybackEngineController;
   title: string;
@@ -505,6 +506,8 @@ export function PlayerSurface({
   /** Latest `state` message from the receiver, driving the replacement card's progress/negotiating display. */
   castState?: PlayarrCastStateMessage | null;
   onToggleCast?: () => Promise<void>;
+  /** Opens the "Play on another device" handoff dialog (hidden when omitted). */
+  onPlayOnDevice?: () => void;
 }) {
   const {
     videoRef,
@@ -1317,6 +1320,7 @@ export function PlayerSurface({
           castDeviceName={castDeviceName}
           onToggleCast={onToggleCast}
           onOpenHealth={inlineMusic ? undefined : () => setHealthOpen(true)}
+          onPlayOnDevice={onPlayOnDevice}
         />
       )}
       {healthOpen && (

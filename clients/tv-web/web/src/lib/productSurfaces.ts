@@ -211,6 +211,12 @@ export const PRODUCT_SETTINGS_SECTIONS: readonly ProductSettingsSection[] = [
     titleKey: "settings.index.requestLatency.title",
     descriptionKey: "settings.index.requestLatency.description",
   },
+  {
+    to: "/settings/remote",
+    number: "09",
+    titleKey: "settings.index.remote.title",
+    descriptionKey: "settings.index.remote.description",
+  },
 ] as const;
 
 /** Platforms that share the ten-foot television chrome/CSS profile. */

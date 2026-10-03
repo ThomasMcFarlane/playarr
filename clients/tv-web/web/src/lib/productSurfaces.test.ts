@@ -76,7 +76,7 @@ describe("productSurfaces — complete client catalogue", () => {
     ]);
   });
 
-  it("registers all eight settings sections", () => {
+  it("registers all nine settings sections", () => {
     expect(PRODUCT_SETTINGS_SECTIONS.map((section) => section.to)).toEqual([
       "/settings/appearance",
       "/settings/profile-avatar",
@@ -86,6 +86,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "/settings/profile-lock",
       "/settings/invite",
       "/settings/request-latency",
+      "/settings/remote",
     ]);
   });
 });

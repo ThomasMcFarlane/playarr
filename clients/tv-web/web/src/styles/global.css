@@ -11679,4 +11679,45 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 @media (max-width: 640px) {
   .playback-health-panel { width: 100vw; }
+/* Phone remote and handoff (docs/architecture/remote-control.md) */
+.remote-code {
+  font-size: clamp(2rem, 6vw, 3.6rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  font-weight: 480;
+}
+
+.remote-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.remote-pad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 320px;
+}
+
+.remote-pad-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.remote-pad-row .input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.remote-pairing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
 }

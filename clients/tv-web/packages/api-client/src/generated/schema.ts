@@ -1092,6 +1092,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discover_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discover/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve_title_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/downloads": {
         parameters: {
             query?: never;
@@ -1996,6 +2028,246 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remote/commands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["command_status_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/events/{id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ack_event_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["create_handoff_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/handoffs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_handoff_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/handoffs/{id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ack_handoff_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/handoffs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_handoff_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["inbox_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/pairings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_pairings_handler"];
+        put?: never;
+        post: operations["create_pairing_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/pairings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_pairing_handler"];
+        put?: never;
+        post?: never;
+        delete: operations["revoke_pairing_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/pairings/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approve_pairing_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/pairings/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["send_command_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/pairings/{id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deny_pairing_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["register_target_handler"];
+        post?: never;
+        delete: operations["unregister_target_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/target/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["report_state_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remote/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_targets_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/capabilities": {
         parameters: {
             query?: never;
@@ -2217,6 +2489,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_watchlist_handler"];
+        put?: never;
+        post: operations["add_watchlist_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/{title_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["remove_watchlist_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/{instance_id}": {
         parameters: {
             query?: never;
@@ -2250,6 +2554,24 @@ export interface components {
             server_time: string;
             users: components["schemas"]["PeerUserRow"][];
         };
+        AckEventRequest: {
+            /** @description Short non-sensitive reason (never user input). */
+            detail?: string | null;
+            /** @description `ok`, `failed` or `unsupported`. */
+            status: string;
+        };
+        AckHandoffRequest: {
+            /**
+             * Format: int64
+             * @description Position the destination actually started at (required for `playing`).
+             */
+            position_ms?: number | null;
+            reason?: string | null;
+            /** @description `playing` or `failed`. */
+            status: string;
+        };
+        /** @enum {string} */
+        ActionKind: "play" | "resume" | "request" | "record" | "launch";
         /**
          * @description One live session, enriched with the labels and route target used by the
          *     administrator Activity and Tasks pages.
@@ -2336,6 +2658,10 @@ export interface components {
         };
         /** @enum {string} */
         AlbumType: "studio" | "live" | "compilation" | "ep" | "single" | "soundtrack";
+        ApprovePairingRequest: {
+            /** @description Narrow the granted scopes to a subset of those requested. */
+            scopes?: string[] | null;
+        };
         /**
          * @description Where in the availability pipeline a `Work` (or a leaf under it) is
          *     sitting. This intentionally mirrors the *arr apps' own state machine
@@ -2561,6 +2887,28 @@ export interface components {
             measured?: components["schemas"]["MeasuredPlayback"];
             reported?: components["schemas"]["ReportedCapabilities"];
         };
+        CommandAccepted: {
+            /** Format: uuid */
+            command_id: string;
+            /** Format: int64 */
+            seq: number;
+        };
+        CommandRequest: {
+            /** @description `navigate`, `text`, `playback` or `input`. */
+            kind: string;
+            /**
+             * @description navigate: `{key}`; text: `{value, mode?: insert|replace|backspace, submit?}`;
+             *     playback: `{action, position_ms?, delta_ms?, language?, level?}`; input: `{input_id}`.
+             */
+            payload: unknown;
+        };
+        CommandStatusResponse: {
+            /** Format: uuid */
+            command_id: string;
+            detail?: string | null;
+            /** @description `queued`, `delivered`, `ok`, `failed`, `unsupported`, `revoked` or `expired`. */
+            status: string;
+        };
         /**
          * @description One platform's row in the compatibility table: what the latest client
          *     build is, the floor below which the version-gate middleware rejects
@@ -2586,6 +2934,29 @@ export interface components {
              *     `GET /api/v1/media/{media_file_id}/download-options`.
              */
             quality_id: string;
+        };
+        CreateHandoffRequest: {
+            /** Format: uuid */
+            destination_device_id: string;
+            /**
+             * Format: uuid
+             * @description Required when the initiator is the source; otherwise taken from the
+             *     source's last reported state.
+             */
+            media_file_id?: string | null;
+            /** @description Client-chosen idempotency key (unique per initiating device). */
+            request_key: string;
+            snapshot?: null | components["schemas"]["PlaybackSnapshot"];
+            /** Format: uuid */
+            source_device_id: string;
+        };
+        CreatePairingRequest: {
+            /** @description Name shown on the target's approval prompt (e.g. "Alex's phone"). */
+            controller_name?: string | null;
+            /** @description Requested scopes; defaults to every capability the target advertises. */
+            scopes?: string[] | null;
+            /** Format: uuid */
+            target_device_id: string;
         };
         CreatePlaylistRequest: {
             /**
@@ -2714,6 +3085,38 @@ export interface components {
              *     up, per RFC 6749 §5.2.
              */
             grant_type: string;
+        };
+        DiscoverResponse: {
+            providers: components["schemas"]["ProviderStatus"][];
+            titles: components["schemas"]["DiscoverTitle"][];
+        };
+        DiscoverTitle: components["schemas"]["DiscoveryTitle"] & {
+            in_watchlist: boolean;
+        };
+        /**
+         * @description What a discovery title is. Games are deliberately separate from
+         *     [`crate::WorkKind`]: they have their own filter and launch semantics.
+         * @enum {string}
+         */
+        DiscoveryKind: "movie" | "series" | "artist" | "author" | "site" | "programme" | "game";
+        /**
+         * @description Which search scope a caller wants. Games only appear for `Games`/`All`.
+         * @enum {string}
+         */
+        DiscoveryScope: "media" | "games" | "all";
+        /** @description A merged real-world title. */
+        DiscoveryTitle: {
+            editions: string[];
+            external_refs: components["schemas"]["ExternalRef"][];
+            kind: components["schemas"]["DiscoveryKind"];
+            overview?: string | null;
+            poster_url?: string | null;
+            sources: components["schemas"]["TitleSource"][];
+            title: string;
+            /** @description Stable identity, see [`identity_key`]. */
+            title_key: string;
+            /** Format: int32 */
+            year?: number | null;
         };
         DownloadOptionsResponse: {
             container: string;
@@ -2898,6 +3301,36 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        HandoffResponse: {
+            /** Format: int64 */
+            acked_position_ms?: number | null;
+            /** Format: int64 */
+            completed_ms?: number | null;
+            /** Format: int64 */
+            created_ms: number;
+            /** Format: uuid */
+            destination_device_id: string;
+            /** Format: int64 */
+            expires_ms: number;
+            failure_reason?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            media_file_id: string;
+            /**
+             * Format: int64
+             * @description Acknowledged position minus the position expected from the snapshot
+             *     after the elapsed time (task 53 measures this).
+             */
+            position_drift_ms?: number | null;
+            snapshot: components["schemas"]["PlaybackSnapshot"];
+            /** Format: uuid */
+            source_device_id: string;
+            /** @description `pending`, `committed`, `failed`, `expired` or `cancelled`. */
+            status: string;
+            /** Format: uuid */
+            work_id: string;
+        };
         HealthExportFact: {
             key: string;
             provenance: components["schemas"]["HealthProvenance"];
@@ -2957,6 +3390,29 @@ export interface components {
             token_type: string;
             /** Format: uuid */
             user_id: string;
+        };
+        InboxEvent: {
+            /** Format: int64 */
+            created_ms: number;
+            /** Format: int64 */
+            expires_ms: number;
+            /** Format: uuid */
+            id: string;
+            /** @description `pairing_request`, `pairing_revoked`, `command`, `handoff_offer` or `handoff_stop`. */
+            kind: string;
+            /** Format: uuid */
+            pairing_id?: string | null;
+            payload?: unknown;
+            /** Format: int64 */
+            seq: number;
+        };
+        InboxResponse: {
+            events: components["schemas"]["InboxEvent"][];
+            /**
+             * Format: int64
+             * @description Highest `seq` returned (or the caller's `after` when empty).
+             */
+            next: number;
         };
         /**
          * @description Response body for [`invites_handler`] -- `docs/architecture/
@@ -3162,6 +3618,28 @@ export interface components {
              *     §5.2's `unsupported_grant_type`.
              */
             error: string;
+        };
+        PairingResponse: {
+            /** Format: uuid */
+            controller_device_id: string;
+            controller_name: string;
+            /** Format: int64 */
+            created_ms: number;
+            /** Format: int64 */
+            expires_ms: number;
+            /** Format: uuid */
+            id: string;
+            /** @description True when the calling device is this pairing's controller. */
+            is_controller: boolean;
+            /** @description True when the calling device is this pairing's target. */
+            is_target: boolean;
+            scopes: string[];
+            /** @description `pending`, `active`, `denied`, `revoked` or `expired`. */
+            status: string;
+            /** Format: uuid */
+            target_device_id: string;
+            /** @description Six digits shown on both devices while the pairing is pending. */
+            verification_code?: string | null;
         };
         /**
          * @description One reachable address for a [`PeerNode`], as asserted by that peer's
@@ -3912,6 +4390,15 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
+        PlaybackSnapshot: {
+            audio_language?: string | null;
+            /** Format: int64 */
+            duration_ms?: number | null;
+            paused?: boolean;
+            /** Format: int64 */
+            position_ms: number;
+            subtitle_language?: string | null;
+        };
         PlaybackSubtitleTrackOption: {
             codec: string;
             forced: boolean;
@@ -4077,6 +4564,16 @@ export interface components {
         ProfilePinSettingResponse: {
             pin_locked: boolean;
         };
+        /**
+         * @description One provider's health for a search.
+         * @enum {string}
+         */
+        ProviderState: "ok" | "unavailable" | "stale";
+        ProviderStatus: {
+            provider: components["schemas"]["SourceKindTag"];
+            reason?: string | null;
+            state: components["schemas"]["ProviderState"];
+        };
         RefreshRequest: {
             /**
              * Format: uuid
@@ -4107,6 +4604,14 @@ export interface components {
             platform: components["schemas"]["ClientPlatform"];
             token: string;
         };
+        RegisterTargetRequest: {
+            /** @description Advertised capabilities: `navigate`, `text`, `playback`, `input`, `handoff`. */
+            capabilities: string[];
+            /** @description Human-readable device name shown on controllers. */
+            name: string;
+            /** @description Client platform wire name, e.g. `android-tv`. */
+            platform?: string | null;
+        };
         /**
          * @description A title a full peer reports but this node has zero local record of at
          *     all -- the partial-cache-node case (§4.3). Mirrors
@@ -4122,6 +4627,17 @@ export interface components {
             release_date?: string | null;
             title: string;
         };
+        RemoteTargetResponse: {
+            capabilities: string[];
+            /** Format: uuid */
+            device_id: string;
+            is_self: boolean;
+            name: string;
+            online: boolean;
+            platform: string;
+            /** @description Last reported playback state, when fresh. */
+            state?: unknown;
+        };
         ReorderPlaylistItemsRequest: {
             /**
              * @description Every item id currently on this playlist, in the desired new order.
@@ -4129,6 +4645,13 @@ export interface components {
              *     ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
              */
             item_ids: string[];
+        };
+        ReportStateRequest: {
+            /**
+             * @description `{media_file_id, work_id?, position_ms, duration_ms?, paused, audio_language?, subtitle_language?, title?}`
+             *     or `null`/empty object when nothing is playing.
+             */
+            state: unknown;
         };
         ReportedCapabilities: {
             audio_codecs?: string[];
@@ -4144,6 +4667,11 @@ export interface components {
             /** Format: int32 */
             max_height?: number | null;
             video_codecs?: string[];
+        };
+        ResolvedTitle: {
+            actions: components["schemas"]["TitleAction"][];
+            in_watchlist: boolean;
+            title: components["schemas"]["DiscoveryTitle"];
         };
         ReviewUserInviteRequest: {
             /** @description `true` grants exactly one generation; `false` denies this request. */
@@ -4349,6 +4877,8 @@ export interface components {
             password: string;
             username: string;
         };
+        /** @enum {string} */
+        SourceAvailability: "available" | "requestable" | "upcoming" | "unavailable";
         /** @description Complete per-node root mapping for one ordinary Source instance. */
         SourceFolderMappingsRequest: {
             folder_mappings: {
@@ -4461,6 +4991,8 @@ export interface components {
         };
         /** @enum {string} */
         SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr" | "whisparr";
+        /** @enum {string} */
+        SourceKindTag: "library" | "peer" | "request" | "live_tv" | "game";
         SourceMatrixFileResponse: {
             /** Format: int64 */
             bitrate?: number | null;
@@ -4550,6 +5082,56 @@ export interface components {
             end_minute_of_day: number;
             /** Format: int32 */
             start_minute_of_day: number;
+        };
+        /**
+         * @description A source-aware thing the viewer can do with a title. Disabled actions are
+         *     listed with a reason so clients can explain rather than hide them.
+         */
+        TitleAction: {
+            action: components["schemas"]["ActionKind"];
+            enabled: boolean;
+            /** Format: uuid */
+            media_file_id?: string | null;
+            /** Format: int64 */
+            position_ms?: number | null;
+            /** Format: uuid */
+            provider_instance_id?: string | null;
+            reason?: string | null;
+            /** Format: uuid */
+            work_id?: string | null;
+        };
+        /**
+         * @description A title snapshot as sent by clients (from a search result or a title
+         *     page) to the watchlist and resolve endpoints.
+         */
+        TitleSnapshot: {
+            external_refs?: components["schemas"]["ExternalRef"][];
+            kind: components["schemas"]["DiscoveryKind"];
+            poster_url?: string | null;
+            title: string;
+            /** Format: uuid */
+            work_id?: string | null;
+            /** Format: int32 */
+            year?: number | null;
+        };
+        /** @description One source's claim on a title. */
+        TitleSource: {
+            availability: components["schemas"]["SourceAvailability"];
+            edition?: string | null;
+            /** @description Human label, for example the library or peer name. */
+            label: string;
+            /**
+             * Format: uuid
+             * @description Provider instance (for example a Radarr source instance) for requests.
+             */
+            provider_instance_id?: string | null;
+            reason?: string | null;
+            source: components["schemas"]["SourceKindTag"];
+            /**
+             * Format: uuid
+             * @description Local work id when this source is the library.
+             */
+            work_id?: string | null;
         };
         /** @description Doc-only mirror of [`TokenResponse`]; see [`DeviceCodeResponseSchema`]. */
         TokenResponseSchema: {
@@ -4811,6 +5393,13 @@ export interface components {
          * @enum {string}
          */
         WatchState: "unseen" | "part_watched" | "watched";
+        WatchlistEntry: components["schemas"]["ResolvedTitle"] & {
+            /** Format: date-time */
+            added_at: string;
+        };
+        WatchlistResponse: {
+            items: components["schemas"]["WatchlistEntry"][];
+        };
         /** @enum {string} */
         Weekday: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         /**
@@ -8272,6 +8861,92 @@ export interface operations {
             };
         };
     };
+    discover_handler: {
+        parameters: {
+            query: {
+                q: string;
+                /** @description `media` (default), `games` or `all`. */
+                scope?: null | components["schemas"]["DiscoveryScope"];
+                /** @description Restrict to one kind. */
+                kind?: null | components["schemas"]["DiscoveryKind"];
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Merged, source-attributed titles plus provider status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverResponse"];
+                };
+            };
+            /** @description Query too long */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_title_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleSnapshot"];
+            };
+        };
+        responses: {
+            /** @description Title resolved for the caller with source-aware actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedTitle"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_download_tickets_handler: {
         parameters: {
             query?: never;
@@ -11237,6 +11912,798 @@ export interface operations {
             };
         };
     };
+    command_status_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Command id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery outcome (never the payload) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandStatusResponse"];
+                };
+            };
+            /** @description Unknown command, or not sent by this controller device */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ack_event_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Event id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AckEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Acknowledged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid status */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown event, or not addressed to this device */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already acknowledged or expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_handoff_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay of an existing handoff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+            /** @description Handoff offered to the destination; the source keeps playing until the destination acknowledges */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No library access, wrong account, or no active handoff pairing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown device or media file */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Destination offline/unsupported, stale source state, or key reused with different parameters */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_handoff_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Handoff id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current handoff state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+            /** @description Unknown handoff, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ack_handoff_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Handoff id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AckHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Outcome recorded. Replays return the recorded outcome without a second stop */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+            /** @description Invalid status */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the destination device can acknowledge */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown handoff, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Handoff expired; the source keeps playing */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_handoff_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Handoff id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled (or the recorded outcome if already closed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+            /** @description Only the initiating device can cancel */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown handoff, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    inbox_handler: {
+        parameters: {
+            query?: {
+                /** @description Last seq already processed */
+                after?: number;
+                /** @description Seconds to wait for an event (max 25) */
+                wait?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events for this target device (long poll) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This device is not registered as a target */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_pairings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent pairings of this account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePairingRequest"];
+            };
+        };
+        responses: {
+            /** @description A pending pairing; the target must approve it */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"];
+                };
+            };
+            /** @description Invalid scopes or pairing with itself */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown target on this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Target offline, or already paired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many pending pairing requests for this target */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pairing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revoke_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pairing revoked (idempotent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approve_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovePairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing is now active */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"];
+                };
+            };
+            /** @description Scopes are not a subset of those requested */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the target device itself can approve */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing is no longer pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing request expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    send_command_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Command queued for the target */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandAccepted"];
+                };
+            };
+            /** @description Invalid command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing not active, scope not granted, or not this pairing's controller device */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Target is offline */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deny_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pairing denied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"];
+                };
+            };
+            /** @description Only the target device itself can deny */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing is no longer pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    register_target_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description This device is registered as a remotely controllable target */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteTargetResponse"];
+                };
+            };
+            /** @description Unknown capability or empty name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unregister_target_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This device is no longer a remote target */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    report_state_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportStateRequest"];
+            };
+        };
+        responses: {
+            /** @description State recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This device is not registered as a target */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_targets_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remote targets registered by this account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteTargetResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_self_capabilities_handler: {
         parameters: {
             query?: never;
@@ -11994,6 +13461,120 @@ export interface operations {
             };
             /** @description No view with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_watchlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's watchlist, newest first, with current actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_watchlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleSnapshot"];
+            };
+        };
+        responses: {
+            /** @description Added (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedTitle"];
+                };
+            };
+            /** @description Empty title */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_watchlist_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identity key from the watchlist entry */
+                title_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (idempotent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
