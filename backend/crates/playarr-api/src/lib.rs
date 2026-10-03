@@ -30,6 +30,7 @@ pub mod admin_peer;
 pub mod admin_playback;
 pub mod artwork;
 pub mod auth_extractor;
+pub mod calendar;
 pub mod catalog;
 pub mod credits;
 pub mod discovery;
@@ -216,6 +217,7 @@ impl Modify for SecurityAddon {
         (name = "oauth", description = "RFC 8628 OAuth 2.0 device authorization endpoints"),
         (name = "webhooks", description = "*arr webhook receiver"),
         (name = "catalog", description = "Catalog browse/search/detail"),
+        (name = "calendar", description = "Aggregated release calendar across the connected *arr instances, and the external iCal subscription"),
         (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
         (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
         (name = "users", description = "User account management and signed-in player preferences"),
@@ -263,6 +265,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(users::signup_handler))
         .routes(routes!(refresh::refresh_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
+        .routes(routes!(calendar::calendar_handler))
         .routes(routes!(catalog::browse_catalog_handler))
         .routes(routes!(catalog::catalog_kinds_handler))
         .routes(routes!(catalog::get_work_handler))
@@ -720,6 +723,8 @@ pub struct AppState {
     /// Remote-control targets, pairings, per-target event queue and
     /// handoffs (`docs/architecture/remote-control.md`).
     pub remote_repo: Arc<dyn playarr_db::RemoteRepo>,
+    /// Short-lived cache of per-instance calendar answers, see `calendar`.
+    pub calendar_cache: Arc<calendar::CalendarCache>,
 }
 
 impl FromRef<AppState> for ReadinessState {

@@ -345,6 +345,26 @@ impl LidarrClient {
     }
 }
 
+impl LidarrClient {
+    /// `GET /api/v1/calendar` -- albums releasing in the inclusive
+    /// `[start, end]` day window, including unmonitored items.
+    pub async fn calendar(
+        &self,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) -> Result<Vec<crate::calendar::LidarrCalendarAlbum>, ArrClientError> {
+        let query = crate::calendar::window_query(start, end, "includeArtist=true");
+        get_json(
+            &self.http,
+            "lidarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v1/calendar?{query}"),
+        )
+        .await
+    }
+}
+
 #[async_trait]
 impl ArrConnector for LidarrClient {
     fn base_url(&self) -> &str {

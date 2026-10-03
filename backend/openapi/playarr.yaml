@@ -1997,6 +1997,64 @@ paths:
           description: Username is already taken
         '410':
           description: Invitation is invalid, expired, or already used
+  /api/v1/calendar:
+    get:
+      tags:
+      - calendar
+      operationId: calendar_handler
+      parameters:
+      - name: start
+        in: query
+        description: First day, inclusive (`YYYY-MM-DD`). Defaults to today (UTC).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date
+      - name: end
+        in: query
+        description: |-
+          Last day, inclusive. Defaults to `start` plus 30 days; at most 92 days
+          after `start`.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date
+      - name: kind
+        in: query
+        description: Comma-separated `episode,movie,album,book`. All when omitted.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: source_instance_id
+        in: query
+        description: Restrict to one source instance.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      responses:
+        '200':
+          description: Upcoming releases from every permitted instance, with per-instance status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarResponse'
+        '400':
+          description: Invalid range or kind
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller may not view the catalog
+      security:
+      - bearer_auth: []
   /api/v1/catalog:
     get:
       tags:
@@ -6408,6 +6466,170 @@ components:
           - string
           - 'null'
           format: uuid
+    CalendarEntry:
+      type: object
+      required:
+      - id
+      - media_kind
+      - release_type
+      - title
+      - date
+      - monitored
+      - has_file
+      - sources
+      properties:
+        average_lag_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Average seconds from air to library availability for the series.
+        date:
+          type: string
+          format: date
+          description: UTC calendar day of the release.
+        episode_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        has_file:
+          type: boolean
+        id:
+          type: string
+          description: Stable across refreshes; derived from the deduplication key.
+        media_kind:
+          $ref: '#/components/schemas/CalendarMediaKind'
+        monitored:
+          type: boolean
+        poster_url:
+          type:
+          - string
+          - 'null'
+          description: Absolute external artwork URL only, never an instance-local path.
+        release_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Exact instant when the source provides one; absent for all-day entries.
+        release_type:
+          $ref: '#/components/schemas/CalendarReleaseType'
+        season_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarEntrySource'
+        subtitle:
+          type:
+          - string
+          - 'null'
+          description: Episode, album or book title.
+        title:
+          type: string
+          description: Series, movie, artist or author title.
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The catalog `Work` this entry belongs to, when it is in the catalog.
+    CalendarEntrySource:
+      type: object
+      description: One instance that reported a calendar entry.
+      required:
+      - source_instance_id
+      - source_name
+      - source_kind
+      - arr_id
+      properties:
+        arr_id:
+          type: integer
+          format: int64
+          description: The source app's own id for the episode, movie, album or book.
+        source_instance_id:
+          type: string
+          format: uuid
+        source_kind:
+          $ref: '#/components/schemas/SourceKind'
+        source_name:
+          type: string
+    CalendarMediaKind:
+      type: string
+      enum:
+      - episode
+      - movie
+      - album
+      - book
+    CalendarReleaseType:
+      type: string
+      enum:
+      - air
+      - cinema
+      - digital
+      - physical
+      - release
+    CalendarResponse:
+      type: object
+      required:
+      - start
+      - end
+      - entries
+      - sources
+      properties:
+        end:
+          type: string
+          format: date
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarEntry'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarSourceStatus'
+        start:
+          type: string
+          format: date
+    CalendarSourceState:
+      type: string
+      enum:
+      - ok
+      - unreachable
+      - rejected
+      - error
+    CalendarSourceStatus:
+      type: object
+      description: Per-instance outcome of one calendar query.
+      required:
+      - source_instance_id
+      - name
+      - kind
+      - status
+      - entry_count
+      properties:
+        entry_count:
+          type: integer
+          format: int32
+          minimum: 0
+        error:
+          type:
+          - string
+          - 'null'
+          description: Short reason; never contains URLs or credentials.
+        kind:
+          $ref: '#/components/schemas/SourceKind'
+        name:
+          type: string
+        source_instance_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/CalendarSourceState'
     CapabilitiesResponse:
       type: object
       required:
@@ -11784,6 +12006,8 @@ tags:
   description: '*arr webhook receiver'
 - name: catalog
   description: Catalog browse/search/detail
+- name: calendar
+  description: Aggregated release calendar across the connected *arr instances, and the external iCal subscription
 - name: playback
   description: 'Playback negotiation: direct-play vs. transcode decision'
 - name: admin

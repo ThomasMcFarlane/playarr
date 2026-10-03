@@ -287,6 +287,26 @@ impl RadarrClient {
     }
 }
 
+impl RadarrClient {
+    /// `GET /api/v3/calendar` -- movies releasing in the inclusive
+    /// `[start, end]` day window, including unmonitored items.
+    pub async fn calendar(
+        &self,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) -> Result<Vec<crate::calendar::RadarrCalendarMovie>, ArrClientError> {
+        let query = crate::calendar::window_query(start, end, "");
+        get_json(
+            &self.http,
+            "radarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v3/calendar?{query}"),
+        )
+        .await
+    }
+}
+
 #[async_trait]
 impl ArrConnector for RadarrClient {
     fn base_url(&self) -> &str {
@@ -308,7 +328,7 @@ impl ArrConnector for RadarrClient {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use wiremock::matchers::{header, method, path};
+    use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
@@ -692,5 +712,30 @@ mod tests {
             }
             other => panic!("expected UnexpectedStatus, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn calendar_parses_movies_with_three_release_dates() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .and(query_param("start", "2026-10-01"))
+            .and(query_param("end", "2026-11-01"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "id": 1, "title": "Film", "tmdbId": 9, "monitored": true, "hasFile": false,
+                "inCinemas": "2026-10-02T00:00:00Z", "digitalRelease": "2026-10-20T00:00:00Z"
+            }])))
+            .mount(&server)
+            .await;
+
+        let client = RadarrClient::new(server.uri(), "test-key");
+        let start = chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let end = chrono::NaiveDate::from_ymd_opt(2026, 10, 31).unwrap();
+        let movies = client.calendar(start, end).await.expect("calendar");
+        assert_eq!(
+            movies[0].digital_release.as_deref(),
+            Some("2026-10-20T00:00:00Z")
+        );
+        assert!(movies[0].physical_release.is_none());
     }
 }

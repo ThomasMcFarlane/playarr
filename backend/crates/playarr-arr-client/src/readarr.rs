@@ -177,6 +177,26 @@ impl ReadarrClient {
     }
 }
 
+impl ReadarrClient {
+    /// `GET /api/v1/calendar` -- books releasing in the inclusive
+    /// `[start, end]` day window, including unmonitored items.
+    pub async fn calendar(
+        &self,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) -> Result<Vec<crate::calendar::ReadarrCalendarBook>, ArrClientError> {
+        let query = crate::calendar::window_query(start, end, "includeAuthor=true");
+        get_json(
+            &self.http,
+            "readarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v1/calendar?{query}"),
+        )
+        .await
+    }
+}
+
 #[async_trait]
 impl ArrConnector for ReadarrClient {
     fn base_url(&self) -> &str {

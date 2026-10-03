@@ -17,6 +17,7 @@
 #![allow(clippy::double_must_use)]
 
 mod bazarr;
+mod calendar;
 mod http;
 mod lidarr;
 mod lookup;
@@ -27,6 +28,11 @@ mod sonarr;
 mod whisparr;
 
 pub use bazarr::{BazarrClient, BazarrSeries, BazarrSubtitleLanguage, BazarrWantedEpisode};
+pub use calendar::{
+    ArrCalendarImage, CalendarStatistics, LidarrCalendarAlbum, LidarrCalendarArtist,
+    RadarrCalendarMovie, ReadarrCalendarAuthor, ReadarrCalendarBook, SonarrCalendarEpisode,
+    SonarrCalendarSeries,
+};
 pub use lidarr::{
     LidarrAlbum, LidarrArtist, LidarrArtistStatistics, LidarrClient, LidarrImage, LidarrMediaInfo,
     LidarrQuality, LidarrQualityInfo, LidarrRevision, LidarrTrack, LidarrTrackFile,

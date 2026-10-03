@@ -26,6 +26,7 @@
 
 pub mod arr_client;
 pub mod artwork_prewarm;
+pub mod calendar;
 pub mod embedding_sync;
 pub mod media_sync;
 pub mod poller;

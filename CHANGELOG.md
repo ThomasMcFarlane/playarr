@@ -133,6 +133,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the server backup and recovery design (inventory, encrypted format, consistent
   snapshots, retention, staged restore and verification plan) in
   `docs/architecture/server-backups.md`, tracked as tasks 62-66.
+- `GET /api/v1/calendar`: aggregated release calendar across the connected Sonarr, Radarr, Lidarr and
+  Readarr instances (episodes, movie cinema/digital/physical dates, albums, books). Duplicate releases
+  on several instances merge with source attribution, results respect the caller's library grants,
+  and unreachable or credential-rejected instances are reported per source instead of dropped.
+  Backed by new `calendar` methods in `playarr-arr-client`, normalisation in `playarr-arr-sync` and a
+  60-second per-instance cache (task 75).
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.

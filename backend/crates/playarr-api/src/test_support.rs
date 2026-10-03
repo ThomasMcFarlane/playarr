@@ -689,6 +689,7 @@ pub async fn test_state() -> (Router, TestState) {
         peer_http: reqwest::Client::new(),
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
+        calendar_cache: Arc::new(crate::calendar::CalendarCache::new()),
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);
@@ -730,6 +731,31 @@ pub async fn seed_movie(state: &TestState, title: &str) -> Uuid {
         release_date: None,
         monitored: true,
         availability: Availability::Available,
+    };
+    let id = work.id;
+    state.work_repo.upsert(&work).await.unwrap();
+    id
+}
+
+/// Seeds a series `Work` carrying a TVDB external ref.
+pub async fn seed_series_with_tvdb(state: &TestState, title: &str, tvdb_id: &str) -> Uuid {
+    let work = Work {
+        id: Uuid::new_v4(),
+        kind: WorkKind::Series,
+        external_refs: vec![playarr_model::ExternalRef {
+            provider: playarr_model::ExternalProvider::Tvdb,
+            external_id: tvdb_id.to_string(),
+        }],
+        title: title.to_string(),
+        sort_title: title.to_string(),
+        overview: None,
+        images: vec![],
+        genres: vec![],
+        tags: vec![],
+        added_at: Utc::now(),
+        release_date: None,
+        monitored: true,
+        availability: Availability::Pending,
     };
     let id = work.id;
     state.work_repo.upsert(&work).await.unwrap();

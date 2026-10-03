@@ -290,6 +290,26 @@ impl SonarrClient {
     }
 }
 
+impl SonarrClient {
+    /// `GET /api/v3/calendar` -- episodes airing releasing in the inclusive
+    /// `[start, end]` day window, including unmonitored items.
+    pub async fn calendar(
+        &self,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) -> Result<Vec<crate::calendar::SonarrCalendarEpisode>, ArrClientError> {
+        let query = crate::calendar::window_query(start, end, "includeSeries=true");
+        get_json(
+            &self.http,
+            "sonarr",
+            &self.base_url,
+            &self.api_key,
+            &format!("/api/v3/calendar?{query}"),
+        )
+        .await
+    }
+}
+
 #[async_trait]
 impl ArrConnector for SonarrClient {
     fn base_url(&self) -> &str {
@@ -769,5 +789,37 @@ mod tests {
             }
             other => panic!("expected UnexpectedStatus, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn calendar_requests_inclusive_window_and_parses_episodes() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .and(query_param("start", "2026-10-01"))
+            .and(query_param("end", "2026-11-01"))
+            .and(query_param("unmonitored", "true"))
+            .and(query_param("includeSeries", "true"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "id": 7, "seriesId": 3, "seasonNumber": 2, "episodeNumber": 5,
+                "title": "Pilot", "airDate": "2026-10-04", "airDateUtc": "2026-10-04T01:00:00Z",
+                "hasFile": false, "monitored": true,
+                "series": {"id": 3, "title": "Show", "tvdbId": 42, "images": [
+                    {"coverType": "poster", "url": "/local", "remoteUrl": "https://img.example/p.jpg"}]}
+            }])))
+            .mount(&server)
+            .await;
+
+        let client = SonarrClient::new(server.uri(), "test-key");
+        let start = chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
+        let end = chrono::NaiveDate::from_ymd_opt(2026, 10, 31).unwrap();
+        let episodes = client.calendar(start, end).await.expect("calendar");
+        assert_eq!(episodes.len(), 1);
+        assert_eq!(episodes[0].series.as_ref().unwrap().tvdb_id, Some(42));
+        assert_eq!(
+            episodes[0].air_date_utc.as_deref(),
+            Some("2026-10-04T01:00:00Z")
+        );
     }
 }
