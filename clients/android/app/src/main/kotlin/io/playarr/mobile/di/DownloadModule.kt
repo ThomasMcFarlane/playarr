@@ -30,6 +30,7 @@ import io.playarr.shared.download.db.PlayarrDownloadDatabase
 import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_1_2
 import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_2_3
 import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_3_4
+import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_4_5
 import java.io.File
 import java.util.concurrent.Executors
 import javax.inject.Singleton
@@ -158,6 +159,7 @@ abstract class DownloadModule {
                     PLAYARR_DOWNLOAD_MIGRATION_1_2,
                     PLAYARR_DOWNLOAD_MIGRATION_2_3,
                     PLAYARR_DOWNLOAD_MIGRATION_3_4,
+                    PLAYARR_DOWNLOAD_MIGRATION_4_5,
                 )
                 .build()
 

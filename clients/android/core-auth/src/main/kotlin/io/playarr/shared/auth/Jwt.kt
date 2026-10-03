@@ -44,6 +44,25 @@ fun decodeAccessTokenIssuerPeerNodeId(accessToken: String?): String? {
     }
 }
 
+/**
+ * Best-effort, unverified read of an access token's `device_id` claim: the
+ * server-side refresh family is keyed by this id, so it is the only id a
+ * refresh for this session can present (device-flow pairing mints it
+ * server-side).
+ */
+fun decodeAccessTokenDeviceId(accessToken: String?): String? {
+    if (accessToken.isNullOrBlank()) return null
+    val parts = accessToken.split(".")
+    if (parts.size != 3) return null
+    val payloadSegment = parts[1].takeIf { it.isNotBlank() } ?: return null
+    return try {
+        val claims = Json.parseToJsonElement(String(Base64.getUrlDecoder().decode(padBase64Url(payloadSegment)))) as? JsonObject
+        claims?.get("device_id")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 /** `java.util.Base64`'s URL decoder accepts unpadded input inconsistently across JDKs -- pad explicitly to a multiple of 4 rather than relying on that. */
 private fun padBase64Url(segment: String): String {
     val remainder = segment.length % 4

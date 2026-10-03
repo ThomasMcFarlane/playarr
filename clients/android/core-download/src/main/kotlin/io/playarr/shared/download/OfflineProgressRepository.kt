@@ -1,5 +1,6 @@
 package io.playarr.shared.download
 
+import io.playarr.shared.auth.TokenStore
 import io.playarr.shared.data.model.UpdateWatchProgressRequest
 import io.playarr.shared.data.remote.PlayarrApi
 import io.playarr.shared.download.db.PendingProgressDao
@@ -29,12 +30,17 @@ interface OfflineProgressRepository {
     suspend fun flushPending()
 }
 
-class DefaultOfflineProgressRepository @Inject constructor(
+class DefaultOfflineProgressRepository internal constructor(
     private val api: PlayarrApi,
     private val dao: PendingProgressDao,
+    private val ownerKey: suspend () -> String,
 ) : OfflineProgressRepository {
+    @Inject
+    constructor(api: PlayarrApi, dao: PendingProgressDao, tokenStore: TokenStore) :
+        this(api, dao, { tokenStore.currentOwnerKey() })
 
     override suspend fun record(mediaFileId: String, positionMs: Long, durationMs: Long, completed: Boolean) {
+        val owner = ownerKey()
         val succeeded = runCatching {
             api.updateWatchProgress(mediaFileId, UpdateWatchProgressRequest(positionMs, durationMs, completed))
         }.isSuccess
@@ -46,13 +52,17 @@ class DefaultOfflineProgressRepository @Inject constructor(
                     durationMs = durationMs,
                     completed = completed,
                     occurredAtEpochMillis = System.currentTimeMillis(),
+                    ownerKey = owner,
                 ),
             )
         }
     }
 
     override suspend fun flushPending() {
-        for (pending in dao.getBatch(MAX_PENDING_PROGRESS_REPLAY_BATCH)) {
+        // Only the active account's rows: another account's offline watches must never be posted under this session.
+        val owner = ownerKey()
+        if (owner.isBlank()) return
+        for (pending in dao.getBatch(MAX_PENDING_PROGRESS_REPLAY_BATCH, owner)) {
             val occurredAt = Instant.ofEpochMilli(pending.occurredAtEpochMillis).toString()
             val succeeded = runCatching {
                 api.updateWatchProgress(

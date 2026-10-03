@@ -81,6 +81,31 @@ class PlayarrProfilesTest {
         )
     }
 
+    @Test
+    fun `chooser lists every saved account across servers even when the server list omits them`() {
+        val saved = listOf(
+            SavedProfile("https://a.example", "user-a", "Alex"),
+            SavedProfile("https://b.example", "user-b", "Bailey"),
+            SavedProfile("https://b.example", "user-c", "Casey"),
+        )
+
+        val merged = mergeAccountProfiles(
+            saved = saved,
+            currentServerUrl = "https://b.example",
+            currentUserId = "user-b",
+            serverProfiles = listOf(profile("user-b", isCurrent = true).copy(displayName = "Bailey Live")),
+        )
+
+        assertEquals(listOf("user-a", "user-b", "user-c"), merged.map { it.id })
+        assertEquals(listOf(false, true, false), merged.map { it.isCurrent })
+        assertEquals("Bailey Live", merged[1].displayName)
+        assertEquals(
+            mapOf("user-a" to "a.example", "user-b" to "b.example", "user-c" to "b.example"),
+            accountServerLabels(saved),
+        )
+        assertEquals(emptyMap<String, String>(), accountServerLabels(saved.drop(1)))
+    }
+
     private fun profile(
         id: String = "profile-id",
         isCurrent: Boolean = false,

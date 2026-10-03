@@ -23,6 +23,7 @@ class OfflineProgressRepositoryTest {
                 progress(it)
             },
             dao = pendingProgressDao(rows, deleted),
+            ownerKey = { "s|u" },
         )
 
         repository.flushPending()
@@ -42,12 +43,33 @@ class OfflineProgressRepositoryTest {
                 throw IOException("server unavailable")
             },
             dao = pendingProgressDao(rows, deleted),
+            ownerKey = { "s|u" },
         )
 
         repository.flushPending()
 
         assertEquals(1, attempts)
         assertEquals(emptyList<Long>(), deleted)
+    }
+
+    @Test
+    fun `pending replay skips rows queued by another account`() = runBlocking {
+        val rows = listOf(
+            PendingProgressEntity(1, "a-media", 1, 2, false, 10, ownerKey = "s|alice"),
+            PendingProgressEntity(2, "b-media", 1, 2, false, 11, ownerKey = "s|bob"),
+        )
+        val deleted = mutableListOf<Long>()
+        val sent = mutableListOf<String>()
+        val repository = DefaultOfflineProgressRepository(
+            api = playarrApi { sent += it; progress(it) },
+            dao = pendingProgressDao(rows, deleted),
+            ownerKey = { "s|bob" },
+        )
+
+        repository.flushPending()
+
+        assertEquals(listOf(2L), deleted)
+        assertEquals(1, sent.size)
     }
 
     private fun pendingRows(count: Int) = (1..count).map { id ->
@@ -69,7 +91,7 @@ class OfflineProgressRepositoryTest {
         arrayOf(PendingProgressDao::class.java),
     ) { proxy, method, arguments ->
         when (method.name) {
-            "getBatch" -> rows.take(arguments.orEmpty().first() as Int)
+            "getBatch" -> rows.filter { it.ownerKey == arguments!![1] || it.ownerKey.isEmpty() }.take(arguments.orEmpty().first() as Int)
             "delete" -> Unit.also { deleted += arguments.orEmpty().first() as Long }
             "toString" -> "FakePendingProgressDao"
             "hashCode" -> System.identityHashCode(proxy)

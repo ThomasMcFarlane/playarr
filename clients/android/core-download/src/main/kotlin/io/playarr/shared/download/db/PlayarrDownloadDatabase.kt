@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [DownloadMetadataEntity::class, PendingProgressEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class PlayarrDownloadDatabase : RoomDatabase() {
@@ -42,5 +42,11 @@ val PLAYARR_DOWNLOAD_MIGRATION_2_3 = object : Migration(2, 3) {
 val PLAYARR_DOWNLOAD_MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE download_metadata ADD COLUMN qualityLabel TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+val PLAYARR_DOWNLOAD_MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE pending_progress ADD COLUMN ownerKey TEXT NOT NULL DEFAULT ''")
     }
 }

@@ -306,20 +306,23 @@ internal class LoginViewModel @Inject constructor(
             }
             _state.value = LoginState.Submitting
             try {
+                val trimmedUsername = username.trim().ifBlank { null }
+                // Add, never replace: other saved accounts stay in TokenStore. A new
+                // account gets its own device id (the server keeps one refresh family
+                // per device id, so sharing one would revoke the previous account).
+                val deviceId = tokenStore.deviceIdForLogin(normalisedUrl, trimmedUsername)
                 serverConfigStore.setBaseUrl(normalisedUrl)
-                tokenStore.clearCurrent()
                 val response = loginApi.login(
                     LoginRequest(
-                        deviceId = tokenStore.getOrCreateDeviceId(),
+                        deviceId = deviceId,
                         deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
                         clientPlatform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
                         clientVersion = BuildConfig.VERSION_NAME,
-                        username = username.trim().ifBlank { null },
+                        username = trimmedUsername,
                         password = password.ifBlank { null },
                     ),
                 )
-                tokenStore.save(response.toTokenResponse())
-                tokenStore.saveIdentity(response.userId, username.trim().ifBlank { null }, normalisedUrl)
+                tokenStore.signIn(response.toTokenResponse(), response.userId, trimmedUsername, normalisedUrl, deviceId)
                 _state.value = LoginState.Idle
             } catch (error: Exception) {
                 _state.value = LoginState.Failed(loginFailure(error))

@@ -22,6 +22,8 @@ data class PendingProgressEntity(
     val durationMs: Long,
     val completed: Boolean,
     val occurredAtEpochMillis: Long,
+    /** `server|userId` of the account that produced this row; blank only for rows queued before accounts were scoped. */
+    val ownerKey: String = "",
 )
 
 @Dao
@@ -29,8 +31,9 @@ interface PendingProgressDao {
     @Query("SELECT * FROM pending_progress ORDER BY id ASC")
     suspend fun getAll(): List<PendingProgressEntity>
 
-    @Query("SELECT * FROM pending_progress ORDER BY id ASC LIMIT :limit")
-    suspend fun getBatch(limit: Int): List<PendingProgressEntity>
+    /** Rows for [ownerKey] only; legacy un-owned rows (queued before accounts were scoped) are replayed by whoever is active. */
+    @Query("SELECT * FROM pending_progress WHERE ownerKey = :ownerKey OR ownerKey = '' ORDER BY id ASC LIMIT :limit")
+    suspend fun getBatch(limit: Int, ownerKey: String): List<PendingProgressEntity>
 
     @Insert
     suspend fun insert(entity: PendingProgressEntity): Long

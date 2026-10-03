@@ -1344,6 +1344,10 @@ internal data class ProfilesSnapshot(
     val savedProfileIds: Set<String>,
     val profileAvatars: Map<String, ProfileAvatarPreference> = emptyMap(),
     val loadWarning: PlayarrMessage? = null,
+    /** userId -> owning server URL, for every listed account. */
+    val profileServers: Map<String, String> = emptyMap(),
+    /** userId -> short server label; empty unless accounts span several servers. */
+    val serverLabels: Map<String, String> = emptyMap(),
 )
 
 internal fun selectAndroidDeviceProfiles(
@@ -1357,14 +1361,44 @@ internal fun selectAndroidDeviceProfiles(
 internal fun savedAndroidProfiles(
     profiles: List<SavedProfile>,
     currentUserId: String?,
+    currentServerUrl: String? = null,
 ): List<AvailableProfile> = profiles.map { profile ->
     AvailableProfile(
         id = profile.userId,
         username = profile.name.orEmpty(),
         displayName = profile.name.orEmpty(),
-        isCurrent = profile.userId == currentUserId,
+        isCurrent = profile.userId == currentUserId &&
+            (currentServerUrl == null || profile.serverUrl == currentServerUrl),
         pinLocked = false,
     )
+}
+
+/**
+ * Every remembered account, across all servers. The active server's own
+ * profile list (when reachable) refines names and PIN state for accounts on
+ * that server, but never hides an account that is saved locally: a second
+ * login is a different account whose server-side household list does not
+ * include the first one.
+ */
+internal fun mergeAccountProfiles(
+    saved: List<SavedProfile>,
+    currentServerUrl: String?,
+    currentUserId: String?,
+    serverProfiles: List<AvailableProfile>?,
+): List<AvailableProfile> {
+    val fromSaved = savedAndroidProfiles(saved, currentUserId, currentServerUrl)
+    if (serverProfiles == null || currentServerUrl == null) return fromSaved
+    val savedOnCurrent = saved.filter { it.serverUrl == currentServerUrl }.mapTo(mutableSetOf(), SavedProfile::userId)
+    val live = selectAndroidDeviceProfiles(serverProfiles, savedOnCurrent, currentUserId).associateBy(AvailableProfile::id)
+    return saved.zip(fromSaved).map { (record, fallback) ->
+        val refined = if (record.serverUrl == currentServerUrl) live[record.userId] else null
+        if (refined == null) fallback else refined.copy(isCurrent = fallback.isCurrent)
+    }
+}
+
+internal fun accountServerLabels(saved: List<SavedProfile>): Map<String, String> {
+    if (saved.map(SavedProfile::serverUrl).distinct().size < 2) return emptyMap()
+    return saved.associate { it.userId to runCatching { URI(it.serverUrl).authority }.getOrNull().orEmpty().ifBlank { it.serverUrl } }
 }
 
 @HiltViewModel
@@ -1381,48 +1415,37 @@ internal class ProfilesViewModel @Inject constructor(
 
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
-        val allSaved = tokenStore.savedProfiles.first()
-        // Hosted QR may leave base URL blank; recover from the saved session so
-        // the profiles picker (and chrome back from /login/qr) still lists them.
-        var serverUrl = serverConfigStore.baseUrl.first()
-        if (serverUrl.isBlank()) {
-            serverUrl = allSaved.firstOrNull()?.serverUrl.orEmpty()
-            if (serverUrl.isNotBlank()) {
-                serverConfigStore.setBaseUrl(serverUrl)
-            }
-        }
-        val saved = if (serverUrl.isBlank()) {
-            allSaved
-        } else {
-            allSaved.filter { it.serverUrl == serverUrl }
+        val saved = tokenStore.savedProfiles.first()
+        val currentServer = tokenStore.currentServerUrl.first()?.takeIf { it.isNotBlank() }
+        val currentUserId = tokenStore.currentUserId.first()
+        if (serverConfigStore.baseUrl.first().isBlank()) {
+            saved.firstOrNull()?.serverUrl?.let { serverConfigStore.setBaseUrl(it) }
         }
         val savedIds = saved.mapTo(mutableSetOf(), SavedProfile::userId)
         val savedAvatars = saved.mapNotNull { profile ->
             profile.avatar?.toPlayarrProfileAvatarPreference()?.let { profile.userId to it }
         }.toMap()
-        val currentUserId = tokenStore.currentUserId.first()
-        val fallback = savedAndroidProfiles(saved, currentUserId)
-        if (currentUserId == null) {
-            _state.value = ParityLoad.Ready(ProfilesSnapshot(fallback, savedIds, savedAvatars))
+        val servers = saved.associate { it.userId to it.serverUrl }
+        val labels = accountServerLabels(saved)
+        fun snapshot(profiles: List<AvailableProfile>, warning: PlayarrMessage? = null) = ProfilesSnapshot(
+            profiles = profiles,
+            savedProfileIds = savedIds,
+            profileAvatars = savedAvatars,
+            loadWarning = warning,
+            profileServers = servers,
+            serverLabels = labels,
+        )
+        if (currentUserId == null || currentServer == null) {
+            _state.value = ParityLoad.Ready(snapshot(mergeAccountProfiles(saved, currentServer, currentUserId, null)))
             return@launch
         }
         _state.value = runCatching { api.listAvailableProfiles() }.fold(
-            onSuccess = {
-                ParityLoad.Ready(
-                    ProfilesSnapshot(
-                        selectAndroidDeviceProfiles(it, savedIds, currentUserId),
-                        savedIds,
-                        savedAvatars,
-                    ),
-                )
-            },
+            onSuccess = { ParityLoad.Ready(snapshot(mergeAccountProfiles(saved, currentServer, currentUserId, it))) },
             onFailure = { failure ->
                 ParityLoad.Ready(
-                    ProfilesSnapshot(
-                        profiles = fallback,
-                        savedProfileIds = savedIds,
-                        profileAvatars = savedAvatars,
-                        loadWarning = failure.playarrMessage(PlayarrFailureSubject.Profiles),
+                    snapshot(
+                        mergeAccountProfiles(saved, currentServer, currentUserId, null),
+                        failure.playarrMessage(PlayarrFailureSubject.Profiles),
                     ),
                 )
             },
@@ -1439,18 +1462,20 @@ internal class ProfilesViewModel @Inject constructor(
         _switchingProfileId.value = profile.id
         runCatching {
             val allSaved = tokenStore.savedProfiles.first()
-            val profileServer = allSaved.firstOrNull { it.userId == profile.id }?.serverUrl
-            var serverUrl = serverConfigStore.baseUrl.first()
-            if (serverUrl.isBlank() && !profileServer.isNullOrBlank()) {
-                serverUrl = profileServer
-                serverConfigStore.setBaseUrl(serverUrl)
-            }
+            val currentServer = tokenStore.currentServerUrl.first()
+            val owning = allSaved.filter { it.userId == profile.id }
+            val serverUrl = (owning.firstOrNull { it.serverUrl == currentServer } ?: owning.firstOrNull())?.serverUrl
+                ?: currentServer
+                ?: serverConfigStore.baseUrl.first()
             if (pin == null && tokenStore.isProfileSaved(serverUrl, profile.id)) {
+                // Swaps the active session (tokens, server, device id) without credentials.
                 check(tokenStore.activateProfile(serverUrl, profile.id))
             } else {
+                val deviceId = tokenStore.deviceIdForLogin(serverUrl, profile.displayName, profile.id)
+                serverConfigStore.setBaseUrl(serverUrl)
                 val response = loginApi.login(
                     LoginRequest(
-                        deviceId = tokenStore.getOrCreateDeviceId(),
+                        deviceId = deviceId,
                         deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
                         clientPlatform = if (isTelevision) ClientPlatform.AndroidTv else ClientPlatform.AndroidMobile,
                         clientVersion = BuildConfig.VERSION_NAME,
@@ -1458,21 +1483,21 @@ internal class ProfilesViewModel @Inject constructor(
                         profileUserId = profile.id,
                     ),
                 )
-                tokenStore.clearCurrent()
-                tokenStore.save(response.toTokenResponse())
-                tokenStore.saveIdentity(response.userId, profile.displayName, serverUrl)
+                tokenStore.signIn(response.toTokenResponse(), response.userId, profile.displayName, serverUrl, deviceId)
             }
         }.onSuccess { onSuccess() }
             .onFailure(onFailure)
         _switchingProfileId.value = null
     }
 
+    /** Removes only this account (its tokens and avatar); every other saved account stays. */
     fun signOut(profileId: String) = viewModelScope.launch {
         val allSaved = tokenStore.savedProfiles.first()
-        val serverUrl = serverConfigStore.baseUrl.first().ifBlank {
-            allSaved.firstOrNull { it.userId == profileId }?.serverUrl.orEmpty()
-        }
-        if (serverUrl.isNotBlank()) {
+        val currentServer = tokenStore.currentServerUrl.first()
+        val owning = allSaved.filter { it.userId == profileId }
+        val serverUrl = (owning.firstOrNull { it.serverUrl == currentServer } ?: owning.firstOrNull())?.serverUrl
+            ?: currentServer
+        if (!serverUrl.isNullOrBlank()) {
             tokenStore.logoutProfile(serverUrl, profileId)
         }
         load()
@@ -1651,6 +1676,7 @@ internal fun ExperienceProfilesScreen(
                         currentAvatar = currentAvatar,
                         avatars = current.value.profileAvatars,
                         savedProfileIds = current.value.savedProfileIds,
+                        serverLabels = current.value.serverLabels,
                         switchingProfileId = switchingProfileId,
                         updateControl = updateControl,
                         actionError = actionError,
@@ -1669,6 +1695,7 @@ internal fun ExperienceProfilesScreen(
                         currentAvatar = currentAvatar,
                         avatars = current.value.profileAvatars,
                         savedProfileIds = current.value.savedProfileIds,
+                        serverLabels = current.value.serverLabels,
                         switchingProfileId = switchingProfileId,
                         actionError = actionError,
                         loadWarning = current.value.loadWarning,
@@ -1776,6 +1803,7 @@ private fun TelevisionProfilesStage(
     currentAvatar: ProfileAvatarPreference?,
     avatars: Map<String, ProfileAvatarPreference>,
     savedProfileIds: Set<String>,
+    serverLabels: Map<String, String>,
     switchingProfileId: String?,
     updateControl: ProfilesUpdateControl,
     actionError: PlayarrMessage?,
@@ -1828,6 +1856,7 @@ private fun TelevisionProfilesStage(
                 profiles.forEach { profile ->
                     ProfileChoice(
                         profile = profile,
+                        serverLabel = serverLabels[profile.id],
                         avatar = if (profile.id == currentUserId) {
                             currentAvatar ?: avatars[profile.id]
                         } else {
@@ -1875,6 +1904,7 @@ private fun TelevisionProfilesStage(
                     items(profiles, key = AvailableProfile::id) { profile ->
                         ProfileChoice(
                             profile = profile,
+                            serverLabel = serverLabels[profile.id],
                             avatar = if (profile.id == currentUserId) {
                                 currentAvatar ?: avatars[profile.id]
                             } else {
@@ -1970,6 +2000,7 @@ private fun MobileProfilesStage(
     currentAvatar: ProfileAvatarPreference?,
     avatars: Map<String, ProfileAvatarPreference>,
     savedProfileIds: Set<String>,
+    serverLabels: Map<String, String>,
     switchingProfileId: String?,
     actionError: PlayarrMessage?,
     loadWarning: PlayarrMessage?,
@@ -2013,6 +2044,7 @@ private fun MobileProfilesStage(
                 items(profiles, key = AvailableProfile::id) { profile ->
                     ProfileChoice(
                         profile = profile,
+                        serverLabel = serverLabels[profile.id],
                         avatar = if (profile.id == currentUserId) {
                             currentAvatar ?: avatars[profile.id]
                         } else {
@@ -2284,6 +2316,7 @@ private fun ProfilesGlassPill(
 @Composable
 private fun ProfileChoice(
     profile: AvailableProfile,
+    serverLabel: String?,
     avatar: ProfileAvatarPreference?,
     selected: Boolean,
     isTelevision: Boolean,
@@ -2368,6 +2401,17 @@ private fun ProfileChoice(
                 .padding(top = 12.dp)
                 .fillMaxWidth(),
         )
+        if (!serverLabel.isNullOrBlank()) {
+            Text(
+                serverLabel,
+                color = WebInkMuted,
+                fontSize = if (isTelevision) 12.sp else 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp).fillMaxWidth(),
+            )
+        }
         Text(
             playarrString(
                 when {
@@ -2849,7 +2893,7 @@ internal class ParitySettingsViewModel @Inject constructor(
     }
     fun changeServer(value: String) = viewModelScope.launch {
         runCatching { normaliseServerUrl(value) }
-            .onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clear() }
+            .onSuccess { serverConfigStore.setBaseUrl(it); tokenStore.clearCurrent() }
             .onFailure {
                 _message.value = SettingsNotice(
                     message = PlayarrMessage.Localized(PlayarrString.SettingsServerInvalidUrl),

@@ -110,6 +110,92 @@ class TokenStoreTest {
         assertEquals(emptyList<SavedProfile>(), store.savedProfiles.first())
     }
 
+    @Test
+    fun `signing in a second account on another server keeps the first and tracks per-account tokens`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        val a = store.deviceIdForLogin("https://a.example", "alex")
+        store.signIn(token("access-a", "refresh-a"), "user-a", "alex", "https://a.example", a)
+        val b = store.deviceIdForLogin("https://b.example", "bailey")
+        store.signIn(token("access-b", "refresh-b"), "user-b", "bailey", "https://b.example", b)
+
+        assertEquals(
+            listOf("user-a" to "https://a.example", "user-b" to "https://b.example"),
+            store.savedProfiles.first().map { it.userId to it.serverUrl },
+        )
+        assertEquals("refresh-b", store.refreshToken.first())
+        assertEquals(b, store.getOrCreateDeviceId())
+
+        assertTrue(store.activateProfile("https://a.example", "user-a"))
+        assertEquals("access-a", store.accessToken.first())
+        assertEquals("refresh-a", store.refreshToken.first())
+        assertEquals("https://a.example", store.currentServerUrl.first())
+        assertEquals(a, store.getOrCreateDeviceId())
+        assertEquals("https://a.example|user-a", store.currentOwnerKey())
+    }
+
+    @Test
+    fun `a second account on the same server gets its own device id and never reuses the first`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        val a = store.deviceIdForLogin("https://x.example", "alex")
+        store.signIn(token("access-a", "refresh-a"), "user-a", "alex", "https://x.example", a)
+        val b = store.deviceIdForLogin("https://x.example", "bailey")
+        store.signIn(token("access-b", "refresh-b"), "user-b", "bailey", "https://x.example", b)
+
+        assertTrue(a != b)
+        // Re-logging into an existing account (any case) reuses its own id.
+        assertEquals(a, store.deviceIdForLogin("https://x.example", "ALEX"))
+        assertEquals(b, store.deviceIdForLogin("https://x.example", null, "user-b"))
+        // Rotating the active account's tokens leaves the other account's tokens alone.
+        store.save(token("access-b2", "refresh-b2"))
+        assertTrue(store.activateProfile("https://x.example", "user-a"))
+        assertEquals("refresh-a", store.refreshToken.first())
+        assertTrue(store.activateProfile("https://x.example", "user-b"))
+        assertEquals("refresh-b2", store.refreshToken.first())
+    }
+
+    @Test
+    fun `legacy single account keeps the install device id and is not displaced by a new login`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        val install = store.getOrCreateDeviceId()
+        store.save(token("access-a", "refresh-a"))
+        store.saveIdentity("user-a", "alex", "https://x.example")
+
+        assertEquals(install, store.getOrCreateDeviceId())
+        assertEquals(install, store.deviceIdForLogin("https://x.example", "alex"))
+        val fresh = store.deviceIdForLogin("https://x.example", "bailey")
+        assertTrue(fresh != install)
+        store.signIn(token("access-b", "refresh-b"), "user-b", "bailey", "https://x.example", fresh)
+
+        assertTrue(store.activateProfile("https://x.example", "user-a"))
+        assertEquals(install, store.getOrCreateDeviceId())
+        assertEquals(2, store.savedProfiles.first().size)
+    }
+
+    @Test
+    fun `binding a server never re-files an existing identity under a different server`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        store.signIn(token("access-a", "refresh-a"), "user-a", "alex", "https://a.example", "dev-a")
+
+        store.bindCurrentServer("https://b.example")
+
+        assertEquals(listOf("https://a.example"), store.savedProfiles.first().map { it.serverUrl })
+        assertEquals("https://a.example", store.currentServerUrl.first())
+    }
+
+    @Test
+    fun `signing out the active account removes only that account`() = runBlocking {
+        val store = TokenStore(TokenStoreFakeDataStore())
+        store.signIn(token("access-a", "refresh-a"), "user-a", "alex", "https://a.example", "dev-a")
+        store.signIn(token("access-b", "refresh-b"), "user-b", "bailey", "https://a.example", "dev-b")
+
+        store.clear()
+
+        assertNull(store.accessToken.first())
+        assertEquals(listOf("user-a"), store.savedProfiles.first().map { it.userId })
+        assertTrue(store.activateProfile("https://a.example", "user-a"))
+        assertEquals("dev-a", store.getOrCreateDeviceId())
+    }
+
     private fun token(access: String, refresh: String) = TokenResponse(
         accessToken = access,
         refreshToken = refresh,
