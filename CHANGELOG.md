@@ -52,6 +52,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   10 s buffered and resumes after 15 s following a stall (was 2.5 s and 5 s), so
   a remux on a link only slightly faster than its bitrate rides out peaks.
 
+### Changed
+
+- The regional servers `playarr-region-a` and `playarr-region-b` serve HTTPS on their public 8484 addresses
+  using cert-manager certificates (optional per-instance `tls` in the `playarr-dev` chart). The
+  server now hot-reloads a renewed static TLS certificate within a minute, without a restart.
+
 ### Fixed
 
 - Roku SceneGraph XML comments no longer contain double hyphens, so the

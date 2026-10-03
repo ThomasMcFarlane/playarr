@@ -1462,6 +1462,14 @@ async fn serve_application_router(
             axum_server::tls_rustls::RustlsConfig::from_pem_file(&tls.cert_path, &tls.key_path)
                 .await?;
         tracing::info!(addr = %config.http_bind_addr, "https server listening with static certificate");
+        // cert-manager (or any renewer) replaces these files in place; pick
+        // the new certificate up without restarting the server.
+        tokio::spawn(watch_static_tls(
+            tls_config.clone(),
+            tls.cert_path.clone(),
+            tls.key_path.clone(),
+            STATIC_TLS_RELOAD_INTERVAL,
+        ));
         if let Some(readiness) = readiness {
             readiness.set_ready(true);
         }
@@ -1480,6 +1488,68 @@ async fn serve_application_router(
         .await?;
     }
     Ok(())
+}
+
+/// How often the static certificate files are checked for replacement.
+const STATIC_TLS_RELOAD_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Reads the certificate and key files and, when either differs from
+/// `last`, reloads them into `config`. Returns whether a reload happened.
+/// A missing, half-written or invalid pair keeps the previous certificate
+/// serving and is retried on the next call, because a renewer may update the
+/// two files at different moments.
+async fn reload_static_tls_if_changed(
+    config: &axum_server::tls_rustls::RustlsConfig,
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+    last: &mut Option<(Vec<u8>, Vec<u8>)>,
+) -> bool {
+    let (cert, key) = match (
+        tokio::fs::read(cert_path).await,
+        tokio::fs::read(key_path).await,
+    ) {
+        (Ok(cert), Ok(key)) => (cert, key),
+        (Err(err), _) | (_, Err(err)) => {
+            tracing::warn!(error = %err, "cannot read static TLS files; keeping current certificate");
+            return false;
+        }
+    };
+    if last.as_ref().is_some_and(|(c, k)| *c == cert && *k == key) {
+        return false;
+    }
+    match config.reload_from_pem(cert.clone(), key.clone()).await {
+        Ok(()) => {
+            tracing::info!("reloaded static TLS certificate");
+            *last = Some((cert, key));
+            true
+        }
+        Err(err) => {
+            tracing::warn!(error = %err, "static TLS files are invalid; keeping current certificate");
+            false
+        }
+    }
+}
+
+/// Polls the static certificate files for the lifetime of the process.
+async fn watch_static_tls(
+    config: axum_server::tls_rustls::RustlsConfig,
+    cert_path: std::path::PathBuf,
+    key_path: std::path::PathBuf,
+    interval: Duration,
+) {
+    let mut last = match (
+        tokio::fs::read(&cert_path).await,
+        tokio::fs::read(&key_path).await,
+    ) {
+        (Ok(cert), Ok(key)) => Some((cert, key)),
+        _ => None,
+    };
+    let mut ticker = tokio::time::interval(interval);
+    ticker.tick().await;
+    loop {
+        ticker.tick().await;
+        reload_static_tls_if_changed(&config, &cert_path, &key_path, &mut last).await;
+    }
 }
 
 /// Worker-role bootstrap: spawns one `ReconciliationPoller` per configured
@@ -2610,5 +2680,44 @@ mod bootstrap_tests {
         assert!(response.contains(
             "Location: https://v4-203-0-113-10.relay.playarr.app:8484/api/system/health?full=1\r\n"
         ));
+    }
+
+    fn write_self_signed(dir: &std::path::Path, name: &str) -> Vec<u8> {
+        let key = rcgen::generate_simple_self_signed(vec![name.to_string()]).unwrap();
+        std::fs::write(dir.join("tls.crt"), key.cert.pem()).unwrap();
+        std::fs::write(dir.join("tls.key"), key.key_pair.serialize_pem()).unwrap();
+        key.cert.der().to_vec()
+    }
+
+    #[tokio::test]
+    async fn static_tls_reloads_only_when_files_change_and_survive_bad_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let (cert, key) = (dir.path().join("tls.crt"), dir.path().join("tls.key"));
+        write_self_signed(dir.path(), "first.example");
+        let config = axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert, &key)
+            .await
+            .unwrap();
+        let mut last = Some((std::fs::read(&cert).unwrap(), std::fs::read(&key).unwrap()));
+
+        // Unchanged files: no reload.
+        assert!(!reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+
+        // Renewed pair: reloaded once, then stable.
+        write_self_signed(dir.path(), "second.example");
+        assert!(reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+        assert!(!reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+
+        // Invalid or missing files keep the last good state and are retried.
+        let good = last.clone();
+        std::fs::write(&cert, "not a certificate").unwrap();
+        assert!(!reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+        assert_eq!(last, good);
+        std::fs::remove_file(&key).unwrap();
+        assert!(!reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+        assert_eq!(last, good);
+
+        // A valid pair written afterwards is picked up.
+        write_self_signed(dir.path(), "third.example");
+        assert!(reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
     }
 }

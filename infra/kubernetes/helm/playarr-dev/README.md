@@ -57,15 +57,53 @@ portmap plugin on that address. Omit the key to keep the instance cluster-only.
 
 | Instance | Node | Address |
 | --- | --- | --- |
-| `playarr-region-a` | region-a | `http://203.0.113.10:8484` |
-| `playarr-region-b` | region-b | `http://203.0.113.20:8484` |
+| `playarr-region-a` | region-a | `https://playarr-a.example.com:8484` (`203.0.113.10`) |
+| `playarr-region-b` | region-b | `https://playarr-b.example.com:8484` (`203.0.113.20`) |
 
-This is plain HTTP on a public address, deliberately and with owner approval
-(no tunnel or VPN). Only the `http` port is published; metrics (9090) stays
-pod-local. The `playarr-a.example.com` and `playarr.example.com` routes are
-unchanged. Deployments use the `Recreate` strategy, so the old Pod releases the
-host port before the new one starts. The node firewall must allow TCP 8484.
-Verify with `curl http://203.0.113.20:8484/healthz`.
+Only the `http` container port is published; metrics (9090) stays pod-local.
+Deployments use the `Recreate` strategy, so the old Pod releases the host port
+before the new one starts. The node firewall must allow TCP 8484.
+
+### HTTPS (`tls`)
+
+The owner requires HTTPS on both public addresses, and performance testing must
+use it. Each instance sets `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
+
+- The chart renders a cert-manager `Certificate` (`<instance>-tls`, ECDSA P-256,
+  PKCS#8) in the release namespace. The `letsencrypt-prod` ClusterIssuer solves
+  DNS-01 through Cloudflare for any name, so `*.example.com` names work.
+- The Secret is mounted read-only at `/tls` and the Pod gets
+  `PLAYARR_TLS_CERT_PATH=/tls/tls.crt` and `PLAYARR_TLS_KEY_PATH=/tls/tls.key`.
+  The server then serves HTTPS on `PLAYARR_HTTP_BIND_ADDR` (static TLS is mutually
+  exclusive with ACME). Probes use `scheme: HTTPS`; the Service exposes 443 and the
+  Emissary Mapping uses `https://<instance>.<namespace>:443`, so the existing
+  `playarr-a.example.com` and `playarr.example.com` routes keep working. Emissary
+  does not verify the upstream certificate, so `routeHost` needs no SAN.
+- Only the node-facing name is a SAN. `playarr.example.com` resolves to the
+  cluster ingress, not the region-b address, so nobody reaches region-b:8484 by that name.
+- Renewal: cert-manager renews about 30 days before expiry and updates the Secret
+  in place. The server checks the two files every 60 seconds and hot-reloads a
+  changed, valid pair (an invalid or half-written pair keeps the old certificate).
+  This needs a server build containing that reload; older builds load the file
+  once and need a Pod restart after each renewal.
+- Ordering: the `Certificate` carries `argocd.argoproj.io/sync-wave: "-1"`, so Argo
+  waits for it to be healthy before the Deployment. The Secret volume is not
+  optional either, so a Pod created early waits in `ContainerCreating` until the
+  Secret exists instead of crash-looping.
+- Plain HTTP on 8484 is no longer served; there is no plaintext redirect on the
+  static-certificate listener. Clients must use `https://`.
+
+Verify after rollout:
+
+```sh
+kubectl get certificate -n playarr          # READY=True for playarr-region-a-tls, playarr-region-b-tls
+curl -sv https://playarr-b.example.com:8484/healthz
+echo | openssl s_client -connect playarr-b.example.com:8484 \
+  -servername playarr-b.example.com 2>/dev/null | openssl x509 -noout -issuer -dates -subject
+```
+
+Repeat for `playarr-region-a`. Rollback: unset `tls` for the instance (plain HTTP
+wiring returns) and sync.
 
 ## Regional runtime image (ffmpeg and ffprobe)
 

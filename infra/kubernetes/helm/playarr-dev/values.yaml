@@ -133,10 +133,15 @@ regionalInstances:
     mediaPath: /srv/media
     runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr-a.example.com
-    # Plain HTTP on the node's public address (owner-approved public server).
+    # HTTPS on the node's public address (owner-approved public server). The
+    # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:
       hostIP: 203.0.113.10
       hostPort: 8484
+    tls:
+      issuer: letsencrypt-prod
+      hostnames:
+        - playarr-a.example.com
 
   playarr-region-b:
     image: streamarr-runtime:26853ca
@@ -160,7 +165,12 @@ regionalInstances:
     mediaPath: /srv/media
     runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr.example.com
-    # Plain HTTP on the node's public address (owner-approved public server).
+    # HTTPS on the node's public address (owner-approved public server). The
+    # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:
       hostIP: 203.0.113.20
       hostPort: 8484
+    tls:
+      issuer: letsencrypt-prod
+      hostnames:
+        - playarr-b.example.com

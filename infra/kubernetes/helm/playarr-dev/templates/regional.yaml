@@ -1,4 +1,34 @@
 {{- range $name, $instance := .Values.regionalInstances }}
+{{- $tls := $instance.tls | default dict }}
+{{- $tlsOn := not (empty $tls.hostnames) }}
+{{- if $tlsOn }}
+---
+# cert-manager issues the certificate (DNS-01) into a Secret that the pod
+# mounts. The sync-wave puts it ahead of the Deployment; the Secret volume is
+# not optional, so the pod also waits in ContainerCreating until it exists.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}-tls
+  labels:
+    {{- include "playarr-dev.regionalLabels" (dict "context" $ "name" $name) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  secretName: {{ $name }}-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ $tls.issuer | default "letsencrypt-prod" }}
+  dnsNames:
+    {{- range $tls.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    encoding: PKCS8
+    rotationPolicy: Always
+{{- end }}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -75,6 +105,12 @@ spec:
               value: 0.0.0.0:9090
             - name: PLAYARR_ROLE
               value: all
+            {{- if $tlsOn }}
+            - name: PLAYARR_TLS_CERT_PATH
+              value: /tls/tls.crt
+            - name: PLAYARR_TLS_KEY_PATH
+              value: /tls/tls.key
+            {{- end }}
           envFrom:
             - secretRef:
                 name: {{ $instance.secretName }}
@@ -93,7 +129,7 @@ spec:
             httpGet:
               path: /readyz
               port: http
-              scheme: HTTP
+              scheme: {{ if $tlsOn }}HTTPS{{ else }}HTTP{{ end }}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
@@ -103,7 +139,7 @@ spec:
             httpGet:
               path: /healthz
               port: http
-              scheme: HTTP
+              scheme: {{ if $tlsOn }}HTTPS{{ else }}HTTP{{ end }}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
@@ -127,6 +163,11 @@ spec:
             - name: runtime
               mountPath: /opt/streamarr
               readOnly: true
+            {{- if $tlsOn }}
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -141,6 +182,12 @@ spec:
           hostPath:
             path: {{ $instance.runtimePath }}
             type: Directory
+        {{- if $tlsOn }}
+        - name: tls
+          secret:
+            secretName: {{ $name }}-tls
+            defaultMode: 0440
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -154,10 +201,17 @@ spec:
     app.kubernetes.io/name: playarr-standalone
     app.kubernetes.io/instance: {{ $name }}
   ports:
+    {{- if $tlsOn }}
+    - name: https
+      port: 443
+      targetPort: http
+      protocol: TCP
+    {{- else }}
     - name: http
       port: 80
       targetPort: http
       protocol: TCP
+    {{- end }}
     - name: metrics
       port: 9090
       targetPort: metrics
@@ -174,7 +228,14 @@ spec:
     - --apiVersion-v3alpha1-only--default
   host: {{ $instance.routeHost | quote }}
   prefix: /
+  {{- if $tlsOn }}
+  # The pod terminates TLS itself; the https:// scheme makes Emissary originate
+  # TLS to it. Without a TLSContext Emissary does not verify the upstream
+  # certificate, so the public hostnames need not match routeHost.
+  service: {{ printf "https://%s.%s:443" $name $.Release.Namespace | quote }}
+  {{- else }}
   service: {{ printf "%s.%s:80" $name $.Release.Namespace | quote }}
+  {{- end }}
   allow_upgrade:
     - websocket
   idle_timeout_ms: 3600000

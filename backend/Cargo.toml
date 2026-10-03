@@ -71,6 +71,9 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 reqwest = { workspace = true }
 
+[dev-dependencies]
+rcgen = "0.13"
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
