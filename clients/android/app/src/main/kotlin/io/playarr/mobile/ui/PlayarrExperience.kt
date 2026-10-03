@@ -142,6 +142,8 @@ import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.toBitmap
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.playarr.mobile.BuildConfig
 import io.playarr.mobile.R
@@ -1037,6 +1039,17 @@ internal fun PlayarrExperience(
     )
 
     val playbackFailed = persistentPlayerState is ExperienceLoad.Failed || playbackState.error != null
+    // The mini player must read the same source timeline as the expanded player (engine position plus
+    // HLS source offset, duration from the negotiated source), not the raw engine window.
+    var miniTimeline by remember { mutableStateOf(PlayarrPlayerTimeline()) }
+    val miniPlayerVisible = shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed)
+    LaunchedEffect(miniPlayerVisible, activePlaybackItem?.mediaFileId) {
+        if (!miniPlayerVisible) return@LaunchedEffect
+        while (true) {
+            miniTimeline = playerViewModel.timelineSnapshot()
+            kotlinx.coroutines.delay(500)
+        }
+    }
     LaunchedEffect(playbackFailed, isPlayer, activePlaybackItem?.mediaFileId) {
         if (shouldClearPlayarrFailedPlayback(playbackFailed, isPlayer, activePlaybackItem != null)) {
             closePlayback()
@@ -1110,7 +1123,7 @@ internal fun PlayarrExperience(
             if (shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed)) {
                 PlayarrMiniPlayer(
                     item = activePlaybackItem!!,
-                    playbackState = playbackState,
+                    timeline = miniTimeline,
                     serverUrl = serverUrl,
                     accessToken = token,
                     isTelevision = isTelevision,
@@ -1128,7 +1141,7 @@ internal fun PlayarrExperience(
 @Composable
 private fun PlayarrMiniPlayer(
     item: PlayarrPlaybackQueueItem,
-    playbackState: PlaybackState,
+    timeline: PlayarrPlayerTimeline,
     serverUrl: String,
     accessToken: String?,
     isTelevision: Boolean,
@@ -1213,7 +1226,7 @@ private fun PlayarrMiniPlayer(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${formatPlayarrPlayerTime(playbackState.positionMs)} / ${formatPlayarrPlayerTime(playbackState.durationMs)}",
+                    "${formatPlayarrPlayerTime(timeline.positionMs)} / ${formatPlayarrPlayerTime(timeline.durationMs)}",
                     color = Color.White.copy(alpha = 0.64f),
                     fontSize = if (isTelevision) 10.sp else 9.sp,
                     maxLines = 1,
@@ -1227,7 +1240,7 @@ private fun PlayarrMiniPlayer(
                 ) {
                     Box(
                         Modifier
-                            .fillMaxWidth(playarrPlaybackProgress(playbackState.positionMs, playbackState.durationMs))
+                            .fillMaxWidth(playarrPlaybackProgress(timeline.positionMs, timeline.durationMs))
                             .fillMaxHeight()
                             .clip(CircleShape)
                             .background(WebPink),
@@ -5739,10 +5752,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         sourceDurationMs = currentSourceDurationMs(),
     )
 
-    private fun currentSourceDurationMs(): Long = activeSourceDurationMs.takeIf { it > 0L }
-        ?: player.rawPlayer.duration.coerceAtLeast(0L).let { engineDuration ->
-            if (engineDuration > 0L) engineDuration + activeSourceOffsetMs else 0L
-        }
+    private fun currentSourceDurationMs(): Long =
+        playarrSourceDurationMs(activeSourceDurationMs, player.rawPlayer.duration, activeSourceOffsetMs)
 
     private fun recordEvent(sessionId: String, event: PlaybackEventRequest) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -6276,6 +6287,8 @@ internal fun resolvePlayarrPlaybackUrl(serverUrl: String, playbackUrl: String): 
         base.resolve(playbackUrl).toString()
     }.getOrDefault(playbackUrl)
 
+private const val HERO_LUMA_SAMPLE_SIZE = 32
+
 @Composable
 internal fun AuthenticatedArtwork(
     work: Work,
@@ -6290,11 +6303,16 @@ internal fun AuthenticatedArtwork(
     val serverAccess = rememberPlayarrWorkServerAccess(work.id, serverUrl, accessToken)
     // Per kind: the server artwork endpoint (cached, authenticated), then the provider URL; a
     // failed load moves on to the next candidate instead of leaving the hero/tile empty.
-    val candidates = remember(work.id, work.images, kinds, serverAccess?.serverUrl) {
-        serverAccess?.let { playarrArtworkCandidates(work.id, work.images, kinds, it.serverUrl) }.orEmpty()
+    val candidateGroups = remember(work.id, work.images, kinds, serverAccess?.serverUrl) {
+        serverAccess?.let { access ->
+            kinds.distinct().map { playarrArtworkCandidates(work.id, work.images, listOf(it), access.serverUrl) }
+        }.orEmpty()
     }
+    val candidates = remember(candidateGroups) { candidateGroups.flatten().distinct() }
     var failed by remember(candidates) { mutableStateOf(0) }
     val resolved = candidates.getOrNull(failed)
+    // Near-black art (e.g. a dark film still) is sampled once from the decoded bitmap and lifted.
+    var exposureGain by remember(resolved) { mutableStateOf(1f) }
     if (serverAccess == null || resolved == null) {
         Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
             Text(work.title, color = WebInkMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
@@ -6302,9 +6320,11 @@ internal fun AuthenticatedArtwork(
         return
     }
     val requestToken = playarrAccessTokenForUrl(serverAccess, resolved)
-    val request = remember(resolved, requestToken) {
+    val request = remember(resolved, requestToken, heroStyle) {
         ImageRequest.Builder(context)
             .data(resolved)
+            // Hero art is sampled for luminance once decoded; hardware bitmaps cannot be read back.
+            .apply { if (heroStyle) allowHardware(false) }
             .apply {
                 if (!requestToken.isNullOrBlank()) {
                     httpHeaders(
@@ -6321,8 +6341,22 @@ internal fun AuthenticatedArtwork(
         contentDescription = work.title,
         contentScale = contentScale,
         onError = { failed += 1 },
+        onSuccess = if (heroStyle) {
+            { state ->
+                val gain = runCatching {
+                    val bitmap = state.result.image.toBitmap(HERO_LUMA_SAMPLE_SIZE, HERO_LUMA_SAMPLE_SIZE)
+                    val pixels = IntArray(HERO_LUMA_SAMPLE_SIZE * HERO_LUMA_SAMPLE_SIZE)
+                    bitmap.getPixels(pixels, 0, HERO_LUMA_SAMPLE_SIZE, 0, 0, HERO_LUMA_SAMPLE_SIZE, HERO_LUMA_SAMPLE_SIZE)
+                    heroArtExposureGain(heroArtMeanLuma(pixels))
+                }.getOrDefault(1f)
+                // Near-black art: prefer the next artwork kind (backdrop -> poster) when the work has one,
+                // otherwise keep this art and lift its exposure.
+                val next = if (gain > 1f) playarrDimArtFallbackIndex(candidateGroups.map { it.size }, failed) else null
+                if (next != null) failed = next else exposureGain = gain
+            }
+        } else null,
         modifier = modifier,
-        colorFilter = if (heroStyle) heroArtFilter(webIsDark) else null,
+        colorFilter = if (heroStyle) heroArtFilter(webIsDark, exposureGain) else null,
         alpha = if (heroStyle) heroArtOpacity(webIsDark) else 1f,
     )
 }

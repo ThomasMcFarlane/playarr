@@ -48,4 +48,24 @@ class PlayarrPlaybackTimelineTest {
         assertEquals(false, shouldRecoverPlayarrHlsSession(false, 404, sessionUrl))
         assertEquals(false, shouldRecoverPlayarrHlsSession(true, 404, "https://playarr.example/media.mp4"))
     }
+
+    @Test
+    fun `mini player timeline uses the source window after a seek on a large mp4`() {
+        // Row 102: engine window after a seek reported ~0:10, source is 1:34:51 with the seek at 1:33:55.
+        val sourceDuration = 5_691_000L
+        val offset = 5_635_000L
+        val engineWindow = 10_000L
+        val duration = playarrSourceDurationMs(sourceDuration, engineWindow, offset)
+        val position = playarrSourcePositionMs(0L, offset, duration)
+        assertEquals("1:34:51", formatPlayarrPlayerTime(duration))
+        assertEquals("1:33:55", formatPlayarrPlayerTime(position))
+        assertEquals("0:10", formatPlayarrPlayerTime(engineWindow))
+    }
+
+    @Test
+    fun `source duration falls back to the offset engine window then zero`() {
+        assertEquals(1_210_000L, playarrSourceDurationMs(0L, 10_000L, 1_200_000L))
+        assertEquals(0L, playarrSourceDurationMs(0L, -1L, 1_200_000L))
+        assertEquals(500L, playarrSourceDurationMs(500L, 10_000L, 1_200_000L))
+    }
 }

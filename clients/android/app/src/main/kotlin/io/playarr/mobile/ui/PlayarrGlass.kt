@@ -293,8 +293,8 @@ internal fun heroArtFilteredGray(gray: Float, contrast: Float, brightness: Float
     (brightness * (contrast * (gray - 0.5f) + 0.5f)).coerceIn(0f, 1f)
 
 /** 4x5 Android colour matrix equivalent of `grayscale(1) contrast(c) brightness(b)`. */
-internal fun heroArtMatrix(contrast: Float, brightness: Float): FloatArray {
-    val k = contrast * brightness
+internal fun heroArtMatrix(contrast: Float, brightness: Float, exposureGain: Float = 1f): FloatArray {
+    val k = contrast * brightness * exposureGain
     val offset = brightness * 0.5f * (1f - contrast) * 255f
     val row = floatArrayOf(k * LUMA_R, k * LUMA_G, k * LUMA_B, 0f, offset)
     return floatArrayOf(
@@ -310,5 +310,47 @@ internal val heroArtFilterDark: ColorFilter =
 internal val heroArtFilterLight: ColorFilter =
     ColorFilter.colorMatrix(ColorMatrix(heroArtMatrix(WebGlass.ART_CONTRAST_LIGHT, WebGlass.ART_BRIGHTNESS_LIGHT)))
 
-internal fun heroArtFilter(dark: Boolean): ColorFilter = if (dark) heroArtFilterDark else heroArtFilterLight
+internal fun heroArtFilter(dark: Boolean, exposureGain: Float = 1f): ColorFilter = when {
+    exposureGain <= 1f -> if (dark) heroArtFilterDark else heroArtFilterLight
+    dark -> ColorFilter.colorMatrix(ColorMatrix(heroArtMatrix(WebGlass.ART_CONTRAST_DARK, WebGlass.ART_BRIGHTNESS_DARK, exposureGain)))
+    else -> ColorFilter.colorMatrix(ColorMatrix(heroArtMatrix(WebGlass.ART_CONTRAST_LIGHT, WebGlass.ART_BRIGHTNESS_LIGHT, exposureGain)))
+}
+
+/** Mean luminance (0..1) at or below which key art is treated as near-black (Sample Movie Four backdrop is ~9/255 = 0.035). */
+internal const val HERO_ART_DIM_LUMA = 0.12f
+private const val HERO_ART_TARGET_LUMA = 0.22f
+private const val HERO_ART_MAX_GAIN = 6f
+
+/** Mean Rec.709 luminance (0..1) of packed ARGB [pixels]; 0 for an empty sample. */
+internal fun heroArtMeanLuma(pixels: IntArray): Float {
+    if (pixels.isEmpty()) return 0f
+    var sum = 0.0
+    for (p in pixels) {
+        sum += LUMA_R * ((p shr 16) and 0xFF) + LUMA_G * ((p shr 8) and 0xFF) + LUMA_B * (p and 0xFF)
+    }
+    return (sum / pixels.size / 255.0).toFloat()
+}
+
+/**
+ * Exposure multiplier applied before the key-art filter so near-black art (mean luminance
+ * <= [HERO_ART_DIM_LUMA]) is lifted towards a visible level instead of leaving the hero empty.
+ * Art at or above the threshold is untouched (1f).
+ */
+internal fun heroArtExposureGain(meanLuma: Float): Float =
+    if (meanLuma > HERO_ART_DIM_LUMA) 1f else (HERO_ART_TARGET_LUMA / meanLuma.coerceAtLeast(0.001f)).coerceIn(1f, HERO_ART_MAX_GAIN)
 internal fun heroArtOpacity(dark: Boolean): Float = if (dark) WebGlass.ART_OPACITY_DARK else WebGlass.ART_OPACITY_LIGHT
+
+/**
+ * Index of the first candidate of the next non-empty artwork kind after [current], given the candidate
+ * count of each requested kind in order, or null when the current candidate is already in the last kind.
+ */
+internal fun playarrDimArtFallbackIndex(groupSizes: List<Int>, current: Int): Int? {
+    var start = 0
+    for (size in groupSizes) {
+        if (size == 0) continue
+        val end = start + size
+        if (current < end) return if (end < groupSizes.sum()) end else null
+        start = end
+    }
+    return null
+}

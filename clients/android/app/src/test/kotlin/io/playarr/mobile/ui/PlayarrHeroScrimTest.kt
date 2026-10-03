@@ -50,4 +50,26 @@ class PlayarrHeroScrimTest {
         assertEquals(1, glassBoxRadius(8f))
         assertTrue(glassBoxRadius(66f) > glassBoxRadius(22f))
     }
+
+    @Test
+    fun nearBlackArtGetsAnExposureLiftAndNormalArtDoesNot() {
+        val crow = IntArray(64) { 0xFF090909.toInt() } // ~9/255 like Sample Movie Four backdrop
+        val gain = heroArtExposureGain(heroArtMeanLuma(crow))
+        assertTrue("gain $gain", gain > 4f)
+        assertEquals(1f, heroArtExposureGain(heroArtMeanLuma(IntArray(64) { 0xFF808080.toInt() })), 0f)
+        assertEquals(1f, heroArtExposureGain(0.5f), 0f)
+        assertEquals(0f, heroArtMeanLuma(IntArray(0)), 0f)
+        val m = heroArtMatrix(0.82f, 0.6f, gain)
+        assertTrue(m[0] > heroArtMatrix(0.82f, 0.6f)[0] * 4f)
+    }
+
+    @Test
+    fun dimArtFallsBackToTheNextArtworkKindOnly() {
+        assertEquals(2, playarrDimArtFallbackIndex(listOf(2, 2), 0))
+        assertEquals(2, playarrDimArtFallbackIndex(listOf(2, 2), 1))
+        assertEquals(null, playarrDimArtFallbackIndex(listOf(2, 2), 2))
+        assertEquals(null, playarrDimArtFallbackIndex(listOf(2, 0), 0))
+        assertEquals(2, playarrDimArtFallbackIndex(listOf(0, 2, 2), 0))
+        assertEquals(null, playarrDimArtFallbackIndex(emptyList(), 0))
+    }
 }

@@ -18,6 +18,11 @@ internal fun playarrSourcePositionMs(
         if (sourceDurationMs > 0L) absolute.coerceAtMost(sourceDurationMs) else absolute
     }
 
+/** Source-timeline duration: the negotiated source duration when known, else the engine window shifted by the source offset. */
+internal fun playarrSourceDurationMs(negotiatedDurationMs: Long, engineDurationMs: Long, sourceOffsetMs: Long): Long =
+    negotiatedDurationMs.takeIf { it > 0L }
+        ?: engineDurationMs.coerceAtLeast(0L).let { if (it > 0L) it + sourceOffsetMs.coerceAtLeast(0L) else 0L }
+
 internal fun isPlayarrOnDemandHls(playbackUrl: String): Boolean =
     playbackUrl.contains("/api/v1/media/sessions/")
 
