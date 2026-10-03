@@ -1535,6 +1535,7 @@ async fn boot_api(
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::new()),
+        portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 

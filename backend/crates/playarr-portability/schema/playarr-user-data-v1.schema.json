@@ -16,7 +16,7 @@
     "playback_preferences": { "type": "array", "items": { "$ref": "#/$defs/playbackPreference" } },
     "playlists": { "type": "array", "items": { "$ref": "#/$defs/playlist" } },
     "ratings": { "type": "array" },
-    "watchlist": { "type": "array" },
+    "watchlist": { "type": "array", "items": { "$ref": "#/$defs/watchlistRecord" } },
     "unmatched": { "type": "array", "items": { "$ref": "#/$defs/unmatched" } }
   },
   "$defs": {
@@ -88,11 +88,19 @@
         }
       }
     },
+    "watchlistRecord": {
+      "type": "object",
+      "required": ["item", "added_at"],
+      "properties": {
+        "item": { "$ref": "#/$defs/item" },
+        "added_at": { "type": "string", "format": "date-time" }
+      }
+    },
     "unmatched": {
       "type": "object",
       "required": ["section", "reason", "record"],
       "properties": {
-        "section": { "enum": ["watch_progress", "playback_preferences", "playlist_item"] },
+        "section": { "enum": ["watch_progress", "playback_preferences", "playlist_item", "watchlist"] },
         "reason": { "enum": ["no_match", "ambiguous", "unsupported_kind", "not_accessible"] },
         "playlist_name": { "type": ["string", "null"] },
         "record": {}

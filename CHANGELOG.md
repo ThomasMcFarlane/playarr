@@ -31,6 +31,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Helm install methods, and the optional playarr.app HTTPS relay. It states that no
   binaries or public image are published yet and offers no download. English, Thai and
   Japanese; covered by `Clients.test.tsx`.
+- Self-service portable user data (tasks 69-70). Signed-in users can export their own watch
+  progress, personal playlists and preferences to a ZIP (`POST /api/v1/users/me/data-exports`,
+  status, download, delete; node-local files that expire after 30 minutes) and import a package
+  into their own account with a preview step (`POST /api/v1/users/me/data-imports/preview`, then
+  apply with the previewed SHA-256). Matching uses TMDB/TVDB/IMDb identifiers first and a strict
+  fuzzy title fallback; imports merge without deleting, are idempotent, never touch another
+  account, and unmatched or ambiguous records are returned as a re-importable package.
+  The package includes the per-profile watchlist (kept even for titles not in any library) and
+  a `watchlist.csv` view. `UserRepo::list_media_playback_preferences` added.
 - New `playarr-portability` crate: the versioned portable user-data package (canonical JSON,
   CSV views, README and JSON Schema in a ZIP), a hardened reader (size, entry, path, symlink,
   version and text limits) and identifier/fuzzy title matching, with unit tests (task 68).

@@ -127,6 +127,13 @@ pub trait UserRepo: Send + Sync {
         media_file_id: Uuid,
     ) -> Result<Option<MediaPlaybackPreferences>, DbError>;
 
+    /// Every per-file playback choice stored for `user_id` (the portable
+    /// export reads these; never another user's rows).
+    async fn list_media_playback_preferences(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<MediaPlaybackPreferences>, DbError>;
+
     async fn upsert_media_playback_preferences(
         &self,
         user_id: Uuid,
@@ -505,6 +512,37 @@ impl UserRepo for SqlxUserRepo {
         .transpose()
     }
 
+    async fn list_media_playback_preferences(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<MediaPlaybackPreferences>, DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
+                 FROM user_media_playback_preferences WHERE user_id = ? ORDER BY media_file_id"
+            }
+            Backend::Postgres => {
+                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
+                 FROM user_media_playback_preferences WHERE user_id = $1 ORDER BY media_file_id"
+            }
+        };
+        let rows = sqlx::query(sql)
+            .bind(user_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                let media_file_id: String = row.try_get("media_file_id")?;
+                Ok(MediaPlaybackPreferences {
+                    media_file_id: parse_uuid(&media_file_id)?,
+                    quality_id: row.try_get("quality_id")?,
+                    audio_track_id: row.try_get("audio_track_id")?,
+                    subtitle_track_id: row.try_get("subtitle_track_id")?,
+                })
+            })
+            .collect()
+    }
+
     async fn upsert_media_playback_preferences(
         &self,
         user_id: Uuid,
@@ -714,8 +752,19 @@ mod tests {
             repo.get_media_playback_preferences(user.id, media_file_id)
                 .await
                 .unwrap(),
-            Some(preferences)
+            Some(preferences.clone())
         );
+
+        // Listing is scoped to the user: another user sees none of these rows.
+        let listed = repo.list_media_playback_preferences(user.id).await.unwrap();
+        assert_eq!(listed, vec![preferences]);
+        let other = sample_user(policy_id, "someone-else");
+        repo.upsert(&other).await.unwrap();
+        assert!(repo
+            .list_media_playback_preferences(other.id)
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]

@@ -239,6 +239,9 @@ fn sanitise(package: &mut UserDataPackage, max: usize) -> Result<(), PackageErro
             clean_item(&mut entry.item, max)?;
         }
     }
+    for record in &mut package.watchlist {
+        clean_item(&mut record.item, max)?;
+    }
     for record in &mut package.unmatched {
         clean(&mut record.section, max)?;
         clean(&mut record.reason, max)?;
@@ -262,6 +265,7 @@ playarr-user-data.json   The canonical data. This is the only file an import rea
 watch-progress.csv       Spreadsheet view of your resume positions and watched state.\r\n\
 playlists.csv            Spreadsheet view of your playlists.\r\n\
 playlist-items.csv       Spreadsheet view of playlist entries, in order.\r\n\
+watchlist.csv            Spreadsheet view of your watchlist.\r\n\
 schema/                  JSON Schema describing the JSON file.\r\n\
 \r\n\
 The CSV files are for reading and are ignored on import. Edit the JSON file if\r\n\
@@ -269,12 +273,12 @@ you need to correct something before importing.\r\n\
 \r\n\
 Units: times are UTC (RFC 3339, ending in Z); positions and durations are\r\n\
 milliseconds. Playarr stores one resume state per title, so there are no\r\n\
-per-viewing events or play counts, and it stores no ratings or separate\r\n\
-watchlist. Nothing here contains passwords, tokens, file paths or other\r\n\
+per-viewing events or play counts, and it stores no personal ratings.\r\n\
+Nothing here contains passwords, tokens, file paths or other\r\n\
 people's data. Full specification: docs/formats/user-data-export-v1.md in the\r\n\
 Playarr repository.\r\n\
 \r\n\
-Counts: {watch} watch records, {prefs} playback preferences, {lists} playlists.\r\n",
+Counts: {watch} watch records, {prefs} playback preferences, {lists} playlists, {watchlist} watchlist titles.\r\n",
         generated = package
             .generated_at
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
@@ -282,6 +286,7 @@ Counts: {watch} watch records, {prefs} playback preferences, {lists} playlists.\
         watch = package.watch_progress.len(),
         prefs = package.playback_preferences.len(),
         lists = package.playlists.len(),
+        watchlist = package.watchlist.len(),
     )
 }
 
@@ -295,7 +300,7 @@ pub fn write_package<W: Write + Seek>(
         .compression_method(CompressionMethod::Deflated)
         .unix_permissions(0o644);
     let json = serde_json::to_vec_pretty(package).map_err(std::io::Error::other)?;
-    let files: [(&str, Vec<u8>); 6] = [
+    let files: [(&str, Vec<u8>); 7] = [
         ("README.txt", readme(package).into_bytes()),
         (JSON_ENTRY, json),
         (SCHEMA_ENTRY, SCHEMA_JSON.as_bytes().to_vec()),
@@ -310,6 +315,10 @@ pub fn write_package<W: Write + Seek>(
         (
             "playlist-items.csv",
             csv_view::playlist_items_csv(package).into_bytes(),
+        ),
+        (
+            "watchlist.csv",
+            csv_view::watchlist_csv(package).into_bytes(),
         ),
     ];
     for (name, bytes) in files {
@@ -353,6 +362,16 @@ mod tests {
             position_ms: 61_000,
             duration_ms: 7_500_000,
             updated_at: Some(at),
+        });
+        p.watchlist.push(WatchlistRecord {
+            item: ItemRef {
+                kind: "series".into(),
+                title: "Not in any library yet".into(),
+                year: Some(2030),
+                external_ids: [("tvdb".to_owned(), "1".to_owned())].into(),
+                ..ItemRef::default()
+            },
+            added_at: at,
         });
         p.playlists.push(Playlist {
             id: Uuid::new_v4(),

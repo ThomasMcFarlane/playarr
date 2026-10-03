@@ -48,6 +48,7 @@ mod physical_path;
 pub mod playback;
 pub mod playback_health;
 pub mod playlists;
+pub mod portability;
 pub mod readiness;
 pub mod refresh;
 pub mod remote;
@@ -224,6 +225,7 @@ impl Modify for SecurityAddon {
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
         (name = "discovery", description = "Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
+        (name = "portability", description = "Self-service export and import of the signed-in user's own library data (watch progress, playlists, preferences)"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
         (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
         (name = "remote", description = "Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)"),
@@ -403,6 +405,18 @@ fn api_router() -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(playlists::remove_playlist_item_handler))
         .routes(routes!(playlists::reorder_playlist_items_handler))
+        .routes(routes!(
+            portability::create_export_handler,
+            portability::list_exports_handler
+        ))
+        .routes(routes!(
+            portability::get_export_handler,
+            portability::delete_export_handler
+        ))
+        .routes(routes!(portability::download_export_handler))
+        .routes(routes!(portability::preview_import_handler))
+        .routes(routes!(portability::apply_import_handler))
+        .routes(routes!(portability::unmatched_import_handler))
         .routes(routes!(credits::work_credits_handler))
         .routes(routes!(credits::get_person_handler))
         .routes(routes!(credits::person_works_handler))
@@ -725,6 +739,8 @@ pub struct AppState {
     pub remote_repo: Arc<dyn playarr_db::RemoteRepo>,
     /// Short-lived cache of per-instance calendar answers, see `calendar`.
     pub calendar_cache: Arc<calendar::CalendarCache>,
+    /// Node-local staging area for self-service user-data export jobs.
+    pub portability: Arc<portability::ExportRegistry>,
 }
 
 impl FromRef<AppState> for ReadinessState {

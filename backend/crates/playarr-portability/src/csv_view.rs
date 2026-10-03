@@ -182,6 +182,20 @@ pub fn playlist_items_csv(package: &UserDataPackage) -> String {
     out
 }
 
+pub fn watchlist_csv(package: &UserDataPackage) -> String {
+    let mut out = header(&[], &["added_at"]);
+    for record in &package.watchlist {
+        let mut cells = item_cells(&record.item);
+        cells.push(
+            record
+                .added_at
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        );
+        out.push_str(&row(&cells));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -18,9 +18,10 @@ media rights: content that the destination does not have simply does not match.
 
 What Playarr does not store is not exported or invented: there are no
 per-viewing events or play counts (one resume state per title), no personal
-ratings, and no separate watchlist (watch-later is a playlist). The format
-reserves `ratings` and `watchlist` so they can be added without a breaking
-change.
+ratings. The format reserves `ratings` so they can be added without a breaking
+change. The watchlist (a per-profile list of titles that need not be in the
+library, introduced with unified discovery) is exported and imported as its own
+section, and a watchlist record is kept even when nothing matches locally.
 
 ## Components
 
@@ -36,13 +37,17 @@ change.
 
 `POST /api/v1/users/me/data-exports` starts a job for the authenticated user.
 There is no user id in any request: the subject is always the token's `sub`.
+The routes use the same gate as playlists and the catalogue (an account that
+may view the catalogue); no administrator role is needed. Content outside the
+account's library grants is left out of the package and never reported.
 
-1. The job is registered in a node-local registry with a random 256-bit id,
-   state `queued`, owned by the user. At most one unfinished job per user and
-   at most two running jobs per node (a semaphore); a further request returns
-   `429`.
+1. The job is registered in a node-local registry with a random id (two UUIDv4
+   values, the same token form used for refresh tokens), state `queued`, owned
+   by the user. A user has at most one unfinished job (a second request returns
+   it instead of starting another) and at most ten retained jobs; at most two
+   jobs run at once per node (a semaphore) and the rest wait in `queued`.
 2. The job reads, once each and in this order, the user's watch progress,
-   playback preferences, personal playlists with items, and account
+   playback preferences, personal playlists with items, the watchlist and account
    preference. This is the snapshot: each table is read once at job start and
    the package describes exactly those reads, even if the user keeps watching.
    A single SQL transaction across the repositories is not available through
@@ -84,7 +89,8 @@ contains no local file path and no source-instance identifier.
 Import is stateless across the two steps so it is safe on any node and holds
 no server-side draft. The client uploads the same package twice.
 
-`POST /api/v1/users/me/data-imports/preview` (body: the ZIP, `application/zip`)
+`POST /api/v1/users/me/data-imports/preview` (body: the ZIP, `application/zip`;
+query `include_preferences`, `progress_conflicts=newest|keep_existing`)
 validates and matches without writing anything and returns:
 
 * `package_sha256`: digest of the uploaded bytes;
@@ -93,12 +99,13 @@ validates and matches without writing anything and returns:
   (conflict: existing progress differs), unmatched, ambiguous;
 * a bounded list of example rows per bucket, with candidates for ambiguous
   records (title, year, kind only);
-* warnings (for example an `owner.display_name` differing from the importer is
-  fine and shown only as information).
+* warnings (the package's original owner name is shown for information only).
+
+Per-title `playback_preferences` are reported (`playback_preferences_not_applied`)
+and never applied: quality ladders and track ids belong to one server's files.
 
 `POST /api/v1/users/me/data-imports` (body: the ZIP; query
-`package_sha256=<digest from the preview>`, and `include_preferences=true|false`,
-`progress_conflicts=newest|keep_existing|replace`) re-validates, re-matches and
+`package_sha256=<digest from the preview>`, plus the same options as the preview) re-validates, re-matches and
 applies. A missing or mismatching digest is `409`. The response reports what
 was added, updated and skipped. `POST /api/v1/users/me/data-imports/unmatched`
 regenerates, from the same upload, an "unmatched" package of everything the

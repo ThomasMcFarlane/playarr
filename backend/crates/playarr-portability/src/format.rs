@@ -36,9 +36,8 @@ pub struct UserDataPackage {
     /// Reserved: Playarr stores no personal ratings yet.
     #[serde(default)]
     pub ratings: Vec<serde_json::Value>,
-    /// Reserved: watch-later is a playlist; there is no separate watchlist.
     #[serde(default)]
-    pub watchlist: Vec<serde_json::Value>,
+    pub watchlist: Vec<WatchlistRecord>,
     /// Present only in an "unmatched" package produced by an import.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unmatched: Vec<UnmatchedRecord>,
@@ -73,6 +72,7 @@ impl UserDataPackage {
                 .iter()
                 .map(|playlist| playlist.items.len())
                 .sum::<usize>()
+            + self.watchlist.len()
             + self.unmatched.len()
     }
 }
@@ -191,9 +191,18 @@ pub struct PlaylistEntry {
     pub item: ItemRef,
 }
 
+/// One title on the user's watchlist. The watchlist deliberately holds titles
+/// that are not in any library yet, so an import keeps them even when nothing
+/// matches locally.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WatchlistRecord {
+    pub item: ItemRef,
+    pub added_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UnmatchedRecord {
-    /// `watch_progress`, `playback_preferences` or `playlist_item`.
+    /// `watch_progress`, `playback_preferences`, `playlist_item` or `watchlist`.
     pub section: String,
     /// `no_match`, `ambiguous`, `unsupported_kind` or `not_accessible`.
     pub reason: String,

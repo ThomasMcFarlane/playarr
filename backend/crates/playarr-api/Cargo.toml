@@ -28,6 +28,7 @@ playarr-peer-sync = { path = "../playarr-peer-sync" }
 playarr-coordination = { path = "../playarr-coordination" }
 playarr-arr-client = { path = "../playarr-arr-client" }
 playarr-tdarr-client = { path = "../playarr-tdarr-client" }
+playarr-portability = { path = "../playarr-portability" }
 axum = { workspace = true }
 tokio-util = { version = "0.7", features = ["io"] }
 futures = { workspace = true }
@@ -64,6 +65,7 @@ hex = "0.4"
 base64 = "0.22.1"
 
 [dev-dependencies]
+zip = { version = "4", default-features = false, features = ["deflate"] }
 tower = { workspace = true, features = ["util"] }
 wiremock = "0.6"
 sqlx = { workspace = true, features = ["any", "sqlite"] }

@@ -22,6 +22,7 @@ are plain relative paths using `/` separators and no directories other than
 | `watch-progress.csv` | Convenience view of `watch_progress`. | No |
 | `playlists.csv` | Convenience view of `playlists`. | No |
 | `playlist-items.csv` | Convenience view of playlist entries, in playlist order. | No |
+| `watchlist.csv` | Convenience view of the watchlist. | No |
 
 **Canonical JSON versus convenience CSV.** Only `playarr-user-data.json` is
 ever read by an import. The CSV files exist so that a person can sort, filter
@@ -85,7 +86,7 @@ reported as unsupported, never silently dropped).
   "playback_preferences": [ /* PlaybackPreferenceRecord */ ],
   "playlists": [ /* Playlist */ ],
   "ratings": [],                               // reserved, see below
-  "watchlist": [],                             // reserved, see below
+  "watchlist": [ /* WatchlistRecord */ ],
   "unmatched": [ /* UnmatchedRecord */ ]       // only in an "unmatched" package
 }
 ```
@@ -105,6 +106,7 @@ the stable provider identifiers first and the human-readable fields second.
 | `year` | integer or null | Release year of the work. |
 | `external_ids` | object | Provider key to identifier of the **work**: `tmdb`, `tvdb`, `imdb`, `musicbrainz_artist`, `musicbrainz_release_group`, `goodreads`, `isbn`, `asin`, `tpdb`, or `other:<name>`. |
 | `season_number`, `episode_number`, `episode_title` | integer, integer, string | Episodes only. |
+| `book_title` | string | Books only (the work is the author). |
 | `album_title`, `disc_number`, `track_number`, `track_title` | string, integer, integer, string | Tracks only. |
 | `playarr` | object | `{ "work_id": uuid, "leaf_id": uuid or null }` as on the source server. |
 
@@ -120,13 +122,16 @@ the stable provider identifiers first and the human-readable fields second.
 
 ### PlaybackPreferenceRecord
 
-Per-title player choices.
+Per-title player choices. They are exported so they are visible in the
+package, but they describe one server's files (quality ladders and track ids
+differ between servers), so an importer reports them and **does not apply
+them**.
 
 | Field | Type | Notes |
 |---|---|---|
 | `item` | ItemRef | |
 | `quality_id` | string | `original` or a quality identifier. |
-| `audio_track_id`, `subtitle_track_id` | string or null | Track identifiers are server specific and are applied only when the destination has an identical identifier for the matched file; otherwise only `quality_id` is applied. |
+| `audio_track_id`, `subtitle_track_id` | string or null | Server-specific track identifiers. |
 
 ### Playlist
 
@@ -143,23 +148,34 @@ Only playlists the user owns are exported. "System" playlists (administrator
 managed, visible to everyone) are not the user's data and are not exported, and
 other people's playlists are never included.
 
-### Ratings and watchlist
+### WatchlistRecord
 
-Playarr version 1 stores neither personal ratings nor a separate watchlist
-(watch-later is a playlist). The arrays are present and empty so the format
-has a stable place for them; importers ignore them until a later
-`schema_version` defines their records. A watchlist implemented as a playlist
-is exported and imported as a playlist.
+One title on the user's watchlist: `{ "item": ItemRef, "added_at": timestamp }`.
+`kind` is a discovery kind: `movie`, `series`, `site`, `artist`, `author`,
+`programme` or `game`. A watchlist holds titles that are **not in any library
+yet** (requestable titles, games), so an importer keeps every valid record even
+when nothing matches locally: it never reports a watchlist record as unmatched
+for lack of library content, only for an unknown `kind` or an empty title.
+Artwork URLs are not exported.
+
+### Ratings
+
+Playarr version 1 stores no personal ratings. `ratings` is present and empty so
+the format has a stable place for them; importers ignore it until a later
+`schema_version` defines its records.
 
 ### UnmatchedRecord
 
-Produced by an import's "unmatched" download so nothing is lost. Same shape as
-the records above wrapped as
-`{ "section": "watch_progress" | "playback_preferences" | "playlist_item",
-"reason": "no_match" | "ambiguous" | "unsupported_kind" | "not_accessible",
+Produced by an import's "unmatched" download so nothing is lost:
+`{ "section": "watch_progress" | "playlist_item" | "watchlist",
+"reason": "no_match" | "ambiguous" | "unsupported_kind" | "invalid_record",
 "playlist_name": string or null, "record": <original record> }`.
-An unmatched package is itself a valid package: it can be uploaded again after
-the missing library content has been added.
+For `playlist_item` the record is `{ "media_type": "video" | "audio",
+"entry": <playlist entry> }`. An unmatched package is itself a valid package:
+an importer folds its records back into the normal sections, so it can be
+uploaded again after the missing library content has been added. Content the
+importing account may not see is reported as `no_match`, never distinguished
+from content that does not exist.
 
 ## Matching rules (normative for importers)
 
@@ -183,22 +199,36 @@ For each ItemRef the importer resolves a work, then a leaf:
    and `disc_number`/`track_number`, falling back to a normalised
    `track_title`; movies are the work itself.
 4. **Visibility.** The matched work must be visible to the importing user under
-   their library permissions, otherwise the record is `not_accessible` (the
-   result must not reveal whether the content exists).
+   their library permissions, otherwise the record is `no_match` (the result
+   must not reveal whether the content exists).
+5. Identifier lookups are per provider namespace and limited to the work kinds
+   the item can live under (a TMDB movie id never matches a series).
 
 ## Import semantics (normative for importers)
 
 * Merge, never replace. Nothing is deleted.
 * **Watch progress**: a record is applied only when the destination has no
-  state for that file, or the incoming `updated_at` is later than the existing
-  one; `watched` is never downgraded to `part_watched` by an older record.
+  state for that file, or (default policy `newest`) the incoming `updated_at`
+  is later than the existing one; under `keep_existing` an existing differing
+  state is never changed; `watched` is never downgraded to `part_watched` by an older record.
   Applying the same package twice changes nothing.
 * **Playlists**: a playlist is matched by case-insensitive name, `media_type`
   and parent among the user's own playlists. A new playlist is created when
-  none matches; items already present are not duplicated and new items are
-  appended in package order.
+  none matches; items already present (same work and track) are not
+  duplicated, including repeats inside the package, and new items are
+  appended in package order. Names are whitespace-normalised and limited to
+  200 characters. A video playlist holds works, so an `episode` entry joins
+  its series.
+* **Watchlist**: a record whose identity key is not already on the user's
+  watchlist is added with its original `added_at`; one that is already there is
+  left alone. The identity key is the same one the watchlist uses (best
+  external identifier, else normalised title and year). Library titles are
+  linked to the local work when the account can see it.
 * **Preferences**: `preferred_audio_language` is applied only if the user
-  chooses to include preferences; the value is validated.
+  chooses to include preferences; the value is validated. Per-title
+  `playback_preferences` are never applied.
+* Two records for the same file inside one package: the later `updated_at`
+  stands.
 * Accounts, passwords, permissions, library grants, tokens, devices, sessions
   and media files are never read from, or written by, an import.
 

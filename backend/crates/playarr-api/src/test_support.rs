@@ -690,6 +690,7 @@ pub async fn test_state() -> (Router, TestState) {
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         calendar_cache: Arc::new(crate::calendar::CalendarCache::new()),
+        portability: Arc::new(crate::portability::ExportRegistry::new()),
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);
