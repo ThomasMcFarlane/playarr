@@ -96,16 +96,20 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -296,6 +300,87 @@ internal val WebInk get() = webPalette.ink
 internal val WebInkSoft get() = webPalette.inkSoft
 internal val WebInkMuted get() = webPalette.inkMuted
 internal val WebPink get() = webPalette.accent
+
+/** Fraction-sized hero backdrop pinned top-start: `fillMaxSize()` first would make the later fraction a no-op. */
+internal fun Modifier.heroBackdrop(isTelevision: Boolean, tvWidthFraction: Float, phoneHeightFraction: Float): Modifier =
+    (if (isTelevision) fillMaxHeight().fillMaxWidth(tvWidthFraction) else fillMaxWidth().fillMaxHeight(phoneHeightFraction))
+        .heroBackdropFade(isTelevision)
+
+/** Fraction of the backdrop, from its leading edge, kept fully opaque before the trailing fade (web `.tv-key-art img` mask: 72%). */
+internal const val HERO_BACKDROP_FADE_START = 0.65f
+
+/** Fades the trailing edge (end on TV, bottom on phone) to transparent so the artwork dissolves into the surface with no seam. */
+private fun Modifier.heroBackdropFade(isTelevision: Boolean): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val stops = arrayOf(0f to Color.Black, HERO_BACKDROP_FADE_START to Color.Black, 1f to Color.Transparent)
+            drawRect(
+                brush = if (isTelevision) Brush.horizontalGradient(colorStops = stops) else Brush.verticalGradient(colorStops = stops),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+
+/**
+ * Scrim laid over listing/detail hero artwork. The copy column sits over the
+ * strongest stops so Ink Soft text clears WCAG AA (>= 4.5:1) even on a pure
+ * white backdrop pixel (see [heroScrimWorstCaseContrast]).
+ */
+internal const val HERO_SCRIM_TEXT_ALPHA = 0.86f
+
+@Composable
+internal fun heroScrimBrush(isTelevision: Boolean): Brush {
+    val surface = WebSurface
+    return if (isTelevision) {
+        Brush.horizontalGradient(
+            0f to surface.copy(alpha = 0.90f),
+            0.45f to surface.copy(alpha = HERO_SCRIM_TEXT_ALPHA),
+            0.60f to surface.copy(alpha = 0.95f),
+            1f to surface,
+        )
+    } else {
+        Brush.verticalGradient(
+            0f to surface.copy(alpha = 0.30f),
+            0.30f to surface.copy(alpha = 0.72f),
+            0.45f to surface.copy(alpha = HERO_SCRIM_TEXT_ALPHA),
+            0.60f to surface.copy(alpha = 0.97f),
+            1f to surface,
+        )
+    }
+}
+
+/** Contrast of [text] over a white backdrop pixel behind a [surface] scrim of [alpha]. */
+internal fun heroScrimWorstCaseContrast(text: Color, surface: Color, alpha: Float): Float {
+    fun lin(c: Float) = if (c <= 0.03928f) c / 12.92f else Math.pow(((c + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    fun lum(c: Color) = 0.2126f * lin(c.red) + 0.7152f * lin(c.green) + 0.0722f * lin(c.blue)
+    val bg = Color(
+        red = surface.red * alpha + (1f - alpha),
+        green = surface.green * alpha + (1f - alpha),
+        blue = surface.blue * alpha + (1f - alpha),
+    )
+    val a = lum(text) + 0.05f
+    val b = lum(bg) + 0.05f
+    return maxOf(a, b) / minOf(a, b)
+}
+
+/** Ghost button for use over hero artwork: opaque-enough fill and Ink content so it never depends on the backdrop. */
+@Composable
+internal fun HeroOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+            containerColor = WebSurfaceStrong.copy(alpha = 0.88f),
+            contentColor = WebInk,
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebInkSoft),
+        content = content,
+    )
+}
 
 internal sealed interface ExperienceLoad<out T> {
     data object Loading : ExperienceLoad<Nothing>
@@ -1670,18 +1755,10 @@ private fun ExperienceStage(
             serverUrl = serverUrl,
             accessToken = accessToken,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (isTelevision) Modifier.fillMaxWidth(0.53f) else Modifier.fillMaxHeight(0.55f)),
+            modifier = Modifier.heroBackdrop(isTelevision, 0.53f, 0.55f),
         )
         Box(
-            Modifier.fillMaxSize().background(
-                if (isTelevision) {
-                    Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.18f), WebSurface.copy(alpha = 0.82f), WebSurface))
-                } else {
-                    Brush.verticalGradient(listOf(Color.Transparent, WebSurface.copy(alpha = 0.78f), WebSurface), endY = 980f)
-                },
-            ),
+            Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)),
         )
         if (isTelevision) {
             Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 28.dp), contentAlignment = Alignment.TopStart) {
@@ -1722,7 +1799,7 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false) {
         )
         Text(
             work.overview?.takeIf(String::isNotBlank) ?: playarrString(PlayarrString.HomeNoSynopsis),
-            color = WebInkMuted,
+            color = WebInkSoft,
             fontSize = 14.sp,
             lineHeight = 21.sp,
             maxLines = 5,
@@ -2171,9 +2248,9 @@ private fun ExperienceLibraryScreen(
                     serverUrl = serverUrl,
                     accessToken = accessToken,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.52f) else Modifier.fillMaxHeight(0.43f)),
+                    modifier = Modifier.heroBackdrop(isTelevision, 0.52f, 0.43f),
                 )
-                Box(Modifier.fillMaxSize().background(if (isTelevision) Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.16f), WebSurface)) else Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 820f)))
+                Box(Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)))
                 if (isTelevision) {
                     Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true) }
                 }
@@ -3016,9 +3093,9 @@ private fun ExperienceDetailScreen(
                         serverUrl = serverUrl,
                         accessToken = accessToken,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.55f) else Modifier.fillMaxHeight(0.48f)),
+                        modifier = Modifier.heroBackdrop(isTelevision, 0.55f, 0.48f),
                     )
-                    Box(Modifier.fillMaxSize().background(if (isTelevision) Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.2f), WebSurface)) else Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 960f)))
+                    Box(Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)))
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
@@ -3267,18 +3344,10 @@ private fun ExperienceVideoDetailContent(
             serverUrl = serverUrl,
             accessToken = accessToken,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (isTelevision) Modifier.fillMaxWidth(0.55f) else Modifier.fillMaxHeight(0.48f)),
+            modifier = Modifier.heroBackdrop(isTelevision, 0.55f, 0.48f),
         )
         Box(
-            Modifier.fillMaxSize().background(
-                if (isTelevision) {
-                    Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.18f), WebSurface.copy(alpha = 0.78f), WebSurface))
-                } else {
-                    Brush.verticalGradient(listOf(Color.Transparent, WebSurface.copy(alpha = 0.76f), WebSurface), endY = 960f)
-                },
-            ),
+            Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)),
         )
         IconButton(
             onClick = onBack,
@@ -3494,7 +3563,7 @@ private fun VideoDetailCopy(
                 episode?.episode?.airDate?.let { add(it.toString()) }
                 addAll(work.genres.take(3))
             }.joinToString(" · "),
-            color = WebInkMuted,
+            color = WebInkSoft,
             fontSize = 11.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -3505,7 +3574,7 @@ private fun VideoDetailCopy(
                 ?: playarrString(
                     if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis,
                 ),
-            color = WebInkMuted,
+            color = WebInkSoft,
             fontSize = 13.sp,
             lineHeight = 20.sp,
             maxLines = if (isTelevision) 5 else 7,
@@ -3590,12 +3659,12 @@ private fun VideoDetailActions(
                 },
             )
         }
-        OutlinedButton(onClick = { onAddToPlaylist(episode?.episode?.id) }) {
+        HeroOutlinedButton(onClick = { onAddToPlaylist(episode?.episode?.id) }) {
             Icon(Icons.Outlined.Add, contentDescription = null)
             Text(playarrString(PlayarrString.ContextAddToPlaylist))
         }
         onPlaybackSettings?.let { openSettings ->
-            OutlinedButton(onClick = openSettings) { Text(playarrString(PlayarrString.DetailPlayback)) }
+            HeroOutlinedButton(onClick = openSettings) { Text(playarrString(PlayarrString.DetailPlayback)) }
         }
         if (canDownload) {
             IconButton(
@@ -4102,7 +4171,7 @@ private fun ExperienceMusicDetailContent(
                 serverUrl = serverUrl,
                 accessToken = accessToken,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.58f) else Modifier.fillMaxHeight(0.42f)),
+                modifier = Modifier.heroBackdrop(isTelevision, 0.58f, 0.42f),
             )
         } else if (selectedAlbum != null) {
             AuthenticatedAlbumArtwork(
@@ -4110,17 +4179,11 @@ private fun ExperienceMusicDetailContent(
                 albumId = selectedAlbum.album.id,
                 serverUrl = serverUrl,
                 accessToken = accessToken,
-                modifier = Modifier.fillMaxSize().then(if (isTelevision) Modifier.fillMaxWidth(0.58f) else Modifier.fillMaxHeight(0.42f)),
+                modifier = Modifier.heroBackdrop(isTelevision, 0.58f, 0.42f),
             )
         }
         Box(
-            Modifier.fillMaxSize().background(
-                if (isTelevision) {
-                    Brush.horizontalGradient(listOf(WebSurface.copy(alpha = 0.28f), WebSurface.copy(alpha = 0.9f), WebSurface))
-                } else {
-                    Brush.verticalGradient(listOf(Color.Transparent, WebSurface), endY = 900f)
-                },
-            ),
+            Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)),
         )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
