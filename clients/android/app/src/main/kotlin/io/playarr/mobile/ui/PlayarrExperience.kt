@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import android.util.Log
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -836,6 +837,7 @@ internal fun televisionDestinationGroups(
     destinations.filter { it.route == "playlists" },
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
+private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
 private const val CAPABILITIES_POLL_MS = 60_000L
 private const val SEARCH_DEBOUNCE_MS = 320L
 internal const val LIBRARY_PAGE_SIZE = 200L
@@ -1521,6 +1523,12 @@ private fun ExperienceNavHost(
                     navController.popBackStack()
                 },
                 onMinimise = navController::popBackStack,
+                onOpenWork = { workId ->
+                    playerViewModel.stopPlayback()
+                    viewModel.clearPlayback()
+                    navController.popBackStack()
+                    navController.navigate("experience-detail/$workId")
+                },
                 viewModel = playerViewModel,
             )
         }
@@ -3014,28 +3022,7 @@ internal class ExperienceDetailViewModel @Inject constructor(
         _state.value = ExperienceLoad.Ready(current.transform())
     }
 
-    private suspend fun loadPlayarrSimilarWorks(work: Work): List<Work> {
-        val semantic = runCatching { api.getSimilarWorks(work.id, 20) }.getOrNull()
-        if (!semantic.isNullOrEmpty()) return semantic.filterNot { it.id == work.id }
-        val pages = if (work.genres.isNotEmpty()) {
-            work.genres.take(3).map { genre ->
-                runCatching {
-                    api.browseCatalog(genre = genre, availableOnly = true, limit = 100)
-                }.getOrNull()
-            }
-        } else {
-            listOf(
-                runCatching {
-                    api.browseCatalog(kind = work.kind.wireName(), availableOnly = true, sort = "recent", limit = 100)
-                }.getOrNull(),
-            )
-        }
-        return pages.flatMap { it?.items.orEmpty() }
-            .distinctBy(Work::id)
-            .filterNot { it.id == work.id }
-            .sortedByDescending { playarrRelatedWorkScore(work, it) }
-            .take(20)
-    }
+    private suspend fun loadPlayarrSimilarWorks(work: Work): List<Work> = loadPlayarrSimilarWorks(api, work)
 
     fun saveMoviePlaybackOptions(mediaFileId: String, request: UpdateMediaPlaybackPreferencesRequest) {
         viewModelScope.launch {
@@ -3088,6 +3075,29 @@ internal class ExperienceDetailViewModel @Inject constructor(
     fun clearSourceSelection() {
         _sourceSelection.value = PlayarrSourceSelection.Idle
     }
+}
+
+internal suspend fun loadPlayarrSimilarWorks(api: PlayarrApi, work: Work): List<Work> {
+    val semantic = runCatching { api.getSimilarWorks(work.id, 20) }.getOrNull()
+    if (!semantic.isNullOrEmpty()) return semantic.filterNot { it.id == work.id }
+    val pages = if (work.genres.isNotEmpty()) {
+        work.genres.take(3).map { genre ->
+            runCatching {
+                api.browseCatalog(genre = genre, availableOnly = true, limit = 100)
+            }.getOrNull()
+        }
+    } else {
+        listOf(
+            runCatching {
+                api.browseCatalog(kind = work.kind.wireName(), availableOnly = true, sort = "recent", limit = 100)
+            }.getOrNull(),
+        )
+    }
+    return pages.flatMap { it?.items.orEmpty() }
+        .distinctBy(Work::id)
+        .filterNot { it.id == work.id }
+        .sortedByDescending { playarrRelatedWorkScore(work, it) }
+        .take(20)
 }
 
 internal fun playarrRelatedWorkScore(target: Work, candidate: Work): Double {
@@ -4998,6 +5008,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private val _controls = MutableStateFlow(PlayarrPlaybackControls())
     val controls = _controls.asStateFlow()
+    private val _suggestions = MutableStateFlow<List<Work>>(emptyList())
+
+    /** End-of-playback suggestions for [suggestionsWorkId]. */
+    val suggestions = _suggestions.asStateFlow()
+    private var suggestionsWorkId: String? = null
     val castAvailable: Boolean get() = castSession.isAvailable
     val castConnection: StateFlow<PlayarrCastConnectionState> = castSession.connectionState
     val castRoutes: StateFlow<List<PlayarrCastRoute>> = castSession.routes
@@ -5057,6 +5072,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayarrPlaybackControls())
     private var activeMediaFileId: String? = null
+    private var activeRequest: PlayarrPlayRequest? = null
     private var activeServerUrl = ""
     private var activeDefaults = PlayarrPlayerDefaults()
     private var activeSessionId: String? = null
@@ -5193,7 +5209,21 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         defaults: PlayarrPlayerDefaults,
         requestedStartPositionMs: Long? = null,
         launchSettings: PlayarrPlaybackLaunchSettings? = null,
+        force: Boolean = false,
     ) {
+        val request = PlayarrPlayRequest(mediaFileId, requestedStartPositionMs, launchSettings)
+        if (!shouldRestartPlayarrPlayback(
+                activeRequest,
+                request,
+                hasEnded = player.state.value.hasEnded,
+                hasFailed = _state.value is ExperienceLoad.Failed || player.state.value.error != null,
+                force = force,
+            )
+        ) {
+            Log.i(PLAYBACK_STATS_TAG, "event=reprepare_skipped reason=same_request media_file_id=$mediaFileId")
+            return
+        }
+        activeRequest = request
         prepareJob?.cancel()
         switchJob?.cancel()
         prepareJob = viewModelScope.launch {
@@ -5228,7 +5258,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             }
 
             val selectedQuality = launchSettings?.qualityId ?: parsePlayarrQualityDefault(defaults.qualityId)
-            _state.value = when (val result = getPlaybackInfo(
+            val prewarmed = takePrewarm(mediaFileId, resumePosition, launchSettings)
+            _state.value = when (val result = prewarmed ?: getPlaybackInfo(
                 mediaFileId = mediaFileId,
                 containers = playarrAndroidContainers,
                 videoCodecs = playarrAndroidVideoCodecs,
@@ -5253,6 +5284,112 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private data class PlayarrPrewarmed(
+        val resumePositionMs: Long,
+        val result: PlayarrResult<PlaybackInfoResponse>?,
+    )
+
+    private class PlayarrPrewarm(val mediaFileId: String, val deferred: kotlinx.coroutines.Deferred<PlayarrPrewarmed>)
+
+    private var prewarm: PlayarrPrewarm? = null
+
+    /**
+     * During the up-next countdown (never before STATE_ENDED, so it cannot
+     * compete with the ending item for bandwidth) negotiates the next item's
+     * playback info ahead of time. This is the normal playback-info call, so it
+     * opens the new item's own fresh session; [play] consumes it, anything
+     * else closes it ([discardPrewarm]). Local downloads need no negotiation.
+     */
+    fun prewarmNext(mediaFileId: String, defaults: PlayarrPlayerDefaults) {
+        if (prewarm?.mediaFileId == mediaFileId) return
+        if (castingMediaFileId.value != null) return
+        discardPrewarm()
+        val deferred = viewModelScope.async {
+            val resume = runCatching { api.getWatchProgress(mediaFileId) }.getOrNull()
+                ?.takeIf { it.state == WatchState.PartWatched }?.positionMs ?: 0L
+            if (runCatching { downloadRepository.localFile(mediaFileId) }.getOrNull() != null) {
+                return@async PlayarrPrewarmed(resume, null)
+            }
+            val quality = parsePlayarrQualityDefault(defaults.qualityId)
+            PlayarrPrewarmed(
+                resume,
+                getPlaybackInfo(
+                    mediaFileId = mediaFileId,
+                    containers = playarrAndroidContainers,
+                    videoCodecs = playarrAndroidVideoCodecs,
+                    audioCodecs = playarrAndroidAudioCodecs,
+                    profile = quality.takeUnless { it == "original" },
+                    forceTranscode = quality != "original",
+                    startPositionMs = resume,
+                    audioStreamIndex = null,
+                    ignoreSavedPreferences = quality == "original",
+                ),
+            )
+        }
+        prewarm = PlayarrPrewarm(mediaFileId, deferred)
+    }
+
+    /** Drops an unused prewarmed negotiation and closes the session it opened. */
+    fun discardPrewarm() {
+        val pending = prewarm ?: return
+        prewarm = null
+        viewModelScope.launch {
+            val result = runCatching { pending.deferred.await() }.getOrNull()?.result
+            (result as? PlayarrResult.Success)?.value?.sessionId?.let {
+                recordEvent(it, PlaybackEventRequest.stop(PlaybackStopReason.UserStopped, 0L))
+            }
+        }
+    }
+
+    private suspend fun takePrewarm(
+        mediaFileId: String,
+        resumePositionMs: Long,
+        launchSettings: PlayarrPlaybackLaunchSettings?,
+    ): PlayarrResult<PlaybackInfoResponse>? {
+        val pending = prewarm ?: return null
+        prewarm = null
+        val got = runCatching { pending.deferred.await() }.getOrNull()
+        val result = got?.result
+        if (got != null && result is PlayarrResult.Success &&
+            playarrPrewarmUsable(pending.mediaFileId, got.resumePositionMs, mediaFileId, resumePositionMs, launchSettings != null)
+        ) {
+            Log.i(PLAYBACK_STATS_TAG, "event=prewarm_used media_file_id=$mediaFileId")
+            return result
+        }
+        (result as? PlayarrResult.Success)?.value?.sessionId?.let {
+            recordEvent(it, PlaybackEventRequest.stop(PlaybackStopReason.UserStopped, 0L))
+        }
+        return null
+    }
+
+    /** Loads (once per work) similar titles for the end card; falls back to genre/new rows. */
+    fun loadSuggestions(work: Work) {
+        if (suggestionsWorkId == work.id) return
+        suggestionsWorkId = work.id
+        _suggestions.value = emptyList()
+        viewModelScope.launch {
+            val loaded = runCatching { loadPlayarrSimilarWorks(api, work) }.getOrDefault(emptyList())
+                .filterNot { it.id == work.id }.take(PLAYER_SUGGESTION_LIMIT)
+            if (suggestionsWorkId == work.id) _suggestions.value = loaded
+        }
+    }
+
+    /**
+     * Replays the active item from 0 (end card Replay). Starts a fresh playback
+     * session through the normal playback-info negotiation: the ended session was
+     * already closed as completed, so seeking it back to 0 would report nothing.
+     */
+    fun replay() {
+        val request = activeRequest ?: return
+        play(
+            request.mediaFileId,
+            activeDefaults,
+            requestedStartPositionMs = 0L,
+            launchSettings = request.launchSettings,
+            force = true,
+        )
     }
 
     fun selectQuality(qualityId: String) {
@@ -5422,6 +5559,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     }
 
     fun stopPlayback() {
+        discardPrewarm()
         prepareJob?.cancel()
         switchJob?.cancel()
         prepareJob = null
@@ -5430,6 +5568,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
         activeMediaFileId = null
+        activeRequest = null
         activePlaybackUrl = ""
         automaticRecoveryUrl = null
     }
@@ -5630,6 +5769,7 @@ private fun ExperiencePlayerScreen(
     onSelectPlayback: (Int) -> Unit,
     onBack: () -> Unit,
     onMinimise: () -> Unit,
+    onOpenWork: (String) -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
     val activeMediaFileId = playbackQueue.currentMediaFileId ?: mediaFileId
@@ -5641,11 +5781,32 @@ private fun ExperiencePlayerScreen(
     val castRoutes by viewModel.castRoutes.collectAsState()
     val castingMediaFileId by viewModel.castingMediaFileId.collectAsState()
     val language = LocalPlayarrLanguage.current
+    val suggestions by viewModel.suggestions.collectAsState()
+    var endCard by remember { mutableStateOf(PlayarrEndCardState()) }
+    var endCardIdleExpired by remember { mutableStateOf(false) }
+    LaunchedEffect(endCard.mode) {
+        endCardIdleExpired = false
+        if (endCard.mode == PlayarrEndCardMode.Standalone) {
+            kotlinx.coroutines.delay(PLAYER_END_CARD_KEEP_AWAKE_MS)
+            endCardIdleExpired = true
+        }
+    }
     var timeline by remember(activeMediaFileId) { mutableStateOf(PlayarrPlayerTimeline()) }
     DisposableEffect(Unit) {
         viewModel.startCastSession()
         onDispose { viewModel.stopCastSession() }
     }
+    PlayarrKeepScreenOn(
+        shouldKeepScreenOn(
+            playWhenReady = playbackState.playWhenReady,
+            hasEnded = playbackState.hasEnded,
+            hasError = playbackState.error != null,
+            showsLocalVideo = state is ExperienceLoad.Ready &&
+                playbackQueue.currentItem?.music != true &&
+                castingMediaFileId == null,
+            endCardHeld = shouldHoldScreenForEndCard(endCard, endCardIdleExpired),
+        ),
+    )
     LaunchedEffect(state, activeMediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
@@ -5669,6 +5830,12 @@ private fun ExperiencePlayerScreen(
             language = language,
         )
     }
+    val endCardWork = playbackQueue.currentItem?.takeIf { !it.music }?.artworkWork
+    val nearEnd = playbackState.hasEnded ||
+        (timeline.durationMs > 0L && timeline.durationMs - timeline.positionMs <= PLAYER_SUGGESTION_PREFETCH_MS)
+    LaunchedEffect(endCardWork?.id, nearEnd) {
+        if (nearEnd && endCardWork != null) viewModel.loadSuggestions(endCardWork)
+    }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> PlayarrPlayerStatus(
@@ -5682,7 +5849,7 @@ private fun ExperiencePlayerScreen(
                 kicker = playarrString(PlayarrString.PlayerPlaybackUnavailable),
                 title = playarrString(PlayarrString.PlayerCouldNotStart),
                 message = playarrText(current.message),
-                onRetry = { viewModel.play(activeMediaFileId, playerDefaults) },
+                onRetry = { viewModel.play(activeMediaFileId, playerDefaults, force = true) },
                 onBack = onBack,
             )
             is ExperienceLoad.Ready -> {
@@ -5714,7 +5881,7 @@ private fun ExperiencePlayerScreen(
                 }
             }
         }
-        if (state is ExperienceLoad.Ready) {
+        if (state is ExperienceLoad.Ready && !endCard.visible) {
             PlayarrPlayerChrome(
                 playbackState = playbackState,
                 timeline = timeline,
@@ -5765,6 +5932,27 @@ private fun ExperiencePlayerScreen(
                     tint = Color.White,
                 )
             }
+        }
+        if (state is ExperienceLoad.Ready) {
+            PlayarrEndOfPlaybackHost(
+                state = endCard,
+                onStateChange = { endCard = it },
+                playbackState = playbackState,
+                item = playbackQueue.currentItem,
+                nextItem = playbackQueue.items.getOrNull(playbackQueue.currentIndex + 1)
+                    ?.takeIf { playbackQueue.canNext && !it.music },
+                casting = castingMediaFileId != null,
+                suggestions = suggestions,
+                isTelevision = isTelevision,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                onPlayNext = { onMovePlayback(1) },
+                onReplay = viewModel::replay,
+                onPrewarmNext = { viewModel.prewarmNext(it, playerDefaults) },
+                onDiscardPrewarm = viewModel::discardPrewarm,
+                onExit = onBack,
+                onOpenWork = onOpenWork,
+            )
         }
     }
 }
@@ -5977,7 +6165,7 @@ private fun AuthenticatedAlbumArtwork(
 internal fun resolveAlbumArtworkUrl(serverUrl: String, artistWorkId: String, albumId: String): String =
     "${serverUrl.trimEnd('/')}/api/v1/artwork/album/${artistWorkId.asUrlPathSegment()}/${albumId.asUrlPathSegment()}/poster"
 
-private fun String.asUrlPathSegment(): String =
+internal fun String.asUrlPathSegment(): String =
     URLEncoder.encode(this, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
 @Composable

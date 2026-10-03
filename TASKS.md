@@ -13,12 +13,18 @@ Owner requirement (3 October 2026): when media finishes, show a UI with exit, re
 |---|------|--------|--------------|-------|
 | 78 | Epic: End-of-playback screen and up-next countdown on all clients | in progress | agent | Spec on branch `task/end-screen-web`. Per-client rows 79-85 must follow the spec; return evidence here. |
 | 79 | End screen: Web, webOS, Tizen, VIDAA fallback, Cast receiver | review PR open | agent | Branch `task/end-screen-web`. Parent: 78. Web/webOS/Tizen share `EndScreen.tsx`; VIDAA legacy player has minimal Replay/Back; Cast receiver renders no player end UI so nothing added. Typecheck and 435 web vitest tests pass. |
-| 80 | End screen: Android (phone, tablet, TV) | in progress | agent | Branch `task/android-end-screen`. Parent: 78. |
+| 80 | End screen: Android (phone, tablet, TV) | implemented, PR PR 44 | agent | Parent: 78. Branch `task/android-end-screen` (stacked on PR 39). Pure state machine `PlayarrEndOfPlayback.kt` with `PlayarrEndOfPlaybackTest`; `:app:testSideloadDebugUnitTest :core-player:testDebugUnitTest :app:assembleSideloadRelease` pass. Not verified on a device. |
 | 81 | End screen: iOS / iPadOS | pending | agent | Parent: 78. |
 | 82 | End screen: tvOS | pending | agent | Parent: 78. |
 | 83 | End screen: Roku | pending | agent | Parent: 78. |
 | 84 | End screen: Xbox | implemented, PR PR 42 | agent | Parent: 78. Branch `task/end-screen-xbox`. `EndOfPlaybackMachine` and queue helpers in `Playarr.Core` (`dotnet test`: 56 passed). UWP head (`PlayerPage`, `PlayerViewModel`) not compiled here (needs Windows/UWP SDK); verify on a dev-mode console. |
 | 85 | End screen: HarmonyOS | pending | agent | Parent: 78. |
+
+## Active: Android high-latency direct-play throughput (2026-10-03)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 86 | Parallel range fetching and buffer tuning for 4K remux direct play on Android | implemented on `task/android-eu-perf`; on-device validation pending | android-eu-perf | `ParallelRangeDataSource` (4 x 4 MiB concurrent ranges), load-control retune, `PlayarrPlaybackStats` logcat telemetry. Evidence: `:core-player:testDebugUnitTest` 11 tests, `:app:testSideloadDebugUnitTest` 144 tests, `:app:assembleSideloadRelease` and `:app:lintSideloadRelease` pass. Next: coordinator measures a library film from emulator-host against region-b. |
 
 ## Planned: Release calendar and availability tracking (2026-10-01)
 

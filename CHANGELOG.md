@@ -30,10 +30,41 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rollout, verification and rollback. The live image tag is unchanged until the image is imported
   on both regional nodes.
 
+- Android direct play fetches large progressive streams over eight concurrent
+  HTTP range connections (4 MiB chunks, delivered in order, bounded memory),
+  so high-latency links no longer cap 4K remuxes at single-connection speed.
+  It falls back to one connection when the server does not return `206`.
+  HLS, subtitles and downloads are unchanged.
+- Android logs `PlayarrPlaybackStats` key=value telemetry (state, buffer,
+  bandwidth, rebuffers, dropped frames, decoder, video format, active
+  connections) at INFO on state changes and every five seconds while playing.
+- Android has a diagnostic-only `debug.playarr.discard_video` system property
+  (`adb shell setprop`) that replaces the video decoder with a renderer which
+  consumes samples in real time and shows nothing, for measuring the network
+  and buffering pipeline on devices that cannot decode the stream. It also
+  turns on Media3 `EventLogger`. Off by default and unreachable without adb.
+
+### Changed
+
+- Android playback buffer now targets 30 to 120 s with a byte cap of 40% of the
+  heap class, and the app requests a large heap, so remux playback has more
+  headroom without risking out-of-memory on TV devices. Playback starts after
+  10 s buffered and resumes after 15 s following a stall (was 2.5 s and 5 s), so
+  a remux on a link only slightly faster than its bitrate rides out peaks.
+
 ### Fixed
 
 - Roku SceneGraph XML comments no longer contain double hyphens, so the
   channel validator parses every component on current Python.
+- Android plays Dolby Vision remuxes on devices without a Dolby Vision decoder.
+  The Matroska track was labelled `video/dolby-vision`, left unsupported, and the
+  player reported READY with no video renderer at all (`buffered_ahead_ms` equal
+  to the whole film, `decoder=none`). Such tracks are now relabelled to their
+  HEVC/AVC/AV1 base layer.
+- Android retries with the next decoder when one fails mid-stream (such as a
+  hardware HEVC decoder that rejects 10-bit video) instead of ending playback,
+  and enables Media3 decoder fallback for initialisation failures.
+- Android advertises `hevc` alongside `h265` in its playback codec capabilities.
 - Direct-play codec matching now treats `h265`/`hevc`, `h264`/`avc` and `av1`/`av01` as
   aliases, so HEVC remuxes are no longer sent to transcode when a client advertises `h265`.
   Direct-play responses for Matroska files now report `video/x-matroska` instead of `video/mp4`.

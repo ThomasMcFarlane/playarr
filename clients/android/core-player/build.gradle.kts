@@ -30,7 +30,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.javax.inject)
+    implementation(libs.okhttp.core)
 
     testImplementation(libs.junit4)
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.core)
 }

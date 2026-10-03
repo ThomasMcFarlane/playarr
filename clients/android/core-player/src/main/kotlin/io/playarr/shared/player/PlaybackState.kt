@@ -14,7 +14,14 @@ data class PlaybackState(
     val playbackSpeed: Float = 1f,
     /** Non-null once playback has failed; UI should surface this and offer a retry. */
     val error: PlaybackError? = null,
+    /** Set when audio selection had to compromise; screens may show it. */
+    val audioNotice: AudioNotice? = null,
 )
+
+enum class AudioNotice {
+    /** The main audio track is undecodable here and only commentary tracks are, so one is playing. */
+    OnlyCommentaryDecodable,
+}
 
 /**
  * A playback failure, narrowed to what UI needs to decide what to show and

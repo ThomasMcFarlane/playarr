@@ -33,6 +33,7 @@ import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_3_4
 import io.playarr.shared.download.db.PLAYARR_DOWNLOAD_MIGRATION_4_5
 import java.io.File
 import java.util.concurrent.Executors
+import javax.inject.Named
 import javax.inject.Singleton
 import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
@@ -53,6 +54,9 @@ import okhttp3.OkHttpClient
  * exact same singleton instances Media3 requires the service and any direct
  * `DownloadManager` reads elsewhere in the app to share.
  */
+/** Qualifier for the bearer-authenticated [OkHttpClient] shared by downloads and playback. */
+internal const val MEDIA_OKHTTP_CLIENT = "playarrMediaOkHttp"
+
 @Module
 @InstallIn(SingletonComponent::class)
 @UnstableApi
@@ -102,10 +106,15 @@ abstract class DownloadModule {
          */
         @Provides
         @Singleton
-        fun provideDownloadDataSourceFactory(
-            serverAccessResolver: PlayarrServerAccessResolver,
-        ): DataSource.Factory {
-            val okHttpClient = OkHttpClient.Builder()
+        fun provideDownloadDataSourceFactory(@Named(MEDIA_OKHTTP_CLIENT) okHttpClient: OkHttpClient): DataSource.Factory =
+            OkHttpDataSource.Factory(okHttpClient)
+
+        /** The authenticated client behind both downloads and playback (see above). */
+        @Provides
+        @Singleton
+        @Named(MEDIA_OKHTTP_CLIENT)
+        fun provideMediaOkHttpClient(serverAccessResolver: PlayarrServerAccessResolver): OkHttpClient {
+            return OkHttpClient.Builder()
                 .addInterceptor { chain ->
                     val requestUrl = chain.request().url
                     val origin = playarrRequestOrigin(requestUrl)
@@ -133,7 +142,6 @@ abstract class DownloadModule {
                     }
                 }
                 .build()
-            return OkHttpDataSource.Factory(okHttpClient)
         }
 
         @Provides

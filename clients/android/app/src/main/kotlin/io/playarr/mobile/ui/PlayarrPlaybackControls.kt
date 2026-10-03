@@ -15,5 +15,5 @@ internal data class PlayarrPlaybackControls(
 )
 
 internal const val playarrAndroidContainers = "mp4,webm,mkv,mp3,flac,m4a,ogg,opus,wav"
-internal const val playarrAndroidVideoCodecs = "h264,h265,vp9,av1"
+internal const val playarrAndroidVideoCodecs = "h264,h265,hevc,vp9,av1"
 internal const val playarrAndroidAudioCodecs = "aac,opus,mp3,flac,vorbis,pcm_s16le,pcm_s24le"

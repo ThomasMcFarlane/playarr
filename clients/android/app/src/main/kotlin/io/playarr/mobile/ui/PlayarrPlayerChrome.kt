@@ -48,6 +48,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,15 +60,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -132,6 +138,13 @@ internal fun PlayarrPlayerChrome(
     var playlistOpen by remember { mutableStateOf(false) }
     var castDialog by remember { mutableStateOf<PlayarrCastDialogKind?>(null) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
+    var pendingSeekMs by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(pendingSeekMs) {
+        val target = pendingSeekMs ?: return@LaunchedEffect
+        delay(PLAYER_SEEK_COALESCE_MS)
+        onSeek(target)
+        pendingSeekMs = null
+    }
     var pendingFocusTarget by remember { mutableStateOf<PlayarrPlayerFocusTarget?>(null) }
     val surfaceFocusRequester = remember { FocusRequester() }
     val backFocusRequester = remember { FocusRequester() }
@@ -170,7 +183,7 @@ internal fun PlayarrPlayerChrome(
                 .focusable()
                 .onKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                    when (playarrPlayerSurfaceAction(event.key.keyCode.toInt())) {
+                    when (playarrPlayerSurfaceAction(event.nativeKeyEvent.keyCode)) {
                         PlayarrPlayerSurfaceAction.TogglePlayback -> {
                             showControls()
                             onTogglePlayback()
@@ -178,13 +191,16 @@ internal fun PlayarrPlayerChrome(
                         }
                         PlayarrPlayerSurfaceAction.SeekBackward -> {
                             showControls()
-                            onSeek((timeline.positionMs - 5_000L).coerceAtLeast(0L))
+                            pendingSeekMs = coalescedSeekTarget(
+                                timeline.positionMs, pendingSeekMs, -PLAYER_SEEK_STEP_MS, timeline.durationMs,
+                            )
                             true
                         }
                         PlayarrPlayerSurfaceAction.SeekForward -> {
                             showControls()
-                            val target = timeline.positionMs + 5_000L
-                            onSeek(if (timeline.durationMs > 0L) target.coerceAtMost(timeline.durationMs) else target)
+                            pendingSeekMs = coalescedSeekTarget(
+                                timeline.positionMs, pendingSeekMs, PLAYER_SEEK_STEP_MS, timeline.durationMs,
+                            )
                             true
                         }
                         PlayarrPlayerSurfaceAction.FocusBack -> {
@@ -268,7 +284,7 @@ internal fun PlayarrPlayerChrome(
                 seekFocusRequester = seekFocusRequester,
                 canPrevious = canPrevious,
                 canNext = canNext,
-                scrubPositionMs = scrubPositionMs,
+                scrubPositionMs = scrubPositionMs ?: pendingSeekMs,
                 onScrub = { scrubPositionMs = it; showControls() },
                 onScrubFinished = {
                     scrubPositionMs?.let(onSeek)
@@ -446,6 +462,7 @@ private fun PlayarrPlayerControlBar(
         "position" to formatPlayarrPlayerTime(displayedPositionMs),
         "duration" to formatPlayarrPlayerTime(durationMs),
     )
+    val focusManager = LocalFocusManager.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -489,6 +506,16 @@ private fun PlayarrPlayerControlBar(
             enabled = durationMs > 0L && !controls.switching,
             modifier = Modifier
                 .focusRequester(seekFocusRequester)
+                // The Slider swallows vertical D-pad keys, which trapped focus on
+                // the seek bar; hand them to normal focus traversal instead.
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                        Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                        else -> false
+                    }
+                }
                 .fillMaxWidth()
                 .semantics { contentDescription = seekDescription },
         )
@@ -506,14 +533,26 @@ private fun PlayarrPlayerControlBar(
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onPrevious, enabled = canPrevious && !controls.switching) {
+            val onPreviousSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onPrevious,
+                enabled = canPrevious && !controls.switching,
+                interactionSource = onPreviousSource,
+                modifier = Modifier.playerFocusRing(onPreviousSource, CircleShape),
+            ) {
                 Icon(
                     Icons.Outlined.SkipPrevious,
                     contentDescription = playarrString(PlayarrString.PlayerPreviousEpisode),
                     tint = if (canPrevious && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
                 )
             }
-            IconButton(onClick = onTogglePlayback, enabled = !controls.switching) {
+            val onTogglePlaybackSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onTogglePlayback,
+                enabled = !controls.switching,
+                interactionSource = onTogglePlaybackSource,
+                modifier = Modifier.playerFocusRing(onTogglePlaybackSource, CircleShape),
+            ) {
                 Icon(
                     if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
                     contentDescription = playarrString(
@@ -523,7 +562,13 @@ private fun PlayarrPlayerControlBar(
                     modifier = Modifier.size(if (isTelevision) 34.dp else 28.dp),
                 )
             }
-            IconButton(onClick = onNext, enabled = canNext && !controls.switching) {
+            val onNextSource = remember { MutableInteractionSource() }
+            IconButton(
+                onClick = onNext,
+                enabled = canNext && !controls.switching,
+                interactionSource = onNextSource,
+                modifier = Modifier.playerFocusRing(onNextSource, CircleShape),
+            ) {
                 Icon(
                     Icons.Outlined.SkipNext,
                     contentDescription = playarrString(PlayarrString.PlayerNextEpisode),
@@ -723,6 +768,13 @@ private fun PlayarrPlayerPlaylistPanel(
     }
 }
 
+/** Visible D-pad focus cue for the player's Material buttons, which show none on television. */
+@Composable
+private fun Modifier.playerFocusRing(source: MutableInteractionSource, shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val focused by source.collectIsFocusedAsState()
+    return if (focused) border(2.dp, Color.White, shape) else this
+}
+
 @Composable
 private fun PlayerMenuButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -733,7 +785,13 @@ private fun PlayerMenuButton(
     onClick: () -> Unit,
 ) {
     if (isTelevision) {
-        TextButton(onClick = onClick, enabled = enabled) {
+        val source = remember { MutableInteractionSource() }
+        TextButton(
+            onClick = onClick,
+            enabled = enabled,
+            interactionSource = source,
+            modifier = Modifier.playerFocusRing(source, CircleShape),
+        ) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
             Text(label, color = Color.White, modifier = Modifier.padding(start = 6.dp))
         }
