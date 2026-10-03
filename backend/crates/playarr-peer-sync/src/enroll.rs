@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use playarr_db::{NodeIdentityRepo, PeerGroupRepo, PeerNodeRepo};
 use playarr_model::{NodeIdentity, PeerAddress, PeerGroup, PeerNode};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};

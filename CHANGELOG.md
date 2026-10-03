@@ -17,12 +17,26 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or a 10-second up-next countdown with Play now and Cancel when a next item
   is queued. Music chains silently and only shows the card when its queue ends.
   The legacy VIDAA fallback player shows Replay and Back to details.
+- Administrators can query `GET /api/v1/admin/system/capabilities` for the optional software and
+  hardware available on the serving node: ffmpeg and ffprobe (path and version), key encoders
+  (`libx264`, `aac`, `libx265`, `hevc_vaapi`, `hevc_nvenc`, `libsvtav1`, `libopus`), ffmpeg
+  hardware acceleration methods and GPU devices. Each item carries a status, the features
+  affected and an install hint; probes use short timeouts and a 30-second cache.
+- Playarr Admin has a System > Server capabilities page showing that report. Missing required
+  software appears in a prominent alert with its impact and install hint, and the status filter
+  is kept in the URL (`?show=attention|present`).
+- `infra/docker/regional-runtime.Dockerfile` defines the regional `streamarr-runtime` image with
+  ffmpeg and ffprobe, and the `playarr-dev` chart README documents its build, node import,
+  rollout, verification and rollback. The live image tag is unchanged until the image is imported
+  on both regional nodes.
 
 ### Fixed
 
 - Roku SceneGraph XML comments no longer contain double hyphens, so the
   channel validator parses every component on current Python.
-
+- Direct-play codec matching now treats `h265`/`hevc`, `h264`/`avc` and `av1`/`av01` as
+  aliases, so HEVC remuxes are no longer sent to transcode when a client advertises `h265`.
+  Direct-play responses for Matroska files now report `video/x-matroska` instead of `video/mp4`.
 - The development webOS route now uses `tv-web-webos.example.com`, which is
   covered by the existing `*.example.com` certificate. A chart render
   assertion prevents regression to a hostname outside that coverage.

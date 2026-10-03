@@ -130,6 +130,10 @@ export type CompatibilityEntry = components["schemas"]["CompatibilityEntry"];
 export type SystemSettings = components["schemas"]["SystemSettings"];
 export type UpdateSystemSettingsRequest =
   components["schemas"]["UpdateSystemSettingsRequest"];
+export type CapabilitiesResponse = components["schemas"]["CapabilitiesResponse"];
+export type CapabilityItem = components["schemas"]["CapabilityItem"];
+export type CapabilityStatus = components["schemas"]["CapabilityStatus"];
+export type CapabilityCategory = components["schemas"]["CapabilityCategory"];
 
 export type SourceKind = components["schemas"]["SourceKind"];
 export type SourceInstanceRequest = components["schemas"]["SourceInstanceRequest"];
@@ -435,6 +439,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/library/source-matrix", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
+  { schemaPath: "/api/v1/admin/system/capabilities", method: "GET" },
   { schemaPath: "/api/v1/admin/peer-groups", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/join", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/self", method: "DELETE" },
@@ -664,6 +669,15 @@ export class ApiClient {
 
   async getSystemSettings(): Promise<SystemSettings> {
     return this.unwrap(await this.raw.GET("/api/v1/admin/system-settings"));
+  }
+
+  /** `GET /api/v1/admin/system/capabilities`; `refresh` bypasses the server's short probe cache. */
+  async getSystemCapabilities(options: { refresh?: boolean } = {}): Promise<CapabilitiesResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/system/capabilities", {
+        params: { query: { refresh: options.refresh ?? false } },
+      })
+    );
   }
 
   async updateSystemSettings(body: UpdateSystemSettingsRequest): Promise<SystemSettings> {

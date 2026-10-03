@@ -18,9 +18,9 @@
 //! [`PeerLeafAvailabilityRepo::list_unmatched_for_group`] (§4.3).
 
 use async_trait::async_trait;
+use playarr_model::PeerLeafAvailability;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::PeerLeafAvailability;
 use uuid::Uuid;
 
 use crate::codec::{

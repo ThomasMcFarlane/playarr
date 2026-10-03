@@ -7,9 +7,9 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
-use serde::{Deserialize, Serialize};
 use playarr_auth::device_flow::{DeviceCodeResponse, TokenError, TokenResponse};
 use playarr_model::ClientPlatform;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::admin_peer::{peer_address_bundle, PeerAddressEntry};

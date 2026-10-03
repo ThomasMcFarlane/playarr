@@ -40,7 +40,6 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_catalog::WorkChildren;
 use playarr_db::SyncMetadata;
 use playarr_model::{
@@ -48,6 +47,7 @@ use playarr_model::{
     PeerNodeStatus, Policy, RoutingRule, SourceInstanceSyncRow, User, UserInvite,
     UserInviteRequest, UserInviteRequestStatus, WorkKind,
 };
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -1314,8 +1314,7 @@ pub async fn run_push_sync_loop(
             };
             let next_cursor = request.accounts.server_time.clone();
             let mut delivered = false;
-            for address in playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses)
-            {
+            for address in playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses) {
                 match peer_client
                     .signed_post::<_, playarr_peer_sync::PushSyncResponse>(
                         address,
@@ -1658,11 +1657,11 @@ mod sync_endpoint_tests {
     use base64::Engine;
     use chrono::Duration;
     use ed25519_dalek::{Signer, SigningKey};
-    use sha2::{Digest, Sha256};
     use playarr_model::media::LeafRef;
     use playarr_model::{
         ClientPlatform, ExternalRef, NodeIdentity, Sensitive, SourceInstance, Work,
     };
+    use sha2::{Digest, Sha256};
     use tower::ServiceExt;
 
     use super::*;
@@ -2248,10 +2247,7 @@ mod sync_endpoint_tests {
             wire_instance["group_library_id"],
             group_library_id.to_string()
         );
-        assert_eq!(
-            wire_instance["base_url"],
-            "https://radarr.internal.example"
-        );
+        assert_eq!(wire_instance["base_url"], "https://radarr.internal.example");
         assert_eq!(wire_instance["api_key_encrypted"], "super-secret-api-key");
         let self_peer_id = state
             .app
@@ -2261,10 +2257,7 @@ mod sync_endpoint_tests {
             .unwrap()
             .unwrap()
             .peer_id;
-        assert_eq!(
-            wire_instance["origin_peer_id"],
-            self_peer_id.to_string()
-        );
+        assert_eq!(wire_instance["origin_peer_id"], self_peer_id.to_string());
 
         let libraries = body["group_libraries"].as_array().unwrap();
         assert!(libraries

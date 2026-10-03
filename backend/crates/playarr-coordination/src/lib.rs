@@ -15,6 +15,8 @@
 //!   keyed by `hashtext(key)`) and a `cluster_leader` heartbeat table
 //!   (leader election, upsert-on-expiry). See the `sql` module for the
 //!   exact statements.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

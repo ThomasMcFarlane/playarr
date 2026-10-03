@@ -21,6 +21,8 @@
 //! shape changes underneath us. Polling straight from each app's own REST
 //! API (via `playarr-arr-client`) is slower to notice a change but can't
 //! drift the same way.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod arr_client;
 pub mod artwork_prewarm;

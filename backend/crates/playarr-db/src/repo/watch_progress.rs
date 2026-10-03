@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use playarr_model::{WatchProgress, WatchState};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{WatchProgress, WatchState};
 use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};

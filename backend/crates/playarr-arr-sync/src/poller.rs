@@ -1255,7 +1255,7 @@ mod tests {
                 .filter(|w| w.kind == kind)
                 .cloned()
                 .collect();
-            matching.sort_by(|a, b| a.id.cmp(&b.id));
+            matching.sort_by_key(|a| a.id);
             let start = offset.max(0) as usize;
             let end = (start + limit.max(0) as usize).min(matching.len());
             Ok(matching

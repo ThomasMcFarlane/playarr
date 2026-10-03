@@ -310,6 +310,7 @@ struct Question {
     qclass: u16,
 }
 
+#[cfg(test)]
 fn handle_packet(request: &[u8]) -> Option<Vec<u8>> {
     handle_packet_with_challenge(request, None)
 }

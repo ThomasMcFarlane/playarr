@@ -3,11 +3,11 @@
 //! `x-api-key` header, JSON body) and response decoding — including the
 //! error path for a non-2xx status.
 
-use serde_json::json;
 use playarr_tdarr_client::{
     AlterWorkerLimitRequest, ScanFilesRequest, ScanIndividualFileRequest, SearchDbQuery,
     TdarrClient, TdarrClientError,
 };
+use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

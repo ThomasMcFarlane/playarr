@@ -15,6 +15,8 @@
 //! moka cache + one broadcast registry; one Redis connection pool; one
 //! Postgres connection for `LISTEN`/`NOTIFY`), so splitting the trait would
 //! only push that coupling into every call site instead of removing it.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 mod channel_registry;
 mod in_memory;

@@ -261,9 +261,7 @@ impl Config {
                 validate_acme_domain(&domain)?;
                 let environment = acme_environment
                     .as_deref()
-                    .ok_or_else(|| {
-                        ConfigError::MissingVar("PLAYARR_ACME_ENVIRONMENT".to_string())
-                    })
+                    .ok_or_else(|| ConfigError::MissingVar("PLAYARR_ACME_ENVIRONMENT".to_string()))
                     .and_then(AcmeEnvironment::parse)?;
                 match acme_accept_terms.as_deref() {
                     Some("true") => {}
@@ -336,12 +334,9 @@ impl Config {
             }
             None => None,
         };
-        let relay_dns_acme_challenge = optional(
-            lookup,
-            "PLAYARR_RELAY_DNS_ACME_CHALLENGE",
-        )
-        .map(|raw| parse_relay_dns_acme_challenge(&raw))
-        .transpose()?;
+        let relay_dns_acme_challenge = optional(lookup, "PLAYARR_RELAY_DNS_ACME_CHALLENGE")
+            .map(|raw| parse_relay_dns_acme_challenge(&raw))
+            .transpose()?;
         if relay_dns_acme_challenge.is_some() && relay_dns_bind_addr.is_none() {
             return Err(ConfigError::InvalidValue {
                 var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
@@ -371,20 +366,21 @@ impl Config {
 }
 
 fn parse_relay_dns_acme_challenge(raw: &str) -> Result<RelayDnsAcmeChallenge, ConfigError> {
-    let (domain, validation) = raw.split_once('=').ok_or_else(|| ConfigError::InvalidValue {
-        var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
-        value: "malformed".to_string(),
-        reason: "expected `_acme-challenge.v4-A-B-C-D.relay.playarr.app=VALIDATION`"
-            .to_string(),
-    })?;
+    let (domain, validation) = raw
+        .split_once('=')
+        .ok_or_else(|| ConfigError::InvalidValue {
+            var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
+            value: "malformed".to_string(),
+            reason: "expected `_acme-challenge.v4-A-B-C-D.relay.playarr.app=VALIDATION`"
+                .to_string(),
+        })?;
     let canonical_domain = domain.to_ascii_lowercase();
     let challenge_target = canonical_domain.strip_prefix("_acme-challenge.");
     if !challenge_target.is_some_and(|target| {
         target.starts_with("v4-")
             && target.ends_with(".relay.playarr.app")
             && is_valid_dns_name(target)
-    })
-    {
+    }) {
         return Err(ConfigError::InvalidValue {
             var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
             value: domain.to_string(),
@@ -516,10 +512,7 @@ mod tests {
     fn tls_paths_must_be_configured_together() {
         let lookup = lookup_from(HashMap::from([
             ("DATABASE_URL", "sqlite://playarr.db"),
-            (
-                "PLAYARR_TLS_CERT_PATH",
-                "/etc/playarr/tls/fullchain.pem",
-            ),
+            ("PLAYARR_TLS_CERT_PATH", "/etc/playarr/tls/fullchain.pem"),
         ]));
         let err = Config::from_env_source(&lookup).unwrap_err();
         assert!(matches!(err, ConfigError::InvalidValue { var, .. } if var.contains("TLS")));
@@ -529,10 +522,7 @@ mod tests {
     fn tls_paths_enable_native_tls() {
         let lookup = lookup_from(HashMap::from([
             ("DATABASE_URL", "sqlite://playarr.db"),
-            (
-                "PLAYARR_TLS_CERT_PATH",
-                "/etc/playarr/tls/fullchain.pem",
-            ),
+            ("PLAYARR_TLS_CERT_PATH", "/etc/playarr/tls/fullchain.pem"),
             ("PLAYARR_TLS_KEY_PATH", "/etc/playarr/tls/privkey.pem"),
         ]));
         let config = Config::from_env_source(&lookup).unwrap();
@@ -564,9 +554,7 @@ mod tests {
             ("PLAYARR_ACME_ENVIRONMENT", "production"),
         ]));
         let err = Config::from_env_source(&missing).unwrap_err();
-        assert!(
-            matches!(err, ConfigError::MissingVar(var) if var == "PLAYARR_ACME_ACCEPT_TERMS")
-        );
+        assert!(matches!(err, ConfigError::MissingVar(var) if var == "PLAYARR_ACME_ACCEPT_TERMS"));
 
         let rejected = lookup_from(HashMap::from([
             ("DATABASE_URL", "sqlite://playarr.db"),
@@ -729,7 +717,9 @@ mod tests {
                 ("PLAYARR_RELAY_DNS_ACME_CHALLENGE", challenge),
             ]));
             let err = Config::from_env_source(&lookup).unwrap_err();
-            assert!(matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_RELAY_DNS_ACME_CHALLENGE"));
+            assert!(
+                matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_RELAY_DNS_ACME_CHALLENGE")
+            );
         }
     }
 

@@ -8,9 +8,9 @@
 //! other peers" -- see `playarr_model::PeerNode`'s own doc comment.
 
 use async_trait::async_trait;
+use playarr_model::{PeerAddress, PeerNode, PeerNodeStatus};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{PeerAddress, PeerNode, PeerNodeStatus};
 use uuid::Uuid;
 
 use crate::codec::{

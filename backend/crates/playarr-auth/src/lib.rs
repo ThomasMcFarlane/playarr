@@ -11,6 +11,8 @@
 //! `playarr-model` (they're domain types other crates need to reference
 //! without pulling in auth logic); this crate is where the *behavior* over
 //! them lives.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod admin;
 pub mod device_flow;

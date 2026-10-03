@@ -4,9 +4,9 @@
 //! module, which manage many rows of their aggregate.
 
 use async_trait::async_trait;
+use playarr_model::{Sensitive, TdarrConnection};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{Sensitive, TdarrConnection};
 use uuid::{uuid, Uuid};
 
 use crate::codec::{format_datetime, parse_datetime};

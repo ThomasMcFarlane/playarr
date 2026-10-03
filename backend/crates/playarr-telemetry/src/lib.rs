@@ -12,6 +12,8 @@
 //! testable code that `playarr-bin` wires up around that subscriber —
 //! see each module's doc comment for what's fully implemented versus
 //! intentionally left as a documented skeleton.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod analytics;
 pub mod correlation;

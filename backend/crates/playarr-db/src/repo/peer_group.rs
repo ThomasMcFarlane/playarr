@@ -10,9 +10,9 @@
 //! legitimate reason to be overwritten in place.
 
 use async_trait::async_trait;
+use playarr_model::PeerGroup;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::PeerGroup;
 use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};

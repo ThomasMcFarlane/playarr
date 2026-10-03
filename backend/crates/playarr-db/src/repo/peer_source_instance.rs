@@ -3,9 +3,9 @@
 //! API keys, and reconciliation settings; peer sync writes only this cache.
 
 use async_trait::async_trait;
+use playarr_model::SourceInstanceIdentity;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::SourceInstanceIdentity;
 use uuid::Uuid;
 
 use crate::codec::{

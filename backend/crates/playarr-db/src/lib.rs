@@ -5,6 +5,8 @@
 //! Nothing outside this crate should import `sqlx` directly — depend on
 //! [`DbPool`] and the trait exports below instead, so the SQLite/Postgres
 //! split stays contained here.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod analytics;
 mod codec;

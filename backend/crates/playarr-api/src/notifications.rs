@@ -7,8 +7,8 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
-use serde::{Deserialize, Serialize};
 use playarr_model::{ClientPlatform, PushRegistration};
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use utoipa::ToSchema;
 

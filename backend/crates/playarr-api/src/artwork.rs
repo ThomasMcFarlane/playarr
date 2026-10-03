@@ -16,11 +16,11 @@
 use std::path::Path as FsPath;
 
 use axum::body::Body;
+use axum::extract::Query;
 use axum::extract::{Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
-use axum::extract::Query;
 use playarr_artwork::{ArtworkCacheError, ArtworkStyle, CachedArtwork};
 use playarr_catalog::WorkChildren;
 use playarr_model::{ImageAsset, ImageKind, Sensitive};

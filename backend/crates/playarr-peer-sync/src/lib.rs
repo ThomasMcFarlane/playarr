@@ -29,6 +29,8 @@
 //! `routing_sync.rs` (routing_rules, §2.4/§3.6's table) is Phase 3 scope --
 //! see that module's own doc comment for why it syncs by plain LWW, the
 //! same as `account_sync::sync_libraries`, with no origin-gating.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod account_sync;
 pub mod availability_sync;

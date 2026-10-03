@@ -17,10 +17,10 @@ use std::collections::{BTreeMap, HashMap};
 
 use axum::extract::{Path, State};
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use playarr_arr_client::ArrConnector;
 use playarr_arr_sync::ArrClient;
 use playarr_model::{LeafSelector, PeerNodeStatus, SourceInstance, SourceKind};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

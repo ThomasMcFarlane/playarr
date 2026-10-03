@@ -311,8 +311,7 @@ fn parse_ffprobe_duration_ms(stdout: &[u8]) -> Result<u64, ApiError> {
 /// manifests grow while ffmpeg is encoding, so their current seekable edge
 /// must never be presented to the player as the title's total duration.
 pub(crate) async fn probe_media_duration_ms(path: &FsPath) -> Result<u64, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
@@ -382,8 +381,7 @@ fn parse_ffprobe_audio_tracks(stdout: &[u8]) -> Result<Vec<SourceAudioTrack>, Ap
 pub(crate) async fn probe_media_audio_tracks(
     path: &FsPath,
 ) -> Result<Vec<SourceAudioTrack>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
@@ -460,8 +458,7 @@ fn parse_ffprobe_subtitle_tracks(stdout: &[u8]) -> Result<Vec<SourceSubtitleTrac
 pub(crate) async fn probe_media_subtitle_tracks(
     path: &FsPath,
 ) -> Result<Vec<SourceSubtitleTrack>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(5),
         Command::new(&binary)
@@ -495,8 +492,7 @@ pub(crate) async fn probe_media_subtitle_tracks(
 }
 
 async fn probe_media_chapters(path: &FsPath) -> Result<Vec<MediaChapter>, ApiError> {
-    let binary =
-        std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
+    let binary = std::env::var("PLAYARR_FFPROBE_BINARY").unwrap_or_else(|_| "ffprobe".to_string());
     let output = tokio::time::timeout(
         Duration::from_secs(15),
         Command::new(&binary)
@@ -2313,13 +2309,13 @@ mod tests {
     use axum::body::Body;
     use axum::extract::ConnectInfo;
     use axum::http::{Request as HttpRequest, StatusCode};
-    use std::net::SocketAddr;
-    use std::path::PathBuf;
     use playarr_model::media::LeafRef;
     use playarr_model::{
         ClientPlatform, MediaFile, PlayMethod, PlaybackSession, ProducedBy, Rendition,
         RenditionStatus,
     };
+    use std::net::SocketAddr;
+    use std::path::PathBuf;
 
     fn write_temp_file(contents: &[u8]) -> PathBuf {
         let path =

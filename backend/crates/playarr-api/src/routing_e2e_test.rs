@@ -31,12 +31,12 @@
 
 use std::net::SocketAddr;
 
-use serde_json::json;
 use playarr_model::media::LeafRef;
 use playarr_model::{
     Availability, DeliveryMode, ExternalProvider, ExternalRef, LeafSelector, MediaFile,
     PeerLeafAvailability, RoutingRule, SourceInstance, WorkKind,
 };
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::test_support::{
@@ -465,8 +465,7 @@ async fn proxy_passthrough_preserves_a_range_request_and_its_206_response() {
     // A real file on disk, on node B -- this is what the entry node's
     // proxy route has to actually stream through, `Range` header and all.
     let content = b"0123456789ABCDEFGHIJ".to_vec();
-    let file_path =
-        std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path = std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, &content).unwrap();
 
     let source_instance_b = Uuid::new_v4();
@@ -575,8 +574,7 @@ async fn proxy_passthrough_returns_full_content_without_a_range_header() {
         found_and_join(&state_a, &base_url_a, &state_b, &base_url_b).await;
 
     let content = b"full content, no range".to_vec();
-    let file_path =
-        std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path = std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, &content).unwrap();
 
     let source_instance_b = Uuid::new_v4();
@@ -665,8 +663,7 @@ async fn proxy_owning_peer_independently_refuses_a_session_whose_policy_no_longe
     let (_group_id, _node_a_peer_id, node_b_peer_id) =
         found_and_join(&state_a, &base_url_a, &state_b, &base_url_b).await;
 
-    let file_path =
-        std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
+    let file_path = std::env::temp_dir().join(format!("playarr-proxy-test-{}.bin", Uuid::new_v4()));
     std::fs::write(&file_path, b"secret bytes").unwrap();
 
     let source_instance_b = Uuid::new_v4();

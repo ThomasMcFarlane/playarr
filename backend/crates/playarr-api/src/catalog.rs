@@ -21,11 +21,11 @@ use std::collections::{HashMap, HashSet};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_catalog::{BrowseQuery, BrowseSort, WorkDetail};
 use playarr_model::{
     Album, Availability, Book, Episode, ExternalProvider, Season, Track, Work, WorkKind,
 };
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

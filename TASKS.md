@@ -31,6 +31,14 @@ Documentation only: implementation is pending and unassigned.
 | 76 | External calendar subscription link | pending | Unassigned | Parent: 74. Depends on 75. Expose a per-user iCal (ICS) subscription URL usable in external calendar apps, with a revocable/regenerable token scoped to the user's permissions. Acceptance: subscribes in Google/Apple/Outlook calendars, updates reflect new/changed releases, revoked tokens stop working. |
 | 77 | Track average time until availability per series | pending | Unassigned | Parent: 74. Depends on 75. Record air/release date versus the time an item becomes available in the library, and show the average lag per series (e.g. on the series page and calendar entries). Acceptance: lag is computed from real grab/import events, excludes items backfilled long after airing or clearly marks them, and handles missing data explicitly. |
 
+## Active: Server capabilities and regional runtime packaging (2026-10-03)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 87 | Admin-only server capabilities endpoint | review PR open | task/server-capabilities | `GET /api/v1/admin/system/capabilities` reports ffmpeg, ffprobe, key encoders and GPU devices on the serving node with impact and install hints. Peer aggregation is not implemented: each node reports itself. Evidence: `cargo test -p playarr-api` 328 passed. |
+| 88 | Admin "Server capabilities" page | review PR open | task/server-capabilities | System nav page with prominent missing-item banner, status filter persisted in the URL, light and dark tokens. |
+| 89 | Regional runtime image with ffmpeg and rollout runbook | review PR open | task/server-capabilities | `infra/docker/regional-runtime.Dockerfile` plus runbook in the playarr-dev README. The live image tag is deliberately not bumped until the image exists on region-a and region-b (owner approval needed). |
+
 ## Active — infrastructure reliability (2026-09-24)
 
 | # | Task | Status | Picked up by | Notes |

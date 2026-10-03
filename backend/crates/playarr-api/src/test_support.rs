@@ -35,9 +35,7 @@ use playarr_db::{
     UserInviteRequestRepo, UserRepo, WatchProgressRepo, WorkRepo,
 };
 use playarr_model::{Availability, Policy, Sensitive, User, Work, WorkKind};
-use playarr_telemetry::analytics::{
-    AnalyticsCollector, InMemorySessionRegistry, SessionRegistry,
-};
+use playarr_telemetry::analytics::{AnalyticsCollector, InMemorySessionRegistry, SessionRegistry};
 use playarr_transcode::{ActiveSessionCounter, TranscodeOrchestrator};
 use uuid::Uuid;
 
@@ -489,9 +487,8 @@ pub async fn test_state() -> (Router, TestState) {
     );
     let peer_sync_state_repo: Arc<dyn playarr_db::PeerSyncStateRepo> =
         Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool.clone()));
-    let sync_conflict_log_repo: Arc<dyn playarr_db::SyncConflictLogRepo> = Arc::new(
-        playarr_db::repo::SqlxSyncConflictLogRepo::new(pool.clone()),
-    );
+    let sync_conflict_log_repo: Arc<dyn playarr_db::SyncConflictLogRepo> =
+        Arc::new(playarr_db::repo::SqlxSyncConflictLogRepo::new(pool.clone()));
     // Real boot parity -- production's `boot_api` seeds the two default
     // views right after migrations run, and test callers that assert on
     // `GET /api/v1/views` (e.g. confirming "Newly Added"/"Newly Released"

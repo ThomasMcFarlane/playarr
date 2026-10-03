@@ -562,6 +562,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/system/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_system_capabilities_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tdarr": {
         parameters: {
             query?: never;
@@ -2285,6 +2301,34 @@ export interface components {
             /** Format: uuid */
             media_file_id?: string | null;
         };
+        CapabilitiesResponse: {
+            /** @description `true` when this response came from the short-lived cache. */
+            cached: boolean;
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["CapabilityItem"][];
+        };
+        /** @enum {string} */
+        CapabilityCategory: "binary" | "encoder" | "hardware";
+        CapabilityItem: {
+            category: components["schemas"]["CapabilityCategory"];
+            /** @description Short factual note about what was observed. */
+            detail?: string | null;
+            /** @description Stable machine identifier, for example `ffmpeg` or `encoder.libx264`. */
+            id: string;
+            /** @description Features that are broken or slowed while the item is not `present`. */
+            impact: string;
+            install_hint: string;
+            name: string;
+            /** @description Resolved binary path or device list, when found. */
+            path?: string | null;
+            /** @description `true` when playback features fail outright without this item. */
+            required: boolean;
+            status: components["schemas"]["CapabilityStatus"];
+            version?: string | null;
+        };
+        /** @enum {string} */
+        CapabilityStatus: "present" | "missing" | "degraded";
         /**
          * @description Doc-only mirror of `playarr_catalog::CatalogPage` -- see
          *     `catalog::CatalogPageSchema`'s own doc comment for why this can't just
@@ -5865,6 +5909,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_system_capabilities_handler: {
+        parameters: {
+            query?: {
+                /** @description Bypass the short cache and probe again. */
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Optional software and hardware available on this node */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilitiesResponse"];
+                };
             };
             /** @description Missing or invalid access token */
             401: {

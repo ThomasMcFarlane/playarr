@@ -10,8 +10,8 @@
 //! `playarr-transcode` actually needs, not an exhaustive mirror of
 //! Tdarr's response shape.
 
-use serde::{Deserialize, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TdarrClientError {

@@ -10,9 +10,9 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use playarr_db::PeerNodeRepo;
 use playarr_model::PeerNode;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};
@@ -87,8 +87,8 @@ pub async fn apply_membership(
 mod tests {
     use base64::Engine;
     use chrono::Utc;
-    use serde_json::json;
     use playarr_model::PeerNodeStatus;
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

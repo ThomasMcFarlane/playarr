@@ -4,8 +4,8 @@
 //! per-app module only has to describe *which* endpoint and *what shape*,
 //! not how to make an HTTP request.
 
-use serde::de::DeserializeOwned;
 use playarr_model::Sensitive;
+use serde::de::DeserializeOwned;
 
 use crate::ArrClientError;
 

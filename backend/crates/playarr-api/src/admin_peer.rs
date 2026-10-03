@@ -34,8 +34,8 @@ use axum::Json;
 use base64::Engine;
 use chrono::{DateTime, Duration, Utc};
 use ed25519_dalek::SigningKey;
-use serde::{Deserialize, Serialize};
 use playarr_model::{NodeIdentity, PeerAddress, PeerGroup, PeerNode, PeerNodeStatus, Sensitive};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

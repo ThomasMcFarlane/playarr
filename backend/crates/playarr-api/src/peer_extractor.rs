@@ -39,8 +39,8 @@ use axum::http::{HeaderMap, StatusCode};
 use base64::Engine;
 use chrono::Utc;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use sha2::{Digest, Sha256};
 use playarr_model::{PeerNode, PeerNodeStatus};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::error::ApiError;

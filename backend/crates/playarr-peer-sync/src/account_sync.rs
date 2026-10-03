@@ -72,7 +72,6 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_db::{
     GroupLibraryRepo, PolicyRepo, SourceInstanceRepo, SyncConflictLog, SyncConflictLogRepo,
     SyncMetadata, UserInviteRepo, UserInviteRequestRepo, UserRepo,
@@ -80,6 +79,7 @@ use playarr_db::{
 use playarr_model::{
     GroupLibrary, Policy, SourceInstanceSyncRow, User, UserInvite, UserInviteRequest,
 };
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};
@@ -652,6 +652,7 @@ pub async fn apply_invites_response(
 /// from `base_url`'s `GET /api/v1/peer/libraries`. Both use plain LWW by
 /// `updated_at`; neither has a privilege-bearing field requiring origin
 /// gating (§3.5).
+#[allow(clippy::too_many_arguments)]
 pub async fn sync_libraries(
     peer_client: &PeerClient,
     base_url: &str,
@@ -793,8 +794,8 @@ pub async fn apply_libraries_response(
 mod tests {
     use base64::Engine;
     use chrono::Duration;
-    use serde_json::json;
     use playarr_model::{ClientPlatform, Sensitive, SourceKind};
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1075,9 +1076,7 @@ mod tests {
             pool: pool.clone(),
             user_repo: Arc::new(playarr_db::repo::SqlxUserRepo::new(pool.clone())),
             policy_repo: Arc::new(playarr_db::repo::SqlxPolicyRepo::new(pool.clone())),
-            group_library_repo: Arc::new(playarr_db::repo::SqlxGroupLibraryRepo::new(
-                pool.clone(),
-            )),
+            group_library_repo: Arc::new(playarr_db::repo::SqlxGroupLibraryRepo::new(pool.clone())),
             source_instance_repo: Arc::new(playarr_db::repo::SqlxSourceInstanceRepo::new(
                 pool.clone(),
             )),

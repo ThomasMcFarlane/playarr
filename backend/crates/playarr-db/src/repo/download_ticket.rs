@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use playarr_model::{DownloadStatus, DownloadTicket};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{DownloadStatus, DownloadTicket};
 use uuid::Uuid;
 
 use crate::codec::{

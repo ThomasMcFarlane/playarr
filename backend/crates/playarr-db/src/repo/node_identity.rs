@@ -20,9 +20,9 @@
 //! `Display`.
 
 use async_trait::async_trait;
+use playarr_model::{NodeIdentity, Sensitive};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{NodeIdentity, Sensitive};
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;

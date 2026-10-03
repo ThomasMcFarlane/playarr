@@ -3,9 +3,9 @@
 //! rationale.
 
 use async_trait::async_trait;
+use playarr_model::WorkEmbedding;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::WorkEmbedding;
 use uuid::Uuid;
 
 use crate::codec::parse_uuid;

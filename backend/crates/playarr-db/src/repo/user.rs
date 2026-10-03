@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use playarr_model::{MediaPlaybackPreferences, ProfileAvatarPreference, Sensitive, User};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{MediaPlaybackPreferences, ProfileAvatarPreference, Sensitive, User};
 use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};

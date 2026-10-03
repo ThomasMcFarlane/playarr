@@ -21,6 +21,8 @@
 //! to (re)write `backend/openapi/playarr.yaml` from the live spec after
 //! changing any route; run the same test without the env var (as CI does)
 //! to confirm the checked-in file still matches.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 pub mod admin;
 pub mod admin_peer;
@@ -47,6 +49,7 @@ pub mod refresh;
 pub mod request_timing_middleware;
 pub mod routing;
 pub mod source_registry;
+pub mod system_capabilities;
 pub mod system_settings;
 pub mod tdarr;
 pub mod user_directory;
@@ -231,6 +234,9 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(
             system_settings::get_system_settings_handler,
             system_settings::update_system_settings_handler
+        ))
+        .routes(routes!(
+            system_capabilities::get_system_capabilities_handler
         ))
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::authorize_device_handler))
@@ -951,6 +957,7 @@ mod tests {
         assert!(json.contains("/api/v1/admin/playback/activity/facets"));
         assert!(json.contains("/api/v1/admin/source-instances"));
         assert!(json.contains("/api/v1/admin/system-settings"));
+        assert!(json.contains("/api/v1/admin/system/capabilities"));
         assert!(json.contains("/api/v1/admin/views"));
         assert!(json.contains("/api/v1/views"));
         assert!(json.contains("/api/v1/views/{id}/resolve"));

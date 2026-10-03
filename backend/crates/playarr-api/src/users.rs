@@ -17,12 +17,12 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_auth::PasswordVerifier;
 use playarr_model::{
     Policy, ProfileAvatarKind, ProfileAvatarPreference, Sensitive, User, UserInvite,
     UserInviteRequest, UserInviteRequestStatus,
 };
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -1557,8 +1557,8 @@ pub async fn verify_profile_pin_handler(
     // `invalid_pin()` so a disallowed target is indistinguishable from a
     // wrong PIN (same non-enumeration posture this handler already applies
     // to a missing/disabled/non-streaming target below).
-    let cross_account_probe = matches!(*state.auth_mode, playarr_auth::AuthMode::FullAccount)
-        && id != streaming.user_id;
+    let cross_account_probe =
+        matches!(*state.auth_mode, playarr_auth::AuthMode::FullAccount) && id != streaming.user_id;
     if cross_account_probe {
         return Err(invalid_pin());
     }

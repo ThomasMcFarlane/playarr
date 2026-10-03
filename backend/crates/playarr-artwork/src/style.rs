@@ -191,7 +191,8 @@ mod tests {
 
     #[test]
     fn stage_output_is_png_and_desaturated() {
-        let (bytes, content_type) = apply_artwork_style(&sample_jpeg(), ArtworkStyle::Stage).unwrap();
+        let (bytes, content_type) =
+            apply_artwork_style(&sample_jpeg(), ArtworkStyle::Stage).unwrap();
         assert_eq!(content_type, "image/png");
         let img = image::load_from_memory(&bytes).unwrap().to_rgba8();
         // Sample mid-left (solid mask region): R=G=B and alpha ≈ 0.72*255.

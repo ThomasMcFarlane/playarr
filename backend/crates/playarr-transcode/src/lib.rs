@@ -44,6 +44,8 @@
 //! re-checks for an existing `Ready` rendition before doing any real work,
 //! so redundant events from multiple concurrent on-demand sessions for the
 //! same file are naturally deduplicated on the receiving end.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -53,11 +55,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_cache::CacheAndPubSub;
 use playarr_db::RenditionRepo;
 use playarr_model::{MediaFile, Rendition};
 use playarr_tdarr_client::{AlterWorkerLimitRequest, ScanIndividualFileRequest, TdarrClient};
+use serde::{Deserialize, Serialize};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
@@ -607,7 +609,7 @@ impl TranscodeOrchestrator {
             .supported_video_codecs
             .iter()
             .chain(capabilities.supported_audio_codecs.iter())
-            .any(|c| c.eq_ignore_ascii_case(&media_file.codec));
+            .any(|c| codecs_match(c, &media_file.codec));
 
         // An unknown source bitrate (the source *arr instance didn't
         // report one) or an uncapped client can't fail this check — only
@@ -1072,6 +1074,24 @@ impl TdarrDispatcher {
     }
 }
 
+/// Canonicalises a codec name so common aliases compare equal:
+/// `h265`/`hevc`/`h.265`, `h264`/`avc`/`avc1`/`h.264`, `av1`/`av01`.
+/// Unknown names are returned lower-cased and trimmed.
+pub fn normalise_codec(codec: &str) -> String {
+    let lower = codec.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "h265" | "h.265" | "hevc" | "hev1" | "hvc1" => "hevc".to_string(),
+        "h264" | "h.264" | "avc" | "avc1" => "h264".to_string(),
+        "av1" | "av01" => "av1".to_string(),
+        _ => lower,
+    }
+}
+
+/// Alias-aware, case-insensitive codec comparison.
+pub fn codecs_match(a: &str, b: &str) -> bool {
+    normalise_codec(a) == normalise_codec(b)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1224,6 +1244,54 @@ mod tests {
 
     mod can_direct_play {
         use super::*;
+
+        #[test]
+        fn codec_aliases_normalise_both_ways() {
+            for (a, b) in [
+                ("h265", "hevc"),
+                ("hevc", "h265"),
+                ("HEVC", "H265"),
+                ("h264", "avc"),
+                ("avc", "h264"),
+                ("av1", "av01"),
+                ("av01", "av1"),
+            ] {
+                assert!(codecs_match(a, b), "{a} should match {b}");
+            }
+            assert!(!codecs_match("hevc", "h264"));
+            assert!(!codecs_match("av1", "vp9"));
+        }
+
+        #[test]
+        fn can_direct_play_matches_codec_aliases() {
+            let orchestrator = test_orchestrator(Arc::new(FakeRenditionRepo::default()));
+            for (file_codec, client_codec) in [
+                ("hevc", "h265"),
+                ("h265", "hevc"),
+                ("avc", "h264"),
+                ("h264", "avc"),
+                ("av01", "av1"),
+                ("av1", "av01"),
+            ] {
+                let mut media_file = sample_media_file();
+                media_file.container = "mp4".to_string();
+                media_file.codec = file_codec.to_string();
+                media_file.bitrate = Some(4_000_000);
+                let mut capabilities = sample_capabilities();
+                capabilities.supported_video_codecs = vec![client_codec.to_string()];
+                assert!(
+                    orchestrator.can_direct_play(&media_file, &capabilities),
+                    "{file_codec} should direct play for client codec {client_codec}"
+                );
+            }
+
+            let mut media_file = sample_media_file();
+            media_file.container = "mp4".to_string();
+            media_file.codec = "hevc".to_string();
+            let mut capabilities = sample_capabilities();
+            capabilities.supported_video_codecs = vec!["h264".to_string()];
+            assert!(!orchestrator.can_direct_play(&media_file, &capabilities));
+        }
 
         #[test]
         fn direct_play_when_everything_matches() {

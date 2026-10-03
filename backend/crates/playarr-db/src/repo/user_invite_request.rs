@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use playarr_model::{UserInvite, UserInviteRequest, UserInviteRequestStatus};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{UserInvite, UserInviteRequest, UserInviteRequestStatus};
 use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};

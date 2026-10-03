@@ -12,9 +12,9 @@
 //! than building their own `reqwest` calls, so the signing/header/error
 //! handling lives in exactly one place.
 
+use playarr_model::PeerAddress;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use playarr_model::PeerAddress;
 
 use crate::signing::PeerIdentity;
 

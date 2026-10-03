@@ -1,8 +1,8 @@
 //! Database boundary for Playarr Server's singleton system settings.
 
 use async_trait::async_trait;
-use sqlx::Row;
 use playarr_model::{SystemSettings, DEFAULT_INSTANCE_NAME};
+use sqlx::Row;
 
 use crate::error::DbError;
 use crate::pool::{Backend, DbPool};

@@ -400,9 +400,9 @@ impl PeerSyncPoller {
 mod tests {
     use base64::Engine;
     use chrono::Utc;
-    use serde_json::json;
     use playarr_coordination::SingleNodeCoordinator;
     use playarr_model::{PeerAddress, PeerNode};
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -438,9 +438,7 @@ mod tests {
             peer_node_repo: Arc::new(playarr_db::repo::SqlxPeerNodeRepo::new(pool.clone())),
             user_repo: Arc::new(playarr_db::repo::SqlxUserRepo::new(pool.clone())),
             policy_repo: Arc::new(playarr_db::repo::SqlxPolicyRepo::new(pool.clone())),
-            group_library_repo: Arc::new(playarr_db::repo::SqlxGroupLibraryRepo::new(
-                pool.clone(),
-            )),
+            group_library_repo: Arc::new(playarr_db::repo::SqlxGroupLibraryRepo::new(pool.clone())),
             source_instance_repo: Arc::new(playarr_db::repo::SqlxSourceInstanceRepo::new(
                 pool.clone(),
             )),

@@ -602,20 +602,17 @@ impl ArtworkCache {
             ArtworkCacheError::Io(format!("could not read cached artwork: {error}"))
         })?;
         let style_for_task = style;
-        let (bytes, content_type) = tokio::task::spawn_blocking(move || {
-            apply_artwork_style(&source, style_for_task)
-        })
-        .await
-        .map_err(|error| ArtworkCacheError::Io(format!("style worker join failed: {error}")))??;
+        let (bytes, content_type) =
+            tokio::task::spawn_blocking(move || apply_artwork_style(&source, style_for_task))
+                .await
+                .map_err(|error| {
+                    ArtworkCacheError::Io(format!("style worker join failed: {error}"))
+                })??;
 
         let directory = styled_path.parent().ok_or_else(|| {
             ArtworkCacheError::Io("styled artwork path has no parent directory".into())
         })?;
-        let temp_path = directory.join(format!(
-            "style-{}-{}.tmp",
-            style.as_str(),
-            Uuid::new_v4()
-        ));
+        let temp_path = directory.join(format!("style-{}-{}.tmp", style.as_str(), Uuid::new_v4()));
         {
             let mut file = tokio::fs::File::create(&temp_path).await.map_err(|error| {
                 ArtworkCacheError::Io(format!("could not create styled artwork file: {error}"))

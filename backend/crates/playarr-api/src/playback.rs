@@ -29,12 +29,12 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use chrono::Utc;
 use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use playarr_model::{
     ClientPlatform, DeliveryMode, ExternalProvider, LeafSelector, MediaFile, PeerNode, PlayMethod,
     PlaybackEvent, PlaybackEventKind, PlaybackSession, TranscodeReason, WatchProgress,
 };
 use playarr_transcode::ClientCapabilities;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -369,6 +369,7 @@ fn direct_play_mime_type(container: &str) -> &'static str {
         "opus" => "audio/ogg; codecs=opus",
         "wav" => "audio/wav",
         "webm" => "video/webm",
+        "mkv" => "video/x-matroska",
         _ => "video/mp4",
     }
 }
@@ -571,7 +572,7 @@ fn derive_transcode_reason(
     let codec_ok = capabilities
         .supported_video_codecs
         .iter()
-        .any(|c| c.eq_ignore_ascii_case(&media_file.codec));
+        .any(|c| playarr_transcode::codecs_match(c, &media_file.codec));
     let bitrate_ok = match (media_file.bitrate, capabilities.max_bitrate_bps) {
         (Some(file_bitrate), Some(max_bitrate)) => file_bitrate <= max_bitrate,
         _ => true,
@@ -1826,14 +1827,39 @@ pub async fn record_playback_event_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn direct_play_mime_type_maps_video_containers() {
+        assert_eq!(direct_play_mime_type("mkv"), "video/x-matroska");
+        assert_eq!(direct_play_mime_type("MKV"), "video/x-matroska");
+        assert_eq!(direct_play_mime_type("webm"), "video/webm");
+        assert_eq!(direct_play_mime_type("mp4"), "video/mp4");
+    }
+
+    #[test]
+    fn transcode_reason_treats_hevc_and_h265_as_same_codec() {
+        let caps = ClientCapabilities {
+            supported_containers: vec!["mkv".to_string()],
+            supported_video_codecs: vec!["h265".to_string()],
+            supported_audio_codecs: vec![],
+            max_bitrate_bps: Some(1),
+        };
+        let mut file = media_file();
+        file.codec = "hevc".to_string();
+        file.bitrate = Some(10);
+        assert!(matches!(
+            derive_transcode_reason(&file, &caps),
+            TranscodeReason::VideoBitrateExceedsLimit
+        ));
+    }
     use crate::test_support::{
         bearer_header, mint_access_token, seed_movie, seed_streaming_user,
         seed_streaming_user_with_library_allow, test_state,
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use std::path::PathBuf;
     use playarr_model::media::LeafRef;
+    use std::path::PathBuf;
     use tower::ServiceExt;
 
     /// `playback_info_handler` now takes `ConnectInfo<SocketAddr>` (mirrors

@@ -10,8 +10,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use playarr_model::{ClientPlatform, Device};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::refresh::RefreshTokenService;

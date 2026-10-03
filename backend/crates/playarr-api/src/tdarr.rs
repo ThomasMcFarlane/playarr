@@ -20,8 +20,8 @@
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
-use serde::{Deserialize, Serialize};
 use playarr_model::{Sensitive, TdarrConnection};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::auth_extractor::AdminUser;

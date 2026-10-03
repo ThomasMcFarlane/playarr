@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use sqlx::Row;
 use playarr_model::{ClientPlatform, PushRegistration};
+use sqlx::Row;
 use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};

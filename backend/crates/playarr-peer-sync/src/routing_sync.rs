@@ -41,9 +41,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use playarr_db::{RoutingRuleRepo, SyncConflictLog, SyncConflictLogRepo};
 use playarr_model::RoutingRule;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};
@@ -180,8 +180,8 @@ pub async fn apply_routing_rules_response(
 mod tests {
     use base64::Engine;
     use chrono::SubsecRound;
-    use serde_json::json;
     use playarr_model::DeliveryMode;
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

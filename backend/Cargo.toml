@@ -30,6 +30,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Playarr Server entrypoint: boots the API/worker roles and hosts the `playarr` CLI (update checks, etc)."
 default-run = "playarr-server"
+license.workspace = true
 
 [[bin]]
 name = "playarr-server"

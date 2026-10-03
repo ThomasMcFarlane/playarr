@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Deserializer, Serialize};
 use playarr_model::Sensitive;
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::http::{build_http_client, get_json, get_status};
 use crate::{ArrClientError, ArrConnector};

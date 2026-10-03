@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use playarr_model::{ClientPlatform, Device};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{ClientPlatform, Device};
 use uuid::Uuid;
 
 use crate::codec::{

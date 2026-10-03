@@ -18,6 +18,8 @@
 //! explicitly scopes them out until "the catalog write path is built"), so
 //! this crate queries `DbPool` directly for just that slice — see
 //! `CatalogService::pool` and `backend/migrations/{sqlite,postgres}/000{4,5}_catalog_children.sql`.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 mod codec;
 
@@ -26,8 +28,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use playarr_cache::CacheAndPubSub;
 use playarr_db::{
     DbError, DbPool, MediaFileRepo, PeerLeafAvailabilityRepo, PeerNodeRepo, WatchProgressRepo,
@@ -37,6 +37,8 @@ use playarr_model::media::LeafRef;
 use playarr_model::{
     Album, Availability, Book, Episode, ExternalProvider, ImageAsset, Season, Track, Work, WorkKind,
 };
+use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -659,16 +661,14 @@ impl CatalogService {
                     updated_at: row.updated_at,
                 };
                 let key = (row.provider.clone(), row.external_id.clone());
-                let remote = merged
-                    .entry(key)
-                    .or_insert_with(|| RemoteOnlyWork {
-                        provider: row.provider.clone(),
-                        external_id: row.external_id.clone(),
-                        title: row.title.clone(),
-                        kind: row.kind,
-                        release_date: row.release_date.map(|date| date.to_rfc3339()),
-                        available_on: Vec::new(),
-                    });
+                let remote = merged.entry(key).or_insert_with(|| RemoteOnlyWork {
+                    provider: row.provider.clone(),
+                    external_id: row.external_id.clone(),
+                    title: row.title.clone(),
+                    kind: row.kind,
+                    release_date: row.release_date.map(|date| date.to_rfc3339()),
+                    available_on: Vec::new(),
+                });
                 if !remote
                     .available_on
                     .iter()
@@ -835,10 +835,10 @@ impl CatalogService {
                 candidates.sort_by(|a, b| b.sort_title.cmp(&a.sort_title));
             }
             BrowseSort::RecentlyAdded => {
-                candidates.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+                candidates.sort_by_key(|a| std::cmp::Reverse(a.added_at));
             }
             BrowseSort::OldestAdded => {
-                candidates.sort_by(|a, b| a.added_at.cmp(&b.added_at));
+                candidates.sort_by_key(|a| a.added_at);
             }
             BrowseSort::ReleaseDateDescending => {
                 // `Option<DateTime<Utc>>`'s derived `Ord` treats `None` as
@@ -846,7 +846,7 @@ impl CatalogService {
                 // naturally pushes works with no release_date (Artist/
                 // Author, or a Movie/Series arr-sync hasn't backfilled yet)
                 // to the bottom rather than the top.
-                candidates.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+                candidates.sort_by_key(|a| std::cmp::Reverse(a.release_date));
             }
         }
 
@@ -985,14 +985,14 @@ impl CatalogService {
                     page.items.sort_by(|a, b| b.sort_title.cmp(&a.sort_title));
                 }
                 playarr_model::ViewSort::RecentlyAdded => {
-                    page.items.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+                    page.items.sort_by_key(|a| std::cmp::Reverse(a.added_at));
                 }
                 playarr_model::ViewSort::OldestAdded => {
-                    page.items.sort_by(|a, b| a.added_at.cmp(&b.added_at));
+                    page.items.sort_by_key(|a| a.added_at);
                 }
                 playarr_model::ViewSort::RecentlyReleased => {
                     page.items
-                        .sort_by(|a, b| b.release_date.cmp(&a.release_date));
+                        .sort_by_key(|a| std::cmp::Reverse(a.release_date));
                 }
                 playarr_model::ViewSort::LastPlayedByUser => {
                     // A work this user never played has no entry in
@@ -1599,7 +1599,6 @@ mod tests {
 
     use async_trait::async_trait;
     use chrono::{Duration as ChronoDuration, Utc};
-    use std::path::PathBuf;
     use playarr_cache::InMemory;
     use playarr_db::repo::{
         SqlxMediaFileRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo, SqlxWatchProgressRepo,
@@ -1608,6 +1607,7 @@ mod tests {
         Availability, ExternalProvider, ExternalRef, ImageAsset, ImageKind, LeafSelector,
         MediaFile, PeerAddress, PeerNode, PeerNodeStatus, WorkKind,
     };
+    use std::path::PathBuf;
 
     use super::*;
 

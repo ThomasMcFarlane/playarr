@@ -152,8 +152,13 @@ mod tests {
         }
     }
 
+    /// Serialises the tests that point `PLAYARR_ARTWORK_CACHE_DIR` at a
+    /// private directory: the variable is process-global.
+    static CACHE_DIR_ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[tokio::test]
     async fn prewarm_work_caches_every_image() {
+        let _env = CACHE_DIR_ENV.lock().await;
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/poster.jpg"))
@@ -165,10 +170,8 @@ mod tests {
             .mount(&server)
             .await;
 
-        let temp_dir = std::env::temp_dir().join(format!(
-            "playarr-arr-sync-prewarm-test-{}",
-            Uuid::new_v4()
-        ));
+        let temp_dir =
+            std::env::temp_dir().join(format!("playarr-arr-sync-prewarm-test-{}", Uuid::new_v4()));
         // SAFETY (test-only): no other thread in this test process reads
         // this env var concurrently.
         unsafe {
@@ -205,6 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn prewarm_work_fetches_arr_local_artwork_with_the_source_api_key() {
+        let _env = CACHE_DIR_ENV.lock().await;
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/api/v1/mediacover/artist/7/fanart.jpg"))

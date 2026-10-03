@@ -34,9 +34,9 @@ use base64::Engine;
 use chrono::{Duration, Utc};
 use ed25519_dalek::{Signer, SigningKey};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
 use playarr_db::PeerNodeRepo;
 use playarr_model::{NodeIdentity, PeerNodeStatus};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -624,10 +624,7 @@ mod tests {
         let standalone = issuer
             .issue_access_token(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
             .unwrap();
-        assert_eq!(
-            JwtIssuer::peek_claims(&standalone).unwrap().iss,
-            "playarr"
-        );
+        assert_eq!(JwtIssuer::peek_claims(&standalone).unwrap().iss, "playarr");
         issuer.verify_access_token(&standalone).await.unwrap();
     }
 

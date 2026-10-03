@@ -255,7 +255,11 @@ mod tests {
 
         let snapshot = registry.snapshot();
         assert_eq!(snapshot.len(), 2);
-        assert!(snapshot.iter().any(|row| row.method == "GET" && row.max_ms == 5.0));
-        assert!(snapshot.iter().any(|row| row.method == "POST" && row.max_ms == 50.0));
+        assert!(snapshot
+            .iter()
+            .any(|row| row.method == "GET" && row.max_ms == 5.0));
+        assert!(snapshot
+            .iter()
+            .any(|row| row.method == "POST" && row.max_ms == 50.0));
     }
 }

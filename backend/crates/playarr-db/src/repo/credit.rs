@@ -5,9 +5,9 @@
 //! (`*_person` vs `*_for_work`/`*_for_person`) that one trait reads fine.
 
 use async_trait::async_trait;
+use playarr_model::{Credit, CreditRole, Person};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{Credit, CreditRole, Person};
 use uuid::Uuid;
 
 use crate::codec::parse_uuid;

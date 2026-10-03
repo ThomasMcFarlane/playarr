@@ -35,11 +35,9 @@ use std::net::SocketAddr;
 use axum::extract::{ConnectInfo, State};
 use axum::Json;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use playarr_auth::{
-    evaluate_login, Argon2PasswordVerifier, Credentials, LoginContext, PinAttempt,
-};
+use playarr_auth::{evaluate_login, Argon2PasswordVerifier, Credentials, LoginContext, PinAttempt};
 use playarr_model::{ClientPlatform, Device};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

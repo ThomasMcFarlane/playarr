@@ -22,6 +22,8 @@
 //! workspace's dependency-light crates; every caller treats a failure
 //! here as best-effort/non-fatal (see `playarr-arr-sync::embedding_sync`)
 //! specifically because of that first-run network dependency.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 use async_trait::async_trait;
 

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use playarr_model::{ExternalProvider, ExternalRef, Work, WorkKind};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{ExternalProvider, ExternalRef, Work, WorkKind};
 use uuid::Uuid;
 
 use crate::codec::{
@@ -364,10 +364,10 @@ mod tests {
         // external_refs come back sorted by (provider, external_id); sort
         // the input the same way before comparing.
         work.external_refs
-            .sort_by(|a, b| provider_to_str(&a.provider).cmp(&provider_to_str(&b.provider)));
+            .sort_by_key(|a| provider_to_str(&a.provider));
         fetched
             .external_refs
-            .sort_by(|a, b| provider_to_str(&a.provider).cmp(&provider_to_str(&b.provider)));
+            .sort_by_key(|a| provider_to_str(&a.provider));
 
         assert_eq!(fetched, work);
     }

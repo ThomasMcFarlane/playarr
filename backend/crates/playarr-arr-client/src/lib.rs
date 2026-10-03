@@ -13,6 +13,8 @@
 //! normalized domain model is a judgment call (which fields become tags,
 //! how availability is derived) that belongs in `playarr-arr-sync`, not
 //! baked into the transport client.
+// `async_trait` expansions trip clippy::double_must_use on current stable.
+#![allow(clippy::double_must_use)]
 
 mod bazarr;
 mod http;

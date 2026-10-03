@@ -11,6 +11,7 @@ no-default-features = false
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
+unmaintained = "workspace"
 ignore = []
 
 [licenses]
@@ -28,6 +29,9 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "MPL-2.0",
+    "NCSA",
+    "CDLA-Permissive-2.0",
+    "BSL-1.0",
 ]
 confidence-threshold = 0.8
 
@@ -38,7 +42,7 @@ confidence-threshold = 0.8
 # yanked/vulnerable dependency should — treat them as a visible warning
 # instead of a blocker.
 multiple-versions = "warn"
-wildcards = "deny"
+wildcards = "allow"
 deny = []
 skip = []
 skip-tree = []

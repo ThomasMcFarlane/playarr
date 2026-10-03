@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use dashmap::DashMap;
+use playarr_model::RefreshTokenRecord;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::RefreshTokenRecord;
 use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};

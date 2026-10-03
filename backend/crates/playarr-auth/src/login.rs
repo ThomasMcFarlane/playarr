@@ -291,10 +291,10 @@ mod tests {
     use crate::jwt::JwtIssuer;
     use crate::refresh::InMemoryRefreshTokenStore;
     use crate::test_support::{FakeDeviceRepo, FakeUserDirectory};
-    use std::sync::Arc;
     use playarr_db::DeviceRepo;
     use playarr_model::ClientPlatform;
     use playarr_model::Sensitive;
+    use std::sync::Arc;
 
     fn user(username: &str, password: &str, disabled: bool) -> User {
         User {

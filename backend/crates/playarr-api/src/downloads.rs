@@ -47,8 +47,8 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::Json;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_model::{DownloadStatus, DownloadTicket};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -740,10 +740,8 @@ mod tests {
     async fn original_ticket_file_serves_source_bytes_with_range_and_attachment_disposition() {
         let (router, state) = test_state().await;
         let contents = b"hello playarr downloads".to_vec();
-        let path = std::env::temp_dir().join(format!(
-            "playarr-api-downloads-test-{}.mkv",
-            Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("playarr-api-downloads-test-{}.mkv", Uuid::new_v4()));
         std::fs::write(&path, &contents).expect("write temp fixture file");
 
         let work_id = seed_movie(&state, "Test Movie").await;

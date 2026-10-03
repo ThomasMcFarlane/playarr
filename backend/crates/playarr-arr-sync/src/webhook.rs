@@ -7,8 +7,8 @@
 //! regular schedule, everything) straight from the source instance's API
 //! via `playarr-arr-client`.
 
-use serde_json::Value;
 use playarr_model::SourceKind;
+use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]

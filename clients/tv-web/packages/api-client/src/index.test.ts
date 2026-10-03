@@ -624,6 +624,30 @@ describe("ApiClient", () => {
     });
   });
 
+  it("reads server capabilities with admin authentication and optional refresh", async () => {
+    const seen: string[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      const url = new URL(request.url);
+      expect(url.pathname).toBe("/api/v1/admin/system/capabilities");
+      expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
+      seen.push(url.searchParams.get("refresh") ?? "");
+      return jsonResponse(200, {
+        generated_at: "2026-10-03T00:00:00Z",
+        cached: false,
+        items: [],
+      });
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "admin-token",
+    });
+
+    await expect(client.getSystemCapabilities()).resolves.toMatchObject({ cached: false });
+    await client.getSystemCapabilities({ refresh: true });
+    expect(seen).toEqual(["false", "true"]);
+  });
+
   it("reads and updates the signed-in profile avatar with authentication", async () => {
     const customPreference = {
       kind: "custom" as const,

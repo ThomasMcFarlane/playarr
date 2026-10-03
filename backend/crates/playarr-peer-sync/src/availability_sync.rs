@@ -35,11 +35,9 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use playarr_db::{PeerLeafAvailabilityRepo, WorkRepo};
-use playarr_model::{
-    Availability, ExternalProvider, LeafSelector, PeerLeafAvailability, WorkKind,
-};
+use playarr_model::{Availability, ExternalProvider, LeafSelector, PeerLeafAvailability, WorkKind};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::peer_client::{PeerClient, PeerClientError};
@@ -235,8 +233,8 @@ mod tests {
 
     use async_trait::async_trait;
     use base64::Engine;
-    use serde_json::json;
     use playarr_model::{ExternalRef, Work};
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -328,7 +326,7 @@ mod tests {
                 .filter(|w| w.kind == kind)
                 .cloned()
                 .collect();
-            matching.sort_by(|a, b| a.id.cmp(&b.id));
+            matching.sort_by_key(|a| a.id);
             let start = offset.max(0) as usize;
             let end = (start + limit.max(0) as usize).min(matching.len());
             Ok(matching

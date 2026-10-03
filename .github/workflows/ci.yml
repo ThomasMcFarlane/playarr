@@ -98,6 +98,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The cluster runner image has no C toolchain, so linking and build
+      # scripts (openssl-sys, libsqlite3-sys) fail with "linker `cc` not found".
+      - name: Ensure C toolchain
+        run: |
+          if ! command -v cc >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq build-essential pkg-config libssl-dev
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

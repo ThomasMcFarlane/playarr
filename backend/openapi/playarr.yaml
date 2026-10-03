@@ -930,6 +930,31 @@ paths:
           description: Caller is authenticated but not an admin
       security:
       - bearer_auth: []
+  /api/v1/admin/system/capabilities:
+    get:
+      tags:
+      - admin
+      operationId: get_system_capabilities_handler
+      parameters:
+      - name: refresh
+        in: query
+        description: Bypass the short cache and probe again.
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: Optional software and hardware available on this node
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
   /api/v1/admin/tdarr:
     get:
       tags:
@@ -5235,6 +5260,77 @@ components:
           - string
           - 'null'
           format: uuid
+    CapabilitiesResponse:
+      type: object
+      required:
+      - generated_at
+      - cached
+      - items
+      properties:
+        cached:
+          type: boolean
+          description: '`true` when this response came from the short-lived cache.'
+        generated_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityItem'
+    CapabilityCategory:
+      type: string
+      enum:
+      - binary
+      - encoder
+      - hardware
+    CapabilityItem:
+      type: object
+      required:
+      - id
+      - name
+      - category
+      - status
+      - required
+      - impact
+      - install_hint
+      properties:
+        category:
+          $ref: '#/components/schemas/CapabilityCategory'
+        detail:
+          type:
+          - string
+          - 'null'
+          description: Short factual note about what was observed.
+        id:
+          type: string
+          description: Stable machine identifier, for example `ffmpeg` or `encoder.libx264`.
+        impact:
+          type: string
+          description: Features that are broken or slowed while the item is not `present`.
+        install_hint:
+          type: string
+        name:
+          type: string
+        path:
+          type:
+          - string
+          - 'null'
+          description: Resolved binary path or device list, when found.
+        required:
+          type: boolean
+          description: '`true` when playback features fail outright without this item.'
+        status:
+          $ref: '#/components/schemas/CapabilityStatus'
+        version:
+          type:
+          - string
+          - 'null'
+    CapabilityStatus:
+      type: string
+      enum:
+      - present
+      - missing
+      - degraded
     CatalogPageSchema:
       type: object
       description: |-

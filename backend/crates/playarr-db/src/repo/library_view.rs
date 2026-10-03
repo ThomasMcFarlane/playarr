@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use playarr_model::{LibraryView, ViewCriteria, ViewSort};
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use playarr_model::{LibraryView, ViewCriteria, ViewSort};
 use uuid::{uuid, Uuid};
 
 use crate::codec::{
