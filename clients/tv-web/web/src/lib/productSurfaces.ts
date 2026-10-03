@@ -70,6 +70,7 @@ export const COMPLETE_CLIENT_SHELL_ROUTES: readonly ProductRoute[] = [
   { path: "/watchlist", id: "watchlist", label: "Watchlist", shelled: true },
   { path: "/playlists", id: "playlists", label: "Playlists", shelled: true },
   { path: "/playlists/:workId", id: "playlists-detail", label: "Playlist detail", shelled: true },
+  { path: "/calendar", id: "calendar", label: "Release calendar", shelled: true },
   { path: "/player/:mediaFileId", id: "player", label: "Player", shelled: true },
   { path: "/settings", id: "settings", label: "Settings index", shelled: true },
   { path: "/settings/appearance", id: "settings-appearance", label: "Settings: appearance", shelled: true },
@@ -160,8 +161,13 @@ export const PRODUCT_NAV_GROUPS: readonly {
         end: false,
       },
       {
+<<<<<<< HEAD
         to: "/watchlist",
         labelKey: "shell.nav.watchlist",
+=======
+        to: "/calendar",
+        labelKey: "shell.nav.calendar",
+>>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
         end: false,
       },
     ],
@@ -375,6 +381,7 @@ export function parityChecklistRows(): readonly {
     { id: "work-detail", category: "surface", label: "Work detail hierarchy + play actions" },
     { id: "music-detail", category: "surface", label: "Music detail + playable tracks" },
     { id: "playlists", category: "surface", label: "Playlists list/create/reorder/remove" },
+    { id: "calendar", category: "surface", label: "Release calendar: agenda/week/month, source banner, subscription" },
     { id: "player", category: "player", label: "Player chrome: play/resume/tracks/quality" },
     { id: "settings-all", category: "settings", label: "All eight settings sections present" },
     { id: "clients", category: "surface", label: "Clients / install info" },

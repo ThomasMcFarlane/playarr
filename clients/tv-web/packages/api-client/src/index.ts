@@ -409,6 +409,110 @@ function toHttpRouteLatency(raw: HttpRouteLatencyResponse): HttpRouteLatency {
   };
 }
 
+// ---------------------------------------------------------------------
+// release calendar (TASKS 74-77)
+//
+// Hand-written until `backend/openapi/playarr.yaml` lands on main with the
+// calendar schemas; the field names mirror that contract exactly.
+// ---------------------------------------------------------------------
+
+export type CalendarMediaKind = "episode" | "movie" | "album" | "book";
+export type CalendarReleaseType = "air" | "cinema" | "digital" | "physical" | "release";
+export type CalendarSourceState = "ok" | "unreachable" | "rejected" | "error";
+
+export interface CalendarEntrySource {
+  source_instance_id: string;
+  source_name: string;
+  source_kind: string;
+  arr_id: number | string;
+}
+
+export interface CalendarEntry {
+  id: string;
+  media_kind: CalendarMediaKind;
+  release_type: CalendarReleaseType;
+  title: string;
+  subtitle?: string | null;
+  season_number?: number | null;
+  episode_number?: number | null;
+  /** UTC calendar day, `YYYY-MM-DD`. */
+  date: string;
+  /** Exact release instant (ISO 8601) when the source provides one. */
+  release_at?: string | null;
+  monitored: boolean;
+  has_file: boolean;
+  poster_url?: string | null;
+  work_id?: string | null;
+  average_lag_seconds?: number | null;
+  sources: CalendarEntrySource[];
+}
+
+export interface CalendarSourceStatus {
+  source_instance_id: string;
+  name: string;
+  kind: string;
+  status: CalendarSourceState;
+  error?: string | null;
+  entry_count: number;
+}
+
+export interface CalendarResponse {
+  start: string;
+  end: string;
+  entries: CalendarEntry[];
+  sources: CalendarSourceStatus[];
+}
+
+export interface CalendarParams {
+  /** Inclusive UTC day, `YYYY-MM-DD`. */
+  start?: string;
+  /** Inclusive UTC day, `YYYY-MM-DD`; at most 92 days after `start`. */
+  end?: string;
+  kinds?: ReadonlyArray<CalendarMediaKind>;
+  sourceInstanceId?: string;
+}
+
+export interface CalendarFeedStatus {
+  active: boolean;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+/** Returned only when a feed token is created or regenerated. */
+export interface CalendarFeedCreated {
+  url: string;
+  token: string;
+  created_at: string;
+}
+
+export interface AvailabilityLagSample {
+  season_number?: number | null;
+  episode_number?: number | null;
+  air_at: string;
+  imported_at: string;
+  lag_seconds: number;
+}
+
+export interface AvailabilityLag {
+  average_seconds: number | null;
+  sample_count: number;
+  backfill_count: number;
+  unknown_count: number;
+  backfill_threshold_days: number;
+  average_grab_seconds: number | null;
+  samples: AvailabilityLagSample[];
+}
+
+export function buildCalendarQuery(params: CalendarParams = {}): string {
+  const query = new URLSearchParams();
+  if (params.start) query.set("start", params.start);
+  if (params.end) query.set("end", params.end);
+  if (params.kinds && params.kinds.length > 0) query.set("kind", params.kinds.join(","));
+  if (params.sourceInstanceId) query.set("source_instance_id", params.sourceInstanceId);
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
 export interface SessionHistoryParams {
   userId?: string;
   /** ISO 8601 datetime, inclusive lower bound on `started_at`. */
@@ -1899,5 +2003,35 @@ export class ApiClient {
       "/api/v1/admin/metrics/http-latency"
     );
     return rows.map(toHttpRouteLatency);
+  }
+
+  // ---------------------------------------------------------------------
+  // release calendar
+  // ---------------------------------------------------------------------
+
+  /** `GET /api/v1/calendar`; defaults to today..today+30 server-side. */
+  async getCalendar(params: CalendarParams = {}): Promise<CalendarResponse> {
+    return this.requestJson<CalendarResponse>("GET", `/api/v1/calendar${buildCalendarQuery(params)}`);
+  }
+
+  async getCalendarFeed(): Promise<CalendarFeedStatus> {
+    return this.requestJson<CalendarFeedStatus>("GET", "/api/v1/calendar/feed");
+  }
+
+  /** Creates or regenerates the feed token; the previous URL stops working. The URL is only ever returned here. */
+  async createCalendarFeed(): Promise<CalendarFeedCreated> {
+    return this.requestJson<CalendarFeedCreated>("POST", "/api/v1/calendar/feed");
+  }
+
+  async revokeCalendarFeed(): Promise<void> {
+    await this.requestJson<void>("DELETE", "/api/v1/calendar/feed");
+  }
+
+  /** `GET /api/v1/catalog/{id}/availability-lag`. */
+  async getAvailabilityLag(workId: string): Promise<AvailabilityLag> {
+    return this.requestJson<AvailabilityLag>(
+      "GET",
+      `/api/v1/catalog/${encodeURIComponent(workId)}/availability-lag`
+    );
   }
 }

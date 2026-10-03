@@ -39,7 +39,11 @@ import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
+<<<<<<< HEAD
 import { WatchlistPage } from "./pages/Watchlist";
+=======
+import { CalendarPage } from "./pages/Calendar";
+>>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
@@ -57,6 +61,7 @@ import { PageScrollRoot } from "./components/PageScrollRoot";
 import { TvEmptyState } from "./components/tv/TvEmptyState";
 import { ProfileAvatar, useStoredProfileAvatar } from "./components/ProfileAvatar";
 import {
+  CalendarIcon,
   DownloadsIcon,
   HomeIcon,
   MusicIcon,
@@ -137,7 +142,11 @@ const NAV_ICONS: Record<string, ComponentType> = {
   "/sites": SitesIcon,
   "/music": MusicIcon,
   "/playlists": PlaylistsIcon,
+<<<<<<< HEAD
   "/watchlist": WatchlistIcon,
+=======
+  "/calendar": CalendarIcon,
+>>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
 };
 
 /** Shell nav hierarchy from productSurfaces (shared with tv-vidaa parity tests). */
@@ -626,6 +635,7 @@ export function App() {
         <Route path="/music/:workId" element={<MusicDetailPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
         <Route path="/settings" element={<SettingsIndexPage />}>

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ApiClient,
   ApiError,
+  buildCalendarQuery,
   DEVICE_CODE_GRANT_TYPE,
   describeApiError,
   type ActivityActiveResponse,
@@ -1412,5 +1413,82 @@ describe("describeApiError", () => {
   it("falls back to a plain Error's message, and to String() for anything else", () => {
     expect(describeApiError(new Error("boom"))).toBe("boom");
     expect(describeApiError("just a string")).toBe("just a string");
+  });
+});
+
+describe("release calendar client", () => {
+  it("builds the calendar query from window, kinds and source", async () => {
+    let seen = "";
+    const fetchImpl = mockFetch((request) => {
+      seen = request.url;
+      return jsonResponse(200, { start: "2026-10-01", end: "2026-10-31", entries: [], sources: [] });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "tok" });
+    await client.getCalendar({
+      start: "2026-10-01",
+      end: "2026-10-31",
+      kinds: ["episode", "movie"],
+      sourceInstanceId: "abc",
+    });
+    const url = new URL(seen);
+    expect(url.pathname).toBe("/api/v1/calendar");
+    expect(url.searchParams.get("start")).toBe("2026-10-01");
+    expect(url.searchParams.get("end")).toBe("2026-10-31");
+    expect(url.searchParams.get("kind")).toBe("episode,movie");
+    expect(url.searchParams.get("source_instance_id")).toBe("abc");
+    expect(fetchImpl.mock.calls[0]![0].headers.get("Authorization")).toBe("Bearer tok");
+  });
+
+  it("omits the query string when no params are given", () => {
+    expect(buildCalendarQuery()).toBe("");
+    expect(buildCalendarQuery({ kinds: [] })).toBe("");
+  });
+
+  it("surfaces invalid_range as an ApiError", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(400, { code: "invalid_range" }));
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    await expect(client.getCalendar({ start: "a", end: "b" })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("manages the subscription feed", async () => {
+    const calls: string[] = [];
+    const fetchImpl = mockFetch((request) => {
+      calls.push(`${request.method} ${new URL(request.url).pathname}`);
+      if (request.method === "GET") return jsonResponse(200, { active: false });
+      if (request.method === "POST") {
+        return jsonResponse(201, { url: "https://x/feed/t.ics", token: "t", created_at: "2026-10-04T00:00:00Z" });
+      }
+      return new Response(null, { status: 204 });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    await expect(client.getCalendarFeed()).resolves.toEqual({ active: false });
+    await expect(client.createCalendarFeed()).resolves.toMatchObject({ token: "t" });
+    await expect(client.revokeCalendarFeed()).resolves.toBeUndefined();
+    expect(calls).toEqual([
+      "GET /api/v1/calendar/feed",
+      "POST /api/v1/calendar/feed",
+      "DELETE /api/v1/calendar/feed",
+    ]);
+  });
+
+  it("fetches availability lag for a work", async () => {
+    let path = "";
+    const fetchImpl = mockFetch((request) => {
+      path = new URL(request.url).pathname;
+      return jsonResponse(200, {
+        average_seconds: null,
+        sample_count: 0,
+        backfill_count: 1,
+        unknown_count: 2,
+        backfill_threshold_days: 30,
+        average_grab_seconds: null,
+        samples: [],
+      });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const lag = await client.getAvailabilityLag("w-1");
+    expect(path).toBe("/api/v1/catalog/w-1/availability-lag");
+    expect(lag.average_seconds).toBeNull();
+    expect(lag.backfill_count).toBe(1);
   });
 });

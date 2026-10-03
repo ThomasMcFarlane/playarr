@@ -43,7 +43,11 @@ describe("productSurfaces — complete client catalogue", () => {
       "sites",
       "music",
       "playlists",
+<<<<<<< HEAD
       "watchlist",
+=======
+      "calendar",
+>>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
       "player",
       "settings",
       "settings-appearance",
@@ -74,7 +78,11 @@ describe("productSurfaces — complete client catalogue", () => {
       "/sites",
       "/music",
       "/playlists",
+<<<<<<< HEAD
       "/watchlist",
+=======
+      "/calendar",
+>>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
     ]);
   });
 
@@ -140,6 +148,7 @@ describe("productSurfaces — web vs tv-vidaa parity", () => {
       "library-music",
       "work-detail",
       "playlists",
+      "calendar",
       "player",
       "settings-all",
       "clients",

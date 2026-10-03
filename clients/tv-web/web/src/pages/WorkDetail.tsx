@@ -17,6 +17,7 @@ import type {
 } from "@playarr-tv/api-client";
 import { describeApiError } from "@playarr-tv/api-client";
 import { useWorkDetail } from "@playarr-tv/api-client/react";
+import { AvailabilityLagNote } from "../components/AvailabilityLag";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
@@ -1702,6 +1703,7 @@ export function WorkDetailPage() {
             <span key={`${genre}-${index}`}>{genre}</span>
           ))}
         </div>
+        {work.kind === "series" ? <AvailabilityLagNote workId={work.id} /> : null}
         <p className="tv-detail-synopsis">
           {activeOverview ??
             (episodic
