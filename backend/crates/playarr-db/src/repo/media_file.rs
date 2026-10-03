@@ -49,6 +49,12 @@ pub trait MediaFileRepo: Send + Sync {
     /// this work actually playable?" without issuing one query per work.
     async fn list_work_ids(&self) -> Result<HashSet<Uuid>, DbError>;
 
+    /// Every distinct `(work_id, source_instance_id)` pair across all media
+    /// files, in one query. Lets catalogue browse apply source-instance and
+    /// library-allow filters without one `list_by_work_id` round trip per
+    /// candidate work.
+    async fn list_work_source_instances(&self) -> Result<Vec<(Uuid, Uuid)>, DbError>;
+
     /// Finds the `MediaFile` for one specific leaf of `work_id` -- the core
     /// lookup that resolves "which file plays this episode/track/book/
     /// movie" for the playback path.
@@ -239,6 +245,19 @@ impl MediaFileRepo for SqlxMediaFileRepo {
             .map(|row| {
                 let raw: String = row.try_get("work_id")?;
                 parse_uuid(&raw)
+            })
+            .collect()
+    }
+
+    async fn list_work_source_instances(&self) -> Result<Vec<(Uuid, Uuid)>, DbError> {
+        let rows = sqlx::query("SELECT DISTINCT work_id, source_instance_id FROM media_files")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                let work: String = row.try_get("work_id")?;
+                let source: String = row.try_get("source_instance_id")?;
+                Ok((parse_uuid(&work)?, parse_uuid(&source)?))
             })
             .collect()
     }
@@ -480,6 +499,21 @@ mod tests {
         assert_eq!(playable_work_ids.len(), 2);
         assert!(playable_work_ids.contains(&work_id));
         assert!(playable_work_ids.contains(&other_work_id));
+
+        // Both files of `work_id` come from the same source instance (the
+        // helper's `Uuid` arg), so the pair set is deduplicated per work.
+        let pairs = repo.list_work_source_instances().await.unwrap();
+        assert!(pairs.iter().any(|(w, _)| *w == work_id));
+        assert!(pairs.iter().any(|(w, _)| *w == other_work_id));
+        let mut expected: Vec<(Uuid, Uuid)> = [&movie_file, &episode_file, &other_work_file]
+            .iter()
+            .map(|f| (f.work_id, f.source_instance_id))
+            .collect();
+        expected.sort();
+        expected.dedup();
+        let mut got = pairs;
+        got.sort();
+        assert_eq!(got, expected);
     }
 
     #[tokio::test]

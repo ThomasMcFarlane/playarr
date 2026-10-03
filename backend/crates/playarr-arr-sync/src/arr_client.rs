@@ -185,13 +185,29 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         overview: movie.overview.clone(),
         genres: movie.genres.clone(),
         images: radarr_images(&movie.images),
-        // A movie can go digital before it's out physically (or vice versa
-        // for a straight-to-disc release), so prefer `digital_release`
-        // (the more commonly-populated, earlier signal) and fall back to
-        // `physical_release` -- either one is a real "it's out" signal, and
-        // Radarr itself has no single unambiguous "release date" field of
-        // its own to defer to instead.
-        release_date: movie.digital_release.or(movie.physical_release),
+        release_date: radarr_release_date(movie),
+    }
+}
+
+/// Original release date of a Radarr movie. Prefers the theatrical date
+/// (`inCinemas`), then the film's `year`; the digital/physical dates are
+/// home-media re-release dates (Sample Movie Four, 1994, has a 2005 DVD) and are only
+/// used when nothing better exists. When only the year is known, an
+/// earliest home-media date inside that same year refines it to a real day.
+fn radarr_release_date(movie: &RadarrMovie) -> Option<DateTime<Utc>> {
+    use chrono::{Datelike, TimeZone};
+    if let Some(cinemas) = movie.in_cinemas {
+        return Some(cinemas);
+    }
+    let home_media = match (movie.digital_release, movie.physical_release) {
+        (Some(d), Some(p)) => Some(d.min(p)),
+        (d, p) => d.or(p),
+    };
+    match movie.year.filter(|year| *year > 0) {
+        Some(year) => home_media
+            .filter(|date| date.year() == year)
+            .or_else(|| Utc.with_ymd_and_hms(year, 1, 1, 0, 0, 0).single()),
+        None => home_media,
     }
 }
 
@@ -482,6 +498,8 @@ mod tests {
             images: Vec::new(),
             digital_release: None,
             physical_release: None,
+            in_cinemas: None,
+            year: None,
         }
     }
 
@@ -675,23 +693,42 @@ mod tests {
     }
 
     #[test]
-    fn radarr_prefers_digital_release_over_physical_release() {
-        let mut movie = radarr_movie(1, "Example Movie", 999, true, true);
+    fn radarr_prefers_in_cinemas_over_home_media_dates() {
+        let mut movie = radarr_movie(1, "Sample Movie Four", 9495, true, true);
+        let cinemas = "1994-05-11T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        movie.in_cinemas = Some(cinemas);
+        movie.year = Some(1994);
+        movie.digital_release = Some("2005-07-30T00:00:00Z".parse().unwrap());
+        movie.physical_release = Some("2005-07-30T00:00:00Z".parse().unwrap());
+        assert_eq!(map_radarr(&movie).release_date, Some(cinemas));
+    }
+
+    #[test]
+    fn radarr_uses_year_when_there_is_no_theatrical_date() {
+        let mut movie = radarr_movie(1, "Sample Movie Four", 9495, true, true);
+        movie.year = Some(1994);
+        movie.digital_release = Some("2005-07-30T00:00:00Z".parse().unwrap());
+        let expected = "1994-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(map_radarr(&movie).release_date, Some(expected));
+    }
+
+    #[test]
+    fn radarr_refines_year_with_home_media_date_in_the_same_year() {
+        let mut movie = radarr_movie(1, "Direct To Video", 5, true, true);
+        movie.year = Some(2020);
         let digital = "2020-06-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
         let physical = "2020-07-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
         movie.digital_release = Some(digital);
         movie.physical_release = Some(physical);
-        let remote = map_radarr(&movie);
-        assert_eq!(remote.release_date, Some(digital));
+        assert_eq!(map_radarr(&movie).release_date, Some(digital));
     }
 
     #[test]
-    fn radarr_falls_back_to_physical_release_when_digital_absent() {
+    fn radarr_falls_back_to_home_media_when_no_cinema_date_or_year() {
         let mut movie = radarr_movie(1, "Example Movie", 999, true, true);
         let physical = "2020-07-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
         movie.physical_release = Some(physical);
-        let remote = map_radarr(&movie);
-        assert_eq!(remote.release_date, Some(physical));
+        assert_eq!(map_radarr(&movie).release_date, Some(physical));
     }
 
     #[test]

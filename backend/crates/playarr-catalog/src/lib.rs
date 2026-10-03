@@ -801,26 +801,26 @@ impl CatalogService {
             candidates.retain(|w| w.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)));
         }
         if query.source_instance_id.is_some() || query.allowed_source_instance_ids.is_some() {
-            let mut matched = Vec::with_capacity(candidates.len());
-            for work in candidates {
-                let files = self.media_file_repo.list_by_work_id(work.id).await?;
+            // One bulk query instead of a `list_by_work_id` per candidate
+            // (an N+1 that cost ~3 s on a 2.7k-title library).
+            let mut sources_by_work: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+            for (work_id, source_id) in self.media_file_repo.list_work_source_instances().await? {
+                sources_by_work.entry(work_id).or_default().push(source_id);
+            }
+            candidates.retain(|work| {
+                let sources = sources_by_work
+                    .get(&work.id)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
                 let matches_explicit_filter = query
                     .source_instance_id
-                    .is_none_or(|wanted| files.iter().any(|f| f.source_instance_id == wanted));
-                let matches_allow_list =
-                    query
-                        .allowed_source_instance_ids
-                        .as_ref()
-                        .is_none_or(|allowed| {
-                            files
-                                .iter()
-                                .any(|f| allowed.contains(&f.source_instance_id))
-                        });
-                if matches_explicit_filter && matches_allow_list {
-                    matched.push(work);
-                }
-            }
-            candidates = matched;
+                    .is_none_or(|wanted| sources.contains(&wanted));
+                let matches_allow_list = query
+                    .allowed_source_instance_ids
+                    .as_ref()
+                    .is_none_or(|allowed| sources.iter().any(|s| allowed.contains(s)));
+                matches_explicit_filter && matches_allow_list
+            });
         }
         if let Some(days) = query.release_window_days {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days);

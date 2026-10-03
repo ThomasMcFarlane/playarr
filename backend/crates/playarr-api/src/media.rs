@@ -191,6 +191,8 @@ struct FfprobeMediaStream {
     #[serde(default)]
     channels: Option<u32>,
     #[serde(default)]
+    profile: Option<String>,
+    #[serde(default)]
     tags: FfprobeStreamTags,
     #[serde(default)]
     disposition: FfprobeStreamDisposition,
@@ -219,6 +221,11 @@ pub(crate) struct SourceAudioTrack {
     pub language: Option<String>,
     pub codec: Option<String>,
     pub channels: Option<u32>,
+    /// Raw ffprobe `profile` (e.g. `DTS-HD MA`, `Dolby TrueHD + Dolby Atmos`).
+    pub profile: Option<String>,
+    /// Human-friendly codec name refined by `profile` (e.g. `DTS-HD MA`,
+    /// `TrueHD Atmos`); `None` when the codec is unknown.
+    pub codec_label: Option<String>,
     pub is_default: bool,
 }
 
@@ -230,6 +237,70 @@ pub(crate) struct SourceSubtitleTrack {
     pub codec: String,
     pub is_default: bool,
     pub forced: bool,
+    /// Set for external `<video>.<lang>.srt/.ass/.vtt` sidecars; `None` for
+    /// streams embedded in the container.
+    pub sidecar_path: Option<std::path::PathBuf>,
+}
+
+/// Refines a bare ffprobe codec name with its `profile` so clients can say
+/// "DTS-HD MA" or "TrueHD Atmos" instead of just "DTS" / "TrueHD".
+pub(crate) fn audio_codec_label(codec: Option<&str>, profile: Option<&str>) -> Option<String> {
+    let codec = codec?.to_ascii_lowercase();
+    let profile_lc = profile.unwrap_or("").to_ascii_lowercase();
+    let atmos = profile_lc.contains("atmos");
+    let label = match codec.as_str() {
+        "dts" => {
+            if profile_lc.contains("dts:x") || profile_lc.contains("dts-x") {
+                "DTS:X"
+            } else if profile_lc.contains("ma") && profile_lc.contains("hd") {
+                "DTS-HD MA"
+            } else if profile_lc.contains("hra") || profile_lc.contains("high resolution") {
+                "DTS-HD HRA"
+            } else if profile_lc.contains("es") {
+                "DTS-ES"
+            } else if profile_lc.contains("96") {
+                "DTS 96/24"
+            } else {
+                "DTS"
+            }
+        }
+        "truehd" => {
+            if atmos {
+                "TrueHD Atmos"
+            } else {
+                "TrueHD"
+            }
+        }
+        "eac3" => {
+            if atmos {
+                "Dolby Digital Plus Atmos"
+            } else {
+                "Dolby Digital Plus"
+            }
+        }
+        "ac3" => "Dolby Digital",
+        "aac" => "AAC",
+        "flac" => "FLAC",
+        "opus" => "Opus",
+        "mp3" => "MP3",
+        "vorbis" => "Vorbis",
+        "alac" => "ALAC",
+        other if other.starts_with("pcm_") => "PCM",
+        _ => return None,
+    };
+    Some(label.to_string())
+}
+
+fn channel_layout(channels: u32) -> Option<&'static str> {
+    Some(match channels {
+        1 => "1.0",
+        2 => "2.0",
+        3 => "2.1",
+        6 => "5.1",
+        7 => "6.1",
+        8 => "7.1",
+        _ => return None,
+    })
 }
 
 fn is_webvtt_compatible_subtitle_codec(codec: &str) -> bool {
@@ -364,12 +435,34 @@ fn parse_ffprobe_audio_tracks(stdout: &[u8]) -> Result<Vec<SourceAudioTrack>, Ap
                 .as_deref()
                 .map(|title| title.trim().to_string())
                 .filter(|title| !title.is_empty())
-                .or_else(|| language.clone())
+                .or_else(|| {
+                    // No embedded title: describe the track by language plus
+                    // the profile-refined codec and channel layout.
+                    let codec_label =
+                        audio_codec_label(stream.codec_name.as_deref(), stream.profile.as_deref());
+                    let layout = stream.channels.and_then(channel_layout);
+                    let detail = match (codec_label.as_deref(), layout) {
+                        (Some(codec), Some(layout)) => Some(format!("{codec} {layout}")),
+                        (Some(codec), None) => Some(codec.to_string()),
+                        (None, _) => None,
+                    };
+                    match (language.as_deref(), detail) {
+                        (Some(lang), Some(detail)) => Some(format!("{lang} \u{b7} {detail}")),
+                        (Some(lang), None) => Some(lang.to_string()),
+                        (None, Some(detail)) => Some(detail),
+                        (None, None) => None,
+                    }
+                })
                 .unwrap_or_else(|| format!("Audio {}", position + 1));
             SourceAudioTrack {
                 stream_index: stream.index,
                 label,
                 language,
+                codec_label: audio_codec_label(
+                    stream.codec_name.as_deref(),
+                    stream.profile.as_deref(),
+                ),
+                profile: stream.profile.clone(),
                 codec: stream.codec_name,
                 channels: stream.channels,
                 is_default: stream.disposition.default == 1,
@@ -391,7 +484,7 @@ pub(crate) async fn probe_media_audio_tracks(
                 "-select_streams",
                 "a",
                 "-show_entries",
-                "stream=index,codec_type,codec_name,channels:stream_tags=language,title:stream_disposition=default",
+                "stream=index,codec_type,codec_name,profile,channels:stream_tags=language,title:stream_disposition=default",
                 "-of",
                 "json",
                 "-i",
@@ -450,6 +543,7 @@ fn parse_ffprobe_subtitle_tracks(stdout: &[u8]) -> Result<Vec<SourceSubtitleTrac
                 codec,
                 is_default: stream.disposition.default == 1,
                 forced: stream.disposition.forced == 1,
+                sidecar_path: None,
             })
         })
         .collect())
@@ -489,6 +583,25 @@ pub(crate) async fn probe_media_subtitle_tracks(
     }
 
     parse_ffprobe_subtitle_tracks(&output.stdout)
+}
+
+/// Embedded text subtitle streams plus `<video>.<lang>[.forced|.sdh].srt/
+/// .ass/.vtt` sidecars next to the file. A failed embedded probe still
+/// returns the sidecars.
+pub(crate) async fn probe_all_subtitle_tracks(
+    path: &FsPath,
+) -> Result<Vec<SourceSubtitleTrack>, ApiError> {
+    let sidecars = crate::sidecar_subtitles::discover_sidecar_subtitles(path).await;
+    let mut tracks = match probe_media_subtitle_tracks(path).await {
+        Ok(tracks) => tracks,
+        Err(error) if !sidecars.is_empty() => {
+            tracing::warn!(path = %path.display(), error = ?error, "embedded subtitle probe failed; serving sidecars only");
+            Vec::new()
+        }
+        Err(error) => return Err(error),
+    };
+    tracks.extend(sidecars);
+    Ok(tracks)
 }
 
 async fn probe_media_chapters(path: &FsPath) -> Result<Vec<MediaChapter>, ApiError> {
@@ -713,24 +826,35 @@ async fn ensure_base_media_subtitle(
     command.kill_on_drop(true);
     let output = tokio::time::timeout(
         Duration::from_secs(120),
-        command
-            // Tell the Matroska demuxer it may discard every video/audio
-            // packet immediately. On remote mounts this lets it skip past
-            // large non-subtitle payloads instead of pulling the whole
-            // media file through SSHFS just to reach the text packets.
-            .args(["-discard:v", "all", "-discard:a", "all"])
-            .arg("-i")
-            .arg(source_path)
-            .args([
-                "-map",
-                &format!("0:{stream_index}"),
-                "-c:s",
-                "webvtt",
-                "-f",
-                "webvtt",
-            ])
-            .arg(&temp_path)
-            .output(),
+        {
+            if crate::sidecar_subtitles::is_sidecar_subtitle_file(source_path) {
+                // External text sidecar: a single subtitle stream; ffmpeg
+                // converts srt/ass/ssa/vtt straight to WebVTT.
+                command
+                    .arg("-i")
+                    .arg(source_path)
+                    .args(["-map", "0:0", "-c:s", "webvtt", "-f", "webvtt"])
+            } else {
+                command
+                    // Tell the Matroska demuxer it may discard every video/audio
+                    // packet immediately. On remote mounts this lets it skip past
+                    // large non-subtitle payloads instead of pulling the whole
+                    // media file through SSHFS just to reach the text packets.
+                    .args(["-discard:v", "all", "-discard:a", "all"])
+                    .arg("-i")
+                    .arg(source_path)
+                    .args([
+                        "-map",
+                        &format!("0:{stream_index}"),
+                        "-c:s",
+                        "webvtt",
+                        "-f",
+                        "webvtt",
+                    ])
+            }
+        }
+        .arg(&temp_path)
+        .output(),
     )
     .await;
     let output = match output {
@@ -1795,7 +1919,7 @@ async fn media_playback_options(
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let (audio_result, subtitle_result) = tokio::join!(
         probe_media_audio_tracks(&resolved_path),
-        probe_media_subtitle_tracks(&resolved_path)
+        probe_all_subtitle_tracks(&resolved_path)
     );
     let audio_tracks = audio_result
         .unwrap_or_else(|error| {
@@ -1814,6 +1938,8 @@ async fn media_playback_options(
             language: track.language,
             codec: track.codec,
             channels: track.channels,
+            profile: track.profile,
+            codec_label: track.codec_label,
             is_default: track.is_default,
         })
         .collect::<Vec<_>>();
@@ -2116,19 +2242,23 @@ pub async fn media_subtitle_handler(
         )?;
     }
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
-    let supported_tracks = probe_media_subtitle_tracks(&resolved_path).await?;
-    if !supported_tracks
+    let supported_tracks = probe_all_subtitle_tracks(&resolved_path).await?;
+    let Some(track) = supported_tracks
         .iter()
-        .any(|track| track.stream_index == stream_index)
-    {
+        .find(|track| track.stream_index == stream_index)
+    else {
         return Err(ApiError::not_found(format!(
             "unknown or unsupported subtitle stream {stream_index}"
         )));
-    }
+    };
+    let subtitle_source = track
+        .sidecar_path
+        .clone()
+        .unwrap_or_else(|| resolved_path.clone());
 
     let subtitle_path = ensure_media_subtitle(
         media_file_id,
-        &resolved_path,
+        &subtitle_source,
         stream_index,
         query.source_offset_ms,
     )
@@ -2603,14 +2733,18 @@ mod tests {
                     language: Some("eng".to_string()),
                     codec: Some("aac".to_string()),
                     channels: Some(2),
+                    profile: None,
+                    codec_label: Some("AAC".to_string()),
                     is_default: true,
                 },
                 SourceAudioTrack {
                     stream_index: 4,
-                    label: "fra".to_string(),
+                    label: "fra \u{b7} Dolby Digital 5.1".to_string(),
                     language: Some("fra".to_string()),
                     codec: Some("ac3".to_string()),
                     channels: Some(6),
+                    profile: None,
+                    codec_label: Some("Dolby Digital".to_string()),
                     is_default: false,
                 },
             ]
@@ -2650,6 +2784,7 @@ mod tests {
                 codec: "subrip".to_string(),
                 is_default: true,
                 forced: false,
+                sidecar_path: None,
             }]
         );
     }
@@ -2722,6 +2857,78 @@ mod tests {
         assert_eq!(cached, generated);
 
         std::fs::remove_dir_all(&test_root).unwrap();
+    }
+
+    #[test]
+    fn refines_audio_labels_from_the_ffprobe_profile() {
+        assert_eq!(
+            audio_codec_label(Some("dts"), Some("DTS-HD MA")).as_deref(),
+            Some("DTS-HD MA")
+        );
+        assert_eq!(
+            audio_codec_label(Some("dts"), Some("DTS-HD HRA")).as_deref(),
+            Some("DTS-HD HRA")
+        );
+        assert_eq!(
+            audio_codec_label(Some("dts"), Some("DTS")).as_deref(),
+            Some("DTS")
+        );
+        assert_eq!(
+            audio_codec_label(Some("truehd"), Some("Dolby TrueHD + Dolby Atmos")).as_deref(),
+            Some("TrueHD Atmos")
+        );
+        assert_eq!(
+            audio_codec_label(Some("eac3"), Some("Dolby Digital Plus + Dolby Atmos")).as_deref(),
+            Some("Dolby Digital Plus Atmos")
+        );
+        let tracks = parse_ffprobe_audio_tracks(
+            br#"{"streams":[{"index":1,"codec_type":"audio","codec_name":"dts","profile":"DTS-HD MA","channels":8,"tags":{"language":"eng"},"disposition":{"default":1}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(tracks[0].label, "eng \u{b7} DTS-HD MA 7.1");
+        assert_eq!(tracks[0].profile.as_deref(), Some("DTS-HD MA"));
+        assert_eq!(tracks[0].codec_label.as_deref(), Some("DTS-HD MA"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn sidecar_subtitle_converts_the_external_file_without_stream_discards() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!("playarr-sidecar-conv-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let video = root.join("ep.mkv");
+        let srt = root.join("ep.en.srt");
+        std::fs::write(&video, b"v").unwrap();
+        std::fs::write(&srt, b"1\n00:00:01,000 --> 00:00:02,000\nHi\n").unwrap();
+        let fake = root.join("fake-ffmpeg.sh");
+        std::fs::write(
+            &fake,
+            b"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/args.log\"\nfor o; do :; done\nprintf 'WEBVTT\\n\\n00:00:01.000 --> 00:00:02.000\\nHi\\n' > \"$o\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let tracks = crate::sidecar_subtitles::discover_sidecar_subtitles(&video).await;
+        assert_eq!(tracks.len(), 1);
+        let track = &tracks[0];
+        let base = root.join("cache").join("base.vtt");
+        let out = ensure_media_subtitle_at(
+            Uuid::new_v4(),
+            track.sidecar_path.as_ref().unwrap(),
+            track.stream_index,
+            0,
+            base.clone(),
+            base.clone(),
+            fake.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+        assert!(std::fs::read_to_string(out).unwrap().starts_with("WEBVTT"));
+        let args = std::fs::read_to_string(root.join("args.log")).unwrap();
+        assert!(args.contains("ep.en.srt"));
+        assert!(!args.contains("-discard:v"));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

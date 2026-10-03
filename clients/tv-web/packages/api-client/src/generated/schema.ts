@@ -3367,10 +3367,17 @@ export interface components {
             /** Format: int32 */
             channels?: number | null;
             codec?: string | null;
+            /**
+             * @description Profile-refined codec name for display, e.g. "DTS-HD MA" or
+             *     "TrueHD Atmos".
+             */
+            codec_label?: string | null;
             id: string;
             is_default: boolean;
             label: string;
             language?: string | null;
+            /** @description Raw ffprobe `profile` (e.g. "DTS-HD MA"), when the stream reports one. */
+            profile?: string | null;
             /** Format: int32 */
             stream_index: number;
         };

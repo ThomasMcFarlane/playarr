@@ -240,6 +240,13 @@ pub struct PlaybackAudioTrackOption {
     pub language: Option<String>,
     pub codec: Option<String>,
     pub channels: Option<u32>,
+    /// Raw ffprobe `profile` (e.g. "DTS-HD MA"), when the stream reports one.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Profile-refined codec name for display, e.g. "DTS-HD MA" or
+    /// "TrueHD Atmos".
+    #[serde(default)]
+    pub codec_label: Option<String>,
     pub is_default: bool,
 }
 
@@ -911,6 +918,8 @@ pub(crate) async fn negotiate_playback(
                 language: track.language,
                 codec: track.codec,
                 channels: track.channels,
+                profile: track.profile,
+                codec_label: track.codec_label,
                 is_default: track.is_default,
             })
             .collect::<Vec<_>>(),
@@ -987,10 +996,8 @@ pub(crate) async fn negotiate_playback(
     let requires_audio_selection = selected_audio_stream_index != default_audio_stream_index;
     let selected_audio_track_id =
         selected_audio_stream_index.map(|stream_index| format!("source-audio-{stream_index}"));
-    let source_subtitle_tracks = match crate::media::probe_media_subtitle_tracks(
-        &resolved_media_path,
-    )
-    .await
+    let source_subtitle_tracks = match crate::media::probe_all_subtitle_tracks(&resolved_media_path)
+        .await
     {
         Ok(tracks) => tracks,
         Err(error) => {

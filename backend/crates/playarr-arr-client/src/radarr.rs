@@ -58,6 +58,14 @@ pub struct RadarrMovie {
     /// `digital_release`.
     #[serde(default, rename = "physicalRelease")]
     pub physical_release: Option<DateTime<Utc>>,
+    /// Original theatrical release date. Absent/null for straight-to-video
+    /// titles and for many older films.
+    #[serde(default, rename = "inCinemas")]
+    pub in_cinemas: Option<DateTime<Utc>>,
+    /// Release year of the film itself (0/absent when unknown). Unlike the
+    /// digital/physical dates this is the original year, not a re-release.
+    #[serde(default)]
+    pub year: Option<i32>,
 }
 
 /// An entry in a movie's `images` array (poster, fanart, banner, ...).

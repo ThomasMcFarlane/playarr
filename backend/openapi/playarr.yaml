@@ -7318,6 +7318,13 @@ components:
           type:
           - string
           - 'null'
+        codec_label:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Profile-refined codec name for display, e.g. "DTS-HD MA" or
+            "TrueHD Atmos".
         id:
           type: string
         is_default:
@@ -7328,6 +7335,11 @@ components:
           type:
           - string
           - 'null'
+        profile:
+          type:
+          - string
+          - 'null'
+          description: Raw ffprobe `profile` (e.g. "DTS-HD MA"), when the stream reports one.
         stream_index:
           type: integer
           format: int32

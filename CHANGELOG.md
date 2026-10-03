@@ -9,6 +9,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Playback info and playback options now list sidecar subtitles
+  (`<video>.<lang>[.forced|.sdh].srt/.ass/.ssa/.vtt` next to the media file) in
+  `subtitle_tracks`, served as WebVTT through the existing subtitle endpoint with
+  stable synthetic stream indices (10000 and above). Audio tracks gain `profile` and
+  `codec_label` (for example "DTS-HD MA", "TrueHD Atmos") and untitled tracks are
+  labelled with language, codec and channel layout (task 98).
 - The public Clients hub at `/clients` now lists Playarr Server (`/clients/server`) as a
   server, not a playback app: requirements (ffmpeg/ffprobe), Docker Compose, systemd and
   Helm install methods, and the optional playarr.app HTTPS relay. It states that no
@@ -90,6 +96,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `/api/v1/catalog` no longer issues one media-file query per candidate title when
+  filtering by library; a single bulk query replaces ~2,700 round trips, removing the
+  fixed 3-4.5 s cost per call on large libraries (task 100).
+- Radarr movies take their release date from `inCinemas`, then the film's `year`
+  (refined by an earlier-or-equal home-media date in that year), and only then from
+  the digital/physical dates, so a library film no longer shows its 2005 DVD date.
+  Existing titles correct on the next arr sync (task 95).
 - Thumbnail ffmpeg processes are killed when the request that started them is dropped (for example a client
   scrolled past a chapter tile), so abandoned grabs no longer pile up memory behind the concurrency limit.
 - Frame thumbnails (`GET /api/v1/media/{id}/thumbnail`) now run at most two ffmpeg extractions at a
