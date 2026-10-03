@@ -22,6 +22,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the server backup and recovery design (inventory, encrypted format, consistent
   snapshots, retention, staged restore and verification plan) in
   `docs/architecture/server-backups.md`, tracked as tasks 62-66.
+- Documented the household and child controls design (rating/tag gates, timezone schedules, server-counted
+  daily budgets, guardian approvals, PIN lockout, offline limits) in
+  `docs/architecture/household-controls.md`, tracked as tasks 103-114.
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.
