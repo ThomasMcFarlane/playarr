@@ -112,6 +112,8 @@ spec:
               value: 0.0.0.0:9090
             - name: PLAYARR_ROLE
               value: all
+            - name: PLAYARR_THUMBNAIL_CONCURRENCY
+              value: {{ $instance.thumbnailConcurrency | quote }}
             # The image bakes in the Admin UI; overrides the legacy hostPath
             # value (/opt/streamarr/web) that the runtime Secret still carries.
             - name: PLAYARR_WEB_ASSETS_DIR
@@ -192,12 +194,7 @@ spec:
             failureThreshold: 6
             successThreshold: 1
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: "2"
-              memory: 2Gi
+            {{- toYaml $instance.resources | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

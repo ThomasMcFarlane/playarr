@@ -112,7 +112,7 @@ workloads:
 # node-local state, runtime trees, security identities and public routes.
 regionalInstances:
   playarr-region-a:
-    image: registry.example.com/playarr-regional:1855f642
+    image: registry.example.com/playarr-regional:9387a9ba
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-a
@@ -124,6 +124,17 @@ regionalInstances:
       runAsUser: 1000
       seccompProfile:
         type: RuntimeDefault
+    # ffmpeg thumbnail grabs of UHD files take ~0.5-0.8 GiB each; the 2 GiB
+    # limit was too small; 4 GiB leaves room for
+    # the default concurrency of 2 plus the server itself.
+    thumbnailConcurrency: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
     persistence:
       create: true
       claimName: playarr-region-a
@@ -154,7 +165,7 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-region-b:
-    image: registry.example.com/playarr-regional:1855f642
+    image: registry.example.com/playarr-regional:9387a9ba
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-b
@@ -164,8 +175,22 @@ regionalInstances:
       runAsGroup: 1000
       runAsNonRoot: true
       runAsUser: 1000
+      # Optional extra groups, for example one that may read the media library.
+      supplementalGroups:
+        - 2000
       seccompProfile:
         type: RuntimeDefault
+    # ffmpeg thumbnail grabs of UHD files take ~0.5-0.8 GiB each; the 2 GiB
+    # limit was too small; 4 GiB leaves room for
+    # the default concurrency of 2 plus the server itself.
+    thumbnailConcurrency: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
     persistence:
       create: true
       claimName: playarr-region-b
