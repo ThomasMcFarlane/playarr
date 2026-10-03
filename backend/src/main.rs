@@ -1275,6 +1275,8 @@ async fn boot_api(
         library_view_repo,
         playlist_repo,
         watchlist_repo,
+        discovery_requests_allow_all_users: std::env::var("PLAYARR_REQUESTS_ALLOW_ALL_USERS")
+            .is_ok_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes")),
         work_repo,
         credit_repo,
         tdarr_connection_repo,

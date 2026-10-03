@@ -15,13 +15,16 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Datelike, Utc};
+use playarr_arr_client::{LookupTitle, RadarrClient, SonarrClient};
 use playarr_catalog::WorkChildren;
 use playarr_model::discovery::{
     compute_actions, identity_key, merge_candidates, ActionContext, DiscoveryCandidate,
     DiscoveryKind, DiscoveryScope, DiscoveryTitle, ProviderState, ProviderStatus,
     SourceAvailability, SourceKindTag, TitleAction, TitleSource, WatchlistItem,
 };
-use playarr_model::{Availability, ExternalRef, WatchState, Work};
+use playarr_model::{
+    Availability, ExternalProvider, ExternalRef, SourceInstance, SourceKind, WatchState, Work,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -137,11 +140,6 @@ fn library_candidate(work: &Work) -> DiscoveryCandidate {
 fn stub_provider_statuses() -> Vec<ProviderStatus> {
     vec![
         ProviderStatus {
-            provider: SourceKindTag::Request,
-            state: ProviderState::Unavailable,
-            reason: Some("No request provider is configured".into()),
-        },
-        ProviderStatus {
             provider: SourceKindTag::LiveTv,
             state: ProviderState::Unavailable,
             reason: Some("Live TV guide is not available yet (tasks 27-28)".into()),
@@ -152,6 +150,174 @@ fn stub_provider_statuses() -> Vec<ProviderStatus> {
             reason: Some("Games catalogue is not available yet (task 22)".into()),
         },
     ]
+}
+
+const REQUEST_LOOKUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const NO_REQUEST_PROVIDER: &str = "No request provider is configured";
+
+/// Radarr (movies) and Sonarr (series) instances, lowest priority value first.
+fn request_instances(state: &AppState, kind: DiscoveryKind) -> Vec<SourceInstance> {
+    let wanted = match kind {
+        DiscoveryKind::Movie => SourceKind::Radarr,
+        DiscoveryKind::Series => SourceKind::Sonarr,
+        _ => return Vec::new(),
+    };
+    let mut found: Vec<_> = state
+        .source_instances
+        .all()
+        .into_iter()
+        .filter(|i| i.kind == wanted)
+        .collect();
+    found.sort_by_key(|i| i.priority);
+    found
+}
+
+fn can_request(state: &AppState, viewer: &CatalogViewer) -> bool {
+    viewer.policy.is_admin || state.discovery_requests_allow_all_users
+}
+
+enum RequestLookup {
+    Radarr(RadarrClient),
+    Sonarr(SonarrClient),
+}
+
+impl RequestLookup {
+    fn for_instance(instance: &SourceInstance) -> Option<Self> {
+        let key = instance.api_key_encrypted.expose_secret().to_string();
+        match instance.kind {
+            SourceKind::Radarr => Some(Self::Radarr(RadarrClient::new(&instance.base_url, key))),
+            SourceKind::Sonarr => Some(Self::Sonarr(SonarrClient::new(&instance.base_url, key))),
+            _ => None,
+        }
+    }
+
+    async fn lookup(
+        &self,
+        term: &str,
+    ) -> Result<Vec<LookupTitle>, playarr_arr_client::ArrClientError> {
+        match self {
+            Self::Radarr(c) => c.lookup_movie(term).await,
+            Self::Sonarr(c) => c.lookup_series(term).await,
+        }
+    }
+
+    async fn add(
+        &self,
+        hit: &LookupTitle,
+        root: &str,
+        profile: i64,
+    ) -> Result<serde_json::Value, playarr_arr_client::ArrClientError> {
+        match self {
+            Self::Radarr(c) => c.add_movie(hit, root, profile).await,
+            Self::Sonarr(c) => c.add_series(hit, root, profile).await,
+        }
+    }
+}
+
+fn lookup_candidate(
+    instance: &SourceInstance,
+    kind: DiscoveryKind,
+    hit: &LookupTitle,
+) -> DiscoveryCandidate {
+    let mut refs = Vec::new();
+    let mut push = |provider, id: String| {
+        refs.push(ExternalRef {
+            provider,
+            external_id: id,
+        })
+    };
+    if let Some(id) = hit.tmdb_id {
+        push(ExternalProvider::Tmdb, id.to_string());
+    }
+    if let Some(id) = hit.tvdb_id {
+        push(ExternalProvider::Tvdb, id.to_string());
+    }
+    if let Some(id) = &hit.imdb_id {
+        push(ExternalProvider::Imdb, id.clone());
+    }
+    let (availability, reason) = if hit.arr_id.is_some() {
+        (
+            SourceAvailability::Upcoming,
+            Some("Already requested".to_string()),
+        )
+    } else {
+        (SourceAvailability::Requestable, None)
+    };
+    DiscoveryCandidate {
+        kind,
+        title: hit.title.clone(),
+        year: hit.year,
+        external_refs: refs,
+        poster_url: hit.poster_url.clone(),
+        overview: hit.overview.clone(),
+        source: TitleSource {
+            source: SourceKindTag::Request,
+            label: instance.name.clone(),
+            availability,
+            reason,
+            edition: None,
+            work_id: None,
+            provider_instance_id: Some(instance.id),
+        },
+    }
+}
+
+/// Searches every request catalogue that applies to the requested kinds.
+async fn request_provider_search(
+    state: &AppState,
+    q: &str,
+    kind_filter: Option<DiscoveryKind>,
+) -> (Vec<DiscoveryCandidate>, ProviderStatus) {
+    let mut instances = Vec::new();
+    for kind in [DiscoveryKind::Movie, DiscoveryKind::Series] {
+        if kind_filter.is_none_or(|k| k == kind) {
+            // One instance per kind answers: the highest-priority one.
+            if let Some(first) = request_instances(state, kind).into_iter().next() {
+                instances.push((kind, first));
+            }
+        }
+    }
+    if instances.is_empty() {
+        return (
+            Vec::new(),
+            ProviderStatus {
+                provider: SourceKindTag::Request,
+                state: ProviderState::Unavailable,
+                reason: Some(NO_REQUEST_PROVIDER.into()),
+            },
+        );
+    }
+    let lookups = instances.iter().map(|(kind, instance)| async move {
+        let Some(client) = RequestLookup::for_instance(instance) else {
+            return (instance, *kind, None);
+        };
+        let result = tokio::time::timeout(REQUEST_LOOKUP_TIMEOUT, client.lookup(q)).await;
+        (instance, *kind, result.ok().and_then(Result::ok))
+    });
+    let mut candidates = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    for (instance, kind, hits) in futures::future::join_all(lookups).await {
+        match hits {
+            Some(hits) => {
+                candidates.extend(hits.iter().map(|h| lookup_candidate(instance, kind, h)))
+            }
+            None => failed.push(instance.name.clone()),
+        }
+    }
+    let status = if failed.is_empty() {
+        ProviderStatus {
+            provider: SourceKindTag::Request,
+            state: ProviderState::Ok,
+            reason: None,
+        }
+    } else {
+        ProviderStatus {
+            provider: SourceKindTag::Request,
+            state: ProviderState::Unavailable,
+            reason: Some(format!("Could not reach {}", failed.join(", "))),
+        }
+    };
+    (candidates, status)
 }
 
 #[utoipa::path(
@@ -183,6 +349,17 @@ pub async fn discover_handler(
         providers.push(ProviderStatus {
             provider: SourceKindTag::Library,
             state: ProviderState::Ok,
+            reason: None,
+        });
+        providers.push(ProviderStatus {
+            provider: SourceKindTag::Request,
+            state: if request_instances(&state, DiscoveryKind::Movie).is_empty()
+                && request_instances(&state, DiscoveryKind::Series).is_empty()
+            {
+                ProviderState::Unavailable
+            } else {
+                ProviderState::Ok
+            },
             reason: None,
         });
         providers.extend(stub_provider_statuses());
@@ -263,6 +440,11 @@ pub async fn discover_handler(
             }
         }
     }
+    if scope != DiscoveryScope::Games {
+        let (found, status) = request_provider_search(&state, q, params.kind).await;
+        candidates.extend(found);
+        providers.push(status);
+    }
     providers.extend(stub_provider_statuses());
 
     let watch: Vec<String> = state
@@ -279,6 +461,15 @@ pub async fn discover_handler(
             .collect(),
     )
     .into_iter()
+    .map(|mut title| {
+        // A title already playable from the library is not requestable.
+        if title.sources.iter().any(|s| {
+            s.source == SourceKindTag::Library && s.availability == SourceAvailability::Available
+        }) {
+            title.sources.retain(|s| s.source != SourceKindTag::Request);
+        }
+        title
+    })
     .map(|title| DiscoverTitle {
         in_watchlist: watch.contains(&title.title_key),
         title,
@@ -323,10 +514,18 @@ async fn build_action_context(
 ) -> Result<ActionContext, ApiError> {
     let mut ctx = ActionContext {
         kind: Some(snap.kind),
-        can_request: true,
-        request_unavailable_reason: Some("No request provider is configured".into()),
+        can_request: can_request(state, viewer),
+        request_instance_id: request_instances(state, snap.kind)
+            .into_iter()
+            .find(|i| i.default_root_folder_id.is_some() && i.default_quality_profile_id.is_some())
+            .map(|i| i.id),
+        request_unavailable_reason: Some(NO_REQUEST_PROVIDER.into()),
         ..Default::default()
     };
+    if ctx.request_instance_id.is_none() && !request_instances(state, snap.kind).is_empty() {
+        ctx.request_unavailable_reason =
+            Some("The request provider has no default root folder or quality profile".into());
+    }
     let Some(work) = work else {
         return Ok(ctx);
     };
@@ -376,6 +575,7 @@ async fn resolve_snapshot(
     let mut candidates = Vec::new();
     // The snapshot itself is the carrier of identity when nothing else is
     // known, so a title that is not in any library still resolves.
+    let request_instance = request_instances(state, snap.kind).into_iter().next();
     candidates.push(DiscoveryCandidate {
         kind: snap.kind,
         title: snap.title.clone(),
@@ -385,12 +585,21 @@ async fn resolve_snapshot(
         overview: None,
         source: TitleSource {
             source: SourceKindTag::Request,
-            label: "Not in your library".into(),
-            availability: SourceAvailability::Unavailable,
-            reason: Some("No request provider is configured".into()),
+            label: request_instance
+                .as_ref()
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "Not in your library".into()),
+            availability: if request_instance.is_some() {
+                SourceAvailability::Requestable
+            } else {
+                SourceAvailability::Unavailable
+            },
+            reason: request_instance
+                .is_none()
+                .then(|| NO_REQUEST_PROVIDER.to_string()),
             edition: None,
             work_id: None,
-            provider_instance_id: None,
+            provider_instance_id: request_instance.map(|i| i.id),
         },
     });
     if let Some(w) = &work {
@@ -563,6 +772,133 @@ pub async fn remove_watchlist_handler(
         .remove(viewer.user_id, &title_key)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RequestResult {
+    pub status: String,
+    pub provider_instance_id: Uuid,
+}
+
+/// Picks the lookup hit that is the snapshot's title: by external id first,
+/// else by normalised name and year.
+fn pick_lookup_hit<'a>(snap: &TitleSnapshot, hits: &'a [LookupTitle]) -> Option<&'a LookupTitle> {
+    let ext = |p: ExternalProvider| {
+        snap.external_refs
+            .iter()
+            .find(|r| r.provider == p)
+            .map(|r| r.external_id.clone())
+    };
+    let (tmdb, tvdb, imdb) = (
+        ext(ExternalProvider::Tmdb),
+        ext(ExternalProvider::Tvdb),
+        ext(ExternalProvider::Imdb),
+    );
+    let id_matches = |wanted: &Option<String>, have: Option<i64>| {
+        wanted
+            .as_deref()
+            .is_some_and(|w| have.map(|v| v.to_string()).as_deref() == Some(w))
+    };
+    hits.iter()
+        .find(|h| {
+            id_matches(&tmdb, h.tmdb_id)
+                || id_matches(&tvdb, h.tvdb_id)
+                || imdb
+                    .as_deref()
+                    .is_some_and(|i| h.imdb_id.as_deref() == Some(i))
+        })
+        .or_else(|| {
+            let wanted = playarr_model::discovery::normalise_title(&snap.title);
+            hits.iter().find(|h| {
+                playarr_model::discovery::normalise_title(&h.title) == wanted
+                    && (snap.year.is_none() || h.year == snap.year)
+            })
+        })
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/discover/request",
+    tag = "discovery",
+    request_body = TitleSnapshot,
+    responses(
+        (status = 200, description = "The title was added to the request provider and is being searched for", body = RequestResult),
+        (status = 403, description = "The caller may not request titles"),
+        (status = 404, description = "The request provider does not know this title"),
+        (status = 409, description = "Already in the library or already requested"),
+        (status = 422, description = "No usable request provider is configured for this kind of title"),
+        (status = 502, description = "The request provider did not accept the request")
+    )
+)]
+pub async fn request_title_handler(
+    State(state): State<AppState>,
+    viewer: CatalogViewer,
+    Json(snap): Json<TitleSnapshot>,
+) -> Result<Json<RequestResult>, ApiError> {
+    if !can_request(&state, &viewer) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "request_not_allowed",
+            "Your account is not allowed to request titles",
+        ));
+    }
+    if find_library_work(&state, &viewer, &snap).await?.is_some() {
+        return Err(ApiError::conflict("this title is already in the library"));
+    }
+    let unprocessable =
+        |code: &str, message: &str| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, code, message);
+    let instances = request_instances(&state, snap.kind);
+    if instances.is_empty() {
+        return Err(unprocessable("no_request_provider", NO_REQUEST_PROVIDER));
+    }
+    let Some(instance) = instances
+        .iter()
+        .find(|i| i.default_root_folder_id.is_some() && i.default_quality_profile_id.is_some())
+    else {
+        return Err(unprocessable(
+            "request_provider_not_configured",
+            "The request provider has no default root folder or quality profile",
+        ));
+    };
+    let (root, profile) = (
+        instance.default_root_folder_id.clone().unwrap_or_default(),
+        instance.default_quality_profile_id.unwrap_or_default(),
+    );
+    let client = RequestLookup::for_instance(instance)
+        .ok_or_else(|| unprocessable("no_request_provider", NO_REQUEST_PROVIDER))?;
+    let term = snap
+        .external_refs
+        .iter()
+        .find_map(|r| match (&r.provider, snap.kind) {
+            (ExternalProvider::Tmdb, DiscoveryKind::Movie) => {
+                Some(format!("tmdb:{}", r.external_id))
+            }
+            (ExternalProvider::Tvdb, DiscoveryKind::Series) => {
+                Some(format!("tvdb:{}", r.external_id))
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| snap.title.clone());
+    let hits = tokio::time::timeout(REQUEST_LOOKUP_TIMEOUT, client.lookup(&term))
+        .await
+        .map_err(|_| ApiError::bad_gateway("the request provider timed out"))?
+        .map_err(|err| {
+            tracing::warn!(%err, "discovery: request lookup failed");
+            ApiError::bad_gateway("the request provider could not look the title up")
+        })?;
+    let hit = pick_lookup_hit(&snap, &hits)
+        .ok_or_else(|| ApiError::not_found("the request provider does not know this title"))?;
+    if hit.arr_id.is_some() {
+        return Err(ApiError::conflict("this title has already been requested"));
+    }
+    client.add(hit, &root, profile).await.map_err(|err| {
+        tracing::warn!(%err, "discovery: request add failed");
+        ApiError::bad_gateway("the request provider did not accept the request")
+    })?;
+    Ok(Json(RequestResult {
+        status: "requested".into(),
+        provider_instance_id: instance.id,
+    }))
 }
 
 #[cfg(test)]
@@ -882,5 +1218,241 @@ mod tests {
         let for_b: WatchlistResponse =
             json_body(router.oneshot(get("/api/v1/watchlist", &tb)).await.unwrap()).await;
         assert!(for_b.items.is_empty());
+    }
+
+    fn radarr_instance(base_url: &str, with_defaults: bool) -> SourceInstance {
+        SourceInstance {
+            id: Uuid::new_v4(),
+            kind: SourceKind::Radarr,
+            name: "Radarr 4K".into(),
+            base_url: base_url.into(),
+            api_key_encrypted: playarr_model::Sensitive::new("key".to_string()),
+            priority: 0,
+            default_root_folder_id: with_defaults.then(|| "/movies".to_string()),
+            folder_mappings: Default::default(),
+            default_quality_profile_id: with_defaults.then_some(4),
+            best_effort: false,
+            group_library_id: None,
+        }
+    }
+
+    async fn mock_radarr(hits: serde_json::Value) -> wiremock::MockServer {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/movie/lookup"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(hits))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    #[tokio::test]
+    async fn discover_offers_requestable_titles_and_hides_request_for_library_titles() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        let instance = Uuid::new_v4();
+        let work = seed_work(&state, "Orbit", "949").await;
+        seed_media_file(&state, work, LeafRef::Work, instance).await;
+        seed_streaming_user_with_library_allow(&state, user, vec![instance]).await;
+        let server = mock_radarr(serde_json::json!([
+            {"title": "Orbit", "year": 1995, "tmdbId": 949, "id": 0},
+            {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0},
+            {"title": "Orbit Wave", "year": 2001, "tmdbId": 5001, "id": 9}
+        ]))
+        .await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        let body: DiscoverResponse = json_body(
+            router
+                .oneshot(get("/api/v1/discover?q=heat", &token))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let by_key = |k: &str| body.titles.iter().find(|t| t.title.title_key == k).unwrap();
+        let heat = by_key("tmdb:movie:949");
+        assert!(heat
+            .title
+            .sources
+            .iter()
+            .all(|s| s.source == SourceKindTag::Library));
+        let sequel = by_key("tmdb:movie:5000");
+        assert_eq!(
+            sequel.title.sources[0].availability,
+            SourceAvailability::Requestable
+        );
+        assert_eq!(sequel.title.sources[0].label, "Radarr 4K");
+        let tracked = by_key("tmdb:movie:5001");
+        assert_eq!(
+            tracked.title.sources[0].availability,
+            SourceAvailability::Upcoming
+        );
+        assert!(body
+            .providers
+            .iter()
+            .any(|p| p.provider == SourceKindTag::Request && p.state == ProviderState::Ok));
+    }
+
+    #[tokio::test]
+    async fn unreachable_request_provider_degrades_without_failing_search() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        // Nothing listens here.
+        state
+            .source_instances
+            .upsert(radarr_instance("http://127.0.0.1:9", true));
+        let token = mint_access_token(&state, user);
+        let response = router
+            .oneshot(get("/api/v1/discover?q=anything", &token))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: DiscoverResponse = json_body(response).await;
+        let status = body
+            .providers
+            .iter()
+            .find(|p| p.provider == SourceKindTag::Request)
+            .unwrap();
+        assert_eq!(status.state, ProviderState::Unavailable);
+        assert!(status.reason.as_deref().unwrap().contains("Radarr 4K"));
+    }
+
+    fn missing_title() -> serde_json::Value {
+        serde_json::json!({"kind": "movie", "title": "Orbit 2", "year": 2030,
+            "external_refs": [{"provider": "tmdb", "external_id": "5000"}]})
+    }
+
+    #[tokio::test]
+    async fn admin_can_request_and_provider_receives_destination() {
+        use crate::test_support::seed_admin_user;
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+        let (router, state) = test_state().await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let server = mock_radarr(serde_json::json!([
+            {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0}
+        ]))
+        .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v3/movie"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({"id": 3})))
+            .expect(1)
+            .mount(&server)
+            .await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, admin);
+
+        let resolved: ResolvedTitle = json_body(
+            router
+                .clone()
+                .oneshot(post("/api/v1/discover/resolve", &token, missing_title()))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let request = resolved
+            .actions
+            .iter()
+            .find(|a| a.action == ActionKind::Request)
+            .unwrap();
+        assert!(request.enabled);
+
+        let response = router
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let posted = server
+            .received_requests()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|r| r.method.as_str() == "POST")
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&posted.body).unwrap();
+        assert_eq!(body["tmdbId"], 5000);
+        assert_eq!(body["rootFolderPath"], "/movies");
+        assert_eq!(body["qualityProfileId"], 4);
+    }
+
+    #[tokio::test]
+    async fn regular_user_cannot_request_and_sees_why() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        let server = mock_radarr(serde_json::json!([])).await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        let resolved: ResolvedTitle = json_body(
+            router
+                .clone()
+                .oneshot(post("/api/v1/discover/resolve", &token, missing_title()))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let request = resolved
+            .actions
+            .iter()
+            .find(|a| a.action == ActionKind::Request)
+            .unwrap();
+        assert!(!request.enabled);
+        assert!(request.reason.as_deref().unwrap().contains("not allowed"));
+        let response = router
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn request_conflicts_and_configuration_errors_are_explicit() {
+        use crate::test_support::seed_admin_user;
+        let (router, state) = test_state().await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+
+        // No provider at all.
+        let response = router
+            .clone()
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        // Provider without defaults.
+        let server = mock_radarr(serde_json::json!([
+            {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 12}
+        ]))
+        .await;
+        let mut bare = radarr_instance(&server.uri(), false);
+        state.source_instances.upsert(bare.clone());
+        let response = router
+            .clone()
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        // Already tracked by the provider.
+        bare.default_root_folder_id = Some("/movies".into());
+        bare.default_quality_profile_id = Some(4);
+        state.source_instances.upsert(bare);
+        let response = router
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

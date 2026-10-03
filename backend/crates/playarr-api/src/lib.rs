@@ -374,6 +374,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(discovery::discover_handler))
         .routes(routes!(discovery::resolve_title_handler))
+        .routes(routes!(discovery::request_title_handler))
         .routes(routes!(
             discovery::list_watchlist_handler,
             discovery::add_watchlist_handler
@@ -504,6 +505,9 @@ pub struct AppState {
     pub playlist_repo: Arc<dyn playarr_db::repo::PlaylistRepo>,
     /// Per-profile watchlist storage -- `discovery.rs`.
     pub watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo>,
+    /// Whether any signed-in user (not just admins) may request titles from
+    /// Radarr/Sonarr through discovery. `PLAYARR_REQUESTS_ALLOW_ALL_USERS`.
+    pub discovery_requests_allow_all_users: bool,
     /// The real, durable persistence layer for `playarr_model::Work` --
     /// `credits.rs`'s `person_works_handler` uses this for a cheap
     /// `Work`-only fetch per credited work id, rather than going through

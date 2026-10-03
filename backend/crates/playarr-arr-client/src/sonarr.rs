@@ -3,7 +3,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use playarr_model::Sensitive;
 use serde::{Deserialize, Serialize};
 
-use crate::http::{build_http_client, get_json, get_status};
+use crate::http::{build_http_client, get_json, get_status, post_json};
+use crate::lookup::{add_body, lookup_path, LookupTitle};
 use crate::{ArrClientError, ArrConnector};
 
 /// A series as Sonarr's `/api/v3/series` endpoint returns it. Deliberately
@@ -178,6 +179,48 @@ impl SonarrClient {
         }
     }
 
+    /// `GET /api/v3/series/lookup?term=` -- catalogue search, including titles
+    /// this instance does not track yet.
+    pub async fn lookup_series(&self, term: &str) -> Result<Vec<LookupTitle>, ArrClientError> {
+        let raw: Vec<serde_json::Value> = get_json(
+            &self.http,
+            "sonarr",
+            &self.base_url,
+            &self.api_key,
+            &lookup_path("/api/v3/series/lookup", term),
+        )
+        .await?;
+        Ok(raw
+            .into_iter()
+            .filter_map(LookupTitle::from_value)
+            .collect())
+    }
+
+    /// `POST /api/v3/series` -- start tracking a looked-up title in the given
+    /// root folder and quality profile and search for it immediately.
+    pub async fn add_series(
+        &self,
+        lookup: &LookupTitle,
+        root_folder_path: &str,
+        quality_profile_id: i64,
+    ) -> Result<serde_json::Value, ArrClientError> {
+        let body = add_body(
+            lookup.raw.clone(),
+            root_folder_path,
+            quality_profile_id,
+            "searchForMissingEpisodes",
+        );
+        post_json(
+            &self.http,
+            "sonarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v3/series",
+            &body,
+        )
+        .await
+    }
+
     /// `GET /api/v3/series` — every series Sonarr currently tracks.
     pub async fn list_series(&self) -> Result<Vec<SonarrSeries>, ArrClientError> {
         get_json(
@@ -272,6 +315,43 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn lookup_and_add_round_trip_sends_api_key_and_destination() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series/lookup"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {"title": "Orbit", "year": 1995, "tmdbId": 949, "tvdbId": 77, "id": 0}
+            ])))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v3/series"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(
+                ResponseTemplate::new(201).set_body_json(json!({"id": 5, "title": "Orbit"})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = SonarrClient::new(server.uri(), "test-key");
+        let hits = client.lookup_series("heat").await.unwrap();
+        assert_eq!(hits.len(), 1);
+        let added = client.add_series(&hits[0], "/media", 4).await.unwrap();
+        assert_eq!(added["id"], 5);
+        let requests = server.received_requests().await.unwrap();
+        let post = requests
+            .iter()
+            .find(|r| r.method.as_str() == "POST")
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&post.body).unwrap();
+        assert_eq!(body["rootFolderPath"], "/media");
+        assert_eq!(body["qualityProfileId"], 4);
+        assert_eq!(body["monitored"], true);
+    }
 
     #[test]
     fn episode_payload_parses_remote_screenshot_and_defaults_missing_images() {

@@ -51,6 +51,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (daily, keep the newest 3 and anything under 7 days, artwork capped at 1 GiB). Only the age public
   recovery key is in values; the schema rejects enabling backups without a valid public key.
   `tests/backup.sh` covers rendering, optionality and schema rejection.
+- Request from discovery: Radarr/Sonarr catalogue lookup feeds `GET /api/v1/discover` as
+  requestable titles, and `POST /api/v1/discover/request` adds a title to the provider's default
+  root folder and quality profile. Admins can request by default; set
+  `PLAYARR_REQUESTS_ALLOW_ALL_USERS=true` to let every signed-in user. Unreachable providers are
+  reported in the response instead of failing the search.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

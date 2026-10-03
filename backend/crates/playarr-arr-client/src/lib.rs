@@ -19,6 +19,7 @@
 mod bazarr;
 mod http;
 mod lidarr;
+mod lookup;
 mod prowlarr;
 mod radarr;
 mod readarr;
@@ -30,6 +31,7 @@ pub use lidarr::{
     LidarrAlbum, LidarrArtist, LidarrArtistStatistics, LidarrClient, LidarrImage, LidarrMediaInfo,
     LidarrQuality, LidarrQualityInfo, LidarrRevision, LidarrTrack, LidarrTrackFile,
 };
+pub use lookup::LookupTitle;
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
 pub use radarr::{
     RadarrClient, RadarrCredit, RadarrImage, RadarrMediaInfo, RadarrMovie, RadarrMovieFile,

@@ -646,6 +646,7 @@ pub async fn test_state() -> (Router, TestState) {
         library_view_repo,
         playlist_repo,
         watchlist_repo,
+        discovery_requests_allow_all_users: false,
         work_repo: work_repo.clone(),
         credit_repo,
         tdarr_connection_repo,

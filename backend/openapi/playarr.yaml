@@ -2316,6 +2316,36 @@ paths:
           description: Caller has neither Playarr streaming access nor admin access
       security:
       - bearer_auth: []
+  /api/v1/discover/request:
+    post:
+      tags:
+      - discovery
+      operationId: request_title_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TitleSnapshot'
+        required: true
+      responses:
+        '200':
+          description: The title was added to the request provider and is being searched for
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestResult'
+        '403':
+          description: The caller may not request titles
+        '404':
+          description: The request provider does not know this title
+        '409':
+          description: Already in the library or already requested
+        '422':
+          description: No usable request provider is configured for this kind of title
+        '502':
+          description: The request provider did not accept the request
+      security:
+      - bearer_auth: []
   /api/v1/discover/resolve:
     post:
       tags:
@@ -9649,6 +9679,17 @@ components:
           type: array
           items:
             type: string
+    RequestResult:
+      type: object
+      required:
+      - status
+      - provider_instance_id
+      properties:
+        provider_instance_id:
+          type: string
+          format: uuid
+        status:
+          type: string
     ResolvedTitle:
       type: object
       required:

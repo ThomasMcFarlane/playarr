@@ -40,6 +40,33 @@ pub(crate) async fn get_json<T: DeserializeOwned>(
     serde_json::from_slice(&bytes).map_err(|source| ArrClientError::Decode { app, source })
 }
 
+/// `POST`s `body` as JSON to `path`, decoding the JSON response as `T`.
+pub(crate) async fn post_json<T: DeserializeOwned>(
+    http: &reqwest::Client,
+    app: &'static str,
+    base_url: &str,
+    api_key: &Sensitive<String>,
+    path: &str,
+    body: &serde_json::Value,
+) -> Result<T, ArrClientError> {
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let response = http
+        .post(&url)
+        .header("X-Api-Key", api_key.expose_secret())
+        .json(body)
+        .send()
+        .await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(ArrClientError::UnexpectedStatus { app, status, body });
+    }
+
+    let bytes = response.bytes().await?;
+    serde_json::from_slice(&bytes).map_err(|source| ArrClientError::Decode { app, source })
+}
+
 /// `GET`s `path`, discarding the body — used for health checks where only
 /// the status code matters.
 pub(crate) async fn get_status(
