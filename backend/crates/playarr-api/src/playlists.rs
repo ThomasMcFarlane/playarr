@@ -563,11 +563,18 @@ pub async fn list_playlist_items_handler(
     // viewer isn't allowed to see, and hiding just those entries mirrors
     // how `browse`/`search` already behave for the same caller.
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let mut visible = Vec::with_capacity(items.len());
     for item in items {
         if state
             .catalog
-            .is_work_visible(item.work_id, allowed.as_deref())
+            .is_work_visible_with(
+                item.work_id,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
             .await?
         {
             visible.push(item);
@@ -629,9 +636,16 @@ pub async fn add_playlist_item_handler(
     // library grants, so a work outside `allowed` 404s here exactly as it
     // would via `GET /api/v1/catalog/works/{id}`.
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let detail = state
         .catalog
-        .get_by_id(body.work_id, allowed.as_deref())
+        .get_by_id_with(
+            body.work_id,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
         .await?;
     match playlist.media_type {
         PlaylistMediaType::Video => {
@@ -771,11 +785,18 @@ pub async fn reorder_playlist_items_handler(
     // same response shape and must be gated by the same
     // `Policy::library_allow` ceiling, not just the initial `GET`.
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let mut visible = Vec::with_capacity(items.len());
     for item in items {
         if state
             .catalog
-            .is_work_visible(item.work_id, allowed.as_deref())
+            .is_work_visible_with(
+                item.work_id,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
             .await?
         {
             visible.push(item);

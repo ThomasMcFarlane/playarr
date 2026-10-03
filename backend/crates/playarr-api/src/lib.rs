@@ -37,6 +37,7 @@ pub mod discovery;
 pub mod downloads;
 pub mod error;
 pub mod health;
+pub mod household;
 pub mod ics;
 pub mod login;
 pub mod media;
@@ -67,6 +68,8 @@ pub mod version_gate;
 pub mod views;
 pub mod webhooks;
 
+#[cfg(test)]
+mod household_tests;
 #[cfg(test)]
 mod peer_group_e2e_test;
 #[cfg(test)]
@@ -234,6 +237,7 @@ impl Modify for SecurityAddon {
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
         (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
         (name = "remote", description = "Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)"),
+        (name = "household", description = "Household and child controls: profile status, schedules, guardian approvals"),
         (name = "peer-groups", description = "Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)")
     )
 )]
@@ -383,6 +387,17 @@ fn api_router() -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(users::list_available_profiles_handler))
         .routes(routes!(users::verify_profile_pin_handler))
+        .routes(routes!(household::household_status_handler))
+        .routes(routes!(
+            household::create_approval_handler,
+            household::list_approvals_handler
+        ))
+        .routes(routes!(household::decide_approval_handler))
+        .routes(routes!(household::consume_approval_handler))
+        .routes(routes!(
+            household::get_user_household_handler,
+            household::put_user_household_handler
+        ))
         .routes(routes!(
             views::create_view_handler,
             views::list_admin_views_handler
@@ -626,6 +641,10 @@ pub struct AppState {
     /// Optional profile-lock PIN hashes. Kept behind a distinct repository
     /// so they cannot be confused with or overwrite account passwords.
     pub profile_pin_repo: Arc<dyn playarr_db::ProfilePinRepo>,
+    /// Household and child controls: server-counted watch budgets, guardian
+    /// approvals, PIN lockout and the content gate
+    /// (`docs/architecture/household-controls.md`).
+    pub household: Arc<household::HouseholdState>,
     /// The real, durable persistence layer for `playarr_model::Policy`
     /// (permission/role) records -- looked up by a user's `policy_id` to
     /// decide `Policy::is_admin` (see [`auth_extractor::AdminUser`]) and by

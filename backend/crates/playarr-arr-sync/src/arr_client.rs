@@ -147,6 +147,20 @@ pub struct RemoteWork {
     /// Readarr -- see `map_lidarr`/`map_readarr`) or a Movie/Series entry
     /// the source app itself hasn't backfilled one for yet.
     pub release_date: Option<DateTime<Utc>>,
+    /// The arr app's content rating, normalised by [`normalise_certification`].
+    /// `None` = unrated. Stored on the `Work` as an arr-owned
+    /// `rating:<value>` tag (see `playarr_auth::household`).
+    pub certification: Option<String>,
+}
+
+/// Trims/uppercases a certification and drops the "not rated" spellings so
+/// that unrated stays unrated rather than becoming a bogus rating tag.
+pub fn normalise_certification(raw: Option<&str>) -> Option<String> {
+    let value = raw?.trim().to_ascii_uppercase();
+    match value.as_str() {
+        "" | "NR" | "UR" | "UNRATED" | "NOT RATED" | "N/A" | "NA" => None,
+        _ => Some(value),
+    }
 }
 
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
@@ -165,6 +179,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
         genres: series.genres.clone(),
         images: sonarr_images(&series.images),
         release_date: series.first_aired,
+        certification: normalise_certification(series.certification.as_deref()),
     }
 }
 
@@ -186,6 +201,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         genres: movie.genres.clone(),
         images: radarr_images(&movie.images),
         release_date: radarr_release_date(movie),
+        certification: normalise_certification(movie.certification.as_deref()),
     }
 }
 
@@ -213,6 +229,7 @@ fn radarr_release_date(movie: &RadarrMovie) -> Option<DateTime<Utc>> {
 
 fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
     RemoteWork {
+        certification: None,
         external_id: artist.foreign_artist_id.clone(),
         source_id: artist.id,
         title: artist.artist_name.clone(),
@@ -263,6 +280,7 @@ fn map_lidarr_with_album_fallback(
 
 fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
     RemoteWork {
+        certification: None,
         external_id: author.foreign_author_id.clone(),
         source_id: author.id,
         title: author.author_name.clone(),
@@ -283,6 +301,7 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
 
 fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
     RemoteWork {
+        certification: None,
         external_id: series.tpdb_id.to_string(),
         source_id: series.id,
         title: series.title.clone(),
@@ -444,6 +463,19 @@ mod tests {
     use super::*;
     use playarr_arr_client::LidarrArtistStatistics;
 
+    #[test]
+    fn certification_is_normalised_and_unrated_spellings_drop() {
+        assert_eq!(
+            normalise_certification(Some(" pg-13 ")),
+            Some("PG-13".into())
+        );
+        assert_eq!(normalise_certification(Some("TV-MA")), Some("TV-MA".into()));
+        for unrated in ["", "  ", "NR", "Not Rated", "unrated", "N/A"] {
+            assert_eq!(normalise_certification(Some(unrated)), None, "{unrated:?}");
+        }
+        assert_eq!(normalise_certification(None), None);
+    }
+
     fn sonarr_series(id: i64, title: &str, tvdb_id: i64, monitored: bool) -> SonarrSeries {
         SonarrSeries {
             id,
@@ -457,6 +489,7 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             first_aired: None,
+            certification: None,
         }
     }
 
@@ -500,6 +533,7 @@ mod tests {
             physical_release: None,
             in_cinemas: None,
             year: None,
+            certification: None,
         }
     }
 

@@ -18,6 +18,12 @@ pub struct ErrorBody {
     /// breaking API change); `message` carries that instead.
     pub error: String,
     pub message: String,
+    /// Optional machine-readable context, e.g. `{"reason":"outside_schedule",
+    /// "next_start_at":"..."}` on a `household_blocked` response. Omitted
+    /// when empty so existing error bodies are unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub details: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,8 +39,14 @@ impl ApiError {
             body: ErrorBody {
                 error: code.into(),
                 message: message.into(),
+                details: None,
             },
         }
+    }
+
+    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+        self.body.details = Some(details);
+        self
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {

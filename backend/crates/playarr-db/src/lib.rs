@@ -17,18 +17,19 @@ pub mod repo;
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
 pub use repo::{
-    CreditRepo, DeviceRepo, DownloadTicketRepo, EmbeddingRepo, GroupLibraryRepo,
-    InMemoryRefreshTokenStore, LibraryViewRepo, MediaFileRepo, NodeIdentityRepo, PeerGroupRepo,
-    PeerJoinToken, PeerJoinTokenRepo, PeerLeafAvailabilityRepo, PeerNodeRepo,
-    PeerSourceInstanceRepo, PeerSyncState, PeerSyncStateRepo, PlaylistRepo, PolicyRepo,
-    ProfilePinRepo, PushRegistrationRepo, RefreshTokenRepo, RemoteEvent, RemoteHandoff,
-    RemotePairing, RemoteRepo, RemoteTarget, RenditionRepo, RoutingRuleRepo, SourceInstanceRepo,
-    SqlxCreditRepo, SqlxDownloadTicketRepo, SqlxEmbeddingRepo, SqlxLibraryViewRepo,
-    SqlxPlaylistRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo,
-    SqlxRemoteRepo, SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-    SqlxUserInviteRequestRepo, SqlxWatchProgressRepo, SqlxWatchlistRepo, SyncConflictLog,
-    SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
-    UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
+    ApprovalRepo, CreditRepo, DeviceRepo, DownloadTicketRepo, EmbeddingRepo, GroupLibraryRepo,
+    HouseholdUsageRepo, InMemoryRefreshTokenStore, LibraryViewRepo, MediaFileRepo,
+    NodeIdentityRepo, PeerGroupRepo, PeerJoinToken, PeerJoinTokenRepo, PeerLeafAvailabilityRepo,
+    PeerNodeRepo, PeerSourceInstanceRepo, PeerSyncState, PeerSyncStateRepo, PinAttemptRepo,
+    PinAttemptState, PlaylistRepo, PolicyRepo, ProfilePinRepo, PushRegistrationRepo,
+    RefreshTokenRepo, RemoteEvent, RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget,
+    RenditionRepo, RoutingRuleRepo, SourceInstanceRepo, SqlxCreditRepo, SqlxDownloadTicketRepo,
+    SqlxEmbeddingRepo, SqlxHouseholdRepo, SqlxLibraryViewRepo, SqlxPlaylistRepo,
+    SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRemoteRepo,
+    SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
+    SqlxWatchProgressRepo, SqlxWatchlistRepo, SyncConflictLog, SyncConflictLogRepo, SyncMetadata,
+    SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo, UserInviteRequestRepo, UserRepo,
+    WatchProgressRepo, WatchlistRepo, WorkRepo,
 };
 
 pub use repo::{

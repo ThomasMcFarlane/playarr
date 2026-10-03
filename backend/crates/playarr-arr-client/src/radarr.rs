@@ -67,6 +67,10 @@ pub struct RadarrMovie {
     /// digital/physical dates this is the original year, not a re-release.
     #[serde(default)]
     pub year: Option<i32>,
+    /// Content rating (MPAA style, e.g. `PG-13`). Absent/null/blank for
+    /// unrated titles. Mapped to a `rating:` tag for household controls.
+    #[serde(default)]
+    pub certification: Option<String>,
 }
 
 /// An entry in a movie's `images` array (poster, fanart, banner, ...).

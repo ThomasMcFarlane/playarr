@@ -23,7 +23,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_library_allowed, forbidden, StreamingUser};
+use crate::auth_extractor::{forbidden, StreamingUser};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -1324,10 +1324,7 @@ pub async fn create_handoff_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found("media file not found"))?;
-    ensure_library_allowed(
-        media.source_instance_id,
-        user.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &user, &media).await?;
 
     let handoff = RemoteHandoff {
         id: Uuid::new_v4(),

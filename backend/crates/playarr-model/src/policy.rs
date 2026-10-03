@@ -107,4 +107,9 @@ pub struct Policy {
     /// above. Kept as the last field so review diffs always show it as an
     /// explicit, deliberate grant.
     pub is_admin: bool,
+
+    /// Household and child controls (`docs/architecture/household-controls.md`).
+    /// Defaults to no extra restrictions, so existing policies are unchanged.
+    #[serde(default)]
+    pub household: crate::household::HouseholdControls,
 }

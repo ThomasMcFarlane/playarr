@@ -65,10 +65,7 @@ use tower_http::services::ServeFile;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{
-    ensure_can_download, ensure_library_allowed, resolve_streaming_access, OptionalStreamingUser,
-    StreamingUser,
-};
+use crate::auth_extractor::{ensure_can_download, OptionalStreamingUser, StreamingUser};
 use crate::error::ApiError;
 use crate::peer_extractor::PeerSignedRequest;
 use crate::playback::{
@@ -1392,10 +1389,11 @@ pub async fn stream_media_handler(
         .playback_session_id
         .and_then(|session_id| state.session_registry.get(session_id));
     let tracking_session_id = if let Some(streaming) = streaming {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
+        crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
+        state
+            .household
+            .record_served(&streaming.policy, streaming.user_id)
+            .await;
 
         candidate_session
             .filter(|session| {
@@ -1424,6 +1422,18 @@ pub async fn stream_media_handler(
                 "playback session does not authorise this media file",
             ));
         }
+        // The capability URL carries no bearer: re-resolve the session
+        // owner's current policy (schedule, budget, rating, library).
+        let policy = crate::auth_extractor::ensure_session_media_access(
+            &state,
+            session.user_id,
+            &media_file,
+        )
+        .await?;
+        state
+            .household
+            .record_served(&policy, session.user_id)
+            .await;
         Some(session_id)
     };
 
@@ -1688,8 +1698,13 @@ pub async fn peer_stream_media_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    let (_, allowed_libraries) = resolve_streaming_access(&state, session.user_id).await?;
-    ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+    let policy =
+        crate::auth_extractor::ensure_session_media_access(&state, session.user_id, &media_file)
+            .await?;
+    state
+        .household
+        .record_served(&policy, session.user_id)
+        .await;
 
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let mut synthetic_request = Request::builder()
@@ -1748,10 +1763,7 @@ pub async fn media_chapters_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     Ok(Json(probe_media_chapters(&resolved_path).await?))
 }
@@ -1781,10 +1793,7 @@ pub async fn media_metadata_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
 
     let duration_ms = match media_file.duration_ms.filter(|duration| *duration > 0) {
         Some(duration_ms) => duration_ms,
@@ -1846,10 +1855,7 @@ pub async fn media_download_options_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     ensure_can_download(&streaming.policy)?;
 
     // Same lazy-probe-and-cache pattern `media_metadata_handler` above
@@ -1906,16 +1912,16 @@ pub async fn media_download_options_handler(
 
 async fn media_playback_options(
     state: &AppState,
-    user_id: Uuid,
+    streaming: &StreamingUser,
     media_file_id: Uuid,
-    allowed_libraries: Option<&[Uuid]>,
 ) -> Result<MediaPlaybackOptionsResponse, ApiError> {
+    let user_id = streaming.user_id;
     let media_file = state
         .media_files
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(media_file.source_instance_id, allowed_libraries)?;
+    crate::auth_extractor::ensure_media_access(state, streaming, &media_file).await?;
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let (audio_result, subtitle_result) = tokio::join!(
         probe_media_audio_tracks(&resolved_path),
@@ -2063,10 +2069,8 @@ pub async fn media_playback_options_handler(
     streaming: StreamingUser,
     Path(media_file_id): Path<Uuid>,
 ) -> Result<Json<MediaPlaybackOptionsResponse>, ApiError> {
-    let allowed = streaming.allowed_libraries();
     Ok(Json(
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?,
+        media_playback_options(&state, &streaming, media_file_id).await?,
     ))
 }
 
@@ -2146,10 +2150,7 @@ pub async fn update_media_playback_options_handler(
     Path(media_file_id): Path<Uuid>,
     Json(body): Json<UpdateMediaPlaybackPreferencesRequest>,
 ) -> Result<Json<MediaPlaybackOptionsResponse>, ApiError> {
-    let allowed = streaming.allowed_libraries();
-    let current =
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?;
+    let current = media_playback_options(&state, &streaming, media_file_id).await?;
     if !current
         .quality_options
         .iter()
@@ -2194,8 +2195,7 @@ pub async fn update_media_playback_options_handler(
         })?;
 
     Ok(Json(
-        media_playback_options(&state, streaming.user_id, media_file_id, allowed.as_deref())
-            .await?,
+        media_playback_options(&state, &streaming, media_file_id).await?,
     ))
 }
 
@@ -2236,10 +2236,12 @@ pub async fn media_subtitle_handler(
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
     if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
+        crate::auth_extractor::ensure_media_access(&state, streaming, &media_file).await?;
+    }
+    if let Some(session) = cookie_session.as_ref() {
+        // Capability URL: re-resolve the session owner's current policy.
+        crate::auth_extractor::ensure_session_media_access(&state, session.user_id, &media_file)
+            .await?;
     }
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let supported_tracks = probe_all_subtitle_tracks(&resolved_path).await?;
@@ -2309,10 +2311,7 @@ pub async fn media_thumbnail_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     let resolved_path = playarr_model::resolve_media_path(&media_file.path);
     let position_ms = thumbnail_position_ms(query.position_ms);
     let thumbnail_path = ensure_media_thumbnail(media_file_id, &resolved_path, position_ms).await?;
@@ -2371,10 +2370,24 @@ pub async fn serve_rendition_file_handler(
             ApiError::not_found(format!("unknown media file {}", rendition.media_file_id))
         })?;
     if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
+        crate::auth_extractor::ensure_media_access(&state, streaming, &media_file).await?;
+        state
+            .household
+            .record_served(&streaming.policy, streaming.user_id)
+            .await;
+    }
+    if let Some(session) = cookie_session.as_ref() {
+        // Capability URL: re-resolve the session owner's current policy.
+        let policy = crate::auth_extractor::ensure_session_media_access(
+            &state,
+            session.user_id,
+            &media_file,
+        )
+        .await?;
+        state
+            .household
+            .record_served(&policy, session.user_id)
+            .await;
     }
     let response = serve_file(&rendition.output_path.join(&file_name), request).await?;
     Ok(match tracking_session_id {
@@ -2437,10 +2450,24 @@ pub async fn serve_session_file_handler(
             ApiError::not_found(format!("unknown media file {}", session.media_file_id))
         })?;
     if let Some(streaming) = streaming.as_ref() {
-        ensure_library_allowed(
-            media_file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
+        crate::auth_extractor::ensure_media_access(&state, streaming, &media_file).await?;
+        state
+            .household
+            .record_served(&streaming.policy, streaming.user_id)
+            .await;
+    }
+    if let Some(session) = cookie_session.as_ref() {
+        // Capability URL: re-resolve the session owner's current policy.
+        let policy = crate::auth_extractor::ensure_session_media_access(
+            &state,
+            session.user_id,
+            &media_file,
+        )
+        .await?;
+        state
+            .household
+            .record_served(&policy, session.user_id)
+            .await;
     }
 
     let dir = state.transcode.session_output_dir(session_id);
@@ -2462,7 +2489,7 @@ mod tests {
     use super::*;
     use crate::test_support::{
         bearer_header, mint_access_token, seed_streaming_user,
-        seed_streaming_user_with_library_allow, test_state,
+        seed_streaming_user_with_library_allow, test_state, TestState,
     };
     use axum::body::Body;
     use axum::extract::ConnectInfo;
@@ -2496,6 +2523,20 @@ mod tests {
             source_instance_id: Uuid::new_v4(),
             source_file_id: Some("1".to_string()),
         }
+    }
+
+    /// Capability URLs now re-resolve the session owner's account on every
+    /// request, so a session must belong to a real streaming user who may
+    /// read the media file's library.
+    async fn seed_session_owner(state: &TestState, session: &PlaybackSession, media_file_id: Uuid) {
+        use crate::playback::MediaFileLookup;
+        let source = state
+            .media_files
+            .get(media_file_id)
+            .await
+            .map(|file| file.source_instance_id)
+            .unwrap_or_else(Uuid::new_v4);
+        seed_streaming_user_with_library_allow(state, session.user_id, vec![source]).await;
     }
 
     fn active_playback_session(media_file_id: Uuid) -> PlaybackSession {
@@ -3266,6 +3307,7 @@ mod tests {
         let (router, state) = test_state().await;
         let media_file_id = Uuid::new_v4();
         let playback_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &playback_session, media_file_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3573,6 +3615,7 @@ mod tests {
         state.rendition_repo.upsert(&rendition).await.unwrap();
 
         let playback_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &playback_session, media_file_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3640,6 +3683,7 @@ mod tests {
         state.rendition_repo.upsert(&rendition).await.unwrap();
 
         let playback_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &playback_session, media_file_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -3711,9 +3755,11 @@ mod tests {
         // first, query second", so only the cookie's session should ever
         // be looked up or tracked.
         let cookie_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &cookie_session, media_file_id).await;
         let cookie_session_id = cookie_session.id;
         state.app.session_registry.insert(cookie_session);
         let query_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &query_session, media_file_id).await;
         let query_session_id = query_session.id;
         state.app.session_registry.insert(query_session);
 
@@ -3957,6 +4003,7 @@ mod tests {
             .unwrap();
 
         let playback_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &playback_session, media_file_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 
@@ -4021,6 +4068,7 @@ mod tests {
             .unwrap();
 
         let playback_session = active_playback_session(media_file_id);
+        seed_session_owner(&state, &playback_session, media_file_id).await;
         let playback_session_id = playback_session.id;
         state.app.session_registry.insert(playback_session);
 

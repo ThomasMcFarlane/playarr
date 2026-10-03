@@ -1473,6 +1473,69 @@ paths:
           description: No user with this id
       security:
       - bearer_auth: []
+  /api/v1/admin/users/{id}/household:
+    get:
+      tags:
+      - household
+      operationId: get_user_household_handler
+      parameters:
+      - name: id
+        in: path
+        description: User id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The account's household settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseholdSettings'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '404':
+          description: Unknown user
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - household
+      operationId: put_user_household_handler
+      parameters:
+      - name: id
+        in: path
+        description: User id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HouseholdSettings'
+        required: true
+      responses:
+        '200':
+          description: Settings saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseholdSettings'
+        '400':
+          description: Invalid rating, time zone, schedule, budget or guardian
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '404':
+          description: Unknown user
+      security:
+      - bearer_auth: []
   /api/v1/admin/users/{user_id}/impersonate:
     post:
       tags:
@@ -2787,6 +2850,135 @@ paths:
           description: The ticket has not finished processing yet (queued/processing/failed)
         '410':
           description: The ticket expired or was canceled
+      security:
+      - bearer_auth: []
+  /api/v1/household/approvals:
+    get:
+      tags:
+      - household
+      operationId: list_approvals_handler
+      responses:
+        '200':
+          description: The caller's own requests and requests from profiles the caller guards, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Approval'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - household
+      operationId: create_approval_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApprovalRequest'
+        required: true
+      responses:
+        '200':
+          description: Approval request created (pending)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          description: Invalid subject for this kind
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
+        '409':
+          description: Too many pending requests
+      security:
+      - bearer_auth: []
+  /api/v1/household/approvals/{id}/consume:
+    post:
+      tags:
+      - household
+      operationId: consume_approval_handler
+      parameters:
+      - name: id
+        in: path
+        description: Approval id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: One use of the approval was consumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumeApprovalResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Approval is not approved, expired, exhausted or belongs to another profile
+      security:
+      - bearer_auth: []
+  /api/v1/household/approvals/{id}/decision:
+    post:
+      tags:
+      - household
+      operationId: decide_approval_handler
+      parameters:
+      - name: id
+        in: path
+        description: Approval id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideApprovalRequest'
+        required: true
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '401':
+          description: Missing or invalid access token, or wrong guardian PIN
+        '403':
+          description: Caller is not a guardian of this profile, is restricted, has no PIN, or is the requester
+        '404':
+          description: Unknown approval
+        '409':
+          description: Already decided or expired
+        '429':
+          description: PIN locked out
+      security:
+      - bearer_auth: []
+  /api/v1/household/status:
+    get:
+      tags:
+      - household
+      operationId: household_status_handler
+      responses:
+        '200':
+          description: 'The signed-in profile''s household state: schedule, remaining time and offline validity'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseholdStatusResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr streaming access
       security:
       - bearer_auth: []
   /api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream:
@@ -5977,7 +6169,9 @@ paths:
         '401':
           description: The target profile is unavailable or the PIN is invalid
         '403':
-          description: Caller does not have Playarr streaming access
+          description: Caller does not have Playarr streaming access, or a restricted caller targets a less restricted profile that has no PIN (`guardian_pin_required`)
+        '429':
+          description: Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`)
       security:
       - bearer_auth: []
   /api/v1/views:
@@ -6446,6 +6640,95 @@ components:
       - ep
       - single
       - soundtrack
+    Approval:
+      type: object
+      description: A guardian approval request and, once decided, its bounded grant.
+      required:
+      - id
+      - profile_user_id
+      - kind
+      - subject
+      - status
+      - requested_at
+      - request_expires_at
+      - uses
+      - bonus_seconds
+      properties:
+        bonus_seconds:
+          type: integer
+          format: int64
+          description: Extra watch seconds for a `Time`/`budget` grant.
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        grant_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: An approved grant is unusable at or after this time.
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ApprovalKind'
+        max_uses:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            `None` = unlimited uses within the grant window (content/time grants
+            are re-checked on every request).
+          minimum: 0
+        note:
+          type:
+          - string
+          - 'null'
+        profile_user_id:
+          type: string
+          format: uuid
+        request_expires_at:
+          type: string
+          format: date-time
+          description: |-
+            A pending request that is not decided by this time can no longer be
+            approved.
+        requested_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        subject:
+          type: string
+          description: |-
+            `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
+            `Purchase`/`Install`: an opaque provider/app identifier.
+        uses:
+          type: integer
+          format: int32
+          minimum: 0
+    ApprovalKind:
+      type: string
+      description: Things a guardian can be asked to approve.
+      enum:
+      - purchase
+      - install
+      - content
+      - time
+    ApprovalStatus:
+      type: string
+      enum:
+      - pending
+      - approved
+      - denied
     ApprovePairingRequest:
       type: object
       properties:
@@ -7276,6 +7559,30 @@ components:
             RFC 3339 timestamp after which `min_supported_version` will be
             ratcheted up; surfaced to clients so they can warn users ahead of
             time rather than being cut off with no notice.
+    ConsumeApprovalResponse:
+      type: object
+      required:
+      - consumed
+      properties:
+        consumed:
+          type: boolean
+    CreateApprovalRequest:
+      type: object
+      required:
+      - kind
+      - subject
+      properties:
+        kind:
+          $ref: '#/components/schemas/ApprovalKind'
+        note:
+          type:
+          - string
+          - 'null'
+        subject:
+          type: string
+          description: |-
+            `content`: a work id. `time`: `schedule` or `budget`. `purchase`/
+            `install`: an opaque provider or application identifier.
     CreateDownloadTicketRequest:
       type: object
       required:
@@ -7473,6 +7780,34 @@ components:
           description: Present only on a crew credit.
         person:
           $ref: '#/components/schemas/PersonResponse'
+    DecideApprovalRequest:
+      type: object
+      required:
+      - approve
+      properties:
+        approve:
+          type: boolean
+        bonus_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: '`time`/`budget` only: extra watch minutes granted.'
+          minimum: 0
+        duration_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            How long an approval stays usable. Default 15 minutes for
+            purchase/install, 60 for content and time; at most 240.
+          minimum: 0
+        pin:
+          type:
+          - string
+          - 'null'
+          description: The guardian's own profile PIN (required to approve).
     DeliveryMode:
       type: string
       description: |-
@@ -7870,6 +8205,14 @@ components:
       - error
       - message
       properties:
+        details:
+          type:
+          - object
+          - 'null'
+          description: |-
+            Optional machine-readable context, e.g. `{"reason":"outside_schedule",
+            "next_start_at":"..."}` on a `household_blocked` response. Omitted
+            when empty so existing error bodies are unchanged.
         error:
           type: string
           description: |-
@@ -8276,6 +8619,168 @@ components:
       enum:
       - server
       - client
+    HouseholdControls:
+      type: object
+      properties:
+        app_allow:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+        approval_required:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalKind'
+          description: Approval kinds that must be granted by a guardian.
+        channel_allow:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: |-
+            `None` = unrestricted; `Some(ids)` = allowlist (empty denies all).
+            Contract only until games/live TV/external apps have routes
+            (TASKS 22, 28, 36).
+        daily_budget_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum watch time per local day, in minutes.
+          minimum: 0
+        game_allow:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+        guardian_user_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Users who may approve requests for, and unlock, this profile.
+        offline_ttl_hours:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum age of a client's cached authorisation. `None` = default.
+          minimum: 0
+        timezone:
+          type:
+          - string
+          - 'null'
+          description: |-
+            IANA zone name used for `access_schedule` and the budget day. `None`
+            means UTC.
+        unrated:
+          $ref: '#/components/schemas/UnratedContent'
+          description: Applies only when the policy has a `max_rating`.
+    HouseholdSettings:
+      type: object
+      description: |-
+        The household-relevant slice of an account's [`Policy`], edited as one
+        unit by `PUT /api/v1/admin/users/{id}/household`.
+      properties:
+        access_schedule:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/AccessWindow'
+          description: |-
+            Allowed windows in the profile's time zone; `null` = no schedule,
+            an empty list = locked out.
+        allowed_tags:
+          type: array
+          items:
+            type: string
+        blocked_folders:
+          type: array
+          items:
+            type: string
+        blocked_tags:
+          type: array
+          items:
+            type: string
+        household:
+          $ref: '#/components/schemas/HouseholdControls'
+        max_rating:
+          type:
+          - string
+          - 'null'
+          description: Rating ceiling such as `PG-13`; `null` = no rating gate.
+    HouseholdStatusResponse:
+      type: object
+      required:
+      - restricted
+      - state
+      - server_time
+      - offline_valid_until
+      - guardian_for
+      properties:
+        daily_budget_minutes:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        guardian_for:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Profiles this user may approve requests for.
+        max_rating:
+          type:
+          - string
+          - 'null'
+        next_start_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start of the next schedule window while outside it.
+        offline_valid_until:
+          type: string
+          format: date-time
+          description: Cached authorisation on a client is valid until this instant.
+        remaining_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        resets_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the daily budget resets, once exhausted.
+        restricted:
+          type: boolean
+          description: Whether any household restriction applies to this profile.
+        server_time:
+          type: string
+          format: date-time
+          description: |-
+            Server time, so clients can show remaining time without trusting
+            their own clock.
+        state:
+          type: string
+          description: '`unrestricted`, `allowed`, `outside_schedule` or `budget_exhausted`.'
+        timezone:
+          type:
+          - string
+          - 'null'
+        window_ends_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the current schedule window.
     ImageAsset:
       type: object
       required:
@@ -10677,6 +11182,11 @@ components:
             and unioned with `library_allow` there -- an empty list here grants
             nothing extra, it does not widen access, matching `library_allow`'s
             own deny-by-default semantics.
+        household:
+          $ref: '#/components/schemas/HouseholdControls'
+          description: |-
+            Household and child controls (`docs/architecture/household-controls.md`).
+            Defaults to no extra restrictions, so existing policies are unchanged.
         id:
           type: string
           format: uuid
@@ -12138,6 +12648,15 @@ components:
           format: uuid
         peer_node_name:
           type: string
+    UnratedContent:
+      type: string
+      description: |-
+        What to do with content that has no usable rating when the profile has a
+        `max_rating` ceiling. Defaults to blocking: an unknown rating must not be
+        treated as "safe" for a child profile.
+      enum:
+      - block
+      - allow
     UpdateMediaPlaybackPreferencesRequest:
       type: object
       required:
@@ -12830,5 +13349,7 @@ tags:
   description: Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to
 - name: remote
   description: Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)
+- name: household
+  description: 'Household and child controls: profile status, schedules, guardian approvals'
 - name: peer-groups
   description: Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)

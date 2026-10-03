@@ -1077,6 +1077,7 @@ async fn bootstrap_admin_with(
         can_share_public: true,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         // Deliberately no Playarr access -- this account exists to run
         // Playarr Server's own admin surface, not as a household viewer
@@ -1227,6 +1228,13 @@ async fn boot_api(
         .transpose()
         .map_err(|err| anyhow::anyhow!("invalid PLAYARR_FIREBASE_WEB_CONFIG JSON: {err}"))?;
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
+    let household_repo = Arc::new(playarr_db::SqlxHouseholdRepo::new(pool.clone()));
+    let household = Arc::new(playarr_api::household::HouseholdState::new(
+        household_repo.clone(),
+        household_repo.clone(),
+        household_repo,
+        Arc::new(playarr_api::household::SystemClock),
+    ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
@@ -1517,6 +1525,7 @@ async fn boot_api(
         push_notifier,
         firebase_web_config,
         profile_pin_repo,
+        household,
         policy_repo,
         sessions: refresh,
         refresh_ttl: chrono::Duration::days(30),

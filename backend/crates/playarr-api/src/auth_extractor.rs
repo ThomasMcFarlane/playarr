@@ -156,6 +156,46 @@ pub(crate) fn ensure_library_allowed(
     }
 }
 
+/// Everything a bearer caller must clear to receive one media file: library
+/// access, then the household content gate (blocked folder, rating, tags,
+/// guardian content approvals). Every route that takes a media file id for
+/// a [`StreamingUser`] goes through this, so a new route cannot forget the
+/// household half.
+pub(crate) async fn ensure_media_access(
+    state: &AppState,
+    streaming: &StreamingUser,
+    media_file: &playarr_model::MediaFile,
+) -> Result<(), ApiError> {
+    ensure_library_allowed(
+        media_file.source_instance_id,
+        streaming.allowed_libraries().as_deref(),
+    )?;
+    state
+        .household
+        .ensure_media_file_allowed(state, &streaming.policy, streaming.user_id, media_file)
+        .await
+}
+
+/// The capability-URL counterpart of [`ensure_media_access`]: a playback
+/// session id (cookie or query) stands in for a bearer, so the session
+/// owner's *current* account state is re-resolved on every request --
+/// disabled-streaming, library, schedule, budget and content rules all
+/// apply, never a snapshot taken when the session was negotiated. Returns
+/// the owner's policy so the caller can account served media.
+pub(crate) async fn ensure_session_media_access(
+    state: &AppState,
+    user_id: Uuid,
+    media_file: &playarr_model::MediaFile,
+) -> Result<Policy, ApiError> {
+    let (policy, allowed) = resolve_streaming_access(state, user_id).await?;
+    ensure_library_allowed(media_file.source_instance_id, allowed.as_deref())?;
+    state
+        .household
+        .ensure_media_file_allowed(state, &policy, user_id, media_file)
+        .await?;
+    Ok(policy)
+}
+
 /// `a` deduplicated against `b`'s ids appended -- the shared union
 /// [`StreamingUser::allowed_libraries`]/[`CatalogViewer::allowed_libraries`]
 /// both use to combine `Policy::library_allow` with `Policy::
@@ -257,6 +297,12 @@ pub(crate) async fn resolve_streaming_access(
             "this account does not have Playarr streaming access",
         ));
     }
+    // Capability-token media URLs re-enter here on every request, so a
+    // schedule boundary or an exhausted budget stops them too.
+    state
+        .household
+        .ensure_time_allowed(&policy, user_id)
+        .await?;
 
     let resolved_group_library_allow = state
         .source_instances
@@ -364,13 +410,16 @@ impl StreamingUser {
     }
 }
 
-impl FromRequestParts<AppState> for StreamingUser {
-    type Rejection = ApiError;
-
-    async fn from_request_parts(
+impl StreamingUser {
+    /// Resolves the bearer user and its policy. `enforce_time` applies the
+    /// household schedule/budget; only the profile-management, status and
+    /// approval routes (see [`AnytimeStreamingUser`]) opt out, so a locked
+    /// profile can still be unlocked by a guardian.
+    async fn resolve(
         parts: &mut Parts,
         state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+        enforce_time: bool,
+    ) -> Result<Self, ApiError> {
         let user = AuthUser::from_request_parts(parts, state).await?;
         let policy = resolve_policy(
             state,
@@ -383,20 +432,62 @@ impl FromRequestParts<AppState> for StreamingUser {
         // Deliberately `policy.can_stream` alone -- `is_admin` does not
         // bypass this, unlike every other gate on `Policy`. See
         // `playarr_model::Policy::can_stream`'s doc comment.
-        if policy.can_stream {
-            let resolved_group_library_allow = state
-                .source_instances
-                .source_instance_ids_for_group_libraries(&policy.group_library_allow);
-            Ok(StreamingUser {
-                user,
-                policy,
-                resolved_group_library_allow,
-            })
-        } else {
-            Err(forbidden(
+        if !policy.can_stream {
+            return Err(forbidden(
                 "this account does not have Playarr streaming access",
-            ))
+            ));
         }
+        if enforce_time {
+            state
+                .household
+                .ensure_time_allowed(&policy, user.user_id)
+                .await?;
+        }
+        let resolved_group_library_allow = state
+            .source_instances
+            .source_instance_ids_for_group_libraries(&policy.group_library_allow);
+        Ok(StreamingUser {
+            user,
+            policy,
+            resolved_group_library_allow,
+        })
+    }
+}
+
+impl FromRequestParts<AppState> for StreamingUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Self::resolve(parts, state, true).await
+    }
+}
+
+/// [`StreamingUser`] without the household schedule/budget gate. Used only
+/// by the routes a locked profile must still reach: profile switching,
+/// household status and guardian approvals. Everything that returns
+/// catalog data or media takes [`StreamingUser`]/[`CatalogViewer`].
+#[derive(Debug, Clone)]
+pub struct AnytimeStreamingUser(pub StreamingUser);
+
+impl std::ops::Deref for AnytimeStreamingUser {
+    type Target = StreamingUser;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromRequestParts<AppState> for AnytimeStreamingUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        StreamingUser::resolve(parts, state, false).await.map(Self)
     }
 }
 
@@ -490,6 +581,10 @@ impl FromRequestParts<AppState> for CatalogViewer {
         .await?;
 
         if policy.can_stream || policy.is_admin {
+            state
+                .household
+                .ensure_time_allowed(&policy, user.user_id)
+                .await?;
             let resolved_group_library_allow = state
                 .source_instances
                 .source_instance_ids_for_group_libraries(&policy.group_library_allow);
@@ -563,6 +658,7 @@ mod tests {
             can_share_public: false,
             device_allow: Vec::new(),
             max_concurrent_sessions: None,
+            household: Default::default(),
             access_schedule: None,
             can_stream: true,
             is_admin,

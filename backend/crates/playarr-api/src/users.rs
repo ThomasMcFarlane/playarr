@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{AdminUser, AuthUser, StreamingUser};
+use crate::auth_extractor::{AdminUser, AnytimeStreamingUser, AuthUser};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -312,7 +312,7 @@ pub struct SelfCapabilitiesResponse {
     )
 )]
 pub async fn get_self_capabilities_handler(
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
 ) -> Json<SelfCapabilitiesResponse> {
     Json(SelfCapabilitiesResponse {
         can_download: streaming.policy.can_download,
@@ -499,6 +499,7 @@ fn default_policy(
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream,
         is_admin,
@@ -756,7 +757,7 @@ pub async fn create_user_invite_handler(
 )]
 pub async fn create_user_invite_request_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
     Json(body): Json<CreateUserInviteRequest>,
 ) -> Result<Json<UserInviteRequestResponse>, ApiError> {
     if let Some(existing) = state
@@ -825,7 +826,7 @@ pub async fn create_user_invite_request_handler(
 )]
 pub async fn get_my_user_invite_request_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
 ) -> Result<Json<Option<UserInviteRequestResponse>>, ApiError> {
     let request = state
         .user_invite_request_repo
@@ -857,7 +858,7 @@ pub async fn get_my_user_invite_request_handler(
 )]
 pub async fn generate_user_invite_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
 ) -> Result<Json<UserInviteResponse>, ApiError> {
     let request = state
         .user_invite_request_repo
@@ -1270,7 +1271,7 @@ pub async fn list_users_handler(
 )]
 pub async fn list_available_profiles_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
 ) -> Result<Json<Vec<AvailableProfileResponse>>, ApiError> {
     let users =
         state.user_repo.list_all().await.map_err(|error| {
@@ -1541,12 +1542,13 @@ pub async fn update_profile_avatar_handler(
             "verified": true
         })),
         (status = 401, description = "The target profile is unavailable or the PIN is invalid"),
-        (status = 403, description = "Caller does not have Playarr streaming access")
+        (status = 403, description = "Caller does not have Playarr streaming access, or a restricted caller targets a less restricted profile that has no PIN (`guardian_pin_required`)"),
+        (status = 429, description = "Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`)")
     )
 )]
 pub async fn verify_profile_pin_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
     Path(id): Path<Uuid>,
     Json(body): Json<VerifyProfilePinRequest>,
 ) -> Result<Json<VerifyProfilePinResponse>, ApiError> {
@@ -1562,6 +1564,12 @@ pub async fn verify_profile_pin_handler(
     if cross_account_probe {
         return Err(invalid_pin());
     }
+    // Brute-force lockout: a four-digit PIN has only 10,000 values, so
+    // failures are counted per (caller, target) and per target.
+    state
+        .household
+        .ensure_pin_not_locked(streaming.user_id, id)
+        .await?;
     let user = state
         .user_repo
         .find_by_id(id)
@@ -1575,7 +1583,7 @@ pub async fn verify_profile_pin_handler(
     if user.disabled {
         return Err(invalid_pin());
     }
-    let can_stream = state
+    let target_policy = state
         .policy_repo
         .find_by_id(user.policy_id)
         .await
@@ -1584,10 +1592,10 @@ pub async fn verify_profile_pin_handler(
                 "failed to load policy for target profile {id}: {error}"
             ))
         })?
-        .is_some_and(|policy| policy.can_stream);
-    if !can_stream {
+        .filter(|policy| policy.can_stream);
+    let Some(target_policy) = target_policy else {
         return Err(invalid_pin());
-    }
+    };
 
     let Some(pin_hash) = state
         .profile_pin_repo
@@ -1599,13 +1607,34 @@ pub async fn verify_profile_pin_handler(
             ))
         })?
     else {
+        // No PIN on the target. A restricted profile may move to another
+        // equally restricted one (a sibling) but never to a less
+        // restricted profile that has no PIN protecting it.
+        let switching_up = id != streaming.user_id
+            && crate::household::is_restricted(&streaming.policy)
+            && !crate::household::is_restricted(&target_policy);
+        if switching_up {
+            return Err(ApiError::new(
+                StatusCode::FORBIDDEN,
+                "guardian_pin_required",
+                "this profile needs a PIN before a restricted profile can switch to it",
+            ));
+        }
         return Ok(Json(VerifyProfilePinResponse { verified: true }));
     };
 
     let verifier = playarr_auth::Argon2PasswordVerifier;
     if !verifier.verify(&body.pin, &pin_hash) {
+        state
+            .household
+            .record_pin_failure(streaming.user_id, id)
+            .await;
         return Err(invalid_pin());
     }
+    state
+        .household
+        .reset_pin_failures(streaming.user_id, id)
+        .await;
     Ok(Json(VerifyProfilePinResponse { verified: true }))
 }
 

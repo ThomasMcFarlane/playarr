@@ -146,7 +146,7 @@ fn chrono_weekday_to_model(day: chrono::Weekday) -> Weekday {
 /// specific rating body issued it — expand this table as real-world
 /// libraries surface ratings it doesn't yet cover, rather than trying to
 /// enumerate every regional/streaming rating scheme up front.
-fn rating_rank(rating: &str) -> Option<u8> {
+pub fn rating_rank(rating: &str) -> Option<u8> {
     let normalized = rating.trim().to_ascii_uppercase();
     let rank = match normalized.as_str() {
         "G" | "TV-Y" | "TV-G" => 0,
@@ -180,6 +180,7 @@ mod tests {
             can_share_public: false,
             device_allow: vec![],
             max_concurrent_sessions: None,
+            household: Default::default(),
             access_schedule: None,
             can_stream: true,
             is_admin: false,

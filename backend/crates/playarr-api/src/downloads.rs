@@ -52,7 +52,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_can_download, ensure_library_allowed, StreamingUser};
+use crate::auth_extractor::{ensure_can_download, StreamingUser};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -150,10 +150,7 @@ pub async fn create_download_ticket_handler(
         .get(body.media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {}", body.media_file_id)))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     ensure_can_download(&streaming.policy)?;
 
     let is_original = body.quality_id == "original";
@@ -247,13 +244,18 @@ pub async fn list_download_tickets_handler(
     // after the ticket was created) must not keep confirming that content
     // exists. A ticket whose `MediaFile` no longer resolves at all is
     // dropped for a restricted caller too (fail closed).
-    let Some(allowed) = streaming.allowed_libraries() else {
+    if streaming.allowed_libraries().is_none()
+        && !crate::household::has_content_rules(&streaming.policy)
+    {
         return Ok(Json(all_tickets.into_iter().map(Into::into).collect()));
-    };
+    }
     let mut visible = Vec::with_capacity(all_tickets.len());
     for ticket in all_tickets {
         if let Some(media_file) = state.media_files.get(ticket.media_file_id).await {
-            if ensure_library_allowed(media_file.source_instance_id, Some(&allowed)).is_ok() {
+            if crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file)
+                .await
+                .is_ok()
+            {
                 visible.push(ticket.into());
             }
         }
@@ -286,10 +288,7 @@ async fn load_owned_ticket(
         .ok_or_else(|| {
             ApiError::not_found(format!("unknown media file {}", ticket.media_file_id))
         })?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(state, streaming, &media_file).await?;
     Ok(ticket)
 }
 

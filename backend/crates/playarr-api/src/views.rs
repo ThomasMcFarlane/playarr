@@ -537,14 +537,20 @@ pub async fn resolve_view_handler(
 ) -> Result<Json<CatalogPage>, ApiError> {
     let view = state.library_view_repo.get(id).await?;
     let defaults = playarr_catalog::BrowseQuery::default();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await
+        .map(|g| playarr_catalog::SharedGate(g));
     let page = state
         .catalog
-        .resolve_view(
+        .resolve_view_with(
             &view,
             Some(viewer.user_id),
             params.limit.unwrap_or(defaults.limit),
             params.offset.unwrap_or(defaults.offset),
             viewer.allowed_libraries(),
+            gate,
         )
         .await?;
     Ok(Json(page))

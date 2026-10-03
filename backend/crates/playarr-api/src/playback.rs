@@ -435,13 +435,18 @@ pub async fn list_watch_progress_handler(
     // at all is dropped for a restricted caller too (fail closed -- there's
     // nothing left to check its library against), same as every other gate
     // in this module.
-    let Some(allowed) = allowed else {
+    // Household content rules (rating/tags) filter history too, so a
+    // blocked title does not linger in "continue watching".
+    if allowed.is_none() && !crate::household::has_content_rules(&streaming.policy) {
         return Ok(Json(all_progress));
-    };
+    }
     let mut visible = Vec::with_capacity(all_progress.len());
     for progress in all_progress {
         if let Some(media_file) = state.media_files.get(progress.media_file_id).await {
-            if ensure_library_allowed(media_file.source_instance_id, Some(&allowed)).is_ok() {
+            if crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file)
+                .await
+                .is_ok()
+            {
                 visible.push(progress);
             }
         }
@@ -478,10 +483,7 @@ pub async fn get_watch_progress_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     let progress = state
         .watch_progress
         .get(streaming.user_id, media_file_id)
@@ -532,10 +534,7 @@ pub async fn update_watch_progress_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
     let position_ms = if body.duration_ms > 0 {
         body.position_ms.min(body.duration_ms)
     } else {
@@ -782,10 +781,7 @@ pub async fn playback_info_handler(
         .get(media_file_id)
         .await
         .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
-    ensure_library_allowed(
-        media_file.source_instance_id,
-        streaming.allowed_libraries().as_deref(),
-    )?;
+    crate::auth_extractor::ensure_media_access(&state, &streaming, &media_file).await?;
 
     // Clients already send these on every request -- see
     // `crate::version_gate`'s own doc comment -- so deriving session
@@ -1459,6 +1455,12 @@ pub async fn peer_playback_info_handler(
             })?,
     };
     ensure_library_allowed(media_file.source_instance_id, allowed_libraries.as_deref())?;
+    // The forwarding peer asserts nothing about content rules: re-derive
+    // them from this node's own synced policy.
+    state
+        .household
+        .ensure_media_file_allowed(&state, &policy, body.user_id, &media_file)
+        .await?;
 
     let response = negotiate_playback(
         &state,

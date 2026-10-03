@@ -37,6 +37,11 @@ pub struct SonarrSeries {
     /// `playarr_arr_sync::arr_client::map_sonarr`.
     #[serde(default, rename = "firstAired")]
     pub first_aired: Option<DateTime<Utc>>,
+    /// Content rating (TV Parental Guidelines, e.g. `TV-MA`). Absent/null/
+    /// blank for unrated series. Mapped to a `rating:` tag for household
+    /// controls.
+    #[serde(default)]
+    pub certification: Option<String>,
 }
 
 /// A single entry from a Sonarr resource's `images` array (poster, fanart,

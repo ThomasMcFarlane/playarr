@@ -106,6 +106,9 @@ pub struct TestState {
     /// `embedding_repo`/`rendition_repo` above already document.
     pub pool: DbPool,
     pub push_notifications: Arc<RecordingPushNotifier>,
+    /// The clock `app.household` reads; move it to cross schedule, budget
+    /// and approval-expiry boundaries.
+    pub clock: Arc<crate::household::FixedClock>,
     /// The id of the one `User` seeded into `app.user_directory` and bound
     /// to `app.auth_mode`'s trusted-network auto-login -- what
     /// `POST /api/v1/auth/login` resolves to for any source IP in tests
@@ -160,6 +163,7 @@ pub async fn seed_admin_user(state: &TestState, user_id: Uuid) {
         can_share_public: true,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         // Mirrors the real bootstrap admin (see `main.rs`'s
         // `bootstrap_admin_if_needed`): admin access does not imply
@@ -215,6 +219,7 @@ pub async fn seed_streaming_user(state: &TestState, user_id: Uuid) {
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream: true,
         is_admin: false,
@@ -269,6 +274,7 @@ pub async fn seed_streaming_user_with_library_allow(
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream: true,
         is_admin: false,
@@ -323,6 +329,7 @@ pub async fn seed_streaming_user_with_group_library_allow(
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream: true,
         is_admin: false,
@@ -376,6 +383,7 @@ pub async fn seed_streaming_user_without_download_access(
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream: true,
         is_admin: false,
@@ -457,6 +465,14 @@ pub async fn test_state() -> (Router, TestState) {
     let push_registration_repo: Arc<dyn PushRegistrationRepo> =
         Arc::new(SqlxPushRegistrationRepo::new(pool.clone()));
     let profile_pin_repo: Arc<dyn ProfilePinRepo> = Arc::new(SqlxProfilePinRepo::new(pool.clone()));
+    let household_clock = Arc::new(crate::household::FixedClock::new(Utc::now()));
+    let household_repo = Arc::new(playarr_db::SqlxHouseholdRepo::new(pool.clone()));
+    let household = Arc::new(crate::household::HouseholdState::new(
+        household_repo.clone(),
+        household_repo.clone(),
+        household_repo,
+        household_clock.clone(),
+    ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
@@ -580,6 +596,7 @@ pub async fn test_state() -> (Router, TestState) {
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         // The default trusted-network auto-login test user stands in for
         // an ordinary Playarr viewer in most tests, so it carries
@@ -666,6 +683,7 @@ pub async fn test_state() -> (Router, TestState) {
         push_notifier: push_notifications.clone(),
         firebase_web_config: None,
         profile_pin_repo,
+        household,
         policy_repo: policy_repo.clone(),
         sessions: refresh,
         refresh_ttl: Duration::days(30),
@@ -710,6 +728,7 @@ pub async fn test_state() -> (Router, TestState) {
             policy_repo,
             pool,
             push_notifications,
+            clock: household_clock,
             default_user_id,
             device_flow,
             work_repo,
@@ -829,4 +848,80 @@ pub async fn seed_downloadable_media_file(
     state.media_file_repo.create(&file).await.unwrap();
     state.media_files.insert(file.clone());
     file
+}
+
+/// Persists a streaming `User` whose `Policy` starts from the same defaults
+/// as [`seed_streaming_user`] and is then customised by `configure` --
+/// the household/child-control tests' way of building a restricted profile
+/// (rating ceiling, schedule, budget, guardians). Returns the saved policy.
+pub async fn seed_policy_user(
+    state: &TestState,
+    user_id: Uuid,
+    configure: impl FnOnce(&mut Policy),
+) -> Policy {
+    let mut policy = Policy {
+        id: Uuid::new_v4(),
+        name: format!("test-household-policy-{user_id}"),
+        library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: false,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        household: Default::default(),
+        access_schedule: None,
+        can_stream: true,
+        is_admin: false,
+    };
+    configure(&mut policy);
+    state
+        .policy_repo
+        .upsert(&policy)
+        .await
+        .expect("seed household test policy");
+    let user = User {
+        id: user_id,
+        username: format!("test-household-{user_id}"),
+        display_name: "Household Test User".to_string(),
+        email: None,
+        password_hash: Sensitive::new(playarr_auth::login::hash_password("test-only-password")),
+        policy_id: policy.id,
+        created_at: Utc::now(),
+        disabled: false,
+        preferred_audio_language: playarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    state
+        .user_repo
+        .upsert(&user)
+        .await
+        .expect("seed household test user");
+    policy
+}
+
+/// Like [`seed_movie`] with explicit tags (e.g. `rating:PG`).
+pub async fn seed_movie_with_tags(state: &TestState, title: &str, tags: &[&str]) -> Uuid {
+    let work = Work {
+        id: Uuid::new_v4(),
+        kind: WorkKind::Movie,
+        external_refs: vec![],
+        title: title.to_string(),
+        sort_title: title.to_string(),
+        overview: Some(format!("{title} is a test fixture.")),
+        images: vec![],
+        genres: vec![],
+        tags: tags.iter().map(|t| t.to_string()).collect(),
+        added_at: Utc::now(),
+        release_date: None,
+        monitored: true,
+        availability: Availability::Available,
+    };
+    let id = work.id;
+    state.work_repo.upsert(&work).await.unwrap();
+    id
 }

@@ -122,7 +122,17 @@ pub async fn work_credits_handler(
     // from a genuinely nonexistent one, before this endpoint leaks any
     // cast/crew detail for it.
     let allowed = viewer.allowed_libraries();
-    state.catalog.get_by_id(id, allowed.as_deref()).await?;
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    state
+        .catalog
+        .get_by_id_with(
+            id,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
+        .await?;
 
     let credits = state.credit_repo.list_for_work(id).await?;
     let mut cast = Vec::new();
@@ -168,7 +178,12 @@ pub async fn get_person_handler(
     // would leak through a library a restricted caller has no grant for.
     // 404, not 403, matching `get_work_handler`'s visibility-miss posture.
     let allowed = viewer.allowed_libraries();
-    let visible_works = visible_works_for_person(&state, id, allowed.as_deref()).await?;
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    let visible_works =
+        visible_works_for_person(&state, id, allowed.as_deref(), gate.as_deref()).await?;
     if visible_works.is_empty() {
         return Err(ApiError::not_found("person not found"));
     }
@@ -245,7 +260,12 @@ pub async fn person_works_handler(
     // (404), the exact existence oracle `get_person_handler` is written
     // to prevent.
     let allowed = viewer.allowed_libraries();
-    let mut works = visible_works_for_person(&state, id, allowed.as_deref()).await?;
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    let mut works =
+        visible_works_for_person(&state, id, allowed.as_deref(), gate.as_deref()).await?;
     if works.is_empty() {
         return Err(ApiError::not_found("person not found"));
     }
@@ -265,6 +285,7 @@ async fn visible_works_for_person(
     state: &AppState,
     person_id: Uuid,
     allowed: Option<&[Uuid]>,
+    gate: Option<&crate::household::HouseholdGate>,
 ) -> Result<Vec<Work>, ApiError> {
     let work_ids = state
         .credit_repo
@@ -277,7 +298,11 @@ async fn visible_works_for_person(
             Err(playarr_db::DbError::NotFound) => continue,
             Err(err) => return Err(err.into()),
         };
-        if state.catalog.is_work_visible(work.id, allowed).await? {
+        if state
+            .catalog
+            .is_work_visible_with(work.id, crate::household::access(allowed, gate))
+            .await?
+        {
             works.push(work);
         }
     }

@@ -740,7 +740,7 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
         overview: remote.overview.clone(),
         images: remote.images.clone(),
         genres: remote.genres.clone(),
-        tags: Vec::new(),
+        tags: rating_tags(&[], remote.certification.as_deref()),
         added_at: Utc::now(),
         // Arr-owned, like `overview`/`images`/`genres` above -- see
         // `RemoteWork::release_date`'s doc comment.
@@ -769,7 +769,27 @@ fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
     merged.images = remote.images.clone();
     merged.genres = remote.genres.clone();
     merged.release_date = remote.release_date;
+    merged.tags = rating_tags(&existing.tags, remote.certification.as_deref());
     merged
+}
+
+/// `existing` tags with the arr-owned `rating:` tag replaced by
+/// `certification` (or removed when the source reports none). Every other
+/// tag, including an admin's `rating-override:`, is preserved untouched.
+fn rating_tags(existing: &[String], certification: Option<&str>) -> Vec<String> {
+    let prefix = playarr_model::household::RATING_TAG_PREFIX;
+    let mut tags: Vec<String> = existing
+        .iter()
+        .filter(|tag| {
+            !tag.get(..prefix.len())
+                .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+        })
+        .cloned()
+        .collect();
+    if let Some(rating) = certification {
+        tags.push(format!("{prefix}{rating}"));
+    }
+    tags
 }
 
 /// The core diff algorithm: given everything the source instance currently
@@ -908,6 +928,7 @@ mod tests {
 
     fn remote(external_id: &str, title: &str, monitored: bool) -> RemoteWork {
         RemoteWork {
+            certification: None,
             external_id: external_id.to_string(),
             // Not exercised by `diff_works`/`merge_work` (only
             // `crate::media_sync::MediaSync` reads it) -- a fixed
@@ -1387,6 +1408,41 @@ mod tests {
         assert!(remaining.iter().any(|w| w.title == "New Name"));
         assert!(remaining.iter().any(|w| w.title == "Brand New"));
         assert!(!remaining.iter().any(|w| w.id == to_delete_id));
+    }
+
+    #[test]
+    fn certification_becomes_an_arr_owned_rating_tag_and_keeps_other_tags() {
+        let existing = work_with_ref(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            "1",
+            "Film",
+            true,
+            Availability::Available,
+        );
+        let mut remote_work = remote("1", "Film", true);
+        remote_work.certification = Some("PG-13".to_string());
+        let merged = merge_work(&existing, WorkKind::Movie, &remote_work);
+        assert_eq!(
+            merged.tags,
+            vec!["kids".to_string(), "rating:PG-13".to_string()]
+        );
+
+        // A changed certification replaces the old tag; an admin override
+        // and unrelated tags survive.
+        let mut with_override = merged.clone();
+        with_override.tags.push("rating-override:G".to_string());
+        remote_work.certification = Some("R".to_string());
+        let again = merge_work(&with_override, WorkKind::Movie, &remote_work);
+        assert!(again.tags.contains(&"rating:R".to_string()));
+        assert!(!again.tags.contains(&"rating:PG-13".to_string()));
+        assert!(again.tags.contains(&"rating-override:G".to_string()));
+        assert!(again.tags.contains(&"kids".to_string()));
+
+        // The source dropping its certification removes the tag.
+        remote_work.certification = None;
+        let cleared = merge_work(&again, WorkKind::Movie, &remote_work);
+        assert!(!cleared.tags.iter().any(|t| t.starts_with("rating:")));
     }
 
     #[test]

@@ -94,6 +94,9 @@ impl From<BrowseQueryParams> for BrowseQuery {
             // allowed libraries), so `defaults`' `None` here is just a
             // placeholder until that assignment happens.
             allowed_source_instance_ids: defaults.allowed_source_instance_ids,
+            // Likewise set by `browse_catalog_handler` from the caller's
+            // resolved policy, never from the request.
+            gate: defaults.gate,
         }
     }
 }
@@ -315,7 +318,18 @@ pub async fn browse_catalog_handler(
     // for `library_allow` (that one bypasses for `is_admin`); unlike that
     // check, this is choosing what to *additionally show*, not what to
     // *gate*, so there's no access-control reason to special-case admins.
-    query.group_library_ids = viewer.policy.group_library_allow.clone();
+    // A peer-only (remote) title has no local record to rate, so a profile
+    // under content rules sees none of them.
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    query.group_library_ids = if gate.is_some() {
+        Vec::new()
+    } else {
+        viewer.policy.group_library_allow.clone()
+    };
+    query.gate = gate.map(|g| playarr_catalog::SharedGate(g));
     let page = state.catalog.browse(query).await?;
     Ok(Json(page))
 }
@@ -404,7 +418,17 @@ pub async fn get_work_handler(
     Path(id): Path<Uuid>,
 ) -> Result<Json<WorkDetail>, ApiError> {
     let allowed = viewer.allowed_libraries();
-    let detail = state.catalog.get_by_id(id, allowed.as_deref()).await?;
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    let detail = state
+        .catalog
+        .get_by_id_with(
+            id,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
+        .await?;
     Ok(Json(detail))
 }
 
@@ -452,17 +476,30 @@ pub async fn search_catalog_handler(
 ) -> Result<Json<SearchResponse>, ApiError> {
     let allowed = viewer.allowed_libraries();
     let limit = params.limit.unwrap_or(25);
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let items = state
         .catalog
-        .search(&params.q, limit, allowed.as_deref())
+        .search_with(
+            &params.q,
+            limit,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
         .await?;
-    let remote_only = state
-        .catalog
-        .search_remote_only(&params.q, &viewer.policy.group_library_allow)
-        .await?
-        .into_iter()
-        .map(RemoteOnlyWork::from)
-        .collect();
+    // Peer-only titles cannot be rated locally: hidden under content rules.
+    let remote_only = if gate.is_some() {
+        Vec::new()
+    } else {
+        state
+            .catalog
+            .search_remote_only(&params.q, &viewer.policy.group_library_allow)
+            .await?
+            .into_iter()
+            .map(RemoteOnlyWork::from)
+            .collect()
+    };
     Ok(Json(SearchResponse { items, remote_only }))
 }
 
@@ -518,9 +555,17 @@ pub async fn similar_works_handler(
     Query(params): Query<SimilarQueryParams>,
 ) -> Result<Json<Vec<Work>>, ApiError> {
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let results = state
         .catalog
-        .similar(id, params.limit.unwrap_or(20), allowed.as_deref())
+        .similar_with(
+            id,
+            params.limit.unwrap_or(20),
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
         .await?;
     Ok(Json(results))
 }

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use utoipa::ToSchema;
 
-use crate::auth_extractor::StreamingUser;
+use crate::auth_extractor::AnytimeStreamingUser;
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -230,7 +230,7 @@ impl PushNotifier for FcmNotifier {
 )]
 pub async fn push_config_handler(
     State(state): State<AppState>,
-    _streaming: StreamingUser,
+    _streaming: AnytimeStreamingUser,
 ) -> Result<Json<FirebaseWebConfig>, ApiError> {
     state
         .firebase_web_config
@@ -257,7 +257,7 @@ pub async fn push_config_handler(
 )]
 pub async fn register_push_handler(
     State(state): State<AppState>,
-    streaming: StreamingUser,
+    streaming: AnytimeStreamingUser,
     Json(body): Json<RegisterPushRequest>,
 ) -> Result<StatusCode, ApiError> {
     if body.token.trim().is_empty() || body.token.len() > 4096 {

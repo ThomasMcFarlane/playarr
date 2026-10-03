@@ -23,6 +23,60 @@
 
 mod codec;
 
+/// A per-caller content restriction applied to every catalog read, on top
+/// of library access (`docs/architecture/household-controls.md`). The
+/// catalog stays policy-agnostic: the API layer supplies an implementation
+/// (rating ceiling, tag lists, guardian grants) and its stable
+/// [`WorkGate::cache_key`] so two callers with different restrictions never
+/// share a cached page.
+pub trait WorkGate: Send + Sync {
+    /// Whether the caller may see `work`.
+    fn permits(&self, work: &Work) -> bool;
+    /// Uniquely identifies this gate's behaviour for cache keys.
+    fn cache_key(&self) -> String;
+}
+
+/// Cheap-to-clone, `Debug`-able handle to a [`WorkGate`].
+#[derive(Clone)]
+pub struct SharedGate(pub Arc<dyn WorkGate>);
+
+impl std::fmt::Debug for SharedGate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SharedGate({})", self.0.cache_key())
+    }
+}
+
+/// Library access plus an optional [`WorkGate`]. `Access::from(None)` is an
+/// unrestricted caller.
+#[derive(Clone, Copy, Default)]
+pub struct Access<'a> {
+    pub allowed: Option<&'a [Uuid]>,
+    pub gate: Option<&'a dyn WorkGate>,
+}
+
+impl<'a> From<Option<&'a [Uuid]>> for Access<'a> {
+    fn from(allowed: Option<&'a [Uuid]>) -> Self {
+        Self {
+            allowed,
+            gate: None,
+        }
+    }
+}
+
+impl<'a> Access<'a> {
+    pub fn new(allowed: Option<&'a [Uuid]>, gate: Option<&'a dyn WorkGate>) -> Self {
+        Self { allowed, gate }
+    }
+
+    fn permits(&self, work: &Work) -> bool {
+        self.gate.is_none_or(|gate| gate.permits(work))
+    }
+
+    fn gate_key(&self) -> String {
+        self.gate.map(|g| g.cache_key()).unwrap_or_default()
+    }
+}
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -133,6 +187,9 @@ pub struct BrowseQuery {
     /// inert for a caller/deployment with no group-library grants -- see
     /// [`CatalogService::browse`]'s doc comment.
     pub group_library_ids: Vec<Uuid>,
+    /// Household/child content restriction (rating, tags, guardian grants).
+    /// `None` = none. See [`WorkGate`].
+    pub gate: Option<SharedGate>,
 }
 
 impl Default for BrowseQuery {
@@ -152,6 +209,7 @@ impl Default for BrowseQuery {
             // implied by merely constructing a query.
             allowed_source_instance_ids: None,
             group_library_ids: Vec::new(),
+            gate: None,
         }
     }
 }
@@ -337,7 +395,7 @@ const ALL_KINDS: [WorkKind; 5] = [
 /// never share a cached page.
 fn browse_cache_key(query: &BrowseQuery) -> String {
     format!(
-        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}",
+        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}:{}",
         query.kind,
         query.available_only,
         query.source_instance_id,
@@ -349,13 +407,18 @@ fn browse_cache_key(query: &BrowseQuery) -> String {
         query.offset,
         query.allowed_source_instance_ids,
         query.group_library_ids,
+        query
+            .gate
+            .as_ref()
+            .map(|g| g.0.cache_key())
+            .unwrap_or_default(),
     )
 }
 
 /// Includes `allowed` -- same cross-caller cache-leak reasoning as
 /// [`browse_cache_key`].
-fn search_cache_key(needle: &str, limit: i64, allowed: Option<&[Uuid]>) -> String {
-    format!("catalog:search:{needle}:{limit}:{allowed:?}")
+fn search_cache_key(needle: &str, limit: i64, allowed: Option<&[Uuid]>, gate: &str) -> String {
+    format!("catalog:search:{needle}:{limit}:{allowed:?}:{gate}")
 }
 
 /// Below this [`strsim::jaro_winkler`] score (`[0.0, 1.0]`, `1.0` =
@@ -800,6 +863,9 @@ impl CatalogService {
         if let Some(tag) = query.tag.as_deref() {
             candidates.retain(|w| w.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)));
         }
+        if let Some(gate) = query.gate.as_ref() {
+            candidates.retain(|work| gate.0.permits(work));
+        }
         if query.source_instance_id.is_some() || query.allowed_source_instance_ids.is_some() {
             // One bulk query instead of a `list_by_work_id` per candidate
             // (an N+1 that cost ~3 s on a 2.7k-title library).
@@ -910,6 +976,27 @@ impl CatalogService {
         offset: i64,
         allowed_source_instance_ids: Option<Vec<Uuid>>,
     ) -> Result<CatalogPage, CatalogError> {
+        self.resolve_view_with(
+            view,
+            user_id,
+            limit,
+            offset,
+            allowed_source_instance_ids,
+            None,
+        )
+        .await
+    }
+
+    /// [`Self::resolve_view`] with a household [`WorkGate`].
+    pub async fn resolve_view_with(
+        &self,
+        view: &playarr_model::LibraryView,
+        user_id: Option<Uuid>,
+        limit: i64,
+        offset: i64,
+        allowed_source_instance_ids: Option<Vec<Uuid>>,
+        gate: Option<SharedGate>,
+    ) -> Result<CatalogPage, CatalogError> {
         let c = &view.criteria;
         let mut page = self
             .browse(BrowseQuery {
@@ -932,6 +1019,7 @@ impl CatalogService {
                 // so there is nothing here for a group-library grant to
                 // union in.
                 group_library_ids: Vec::new(),
+                gate,
             })
             .await?;
 
@@ -1065,6 +1153,19 @@ impl CatalogService {
         limit: i64,
         allowed_source_instance_ids: Option<&[Uuid]>,
     ) -> Result<Vec<Work>, CatalogError> {
+        self.search_with(query, limit, allowed_source_instance_ids.into())
+            .await
+    }
+
+    /// [`Self::search`] with a household [`WorkGate`] as well as library
+    /// access.
+    pub async fn search_with(
+        &self,
+        query: &str,
+        limit: i64,
+        access: Access<'_>,
+    ) -> Result<Vec<Work>, CatalogError> {
+        let allowed_source_instance_ids = access.allowed;
         let raw_needle = query.trim();
         let limit = limit.max(0) as usize;
 
@@ -1073,7 +1174,12 @@ impl CatalogService {
         }
         let needle = fold_locale(raw_needle);
 
-        let cache_key = search_cache_key(&needle, limit as i64, allowed_source_instance_ids);
+        let cache_key = search_cache_key(
+            &needle,
+            limit as i64,
+            allowed_source_instance_ids,
+            &access.gate_key(),
+        );
         if let Some(cached) = self.cache.get(&cache_key).await? {
             if let Ok(items) = serde_json::from_slice::<Vec<Work>>(&cached) {
                 return Ok(items);
@@ -1109,6 +1215,9 @@ impl CatalogService {
         for (work, _, _) in scored {
             if matches.len() >= limit {
                 break;
+            }
+            if !access.permits(&work) {
+                continue;
             }
             if let Some(allowed) = allowed_source_instance_ids {
                 let files = self.media_file_repo.list_by_work_id(work.id).await?;
@@ -1164,6 +1273,19 @@ impl CatalogService {
         limit: i64,
         allowed_source_instance_ids: Option<&[Uuid]>,
     ) -> Result<Vec<Work>, CatalogError> {
+        self.similar_with(work_id, limit, allowed_source_instance_ids.into())
+            .await
+    }
+
+    /// [`Self::similar`] with a household [`WorkGate`] as well as library
+    /// access.
+    pub async fn similar_with(
+        &self,
+        work_id: Uuid,
+        limit: i64,
+        access: Access<'_>,
+    ) -> Result<Vec<Work>, CatalogError> {
+        let allowed_source_instance_ids = access.allowed;
         let embedding_repo = self.embedding_repo.as_ref().ok_or(CatalogError::NotFound)?;
         let limit = limit.max(0) as usize;
 
@@ -1197,6 +1319,7 @@ impl CatalogService {
                 continue;
             }
             match self.work_repo.get(candidate_id).await {
+                Ok(work) if !access.permits(&work) => continue,
                 Ok(work) => works.push(work),
                 Err(DbError::NotFound) => continue,
                 Err(err) => return Err(err.into()),
@@ -1225,9 +1348,24 @@ impl CatalogService {
         id: Uuid,
         allowed_source_instance_ids: Option<&[Uuid]>,
     ) -> Result<WorkDetail, CatalogError> {
+        self.get_by_id_with(id, allowed_source_instance_ids.into())
+            .await
+    }
+
+    /// [`Self::get_by_id`] with a household [`WorkGate`] as well as library
+    /// access. A gated work is `NotFound`, like a library-restricted one.
+    pub async fn get_by_id_with(
+        &self,
+        id: Uuid,
+        access: Access<'_>,
+    ) -> Result<WorkDetail, CatalogError> {
+        let allowed_source_instance_ids = access.allowed;
         let cache_key = work_detail_cache_key(id);
         if let Some(cached) = self.cache.get(&cache_key).await? {
             if let Ok(detail) = serde_json::from_slice::<WorkDetail>(&cached) {
+                if !access.permits(&detail.work) {
+                    return Err(CatalogError::NotFound);
+                }
                 if !self
                     .is_work_visible(detail.work.id, allowed_source_instance_ids)
                     .await?
@@ -1244,6 +1382,9 @@ impl CatalogService {
             Err(other) => return Err(CatalogError::Db(other)),
         };
 
+        if !access.permits(&work) {
+            return Err(CatalogError::NotFound);
+        }
         if !self
             .is_work_visible(work.id, allowed_source_instance_ids)
             .await?
@@ -1296,6 +1437,17 @@ impl CatalogService {
         Ok(detail)
     }
 
+    /// The bare `Work` for `id`, `None` if it does not exist. For callers
+    /// that must evaluate a per-work restriction (rating/tags) outside a
+    /// catalog read.
+    pub async fn work(&self, id: Uuid) -> Result<Option<Work>, CatalogError> {
+        match self.work_repo.get(id).await {
+            Ok(work) => Ok(Some(work)),
+            Err(DbError::NotFound) => Ok(None),
+            Err(other) => Err(CatalogError::Db(other)),
+        }
+    }
+
     /// `true` if `work_id` is visible under `allowed` -- the shared
     /// primitive behind [`Self::get_by_id`]'s access check and
     /// `playarr-api`'s playlist-item visibility filter (a caller can list
@@ -1315,7 +1467,25 @@ impl CatalogService {
         work_id: Uuid,
         allowed: Option<&[Uuid]>,
     ) -> Result<bool, CatalogError> {
-        let Some(allowed) = allowed else {
+        self.is_work_visible_with(work_id, allowed.into()).await
+    }
+
+    /// [`Self::is_work_visible`] with a household [`WorkGate`] as well as
+    /// library access.
+    pub async fn is_work_visible_with(
+        &self,
+        work_id: Uuid,
+        access: Access<'_>,
+    ) -> Result<bool, CatalogError> {
+        if let Some(gate) = access.gate {
+            match self.work_repo.get(work_id).await {
+                Ok(work) if !gate.permits(&work) => return Ok(false),
+                Ok(_) => {}
+                Err(DbError::NotFound) => return Ok(false),
+                Err(other) => return Err(CatalogError::Db(other)),
+            }
+        }
+        let Some(allowed) = access.allowed else {
             return Ok(true);
         };
         let files = self.media_file_repo.list_by_work_id(work_id).await?;
@@ -3059,6 +3229,59 @@ mod tests {
         // Empty allow-list is deny-all, not all-allow.
         let err = svc.get_by_id(film_id, Some(&[])).await.unwrap_err();
         assert!(matches!(err, CatalogError::NotFound));
+    }
+
+    /// Gate that hides any work carrying a `blocked` tag.
+    struct HideBlocked(&'static str);
+
+    impl WorkGate for HideBlocked {
+        fn permits(&self, work: &Work) -> bool {
+            !work.tags.iter().any(|t| t == "blocked")
+        }
+
+        fn cache_key(&self) -> String {
+            self.0.to_string()
+        }
+    }
+
+    #[tokio::test]
+    async fn work_gate_applies_to_browse_search_detail_and_never_shares_cache() {
+        let pool = test_pool().await;
+        let repo = work_repo(pool.clone());
+        let ok = movie("Gate Fine", "Gate Fine", &[], 0);
+        let mut bad = movie("Gate Hidden", "Gate Hidden", &[], 0);
+        bad.tags.push("blocked".to_string());
+        repo.upsert(&ok).await.unwrap();
+        repo.upsert(&bad).await.unwrap();
+        let svc = service(pool, repo);
+
+        // An ungated caller warms the browse and search caches first.
+        let all = svc.browse(BrowseQuery::default()).await.unwrap();
+        assert_eq!(all.items.len(), 2);
+        assert_eq!(svc.search("gate", 10, None).await.unwrap().len(), 2);
+        svc.get_by_id(bad.id, None).await.unwrap();
+
+        let gate = SharedGate(Arc::new(HideBlocked("hide-blocked")));
+        let gated = svc
+            .browse(BrowseQuery {
+                gate: Some(gate.clone()),
+                ..BrowseQuery::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(gated.items.len(), 1);
+        assert_eq!(gated.items[0].id, ok.id);
+
+        let access = Access::new(None, Some(gate.0.as_ref()));
+        let found = svc.search_with("gate", 10, access).await.unwrap();
+        assert_eq!(found.len(), 1);
+        assert!(matches!(
+            svc.get_by_id_with(bad.id, access).await,
+            Err(CatalogError::NotFound)
+        ));
+        svc.get_by_id_with(ok.id, access).await.unwrap();
+        assert!(!svc.is_work_visible_with(bad.id, access).await.unwrap());
+        assert!(svc.is_work_visible_with(ok.id, access).await.unwrap());
     }
 
     #[tokio::test]

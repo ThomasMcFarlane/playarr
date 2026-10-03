@@ -225,6 +225,7 @@ mod tests {
             can_share_public: false,
             device_allow: vec![],
             max_concurrent_sessions: None,
+            household: Default::default(),
             access_schedule: None,
             can_stream: false,
             is_admin: true,

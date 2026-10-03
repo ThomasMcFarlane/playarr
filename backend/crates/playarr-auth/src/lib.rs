@@ -16,6 +16,7 @@
 
 pub mod admin;
 pub mod device_flow;
+pub mod household;
 pub mod jwt;
 pub mod login;
 pub mod policy;

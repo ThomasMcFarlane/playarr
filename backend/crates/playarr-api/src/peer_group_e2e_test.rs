@@ -243,6 +243,7 @@ async fn two_peer_nodes_join_and_sync_over_the_real_wire_protocol() {
         can_share_public: false,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
+        household: Default::default(),
         access_schedule: None,
         can_stream: true,
         is_admin: false,

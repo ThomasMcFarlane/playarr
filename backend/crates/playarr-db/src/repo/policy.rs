@@ -102,6 +102,7 @@ impl SqlxPolicyRepo {
         let access_schedule: Option<String> = row.try_get("access_schedule")?;
         let can_stream: i64 = row.try_get("can_stream")?;
         let is_admin: i64 = row.try_get("is_admin")?;
+        let household: String = row.try_get("household")?;
 
         Ok(Policy {
             id: parse_uuid(&id)?,
@@ -126,6 +127,7 @@ impl SqlxPolicyRepo {
                 .transpose()?,
             can_stream: can_stream != 0,
             is_admin: is_admin != 0,
+            household: serde_json::from_str(&household)?,
         })
     }
 
@@ -159,14 +161,14 @@ impl PolicyRepo for SqlxPolicyRepo {
                 "SELECT id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin \
+                 can_stream, is_admin, household \
                  FROM policies WHERE id = ? AND deleted_at IS NULL"
             }
             Backend::Postgres => {
                 "SELECT id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin \
+                 can_stream, is_admin, household \
                  FROM policies WHERE id = $1 AND deleted_at IS NULL"
             }
         };
@@ -189,6 +191,7 @@ impl PolicyRepo for SqlxPolicyRepo {
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
+        let household = serde_json::to_string(&policy.household)?;
 
         // `updated_at` is bound once below from the server clock, never a
         // caller-supplied value -- see this module's own doc comment.
@@ -203,8 +206,8 @@ impl PolicyRepo for SqlxPolicyRepo {
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 can_stream, is_admin, updated_at, household) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, library_allow = excluded.library_allow, \
                  group_library_allow = excluded.group_library_allow, \
@@ -215,16 +218,17 @@ impl PolicyRepo for SqlxPolicyRepo {
                  device_allow = excluded.device_allow, \
                  max_concurrent_sessions = excluded.max_concurrent_sessions, \
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
-                 is_admin = excluded.is_admin, updated_at = excluded.updated_at"
+                 is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
+                 household = excluded.household"
             }
             Backend::Postgres => {
                 "INSERT INTO policies \
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at) \
+                 can_stream, is_admin, updated_at, household) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
-                 $17, $18) \
+                 $17, $18, $19) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, library_allow = excluded.library_allow, \
                  group_library_allow = excluded.group_library_allow, \
@@ -235,7 +239,8 @@ impl PolicyRepo for SqlxPolicyRepo {
                  device_allow = excluded.device_allow, \
                  max_concurrent_sessions = excluded.max_concurrent_sessions, \
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
-                 is_admin = excluded.is_admin, updated_at = excluded.updated_at"
+                 is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
+                 household = excluded.household"
             }
         };
         sqlx::query(sql)
@@ -257,6 +262,7 @@ impl PolicyRepo for SqlxPolicyRepo {
             .bind(policy.can_stream as i64)
             .bind(policy.is_admin as i64)
             .bind(format_datetime(chrono::Utc::now()))
+            .bind(household)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -290,7 +296,7 @@ impl PolicyRepo for SqlxPolicyRepo {
         let sql = "SELECT id, name, library_allow, group_library_allow, blocked_folders, \
                     max_rating, blocked_tags, allowed_tags, can_transcode, can_download, \
                     can_delete, can_share_public, device_allow, max_concurrent_sessions, \
-                    access_schedule, can_stream, is_admin \
+                    access_schedule, can_stream, is_admin, household \
                     FROM policies WHERE deleted_at IS NULL ORDER BY name";
         let rows = sqlx::query(sql).fetch_all(&self.pool).await?;
         rows.iter().map(Self::from_row).collect()
@@ -355,6 +361,7 @@ impl PolicyRepo for SqlxPolicyRepo {
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
+        let household = serde_json::to_string(&policy.household)?;
 
         let sql = match self.backend {
             Backend::Sqlite => {
@@ -362,8 +369,8 @@ impl PolicyRepo for SqlxPolicyRepo {
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at, origin_peer_id, deleted_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 can_stream, is_admin, updated_at, origin_peer_id, deleted_at, household) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, library_allow = excluded.library_allow, \
                  group_library_allow = excluded.group_library_allow, \
@@ -375,16 +382,17 @@ impl PolicyRepo for SqlxPolicyRepo {
                  max_concurrent_sessions = excluded.max_concurrent_sessions, \
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
                  is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
-                 origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at"
+                 origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at, \
+                 household = excluded.household"
             }
             Backend::Postgres => {
                 "INSERT INTO policies \
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at, origin_peer_id, deleted_at) \
+                 can_stream, is_admin, updated_at, origin_peer_id, deleted_at, household) \
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
-                 $17, $18, $19, $20) \
+                 $17, $18, $19, $20, $21) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, library_allow = excluded.library_allow, \
                  group_library_allow = excluded.group_library_allow, \
@@ -396,7 +404,8 @@ impl PolicyRepo for SqlxPolicyRepo {
                  max_concurrent_sessions = excluded.max_concurrent_sessions, \
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
                  is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
-                 origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at"
+                 origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at, \
+                 household = excluded.household"
             }
         };
         sqlx::query(sql)
@@ -420,6 +429,7 @@ impl PolicyRepo for SqlxPolicyRepo {
             .bind(format_datetime(metadata.updated_at))
             .bind(metadata.origin_peer_id.map(|id| id.to_string()))
             .bind(metadata.deleted_at.map(format_datetime))
+            .bind(household)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -432,7 +442,7 @@ impl PolicyRepo for SqlxPolicyRepo {
         const SELECT: &str = "id, name, library_allow, group_library_allow, blocked_folders, \
                                max_rating, blocked_tags, allowed_tags, can_transcode, \
                                can_download, can_delete, can_share_public, device_allow, \
-                               max_concurrent_sessions, access_schedule, can_stream, is_admin, \
+                               max_concurrent_sessions, access_schedule, can_stream, is_admin, household, \
                                updated_at, origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
@@ -484,6 +494,16 @@ mod tests {
             can_share_public: false,
             device_allow: vec![ClientPlatform::Web, ClientPlatform::AndroidTv],
             max_concurrent_sessions: Some(3),
+            household: playarr_model::HouseholdControls {
+                unrated: playarr_model::UnratedContent::Allow,
+                timezone: Some("Europe/London".to_string()),
+                daily_budget_minutes: Some(90),
+                game_allow: Some(vec![]),
+                guardian_user_ids: vec![Uuid::new_v4()],
+                approval_required: vec![playarr_model::ApprovalKind::Purchase],
+                offline_ttl_hours: Some(12),
+                ..Default::default()
+            },
             access_schedule: Some(vec![AccessWindow {
                 weekday: Weekday::Monday,
                 time_range: TimeRange {

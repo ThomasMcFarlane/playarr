@@ -17,6 +17,7 @@ pub mod discovery;
 pub mod download;
 pub mod embedding;
 pub mod group_library;
+pub mod household;
 pub mod library_view;
 pub mod media;
 pub mod media_path;
@@ -48,6 +49,7 @@ pub use calendar::{
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
 pub use group_library::{GroupLibrary, LeafSelector, PeerLeafAvailability};
+pub use household::{Approval, ApprovalKind, ApprovalStatus, HouseholdControls, UnratedContent};
 pub use library_view::{LibraryView, ViewCriteria, ViewSort};
 pub use media::{MediaFile, ProducedBy, Rendition, RenditionStatus};
 pub use media_path::resolve_media_path;

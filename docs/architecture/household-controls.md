@@ -122,6 +122,31 @@ cached media stays locked until it reconnects. This is client-enforced and is a
 documented residual risk: a rooted device can bypass local checks, which is why
 the TTL is short and online playback is always server-evaluated.
 
+## Routes
+
+| Route | Who | Purpose |
+|---|---|---|
+| `GET /api/v1/household/status` | any streaming profile, even when locked | state, remaining time, next change, `guardian_for`, offline validity |
+| `POST /api/v1/household/approvals` | the requesting profile | create a pending request |
+| `GET /api/v1/household/approvals` | profile or its guardians | own requests plus those of guarded profiles |
+| `POST /api/v1/household/approvals/{id}/decision` | a listed guardian with a PIN | approve (PIN step-up, bounded duration) or deny |
+| `POST /api/v1/household/approvals/{id}/consume` | the requesting profile | spend one use (purchase/install hooks) |
+| `GET/PUT /api/v1/admin/users/{id}/household` | admin | rating, tags, schedule, timezone, budget, guardians |
+
+A blocked request is `403 household_blocked` with
+`details.reason` of `outside_schedule`, `budget_exhausted`, `rating_too_high`,
+`unrated`, `tag_blocked` or `folder_blocked`, plus `next_start_at`/`resets_at`
+where relevant. A PIN lockout is `429 pin_locked` with `retry_after_seconds`.
+
+## Known gaps (tracked)
+
+* A stored refresh token for a PIN-locked profile is not itself gated by the
+  PIN (row 115); the PIN gate on switching is enforced by clients, with
+  lockout, step-up and switch-up refusal enforced by the server.
+* Budget counting is per node; a multi-replica deployment counts each
+  replica's served media into one shared table but throttles writes in memory,
+  so concurrent replicas can over-grant by at most one flush interval.
+
 ## Blocked on other work (recorded as explicit rows)
 
 * Rows 22/28/36 (games, live TV, external apps) define no routes yet. The

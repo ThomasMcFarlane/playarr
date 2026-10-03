@@ -371,8 +371,20 @@ pub async fn discover_handler(
 
     if scope != DiscoveryScope::Games {
         let allowed = viewer.allowed_libraries();
+        let gate = state
+            .household
+            .gate_for(&viewer.policy, viewer.user_id)
+            .await;
         let limit = params.limit.unwrap_or(25).clamp(1, 100);
-        match state.catalog.search(q, limit, allowed.as_deref()).await {
+        match state
+            .catalog
+            .search_with(
+                q,
+                limit,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
+            .await
+        {
             Ok(works) => {
                 candidates.extend(works.iter().map(library_candidate));
                 providers.push(ProviderStatus {
@@ -486,6 +498,10 @@ async fn find_library_work(
     snap: &TitleSnapshot,
 ) -> Result<Option<Work>, ApiError> {
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let mut ids: Vec<Uuid> = snap.work_id.into_iter().collect();
     for r in &snap.external_refs {
         if let Ok(Some(work)) = state
@@ -499,7 +515,14 @@ async fn find_library_work(
         }
     }
     for id in ids {
-        if let Ok(detail) = state.catalog.get_by_id(id, allowed.as_deref()).await {
+        if let Ok(detail) = state
+            .catalog
+            .get_by_id_with(
+                id,
+                crate::household::access(allowed.as_deref(), gate.as_deref()),
+            )
+            .await
+        {
             return Ok(Some(detail.work));
         }
     }
@@ -531,9 +554,16 @@ async fn build_action_context(
     };
     ctx.library_work_id = Some(work.id);
     let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
     let detail = state
         .catalog
-        .get_by_id(work.id, allowed.as_deref())
+        .get_by_id_with(
+            work.id,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
         .await
         .ok();
     let progress = state.watch_progress.list_for_user(viewer.user_id).await?;

@@ -134,6 +134,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the server backup and recovery design (inventory, encrypted format, consistent
   snapshots, retention, staged restore and verification plan) in
   `docs/architecture/server-backups.md`, tracked as tasks 62-66.
+- Household and child controls on the server (TASKS 104-107, design in
+  `docs/architecture/household-controls.md`): rating ceiling with a fail-closed unrated
+  setting and blocked/allowed tags enforced on catalog browse, search, detail, similar,
+  credits, artwork, saved views, playlists, watch history, downloads and every media route;
+  schedules evaluated in the profile's IANA time zone on the server clock; a server-counted
+  daily watch budget; `GET /api/v1/household/status`; guardian approval requests for
+  content, extra time, purchases and installs, approved with the guardian's own PIN and bounded
+  by expiry and single use; admin `GET/PUT /api/v1/admin/users/{id}/household`. Arr sync
+  writes Radarr/Sonarr certifications as `rating:` tags (admin override `rating-override:`).
+  Policies gain a `household` JSON column (SQLite migrations `0050`/`0051`, Postgres `0051`/`0052`).
+- Bypass-resistance tests for token reuse, capability media URLs, profile escape, PIN brute
+  force, expired and replayed approvals, and schedule crossing during playback
+  (`backend/crates/playarr-api/src/household_tests.rs`).
 - Documented the household and child controls design (rating/tag gates, timezone schedules, server-counted
   daily budgets, guardian approvals, PIN lockout, offline limits) in
   `docs/architecture/household-controls.md`, tracked as tasks 103-114.
@@ -1936,6 +1949,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- Playback capability URLs (`playback_session_id` cookie or query) previously skipped all
+  account checks after the session was created. They now re-resolve the session owner's
+  streaming grant, library access, schedule, budget and content rules on every request.
+- Profile PIN verification is rate limited: five failures per profile pair, or twenty against
+  one profile from any caller, lock it out with exponential back-off (`429 pin_locked`). A
+  restricted profile can no longer "switch" into a less restricted profile that has no PIN.
 - Ignore local runtime data, browser-automation helpers, embedding caches, and the local backend
   scratch runner so credentials, databases, downloaded models, and machine-specific paths cannot
   be committed accidentally.

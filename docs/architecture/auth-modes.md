@@ -144,6 +144,11 @@ a fully-built system:
   `playarr-db`, no `users` table in either migration set, and no
   `PolicyRepo`/`policies` table at all. Accounts do not survive a process
   restart and are not shared across nodes in a multi-node deployment.
+- **Household and child controls are now evaluated on the live request paths**
+  (rating/tags, schedule, budget, guardian approvals, PIN lockout): see
+  [`household-controls.md`](household-controls.md). The remainder of this
+  bullet describes the older general `DefaultPolicyEvaluator`, which is still
+  not the code path those controls use.
 - **`Policy`-based authorization is implemented but not evaluated on any
   request path yet.** `playarr_auth::policy::DefaultPolicyEvaluator` is a
   real, fully unit-tested implementation of every rule in the "The `Policy`

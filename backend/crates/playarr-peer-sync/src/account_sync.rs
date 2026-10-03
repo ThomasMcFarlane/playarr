@@ -254,6 +254,10 @@ pub fn merge_non_privileged_policy_fields(local: &Policy, incoming: &Policy) -> 
         access_schedule: local.access_schedule.clone(),
         can_stream: local.can_stream,
         is_admin: local.is_admin,
+        // Guardians and approval rules decide who can unlock a child
+        // profile, so they are privilege-bearing: a non-origin peer cannot
+        // change them.
+        household: local.household.clone(),
     }
 }
 
@@ -848,6 +852,7 @@ mod tests {
             access_schedule: None,
             can_stream: true,
             is_admin: false,
+            household: Default::default(),
         }
     }
 

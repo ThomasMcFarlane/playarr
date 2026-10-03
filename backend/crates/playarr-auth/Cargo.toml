@@ -25,6 +25,8 @@ dashmap = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 # CIDR parsing/matching for the trusted-network trust tier (`login`).
 ipnet = "2"
+# IANA time zones for household schedules and budgets (`household`).
+chrono-tz = "0.10"
 # Refresh-token secret hashing (`refresh`) -- fast general-purpose hashing
 # is deliberate here (see `secret::hash_token`'s doc comment), unlike the
 # slow, salted Argon2id used for password/PIN verification below.

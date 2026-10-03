@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::admin_peer::{peer_address_bundle, PeerAddressEntry};
-use crate::auth_extractor::StreamingUser;
+use crate::auth_extractor::AnytimeStreamingUser;
 use crate::AppState;
 
 pub const DEVICE_CODE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
@@ -197,7 +197,7 @@ fn encode_servers_param(addresses: &[PeerAddressEntry]) -> String {
 )]
 pub async fn authorize_device_handler(
     State(state): State<AppState>,
-    user: StreamingUser,
+    user: AnytimeStreamingUser,
     Json(body): Json<DeviceAuthorizationRequest>,
 ) -> Result<StatusCode, crate::error::ApiError> {
     let user_code = normalise_user_code(&body.user_code);

@@ -15,6 +15,7 @@ mod device;
 mod download_ticket;
 mod embedding;
 mod group_library;
+mod household;
 mod library_view;
 mod media_file;
 mod node_identity;
@@ -52,6 +53,9 @@ pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};
 pub use embedding::{EmbeddingRepo, SqlxEmbeddingRepo};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
+pub use household::{
+    ApprovalRepo, HouseholdUsageRepo, PinAttemptRepo, PinAttemptState, SqlxHouseholdRepo,
+};
 pub use library_view::{
     seed_default_views, LibraryViewRepo, SqlxLibraryViewRepo, NEWLY_ADDED_VIEW_ID,
     NEWLY_RELEASED_VIEW_ID,

@@ -22,7 +22,7 @@ use tokio::sync::Semaphore;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::auth_extractor::{ensure_library_allowed, forbidden, StreamingUser};
+use crate::auth_extractor::{forbidden, StreamingUser};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -989,10 +989,7 @@ pub async fn playback_health_handler(
     }
     let media_file = state.media_files.get(session.media_file_id).await;
     if let Some(file) = &media_file {
-        ensure_library_allowed(
-            file.source_instance_id,
-            streaming.allowed_libraries().as_deref(),
-        )?;
+        crate::auth_extractor::ensure_media_access(&state, &streaming, file).await?;
     }
 
     let (source_range, source_audio_codec, source_audio_channels) = match &media_file {
