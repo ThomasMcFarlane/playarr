@@ -18,7 +18,7 @@ necessary but not sufficient.
 | Server-managed assets: artwork cache | `PLAYARR_ARTWORK_CACHE_DIR` (default: next to the SQLite file) | Included in `full` mode when the directory exists. Re-fetchable from the provider if absent, so it is a convenience, not a dependency. |
 | Derived caches: thumbnails, subtitle conversions, transcode and HLS output, download staging | local temp/cache | Excluded (regenerable). Listed in the manifest as excluded. |
 | Ephemeral coordination (`cluster_leader`, `cache_entries`) | database | Excluded. |
-| Sessions (`refresh_token_families`, `playback_sessions`, `download_tickets`, device codes) | database | Captured by the snapshot but cleared on restore (all users sign in again; open download tickets are gone). |
+| Sessions and derived rows (`refresh_token_families`, `download_tickets`, `renditions`) | database | Captured by the snapshot but cleared on restore: every user signs in again, open download tickets are void and renditions are regenerated. Historical `playback_sessions` and `playback_events` are history and are kept. |
 | Media libraries and recordings | external (`/srv/media`, NFS, the media-manager-owned folders) | Never copied. Third-party and operator-owned files are not Playarr data. The manifest lists every source root path so restore can check the replacement mounts. Server-owned recordings do not exist yet; when they do they are a new "assets" class under the same mechanism. |
 | Runtime secrets (`DATABASE_URL`, `PLAYARR_JWT_SECRET`, TLS and ACME material, bootstrap credentials) | environment / Kubernetes Secret / volume | Never in the archive. The manifest records which are required (names only); the operator re-supplies them on the replacement. A new `PLAYARR_JWT_SECRET` simply invalidates old tokens. |
 | Database credentials and server-side recovery key | n/a | See section 3. |
@@ -109,7 +109,7 @@ under a running server is unsafe. The Admin page shows the exact command.
    build the schema at the archive's version, load rows in foreign-key order
    inside one transaction, verify row counts against the manifest, then apply
    remaining migrations.
-3. **Policy.** Sessions and download tickets are cleared. Library paths can be
+3. **Policy.** Refresh-token families, download tickets and renditions are cleared. Library paths can be
    remapped with `--remap-path OLD=NEW` (rewrites source root overrides and
    media paths). Every library root is checked on the replacement; a missing
    or unreadable root is reported and blocks cutover unless
@@ -148,3 +148,27 @@ Playback of media and recording schedules cannot be proven where the feature
 does not exist; the report states restored coverage and missing dependencies
 explicitly, and playback is verified through the restored instance's playback
 info endpoint pointing at a test library directory.
+
+## 6. Operating notes and known gaps
+
+- **Where backups go.** `PLAYARR_BACKUP_DIR` is a directory. On the regional
+  servers it is `/data/backups` on the state volume, which is the same disk as
+  the database: it protects against corruption and mistakes, not against losing
+  the node. Copy archives off the node (Admin, Backups, Download) or mount a
+  separate volume or share. Object-storage destinations are not implemented.
+- **Restore is a CLI action**, not a button: replacing the database under a
+  running server is unsafe. The Admin page shows the exact command.
+- **Repeatable proof.** `scripts/verify-backup-recovery.sh` starts a scratch
+  instance, backs it up through the API, restores into an empty location and
+  starts a second instance from it, checking users, permissions, passwords,
+  playlists, settings and session invalidation, plus wrong-key, damaged,
+  truncated and cross-engine refusals. The Rust suites cover both engines
+  (PostgreSQL tests run when `PLAYARR_TEST_POSTGRES_URL` points at a scratch
+  server and are skipped otherwise).
+- **PostgreSQL schema gap.** The PostgreSQL migration set has no
+  `source_root_folders` / `folder_media_entries` tables (SQLite migration 42), so
+  folder-scanned library roots are only inventoried and remapped on SQLite.
+  Backup and restore pick the tables up automatically once the migration exists.
+- **Not provable yet.** Recording schedules and server-owned recordings do not
+  exist, so there is nothing to retain; and playback of restored media depends on
+  the library mounts of the replacement, which restore checks but cannot create.

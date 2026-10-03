@@ -9,6 +9,7 @@ import { WorkDetailPage } from "./pages/WorkDetail";
 import { TasksPage } from "./pages/Tasks";
 import { ActivityPage } from "./pages/Activity";
 import { SystemSettingsPage } from "./pages/SystemSettings";
+import { BackupsPage } from "./pages/Backups";
 import { ServerCapabilitiesPage } from "./pages/ServerCapabilities";
 import { PeerGroupsPage } from "./pages/PeerGroups";
 import { ViewsPage } from "./pages/ViewsPage";
@@ -50,6 +51,7 @@ const SYSTEM_NAV_LINKS = [
   { to: "/settings", label: "Settings", end: false },
   { to: "/peer-groups", label: "Peer groups", end: false },
   { to: "/capabilities", label: "Server capabilities", end: false },
+  { to: "/backups", label: "Backups", end: false },
   { to: "/tasks", label: "Tasks", end: false },
   { to: "/activity", label: "Activity", end: false },
 ] as const;
@@ -242,6 +244,7 @@ export function App() {
                       <Route path="/activity" element={<ActivityPage />} />
                       <Route path="/settings" element={<SystemSettingsPage />} />
                       <Route path="/capabilities" element={<ServerCapabilitiesPage />} />
+                      <Route path="/backups" element={<BackupsPage />} />
                       <Route path="/peer-groups" element={<PeerGroupsPage />} />
                       <Route
                         path="/api-explorer"

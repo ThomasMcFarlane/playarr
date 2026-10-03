@@ -58,6 +58,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   root folder and quality profile. Admins can request by default; set
   `PLAYARR_REQUESTS_ALLOW_ALL_USERS=true` to let every signed-in user. Unreachable providers are
   reported in the response instead of failing the search.
+- Admin "Backups" page (System): shows the backup destination, contents mode (database-only is labelled
+  partial), schedule, retention and recovery-key fingerprints; starts a run with live phase progress;
+  lists backups with Complete, Partial or Incomplete badges, what each includes, excludes and depends on
+  (library paths, secrets to supply); downloads the encrypted archive, verifies its stored checksum and
+  deletes backups; shows recent failures and the restore command. When backups are not configured it
+  explains how to enable them. Typed API client methods and regenerated schema.
+- Administrator backup API under `/api/v1/admin/backups`: overview (configuration, current run with phase,
+  history from the commit records, recent failures, recovery-key fingerprints), start a run (202, 409 if one
+  is active), download the encrypted archive, verify its stored checksum and delete a backup (the last
+  complete backup cannot be deleted). Scheduled runs execute on the elected leader node. Config errors
+  (a backup directory without a valid recovery public key) stop startup instead of silently not backing up.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.
@@ -85,6 +96,30 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the unified discovery and watchlist design (title identity, source attribution,
   provider status, per-profile watchlist, source-aware actions) in
   `docs/architecture/discovery-watchlist.md`, tracked as tasks 46-49 and 49a-49e.
+- Encrypted server backups (`playarr-backup` crate). A backup is a consistent database snapshot
+  (SQLite `VACUUM INTO`, or one `REPEATABLE READ` PostgreSQL transaction) plus the artwork cache,
+  written as an age-encrypted archive with a versioned manifest of checksums, row counts and an
+  explicit included/excluded/unavailable inventory. Archives are published atomically (partial
+  file, read-back checksum, then a plaintext sidecar as the commit marker), so an interrupted or
+  failed run never appears as a complete backup. Retention runs only after a successful publish
+  and always keeps the last good backup. Configure with `PLAYARR_BACKUP_DIR`,
+  `PLAYARR_BACKUP_RECIPIENTS`, `PLAYARR_BACKUP_MODE`, `PLAYARR_BACKUP_INTERVAL_HOURS`,
+  `PLAYARR_BACKUP_KEEP_LAST`, `PLAYARR_BACKUP_KEEP_DAYS`. New CLI: `playarr-server backup keygen`,
+  `create` and `verify`. The server holds only public keys; the recovery identity stays with the
+  administrator.
+- Staged server restore: `playarr-server backup restore` validates the archive (decrypt, every
+  checksum, format, engine and schema compatibility), restores into staging (a private SQLite file,
+  or a staging PostgreSQL schema built at the archive's schema version and migrated forward),
+  verifies row counts, integrity and foreign keys, then checks that library roots exist before
+  cutover. The previous installation is kept aside (renamed file or schema) and a failed restore
+  leaves it untouched. Sessions, download tickets and renditions are cleared; `--remap-path`
+  rewrites library paths; `--identity clone` drops peer identity and disables request forwarding,
+  push and Tdarr so a copy cannot act as the original; `--dry-run` validates only. Cross-engine
+  restores are refused. PostgreSQL tests run when `PLAYARR_TEST_POSTGRES_URL` points at a scratch
+  server.
+- Documented the server backup and recovery design (inventory, encrypted format, consistent
+  snapshots, retention, staged restore and verification plan) in
+  `docs/architecture/server-backups.md`, tracked as tasks 62-66.
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.

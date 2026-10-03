@@ -25,6 +25,7 @@
 #![allow(clippy::double_must_use)]
 
 pub mod admin;
+pub mod admin_backups;
 pub mod admin_peer;
 pub mod admin_playback;
 pub mod artwork;
@@ -248,6 +249,13 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(
             system_capabilities::get_system_capabilities_handler
         ))
+        .routes(routes!(
+            admin_backups::get_backups_handler,
+            admin_backups::start_backup_handler
+        ))
+        .routes(routes!(admin_backups::download_backup_handler))
+        .routes(routes!(admin_backups::verify_backup_handler))
+        .routes(routes!(admin_backups::delete_backup_handler))
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::authorize_device_handler))
         .routes(routes!(oauth::device_token_handler))
@@ -529,6 +537,10 @@ pub struct AppState {
     /// installation. The public version endpoint reads this repository too,
     /// so clients see a changed instance name immediately.
     pub system_settings_repo: Arc<dyn playarr_db::SystemSettingsRepo>,
+    /// Encrypted server backups (`docs/architecture/server-backups.md`);
+    /// `None` until `PLAYARR_BACKUP_DIR` and `PLAYARR_BACKUP_RECIPIENTS` are
+    /// configured.
+    pub backup: Option<Arc<playarr_backup::BackupService>>,
     pub media_files: Arc<dyn MediaFileLookup>,
     /// Per-user durable resume positions and watched state.
     pub watch_progress: Arc<dyn playarr_db::WatchProgressRepo>,

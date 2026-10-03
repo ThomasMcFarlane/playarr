@@ -404,7 +404,7 @@ pub async fn seed_streaming_user_without_download_access(
         .expect("seed no-download test user");
 }
 
-fn test_version_gate() -> VersionGateLayer {
+pub fn test_version_gate() -> VersionGateLayer {
     VersionGateLayer::new(
         ClientCompatibilityTable::from_toml_str(
             r#"
@@ -651,6 +651,7 @@ pub async fn test_state() -> (Router, TestState) {
         credit_repo,
         tdarr_connection_repo,
         system_settings_repo,
+        backup: None,
         media_files: media_files.clone() as Arc<dyn MediaFileLookup>,
         watch_progress,
         download_tickets,

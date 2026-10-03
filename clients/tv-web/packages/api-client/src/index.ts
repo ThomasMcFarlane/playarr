@@ -151,6 +151,14 @@ export type CapabilityItem = components["schemas"]["CapabilityItem"];
 export type CapabilityStatus = components["schemas"]["CapabilityStatus"];
 export type CapabilityCategory = components["schemas"]["CapabilityCategory"];
 
+export type BackupOverview = components["schemas"]["BackupOverview"];
+export type BackupSummary = components["schemas"]["BackupSummary"];
+export type BackupRunStatus = components["schemas"]["BackupRunStatus"];
+export type BackupFailure = components["schemas"]["BackupFailure"];
+export type BackupInventoryItem = components["schemas"]["BackupInventoryItem"];
+export type BackupVerification = components["schemas"]["BackupVerification"];
+export type StartedBackup = components["schemas"]["StartedBackup"];
+
 export type SourceKind = components["schemas"]["SourceKind"];
 export type SourceInstanceRequest = components["schemas"]["SourceInstanceRequest"];
 export type SourceInstanceResponse = components["schemas"]["SourceInstanceResponse"];
@@ -456,6 +464,11 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/system-settings", method: "GET" },
   { schemaPath: "/api/v1/admin/system-settings", method: "PUT" },
   { schemaPath: "/api/v1/admin/system/capabilities", method: "GET" },
+  { schemaPath: "/api/v1/admin/backups", method: "GET" },
+  { schemaPath: "/api/v1/admin/backups", method: "POST" },
+  { schemaPath: "/api/v1/admin/backups/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/backups/{id}/download", method: "GET" },
+  { schemaPath: "/api/v1/admin/backups/{id}/verify", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/join", method: "POST" },
   { schemaPath: "/api/v1/admin/peer-groups/self", method: "DELETE" },
@@ -700,6 +713,42 @@ export class ApiClient {
         params: { query: { refresh: options.refresh ?? false } },
       })
     );
+  }
+
+  /** `GET /api/v1/admin/backups`: configuration, current run, history and failures. */
+  async getBackups(): Promise<BackupOverview> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/backups"));
+  }
+
+  /** `POST /api/v1/admin/backups`: starts a run in the background (409 if one is active). */
+  async startBackup(): Promise<StartedBackup> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/backups"));
+  }
+
+  async verifyBackup(id: string): Promise<BackupVerification> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/backups/{id}/verify", { params: { path: { id } } })
+    );
+  }
+
+  async deleteBackup(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/backups/{id}", { params: { path: { id } } })
+    );
+  }
+
+  /** Downloads the encrypted archive as a Blob (the recovery key is needed to read it). */
+  async downloadBackup(id: string): Promise<Blob> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await this.rawFetch(
+      new Request(this.resolveUrl(`/api/v1/admin/backups/${encodeURIComponent(id)}/download`), {
+        headers,
+      })
+    );
+    if (!response.ok) throw new ApiError(response.status, response.statusText, undefined);
+    return response.blob();
   }
 
   async updateSystemSettings(body: UpdateSystemSettingsRequest): Promise<SystemSettings> {

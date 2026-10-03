@@ -167,12 +167,77 @@ enum Command {
         #[arg(long, value_enum, default_value_t = UpdateChannel::Stable)]
         channel: UpdateChannel,
     },
+    /// Server backups: create, verify and manage recovery keys.
+    Backup {
+        #[command(subcommand)]
+        command: BackupCommand,
+    },
     /// Reset an existing administrator's password from standard input.
     ResetAdminPassword {
         /// Administrator username to update.
         #[arg(long, default_value = DEFAULT_BOOTSTRAP_ADMIN_USERNAME)]
         username: String,
     },
+}
+
+#[derive(Subcommand)]
+enum BackupCommand {
+    /// Generate a recovery key pair. The secret identity is written to `--out`
+    /// (mode 0600, never printed); the public key is printed for
+    /// `PLAYARR_BACKUP_RECIPIENTS`.
+    Keygen {
+        #[arg(long)]
+        out: std::path::PathBuf,
+    },
+    /// Run one backup now using the `PLAYARR_BACKUP_*` configuration.
+    Create,
+    /// Restore a backup into the database named by `DATABASE_URL`. Run with the
+    /// server stopped. Validates and stages first; the current installation is
+    /// only replaced (and kept aside) once every check passes.
+    Restore {
+        #[arg(long)]
+        archive: std::path::PathBuf,
+        #[arg(long)]
+        identity_file: std::path::PathBuf,
+        /// Rewrite library paths, `OLD=NEW`. Repeatable.
+        #[arg(long = "remap-path", value_parser = parse_remap)]
+        remap: Vec<(String, String)>,
+        /// `replace` keeps the peer identity (the original is gone); `clone`
+        /// drops it and disables outbound integrations.
+        #[arg(long, value_enum, default_value_t = RestoreIdentity::Replace)]
+        identity: RestoreIdentity,
+        /// Proceed even when library roots are missing on this machine.
+        #[arg(long)]
+        allow_missing_media: bool,
+        /// Validate and stage only; change nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Staging directory (default: beside the SQLite file, else the temp dir).
+        #[arg(long)]
+        work_dir: Option<std::path::PathBuf>,
+    },
+    /// Decrypt an archive and check every checksum without restoring.
+    Verify {
+        #[arg(long)]
+        archive: std::path::PathBuf,
+        #[arg(long)]
+        identity_file: std::path::PathBuf,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum RestoreIdentity {
+    Replace,
+    Clone,
+}
+
+fn parse_remap(raw: &str) -> Result<(String, String), String> {
+    match raw.split_once('=') {
+        Some((old, new)) if !old.is_empty() && !new.is_empty() => {
+            Ok((old.to_string(), new.to_string()))
+        }
+        _ => Err("expected OLD=NEW".to_string()),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -202,7 +267,124 @@ async fn main() -> anyhow::Result<()> {
             yes,
             channel,
         } => update(check, yes, channel).await,
+        Command::Backup { command } => backup_command(command).await,
         Command::ResetAdminPassword { username } => reset_admin_password(&username).await,
+    }
+}
+
+async fn backup_command(command: BackupCommand) -> anyhow::Result<()> {
+    use std::io::Write as _;
+    match command {
+        BackupCommand::Keygen { out } => {
+            let key = playarr_backup::crypto::generate_key();
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            let mut file = options
+                .open(&out)
+                .map_err(|error| anyhow::anyhow!("cannot create {}: {error}", out.display()))?;
+            writeln!(file, "# Playarr backup recovery key. Keep it offline; anyone holding it can read every backup.")?;
+            writeln!(file, "# public key: {}", key.public)?;
+            writeln!(file, "{}", key.secret)?;
+            file.sync_all()?;
+            println!("recovery key written to {}", out.display());
+            println!("public key (for PLAYARR_BACKUP_RECIPIENTS): {}", key.public);
+            Ok(())
+        }
+        BackupCommand::Create => {
+            let mut config = playarr_backup::BackupConfig::from_env()?
+                .ok_or_else(|| anyhow::anyhow!("PLAYARR_BACKUP_DIR is not set"))?;
+            config.artwork_dir = Some(playarr_artwork::artwork_cache_root());
+            let database_url = env::var("DATABASE_URL")
+                .map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?;
+            let pool = playarr_db::connect(&database_url).await?;
+            let service =
+                playarr_backup::BackupService::new(config, pool, env!("CARGO_PKG_VERSION"));
+            let sidecar = service.run_now("cli").await?;
+            println!(
+                "backup {} written to {} ({} bytes, {} partial)",
+                sidecar.manifest.backup_id,
+                sidecar.archive_name,
+                sidecar.archive_size,
+                if sidecar.manifest.partial {
+                    "labelled"
+                } else {
+                    "not"
+                }
+            );
+            Ok(())
+        }
+        BackupCommand::Restore {
+            archive,
+            identity_file,
+            remap,
+            identity,
+            allow_missing_media,
+            dry_run,
+            work_dir,
+        } => {
+            let database_url = env::var("DATABASE_URL")
+                .map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?;
+            let identities = playarr_backup::crypto::read_identity_file(&identity_file)?;
+            let work_dir = work_dir.unwrap_or_else(|| {
+                database_url
+                    .strip_prefix("sqlite://")
+                    .and_then(|rest| rest.split('?').next())
+                    .and_then(|path| std::path::Path::new(path).parent())
+                    .map(|parent| parent.to_path_buf())
+                    .unwrap_or_else(env::temp_dir)
+            });
+            let report =
+                playarr_backup::restore::restore(playarr_backup::restore::RestoreOptions {
+                    archive,
+                    identities,
+                    database_url,
+                    work_dir,
+                    artwork_dir: Some(playarr_artwork::artwork_cache_root()),
+                    remap,
+                    identity_mode: match identity {
+                        RestoreIdentity::Replace => playarr_backup::restore::IdentityMode::Replace,
+                        RestoreIdentity::Clone => playarr_backup::restore::IdentityMode::Clone,
+                    },
+                    allow_missing_media,
+                    dry_run,
+                })
+                .await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            if report.cutover {
+                println!("restore complete; start the server, then have users sign in again");
+            } else {
+                println!("dry run complete; nothing was changed");
+            }
+            Ok(())
+        }
+        BackupCommand::Verify {
+            archive,
+            identity_file,
+        } => {
+            let identities = playarr_backup::crypto::read_identity_file(&identity_file)?;
+            let manifest = tokio::task::spawn_blocking(move || {
+                playarr_backup::archive::verify_and_extract(&archive, &identities, None)
+            })
+            .await??;
+            println!(
+                "backup {} verified: engine {}, schema {}, {} files, {}",
+                manifest.backup_id,
+                manifest.engine.as_str(),
+                manifest.schema_version,
+                manifest.files.len(),
+                if manifest.partial {
+                    "partial"
+                } else {
+                    "complete"
+                }
+            );
+            Ok(())
+        }
     }
 }
 
@@ -270,6 +452,37 @@ async fn serve() -> anyhow::Result<()> {
     // for the split between this fast in-memory read path and the durable
     // repo behind it.
     let source_instances = Arc::new(playarr_api::SourceInstanceRegistry::new());
+
+    // Encrypted server backups (docs/architecture/server-backups.md). Off
+    // unless `PLAYARR_BACKUP_DIR` is set; a half-configured setup (no valid
+    // recovery public key) stops startup rather than silently not backing up.
+    let backup_service = match playarr_backup::BackupConfig::from_env()? {
+        Some(mut backup_config) => {
+            backup_config.artwork_dir = Some(playarr_artwork::artwork_cache_root());
+            tracing::info!(
+                destination = %backup_config.dir.display(),
+                mode = ?backup_config.mode,
+                interval_hours = backup_config.interval.map(|i| i.as_secs() / 3600),
+                keep_last = backup_config.keep_last,
+                "server backups enabled"
+            );
+            Some(Arc::new(playarr_backup::BackupService::new(
+                backup_config,
+                pool.clone(),
+                env!("CARGO_PKG_VERSION"),
+            )))
+        }
+        None => None,
+    };
+    if let (Some(service), true) = (&backup_service, config.role.runs_worker()) {
+        // Scheduled runs happen on one node only, behind the leader gate.
+        tokio::spawn(run_while_leader(
+            coordinator.clone(),
+            "server-backup",
+            Duration::from_secs(60),
+            service.as_ref().clone().run_schedule(),
+        ));
+    }
 
     // Connects `boot_api`'s `TranscodeOrchestrator` (an on-demand session
     // starting is the send side) to `boot_worker`'s `TdarrDispatcher` (the
@@ -359,6 +572,7 @@ async fn serve() -> anyhow::Result<()> {
                 analytics,
                 analytics_event_rx,
                 coordinator,
+                backup_service,
             )
             .await
         } else {
@@ -930,6 +1144,7 @@ async fn boot_api(
     analytics: Arc<playarr_telemetry::analytics::AnalyticsCollector>,
     analytics_event_rx: tokio::sync::mpsc::Receiver<playarr_model::PlaybackEvent>,
     coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
+    backup_service: Option<Arc<playarr_backup::BackupService>>,
 ) -> anyhow::Result<()> {
     use playarr_api::user_directory::RepoBackedUserDirectory;
     use playarr_api::{
@@ -1281,6 +1496,7 @@ async fn boot_api(
         credit_repo,
         tdarr_connection_repo,
         system_settings_repo,
+        backup: backup_service,
         media_files,
         watch_progress,
         download_tickets,

@@ -13,6 +13,7 @@ playarr-db = { path = "../playarr-db", features = ["sqlite", "postgres"] }
 playarr-cache = { path = "../playarr-cache" }
 playarr-catalog = { path = "../playarr-catalog" }
 playarr-artwork = { path = "../playarr-artwork" }
+playarr-backup = { path = "../playarr-backup" }
 playarr-transcode = { path = "../playarr-transcode" }
 playarr-auth = { path = "../playarr-auth" }
 playarr-arr-sync = { path = "../playarr-arr-sync" }
@@ -28,6 +29,7 @@ playarr-coordination = { path = "../playarr-coordination" }
 playarr-arr-client = { path = "../playarr-arr-client" }
 playarr-tdarr-client = { path = "../playarr-tdarr-client" }
 axum = { workspace = true }
+tokio-util = { version = "0.7", features = ["io"] }
 futures = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

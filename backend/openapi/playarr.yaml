@@ -53,6 +53,122 @@ paths:
                   sunset: null
                 instance_name: Playarr Server
                 server_version: 1.4.2
+  /api/v1/admin/backups:
+    get:
+      tags:
+      - admin
+      operationId: get_backups_handler
+      responses:
+        '200':
+          description: Backup configuration, current run, history and recent failures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupOverview'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - admin
+      operationId: start_backup_handler
+      responses:
+        '202':
+          description: A backup run was started in the background
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartedBackup'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Backups are not configured
+        '409':
+          description: A backup is already running
+      security:
+      - bearer_auth: []
+  /api/v1/admin/backups/{id}:
+    delete:
+      tags:
+      - admin
+      operationId: delete_backup_handler
+      parameters:
+      - name: id
+        in: path
+        description: Backup id
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Backup deleted
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No backup with this id
+        '409':
+          description: This is the only complete backup
+      security:
+      - bearer_auth: []
+  /api/v1/admin/backups/{id}/download:
+    get:
+      tags:
+      - admin
+      operationId: download_backup_handler
+      parameters:
+      - name: id
+        in: path
+        description: Backup id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The encrypted archive, byte for byte
+          content:
+            application/octet-stream: {}
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No complete backup with this id
+      security:
+      - bearer_auth: []
+  /api/v1/admin/backups/{id}/verify:
+    post:
+      tags:
+      - admin
+      operationId: verify_backup_handler
+      parameters:
+      - name: id
+        in: path
+        description: Backup id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Whether the stored archive still matches its recorded checksum. Decrypting needs the recovery key and is done with the CLI.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupVerification'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No backup with this id
+      security:
+      - bearer_auth: []
   /api/v1/admin/library/source-matrix:
     get:
       tags:
@@ -6033,6 +6149,211 @@ components:
           type: boolean
         username:
           type: string
+    BackupFailure:
+      type: object
+      required:
+      - id
+      - at
+      - phase
+      - error
+      properties:
+        at:
+          type: string
+          format: date-time
+        error:
+          type: string
+        id:
+          type: string
+        phase:
+          type: string
+    BackupInventoryItem:
+      type: object
+      required:
+      - class
+      - detail
+      properties:
+        class:
+          type: string
+        detail:
+          type: string
+    BackupOverview:
+      type: object
+      required:
+      - enabled
+      - recipient_fingerprints
+      - backups
+      - failures
+      - restore_command
+      properties:
+        backups:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupSummary'
+        current:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/BackupRunStatus'
+        destination:
+          type:
+          - string
+          - 'null'
+        enabled:
+          type: boolean
+          description: False until `PLAYARR_BACKUP_DIR` and `PLAYARR_BACKUP_RECIPIENTS` are set.
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupFailure'
+        keep_days:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        keep_last:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        mode:
+          type:
+          - string
+          - 'null'
+        recipient_fingerprints:
+          type: array
+          items:
+            type: string
+          description: Short identifiers of the configured recovery public keys.
+        restore_command:
+          type: string
+          description: Command to run on the replacement server to restore a backup.
+        schedule_hours:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Hours between scheduled runs; absent means manual only.
+          minimum: 0
+    BackupRunStatus:
+      type: object
+      required:
+      - id
+      - started_at
+      - trigger
+      - phase
+      - bytes_staged
+      properties:
+        bytes_staged:
+          type: integer
+          format: int64
+          minimum: 0
+        id:
+          type: string
+        phase:
+          type: string
+          description: '`starting`, `preflight`, `snapshot`, `assets`, `archive`, `publish` or `retention`.'
+        started_at:
+          type: string
+          format: date-time
+        trigger:
+          type: string
+          description: '`manual`, `schedule` or `cli`.'
+    BackupSummary:
+      type: object
+      required:
+      - id
+      - created_at
+      - archive_name
+      - size_bytes
+      - engine
+      - schema_version
+      - server_version
+      - mode
+      - partial
+      - complete
+      - tables
+      - rows
+      - included
+      - excluded
+      - unavailable
+      - library_roots
+      - required_secrets
+      properties:
+        archive_name:
+          type: string
+        complete:
+          type: boolean
+          description: |-
+            False when the archive named by the commit record is missing or has the
+            wrong size. Incomplete backups are never offered for restore.
+        created_at:
+          type: string
+          format: date-time
+        engine:
+          type: string
+        excluded:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupInventoryItem'
+        id:
+          type: string
+        included:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupInventoryItem'
+        library_roots:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          description: '`full` or `database`.'
+        partial:
+          type: boolean
+          description: |-
+            True when the backup does not contain everything (database mode, or an
+            asset class skipped); see `unavailable` and `excluded`.
+        required_secrets:
+          type: array
+          items:
+            type: string
+        rows:
+          type: integer
+          format: int64
+          minimum: 0
+        schema_version:
+          type: integer
+          format: int64
+        server_version:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+        tables:
+          type: integer
+          minimum: 0
+        unavailable:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupInventoryItem'
+    BackupVerification:
+      type: object
+      required:
+      - ok
+      - expected_sha256
+      - actual_sha256
+      - size_bytes
+      properties:
+        actual_sha256:
+          type: string
+        expected_sha256:
+          type: string
+        ok:
+          type: boolean
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
     Book:
       type: object
       required:
@@ -10449,6 +10770,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SourceInstanceResponse'
+    StartedBackup:
+      type: object
+      required:
+      - id
+      properties:
+        id:
+          type: string
     StopReason:
       oneOf:
       - type: string

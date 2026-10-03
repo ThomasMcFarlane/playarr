@@ -52,6 +52,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_backups_handler"];
+        put?: never;
+        post: operations["start_backup_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_backup_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/backups/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download_backup_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/backups/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify_backup_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/library/source-matrix": {
         parameters: {
             query?: never;
@@ -2325,6 +2389,88 @@ export interface components {
             pin_locked: boolean;
             username: string;
         };
+        BackupFailure: {
+            /** Format: date-time */
+            at: string;
+            error: string;
+            id: string;
+            phase: string;
+        };
+        BackupInventoryItem: {
+            class: string;
+            detail: string;
+        };
+        BackupOverview: {
+            backups: components["schemas"]["BackupSummary"][];
+            current?: null | components["schemas"]["BackupRunStatus"];
+            destination?: string | null;
+            /** @description False until `PLAYARR_BACKUP_DIR` and `PLAYARR_BACKUP_RECIPIENTS` are set. */
+            enabled: boolean;
+            failures: components["schemas"]["BackupFailure"][];
+            /** Format: int64 */
+            keep_days?: number | null;
+            keep_last?: number | null;
+            mode?: string | null;
+            /** @description Short identifiers of the configured recovery public keys. */
+            recipient_fingerprints: string[];
+            /** @description Command to run on the replacement server to restore a backup. */
+            restore_command: string;
+            /**
+             * Format: int64
+             * @description Hours between scheduled runs; absent means manual only.
+             */
+            schedule_hours?: number | null;
+        };
+        BackupRunStatus: {
+            /** Format: int64 */
+            bytes_staged: number;
+            id: string;
+            /** @description `starting`, `preflight`, `snapshot`, `assets`, `archive`, `publish` or `retention`. */
+            phase: string;
+            /** Format: date-time */
+            started_at: string;
+            /** @description `manual`, `schedule` or `cli`. */
+            trigger: string;
+        };
+        BackupSummary: {
+            archive_name: string;
+            /**
+             * @description False when the archive named by the commit record is missing or has the
+             *     wrong size. Incomplete backups are never offered for restore.
+             */
+            complete: boolean;
+            /** Format: date-time */
+            created_at: string;
+            engine: string;
+            excluded: components["schemas"]["BackupInventoryItem"][];
+            id: string;
+            included: components["schemas"]["BackupInventoryItem"][];
+            library_roots: string[];
+            /** @description `full` or `database`. */
+            mode: string;
+            /**
+             * @description True when the backup does not contain everything (database mode, or an
+             *     asset class skipped); see `unavailable` and `excluded`.
+             */
+            partial: boolean;
+            required_secrets: string[];
+            /** Format: int64 */
+            rows: number;
+            /** Format: int64 */
+            schema_version: number;
+            server_version: string;
+            /** Format: int64 */
+            size_bytes: number;
+            tables: number;
+            unavailable: components["schemas"]["BackupInventoryItem"][];
+        };
+        BackupVerification: {
+            actual_sha256: string;
+            expected_sha256: string;
+            ok: boolean;
+            /** Format: int64 */
+            size_bytes: number;
+        };
         Book: {
             /** Format: uuid */
             author_work_id: string;
@@ -4342,6 +4488,9 @@ export interface components {
             peers: components["schemas"]["PeerMatrixNodeResponse"][];
             sources: components["schemas"]["SourceInstanceResponse"][];
         };
+        StartedBackup: {
+            id: string;
+        };
         StopReason: "completed" | "user_stopped" | "error" | "device_disconnected" | "session_revoked" | "concurrent_limit_exceeded" | "idle_timeout" | {
             other: string;
         };
@@ -4848,6 +4997,225 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["VersionEnvelope"];
                 };
+            };
+        };
+    };
+    get_backups_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup configuration, current run, history and recent failures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupOverview"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    start_backup_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A backup run was started in the background */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartedBackup"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backups are not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A backup is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_backup_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No backup with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This is the only complete backup */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_backup_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The encrypted archive, byte for byte */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No complete backup with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    verify_backup_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether the stored archive still matches its recorded checksum. Decrypting needs the recovery key and is done with the CLI. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupVerification"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No backup with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

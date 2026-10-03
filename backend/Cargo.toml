@@ -18,6 +18,7 @@ members = [
     "crates/playarr-telemetry",
     "crates/playarr-portability",
     "crates/playarr-api",
+    "crates/playarr-backup",
 ]
 
 # The workspace root manifest doubles as the `playarr-bin` package: cargo
@@ -52,6 +53,7 @@ playarr-arr-sync = { path = "crates/playarr-arr-sync" }
 playarr-peer-sync = { path = "crates/playarr-peer-sync" }
 playarr-embeddings = { path = "crates/playarr-embeddings" }
 playarr-artwork = { path = "crates/playarr-artwork" }
+playarr-backup = { path = "crates/playarr-backup" }
 playarr-tdarr-client = { path = "crates/playarr-tdarr-client" }
 axum = { workspace = true }
 axum-server = { workspace = true }
