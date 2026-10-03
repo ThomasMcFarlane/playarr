@@ -205,7 +205,8 @@ complete merely because a fallback exists.
 | 103 | Server: `/api/v1/catalog` costs a fixed 3-4.5 s per call | pending | Unassigned | Seen on region-b: limit=1 takes about 3.2 s, limit=1000 about 4.9 s. Find the fixed per-call cost (see row 100). |
 | 104 | Verify end-of-playback screen on devices: iOS, tvOS, Roku, Xbox, Harmony | pending | Unassigned | Parent: 78. Implemented and merged (PR 45, PR 41, PR 42, PR 46) but only Android has been device-verified. Each client needs a real device or emulator run of replay, exit, suggestions and up-next countdown. |
 | 105 | Relay cut-over | pending | Unassigned | Relay chart support (PR 54) and phone-home (PR 38) are merged but disabled. Steps: set Worker secrets `RELAY_CF_API_TOKEN` and `RELAY_HMAC_SECRET`; pre-create the v4 DNS records; remove the relay NS delegation; set `acme.enabled: true`. Needs owner approval; see `docs/deployment/playarr-relay.md`. |
-| 106 | Security: registry.example.com allows anonymous pushes | pending | Unassigned | Lock down push authentication so only CI can push (pull stays as needed by regional servers). |
+| 106 | Security: registry.example.com allows anonymous pushes | won't do — owner decision 3 Oct 2026: registry is on a private network | Unassigned | Lock down push authentication so only CI can push (pull stays as needed by regional servers). |
+| 107 | TV web: lag-free remote navigation under 4K | in progress — open PR PR 27 (`perf/tv-web-nav-4k`) | agent | Lag-free remote nav under 4K plus multi× CPU throttle testing. |
 
 ## Conventions
 
