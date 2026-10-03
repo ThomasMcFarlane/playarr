@@ -19,6 +19,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Availability lag (task 77): grab and import events from the Sonarr, Radarr, Lidarr and Readarr
+  webhooks are stored (`availability_events`, SQLite 0047, Postgres 0048) and
+  `GET /api/v1/catalog/{id}/availability-lag` returns the average time from release to first import
+  (plus grab lag, sample list and counts). Upgrades and repeat imports never count, imports more than
+  30 days after release are reported as backfills and excluded, and items with no release time are
+  counted as unknown. Episode calendar entries carry `average_lag_seconds`.
 - Regional region-b now runs image `<image>` as well (phone remote and playback handoff API; discovery and
   watchlist API), after region-a was verified.
 - Regional region-a now runs image `<image>`, which adds the phone remote and playback handoff API
@@ -111,6 +117,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Android client data layer for the release calendar (`GET /api/v1/calendar`, the `/calendar/feed`
   subscription routes and `/catalog/{id}/availability-lag`): typed models that tolerate unknown
   enum values, a `CalendarRepository`, and decoding/route tests. Tracked as tasks 75-77.
+- External calendar subscription (task 76): `POST/GET/DELETE /api/v1/calendar/feed` create or
+  regenerate, inspect and revoke a per-user token, and `GET /api/v1/calendar/feed/{token}.ics` serves
+  an RFC 5545 feed (14 days back, 180 ahead) limited to the owner's current libraries. Only a SHA-256 of
+  the token is stored, regenerating revokes the old URL, and unknown or revoked tokens return 404.
+  New `calendar_feed_tokens` migration (SQLite 0046, Postgres 0047).
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

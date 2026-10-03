@@ -130,7 +130,7 @@ pub async fn device_code_handler(
     Ok(Json(response))
 }
 
-fn request_verification_uri(headers: &HeaderMap, path: &str) -> String {
+pub(crate) fn request_verification_uri(headers: &HeaderMap, path: &str) -> String {
     let forwarded_value = |name: &str| {
         headers
             .get(name)

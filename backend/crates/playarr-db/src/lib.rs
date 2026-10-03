@@ -30,3 +30,8 @@ pub use repo::{
     SyncConflictLogRepo, SyncMetadata, SystemSettingsRepo, TdarrConnectionRepo, UserInviteRepo,
     UserInviteRequestRepo, UserRepo, WatchProgressRepo, WatchlistRepo, WorkRepo,
 };
+
+pub use repo::{
+    AvailabilityEventRepo, CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxAvailabilityEventRepo,
+    SqlxCalendarFeedTokenRepo,
+};

@@ -1206,6 +1206,10 @@ async fn boot_api(
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
+    let calendar_feed_token_repo: Arc<dyn playarr_db::CalendarFeedTokenRepo> =
+        Arc::new(playarr_db::SqlxCalendarFeedTokenRepo::new(pool.clone()));
+    let availability_event_repo: Arc<dyn playarr_db::AvailabilityEventRepo> =
+        Arc::new(playarr_db::SqlxAvailabilityEventRepo::new(pool.clone()));
     let push_registration_repo: Arc<dyn PushRegistrationRepo> =
         Arc::new(SqlxPushRegistrationRepo::new(pool.clone()));
     let push_notifier: Arc<dyn playarr_api::notifications::PushNotifier> =
@@ -1536,6 +1540,8 @@ async fn boot_api(
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::new()),
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
+        calendar_feed_token_repo,
+        availability_event_repo,
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 

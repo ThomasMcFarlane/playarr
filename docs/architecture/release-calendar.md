@@ -109,12 +109,16 @@ cannot send an `Authorization` header.
 Record real events from the *arr webhooks Playarr already receives
 (`/api/v1/webhooks/arr`): `Grab` and `Download` (import).
 
-- Table `availability_events(id, source_instance_id, work_kind,
-  provider, external_id, season_number, episode_number, event_type
-  (`grab|import`), occurred_at, air_at, is_upgrade)`; unique on
-  `(source_instance_id, work_kind, external_id, season_number,
-  episode_number, event_type, occurred_at)` so webhook retries are idempotent.
-  `air_at` is the episode/movie release date known at event time.
+- Table `availability_events(source_instance_id, provider, external_id,
+  season_number, episode_number, item_id, event_type (`grab|import`),
+  occurred_at, air_at, is_upgrade)`; the primary key spans all of them except
+  `air_at`/`is_upgrade`, so webhook retries are idempotent. Season and episode
+  are `-1` for movies, albums and books. `air_at` is the release time in the
+  payload (Sonarr `airDateUtc`, Radarr the earlier of `digitalRelease` and
+  `physicalRelease`, Lidarr/Readarr `releaseDate`), absent when not supplied.
+  `occurred_at` is when the webhook was received. Only identity, coordinates,
+  release time and `isUpgrade` are read from the body. Events accumulate from
+  the moment the webhooks are configured; earlier items simply have no samples.
 - Lag per item is `first import occurred_at - air_at`. Upgrades
   (`isUpgrade`) and repeat imports never count; only the first import does.
 - Excluded: items imported later than `BACKFILL_THRESHOLD` (30 days) after

@@ -11,6 +11,7 @@
 //! [`VersionEnvelope`] and its friends). Left off by default so downstream
 //! crates that don't serve HTTP (workers, CLI) don't pull in utoipa.
 
+pub mod availability;
 pub mod calendar;
 pub mod discovery;
 pub mod download;
@@ -36,6 +37,10 @@ pub mod tdarr;
 pub mod user;
 pub mod work;
 
+pub use availability::{
+    compute_lag, AvailabilityEvent, AvailabilityEventType, AvailabilityLag, AvailabilityLagSample,
+    BACKFILL_THRESHOLD_DAYS,
+};
 pub use calendar::{
     CalendarEntry, CalendarEntrySource, CalendarMediaKind, CalendarReleaseType, CalendarResponse,
     CalendarSourceState, CalendarSourceStatus,

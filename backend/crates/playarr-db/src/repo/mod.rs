@@ -8,6 +8,8 @@
 //! (`sqlx::AnyPool`), with per-backend (SQLite/Postgres) SQL text selected
 //! at construction time via `Backend::detect` — see any `Sqlx*Repo::new`.
 
+mod availability_event;
+mod calendar_feed_token;
 mod credit;
 mod device;
 mod download_ticket;
@@ -41,6 +43,10 @@ mod watch_progress;
 mod watchlist;
 mod work;
 
+pub use availability_event::{AvailabilityEventRepo, SqlxAvailabilityEventRepo};
+pub use calendar_feed_token::{
+    CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxCalendarFeedTokenRepo,
+};
 pub use credit::{CreditRepo, SqlxCreditRepo};
 pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};

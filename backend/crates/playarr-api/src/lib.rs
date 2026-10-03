@@ -37,6 +37,7 @@ pub mod discovery;
 pub mod downloads;
 pub mod error;
 pub mod health;
+pub mod ics;
 pub mod login;
 pub mod media;
 pub mod notifications;
@@ -120,6 +121,9 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
     "/api/v1/auth/login",
     "/api/v1/auth/signup",
     "/api/v1/auth/refresh",
+    // Authenticated by the revocable token embedded in the path, because
+    // calendar apps cannot send an Authorization header.
+    "/api/v1/calendar/feed/{file}",
     "/api/v1/oauth/device/code",
     "/api/v1/oauth/token",
     "/webhooks/{instance_id}",
@@ -268,6 +272,13 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(refresh::refresh_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
         .routes(routes!(calendar::calendar_handler))
+        .routes(routes!(
+            calendar::get_calendar_feed_handler,
+            calendar::create_calendar_feed_handler,
+            calendar::revoke_calendar_feed_handler
+        ))
+        .routes(routes!(calendar::calendar_feed_ics_handler))
+        .routes(routes!(calendar::availability_lag_handler))
         .routes(routes!(catalog::browse_catalog_handler))
         .routes(routes!(catalog::catalog_kinds_handler))
         .routes(routes!(catalog::get_work_handler))
@@ -741,6 +752,10 @@ pub struct AppState {
     pub calendar_cache: Arc<calendar::CalendarCache>,
     /// Node-local staging area for self-service user-data export jobs.
     pub portability: Arc<portability::ExportRegistry>,
+    /// Revocable tokens behind the external iCal subscription URL.
+    pub calendar_feed_token_repo: Arc<dyn playarr_db::CalendarFeedTokenRepo>,
+    /// Grab and import events behind the availability-lag statistic.
+    pub availability_event_repo: Arc<dyn playarr_db::AvailabilityEventRepo>,
 }
 
 impl FromRef<AppState> for ReadinessState {

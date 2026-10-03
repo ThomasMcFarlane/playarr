@@ -2055,6 +2055,75 @@ paths:
           description: Caller may not view the catalog
       security:
       - bearer_auth: []
+  /api/v1/calendar/feed:
+    get:
+      tags:
+      - calendar
+      operationId: get_calendar_feed_handler
+      responses:
+        '200':
+          description: Whether the caller has an active subscription token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarFeedStatus'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller may not view the catalog
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - calendar
+      operationId: create_calendar_feed_handler
+      responses:
+        '201':
+          description: A new subscription URL; any previous token stops working. The token is returned only here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarFeedCreated'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller may not view the catalog
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - calendar
+      operationId: revoke_calendar_feed_handler
+      responses:
+        '204':
+          description: The subscription token is revoked (idempotent)
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller may not view the catalog
+      security:
+      - bearer_auth: []
+  /api/v1/calendar/feed/{file}:
+    get:
+      tags:
+      - calendar
+      operationId: calendar_feed_ics_handler
+      parameters:
+      - name: file
+        in: path
+        description: The subscription token followed by `.ics`
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: iCalendar (RFC 5545) feed of the owner's releases
+          content:
+            text/calendar:
+              schema:
+                type: string
+        '404':
+          description: Unknown or revoked token
   /api/v1/catalog:
     get:
       tags:
@@ -2315,6 +2384,34 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No work with this id
+      security:
+      - bearer_auth: []
+  /api/v1/catalog/{id}/availability-lag:
+    get:
+      tags:
+      - calendar
+      operationId: availability_lag_handler
+      parameters:
+      - name: id
+        in: path
+        description: Catalog work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Average time from release to availability, from real grab/import events. Backfills and items without release data are counted but excluded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityLag'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller may not view the catalog
         '404':
           description: No work with this id
       security:
@@ -6403,6 +6500,80 @@ components:
         updated_at:
           type: string
           format: date-time
+    AvailabilityLag:
+      type: object
+      description: Average time until availability for one series, movie, artist or author.
+      required:
+      - sample_count
+      - backfill_count
+      - unknown_count
+      - backfill_threshold_days
+      - samples
+      properties:
+        average_grab_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Mean seconds from release to first grab over the same samples.
+        average_seconds:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Mean seconds from air/release to first import; `null` with no samples.
+        backfill_count:
+          type: integer
+          format: int32
+          description: |-
+            Items first imported more than `backfill_threshold_days` after release:
+            counted here and excluded from the average.
+          minimum: 0
+        backfill_threshold_days:
+          type: integer
+          format: int32
+          minimum: 0
+        sample_count:
+          type: integer
+          format: int32
+          description: Items that contributed to `average_seconds`.
+          minimum: 0
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailabilityLagSample'
+          description: Most recent samples, newest first (at most 20).
+        unknown_count:
+          type: integer
+          format: int32
+          description: 'Items with no release time, or imported before it aired: excluded.'
+          minimum: 0
+    AvailabilityLagSample:
+      type: object
+      required:
+      - air_at
+      - imported_at
+      - lag_seconds
+      properties:
+        air_at:
+          type: string
+          format: date-time
+        episode_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        imported_at:
+          type: string
+          format: date-time
+        lag_seconds:
+          type: integer
+          format: int64
+        season_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
     AvailabilityResponse:
       type: object
       description: Response body for [`availability_handler`].
@@ -6797,6 +6968,39 @@ components:
           $ref: '#/components/schemas/SourceKind'
         source_name:
           type: string
+    CalendarFeedCreated:
+      type: object
+      required:
+      - url
+      - token
+      - created_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        token:
+          type: string
+          description: The secret path component, shown once.
+        url:
+          type: string
+          description: Full subscription URL, shown once.
+    CalendarFeedStatus:
+      type: object
+      required:
+      - active
+      properties:
+        active:
+          type: boolean
+        created_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_used_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     CalendarMediaKind:
       type: string
       enum:

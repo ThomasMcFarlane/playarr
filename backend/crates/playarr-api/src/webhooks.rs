@@ -47,6 +47,19 @@ pub async fn arr_webhook_handler(
         .get(instance_id)
         .ok_or_else(|| ApiError::not_found(format!("unknown source instance {instance_id}")))?;
 
+    // Real grab/import events feed the availability-lag statistic. A
+    // storage failure must never reject the webhook: the poller still reconciles.
+    for event in playarr_arr_sync::availability::extract_availability_events(
+        instance_id,
+        instance.kind,
+        &body,
+        chrono::Utc::now(),
+    ) {
+        if let Err(err) = state.availability_event_repo.record(&event).await {
+            tracing::warn!(%instance_id, error = %err, "failed to record availability event");
+        }
+    }
+
     state
         .webhook
         .handle(instance_id, instance.kind, body)

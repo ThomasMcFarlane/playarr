@@ -266,6 +266,27 @@ pub(crate) async fn resolve_streaming_access(
     Ok((policy, allowed_libraries))
 }
 
+/// Catalog-view access for `user_id` without a bearer token, for credentials
+/// that are not JWTs (the calendar subscription token). Mirrors
+/// [`CatalogViewer`]: `Ok((policy, allowed_libraries))` where `None` means
+/// unrestricted. Denies disabled or deleted users the same way.
+pub(crate) async fn resolve_catalog_access(
+    state: &AppState,
+    user_id: Uuid,
+) -> Result<(Policy, Option<Vec<Uuid>>), ApiError> {
+    let deny = forbidden("this account may not view the catalog");
+    let policy = resolve_policy(state, user_id, "catalog", deny.clone()).await?;
+    if !(policy.can_stream || policy.is_admin) {
+        return Err(deny);
+    }
+    let resolved_group_library_allow = state
+        .source_instances
+        .source_instance_ids_for_group_libraries(&policy.group_library_allow);
+    let allowed = (!policy.is_admin)
+        .then(|| union_library_ids(&policy.library_allow, &resolved_group_library_allow));
+    Ok((policy, allowed))
+}
+
 impl FromRequestParts<AppState> for AdminUser {
     type Rejection = ApiError;
 
