@@ -106,6 +106,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The playback connection test now holds its concurrency slot (four at once, extra callers get
+  429) until the response body finishes or the client cancels, instead of only while the payload
+  was built, and sends a `Content-Length`.
 - `/api/v1/catalog` no longer issues one media-file query per candidate title when
   filtering by library; a single bulk query replaces ~2,700 round trips, removing the
   fixed 3-4.5 s cost per call on large libraries (task 100).

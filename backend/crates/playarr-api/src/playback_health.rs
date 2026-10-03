@@ -6,7 +6,7 @@
 //! fact as `measured`, `reported` or `unknown`, and produces readable findings
 //! plus a redacted export. Nothing here runs on the playback hot path.
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use axum::body::Body;
@@ -1033,7 +1033,8 @@ const CONNECTION_TEST_DEFAULT_BYTES: u64 = 1024 * 1024;
 const CONNECTION_TEST_MAX_BYTES: u64 = 4 * 1024 * 1024;
 const CONNECTION_TEST_MAX_CONCURRENT: usize = 4;
 
-static CONNECTION_TEST_SLOTS: OnceLock<Semaphore> = OnceLock::new();
+static CONNECTION_TEST_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const CONNECTION_TEST_CHUNK: usize = 64 * 1024;
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ConnectionTestQuery {
@@ -1063,22 +1064,36 @@ pub async fn connection_test_handler(
     _streaming: StreamingUser,
     Query(query): Query<ConnectionTestQuery>,
 ) -> Result<Response, ApiError> {
-    let slots =
-        CONNECTION_TEST_SLOTS.get_or_init(|| Semaphore::new(CONNECTION_TEST_MAX_CONCURRENT));
-    let permit = slots.try_acquire().map_err(|_| {
+    let slots = CONNECTION_TEST_SLOTS
+        .get_or_init(|| Arc::new(Semaphore::new(CONNECTION_TEST_MAX_CONCURRENT)))
+        .clone();
+    let permit = slots.try_acquire_owned().map_err(|_| {
         ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "too_many_requests",
             "too many connection tests are running; try again shortly",
         )
     })?;
-    let bytes = clamp_test_bytes(query.bytes) as usize;
-    // The payload is small and fixed; hold the slot only while building it so
-    // the limit bounds server work, not slow clients.
-    let payload = vec![0u8; bytes];
-    drop(permit);
-    let mut response = Response::new(Body::from(payload));
+    let total = clamp_test_bytes(query.bytes) as usize;
+    // The slot is held until the body is dropped (finished, cancelled or the
+    // client went away), so the limit bounds real concurrent transfers.
+    let chunk = axum::body::Bytes::from(vec![0u8; CONNECTION_TEST_CHUNK.min(total)]);
+    let stream = futures::stream::unfold((total, permit), move |(remaining, permit)| {
+        let chunk = chunk.clone();
+        async move {
+            if remaining == 0 {
+                return None;
+            }
+            let take = remaining.min(chunk.len());
+            Some((
+                Ok::<_, std::convert::Infallible>(chunk.slice(..take)),
+                (remaining - take, permit),
+            ))
+        }
+    });
+    let mut response = Response::new(Body::from_stream(stream));
     let headers = response.headers_mut();
+    headers.insert(header::CONTENT_LENGTH, HeaderValue::from(total as u64));
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
@@ -1396,6 +1411,9 @@ mod tests {
     use axum::http::Request;
     use tower::ServiceExt;
 
+    /// The slot limit is process-wide, so tests that use it run one at a time.
+    static CONNECTION_TEST_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     fn req(method: &str, uri: &str, token: &str, body: serde_json::Value) -> Request<Body> {
         let mut request = Request::builder()
             .method(method)
@@ -1471,7 +1489,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn connection_test_holds_its_slot_until_the_body_is_dropped() {
+        let _serial = CONNECTION_TEST_TEST_LOCK.lock().await;
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        let token = mint_access_token(&state, user);
+        let uri = "/api/v1/playback/connection-test?bytes=4194304";
+
+        let mut held = Vec::new();
+        for _ in 0..CONNECTION_TEST_MAX_CONCURRENT {
+            let response = router
+                .clone()
+                .oneshot(req("GET", uri, &token, serde_json::json!(null)))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()["content-length"], "4194304");
+            held.push(response);
+        }
+        let refused = router
+            .clone()
+            .oneshot(req("GET", uri, &token, serde_json::json!(null)))
+            .await
+            .unwrap();
+        assert_eq!(refused.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        // Cancelling (dropping) one transfer frees its slot.
+        held.pop();
+        let again = router
+            .clone()
+            .oneshot(req("GET", uri, &token, serde_json::json!(null)))
+            .await
+            .unwrap();
+        assert_eq!(again.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn connection_test_is_bounded_and_authenticated() {
+        let _serial = CONNECTION_TEST_TEST_LOCK.lock().await;
         let (router, state) = test_state().await;
         let user = Uuid::new_v4();
         seed_streaming_user(&state, user).await;
