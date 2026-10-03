@@ -134,13 +134,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an RFC 5545 feed (14 days back, 180 ahead) limited to the owner's current libraries. Only a SHA-256 of
   the token is stored, regenerating revokes the old URL, and unknown or revoked tokens return 404.
   New `calendar_feed_tokens` migration (SQLite 0046, Postgres 0047).
-<<<<<<< HEAD
 - Playarr Web (and the TV shells that share it): a Watchlist page and nav item with Resume/Play
   that opens the exact media file and explained unavailable actions, a watchlist toggle on title
   pages, "Other sources" results (peers) in Search and a Games filter with provider status.
 <<<<<<< HEAD
 <<<<<<< HEAD
-=======
 =======
 - Playarr Web (and the webOS/Tizen shells that share it) now has a Calendar page in the main navigation
   with agenda, week and month views (agenda by default on TV, touch and narrow screens), previous/next/today
@@ -150,7 +148,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   subscription link (create, regenerate and revoke with confirmation, copy once, last-used time), and the
   series detail page shows "Usually available about X after release" with an honest no-data state and
   the excluded backfill/unknown counts (tasks 75-77). Includes English, Thai and Japanese strings.
->>>>>>> (feat(web): add release calendar page, subscription and availability lag)
 - Shared web API client methods and types for the release calendar (`getCalendar`, feed status, create,
   regenerate and revoke, and `getAvailabilityLag`), with unit tests (tasks 75-77).
 >>>>>>> (feat(api-client): add release calendar, feed and availability-lag methods)
@@ -317,6 +314,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Registered the portability `ProgressConflicts` schema so `backend/openapi/playarr.yaml` resolves and the
   TypeScript API client can be regenerated.
+- Android playback health dialog: D-pad focus now starts on the first finding instead of Close, so Down walks the findings, detail, connection test and export buttons.
 - Catalogue browse loads each page of works' external references with batched `IN (...)`
   queries instead of one query per title, removing the remaining ~0.4 s per uncached
   `/api/v1/catalog` call on region-b (task 100).

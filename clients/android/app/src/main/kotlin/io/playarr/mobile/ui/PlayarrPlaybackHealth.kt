@@ -28,6 +28,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -205,6 +208,15 @@ internal fun PlayarrPlaybackHealthDialog(
     var note by remember { mutableStateOf<PlayarrString?>(null) }
     var testJob by remember { mutableStateOf<Job?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
+    // D-pad users start inside the content (not on Close) so Down walks the findings.
+    val initialFocus = remember { FocusRequester() }
+
+    LaunchedEffect(load) {
+        if (load !is HealthLoad.Loading) {
+            withFrameNanos { }
+            runCatching { initialFocus.requestFocus() }
+        }
+    }
 
     LaunchedEffect(reloadKey) {
         load = HealthLoad.Loading
@@ -236,7 +248,7 @@ internal fun PlayarrPlaybackHealthDialog(
                     HealthLoad.Loading -> item { Text(playarrString(PlayarrString.HealthLoading)) }
                     is HealthLoad.Failed -> {
                         item {
-                            HealthFocusable {
+                            HealthFocusable(Modifier.focusRequester(initialFocus)) {
                                 Text(
                                     playarrString(
                                         when (state.error) {
@@ -257,7 +269,10 @@ internal fun PlayarrPlaybackHealthDialog(
                     is HealthLoad.Ready -> {
                         val report = state.report
                         items(playarrSortFindings(report.findings).size) { index ->
-                            HealthFindingCard(playarrSortFindings(report.findings)[index])
+                            HealthFindingCard(
+                                playarrSortFindings(report.findings)[index],
+                                if (index == 0) Modifier.focusRequester(initialFocus) else Modifier,
+                            )
                         }
                         item {
                             TextButton(onClick = { detail = !detail }) {
@@ -380,11 +395,11 @@ internal fun PlayarrPlaybackHealthDialog(
 
 /** Text is not focusable on its own, so D-pad users could not scroll past it. */
 @Composable
-private fun HealthFocusable(content: @Composable () -> Unit) {
+private fun HealthFocusable(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     androidx.compose.foundation.layout.Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .border(
                 BorderStroke(if (focused) 2.dp else 0.dp, if (focused) WebPink else Color.Transparent),
@@ -396,14 +411,14 @@ private fun HealthFocusable(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun HealthFindingCard(finding: HealthFinding) {
+private fun HealthFindingCard(finding: HealthFinding, modifier: Modifier = Modifier) {
     val accent = when (finding.severity) {
         HealthSeverity.Ok -> Color(0xFF6FCF97)
         HealthSeverity.Info -> Color(0xFF7FB7FF)
         HealthSeverity.Warning -> Color(0xFFFFD27A)
         HealthSeverity.Problem -> Color(0xFFFF7A6B)
     }
-    HealthFocusable {
+    HealthFocusable(modifier) {
         Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(finding.title, fontWeight = FontWeight.Bold, color = accent)
             Text(finding.detail, fontSize = 13.sp)
