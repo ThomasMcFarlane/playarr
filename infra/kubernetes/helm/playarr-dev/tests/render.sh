@@ -66,6 +66,41 @@ if helm template playarr-dev "$chart_dir" --set regionalInstances.playarr-region
   echo "schema accepted an out-of-range hostPort" >&2
   exit 1
 fi
+# Relay (acme) is disabled until the cut-over: nothing relay-related renders.
+! grep -q 'PLAYARR_ACME\|PLAYARR_RELAY_REGISTER\|PLAYARR_PUBLIC_IPV4' "$rendered"
+# Enabling the relay on top of static TLS: both certificates are configured, the
+# transport stays HTTPS, and only 8484 is published (no port 80, no DNS port).
+relay="$(mktemp)"
+trap 'rm -f "$rendered" "$no_tls" "$no_host" "$relay"' EXIT
+helm template playarr-dev "$chart_dir" --namespace playarr \
+  --set regionalInstances.playarr-region-a.acme.enabled=true \
+  --set regionalInstances.playarr-region-b.acme.enabled=true >"$relay"
+test "$(grep -c 'value: relay-dns-01$' "$relay")" -eq 2
+test "$(grep -c 'PLAYARR_RELAY_REGISTER' "$relay")" -eq 2
+test "$(grep -c 'value: /tls/tls.crt$' "$relay")" -eq 2
+grep -q 'value: "v4-203-0-113-10.relay.playarr.app"' "$relay"
+grep -q 'value: "v4-203-0-113-20.relay.playarr.app"' "$relay"
+grep -A1 'name: PLAYARR_PUBLIC_IPV4' "$relay" | grep -q 'value: "203.0.113.10"'
+grep -A1 'name: PLAYARR_PUBLIC_IPV4' "$relay" | grep -q 'value: "203.0.113.20"'
+grep -q 'service: "https://playarr-region-a.playarr:443"' "$relay"
+test "$(grep -c '^              scheme: HTTPS$' "$relay")" -eq 4
+test "$(grep -c '^          startupProbe:$' "$relay")" -eq 6
+! grep -Eq 'hostPort: (53|80)$|containerPort: (53|80|443)$|hostNetwork|PLAYARR_RELAY_DNS|PLAYARR_ACME_HTTP01' "$relay"
+# Relay without static TLS: HTTPS wiring plus a startup probe for the first issuance.
+relay_only="$(mktemp)"
+trap 'rm -f "$rendered" "$no_tls" "$no_host" "$relay" "$relay_only"' EXIT
+helm template playarr-dev "$chart_dir" --namespace playarr \
+  --set regionalInstances.playarr-region-a.tls=null \
+  --set regionalInstances.playarr-region-a.acme.enabled=true >"$relay_only"
+grep -q 'service: "https://playarr-region-a.playarr:443"' "$relay_only"
+test "$(grep -c '^          startupProbe:$' "$relay_only")" -eq 7
+# The relay registers hostExposure.hostIP, so acme without hostExposure is rejected.
+if helm template playarr-dev "$chart_dir" --namespace playarr \
+  --set regionalInstances.playarr-region-a.hostExposure=null \
+  --set regionalInstances.playarr-region-a.acme.enabled=true >/dev/null 2>&1; then
+  echo "chart accepted acme without hostExposure" >&2
+  exit 1
+fi
 if grep -Eq 'service: ".*\.dev:80"' "$rendered"; then
   echo "found a hard-coded dev namespace service reference" >&2
   exit 1

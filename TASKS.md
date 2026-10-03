@@ -44,6 +44,13 @@ Documentation only: implementation is pending and unassigned.
 | 87 | Admin-only server capabilities endpoint | review PR open | task/server-capabilities | `GET /api/v1/admin/system/capabilities` reports ffmpeg, ffprobe, key encoders and GPU devices on the serving node with impact and install hints. Peer aggregation is not implemented: each node reports itself. Evidence: `cargo test -p playarr-api` 328 passed. |
 | 88 | Admin "Server capabilities" page | review PR open | task/server-capabilities | System nav page with prominent missing-item banner, status filter persisted in the URL, light and dark tokens. |
 | 89 | Regional runtime image with ffmpeg and rollout runbook | review PR open | task/server-capabilities | `infra/docker/regional-runtime.Dockerfile` plus runbook in the playarr-dev README. The live image tag is deliberately not bumped until the image exists on region-a and region-b (owner approval needed). |
+
+## Active: Restore public relay on regional servers (2026-10-03)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 90 | Restore public relay (HTTPS on 8484, ACME DNS-01 through the Worker) for region-a and region-b in the playarr-dev chart | review PR open | task/restore-public-relay | Optional `acme` block extending the existing `hostExposure` (one mechanism, only 8484 published; no port 80, no DNS port) and coexisting with the static `tls` certificate, relay-registration and DNS-01 env; ships disabled until the cut-over; chart 0.4.0. Stacked on the server-capabilities PR (PR 35). Evidence: `tests/render.sh` and `helm lint --strict` pass. Not deployed: rollout needs owner approval per the README runbook, then a `targetRevision` bump in the deployment repository. |
+
 ## Active — infrastructure reliability (2026-09-24)
 
 | # | Task | Status | Picked up by | Notes |

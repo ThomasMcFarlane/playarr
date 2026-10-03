@@ -74,8 +74,8 @@ use it. Each instance sets `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
   DNS-01 through Cloudflare for any name, so `*.example.com` names work.
 - The Secret is mounted read-only at `/tls` and the Pod gets
   `PLAYARR_TLS_CERT_PATH=/tls/tls.crt` and `PLAYARR_TLS_KEY_PATH=/tls/tls.key`.
-  The server then serves HTTPS on `PLAYARR_HTTP_BIND_ADDR` (static TLS is mutually
-  exclusive with ACME). Probes use `scheme: HTTPS`; the Service exposes 443 and the
+  The server then serves HTTPS on `PLAYARR_HTTP_BIND_ADDR` (the relay ACME
+  certificate described under "Public relay" can be added alongside it). Probes use `scheme: HTTPS`; the Service exposes 443 and the
   Emissary Mapping uses `https://<instance>.<namespace>:443`, so the existing
   `playarr-a.example.com` and `playarr.example.com` routes keep working. Emissary
   does not verify the upstream certificate, so `routeHost` needs no SAN.
@@ -91,7 +91,8 @@ use it. Each instance sets `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
   optional either, so a Pod created early waits in `ContainerCreating` until the
   Secret exists instead of crash-looping.
 - Plain HTTP on 8484 is no longer served; there is no plaintext redirect on the
-  static-certificate listener. Clients must use `https://`.
+  static-certificate listener (except the relay challenge path when the relay is
+  enabled). Clients must use `https://`.
 
 Verify after rollout:
 
@@ -187,6 +188,119 @@ volume and hostPath runtime are untouched by either image. If Argo is not
 available, `kubectl -n playarr rollout undo deploy/playarr-region-a` returns to the
 previous ReplicaSet, but Argo will then show drift until the values are
 reverted.
+
+## Public relay (HTTPS on 8484, DNS-01 through the Worker)
+
+When region-a and region-b moved from systemd to k3s pods they lost their public
+exposure and ACME settings, so the public relay stopped working. The relay
+now needs only one public port per server: 8484.
+
+Cloudflare only holds DNS. There is no DNS server in the cluster and no port
+80. Each server tells the `playarr.app` Worker its public IPv4 address; the
+Worker calls it back on `http://<ip>:8484/.well-known/playarr-relay/<token>`
+to prove control of the address and then publishes the DNS-only record
+`v4-A-B-C-D.relay.playarr.app`. The same handshake lets the server obtain its
+Let's Encrypt certificate with ACME DNS-01 through the Worker. Streaming and
+API requests never pass through Cloudflare. See the repository's
+`docs/deployment/playarr-relay.md` for the trust model and cut-over order.
+
+The public port is the existing `hostExposure` (see "Direct host exposure"
+above): `hostIP` and `hostPort` 8484 publish the container's 8484 through the
+CNI `portmap` plugin on the node's public address only. Static TLS (`tls`, see
+"HTTPS" above) stays the active transport for the `example.com` names. The
+optional per-instance `acme` block adds the relay certificate on the same port:
+the server holds both certificates and presents the one matching the TLS SNI
+name (`v4-*.relay.playarr.app` gets the relay certificate, everything else the
+static one). `acme.enabled` requires `hostExposure`; the chart fails to render
+otherwise. It is `false` in `values.yaml` until the relay cut-over.
+
+| Setting | region-a | region-b |
+| --- | --- | --- |
+| `hostExposure` | 203.0.113.10:8484 | 203.0.113.20:8484 |
+| `acme.domain` | `v4-203-0-113-10.relay.playarr.app` | `v4-203-0-113-20.relay.playarr.app` |
+
+The pods stay non-root with every capability dropped and bind no low port at
+all. With ACME enabled the chart additionally sets `PLAYARR_ACME_DOMAIN`,
+`PLAYARR_ACME_ENVIRONMENT=production`, `PLAYARR_ACME_ACCEPT_TERMS=true`,
+`PLAYARR_ACME_CACHE_DIR=/data/acme` (on the state PVC, so certificates survive
+restarts), `PLAYARR_ACME_CHALLENGE=relay-dns-01`, `PLAYARR_RELAY_REGISTER=true`
+and `PLAYARR_PUBLIC_IPV4` (the instance's `hostExposure.hostIP`). The static
+`PLAYARR_TLS_*` paths remain when `tls` is set: the server accepts both.
+
+On 8484 the listener already speaks HTTPS with the static certificate, so probes
+and the Mapping are unchanged. The Worker's callback is plain HTTP to
+`/.well-known/playarr-relay/<token>` on the same port; the server answers that
+one path in cleartext and redirects everything else. The relay certificate is
+issued in the background and added to the SNI resolver without a restart. If an
+instance enables `acme` without `tls`, the listener is plain HTTP until the
+first relay certificate exists, so a five-minute startup probe is rendered.
+
+Setting `acme.enabled: false` renders the previous wiring (static TLS only).
+
+The server image must include the relay registration, DNS-01 and multi-certificate
+support, and the Worker side must be live first: do not enable `acme` before the
+relay cut-over steps in `docs/deployment/playarr-relay.md` have been approved and
+carried out.
+
+### Relay rollout (needs owner approval; changes the cluster)
+
+These steps must not be run until the owner approves them. Merge only after the
+runtime image work this chart revision builds on is merged.
+
+1. Preflight on each node (read-only): TCP 8484 must be free on the public
+   address, the old systemd units must stay stopped and disabled, and any
+   provider or host firewall must allow inbound TCP 8484 (the Worker and
+   browsers connect to it).
+
+   ```sh
+   sudo ss -lntp | grep -E ':8484\b'
+   systemctl is-active playarr-region-a playarr-region-b
+   ```
+
+2. Complete the Worker cut-over (secrets, cron, removal of the `relay`
+   delegation) as written in `docs/deployment/playarr-relay.md`.
+
+3. Merge, then bump the chart `targetRevision` in the GitOps repository and let
+   Argo sync the `playarr` application. Roll one instance at a time:
+
+   ```sh
+   kubectl -n playarr rollout status deploy/playarr-region-a
+   kubectl -n playarr logs deploy/playarr-region-a | grep -i -E 'acme|relay|certificate'
+   ```
+
+   Expect "registered relay hostname" and then "automatic HTTPS enabled with
+   Let's Encrypt ACME DNS-01" (or "using cached relay certificate").
+
+4. Verification (all read-only):
+
+   ```sh
+   # The Worker published the DNS-only record.
+   dig +short A v4-203-0-113-20.relay.playarr.app
+   dig +short A v4-203-0-113-10.relay.playarr.app
+
+   # Public HTTPS with a browser-trusted Let's Encrypt certificate.
+   curl -sv https://v4-203-0-113-20.relay.playarr.app:8484/healthz
+   openssl s_client -connect 203.0.113.20:8484 \
+     -servername v4-203-0-113-20.relay.playarr.app </dev/null 2>/dev/null \
+     | openssl x509 -noout -issuer -subject -dates
+
+   # Pods and routes.
+   kubectl -n playarr get pods -l app.kubernetes.io/name=playarr-standalone
+   kubectl -n playarr get mapping playarr-region-a playarr-region-b
+   ```
+
+   Then request each regional route host through the normal public edge and
+   confirm `/healthz` and a signed-in page load still work and a WebSocket
+   still upgrades; those requests now cross Emissary's TLS origination.
+
+### Relay rollback
+
+Set `acme.enabled: false` for both instances and sync. The Deployment is
+recreated without the relay variables and keeps serving HTTPS with the static
+certificate on the `hostExposure` port, so the route hosts are unaffected. The
+ACME account and certificate on the state volume are kept and reused on the
+next attempt. The previous systemd units should remain stopped: starting them
+would conflict with the same host port.
 
 ## Regional PV cutover
 

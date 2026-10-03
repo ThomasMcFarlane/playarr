@@ -1,6 +1,13 @@
 {{- range $name, $instance := .Values.regionalInstances }}
 {{- $tls := $instance.tls | default dict }}
 {{- $tlsOn := not (empty $tls.hostnames) }}
+{{- $acme := $instance.acme | default dict }}
+{{- $acmeOn := $acme.enabled | default false }}
+{{- /* The pod speaks HTTPS when either a static (cert-manager) certificate or the relay ACME certificate is configured. */}}
+{{- $httpsOn := or $tlsOn $acmeOn }}
+{{- if and $acmeOn (not $instance.hostExposure) }}
+{{- fail (printf "regionalInstances.%s.acme.enabled requires hostExposure (the relay registers its public address)" $name) }}
+{{- end }}
 {{- if $tlsOn }}
 ---
 # cert-manager issues the certificate (DNS-01) into a Secret that the pod
@@ -111,6 +118,26 @@ spec:
             - name: PLAYARR_TLS_KEY_PATH
               value: /tls/tls.key
             {{- end }}
+            {{- if $acmeOn }}
+            # Relay certificate (v4-* name) via ACME DNS-01 through the
+            # playarr.app Worker: no port 80 and no DNS server in the cluster.
+            # When a static certificate is also mounted, the server presents
+            # whichever certificate matches the TLS SNI name.
+            - name: PLAYARR_ACME_DOMAIN
+              value: {{ $acme.domain | quote }}
+            - name: PLAYARR_ACME_ENVIRONMENT
+              value: {{ $acme.environment | quote }}
+            - name: PLAYARR_ACME_ACCEPT_TERMS
+              value: {{ $acme.acceptTerms | quote }}
+            - name: PLAYARR_ACME_CACHE_DIR
+              value: {{ $acme.cacheDir | quote }}
+            - name: PLAYARR_ACME_CHALLENGE
+              value: relay-dns-01
+            - name: PLAYARR_RELAY_REGISTER
+              value: "true"
+            - name: PLAYARR_PUBLIC_IPV4
+              value: {{ $instance.hostExposure.hostIP | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: {{ $instance.secretName }}
@@ -125,11 +152,26 @@ spec:
             - name: metrics
               containerPort: 9090
               protocol: TCP
+          {{- if and $acmeOn (not $tlsOn) }}
+          # Without a static certificate the listener speaks plain HTTP until
+          # the first relay certificate is issued (registration, DNS-01 and
+          # Let's Encrypt validation take a minute or two), so the HTTPS probe
+          # fails. Allow five minutes before the liveness probe may act.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTPS
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+            successThreshold: 1
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
-              scheme: {{ if $tlsOn }}HTTPS{{ else }}HTTP{{ end }}
+              scheme: {{ if $httpsOn }}HTTPS{{ else }}HTTP{{ end }}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
@@ -139,7 +181,7 @@ spec:
             httpGet:
               path: /healthz
               port: http
-              scheme: {{ if $tlsOn }}HTTPS{{ else }}HTTP{{ end }}
+              scheme: {{ if $httpsOn }}HTTPS{{ else }}HTTP{{ end }}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
@@ -201,7 +243,7 @@ spec:
     app.kubernetes.io/name: playarr-standalone
     app.kubernetes.io/instance: {{ $name }}
   ports:
-    {{- if $tlsOn }}
+    {{- if $httpsOn }}
     - name: https
       port: 443
       targetPort: http
@@ -228,7 +270,7 @@ spec:
     - --apiVersion-v3alpha1-only--default
   host: {{ $instance.routeHost | quote }}
   prefix: /
-  {{- if $tlsOn }}
+  {{- if $httpsOn }}
   # The pod terminates TLS itself; the https:// scheme makes Emissary originate
   # TLS to it. Without a TLSContext Emissary does not verify the upstream
   # certificate, so the public hostnames need not match routeHost.

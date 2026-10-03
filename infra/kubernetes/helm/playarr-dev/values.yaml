@@ -142,6 +142,17 @@ regionalInstances:
       issuer: letsencrypt-prod
       hostnames:
         - playarr-a.example.com
+    # Public relay certificate (v4-* name) by ACME DNS-01 through the
+    # playarr.app Worker. Disabled until the relay cut-over in
+    # docs/deployment/playarr-relay.md has been approved and carried out. Needs
+    # hostExposure. The static tls certificate above stays the transport for
+    # the example.com name; the server picks the certificate by SNI.
+    acme:
+      enabled: false
+      domain: v4-203-0-113-10.relay.playarr.app
+      environment: production
+      acceptTerms: true
+      cacheDir: /data/acme
 
   playarr-region-b:
     image: streamarr-runtime:26853ca
@@ -174,3 +185,14 @@ regionalInstances:
       issuer: letsencrypt-prod
       hostnames:
         - playarr-b.example.com
+    # Public relay certificate (v4-* name) by ACME DNS-01 through the
+    # playarr.app Worker. Disabled until the relay cut-over in
+    # docs/deployment/playarr-relay.md has been approved and carried out. Needs
+    # hostExposure. The static tls certificate above stays the transport for
+    # the example.com name; the server picks the certificate by SNI.
+    acme:
+      enabled: false
+      domain: v4-203-0-113-20.relay.playarr.app
+      environment: production
+      acceptTerms: true
+      cacheDir: /data/acme

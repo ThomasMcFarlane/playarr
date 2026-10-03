@@ -60,6 +60,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The `playarr-dev` chart can restore the public relay for the regional servers that moved from
+  systemd to k3s pods. An optional per-instance `acme` block builds on the existing
+  `hostExposure` (hostPort 8484 on the node's public address, the only published port: no port 80
+  and no DNS port) and adds the relay certificate on that port alongside the static cert-manager certificate (the server picks one by SNI). The block ships disabled until the relay cut-over. The pods stay non-root with
+  every capability dropped. ACME uses DNS-01 through the `playarr.app` Worker
+  (`PLAYARR_ACME_CHALLENGE=relay-dns-01`, `PLAYARR_RELAY_REGISTER=true`, `PLAYARR_PUBLIC_IPV4`).
+  The Service and Emissary routes already target TLS on port 443 through the static certificate.
+  Chart version 0.4.0; the render test covers the new wiring, and the README carries an
+  owner-approved rollout, verification and rollback runbook. Nothing is deployed by this change.
 - Roku SceneGraph XML comments no longer contain double hyphens, so the
   channel validator parses every component on current Python.
 - Android plays Dolby Vision remuxes on devices without a Dolby Vision decoder.
