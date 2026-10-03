@@ -133,6 +133,10 @@ regionalInstances:
     mediaPath: /srv/media
     runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr-a.example.com
+    # Plain HTTP on the node's public address (owner-approved public server).
+    hostExposure:
+      hostIP: 203.0.113.10
+      hostPort: 8484
 
   playarr-region-b:
     image: streamarr-runtime:26853ca
@@ -156,3 +160,7 @@ regionalInstances:
     mediaPath: /srv/media
     runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr.example.com
+    # Plain HTTP on the node's public address (owner-approved public server).
+    hostExposure:
+      hostIP: 203.0.113.20
+      hostPort: 8484

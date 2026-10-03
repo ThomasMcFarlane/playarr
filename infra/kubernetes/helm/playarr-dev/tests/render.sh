@@ -28,6 +28,23 @@ grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
 grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 grep -q 'service: "playarr-region-a.playarr:80"' "$rendered"
 grep -q 'service: "playarr-region-b.playarr:80"' "$rendered"
+test "$(grep -c '^              hostPort: ' "$rendered")" -eq 2
+test "$(grep -c '^              hostIP: ' "$rendered")" -eq 2
+grep -q '^              hostIP: "203.0.113.10"$' "$rendered"
+grep -q '^              hostIP: "203.0.113.20"$' "$rendered"
+test "$(grep -c '^              hostPort: 8484$' "$rendered")" -eq 2
+# hostExposure is optional: omitting it must remove hostIP/hostPort.
+no_host="$(mktemp)"
+trap 'rm -f "$rendered" "$no_host"' EXIT
+helm template playarr-dev "$chart_dir" --namespace playarr \
+  --set regionalInstances.playarr-region-a.hostExposure=null \
+  --set regionalInstances.playarr-region-b.hostExposure=null >"$no_host"
+test "$(grep -c 'hostPort:' "$no_host")" -eq 0
+# Invalid values must be rejected by the schema.
+if helm template playarr-dev "$chart_dir" --set regionalInstances.playarr-region-a.hostExposure.hostPort=70000 >/dev/null 2>&1; then
+  echo "schema accepted an out-of-range hostPort" >&2
+  exit 1
+fi
 if grep -Eq 'service: ".*\.dev:80"' "$rendered"; then
   echo "found a hard-coded dev namespace service reference" >&2
   exit 1

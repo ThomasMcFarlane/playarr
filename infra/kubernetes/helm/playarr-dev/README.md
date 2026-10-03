@@ -45,8 +45,27 @@ Two defaults deliberately preserve the current dev-host development behaviour:
 
 If those paths do not exist, Kubernetes leaves the Pods in
 `ContainerCreating` with `FailedMount`, as it does in the source deployment.
-Changing them is a separate operational decision. None of these Pods requests
+Changing them is a separate operational decision. None of the six dev-host Pods requests
 `hostNetwork` or `hostPort`; port 8080 is a pod-local container port.
+
+## Direct host exposure (regional instances)
+
+Each entry in `regionalInstances` may set an optional
+`hostExposure: {hostIP, hostPort}`. When present, the `http` container port
+(8484) also gets that `hostIP`/`hostPort`, which k3s publishes through the CNI
+portmap plugin on that address. Omit the key to keep the instance cluster-only.
+
+| Instance | Node | Address |
+| --- | --- | --- |
+| `playarr-region-a` | region-a | `http://203.0.113.10:8484` |
+| `playarr-region-b` | region-b | `http://203.0.113.20:8484` |
+
+This is plain HTTP on a public address, deliberately and with owner approval
+(no tunnel or VPN). Only the `http` port is published; metrics (9090) stays
+pod-local. The `playarr-a.example.com` and `playarr.example.com` routes are
+unchanged. Deployments use the `Recreate` strategy, so the old Pod releases the
+host port before the new one starts. The node firewall must allow TCP 8484.
+Verify with `curl http://203.0.113.20:8484/healthz`.
 
 ## Regional PV cutover
 
