@@ -7,9 +7,10 @@
 
 use chrono::{DateTime, Utc};
 use playarr_arr_client::{
-    ArrClientError, BazarrClient, LidarrAlbum, LidarrArtist, LidarrClient, LidarrImage,
-    ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor, ReadarrClient,
-    SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage, WhisparrSeries,
+    ArrClientError, BazarrClient, DubarrClient, LidarrAlbum, LidarrArtist, LidarrClient,
+    LidarrImage, ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor,
+    ReadarrClient, SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage,
+    WhisparrSeries,
 };
 use playarr_model::{
     Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
@@ -355,7 +356,7 @@ pub fn work_kind_and_provider(source_kind: SourceKind) -> Option<(WorkKind, Exte
         SourceKind::Lidarr => Some((WorkKind::Artist, ExternalProvider::MusicBrainzArtist)),
         SourceKind::Readarr => Some((WorkKind::Author, ExternalProvider::Goodreads)),
         SourceKind::Whisparr => Some((WorkKind::Site, ExternalProvider::Tpdb)),
-        SourceKind::Bazarr | SourceKind::Prowlarr => None,
+        SourceKind::Bazarr | SourceKind::Prowlarr | SourceKind::Dubarr => None,
     }
 }
 
@@ -369,6 +370,7 @@ pub enum ArrClient {
     Bazarr(BazarrClient),
     Prowlarr(ProwlarrClient),
     Whisparr(WhisparrClient),
+    Dubarr(DubarrClient),
 }
 
 impl ArrClient {
@@ -388,6 +390,7 @@ impl ArrClient {
             SourceKind::Bazarr => ArrClient::Bazarr(BazarrClient::new(base_url, api_key)),
             SourceKind::Prowlarr => ArrClient::Prowlarr(ProwlarrClient::new(base_url, api_key)),
             SourceKind::Whisparr => ArrClient::Whisparr(WhisparrClient::new(base_url, api_key)),
+            SourceKind::Dubarr => ArrClient::Dubarr(DubarrClient::new(base_url, api_key)),
         }
     }
 
@@ -427,7 +430,7 @@ impl ArrClient {
                 .iter()
                 .map(map_whisparr)
                 .collect()),
-            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(Vec::new()),
+            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) | ArrClient::Dubarr(_) => Ok(Vec::new()),
         }
     }
 
@@ -453,7 +456,7 @@ impl ArrClient {
             }
             ArrClient::Readarr(client) => Ok(Some(map_readarr(&client.get_author(id).await?))),
             ArrClient::Whisparr(client) => Ok(Some(map_whisparr(&client.get_series(id).await?))),
-            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(None),
+            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) | ArrClient::Dubarr(_) => Ok(None),
         }
     }
 }

@@ -633,6 +633,7 @@ mod tests {
             SourceKind::Prowlarr,
             SourceKind::Readarr,
             SourceKind::Whisparr,
+            SourceKind::Dubarr,
         ] {
             let instance = sample_instance(kind, "instance");
             repo.upsert(&instance).await.unwrap();

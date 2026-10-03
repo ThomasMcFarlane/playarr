@@ -360,6 +360,53 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
     start_position_ms: u64,
     audio_stream_index: Option<u32>,
 ) -> Vec<String> {
+    build_hls_args(
+        input_path,
+        profile,
+        output_dir,
+        start_position_ms,
+        audio_stream_index,
+        None,
+    )
+}
+
+/// An audio file outside the source container (a Dubarr dub track) that
+/// replaces the source audio in an on-demand HLS transcode. `headers` are
+/// sent when `url` is an HTTP(S) address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalAudio {
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+}
+
+/// Like [`build_ffmpeg_hls_args_at_with_audio`], but the audio comes from a
+/// second input (`external`); the source video is mapped as usual and the
+/// source audio is dropped.
+pub fn build_ffmpeg_hls_args_at_with_external_audio(
+    input_path: &Path,
+    profile: &TranscodeTargetProfile,
+    output_dir: &Path,
+    start_position_ms: u64,
+    external: &ExternalAudio,
+) -> Vec<String> {
+    build_hls_args(
+        input_path,
+        profile,
+        output_dir,
+        start_position_ms,
+        None,
+        Some(external),
+    )
+}
+
+fn build_hls_args(
+    input_path: &Path,
+    profile: &TranscodeTargetProfile,
+    output_dir: &Path,
+    start_position_ms: u64,
+    audio_stream_index: Option<u32>,
+    external: Option<&ExternalAudio>,
+) -> Vec<String> {
     let mut args = vec![
         // Overwrite without prompting — the per-session output directory
         // is freshly created, but ffmpeg still probes for an existing
@@ -372,9 +419,27 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
         args.push(format!("{:.3}", start_position_ms as f64 / 1000.0));
     }
 
+    args.extend(["-i".to_string(), input_path.to_string_lossy().into_owned()]);
+    if let Some(ext) = external {
+        // The dub is aligned to the original's timeline, so it is seeked to
+        // the same absolute position as the video input.
+        if start_position_ms > 0 {
+            args.push("-ss".to_string());
+            args.push(format!("{:.3}", start_position_ms as f64 / 1000.0));
+        }
+        if !ext.headers.is_empty() {
+            let block: String = ext
+                .headers
+                .iter()
+                .map(|(k, v)| format!("{k}: {v}\r\n"))
+                .collect();
+            args.push("-headers".to_string());
+            args.push(block);
+        }
+        args.push("-i".to_string());
+        args.push(ext.url.clone());
+    }
     args.extend([
-        "-i".to_string(),
-        input_path.to_string_lossy().into_owned(),
         "-c:v".to_string(),
         profile.video_codec.clone(),
         // Browser MSE implementations generally accept 8-bit H.264 but
@@ -386,9 +451,13 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
         "-map".to_string(),
         "0:v:0".to_string(),
         "-map".to_string(),
-        audio_stream_index
-            .map(|stream_index| format!("0:{stream_index}"))
-            .unwrap_or_else(|| "0:a:0?".to_string()),
+        if external.is_some() {
+            "1:a:0".to_string()
+        } else {
+            audio_stream_index
+                .map(|stream_index| format!("0:{stream_index}"))
+                .unwrap_or_else(|| "0:a:0?".to_string())
+        },
         "-sn".to_string(),
     ]);
 
@@ -686,6 +755,47 @@ impl TranscodeOrchestrator {
         start_position_ms: u64,
         audio_stream_index: Option<u32>,
     ) -> Result<TranscodeSession, TranscodeError> {
+        self.spawn_on_demand(
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            audio_stream_index,
+            None,
+        )
+        .await
+    }
+
+    /// Starts an on-demand HLS transcode whose audio is an external file
+    /// (a Dubarr dub track) instead of a source-container stream.
+    pub async fn spawn_on_demand_transcode_with_external_audio(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        external: &ExternalAudio,
+    ) -> Result<TranscodeSession, TranscodeError> {
+        self.spawn_on_demand(
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            None,
+            Some(external),
+        )
+        .await
+    }
+
+    async fn spawn_on_demand(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        audio_stream_index: Option<u32>,
+        external: Option<&ExternalAudio>,
+    ) -> Result<TranscodeSession, TranscodeError> {
         if let Some(max) = self.max_concurrent_sessions {
             let active = self.active_children.lock().await.len();
             if active >= max {
@@ -699,12 +809,13 @@ impl TranscodeOrchestrator {
         tokio::fs::create_dir_all(&output_dir).await?;
 
         let source_path = playarr_model::resolve_media_path(&media_file.path);
-        let args = build_ffmpeg_hls_args_at_with_audio(
+        let args = build_hls_args(
             &source_path,
             &target_profile,
             &output_dir,
             start_position_ms,
             audio_stream_index,
+            external,
         );
 
         let mut command = Command::new(&self.ffmpeg_binary);
@@ -1096,6 +1207,28 @@ pub fn codecs_match(a: &str, b: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_audio_adds_second_input_and_maps_it() {
+        let profile = TranscodeTargetProfile::resolve("720p");
+        let ext = ExternalAudio {
+            url: "http://dubarr.local/api/v1/tracks/t1/download".to_string(),
+            headers: vec![("X-Api-Key".to_string(), "k".to_string())],
+        };
+        let args = build_ffmpeg_hls_args_at_with_external_audio(
+            Path::new("/m/a.mkv"),
+            &profile,
+            Path::new("/out"),
+            90_000,
+            &ext,
+        );
+        let joined = args.join(" ");
+        assert_eq!(args.iter().filter(|a| *a == "-i").count(), 2);
+        assert_eq!(args.iter().filter(|a| *a == "-ss").count(), 2);
+        assert!(joined.contains("-map 0:v:0 -map 1:a:0"));
+        assert!(joined.contains("X-Api-Key: k"));
+        assert!(!joined.contains("0:a:0?"));
+    }
+
     use super::*;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Mutex as StdMutex;

@@ -17,6 +17,15 @@ Owner request (4 October 2026): filter the library by available subtitle languag
 | 183 | Android: language filters in the native Compose Filters sheet (TV and phone), localised names | pending | lang-filters | Parent: 180. Depends on 181. |
 | 184 | Other clients: iOS, Apple TV, Fire TV Vega, Xbox, Harmony, Roku, VIDAA language filters | pending | Unassigned | Parent: 180. Depends on 181; use `audio_lang`/`subtitle_lang` and `/api/v1/catalog/languages`. |
 | 185 | Validate language filters on region-b, web and the Android emulator | pending | lang-filters | Parent: 180. Depends on 181-183. |
+## Active: Dubarr dub tracks as alternate audio (2026-10-04)
+
+Owner decision (4 October 2026): Dubarr (AI dubbing manager, `ThomasMcFarlane/dubarr`) publishes finished dub tracks as sidecar audio; Playarr catalogues them as extra audio tracks. Contract: Dubarr `docs/architecture.md` section 7 and `server/openapi.yaml`.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 190 | Server: Dubarr source type (`dubarr` source kind, client, change-feed poller), dub tracks offered in playback audio options, HLS transcode with external audio | in progress | dubarr-integration | Branch `task/dubarr-source`. Selecting a dub forces an on-demand HLS transcode (source video plus the dub as audio); direct play of a dub is not possible. Parent: Dubarr D-07. |
+| 191 | Clients: show dub tracks in the audio picker | open | Unassigned | Clients already render `audio_tracks` from playback info; verify the labels and language display on web, Android, iOS, tvOS, Roku, Xbox, Harmony. No client change is expected. |
+| 192 | Dubarr direct-play alternate audio (remux or muxed rendition) without transcoding video | open | Unassigned | Today a dub means a video transcode. A cheaper path is `-c:v copy` HLS with the dub as audio when the client can play the video codec. |
 
 ## Active: Public Playarr Server releases (2026-10-04)
 

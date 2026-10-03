@@ -279,7 +279,7 @@ impl MediaSync {
                 self.sync_whisparr(client, work_id, arr_source_id, source_instance_id)
                     .await
             }
-            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) => Ok(()),
+            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) | ArrClient::Dubarr(_) => Ok(()),
         };
         if result.is_ok() {
             self.media_file_repo

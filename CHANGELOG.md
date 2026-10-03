@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Dubarr integration (task 190): a new `dubarr` source kind (Settings, Sources) connects Playarr to Dubarr. Dub tracks for a media file are listed as extra audio options in playback info; choosing one starts an on-demand HLS transcode with the dub as the audio track (video from the original, seeking aligned). Lookups are cached for 60 seconds, invalidated by Dubarr's change feed, and never block playback when Dubarr is down. Covered by wiremock tests for the client and lookup and a unit test for the ffmpeg arguments.
 - Public Playarr Server releases (tag `backend-v*`): Linux x86-64 and ARM64 tarballs with SHA-256 checksums served from `playarr.app/downloads/server/`, and a multi-arch image at `ghcr.io/thomasmcfarlane/playarr-server`. The Clients hub server page now has per-architecture Download buttons, checksums and Docker pull/run/compose snippets. See `docs/deployment/server-releases.md`.
 
 ### Changed

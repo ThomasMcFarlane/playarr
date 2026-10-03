@@ -38,6 +38,7 @@ async fn health_check(client: &ArrClient) -> Result<(), playarr_arr_client::ArrC
         ArrClient::Bazarr(c) => c.health_check().await,
         ArrClient::Prowlarr(c) => c.health_check().await,
         ArrClient::Whisparr(c) => c.health_check().await,
+        ArrClient::Dubarr(c) => c.health_check().await,
     }
 }
 

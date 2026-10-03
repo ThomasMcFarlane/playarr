@@ -257,7 +257,7 @@ pub async fn fetch_calendar(
                 });
             }
         }
-        SourceKind::Bazarr | SourceKind::Prowlarr | SourceKind::Whisparr => {}
+        SourceKind::Bazarr | SourceKind::Prowlarr | SourceKind::Whisparr | SourceKind::Dubarr => {}
     }
     Ok(out)
 }

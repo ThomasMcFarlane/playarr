@@ -1587,6 +1587,11 @@ async fn boot_api(
         peer_sync_interval_secs_from_env(),
     ));
 
+    // Keep Dubarr dub-track lookups fresh by watching each instance's change feed.
+    tokio::spawn(playarr_api::dubarr_audio::run_change_poller(
+        state.source_instances.clone(),
+    ));
+
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
     let relay_runtime = match &config.relay {

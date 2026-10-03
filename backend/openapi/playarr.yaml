@@ -12198,6 +12198,7 @@ components:
       - prowlarr
       - readarr
       - whisparr
+      - dubarr
     SourceKindTag:
       type: string
       enum:

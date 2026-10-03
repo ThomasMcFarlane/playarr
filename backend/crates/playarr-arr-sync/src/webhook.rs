@@ -89,6 +89,8 @@ fn extract_entity_id(source_kind: SourceKind, body: &Value) -> Option<i64> {
         // to depend on an id pointer here, so it always falls back to a
         // full pass.
         SourceKind::Bazarr => return None,
+        // Dubarr publishes tracks through its own change feed, not webhooks.
+        SourceKind::Dubarr => return None,
         // Prowlarr's events are indexer/download-client health signals,
         // not media entities — there is no "entity" to point a targeted
         // refetch at.

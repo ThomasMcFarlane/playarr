@@ -929,6 +929,26 @@ pub(crate) async fn negotiate_playback(
             Vec::new()
         }
     };
+    // Dubarr dub tracks are offered as extra audio options after the source
+    // streams. Best-effort: lookup failures never affect playback.
+    let dub_tracks = crate::dubarr_audio::lookup(
+        &state.source_instances,
+        &media_file.path.to_string_lossy(),
+        &resolved_media_path.to_string_lossy(),
+    )
+    .await;
+    let mut audio_tracks = audio_tracks;
+    audio_tracks.extend(dub_tracks.iter().map(|dub| PlaybackAudioTrackOption {
+        id: dub.option_id(),
+        stream_index: dub.stream_index,
+        label: dub.track.title.clone(),
+        language: Some(dub.track.language.clone()),
+        codec: Some(dub.track.codec.clone()),
+        channels: Some(dub.track.channels),
+        profile: None,
+        codec_label: None,
+        is_default: false,
+    }));
     let persisted_preferences = if query.ignore_saved_preferences {
         None
     } else {
@@ -990,8 +1010,14 @@ pub(crate) async fn negotiate_playback(
             .or(default_audio_stream_index),
     };
     let requires_audio_selection = selected_audio_stream_index != default_audio_stream_index;
-    let selected_audio_track_id =
-        selected_audio_stream_index.map(|stream_index| format!("source-audio-{stream_index}"));
+    let selected_dub = selected_audio_stream_index
+        .and_then(|index| dub_tracks.iter().find(|dub| dub.stream_index == index));
+    let selected_audio_track_id = match selected_dub {
+        Some(dub) => Some(dub.option_id()),
+        None => {
+            selected_audio_stream_index.map(|stream_index| format!("source-audio-{stream_index}"))
+        }
+    };
     let source_subtitle_tracks = match crate::media::probe_all_subtitle_tracks(&resolved_media_path)
         .await
     {
@@ -1156,16 +1182,37 @@ pub(crate) async fn negotiate_playback(
     } else {
         query.start_position_ms
     };
-    let transcode_session = state
-        .transcode
-        .spawn_on_demand_transcode_at_with_audio(
-            &media_file,
-            &profile,
-            &state.node_id,
-            source_offset_ms,
-            selected_audio_stream_index,
-        )
-        .await?;
+    let transcode_session = match selected_dub {
+        Some(dub) => {
+            let (url, (header_name, header_value)) = dub.client().download_target(&dub.track);
+            let external = playarr_transcode::ExternalAudio {
+                url,
+                headers: vec![(header_name.to_string(), header_value)],
+            };
+            state
+                .transcode
+                .spawn_on_demand_transcode_with_external_audio(
+                    &media_file,
+                    &profile,
+                    &state.node_id,
+                    source_offset_ms,
+                    &external,
+                )
+                .await?
+        }
+        None => {
+            state
+                .transcode
+                .spawn_on_demand_transcode_at_with_audio(
+                    &media_file,
+                    &profile,
+                    &state.node_id,
+                    source_offset_ms,
+                    selected_audio_stream_index,
+                )
+                .await?
+        }
+    };
 
     let target_profile = playarr_transcode::TranscodeTargetProfile::resolve(&profile);
     let session = seed.into_session(

@@ -18,6 +18,7 @@
 
 mod bazarr;
 mod calendar;
+mod dubarr;
 mod http;
 mod lidarr;
 mod lookup;
@@ -33,6 +34,7 @@ pub use calendar::{
     RadarrCalendarMovie, ReadarrCalendarAuthor, ReadarrCalendarBook, SonarrCalendarEpisode,
     SonarrCalendarSeries,
 };
+pub use dubarr::{DubarrChange, DubarrChanges, DubarrClient, DubarrTrack};
 pub use lidarr::{
     LidarrAlbum, LidarrArtist, LidarrArtistStatistics, LidarrClient, LidarrImage, LidarrMediaInfo,
     LidarrQuality, LidarrQualityInfo, LidarrRevision, LidarrTrack, LidarrTrackFile,

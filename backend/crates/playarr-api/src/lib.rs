@@ -35,6 +35,7 @@ pub mod catalog;
 pub mod credits;
 pub mod discovery;
 pub mod downloads;
+pub mod dubarr_audio;
 pub mod error;
 pub mod health;
 pub mod household;

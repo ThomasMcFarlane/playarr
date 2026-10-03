@@ -108,6 +108,7 @@ pub(crate) fn source_kind_to_str(kind: SourceKind) -> &'static str {
         SourceKind::Prowlarr => "prowlarr",
         SourceKind::Readarr => "readarr",
         SourceKind::Whisparr => "whisparr",
+        SourceKind::Dubarr => "dubarr",
     }
 }
 
@@ -120,6 +121,7 @@ pub(crate) fn source_kind_from_str(raw: &str) -> Result<SourceKind, DbError> {
         "prowlarr" => Ok(SourceKind::Prowlarr),
         "readarr" => Ok(SourceKind::Readarr),
         "whisparr" => Ok(SourceKind::Whisparr),
+        "dubarr" => Ok(SourceKind::Dubarr),
         other => Err(decode_err(format!("unknown source kind {other:?}"))),
     }
 }

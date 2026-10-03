@@ -26,6 +26,10 @@ pub enum SourceKind {
     /// distinct application an operator points Playarr Server at separately, with
     /// its own [`crate::ExternalProvider::Tpdb`] metadata identity.
     Whisparr,
+    /// Dubarr -- the AI dubbing companion. It owns no catalogue of works; it
+    /// exposes finished dub tracks (sidecar audio) that Playarr offers as
+    /// alternate audio for the media files they belong to.
+    Dubarr,
 }
 
 /// A single configured *arr connection. Playarr Server can be pointed at

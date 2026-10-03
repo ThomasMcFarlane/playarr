@@ -181,7 +181,7 @@ pub fn extract_availability_events(
                 ));
             }
         }
-        SourceKind::Bazarr | SourceKind::Prowlarr | SourceKind::Whisparr => {}
+        SourceKind::Bazarr | SourceKind::Prowlarr | SourceKind::Whisparr | SourceKind::Dubarr => {}
     }
     out
 }
