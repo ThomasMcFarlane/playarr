@@ -163,6 +163,21 @@ sub init()
     m.profileLabel = m.top.findNode("profileLabel")
     m.persistentHeader = m.top.findNode("persistentHeader")
     m.video = m.top.findNode("video")
+    m.endScreen = m.top.findNode("endScreen")
+    m.endHeading = m.top.findNode("endHeading")
+    m.endTitle = m.top.findNode("endTitle")
+    m.endMessage = m.top.findNode("endMessage")
+    m.endCountdownLabel = m.top.findNode("endCountdownLabel")
+    m.endSuggestions = m.top.findNode("endSuggestions")
+    m.endCountdownTimer = m.top.findNode("endCountdownTimer")
+    m.endButtons = []
+    for i = 0 to 3
+        m.endButtons.Push({ bg: m.top.findNode("endButton" + i.ToStr()), label: m.top.findNode("endButtonLabel" + i.ToStr()) })
+    end for
+    m.endActions = []
+    m.endFocusIndex = 0
+    m.endSuggestionWorks = []
+    m.endCountdown = 0
     m.pairingTimer = m.top.findNode("pairingTimer")
     m.clockTime = m.top.findNode("clockTime")
     m.clockDate = m.top.findNode("clockDate")
@@ -286,6 +301,8 @@ sub init()
     m.hostedLinkTimer.ObserveField("fire", "pollHostedLink")
     m.heartbeatTimer.ObserveField("fire", "sendHeartbeat")
     m.video.ObserveField("state", "onVideoStateChanged")
+    m.endCountdownTimer.ObserveField("fire", "onEndCountdownTick")
+    m.endSuggestions.ObserveField("rowItemSelected", "onEndSuggestionSelected")
     m.video.ObserveField("downloadedSegment", "onDownloadedSegment")
     m.controlBarProgressTimer.ObserveField("fire", "updatePlayerProgress")
     m.playerAutoHideTimer.ObserveField("fire", "hidePlayerControls")
@@ -678,6 +695,8 @@ sub onApiResult(event as Object)
         showDetail(result.data)
     else if action = "chapters"
         acceptDetailChapters(result.data)
+    else if action = "endSimilar"
+        acceptEndSuggestions(result.data)
     else if action = "similarPrimary"
         acceptSimilarPrimary(result.data)
     else if action = "similarGenre"
@@ -869,6 +888,8 @@ sub handleApiFailure(action as String, result as Object)
     ' e.g. /similar 404ing is an expected, handled case there too): a
     ' failed fetch just leaves that rail hidden and continues the chain
     ' rather than blocking the whole detail screen behind a hard error.
+    ' Suggestions on the end screen are best effort: no row on failure.
+    if action = "endSimilar" then return
     if action = "chapters"
         loadSimilarTitles(m.selectedDetail.work)
         return
@@ -4775,6 +4796,7 @@ sub startPlayback(data as Object)
     m.lastVideoState = ""
     m.bufferedSeconds = 0
     m.playerBufferedFill.width = 0
+    hideEndScreen()
     m.video.content = content
     m.video.visible = true
     ' NOT m.video.SetFocus(true): a focused Video node swallows remote
@@ -4822,7 +4844,7 @@ sub onVideoStateChanged()
     else if state = "playing" and m.lastVideoState = "paused"
         sendPlaybackEvent({ kind: "resume", position_ms: positionMs })
     else if state = "finished"
-        finishPlayback("completed")
+        showEndOfPlayback()
     else if state = "error"
         sendPlaybackEvent({ kind: "error", message: "Roku video playback failed" })
         finishPlayback("error")
@@ -5039,6 +5061,257 @@ sub finishPlayback(reason as String)
     m.detailActions.SetFocus(true)
 end sub
 
+' ---------------------------------------------------------------------------
+' End-of-playback screen (docs/architecture/end-of-playback.md)
+'
+' Reached from the Video node's "finished" state. Mirrors the spec's states:
+'   - next item exists (m.playbackEpisodeList, next episode): "Up next"
+'     10 s countdown with Play now / Cancel / Replay / Back to details
+'   - album/track queue: the next track starts immediately, no card
+'   - nothing follows (or Cancel pressed): ended card, Replay / Back to details
+' Both cards show a "More like this" row from /api/v1/catalog/{id}/similar.
+' Only explicit actions stop the countdown; moving focus does not. Roku has
+' no autoplay-next preference, so autoplay behaves as on.
+' ---------------------------------------------------------------------------
+
+function nextPlaybackItem() as Dynamic
+    if m.playbackEpisodeList.Count() = 0 then return invalid
+    idx = m.playbackEpisodeIndex + 1
+    if idx < 0 or idx >= m.playbackEpisodeList.Count() then return invalid
+    item = m.playbackEpisodeList[idx]
+    if item.media_file_id = invalid or item.media_file_id = "" then return invalid
+    return item
+end function
+
+' Title and "S1:E2" code of the playback-list entry at flatIndex, found by
+' walking m.detailSeasons (the flat list drops the season number).
+function playbackItemInfo(flatIndex as Integer) as Object
+    info = { title: "", code: "" }
+    n = 0
+    for each group in m.detailSeasons
+        for each leaf in groupLeaves(group, m.detailGroupKind)
+            if n = flatIndex
+                if m.detailGroupKind = "artist"
+                    if leaf.track <> invalid and leaf.track.title <> invalid then info.title = leaf.track.title
+                else
+                    if leaf.episode <> invalid
+                        if leaf.episode.title <> invalid then info.title = leaf.episode.title
+                        if group.season <> invalid and group.season.season_number <> invalid and leaf.episode.episode_number <> invalid
+                            info.code = "S" + group.season.season_number.ToStr() + ":E" + leaf.episode.episode_number.ToStr()
+                        end if
+                    end if
+                end if
+                return info
+            end if
+            n += 1
+        end for
+    end for
+    return info
+end function
+
+function endWorkTitle() as String
+    if m.selectedDetail <> invalid and m.selectedDetail.work <> invalid and m.selectedDetail.work.title <> invalid
+        return m.selectedDetail.work.title
+    end if
+    return ""
+end function
+
+sub showEndOfPlayback()
+    if m.playbackEnded then return
+    m.playbackEnded = true
+    m.heartbeatTimer.control = "stop"
+    ' Progress/watched is reported before any card appears (spec section 2).
+    sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: "completed" })
+    m.video.control = "stop"
+    m.video.visible = false
+    m.controlBarProgressTimer.control = "stop"
+    m.playerAutoHideTimer.control = "stop"
+    m.playerControls.visible = false
+    ' Music queue: chain straight into the next track with no card.
+    if m.detailGroupKind = "artist" and nextPlaybackItem() <> invalid
+        playAdjacentEpisode(1)
+        return
+    end if
+    m.endSuggestionWorks = []
+    m.endSuggestions.visible = false
+    m.endScreen.visible = true
+    m.top.screenState = "endscreen"
+    if nextPlaybackItem() <> invalid
+        startEndCountdown()
+    else
+        showEndCard()
+    end if
+    if m.selectedDetail <> invalid and m.selectedDetail.work <> invalid and m.selectedDetail.work.id <> invalid
+        sendApi("endSimilar", "GET", "/api/v1/catalog/" + UrlEncode(m.selectedDetail.work.id) + "/similar?limit=12", invalid, true)
+    end if
+end sub
+
+sub startEndCountdown()
+    nextInfo = playbackItemInfo(m.playbackEpisodeIndex + 1)
+    m.endCountdown = 10
+    m.endHeading.text = "Up next"
+    m.endTitle.text = nextInfo.title
+    subtitle = endWorkTitle()
+    if nextInfo.code <> "" then subtitle += "  " + nextInfo.code
+    m.endMessage.text = subtitle
+    m.endActions = [{ id: "playNow", text: "Play now" }, { id: "cancel", text: "Cancel" }, { id: "replay", text: "Replay" }, { id: "exit", text: "Back to details" }]
+    paintEndCountdown()
+    m.endCountdownTimer.control = "start"
+    focusEndButton(0)
+end sub
+
+sub paintEndCountdown()
+    m.endCountdownLabel.text = "Playing in " + m.endCountdown.ToStr()
+end sub
+
+sub onEndCountdownTick()
+    if m.top.screenState <> "endscreen" or m.endCountdown <= 0 then return
+    m.endCountdown -= 1
+    if m.endCountdown <= 0
+        m.endCountdownTimer.control = "stop"
+        playNextFromEnd()
+    else
+        paintEndCountdown()
+    end if
+end sub
+
+' Ended card for the item that just finished (also the sticky result of
+' Cancel: the countdown never restarts without a new playback).
+sub showEndCard()
+    info = playbackItemInfo(m.playbackEpisodeIndex)
+    m.endCountdown = 0
+    m.endCountdownTimer.control = "stop"
+    m.endCountdownLabel.text = ""
+    m.endHeading.text = "Finished"
+    if info.title <> ""
+        m.endTitle.text = info.title
+        subtitle = endWorkTitle()
+        if info.code <> "" then subtitle += "  " + info.code
+        m.endMessage.text = subtitle
+    else
+        m.endTitle.text = endWorkTitle()
+        m.endMessage.text = ""
+    end if
+    m.endActions = [{ id: "replay", text: "Replay" }, { id: "exit", text: "Back to details" }]
+    focusEndButton(0)
+end sub
+
+sub focusEndButton(index as Integer)
+    if index >= m.endActions.Count() then index = m.endActions.Count() - 1
+    if index < 0 then index = 0
+    m.endFocusIndex = index
+    for i = 0 to m.endButtons.Count() - 1
+        b = m.endButtons[i]
+        if i < m.endActions.Count()
+            b.bg.visible = true
+            b.label.visible = true
+            b.label.text = m.endActions[i].text
+            if i = index
+                b.bg.color = &hCF3157FF
+            else
+                b.bg.color = &h2A262CFF
+            end if
+        else
+            b.bg.visible = false
+            b.label.visible = false
+        end if
+    end for
+    m.top.SetFocus(true)
+end sub
+
+sub playNextFromEnd()
+    hideEndScreen()
+    playAdjacentEpisode(1)
+end sub
+
+sub hideEndScreen()
+    m.endCountdownTimer.control = "stop"
+    m.endCountdown = 0
+    m.endScreen.visible = false
+    m.endSuggestions.visible = false
+end sub
+
+' Back to details of the finished work (also hardware Back).
+sub exitEndScreen()
+    hideEndScreen()
+    m.top.screenState = "detail"
+    showOnly("detail")
+    m.detailActions.SetFocus(true)
+end sub
+
+sub activateEndAction()
+    if m.endFocusIndex >= m.endActions.Count() then return
+    id = m.endActions[m.endFocusIndex].id
+    if id = "playNow"
+        playNextFromEnd()
+    else if id = "cancel"
+        showEndCard()
+    else if id = "replay"
+        ' The ended session is already closed as completed server-side, so
+        ' Replay negotiates a brand new playback session (requestPlayback ->
+        ' startPlayback stores the new session id) instead of seeking to 0.
+        hideEndScreen()
+        requestPlayback(m.currentMediaFileId)
+    else
+        exitEndScreen()
+    end if
+end sub
+
+sub acceptEndSuggestions(data as Object)
+    if m.top.screenState <> "endscreen" or m.selectedDetail = invalid then return
+    workId = m.selectedDetail.work.id
+    visible = []
+    for each candidate in itemsFromCatalog(data)
+        if candidate.id <> workId and (candidate.kind = "movie" or isEpisodicKind(candidate.kind))
+            visible.Push(candidate)
+            if visible.Count() >= 12 then exit for
+        end if
+    end for
+    m.endSuggestionWorks = visible
+    if visible.Count() = 0 then return
+    buildRailContent(m.endSuggestions, visible, false, 1.5)
+    row = m.endSuggestions.content.GetChild(0)
+    if row <> invalid then row.title = "More like this"
+    m.endSuggestions.visible = true
+end sub
+
+sub onEndSuggestionSelected(event as Object)
+    position = event.GetData()
+    if position = invalid or position.Count() < 2 then return
+    idx = position[1]
+    if idx < 0 or idx >= m.endSuggestionWorks.Count() then return
+    work = m.endSuggestionWorks[idx]
+    hideEndScreen()
+    openWorkDetail(work, m.detailOrigin)
+end sub
+
+function onEndScreenKey(key as String) as Boolean
+    onSuggestions = m.endSuggestions.visible and m.endSuggestions.isInFocusChain()
+    if key = "back"
+        exitEndScreen()
+        return true
+    else if onSuggestions
+        if key = "up"
+            focusEndButton(m.endFocusIndex)
+            return true
+        end if
+        return false
+    else if key = "left"
+        focusEndButton(m.endFocusIndex - 1)
+        return true
+    else if key = "right"
+        focusEndButton(m.endFocusIndex + 1)
+        return true
+    else if key = "down"
+        if m.endSuggestions.visible then m.endSuggestions.SetFocus(true)
+        return true
+    else if key = "OK" or key = "play"
+        activateEndAction()
+        return true
+    end if
+    return true
+end function
+
 sub setListContent(list as Object, labels as Object)
     content = CreateObject("roSGNode", "ContentNode")
     for each label in labels
@@ -5092,13 +5365,16 @@ sub showOnly(name as String)
     if name <> "playback"
         m.video.visible = false
         m.playerControls.visible = false
+        hideEndScreen()
     end if
 end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
     state = m.top.screenState
-    if state = "playback"
+    if state = "endscreen"
+        return onEndScreenKey(key)
+    else if state = "playback"
         ' Custom control-bar key handling (phase 5) -- see the "Custom
         ' playback control bar" section above. Every branch besides "back"
         ' both performs its action and re-shows/resets the 3s auto-hide

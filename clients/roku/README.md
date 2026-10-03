@@ -18,7 +18,11 @@ downloads).
 3. Select the linked household profile.
 4. Browse the available catalogue, open a title and play its first available
    media file.
-5. Report playback start, pause, resume, heartbeat and stop events to the
+5. When playback finishes, an end screen offers Replay, Back to details and
+   similar-title suggestions, or a 10 s "Up next" countdown (Play now, Cancel,
+   Replay, Back to details) when a next episode follows
+   (`docs/architecture/end-of-playback.md`).
+6. Report playback start, pause, resume, heartbeat and stop events to the
    Playarr Server session API.
 
 The server URL, rotating refresh token and current access token are stored in

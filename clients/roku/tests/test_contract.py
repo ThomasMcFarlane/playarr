@@ -148,6 +148,58 @@ class NavigationContractTests(unittest.TestCase):
         self.assertIn('sub loadHomeMoreSeries()', MAIN)
 
 
+class EndOfPlaybackTests(unittest.TestCase):
+    def test_finished_state_opens_the_end_screen_not_detail(self) -> None:
+        self.assertRegex(MAIN, r'state = "finished"\s+showEndOfPlayback\(\)')
+        self.assertIn('m.top.screenState = "endscreen"', MAIN)
+        self.assertIn('state = "endscreen"', MAIN)
+
+    def test_end_screen_reports_completed_stop_once(self) -> None:
+        body = MAIN.split("sub showEndOfPlayback()", 1)[1].split("end sub", 1)[0]
+        self.assertIn('reason: "completed"', body)
+        self.assertIn("if m.playbackEnded then return", body)
+
+    def test_end_card_actions_and_up_next_countdown(self) -> None:
+        for text in ("Replay", "Back to details", "Play now", "Cancel"):
+            with self.subTest(text=text):
+                self.assertIn(f'text: "{text}"', MAIN)
+        self.assertIn('id="endCountdownTimer"', SCENE)
+        self.assertIn("sub onEndCountdownTick()", MAIN)
+        self.assertIn("playAdjacentEpisode(1)", MAIN)
+
+    def test_focus_movement_does_not_stop_the_countdown(self) -> None:
+        body = MAIN.split("function onEndScreenKey", 1)[1].split("end function", 1)[0]
+        self.assertNotIn("Countdown", body)
+
+    def test_music_queue_chains_without_a_card(self) -> None:
+        body = MAIN.split("sub showEndOfPlayback()", 1)[1].split("end sub", 1)[0]
+        self.assertIn('m.detailGroupKind = "artist"', body)
+
+    def test_suggestions_use_the_similar_endpoint_and_a_native_rowlist(self) -> None:
+        self.assertRegex(SCENE, r'<RowList id="endSuggestions"')
+        self.assertIn('"/similar?limit=12"', MAIN)
+        self.assertIn('action = "endSimilar"', MAIN)
+
+    def test_end_screen_handles_remote_back_and_directions(self) -> None:
+        body = MAIN.split("function onEndScreenKey", 1)[1].split("end function", 1)[0]
+        for key in ("back", "left", "right", "down", "up", "OK"):
+            with self.subTest(key=key):
+                self.assertIn(f'key = "{key}"', body)
+
+    def test_replay_negotiates_a_fresh_playback_session(self) -> None:
+        body = MAIN.split("sub activateEndAction", 1)[1].split("end sub", 1)[0]
+        replay = body.split('id = "replay"', 1)[1].split("else", 1)[0]
+        self.assertIn("requestPlayback(m.currentMediaFileId)", replay)
+        self.assertNotIn("seek", replay.replace("instead of seeking", ""))
+        start = MAIN.split("sub startPlayback", 1)[1].split("end sub", 1)[0]
+        self.assertIn("m.playbackSessionId = data.session_id", start)
+        self.assertIn("m.playbackEnded = false", start)
+
+    def test_replay_and_new_playback_clear_the_end_screen(self) -> None:
+        start = MAIN.split("sub startPlayback", 1)[1].split("end sub", 1)[0]
+        self.assertIn("hideEndScreen()", start)
+
+
 class SecretSafetyTests(unittest.TestCase):
     def test_authorisation_header_is_not_sent_to_external_artwork_hosts(self) -> None:
         helper = re.search(

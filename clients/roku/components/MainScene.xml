@@ -25,7 +25,7 @@
     <!--
       Pairing = web `/login/qr` layout (centered ProfileAuth panel + embedded
       DeviceLogin stack) in Playarr **dark** theme (same as the rest of the
-      Roku shell: --bg #151315, --ink #f4f0f1). Browser /login/qr often looks
+      Roku shell: - -bg #151315, - -ink #f4f0f1). Browser /login/qr often looks
       light because desktop defaults to light theme; TV product is dark.
       QR tile stays white plate + black modules (.device-login-qr).
     -->
@@ -583,7 +583,7 @@
       nav-shape fix this pass targets).
     -->
     <Group id="persistentHeader">
-      <!-- Logo centred over the dock (.app-logo over --tv-nav-centre-x).
+      <!-- Logo centred over the dock (.app-logo over - -tv-nav-centre-x).
            Dock left edge ~32, item centre ~32+8+32 = 72; logo 40x40 → x=52. -->
       <Poster id="navLogo" translation="[52,36]" width="40" height="40" uri="pkg:/images/pairing-logo.png" />
 
@@ -683,6 +683,40 @@
       <Label id="playerTimeLabel" translation="[1520,965]" width="300" height="50" horizAlign="right" text="0:00 / 0:00" scale="[0.56,0.56]" scaleRotateCenter="[150,25]" color="0xDCE5F0FF" opacity="0" />
     </Group>
 
+    <!--
+      End-of-playback screen (docs/architecture/end-of-playback.md). Shown
+      when the Video node reaches state "finished" instead of dropping
+      straight back to detail. Two modes share this one Group:
+        - end card: Replay / Back to details
+        - up-next countdown: Play now / Cancel / Replay / Back to details,
+        auto-advancing
+      plus a "More like this" suggestions row from
+      /api/v1/catalog/{id}/similar. The Scene keeps focus and drives the
+      four button slots from onKeyEvent (screenState "endscreen"); the
+      suggestions RowList takes focus only while the viewer is on that row.
+    -->
+    <Group id="endScreen" visible="false">
+      <Rectangle id="endScreenBg" translation="[0,0]" width="1920" height="1080" color="0x151315FF" />
+      <Label id="endHeading" translation="[160,150]" width="1600" height="50" text="Finished" scale="[0.75,0.75]" color="0xA9B7C9FF" />
+      <Label id="endTitle" translation="[160,205]" width="1600" height="70" scale="[1.06,1.06]" color="0xFFFFFFFF" />
+      <Label id="endCountdownLabel" translation="[160,335]" width="1600" height="50" scale="[0.75,0.75]" color="0xFFFFFFFF" />
+      <Label id="endMessage" translation="[160,285]" width="1600" height="50" scale="[0.75,0.75]" color="0xDCE5F0FF" />
+      <Rectangle id="endButton0" translation="[160,400]" width="300" height="72" color="0x2A262CFF" />
+      <Label id="endButtonLabel0" translation="[160,418]" width="300" height="50" horizAlign="center" scale="[0.69,0.69]" scaleRotateCenter="[150,25]" color="0xFFFFFFFF" />
+      <Rectangle id="endButton1" translation="[490,400]" width="300" height="72" color="0x2A262CFF" />
+      <Label id="endButtonLabel1" translation="[490,418]" width="300" height="50" horizAlign="center" scale="[0.69,0.69]" scaleRotateCenter="[150,25]" color="0xFFFFFFFF" />
+      <Rectangle id="endButton2" translation="[820,400]" width="300" height="72" color="0x2A262CFF" />
+      <Label id="endButtonLabel2" translation="[820,418]" width="300" height="50" horizAlign="center" scale="[0.69,0.69]" scaleRotateCenter="[150,25]" color="0xFFFFFFFF" />
+      <Rectangle id="endButton3" translation="[1150,400]" width="300" height="72" color="0x2A262CFF" />
+      <Label id="endButtonLabel3" translation="[1150,418]" width="300" height="50" horizAlign="center" scale="[0.69,0.69]" scaleRotateCenter="[150,25]" color="0xFFFFFFFF" />
+      <RowList id="endSuggestions" translation="[160,610]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[1600,270]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
+        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+        focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
+        visible="false" />
+    </Group>
+
     <Timer id="pairingTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough
          for a clock that only displays hours/minutes. -->
@@ -691,6 +725,7 @@
     <Timer id="hostedLinkTimer" repeat="true" />
     <Timer id="heartbeatTimer" duration="20" repeat="true" />
     <Timer id="controlBarProgressTimer" duration="0.5" repeat="true" />
+    <Timer id="endCountdownTimer" duration="1" repeat="true" />
     <Timer id="playerAutoHideTimer" duration="3" repeat="false" />
     <!-- Deferred browse key-art download so acceptBrowseCatalog can paint first. -->
     <Timer id="browseKeyArtTimer" duration="0.5" repeat="false" />

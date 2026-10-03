@@ -20,6 +20,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku SceneGraph XML comments no longer contain double hyphens, so the
+  channel validator parses every component on current Python.
+
 - The development webOS route now uses `tv-web-webos.example.com`, which is
   covered by the existing `*.example.com` certificate. A chart render
   assertion prevents regression to a hostname outside that coverage.
@@ -79,6 +82,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   loop—not public media scraping—as the dominant traffic source.
 
 ### Added
+
+- Roku now shows the shared end-of-playback screen when media finishes: an
+  ended card (Replay, Back to details), an "Up next" ten-second countdown (Play
+  now, Cancel, Replay, Back to details) when a next episode follows, direct
+  chaining for album tracks, and a "More like this" row from the catalogue
+  similar-titles endpoint, all driven by the remote. Contract tests cover it.
 
 - Planned tasks 62–71 as separate server backup/recovery and portable per-user
   library export/import workstreams. Recorded complete data coverage,

@@ -78,7 +78,7 @@
     <Group id="keyArtLayer" opacity="0">
       <!-- Key-art Poster loads GET /api/v1/artwork/...&style=stage (server
            greyscale + opacity + right fade). No client-side filter wash on
-           the bitmap itself -- that used to fight a full-colour source. -->
+           the bitmap itself - - that used to fight a full-colour source. -->
       <Poster id="keyArt" translation="[0,-33]" width="998" height="1145" loadDisplayMode="scaleToZoom" />
       <!-- Soft stage wash only (left + vertical vignette). Pixel math for
            greyscale/contrast/brightness/opacity is baked server-side. -->
