@@ -29,6 +29,9 @@ routes are native Compose:
 - account and server sign-in plus profile switching;
 - responsive feature stages, progress shelves, search, and filtered libraries;
 - playlists, work details, watched-state actions, and playable child rows;
+- the aggregated release calendar (agenda, week and month views, media-kind filters,
+  source-failure banner and subscription management; see
+  [`../release-calendar.md`](../release-calendar.md)) and the series availability-lag line;
 - Media3 direct/HLS playback; and
 - appearance, avatar, language, player, server, profile-lock, invitation, and
   sign-out settings.

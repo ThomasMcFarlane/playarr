@@ -58,6 +58,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CastConnected
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
@@ -831,6 +832,7 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("movies", PlayarrString.NavMovies, Icons.Outlined.Movie, WorkKind.Movie),
     ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
+    ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
     ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
 )
 
@@ -850,7 +852,7 @@ internal fun televisionDestinationGroups(
     destinations: List<ExperienceDestination>,
 ): List<List<ExperienceDestination>> = listOf(
     destinations.filter { it.route in setOf("downloads", "search") },
-    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music") },
+    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "calendar") },
     destinations.filter { it.route == "playlists" },
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
@@ -1620,6 +1622,14 @@ private fun ExperienceNavHost(
                 viewModel = playerViewModel,
             )
         }
+        composable("calendar") {
+            ExperienceOnlineGate(isOnline, isTelevision, "calendar") {
+                ExperienceCalendarScreen(
+                    isTelevision = isTelevision,
+                    onOpenWork = { navController.navigate("experience-detail/$it") },
+                )
+            }
+        }
         composable("playlists") {
             ExperienceOnlineGate(isOnline, isTelevision, "playlists") {
                 ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
@@ -1686,7 +1696,7 @@ internal fun restorableExperienceRoute(
     mediaFileId: String? = null,
     playlistId: String? = null,
 ): String? = when (route) {
-    "home", "search", "series", "movies", "sites", "music", "playlists", "settings", "downloads" -> route
+    "home", "search", "series", "movies", "sites", "music", "calendar", "playlists", "settings", "downloads" -> route
     "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
         buildString {
             append("experience-detail/")
@@ -3071,6 +3081,12 @@ internal class ExperienceDetailViewModel @Inject constructor(
                         }
                     }
                     if (!videoDetail) return@launch
+                    if (detail.children is WorkChildren.Series) {
+                        launch {
+                            val lag = runCatching { api.getAvailabilityLag(detail.work.id) }.getOrNull()
+                            updateSnapshot(detail.work.id) { copy(availabilityLag = lag) }
+                        }
+                    }
                     launch {
                         val credits = runCatching { api.getWorkCredits(detail.work.id) }
                             .getOrDefault(WorkCreditsResponse())
@@ -3210,6 +3226,8 @@ internal data class ExperienceDetailSnapshot(
     val movieChapters: List<MediaChapter> = emptyList(),
     val movieMetadata: MediaMetadata? = null,
     val moviePlaybackOptions: MediaPlaybackOptionsResponse? = null,
+    /** Series only; null while loading or when the server cannot supply it. */
+    val availabilityLag: io.playarr.shared.data.model.AvailabilityLag? = null,
 )
 
 internal sealed interface PlayarrSourceSelection {
@@ -3314,6 +3332,7 @@ private fun ExperienceDetailScreen(
                         movieChapters = current.value.movieChapters,
                         movieMetadata = current.value.movieMetadata,
                         moviePlaybackOptions = current.value.moviePlaybackOptions,
+                        availabilityLag = current.value.availabilityLag,
                         initialMediaFileId = initialMediaFileId,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
@@ -3535,6 +3554,7 @@ private fun ExperienceVideoDetailContent(
     movieChapters: List<MediaChapter>,
     movieMetadata: MediaMetadata?,
     moviePlaybackOptions: MediaPlaybackOptionsResponse?,
+    availabilityLag: io.playarr.shared.data.model.AvailabilityLag?,
     initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
@@ -3637,6 +3657,7 @@ private fun ExperienceVideoDetailContent(
                     movieMetadata?.durationMs,
                     true,
                 )
+                availabilityLag?.let { PlayarrAvailabilityLagLine(it) }
                 VideoDetailActions(
                     work = detail.work,
                     episode = selectedEpisode,
@@ -3708,6 +3729,7 @@ private fun ExperienceVideoDetailContent(
                         false,
                     )
                 }
+                availabilityLag?.let { lag -> item { PlayarrAvailabilityLagLine(lag) } }
                 item {
                     VideoDetailActions(
                         work = detail.work,
@@ -6749,7 +6771,7 @@ private fun WorkKind.playarrCollectionNoun(): String = playarrString(
     if (this == WorkKind.Artist) PlayarrString.LibraryCollectionArtists else PlayarrString.LibraryCollectionTitles,
 )
 
-private fun io.playarr.shared.domain.model.PlayarrError.userMessageForExperience(
+internal fun io.playarr.shared.domain.model.PlayarrError.userMessageForExperience(
     subject: PlayarrString,
 ): PlayarrMessage = when (this) {
     is io.playarr.shared.domain.model.PlayarrError.Network -> {

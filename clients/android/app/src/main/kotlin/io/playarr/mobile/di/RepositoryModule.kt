@@ -4,6 +4,8 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import io.playarr.shared.domain.repository.CalendarRepository
+import io.playarr.shared.domain.repository.DefaultCalendarRepository
 import io.playarr.shared.domain.repository.DefaultVersionRepository
 import io.playarr.shared.domain.repository.DefaultPlaybackRepository
 import io.playarr.shared.domain.repository.DefaultWorkRepository
@@ -28,4 +30,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindVersionRepository(impl: DefaultVersionRepository): VersionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCalendarRepository(impl: DefaultCalendarRepository): CalendarRepository
 }

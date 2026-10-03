@@ -13,11 +13,11 @@ class PlayarrNavigationParityTest {
     fun `mobile destinations wait for catalogue access and hide downloads until granted`() {
         assertTrue(visibleExperienceDestinations(availableKinds = null, canDownload = true).isEmpty())
         assertEquals(
-            listOf("search", "home", "series", "movies", "sites", "music", "playlists"),
+            listOf("search", "home", "series", "movies", "sites", "music", "calendar", "playlists"),
             visibleExperienceDestinations(allKinds, canDownload = null).map(ExperienceDestination::route),
         )
         assertEquals(
-            listOf("downloads", "search", "home", "series", "movies", "sites", "music", "playlists"),
+            listOf("downloads", "search", "home", "series", "movies", "sites", "music", "calendar", "playlists"),
             visibleExperienceDestinations(allKinds, canDownload = true).map(ExperienceDestination::route),
         )
         assertFalse(visibleExperienceDestinations(allKinds, canDownload = false).any { it.route == "downloads" })

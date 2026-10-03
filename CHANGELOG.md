@@ -98,6 +98,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is active), download the encrypted archive, verify its stored checksum and delete a backup (the last
   complete backup cannot be deleted). Scheduled runs execute on the elected leader node. Config errors
   (a backup directory without a valid recovery public key) stop startup instead of silently not backing up.
+- Android (phone, tablet and TV): native Compose release calendar in the main navigation with
+  agenda (default), week and month views, previous/next/today, media-kind filters, a visible banner
+  for integrations that could not be read, and D-pad navigation on TV. Entries open the work detail
+  or a sheet with sources and library state. Calendar subscription management (create, regenerate,
+  copy/share, revoke, last used) and "Usually available about X after release" on series details,
+  with an honest "no data yet" and a note on excluded backfills. Tracked as tasks 75-77.
+- Android client data layer for the release calendar (`GET /api/v1/calendar`, the `/calendar/feed`
+  subscription routes and `/catalog/{id}/availability-lag`): typed models that tolerate unknown
+  enum values, a `CalendarRepository`, and decoding/route tests. Tracked as tasks 75-77.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

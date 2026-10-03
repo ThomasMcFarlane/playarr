@@ -1,5 +1,9 @@
 package io.playarr.shared.data.remote
 
+import io.playarr.shared.data.model.AvailabilityLag
+import io.playarr.shared.data.model.CalendarFeedCreated
+import io.playarr.shared.data.model.CalendarFeedStatus
+import io.playarr.shared.data.model.CalendarResponse
 import io.playarr.shared.data.model.CatalogPage
 import io.playarr.shared.data.model.ClientPlaybackReport
 import io.playarr.shared.data.model.PlaybackHealthReport
@@ -152,6 +156,39 @@ interface PlayarrApi {
         @Path("id") id: String,
         @Query("limit") limit: Long? = null,
     ): List<Work>
+
+    /**
+     * `GET /api/v1/catalog/{id}/availability-lag` -- average time from
+     * release to availability in the library, from real grab/import events.
+     */
+    @GET("api/v1/catalog/{id}/availability-lag")
+    suspend fun getAvailabilityLag(@Path("id") id: String): AvailabilityLag
+
+    // ---- calendar ------------------------------------------------------------
+
+    /**
+     * `GET /api/v1/calendar` -- upcoming releases from every permitted
+     * integration. [start]/[end] are inclusive `YYYY-MM-DD` UTC days (at most
+     * 92 days apart, else 400 `invalid_range`); [kind] is a comma-separated
+     * list of `episode,movie,album,book`.
+     */
+    @GET("api/v1/calendar")
+    suspend fun getCalendar(
+        @Query("start") start: String? = null,
+        @Query("end") end: String? = null,
+        @Query("kind") kind: String? = null,
+        @Query("source_instance_id") sourceInstanceId: String? = null,
+    ): CalendarResponse
+
+    @GET("api/v1/calendar/feed")
+    suspend fun getCalendarFeed(): CalendarFeedStatus
+
+    /** Creates or regenerates the subscription; the previous URL stops working. The URL is only returned here. */
+    @POST("api/v1/calendar/feed")
+    suspend fun createCalendarFeed(): CalendarFeedCreated
+
+    @DELETE("api/v1/calendar/feed")
+    suspend fun revokeCalendarFeed(): Response<ResponseBody>
 
     // ---- views ---------------------------------------------------------------
 
