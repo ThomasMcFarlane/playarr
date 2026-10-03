@@ -145,7 +145,32 @@ internal class PlaybackStatsLogger(
     private var videoCodec = "none"
     private var videoSize = "0x0"
     private var videoBitrate = -1
+    private var videoMime: String? = null
+    private var audioMime: String? = null
+    private var audioChannels = 0
+    private var audioPassthrough: Boolean? = null
+    private var decoderKind = DecoderKind.Unknown
     private var ticking = false
+
+    /** Measured playback values for the playback health screen; safe to call from the main thread. */
+    fun diagnostics(): PlaybackDiagnostics {
+        val parts = videoSize.split('x')
+        val ownBps = transfers.throughputBps()
+        return PlaybackDiagnostics(
+            videoCodec = DiagnosticNames.videoCodec(videoMime),
+            decoderName = decoder.takeUnless { it == "none" },
+            decoderKind = decoderKind,
+            width = parts.getOrNull(0)?.toIntOrNull() ?: 0,
+            height = parts.getOrNull(1)?.toIntOrNull() ?: 0,
+            droppedFrames = droppedFrames,
+            rebufferCount = rebuffer.count,
+            rebufferMs = rebuffer.totalMs(clock()),
+            throughputBps = if (ownBps > 0) ownBps else meterBps,
+            audioCodec = DiagnosticNames.audioCodec(audioMime),
+            audioChannels = audioChannels,
+            audioPassthrough = audioPassthrough,
+        )
+    }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -235,6 +260,23 @@ internal class PlaybackStatsLogger(
         initializationDurationMs: Long,
     ) {
         decoder = decoderName
+        decoderKind = DiagnosticNames.lookupDecoderKind(decoderName)
+    }
+
+    override fun onAudioInputFormatChanged(
+        eventTime: AnalyticsListener.EventTime,
+        format: Format,
+        decoderReuseEvaluation: DecoderReuseEvaluation?,
+    ) {
+        audioMime = format.sampleMimeType
+        audioChannels = format.channelCount.takeIf { it > 0 } ?: 0
+    }
+
+    override fun onAudioTrackInitialized(
+        eventTime: AnalyticsListener.EventTime,
+        audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig,
+    ) {
+        audioPassthrough = DiagnosticNames.isPassthroughEncoding(audioTrackConfig.encoding)
     }
 
     override fun onVideoInputFormatChanged(
@@ -242,6 +284,7 @@ internal class PlaybackStatsLogger(
         format: Format,
         decoderReuseEvaluation: DecoderReuseEvaluation?,
     ) {
+        videoMime = format.sampleMimeType
         videoCodec = format.codecs ?: format.sampleMimeType ?: "unknown"
         videoSize = "${format.width}x${format.height}"
         videoBitrate = StreamBitrate.declaredBps(format).takeIf { it > 0 }?.toInt() ?: -1

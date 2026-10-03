@@ -1,6 +1,8 @@
 package io.playarr.shared.data.remote
 
 import io.playarr.shared.data.model.CatalogPage
+import io.playarr.shared.data.model.ClientPlaybackReport
+import io.playarr.shared.data.model.PlaybackHealthReport
 import io.playarr.shared.data.model.AddPlaylistItemRequest
 import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.CreatePlaylistRequest
@@ -54,6 +56,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.PUT
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 /**
  * Real, typed Retrofit client for every catalog/playback/system/webhooks
@@ -193,6 +196,26 @@ interface PlayarrApi {
         @Path("session_id") sessionId: String,
         @Body request: PlaybackEventRequest,
     )
+
+    /**
+     * Explains how an active session is being played. Unknown client values
+     * must be left null in [report]. 404 means the session is closed or
+     * belongs to another server.
+     */
+    @POST("api/v1/playback/sessions/{session_id}/health")
+    suspend fun getPlaybackHealth(
+        @Path("session_id") sessionId: String,
+        @Body report: ClientPlaybackReport,
+    ): PlaybackHealthReport
+
+    /**
+     * Bounded zero-filled payload (server caps it at 4 MiB) for a short
+     * cancellable connection test. Cancelling the calling coroutine aborts
+     * the transfer.
+     */
+    @Streaming
+    @GET("api/v1/playback/connection-test")
+    suspend fun connectionTest(@Query("bytes") bytes: Int): ResponseBody
 
     @GET("api/v1/playback/progress")
     suspend fun listWatchProgress(): List<WatchProgress>

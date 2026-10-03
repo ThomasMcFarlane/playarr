@@ -5780,6 +5780,48 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     internal fun currentSourceDurationMs(): Long =
         playarrSourceDurationMs(activeSourceDurationMs, player.rawPlayer.duration, activeSourceOffsetMs)
 
+    /** Throughput from the last connection test; folded into the next health report. */
+    @Volatile
+    private var lastConnectionTestBps: Long? = null
+
+    /**
+     * Playback health for the current session (`docs/architecture/playback-health.md`):
+     * loads the server's explanation with what this player measured, and runs
+     * the short bounded connection test. Both read the active session lazily,
+     * so the dialog always reflects the item playing when it was opened.
+     */
+    fun playbackHealth(displayHdrFormats: List<String>): PlayarrPlayerHealth = PlayarrPlayerHealth(
+        load = {
+            val sessionId = activeSessionId
+                ?: return@PlayarrPlayerHealth Result.failure(PlayarrHealthException(PlayarrHealthError.NoSession))
+            runCatching {
+                api.getPlaybackHealth(
+                    sessionId,
+                    playarrBuildHealthRequest(player.diagnostics(), displayHdrFormats, lastConnectionTestBps),
+                )
+            }
+        },
+        runConnectionTest = {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    kotlinx.coroutines.withTimeout(PLAYARR_CONNECTION_TEST_TIMEOUT_MS) {
+                        val started = android.os.SystemClock.elapsedRealtime()
+                        val body = api.connectionTest(PLAYARR_CONNECTION_TEST_BYTES)
+                        val headersAt = android.os.SystemClock.elapsedRealtime()
+                        val bytes = body.use { it.source().readAll(okio.blackholeSink()) }
+                        val finished = android.os.SystemClock.elapsedRealtime()
+                        val seconds = ((finished - headersAt).coerceAtLeast(1L)) / 1000.0
+                        PlayarrConnectionTestResult(
+                            bytes = bytes,
+                            latencyMs = headersAt - started,
+                            throughputBps = (bytes * 8 / seconds).toLong(),
+                        ).also { lastConnectionTestBps = it.throughputBps }
+                    }
+                }
+            }
+        },
+    )
+
     private fun recordEvent(sessionId: String, event: PlaybackEventRequest) {
         viewModelScope.launch(Dispatchers.IO) {
             telemetryMutex.withLock {
@@ -5941,6 +5983,7 @@ private fun ExperiencePlayerScreen(
     LaunchedEffect(endCardWork?.id, nearEnd) {
         if (nearEnd && endCardWork != null) viewModel.loadSuggestions(endCardWork)
     }
+    val healthContext = LocalContext.current
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> PlayarrPlayerStatus(
@@ -6022,6 +6065,9 @@ private fun ExperiencePlayerScreen(
                     onStopCasting = viewModel::stopCasting,
                 ),
                 onPlayOnDevice = { showPlayOnDevice = true },
+                health = remember(viewModel, healthContext) {
+                    viewModel.playbackHealth(playarrDisplayHdrFormats(healthContext))
+                },
             )
             if (showPlayOnDevice) PlayOnDeviceDialog(onDismiss = { showPlayOnDevice = false })
         } else {

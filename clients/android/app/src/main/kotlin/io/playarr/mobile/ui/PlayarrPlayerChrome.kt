@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.HighQuality
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
@@ -132,6 +133,7 @@ internal fun PlayarrPlayerChrome(
     onSubtitle: (String?) -> Unit,
     cast: PlayarrPlayerCastState = PlayarrPlayerCastState(),
     onPlayOnDevice: (() -> Unit)? = null,
+    health: PlayarrPlayerHealth? = null,
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(true) }
@@ -139,6 +141,7 @@ internal fun PlayarrPlayerChrome(
     var openMenu by remember { mutableStateOf<PlayarrPlayerMenu?>(null) }
     var playlistOpen by remember { mutableStateOf(false) }
     var castDialog by remember { mutableStateOf<PlayarrCastDialogKind?>(null) }
+    var healthOpen by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableStateOf<Long?>(null) }
     var pendingSeekMs by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(pendingSeekMs) {
@@ -158,8 +161,8 @@ internal fun PlayarrPlayerChrome(
         activityEpoch += 1L
     }
 
-    LaunchedEffect(visible, playbackState.playWhenReady, activityEpoch, openMenu, playlistOpen, scrubPositionMs) {
-        if (!visible || !playbackState.playWhenReady || openMenu != null || playlistOpen || scrubPositionMs != null) return@LaunchedEffect
+    LaunchedEffect(visible, playbackState.playWhenReady, activityEpoch, openMenu, playlistOpen, scrubPositionMs, healthOpen) {
+        if (!visible || !playbackState.playWhenReady || openMenu != null || playlistOpen || scrubPositionMs != null || healthOpen) return@LaunchedEffect
         delay(PLAYER_CONTROLS_TIMEOUT_MS)
         visible = false
         surfaceFocusRequester.requestFocus()
@@ -256,6 +259,15 @@ internal fun PlayarrPlayerChrome(
                         onClick = { showControls(); onPlayOnDevice() },
                     )
                 }
+                if (health != null) {
+                    PlayarrPlayerTopButton(
+                        icon = Icons.Outlined.Info,
+                        label = playarrString(PlayarrString.HealthOpen),
+                        accessibilityLabel = playarrString(PlayarrString.HealthOpen),
+                        isTelevision = isTelevision,
+                        onClick = { showControls(); healthOpen = true },
+                    )
+                }
                 if (cast.visible) {
                     val connected = cast.connectionState is PlayarrCastConnectionState.Connected
                     val connecting = cast.connectionState is PlayarrCastConnectionState.Connecting
@@ -342,6 +354,14 @@ internal fun PlayarrPlayerChrome(
             onQuality = { onQuality(it); openMenu = null; showControls() },
             onAudio = { onAudio(it); openMenu = null; showControls() },
             onSubtitle = { onSubtitle(it); openMenu = null; showControls() },
+        )
+    }
+
+    if (healthOpen && health != null) {
+        PlayarrPlaybackHealthDialog(
+            health = health,
+            isTelevision = isTelevision,
+            onDismiss = { healthOpen = false; showControls() },
         )
     }
 

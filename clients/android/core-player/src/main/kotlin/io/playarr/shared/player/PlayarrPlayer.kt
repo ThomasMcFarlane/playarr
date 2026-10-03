@@ -80,6 +80,9 @@ interface PlayarrPlayer {
     fun setPlaybackSpeed(speed: Float)
     fun selectSubtitleTrack(trackId: String?)
 
+    /** What the player has measured for the current playback; see [PlaybackDiagnostics]. */
+    fun diagnostics(): PlaybackDiagnostics
+
     /** Releases the underlying player. Must be called from the owning screen's lifecycle teardown. */
     fun release()
 }

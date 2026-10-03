@@ -44,6 +44,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - New `playarr-portability` crate: the versioned portable user-data package (canonical JSON,
   CSV views, README and JSON Schema in a ZIP), a hardened reader (size, entry, path, symlink,
   version and text limits) and identifier/fuzzy title matching, with unit tests (task 68).
+- Playarr for Android (phone and Android TV) has a Playback health dialog in the player: a
+  plain-language explanation of direct play versus transcoding, HDR to SDR and audio limits,
+  technical detail that labels every value measured, reported or not available (using the player's
+  decoder, dropped-frame, rebuffer and audio-passthrough measurements), a short cancellable
+  connection test, and an explicit copy/share of a redacted diagnostics export (tasks 58-60).
 - Playarr Web (and the TV layouts that share it) has a Playback health panel in the player
   controls: a plain-language explanation of direct play versus transcoding, HDR to SDR and audio
   limits with a next action for each, a "technical detail" view that labels every value measured,

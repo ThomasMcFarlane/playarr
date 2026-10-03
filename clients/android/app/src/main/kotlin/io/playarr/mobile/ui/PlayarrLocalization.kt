@@ -1273,6 +1273,141 @@ internal enum class PlayarrString(
         "デバイスを検索しています…",
     ),
     CastStopCasting("Stop casting", "หยุดแคสต์", "キャストを停止"),
+    HealthOpen(
+        "Playback health",
+        "สถานะการเล่น",
+        "再生の状態",
+    ),
+    HealthTitle(
+        "Playback health",
+        "สถานะการเล่น",
+        "再生の状態",
+    ),
+    HealthLoading(
+        "Checking this playback…",
+        "กำลังตรวจสอบการเล่นนี้…",
+        "この再生を確認しています…",
+    ),
+    HealthNoSession(
+        "There is no active playback to check yet.",
+        "ยังไม่มีการเล่นที่ตรวจสอบได้",
+        "確認できる再生がまだありません。",
+    ),
+    HealthNotAvailable(
+        "Playback health is not available for this server or this playback.",
+        "สถานะการเล่นไม่พร้อมใช้งานสำหรับเซิร์ฟเวอร์หรือการเล่นนี้",
+        "このサーバーまたはこの再生では再生の状態を確認できません。",
+    ),
+    HealthNetworkError(
+        "Could not reach the server to check this playback.",
+        "เชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบการเล่นนี้ไม่ได้",
+        "再生を確認するためにサーバーへ接続できませんでした。",
+    ),
+    HealthRetry(
+        "Try again",
+        "ลองอีกครั้ง",
+        "再試行",
+    ),
+    HealthHideDetail(
+        "Hide technical detail",
+        "ซ่อนรายละเอียดทางเทคนิค",
+        "詳細を隠す",
+    ),
+    HealthShowDetail(
+        "Show technical detail",
+        "แสดงรายละเอียดทางเทคนิค",
+        "技術的な詳細を表示",
+    ),
+    HealthUnknown(
+        "Unknown",
+        "ไม่ทราบ",
+        "不明",
+    ),
+    HealthMeasured(
+        "measured",
+        "วัดได้จริง",
+        "実測",
+    ),
+    HealthReported(
+        "reported by device",
+        "อุปกรณ์แจ้งมา",
+        "端末が申告",
+    ),
+    HealthNotAvailableValue(
+        "not available",
+        "ไม่มีข้อมูล",
+        "取得不可",
+    ),
+    HealthNextAction(
+        "What to do:",
+        "สิ่งที่ควรทำ:",
+        "対処:",
+    ),
+    HealthTestHeading(
+        "Connection test",
+        "ทดสอบการเชื่อมต่อ",
+        "接続テスト",
+    ),
+    HealthTestHint(
+        "Downloads about 1 MB once, stops after 8 seconds and can be cancelled. It may cause a brief stutter while video is playing.",
+        "ดาวน์โหลดประมาณ 1 MB หนึ่งครั้ง หยุดเองใน 8 วินาที และยกเลิกได้ ขณะเล่นวิดีโออาจกระตุกสั้นๆ",
+        "約1MBを1回ダウンロードし、8秒で停止します。キャンセルもできます。再生中は一瞬止まることがあります。",
+    ),
+    HealthTestRun(
+        "Run connection test",
+        "เริ่มทดสอบการเชื่อมต่อ",
+        "接続テストを実行",
+    ),
+    HealthTestCancel(
+        "Cancel test",
+        "ยกเลิกการทดสอบ",
+        "テストをキャンセル",
+    ),
+    HealthTestRunning(
+        "Testing…",
+        "กำลังทดสอบ…",
+        "テスト中…",
+    ),
+    HealthTestCancelled(
+        "Test cancelled.",
+        "ยกเลิกการทดสอบแล้ว",
+        "テストをキャンセルしました。",
+    ),
+    HealthTestFailed(
+        "The connection test could not finish.",
+        "การทดสอบการเชื่อมต่อไม่เสร็จสมบูรณ์",
+        "接続テストを完了できませんでした。",
+    ),
+    HealthTestResult(
+        "About {{rate}} download, {{latency}} ms to first response.",
+        "ดาวน์โหลดประมาณ {{rate}} ตอบกลับครั้งแรกใน {{latency}} มิลลิวินาที",
+        "ダウンロード約{{rate}}、最初の応答まで{{latency}}ミリ秒。",
+    ),
+    HealthExportHeading(
+        "Share diagnostics",
+        "แชร์ข้อมูลวินิจฉัย",
+        "診断情報を共有",
+    ),
+    HealthExportHint(
+        "Nothing is sent anywhere. The export has no names, titles, addresses, account or device identifiers or tokens.",
+        "ไม่มีการส่งไปที่ใด ข้อมูลไม่มีชื่อ ชื่อเรื่อง ที่อยู่ รหัสบัญชีหรืออุปกรณ์ หรือโทเคน",
+        "どこにも送信されません。名前、タイトル、アドレス、アカウントや端末の識別子、トークンは含まれません。",
+    ),
+    HealthExportCopy(
+        "Copy diagnostics",
+        "คัดลอกข้อมูลวินิจฉัย",
+        "診断情報をコピー",
+    ),
+    HealthExportShare(
+        "Share…",
+        "แชร์…",
+        "共有…",
+    ),
+    HealthCopied(
+        "Copied.",
+        "คัดลอกแล้ว",
+        "コピーしました。",
+    ),
 }
 
 @Immutable

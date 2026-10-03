@@ -49,6 +49,8 @@ class ExoPlayerPlayarrPlayer private constructor(
     private var audioPolicyApplied = false
     private var preferredAudioLanguage: String? = null
 
+    override fun diagnostics(): PlaybackDiagnostics = statsLogger.diagnostics()
+
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
