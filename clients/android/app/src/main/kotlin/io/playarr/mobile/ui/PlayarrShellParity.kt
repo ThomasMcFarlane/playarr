@@ -50,3 +50,11 @@ internal fun shouldShowPlayarrOfflineState(isOnline: Boolean, currentRoute: Stri
 
 internal fun shouldHandlePlayarrMiniPlayerBack(isPlayer: Boolean, hasPlayback: Boolean): Boolean =
     !isPlayer && hasPlayback
+
+/** The mini player only appears once playback is actually ready, never over loading or failed starts. */
+internal fun shouldShowPlayarrMiniPlayer(isPlayer: Boolean, hasPlayback: Boolean, playerReady: Boolean): Boolean =
+    !isPlayer && hasPlayback && playerReady
+
+/** A failed start that the viewer has left (minimised or navigated away from) is discarded. */
+internal fun shouldClearPlayarrFailedPlayback(playerFailed: Boolean, isPlayer: Boolean, hasPlayback: Boolean): Boolean =
+    playerFailed && !isPlayer && hasPlayback

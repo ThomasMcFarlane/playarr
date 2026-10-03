@@ -45,4 +45,19 @@ class PlayarrShellParityTest {
         assertFalse(shouldHandlePlayarrMiniPlayerBack(isPlayer = false, hasPlayback = false))
         assertFalse(shouldHandlePlayarrMiniPlayerBack(isPlayer = true, hasPlayback = true))
     }
+
+    @Test
+    fun miniPlayerOnlyShowsWhenPlaybackIsReady() {
+        assertTrue(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = true))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = false))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = true, hasPlayback = true, playerReady = true))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = false, playerReady = true))
+    }
+
+    @Test
+    fun failedPlaybackIsClearedOnlyOffThePlayerScreen() {
+        assertTrue(shouldClearPlayarrFailedPlayback(playerFailed = true, isPlayer = false, hasPlayback = true))
+        assertFalse(shouldClearPlayarrFailedPlayback(playerFailed = true, isPlayer = true, hasPlayback = true))
+        assertFalse(shouldClearPlayarrFailedPlayback(playerFailed = false, isPlayer = false, hasPlayback = true))
+    }
 }

@@ -522,6 +522,7 @@ internal enum class PlayarrString(
     ),
     DetailUnavailable("Unavailable", "ไม่พร้อมใช้งาน", "利用できません"),
     DetailChapters("Chapters", "บท", "チャプター"),
+    WatchStateUnwatched("Unwatched", "ยังไม่ได้ดู", "未視聴"),
     DetailChapterNumber("Chapter {{number}}", "บทที่ {{number}}", "チャプター{{number}}"),
     DetailCast("Cast", "นักแสดง", "キャスト"),
     DetailSimilarTitles("Similar Titles", "เรื่องที่คล้ายกัน", "似ているタイトル"),
@@ -588,6 +589,7 @@ internal enum class PlayarrString(
     PlayerSubtitleTrackMenuLabel("Subtitle track", "แทร็กคำบรรยาย", "字幕トラック"),
     PlayerSubtitlesHeading("Subtitles", "คำบรรยาย", "字幕"),
     PlayerOff("Off", "ปิด", "オフ"),
+    PlayerNoSubtitles("No subtitles", "ไม่มีคำบรรยาย", "字幕なし"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
     PlayerPlaylistLabelSingular(

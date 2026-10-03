@@ -317,6 +317,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
 
+    private val libraryJobs = mutableMapOf<WorkKind, Job>()
+
     private val _libraries = MutableStateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>>(emptyMap())
     val libraries: StateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>> = _libraries.asStateFlow()
 
@@ -340,6 +342,20 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
     val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
+
+    private val _progressLoaded = MutableStateFlow(false)
+    val progressLoaded: StateFlow<Boolean> = _progressLoaded.asStateFlow()
+
+    /** Fetches watch progress once so library cards can show the unwatched dot without visiting Home first. */
+    fun ensureProgressLoaded() {
+        if (_progressLoaded.value) return
+        viewModelScope.launch {
+            runCatching { api.listWatchProgress() }.getOrNull()?.let {
+                _progress.value = it
+                _progressLoaded.value = true
+            }
+        }
+    }
 
     val profileAvatar: StateFlow<ProfileAvatarPreference?> = tokenStore.currentProfileAvatar
         .map { it?.toPlayarrProfileAvatarPreference() }
@@ -375,7 +391,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     fun loadHome() {
         viewModelScope.launch {
             _home.value = ExperienceLoad.Loading
-            val progressRequest = async { runCatching { api.listWatchProgress() }.getOrDefault(emptyList()) }
+            val progressRequest = async { runCatching { api.listWatchProgress() }.getOrNull() }
             val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site)
             val results = kinds.map { kind ->
                 async { kind to browseLibrary(kind = kind, availableOnly = true, sort = "recent", limit = 36) }
@@ -392,7 +408,8 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             val byKind = results.associate { (kind, result) ->
                 kind to ((result as? PlayarrResult.Success)?.value ?: emptyList())
             }
-            val progress = progressRequest.await()
+            val progressRows = progressRequest.await()
+            val progress = progressRows ?: emptyList()
             val onDeck = progress
                 .asSequence()
                 .filter { it.state == WatchState.PartWatched }
@@ -410,11 +427,14 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 .awaitAll()
                 .filterNotNull()
             _progress.value = progress
+            if (progressRows != null) _progressLoaded.value = true
             _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, onDeck))
         }
     }
 
     fun reloadForProfile() {
+        libraryJobs.values.forEach(Job::cancel)
+        libraryJobs.clear()
         _availableKinds.value = null
         _canDownload.value = null
         _libraries.value = emptyMap()
@@ -445,22 +465,60 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 
     fun loadLibrary(kind: WorkKind) {
         if (_libraries.value[kind] is ExperienceLoad.Ready) return
-        viewModelScope.launch {
+        libraryJobs.remove(kind)?.cancel()
+        libraryJobs[kind] = viewModelScope.launch {
             _libraries.value = _libraries.value + (kind to ExperienceLoad.Loading)
-            _libraries.value = _libraries.value + (kind to when (
-                val result = browseLibrary(kind = kind, availableOnly = true, sort = "title", limit = 240)
-            ) {
-                is PlayarrResult.Success -> ExperienceLoad.Ready(result.value)
-                is PlayarrResult.Failure -> ExperienceLoad.Failed(
-                    result.error.userMessageForExperience(kind.playarrPluralKey()),
+            // Page through the whole catalogue as Playarr Web does (200 per
+            // request): the first page is shown immediately and later pages
+            // are appended while the viewer browses.
+            var offset = 0L
+            var loaded = emptyList<Work>()
+            while (true) {
+                val result = browseLibrary(
+                    kind = kind,
+                    availableOnly = true,
+                    sort = "title",
+                    limit = LIBRARY_PAGE_SIZE,
+                    offset = offset,
                 )
-            })
+                when (result) {
+                    is PlayarrResult.Success -> {
+                        val page = result.value
+                        loaded = mergeLibraryPage(loaded, page)
+                        _libraries.value = _libraries.value + (kind to ExperienceLoad.Ready(loaded))
+                        offset += page.size
+                        if (page.size < LIBRARY_PAGE_SIZE) break
+                    }
+                    is PlayarrResult.Failure -> {
+                        // Keep whatever has loaded; only a failed first page is an error.
+                        if (loaded.isEmpty()) {
+                            _libraries.value = _libraries.value + (
+                                kind to ExperienceLoad.Failed(
+                                    result.error.userMessageForExperience(kind.playarrPluralKey()),
+                                )
+                                )
+                        }
+                        break
+                    }
+                }
+            }
         }
     }
 
     fun prepareSearch() {
         viewModelScope.launch {
             _searchViews.value = runCatching { api.listViews() }.getOrDefault(emptyList())
+        }
+        // Warm the availability index as soon as Search opens (Playarr Web does the
+        // same) so the first query does not wait on a full catalogue crawl.
+        viewModelScope.launch {
+            try {
+                loadAvailableSearchWorkIds()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // The query path retries and reports failures itself.
+            }
         }
     }
 
@@ -612,8 +670,8 @@ internal data class ExperienceDestination(
     val kind: WorkKind? = null,
 )
 
-private enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
-private enum class LibraryArtworkSize { Small, Medium, Large }
+internal enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
+internal enum class LibraryArtworkSize { Small, Medium, Large }
 
 internal val experienceDestinations = listOf(
     ExperienceDestination("downloads", PlayarrString.NavDownloads, Icons.Outlined.Download),
@@ -648,6 +706,14 @@ internal fun televisionDestinationGroups(
 
 private const val CAPABILITIES_POLL_MS = 60_000L
 private const val SEARCH_DEBOUNCE_MS = 320L
+internal const val LIBRARY_PAGE_SIZE = 200L
+
+/** Appends [page] to [loaded], dropping works already present (pages can overlap if the catalogue shifts mid-load). */
+internal fun mergeLibraryPage(loaded: List<Work>, page: List<Work>): List<Work> {
+    if (loaded.isEmpty()) return page
+    val seen = loaded.mapTo(HashSet(loaded.size * 2), Work::id)
+    return loaded + page.filter { seen.add(it.id) }
+}
 private const val SEARCH_LIMIT = 60L
 private const val SEARCH_LIBRARY_LIMIT = 500L
 private const val SEARCH_AVAILABILITY_PAGE_SIZE = 500L
@@ -783,6 +849,13 @@ internal fun PlayarrExperience(
         onBack = closePlayback,
     )
 
+    val playbackFailed = persistentPlayerState is ExperienceLoad.Failed || playbackState.error != null
+    LaunchedEffect(playbackFailed, isPlayer, activePlaybackItem?.mediaFileId) {
+        if (shouldClearPlayarrFailedPlayback(playbackFailed, isPlayer, activePlaybackItem != null)) {
+            closePlayback()
+        }
+    }
+
     if (activePlaybackItem != null && persistentPlayerState is ExperienceLoad.Ready) {
         PlayarrMediaSession(
             player = playerViewModel.player.rawPlayer,
@@ -847,15 +920,15 @@ internal fun PlayarrExperience(
                 }
             }
 
-            if (!isPlayer && activePlaybackItem != null) {
+            if (shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed)) {
                 PlayarrMiniPlayer(
-                    item = activePlaybackItem,
+                    item = activePlaybackItem!!,
                     playbackState = playbackState,
                     serverUrl = serverUrl,
                     accessToken = token,
                     isTelevision = isTelevision,
                     onMaximise = {
-                        navController.navigate("experience-player/${Uri.encode(activePlaybackItem.mediaFileId)}")
+                        navController.navigate("experience-player/${Uri.encode(activePlaybackItem!!.mediaFileId)}")
                     },
                     modifier = Modifier.align(if (isTelevision) Alignment.BottomEnd else Alignment.BottomCenter),
                 )
@@ -1141,6 +1214,13 @@ private fun ProfileControl(
         PlayarrString.ProfileControl,
         "name" to (userName ?: viewer),
     )
+    var focused by remember { mutableStateOf(false) }
+    val focusScale = rememberPlayarrFocusScale(
+        focused = focused,
+        focusedScale = FocusMotion.navFocusScale,
+        unfocusedScale = FocusMotion.restScale,
+        label = "profileControlFocus",
+    )
     Column(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
@@ -1150,11 +1230,18 @@ private fun ProfileControl(
         Surface(
             onClick = onClick,
             modifier = (if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp))
+                .scale(focusScale)
+                .onFocusChanged { focused = it.isFocused }
                 .semantics { contentDescription = profileDescription },
             shape = CircleShape,
             color = WebSurfaceStrong.copy(alpha = 0.94f),
-            contentColor = WebInkSoft,
-            border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+            contentColor = if (focused) WebInk else WebInkSoft,
+            // A visible ring is the only focus cue the D-pad has on this control.
+            border = if (focused) {
+                androidx.compose.foundation.BorderStroke(2.dp, WebPink)
+            } else {
+                androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f))
+            },
             shadowElevation = 12.dp,
         ) {
             Row(
@@ -1725,6 +1812,7 @@ private fun ExperienceLandscapeCard(
     mediaFileId: String? = null,
     displayTitle: String = work.title,
     displaySubtitle: String? = null,
+    showUnwatched: Boolean = false,
 ) {
     val resolvedSubtitle = displaySubtitle ?: work.kind.playarrSingularLabel()
     var focused by remember { mutableStateOf(false) }
@@ -1776,10 +1864,28 @@ private fun ExperienceLandscapeCard(
                     Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
                 }
             }
+            if (showUnwatched && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
+                PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
+            }
         }
         Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
         Text(resolvedSubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+/** Web `WatchStateOverlay` crimson; the app's accent is neutral grey, so it cannot be reused here. */
+private val UnwatchedDotColour = Color(0xFFCF3157)
+
+@Composable
+private fun PlayarrUnwatchedDot(modifier: Modifier = Modifier) {
+    val label = playarrString(PlayarrString.WatchStateUnwatched)
+    Box(
+        modifier
+            .size(12.dp)
+            .background(UnwatchedDotColour, CircleShape)
+            .border(2.dp, Color.White.copy(alpha = 0.94f), CircleShape)
+            .semantics { contentDescription = label },
+    )
 }
 
 @Composable
@@ -1792,10 +1898,12 @@ private fun LibraryResults(
     isTelevision: Boolean,
     selectedId: String,
     progressByWork: Map<String, WatchProgress>,
+    progressLoaded: Boolean,
     onSelected: (Work) -> Unit,
     onOpen: (Work) -> Unit,
     onContext: (Work) -> Unit,
 ) {
+    val fixedColumns = playarrLibraryGridColumns(viewMode, artworkSize, isTelevision)
     val landscapeWidth = when (artworkSize) {
         LibraryArtworkSize.Small -> if (isTelevision) 150.dp else 132.dp
         LibraryArtworkSize.Medium -> if (isTelevision) 190.dp else 164.dp
@@ -1804,7 +1912,7 @@ private fun LibraryResults(
     val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 28.dp, bottom = 104.dp)
     when (viewMode) {
         LibraryViewMode.Screen -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(landscapeWidth),
+            columns = fixedColumns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(landscapeWidth),
             modifier = Modifier.fillMaxSize(),
             contentPadding = padding,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -1822,6 +1930,7 @@ private fun LibraryResults(
                     modifier = Modifier.fillMaxWidth(),
                     progress = progressByWork[work.id],
                     onContext = { onContext(work) },
+                    showUnwatched = progressLoaded,
                 )
             }
         }
@@ -1846,14 +1955,14 @@ private fun LibraryResults(
             }
         }
         LibraryViewMode.Cover -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(landscapeWidth * 0.72f),
+            columns = fixedColumns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(landscapeWidth * 0.72f),
             modifier = Modifier.fillMaxSize(),
             contentPadding = padding,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             items(works, key = Work::id) { work ->
-                LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.72f, work.id == selectedId, onSelected, onOpen, onContext)
+                LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.72f, work.id == selectedId, onSelected, onOpen, onContext, showUnwatched = progressLoaded && shouldShowPlayarrUnwatchedDot(progressByWork[work.id], true), fillWidth = fixedColumns != null)
             }
         }
         LibraryViewMode.CoverFlow -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1868,7 +1977,7 @@ private fun LibraryResults(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 items(works, key = Work::id) { work ->
-                    LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.84f, work.id == selectedId, onSelected, onOpen, onContext)
+                    LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.84f, work.id == selectedId, onSelected, onOpen, onContext, showUnwatched = progressLoaded && shouldShowPlayarrUnwatchedDot(progressByWork[work.id], true))
                 }
             }
         }
@@ -1885,6 +1994,8 @@ private fun LibraryCoverCard(
     onSelected: (Work) -> Unit,
     onOpen: (Work) -> Unit,
     onContext: (Work) -> Unit,
+    showUnwatched: Boolean = false,
+    fillWidth: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val libraryScale = rememberPlayarrFocusScale(
@@ -1893,15 +2004,18 @@ private fun LibraryCoverCard(
         label = "libraryCardFocus",
     )
     Column(
-        Modifier.width(width).scale(libraryScale)
+        (if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }.focusable()
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
-        AuthenticatedArtwork(
-            work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
-            Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
-                .then(if (focused || selected) Modifier.border(1.dp, WebInkSoft, RoundedCornerShape(12.dp)) else Modifier),
-        )
+        Box {
+            AuthenticatedArtwork(
+                work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
+                Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
+                    .then(if (focused || selected) Modifier.border(1.dp, WebInkSoft, RoundedCornerShape(12.dp)) else Modifier),
+            )
+            if (showUnwatched) PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
+        }
         Text(work.title, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
     }
 }
@@ -2016,11 +2130,13 @@ private fun ExperienceLibraryScreen(
 ) {
     val states by viewModel.libraries.collectAsState()
     val progress by viewModel.progress.collectAsState()
-    val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
+    val progressLoaded by viewModel.progressLoaded.collectAsState()
+    val progressByWork = remember(progress) { indexPlayarrProgressByWork(progress) }
     val language = LocalPlayarrLanguage.current
     val plural = kind.playarrPluralLabel()
     val collection = kind.playarrCollectionNoun()
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
+    LaunchedEffect(Unit) { viewModel.ensureProgressLoaded() }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
         ExperienceLoad.Loading -> ExperienceLoading(
             playarrString(PlayarrString.LibraryLoading, "label" to plural),
@@ -2034,7 +2150,7 @@ private fun ExperienceLibraryScreen(
                 )
                 return
             }
-            var selectedId by remember(state.value) { mutableStateOf(state.value.first().id) }
+            var selectedId by remember(kind) { mutableStateOf(state.value.first().id) }
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var activeLetter by remember(kind) { mutableStateOf("#") }
             var filtersOpen by remember { mutableStateOf(false) }
@@ -2084,6 +2200,7 @@ private fun ExperienceLibraryScreen(
                         isTelevision = isTelevision,
                         selectedId = selectedId,
                         progressByWork = progressByWork,
+                        progressLoaded = progressLoaded,
                         onSelected = { selectedId = it.id },
                         onOpen = { navController.navigate("experience-detail/${it.id}") },
                         onContext = { contextWork = it },
@@ -2195,7 +2312,8 @@ private fun ExperienceSearchScreen(
     }
     Column(
         modifier = Modifier.fillMaxSize().background(WebSurface).padding(
-            start = if (isTelevision) 72.dp else 16.dp,
+            // Television: clear the 118 px navigation rail so results and filters stay reachable.
+            start = if (isTelevision) 154.dp else 16.dp,
             end = if (isTelevision) 72.dp else 16.dp,
             top = if (isTelevision) 92.dp else 72.dp,
         ),
@@ -2324,7 +2442,7 @@ private fun ExperienceSearchScreen(
                 }
             }
         }
-        if (selectedWork != null || selectedPlaylist != null) {
+        if (query.isNotBlank() && (selectedWork != null || selectedPlaylist != null)) {
             ExperienceSearchPreview(
                 work = selectedWork,
                 playlist = selectedPlaylist,
@@ -2839,6 +2957,7 @@ private fun ExperienceDetailScreen(
                     ExperienceMusicDetailContent(
                         detail = detail,
                         children = artistChildren,
+                        progressByMedia = progressByMedia,
                         initialMediaFileId = initialMediaFileId,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
@@ -3203,6 +3322,7 @@ private fun ExperienceVideoDetailContent(
                     onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
                     onAddToPlaylist = onAddToPlaylist,
                     onDownload = onDownload,
+                    autoFocusPlay = true,
                 )
             }
             if (series != null) {
@@ -3433,10 +3553,17 @@ private fun VideoDetailActions(
     onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
+    autoFocusPlay: Boolean = false,
 ) {
     if (mediaFileId == null) {
         Text(playarrString(PlayarrString.DetailNoPlayableMedia), color = WebInkMuted)
         return
+    }
+    // Television: start D-pad focus on Play (as Playarr Web does) instead of the
+    // first focusable item in the navigation rail.
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(mediaFileId, autoFocusPlay) {
+        if (autoFocusPlay) runCatching { playFocus.requestFocus() }
     }
     val title = episode?.episode?.title
         ?: episode?.let {
@@ -3447,7 +3574,10 @@ private fun VideoDetailActions(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(onClick = { onPlay(mediaFileId, null, launchSettings) }) {
+        Button(
+            onClick = { onPlay(mediaFileId, null, launchSettings) },
+            modifier = Modifier.focusRequester(playFocus),
+        ) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
             Text(
                 if (progress?.state == WatchState.PartWatched) {
@@ -3711,6 +3841,16 @@ private fun EpisodeDetailCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Web: the media-file frame thumbnail is primary, the series backdrop is the fallback.
+                episode.mediaFileId?.let { mediaFileId ->
+                    AuthenticatedMediaThumbnail(
+                        mediaFileId = mediaFileId,
+                        serverUrl = serverUrl,
+                        accessToken = accessToken,
+                        contentDescription = "",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)))))
                 Text(
                     "S${seasonNumber.toString().padStart(2, '0')} · E${episode.episode.episodeNumber.toString().padStart(2, '0')}",
@@ -3723,6 +3863,9 @@ private fun EpisodeDetailCard(
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
                         Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
                     }
+                }
+                if (available && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
+                    PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
                 }
             }
         }
@@ -3779,20 +3922,43 @@ private fun MovieDetailBrowser(
                             onClick = { onPlay(mediaFileId, chapter.startMs, launchSettings) },
                             color = WebSurfaceSoft,
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.width(if (isTelevision) 190.dp else 156.dp),
+                            modifier = Modifier.width(if (isTelevision) 260.dp else 188.dp),
                         ) {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text(
-                                    chapter.title ?: playarrString(
-                                        PlayarrString.DetailChapterNumber,
-                                        "number" to chapter.index + 1,
-                                    ),
-                                    color = WebInk,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(formatPlayarrPlayerTime(chapter.startMs), color = WebInkMuted, fontSize = 11.sp)
+                            Column {
+                                Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(WebSurfaceSoft)) {
+                                    AuthenticatedMediaThumbnail(
+                                        mediaFileId = mediaFileId,
+                                        serverUrl = serverUrl,
+                                        accessToken = accessToken,
+                                        contentDescription = "",
+                                        positionMs = chapter.startMs,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                    Text(
+                                        (chapter.index + 1).toString().padStart(2, '0'),
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(8.dp)
+                                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                                    )
+                                }
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(formatPlayarrPlayerTime(chapter.startMs), color = WebInkMuted, fontSize = 11.sp)
+                                    Text(
+                                        chapter.title ?: playarrString(
+                                            PlayarrString.DetailChapterNumber,
+                                            "number" to chapter.index + 1,
+                                        ),
+                                        color = WebInk,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                     }
@@ -3897,6 +4063,7 @@ private fun SimilarWorksRail(
 private fun ExperienceMusicDetailContent(
     detail: WorkDetail,
     children: WorkChildren.Artist,
+    progressByMedia: Map<String, WatchProgress>,
     initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
@@ -4131,6 +4298,7 @@ private fun ExperienceMusicDetailContent(
                             artistTitle = detail.work.title,
                             posterUrl = posterUrl,
                             canDownload = canDownload,
+                            progress = track.mediaFileId?.let(progressByMedia::get),
                             selected = track.track.id == selectedTrack?.track?.id,
                             onSelect = { selectedTrackId = track.track.id },
                             onPlay = {
@@ -4204,6 +4372,7 @@ private fun MusicTrackRow(
     artistTitle: String,
     posterUrl: String?,
     canDownload: Boolean,
+    progress: WatchProgress?,
     selected: Boolean,
     onSelect: () -> Unit,
     onPlay: () -> Unit,
@@ -4229,6 +4398,9 @@ private fun MusicTrackRow(
             Text(track.track.trackNumber.toString().padStart(2, '0'), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(track.track.title, color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(formatMusicDurationLabel(track.track.durationSeconds), color = WebInkMuted, fontSize = 11.sp)
+            if (shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
+                PlayarrUnwatchedDot(Modifier.size(8.dp))
+            }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
                     Icons.Outlined.Add,
@@ -5573,6 +5745,7 @@ private fun AuthenticatedMediaThumbnail(
     accessToken: String?,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    positionMs: Long? = null,
 ) {
     val context = LocalContext.current
     val serverAccess = rememberPlayarrMediaServerAccess(mediaFileId, serverUrl, accessToken)
@@ -5580,8 +5753,8 @@ private fun AuthenticatedMediaThumbnail(
         Box(modifier.background(WebSurfaceSoft))
         return
     }
-    val url = remember(serverAccess.serverUrl, mediaFileId) {
-        "${serverAccess.serverUrl.trimEnd('/')}/api/v1/media/${Uri.encode(mediaFileId)}/thumbnail"
+    val url = remember(serverAccess.serverUrl, mediaFileId, positionMs) {
+        playarrMediaThumbnailUrl(serverAccess.serverUrl, mediaFileId, positionMs)
     }
     val requestToken = playarrAccessTokenForUrl(serverAccess, url)
     val request = remember(url, requestToken) {
@@ -5604,6 +5777,13 @@ private fun AuthenticatedMediaThumbnail(
         contentScale = ContentScale.Crop,
         modifier = modifier,
     )
+}
+
+/** `GET /api/v1/media/{id}/thumbnail`, optionally at a chapter offset (`position_ms`), as the web client requests it. */
+internal fun playarrMediaThumbnailUrl(serverUrl: String, mediaFileId: String, positionMs: Long? = null): String {
+    val id = java.net.URLEncoder.encode(mediaFileId, "UTF-8").replace("+", "%20")
+    val base = "${serverUrl.trimEnd('/')}/api/v1/media/$id/thumbnail"
+    return if (positionMs == null) base else "$base?position_ms=${positionMs.coerceAtLeast(0L)}"
 }
 
 internal fun resolveArtworkUrl(serverUrl: String, artworkUrl: String): String = runCatching {

@@ -773,7 +773,7 @@ private fun PlayarrPlayerOptionsDialog(
                     item {
                         PlayerDialogOption(
                             label = playarrString(PlayarrString.PlayerOff),
-                            detail = null,
+                            detail = playarrString(PlayarrString.PlayerNoSubtitles),
                             selected = controls.selectedSubtitleTrackId == null,
                         ) { onSubtitle(null) }
                     }
@@ -792,7 +792,7 @@ private fun PlayarrPlayerOptionsDialog(
                         PlayerDialogOption(
                             label = track.label,
                             detail = track.language,
-                            selected = track.id == controls.selectedAudioTrackId,
+                            selected = track.id == (controls.selectedAudioTrackId ?: controls.audioTracks.firstOrNull()?.id),
                         ) { onAudio(track.id) }
                     }
                     PlayarrPlayerMenu.Subtitles -> items(controls.subtitleTracks.size) { index ->
