@@ -112,6 +112,10 @@ spec:
               value: 0.0.0.0:9090
             - name: PLAYARR_ROLE
               value: all
+            # The image bakes in the Admin UI; overrides the legacy hostPath
+            # value (/opt/streamarr/web) that the runtime Secret still carries.
+            - name: PLAYARR_WEB_ASSETS_DIR
+              value: /app/web
             {{- if $tlsOn }}
             - name: PLAYARR_TLS_CERT_PATH
               value: /tls/tls.crt
@@ -202,9 +206,6 @@ spec:
             - name: media
               mountPath: /srv/media
               readOnly: true
-            - name: runtime
-              mountPath: /opt/streamarr
-              readOnly: true
             {{- if $tlsOn }}
             - name: tls
               mountPath: /tls
@@ -219,10 +220,6 @@ spec:
         - name: media
           hostPath:
             path: {{ $instance.mediaPath }}
-            type: Directory
-        - name: runtime
-          hostPath:
-            path: {{ $instance.runtimePath }}
             type: Directory
         {{- if $tlsOn }}
         - name: tls

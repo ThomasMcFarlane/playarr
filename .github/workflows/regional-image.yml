@@ -1,0 +1,54 @@
+# Builds the self-contained regional server image (server binary, Admin web
+# assets, ffmpeg/ffprobe) and publishes it to the cluster registry, tagged with
+# the first 8 characters of the commit SHA. The regional Deployments reference
+# that tag in infra/kubernetes/helm/playarr-dev/values.yaml. The registry
+# accepts pushes from inside the cluster without credentials.
+name: Regional image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'clients/tv-web/**'
+      - 'infra/docker/backend.Dockerfile'
+      - '.github/workflows/regional-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: regional-image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: registry.example.com/playarr-regional
+
+jobs:
+  image:
+    name: Build and push
+    runs-on: playarr-runners
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          tag="$(git rev-parse --short=8 HEAD)"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          docker build -f infra/docker/backend.Dockerfile \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            -t "$IMAGE:$tag" .
+
+      - name: Verify tools in the image
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint ffprobe "$IMAGE:$TAG" -version | head -n 1
+          docker run --rm --entrypoint ffmpeg "$IMAGE:$TAG" -version | head -n 1
+          docker run --rm --entrypoint /app/playarr-server "$IMAGE:$TAG" --version
+
+      - name: Push
+        run: docker push "$IMAGE:$TAG"

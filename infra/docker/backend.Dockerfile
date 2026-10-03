@@ -45,7 +45,10 @@
 # ==============================================================================
 
 ARG RUST_VERSION=1
-ARG DEBIAN_CODENAME=bookworm
+# trixie, not bookworm: the prebuilt ONNX Runtime that ort-sys links is built
+# with a newer libstdc++ (GCC 13+) than bookworm's GCC 12 provides, so the
+# final link fails with undefined `std::__cxx11::basic_string::_M_replace_cold`.
+ARG DEBIAN_CODENAME=trixie
 
 # ------------------------------------------------------------------------
 # Stage 1: chef -- base image with cargo-chef installed once, reused by

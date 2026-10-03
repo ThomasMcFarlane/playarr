@@ -43,7 +43,7 @@ Documentation only: implementation is pending and unassigned.
 |---|------|--------|--------------|-------|
 | 87 | Admin-only server capabilities endpoint | review PR open | task/server-capabilities | `GET /api/v1/admin/system/capabilities` reports ffmpeg, ffprobe, key encoders and GPU devices on the serving node with impact and install hints. Peer aggregation is not implemented: each node reports itself. Evidence: `cargo test -p playarr-api` 328 passed. |
 | 88 | Admin "Server capabilities" page | review PR open | task/server-capabilities | System nav page with prominent missing-item banner, status filter persisted in the URL, light and dark tokens. |
-| 89 | Regional runtime image with ffmpeg and rollout runbook | review PR open | task/server-capabilities | `infra/docker/regional-runtime.Dockerfile` plus runbook in the playarr-dev README. The live image tag is deliberately not bumped until the image exists on region-a and region-b (owner approval needed). |
+| 89 | Regional runtime image with ffmpeg and rollout runbook | review PR open | task/server-capabilities | Superseded: regional servers use a registry image built from `backend.Dockerfile` (see the playarr-dev README). |
 
 ## Active: Restore public relay on regional servers (2026-10-03)
 

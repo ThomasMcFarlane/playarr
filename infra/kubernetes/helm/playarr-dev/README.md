@@ -106,88 +106,66 @@ echo | openssl s_client -connect playarr-b.example.com:8484 \
 Repeat for `playarr-region-a`. Rollback: unset `tls` for the instance (plain HTTP
 wiring returns) and sync.
 
-## Regional runtime image (ffmpeg and ffprobe)
+## Regional server image (registry, GitOps)
 
-The regional servers run `streamarr-runtime:<tag>` with
-`imagePullPolicy: Never`: the image is imported by hand into each node's
-containerd and carries only userland. The release binary and web assets come
-from the node's `runtimePath` hostPath mounted at `/opt/streamarr`. The
-`<image>` image is an Arch Linux base with no ffmpeg, so every endpoint that
-shells out to `ffprobe` or `ffmpeg` (transcode, HLS, thumbnails, chapters,
-audio and subtitle track probing) returns 500 with
-`could not start ffprobe: No such file or directory`.
+The regional servers run a self-contained image,
+`registry.example.com/playarr-regional:<main-sha>`, built from
+[`infra/docker/backend.Dockerfile`](../../../docker/backend.Dockerfile): the
+`playarr-server` binary, the Admin web assets (`/app/web`) and `ffmpeg` /
+`ffprobe` (the server shells out to both for transcoding, HLS, thumbnails,
+chapters and track probing). Nothing is mounted from the node any more: the
+earlier `streamarr-runtime` image with a `runtimePath` hostPath and a manual
+`ctr images import` is gone. What stays on the node is the state PVC, the media
+hostPath (`mediaPath`, read-only) and the TLS Secret.
 
-The image had no build recipe in this repository; the Dockerfile
-[`infra/docker/regional-runtime.Dockerfile`](../../../docker/regional-runtime.Dockerfile)
-now defines it: the same Arch base (so it stays ABI-compatible with the
-Arch-built release binary), plus `ffmpeg` (which ships `ffprobe`) and the same
-`/opt/streamarr/streamarr` entrypoint. The build fails if either binary is
-missing. `infra/docker/backend.Dockerfile` already bundles ffmpeg but is
-Debian-based and embeds its own binary and web assets, so adopting it would
-mean dropping the hostPath runtime layout and changing the runtime Secrets'
-`PLAYARR_WEB_ASSETS_DIR`; that is a larger, separate decision.
+`registry.example.com` is the cluster registry's public name (the
+`registry-public` certificate in namespace `example`), so the nodes pull from it
+over HTTPS with no registry configuration and no credentials. `imagePullPolicy`
+is `IfNotPresent` because tags are immutable commit SHAs.
 
-`values.yaml` deliberately still points both regional servers at
-`streamarr-runtime:26853ca`. With `imagePullPolicy: Never`, referencing a tag
-that is not yet imported on the node leaves the Pod in
-`ErrImageNeverPull` and, because the strategy is `Recreate`, takes the server
-down. The tag bump is therefore a runbook step, taken only after the image is
-present on both nodes.
+The chart sets `PLAYARR_WEB_ASSETS_DIR=/app/web`, overriding the legacy
+`/opt/streamarr/web` value the runtime Secrets still carry.
 
-After the new image is live, open Admin, System, Server capabilities on each
-server to confirm ffmpeg, ffprobe and the required encoders report `present`.
+### Publishing an image
 
-### Rollout (needs owner approval; changes the cluster)
+The workflow `.github/workflows/regional-image.yml` builds and pushes
+`playarr-regional:<first 8 characters of the commit SHA>` on every push to
+`main` that touches the backend, the Admin UI or the Dockerfile, and fails if
+`ffprobe` or `playarr-server --version` does not run inside the image. To build
+by hand from a checkout of the commit:
 
-Use `NEW=26853ca-ffmpeg1` (increment the suffix for any rebuild; never reuse a
-tag on a node).
+```sh
+SHA=$(git rev-parse --short=8 HEAD)
+docker build -f infra/docker/backend.Dockerfile \
+  -t registry.example.com/playarr-regional:$SHA .
+docker run --rm --entrypoint ffprobe registry.example.com/playarr-regional:$SHA -version | head -n 1
+docker push registry.example.com/playarr-regional:$SHA
+```
 
-1. Build once, on any machine with Docker:
+### Rollout
 
-   ```sh
-   docker build -t streamarr-runtime:$NEW - < infra/docker/regional-runtime.Dockerfile
-   docker run --rm --entrypoint ffprobe streamarr-runtime:$NEW -version | head -n 1
-   docker save streamarr-runtime:$NEW | gzip > streamarr-runtime-$NEW.tar.gz
-   ```
-
-2. Copy the archive to each regional node (region-a and region-b) and import it into the
-   k3s containerd image store. The old `<image>` image stays in place for
-   rollback:
-
-   ```sh
-   gunzip -c streamarr-runtime-$NEW.tar.gz | sudo k3s ctr images import -
-   sudo k3s ctr images ls | grep streamarr-runtime
-   ```
-
-   Both `<image>` and `$NEW` must be listed on both nodes before continuing.
-
-3. Bump the tag. Change `regionalInstances.playarr-region-a.image` first, merge,
-   and let Argo sync the `playarr` application; the Deployment recreates the
-   Pod, so expect a short outage for that server. Verify (below), then repeat
-   for `playarr-region-b`, which serves the public hostname.
-
+1. Wait for the image of the commit you want (or push it by hand as above).
+2. Set `regionalInstances.<name>.image` to that tag in `values.yaml` and merge.
+   Do region-a first, then region-b, which serves the public hostname.
+3. Bump the `playarr` `targetRevision` in the deployment repository repository to the
+   merge commit; Argo syncs and the `Recreate` strategy replaces each Pod (a
+   short outage per server).
 4. Verify per server:
 
    ```sh
    kubectl -n playarr rollout status deploy/playarr-region-a
-   kubectl -n playarr exec deploy/playarr-region-a -- ffprobe -version | head -n 1
-   kubectl -n playarr exec deploy/playarr-region-a -- ffmpeg -version | head -n 1
+   kubectl -n playarr exec deploy/playarr-region-a -c playarr -- ffprobe -version | head -n 1
    ```
 
-   Then confirm the Server capabilities page shows no required item missing and
-   that a previously failing transcode, chapters or track-probing request now
-   succeeds.
+   Then open Admin, System, Server capabilities and confirm no required item is
+   missing.
 
 ### Rollback
 
-The previous image is never removed from the nodes, so rollback is a values
-change: set the affected `image` back to `streamarr-runtime:26853ca` (revert
-the bump commit), merge and sync. Rolling back restores the pre-ffmpeg
-behaviour (media endpoints return 500) but nothing else changes, as the state
-volume and hostPath runtime are untouched by either image. If Argo is not
-available, `kubectl -n playarr rollout undo deploy/playarr-region-a` returns to the
-previous ReplicaSet, but Argo will then show drift until the values are
-reverted.
+Revert the deployment repository pin (or the `values.yaml` image bump) and let Argo sync.
+The state PVC is untouched by either image. If Argo is unavailable,
+`kubectl -n playarr rollout undo deploy/playarr-region-a` returns to the previous
+ReplicaSet, but Argo will show drift until the pin is reverted.
 
 ## Public relay (HTTPS on 8484, DNS-01 through the Worker)
 

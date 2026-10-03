@@ -26,6 +26,10 @@ grep -q 'service: "playarr-nav-perf.playarr:80"' "$rendered"
 grep -q 'service: "tv-web.playarr:80"' "$rendered"
 grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
 grep -q 'host: "tv-web-webos.example.com"' "$rendered"
+# Regional servers pull a self-contained image from the registry: no hostPath runtime.
+test "$(grep -c 'image: "registry.example.com/playarr-regional:' "$rendered")" -eq 2
+! grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never' "$rendered"
+test "$(grep -c '^            - name: PLAYARR_WEB_ASSETS_DIR$' "$rendered")" -eq 2
 # TLS instances: Emissary originates TLS to the pod on the https Service port.
 grep -q 'service: "https://playarr-region-a.playarr:443"' "$rendered"
 grep -q 'service: "https://playarr-region-b.playarr:443"' "$rendered"

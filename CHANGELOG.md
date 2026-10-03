@@ -36,10 +36,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playarr Admin has a System > Server capabilities page showing that report. Missing required
   software appears in a prominent alert with its impact and install hint, and the status filter
   is kept in the URL (`?show=attention|present`).
-- `infra/docker/regional-runtime.Dockerfile` defines the regional `streamarr-runtime` image with
-  ffmpeg and ffprobe, and the `playarr-dev` chart README documents its build, node import,
-  rollout, verification and rollback. The live image tag is unchanged until the image is imported
-  on both regional nodes.
+- The regional servers run a self-contained image, `registry.example.com/playarr-regional:<sha>`
+  (server binary, Admin UI, ffmpeg and ffprobe), built by `.github/workflows/regional-image.yml`
+  and pulled from the cluster registry. The `streamarr-runtime` image, its `runtimePath` hostPath
+  and the manual node import are removed.
 
 - Android direct play fetches large progressive streams over eight concurrent
   HTTP range connections (4 MiB chunks, delivered in order, bounded memory),

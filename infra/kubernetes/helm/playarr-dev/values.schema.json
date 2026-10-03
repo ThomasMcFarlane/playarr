@@ -85,7 +85,7 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["image", "imagePullPolicy", "replicas", "nodeName", "secretName", "podSecurityContext", "persistence", "mediaPath", "runtimePath", "routeHost"],
+        "required": ["image", "imagePullPolicy", "replicas", "nodeName", "secretName", "podSecurityContext", "persistence", "mediaPath", "routeHost"],
         "properties": {
           "image": {"type": "string", "minLength": 1},
           "imagePullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]},
@@ -106,7 +106,6 @@
             }
           },
           "mediaPath": {"type": "string", "minLength": 1},
-          "runtimePath": {"type": "string", "minLength": 1},
           "routeHost": {"type": "string", "minLength": 1},
           "tls": {
             "type": "object",

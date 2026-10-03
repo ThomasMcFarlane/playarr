@@ -112,8 +112,8 @@ workloads:
 # node-local state, runtime trees, security identities and public routes.
 regionalInstances:
   playarr-region-a:
-    image: streamarr-runtime:26853ca
-    imagePullPolicy: Never
+    image: registry.example.com/playarr-regional:1855f642
+    imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-a
     secretName: playarr-region-a-runtime
@@ -131,7 +131,6 @@ regionalInstances:
       storageClassName: playarr-region-a-local
       size: 10Gi
     mediaPath: /srv/media
-    runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr-a.example.com
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
@@ -155,8 +154,8 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-region-b:
-    image: streamarr-runtime:26853ca
-    imagePullPolicy: Never
+    image: registry.example.com/playarr-regional:1855f642
+    imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-b
     secretName: playarr-region-b-runtime
@@ -174,7 +173,6 @@ regionalInstances:
       storageClassName: playarr-region-b-local
       size: 10Gi
     mediaPath: /srv/media
-    runtimePath: /opt/streamarr-release-26853ca
     routeHost: playarr.example.com
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
