@@ -76,3 +76,23 @@ adb -s <tv> install -r app/build/outputs/apk/debug/playarr-android-debug.apk
 
 Visual parity work uses **native** Compose captures (instrumentation /
 emulator screenshots), never WebView freezes of Playarr Web.
+
+## Background and glass treatment
+
+The native shell reproduces Playarr Web's key-art background and frosted
+panels in Compose (`PlayarrGlass.kt`), with no WebView:
+
+| Element | Web | Native |
+| --- | --- | --- |
+| Key art (`.tv-key-art img`) | `grayscale(1) contrast(.82) brightness(.6)`, opacity .72 (dark); `contrast(.88) brightness(1.1)`, opacity .4 (light) | `ColorFilter` matrix + alpha on the hero `AsyncImage` (`heroArtFilter`) |
+| Nav groups (`.app-nav-group`) | `blur(24px) saturate(1.2)`, surface-strong at .56, 22px radius, hairline border, shadow `0 14px 42px` | `Modifier.glass(..., WebGlass.NavGroup)` |
+| Identity pill / round controls | `blur(22px) saturate(1.2)` at .66, `blur(18px)` at .70 | `WebGlass.Identity`, `WebGlass.Control` |
+
+Compose cannot sample what is behind a composable, so each hero screen wraps
+its art and scrim in `HeroBackdropStack`. When that backdrop changes it is
+snapshotted once at 1/8 scale, box-blurred on the CPU and cached; every glass
+surface draws the cached bitmap clipped to its own bounds, then its tint,
+border and shadow. There is no per-frame blur, which keeps television frame
+pacing unchanged, and it works on API 26+. The hero scrim alpha is validated
+against the filtered artwork's worst-case pixel in both themes
+(`PlayarrHeroScrimTest`).
