@@ -12,6 +12,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.
+- Design for the aggregated release calendar, iCal subscription and availability-lag statistic
+  (`docs/architecture/release-calendar.md`, tasks 74-77); sub-rows 74.1-74.5 track the other clients.
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.
