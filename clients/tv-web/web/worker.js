@@ -1,4 +1,5 @@
 import * as QRCode from "qrcode/lib/core/qrcode.js";
+import { handleRelayRequest, runCleanup } from "./relay.js";
 
 const DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
@@ -512,8 +513,15 @@ function downloadKey(pathname) {
 }
 
 export default {
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(runCleanup(env));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/relay/")) {
+      return handleRelayRequest(request, env);
+    }
     if (url.pathname.startsWith("/api/link/")) {
       const packagedLinkEndpoint =
         url.pathname === "/api/link/code" ||

@@ -11,7 +11,7 @@
 
 use std::env::VarError;
 use std::fmt;
-use std::net::{AddrParseError, SocketAddr};
+use std::net::{AddrParseError, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
 /// Which responsibilities this process instance takes on. Set via
@@ -123,14 +123,13 @@ pub struct Config {
     /// configured together; when absent, the listener serves plain HTTP.
     pub tls: Option<TlsConfig>,
     /// Optional automatic HTTPS configuration. Enabled by
-    /// `PLAYARR_ACME_DOMAIN`; mutually exclusive with static TLS paths.
+    /// `PLAYARR_ACME_DOMAIN`; mutually exclusive with static TLS paths, except
+    /// for the `relay-dns-01` challenge (both certificates, chosen by SNI).
     pub acme: Option<AcmeConfig>,
-    /// Optional authoritative DNS listener for deterministic
-    /// `v4-A-B-C-D.relay.playarr.app` names. Disabled when unset.
-    pub relay_dns_bind_addr: Option<SocketAddr>,
-    /// Optional one-record DNS-01 response for issuing a certificate when a
-    /// relay node cannot receive Let's Encrypt HTTP-01 traffic on port 80.
-    pub relay_dns_acme_challenge: Option<RelayDnsAcmeChallenge>,
+    /// Optional relay phone-home (`PLAYARR_RELAY_REGISTER=true`): the server
+    /// tells the Playarr Worker its public IPv4 address so
+    /// `v4-A-B-C-D.relay.playarr.app` resolves to it.
+    pub relay: Option<RelayConfig>,
     /// `PLAYARR_OTLP_ENDPOINT` — optional OTLP collector endpoint; when
     /// unset, `playarr-telemetry::otel` is a no-op layer.
     pub otlp_endpoint: Option<String>,
@@ -143,10 +142,24 @@ pub struct TlsConfig {
     pub key_path: PathBuf,
 }
 
+/// Relay registration with the Playarr Worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RelayDnsAcmeChallenge {
-    pub domain: String,
-    pub validation: String,
+pub struct RelayConfig {
+    /// `PLAYARR_RELAY_URL`, default `https://playarr.app`.
+    pub base_url: String,
+    /// `PLAYARR_PUBLIC_IPV4` override; otherwise the Worker reports the
+    /// address it sees (`CF-Connecting-IP`).
+    pub public_ipv4: Option<Ipv4Addr>,
+}
+
+/// How an ACME certificate is proven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcmeChallenge {
+    /// HTTP-01 on a dedicated listener (default).
+    Http01,
+    /// DNS-01 through the Playarr Worker (`PLAYARR_ACME_CHALLENGE=relay-dns-01`),
+    /// which needs no port 80.
+    RelayDns01,
 }
 
 /// Automatic certificate management using Let's Encrypt's ACME service and
@@ -158,6 +171,7 @@ pub struct AcmeConfig {
     pub contact: Option<String>,
     pub cache_dir: PathBuf,
     pub http01_bind_addr: SocketAddr,
+    pub challenge: AcmeChallenge,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -247,14 +261,18 @@ impl Config {
         let acme_contact = optional(lookup, "PLAYARR_ACME_CONTACT");
         let acme_cache_dir = optional(lookup, "PLAYARR_ACME_CACHE_DIR");
         let acme_http01_bind_addr = optional(lookup, "PLAYARR_ACME_HTTP01_BIND_ADDR");
+        let acme_challenge = optional(lookup, "PLAYARR_ACME_CHALLENGE");
         let acme = match acme_domain {
             Some(domain) => {
-                if tls.is_some() {
+                // Static TLS may only be combined with the relay DNS-01
+                // certificate (checked below): the server then holds both and
+                // picks one by SNI. HTTP-01 ACME stays exclusive with it.
+                if tls.is_some() && acme_challenge.as_deref() != Some("relay-dns-01") {
                     return Err(ConfigError::InvalidValue {
                         var: "PLAYARR_ACME_DOMAIN/PLAYARR_TLS_CERT_PATH/PLAYARR_TLS_KEY_PATH"
                             .to_string(),
                         value: "ACME and static TLS both configured".to_string(),
-                        reason: "automatic ACME HTTPS and static TLS are mutually exclusive"
+                        reason: "automatic ACME HTTPS and static TLS are mutually exclusive unless PLAYARR_ACME_CHALLENGE=relay-dns-01"
                             .to_string(),
                     });
                 }
@@ -280,6 +298,27 @@ impl Config {
                         ));
                     }
                 }
+                let challenge = match acme_challenge.as_deref() {
+                    None | Some("http-01") => AcmeChallenge::Http01,
+                    Some("relay-dns-01") => AcmeChallenge::RelayDns01,
+                    Some(value) => {
+                        return Err(ConfigError::InvalidValue {
+                            var: "PLAYARR_ACME_CHALLENGE".to_string(),
+                            value: value.to_string(),
+                            reason: "expected one of: http-01, relay-dns-01".to_string(),
+                        });
+                    }
+                };
+                if challenge == AcmeChallenge::RelayDns01
+                    && !(domain.starts_with("v4-") && domain.ends_with(".relay.playarr.app"))
+                {
+                    return Err(ConfigError::InvalidValue {
+                        var: "PLAYARR_ACME_DOMAIN".to_string(),
+                        value: domain,
+                        reason: "relay-dns-01 only issues v4-A-B-C-D.relay.playarr.app names"
+                            .to_string(),
+                    });
+                }
                 let http01_bind_addr = acme_http01_bind_addr
                     .as_deref()
                     .unwrap_or("0.0.0.0:80")
@@ -302,6 +341,7 @@ impl Config {
                         .unwrap_or_else(|| "/var/lib/playarr/acme".to_string())
                         .into(),
                     http01_bind_addr,
+                    challenge,
                 })
             }
             None => {
@@ -310,6 +350,7 @@ impl Config {
                     || acme_contact.is_some()
                     || acme_cache_dir.is_some()
                     || acme_http01_bind_addr.is_some()
+                    || acme_challenge.is_some()
                 {
                     return Err(ConfigError::InvalidValue {
                         var: "PLAYARR_ACME_DOMAIN".to_string(),
@@ -321,27 +362,22 @@ impl Config {
                 None
             }
         };
-        let relay_dns_bind_addr = match optional(lookup, "PLAYARR_RELAY_DNS_BIND_ADDR") {
-            Some(raw) => {
-                Some(
-                    raw.parse()
-                        .map_err(|err: AddrParseError| ConfigError::InvalidValue {
-                            var: "PLAYARR_RELAY_DNS_BIND_ADDR".to_string(),
-                            value: raw,
-                            reason: err.to_string(),
-                        })?,
-                )
-            }
-            None => None,
-        };
-        let relay_dns_acme_challenge = optional(lookup, "PLAYARR_RELAY_DNS_ACME_CHALLENGE")
-            .map(|raw| parse_relay_dns_acme_challenge(&raw))
-            .transpose()?;
-        if relay_dns_acme_challenge.is_some() && relay_dns_bind_addr.is_none() {
+        let relay = parse_relay(lookup)?;
+        if matches!(&acme, Some(acme) if acme.challenge == AcmeChallenge::RelayDns01)
+            && relay.is_none()
+        {
             return Err(ConfigError::InvalidValue {
-                var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
-                value: "set".to_string(),
-                reason: "requires PLAYARR_RELAY_DNS_BIND_ADDR".to_string(),
+                var: "PLAYARR_ACME_CHALLENGE".to_string(),
+                value: "relay-dns-01".to_string(),
+                reason: "requires PLAYARR_RELAY_REGISTER=true".to_string(),
+            });
+        }
+        let relay_acme = matches!(&acme, Some(acme) if acme.challenge == AcmeChallenge::RelayDns01);
+        if relay.is_some() && tls.is_some() && !relay_acme {
+            return Err(ConfigError::InvalidValue {
+                var: "PLAYARR_RELAY_REGISTER".to_string(),
+                value: "true".to_string(),
+                reason: "the relay callback needs the ACME or plain HTTP listener; it can only be combined with static TLS paths when PLAYARR_ACME_CHALLENGE=relay-dns-01".to_string(),
             });
         }
         let otlp_endpoint = optional(lookup, "PLAYARR_OTLP_ENDPOINT");
@@ -357,52 +393,67 @@ impl Config {
             http_bind_addr,
             tls,
             acme,
-            relay_dns_bind_addr,
-            relay_dns_acme_challenge,
+            relay,
             otlp_endpoint,
             deployment_tier,
         })
     }
 }
 
-fn parse_relay_dns_acme_challenge(raw: &str) -> Result<RelayDnsAcmeChallenge, ConfigError> {
-    let (domain, validation) = raw
-        .split_once('=')
-        .ok_or_else(|| ConfigError::InvalidValue {
-            var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
-            value: "malformed".to_string(),
-            reason: "expected `_acme-challenge.v4-A-B-C-D.relay.playarr.app=VALIDATION`"
-                .to_string(),
-        })?;
-    let canonical_domain = domain.to_ascii_lowercase();
-    let challenge_target = canonical_domain.strip_prefix("_acme-challenge.");
-    if !challenge_target.is_some_and(|target| {
-        target.starts_with("v4-")
-            && target.ends_with(".relay.playarr.app")
-            && is_valid_dns_name(target)
-    }) {
-        return Err(ConfigError::InvalidValue {
-            var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
-            value: domain.to_string(),
-            reason: "expected an ACME challenge hostname below relay.playarr.app".to_string(),
-        });
+fn parse_relay(lookup: &EnvLookup<'_>) -> Result<Option<RelayConfig>, ConfigError> {
+    let register = optional(lookup, "PLAYARR_RELAY_REGISTER");
+    let url = optional(lookup, "PLAYARR_RELAY_URL");
+    let public_ipv4 = optional(lookup, "PLAYARR_PUBLIC_IPV4");
+    match register.as_deref() {
+        Some("true") => {}
+        Some("false") | None => {
+            if url.is_some() || public_ipv4.is_some() {
+                return Err(ConfigError::InvalidValue {
+                    var: "PLAYARR_RELAY_REGISTER".to_string(),
+                    value: register.unwrap_or_else(|| "unset".to_string()),
+                    reason: "must be `true` when PLAYARR_RELAY_URL or PLAYARR_PUBLIC_IPV4 is set"
+                        .to_string(),
+                });
+            }
+            return Ok(None);
+        }
+        Some(value) => {
+            return Err(ConfigError::InvalidValue {
+                var: "PLAYARR_RELAY_REGISTER".to_string(),
+                value: value.to_string(),
+                reason: "expected `true` or `false`".to_string(),
+            });
+        }
     }
-    if validation.is_empty()
-        || validation.len() > u8::MAX as usize
-        || !validation
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    let base_url = url
+        .unwrap_or_else(|| "https://playarr.app".to_string())
+        .trim_end_matches('/')
+        .to_string();
+    let local_test_url =
+        base_url.starts_with("http://127.0.0.1") || base_url.starts_with("http://localhost");
+    if !(base_url.starts_with("https://") || local_test_url)
+        || base_url[base_url.find("//").unwrap() + 2..].contains('/')
     {
         return Err(ConfigError::InvalidValue {
-            var: "PLAYARR_RELAY_DNS_ACME_CHALLENGE".to_string(),
-            value: domain.to_string(),
-            reason: "validation must be 1-255 unpadded base64url characters".to_string(),
+            var: "PLAYARR_RELAY_URL".to_string(),
+            value: base_url,
+            reason: "expected an https origin without a path".to_string(),
         });
     }
-    Ok(RelayDnsAcmeChallenge {
-        domain: canonical_domain,
-        validation: validation.to_string(),
-    })
+    let public_ipv4 = public_ipv4
+        .map(|raw| {
+            raw.parse::<Ipv4Addr>()
+                .map_err(|err| ConfigError::InvalidValue {
+                    var: "PLAYARR_PUBLIC_IPV4".to_string(),
+                    value: raw,
+                    reason: err.to_string(),
+                })
+        })
+        .transpose()?;
+    Ok(Some(RelayConfig {
+        base_url,
+        public_ipv4,
+    }))
 }
 
 fn validate_acme_domain(domain: &str) -> Result<(), ConfigError> {
@@ -504,8 +555,7 @@ mod tests {
         assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
         assert_eq!(config.tls, None);
         assert_eq!(config.acme, None);
-        assert_eq!(config.relay_dns_bind_addr, None);
-        assert_eq!(config.relay_dns_acme_challenge, None);
+        assert_eq!(config.relay, None);
     }
 
     #[test]
@@ -585,6 +635,7 @@ mod tests {
                 contact: None,
                 cache_dir: "/var/lib/playarr/acme".into(),
                 http01_bind_addr: "0.0.0.0:80".parse().unwrap(),
+                challenge: AcmeChallenge::Http01,
             })
         );
     }
@@ -672,55 +723,158 @@ mod tests {
     }
 
     #[test]
-    fn relay_dns_listener_is_opt_in() {
-        let lookup = lookup_from(HashMap::from([
-            ("DATABASE_URL", "sqlite://playarr.db"),
-            ("PLAYARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
-        ]));
-        let config = Config::from_env_source(&lookup).unwrap();
-        assert_eq!(
-            config.relay_dns_bind_addr,
-            Some("0.0.0.0:53".parse().unwrap())
-        );
+    fn relay_dns01_coexists_with_static_tls_but_http01_and_bare_relay_do_not() {
+        let base = [
+            ("PLAYARR_TLS_CERT_PATH", "/tls/tls.crt"),
+            ("PLAYARR_TLS_KEY_PATH", "/tls/tls.key"),
+        ];
+        let relay = [
+            ("PLAYARR_RELAY_REGISTER", "true"),
+            ("PLAYARR_ACME_DOMAIN", "v4-203-0-113-10.relay.playarr.app"),
+            ("PLAYARR_ACME_ENVIRONMENT", "staging"),
+            ("PLAYARR_ACME_ACCEPT_TERMS", "true"),
+            ("PLAYARR_ACME_CHALLENGE", "relay-dns-01"),
+        ];
+        let both: Vec<_> = base.iter().chain(relay.iter()).copied().collect();
+        let config = relay_env(&both).unwrap();
+        assert!(config.tls.is_some());
+        assert_eq!(config.acme.unwrap().challenge, AcmeChallenge::RelayDns01);
+        assert!(config.relay.is_some());
+
+        // Static TLS plus registration without the relay certificate is still rejected.
+        let bare: Vec<_> = base
+            .iter()
+            .copied()
+            .chain([("PLAYARR_RELAY_REGISTER", "true")])
+            .collect();
+        assert!(relay_env(&bare).is_err());
+
+        // HTTP-01 ACME stays exclusive with static TLS.
+        let http01: Vec<_> = base
+            .iter()
+            .copied()
+            .chain([
+                ("PLAYARR_ACME_DOMAIN", "playarr.example.com"),
+                ("PLAYARR_ACME_ENVIRONMENT", "staging"),
+                ("PLAYARR_ACME_ACCEPT_TERMS", "true"),
+            ])
+            .collect();
+        assert!(relay_env(&http01).is_err());
+    }
+
+    fn relay_env(extra: &[(&'static str, &'static str)]) -> Result<Config, ConfigError> {
+        let mut vars = HashMap::from([("DATABASE_URL", "sqlite://playarr.db")]);
+        vars.extend(extra.iter().copied());
+        Config::from_env_source(&lookup_from(vars))
     }
 
     #[test]
-    fn relay_dns_accepts_one_scoped_acme_dns01_challenge() {
-        let lookup = lookup_from(HashMap::from([
-            ("DATABASE_URL", "sqlite://playarr.db"),
-            ("PLAYARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
-            (
-                "PLAYARR_RELAY_DNS_ACME_CHALLENGE",
-                "_acme-challenge.v4-203-0-113-10.relay.playarr.app=abc_DEF-123",
-            ),
-        ]));
-        let config = Config::from_env_source(&lookup).unwrap();
+    fn relay_registration_is_opt_in_and_defaults_to_playarr_app() {
+        assert_eq!(relay_env(&[]).unwrap().relay, None);
         assert_eq!(
-            config.relay_dns_acme_challenge,
-            Some(RelayDnsAcmeChallenge {
-                domain: "_acme-challenge.v4-203-0-113-10.relay.playarr.app".to_string(),
-                validation: "abc_DEF-123".to_string(),
+            relay_env(&[("PLAYARR_RELAY_REGISTER", "true")])
+                .unwrap()
+                .relay,
+            Some(RelayConfig {
+                base_url: "https://playarr.app".to_string(),
+                public_ipv4: None,
             })
         );
     }
 
     #[test]
-    fn relay_dns_rejects_unscoped_or_malformed_acme_challenges() {
-        for challenge in [
-            "_acme-challenge.example.com=value",
-            "v4-203-0-113-10.relay.playarr.app=value",
-            "_acme-challenge.v4-203-0-113-10.relay.playarr.app=bad=value",
+    fn relay_accepts_an_ipv4_override_and_rejects_bad_settings() {
+        assert_eq!(
+            relay_env(&[
+                ("PLAYARR_RELAY_REGISTER", "true"),
+                ("PLAYARR_PUBLIC_IPV4", "203.0.113.10"),
+                ("PLAYARR_RELAY_URL", "https://playarr.app/"),
+            ])
+            .unwrap()
+            .relay,
+            Some(RelayConfig {
+                base_url: "https://playarr.app".to_string(),
+                public_ipv4: Some("203.0.113.10".parse().unwrap()),
+            })
+        );
+        for (var, extra) in [
+            ("PLAYARR_PUBLIC_IPV4", vec![("PLAYARR_PUBLIC_IPV4", "::1")]),
+            (
+                "PLAYARR_RELAY_URL",
+                vec![("PLAYARR_RELAY_URL", "http://example.com")],
+            ),
+            (
+                "PLAYARR_RELAY_URL",
+                vec![("PLAYARR_RELAY_URL", "https://playarr.app/api")],
+            ),
         ] {
-            let lookup = lookup_from(HashMap::from([
-                ("DATABASE_URL", "sqlite://playarr.db"),
-                ("PLAYARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53"),
-                ("PLAYARR_RELAY_DNS_ACME_CHALLENGE", challenge),
-            ]));
-            let err = Config::from_env_source(&lookup).unwrap_err();
+            let mut vars = vec![("PLAYARR_RELAY_REGISTER", "true")];
+            vars.extend(extra);
+            let err = relay_env(&vars).unwrap_err();
             assert!(
-                matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_RELAY_DNS_ACME_CHALLENGE")
+                matches!(err, ConfigError::InvalidValue { var: found, .. } if found == var),
+                "{var}"
             );
         }
+        for stray in [
+            ("PLAYARR_PUBLIC_IPV4", "203.0.113.10"),
+            ("PLAYARR_RELAY_URL", "https://playarr.app"),
+        ] {
+            let err = relay_env(&[stray]).unwrap_err();
+            assert!(
+                matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_RELAY_REGISTER")
+            );
+        }
+    }
+
+    #[test]
+    fn relay_dns01_needs_registration_and_a_relay_name() {
+        let acme = [
+            ("PLAYARR_ACME_ENVIRONMENT", "production"),
+            ("PLAYARR_ACME_ACCEPT_TERMS", "true"),
+            ("PLAYARR_ACME_CHALLENGE", "relay-dns-01"),
+        ];
+        let mut base = vec![("PLAYARR_ACME_DOMAIN", "v4-203-0-113-10.relay.playarr.app")];
+        base.extend(acme);
+        let err = relay_env(&base).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_ACME_CHALLENGE")
+        );
+
+        base.push(("PLAYARR_RELAY_REGISTER", "true"));
+        let config = relay_env(&base).unwrap();
+        assert_eq!(config.acme.unwrap().challenge, AcmeChallenge::RelayDns01);
+
+        let mut other = vec![
+            ("PLAYARR_ACME_DOMAIN", "playarr.example.com"),
+            ("PLAYARR_RELAY_REGISTER", "true"),
+        ];
+        other.extend(acme);
+        let err = relay_env(&other).unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_ACME_DOMAIN")
+        );
+    }
+
+    #[test]
+    fn unknown_acme_challenges_are_rejected_and_the_former_relay_dns_variables_are_gone() {
+        let err = relay_env(&[
+            ("PLAYARR_ACME_DOMAIN", "playarr.example.com"),
+            ("PLAYARR_ACME_ENVIRONMENT", "production"),
+            ("PLAYARR_ACME_ACCEPT_TERMS", "true"),
+            ("PLAYARR_ACME_CHALLENGE", "tls-alpn-01"),
+        ])
+        .unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { var, .. } if var == "PLAYARR_ACME_CHALLENGE")
+        );
+        // The in-process authoritative DNS server was removed: the variables are ignored.
+        assert_eq!(
+            relay_env(&[("PLAYARR_RELAY_DNS_BIND_ADDR", "0.0.0.0:53")])
+                .unwrap()
+                .relay,
+            None
+        );
     }
 
     #[test]

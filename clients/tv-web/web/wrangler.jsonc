@@ -39,6 +39,12 @@
       "new_sqlite_classes": ["LinkSession"]
     }
   ],
+  "triggers": {
+    "crons": ["17 4 * * *"]
+  },
+  "vars": {
+    "RELAY_ZONE_ID": "REDACTED_CF_ZONE_ID"
+  },
   "routes": [
     {
       "pattern": "playarr.app",

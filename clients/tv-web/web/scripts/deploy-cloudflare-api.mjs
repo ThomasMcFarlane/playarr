@@ -5,6 +5,10 @@ import { extname, join, relative, resolve, sep } from "node:path";
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const scriptName = "playarr-web";
+// Zone that holds the DNS-only relay records. Not a secret.
+const relayZoneId = process.env.PLAYARR_RELAY_ZONE_ID ?? "REDACTED_CF_ZONE_ID";
+// Runs the daily relay DNS cleanup (`scheduled` in worker.js).
+const relayCleanupCron = "17 4 * * *";
 const assetsDirectory = resolve("web/dist");
 const workerBundle = resolve("web/dist-worker.mjs");
 
@@ -131,7 +135,11 @@ const metadata = {
   main_module: "worker.mjs",
   compatibility_date: "2026-07-17",
   compatibility_flags: ["nodejs_compat"],
+  // The relay secrets (RELAY_HMAC_SECRET, RELAY_CF_API_TOKEN) are set once out
+  // of band; a deploy must not drop them.
+  keep_bindings: ["secret_text"],
   bindings: [
+    { name: "RELAY_ZONE_ID", type: "plain_text", text: relayZoneId },
     { name: "ASSETS", type: "assets" },
     {
       name: "CLIENT_DOWNLOADS",
@@ -176,6 +184,12 @@ deployment.append(
 const result = await request(`/accounts/${accountId}/workers/scripts/${scriptName}`, {
   method: "PUT",
   body: deployment,
+});
+
+await request(`/accounts/${accountId}/workers/scripts/${scriptName}/schedules`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify([{ cron: relayCleanupCron }]),
 });
 
 async function verifyPublicLegalPage() {

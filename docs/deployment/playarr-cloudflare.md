@@ -38,8 +38,11 @@ Playarr Server device code; it never receives a password, browser bearer token, 
    deployment creates the `playarr-web` Worker, its `LinkSession` Durable Object namespace, and
    the `playarr.app` custom domain. Cloudflare manages its DNS record and TLS certificate.
 
-Do not put either credential in a tracked file. The deployment needs no
-runtime secrets; the linking broker uses only Durable Object storage and Web Crypto randomness.
+Do not put either credential in a tracked file. The linking broker needs no
+runtime secrets (only Durable Object storage and Web Crypto randomness). The
+relay endpoints stay disabled (`503 relay_not_configured`) until the two relay
+Worker secrets exist; see [Playarr relay](playarr-relay.md). Deployments keep
+those secrets (`keep_bindings: ["secret_text"]`) and set the daily cleanup cron.
 
 ## Automatic production deployment
 
@@ -97,13 +100,14 @@ Local Network Access cannot connect from the HTTPS hosted app to a private
 plain-HTTP server.
 
 For a public IPv4 address, Playarr converts the address to the deterministic
-`https://v4-A-B-C-D.relay.playarr.app:8484` hostname. The parent Cloudflare
-records are DNS-only: Playarr Server's built-in authoritative DNS resolves that name
-straight back to the entered IP, and Playarr Server terminates HTTPS itself. Enable
-the matching `PLAYARR_ACME_DOMAIN` in production mode so Playarr Server acquires
-and renews the browser-trusted certificate; the operator must also explicitly
-accept the certificate authority's terms with
-`PLAYARR_ACME_ACCEPT_TERMS=true`. Playarr never relays requests
+`https://v4-A-B-C-D.relay.playarr.app:8484` hostname. The records below
+`relay.playarr.app` are DNS-only and are published by this Worker after the
+server proves control of the address; see [Playarr relay](playarr-relay.md).
+Playarr Server terminates HTTPS itself. Enable the matching
+`PLAYARR_ACME_DOMAIN` in production mode so Playarr Server acquires and
+renews the browser-trusted certificate (ACME DNS-01 through the Worker needs no
+port 80); the operator must also explicitly accept the certificate authority's
+terms with `PLAYARR_ACME_ACCEPT_TERMS=true`. Playarr never relays requests
 through Cloudflare, and Playarr Server never installs or serves a copy of Playarr.
 
 ## Domain changes

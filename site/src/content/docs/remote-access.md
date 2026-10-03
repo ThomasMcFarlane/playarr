@@ -23,8 +23,7 @@ your security.
 | --- | --- | --- | --- | --- |
 | `8484` | TCP | The API, the HLS and byte-range media endpoints, and, when `PLAYARR_WEB_ASSETS_DIR` points at a built Admin bundle, Playarr Admin at `/` | `PLAYARR_HTTP_BIND_ADDR` (default `0.0.0.0:8484`) | This is the only one that should ever be reachable, and only behind TLS |
 | `9090` | TCP | Prometheus `/metrics`, served unconditionally by every role | `PLAYARR_METRICS_BIND_ADDR` (default `0.0.0.0:9090`) | **No.** Never proxy it to the edge |
-| `80` | TCP | ACME HTTP-01 challenge listener, only when Playarr's own automatic HTTPS is enabled | `PLAYARR_ACME_HTTP01_BIND_ADDR` (default `0.0.0.0:80`) | Only while automatic HTTPS is in use |
-| `53` | UDP + TCP | Optional authoritative relay DNS, served from the same process, off unless explicitly enabled | `PLAYARR_RELAY_DNS_BIND_ADDR` (unset by default) | Only for the relay-hostname flow below |
+| `80` | TCP | ACME HTTP-01 challenge listener, only when Playarr's own automatic HTTPS is enabled with the default `http-01` challenge (not needed with `relay-dns-01`) | `PLAYARR_ACME_HTTP01_BIND_ADDR` (default `0.0.0.0:80`) | Only while HTTP-01 automatic HTTPS is in use |
 
 Every one of those bind variables takes a **full socket address**, not a bare port number.
 `PLAYARR_HTTP_BIND_ADDR=8484` is a startup error.
@@ -110,23 +109,15 @@ journalctl -u playarr.service -f
 ```
 
 The shipped systemd unit grants `CAP_NET_BIND_SERVICE`, which is what allows the unprivileged
-`playarr` user to bind ports 80 and 53. No other privilege is granted.
+`playarr` user to bind port 80 for HTTP-01. No other privilege is granted. A relay node using `relay-dns-01`
+(below) needs neither the capability nor port 80.
 
-> **Playarr's own ACME client only ever performs HTTP-01.** The challenge type is fixed in code
-> (`UseChallenge::Http01`); there is no setting that switches it to DNS-01. If inbound port 80
-> cannot reach the machine, automatic HTTPS will fail after 120 seconds and the process will exit.
-> Use a reverse proxy or a static certificate instead.
->
-> The two relay-DNS variables are a separate, narrower facility, not an alternative challenge type
-> for the block above. `PLAYARR_RELAY_DNS_BIND_ADDR` turns on an authoritative listener for the
-> `relay.playarr.app` zone inside the same process, and `PLAYARR_RELAY_DNS_ACME_CHALLENGE`
-> makes that listener serve one temporary TXT record so *some other* ACME client's DNS-01 validation
-> can be answered. The value must be `_acme-challenge.v4-A-B-C-D.relay.playarr.app=<VALIDATION>` , 
-> the hostname is validated and rejected unless it starts with `v4-` and ends with
-> `.relay.playarr.app`, and it requires `PLAYARR_RELAY_DNS_BIND_ADDR` to be set too. Remove the
-> challenge setting immediately after the certificate is issued. The repository does not document an
-> end-to-end procedure for obtaining and installing a certificate this way, so treat it as a
-> low-level building block rather than a supported route.
+> **HTTP-01 is the default challenge.** If inbound port 80 cannot reach the machine, automatic HTTPS
+> will fail after 120 seconds and the process will exit. For a public IPv4 relay node you can instead
+> set `PLAYARR_ACME_CHALLENGE=relay-dns-01` together with `PLAYARR_RELAY_REGISTER=true`: the
+> certificate is then obtained with ACME DNS-01 through the `playarr.app` Worker, which publishes the
+> temporary TXT record for you, so no port 80 is needed. See "Reaching a public IPv4 address" below
+> and `docs/deployment/playarr-relay.md` in the repository.
 
 ## Running behind a reverse proxy
 
@@ -399,10 +390,16 @@ way around that.
 
 For a **public IPv4 address**, Playarr rewrites what you typed into the deterministic hostname
 `https://v4-A-B-C-D.relay.playarr.app:8484`. The parent DNS records are DNS-only and no traffic is
-relayed through them; Playarr's own authoritative DNS listener resolves that name straight back to
-the address you entered, and Playarr terminates TLS itself. That means setting
-`PLAYARR_ACME_DOMAIN` to the matching `v4-A-B-C-D.relay.playarr.app` hostname with
-`PLAYARR_ACME_ENVIRONMENT=production` and `PLAYARR_ACME_ACCEPT_TERMS=true`.
+relayed through them. Cloudflare only holds DNS: when you opt in with `PLAYARR_RELAY_REGISTER=true`,
+your server tells `playarr.app` its public IPv4 address (override with `PLAYARR_PUBLIC_IPV4`, or let
+`playarr.app` report the address it sees), on start, when the address changes and hourly. Playarr
+calls your server back on `http://<ip>:8484/.well-known/playarr-relay/<token>` to prove you control
+that address, then publishes the matching DNS-only record, which is removed after seven days without a
+heartbeat. Playarr terminates TLS itself. Set `PLAYARR_ACME_DOMAIN` to the matching
+`v4-A-B-C-D.relay.playarr.app` hostname with `PLAYARR_ACME_ENVIRONMENT=production`,
+`PLAYARR_ACME_ACCEPT_TERMS=true` and, if port 80 is not reachable, `PLAYARR_ACME_CHALLENGE=relay-dns-01`.
+Registration sends your public IPv4 address and a key fingerprint to `playarr.app`, which is why it is
+off by default.
 
 Two consequences of that, both easy to miss. The clients build the URL with port `8484` hard-coded,
 so `PLAYARR_HTTP_BIND_ADDR` must keep listening on `8484`, do not move it. And because Playarr

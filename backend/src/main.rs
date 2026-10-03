@@ -27,6 +27,7 @@
 // `async_trait` expansions trip clippy::double_must_use on current stable.
 #![allow(clippy::double_must_use)]
 
+use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, io::Read};
@@ -36,7 +37,9 @@ use playarr_config::{Config, DeploymentTier};
 use playarr_db::DbPool;
 
 mod acme_cache;
-mod relay_dns;
+mod multi_cert;
+mod relay;
+mod relay_acme;
 
 const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibility.toml");
 
@@ -44,6 +47,9 @@ const CLIENT_COMPATIBILITY_TOML: &str = include_str!("../config/client-compatibi
 struct HttpRedirectAcceptor<A> {
     inner: A,
     https_origin: Arc<str>,
+    /// Relay challenge tokens that may be answered over plain HTTP, so the
+    /// Playarr Worker's callback works on the HTTPS port.
+    relay_challenges: Option<Arc<relay::ChallengeStore>>,
 }
 
 impl<A> HttpRedirectAcceptor<A> {
@@ -51,7 +57,13 @@ impl<A> HttpRedirectAcceptor<A> {
         Self {
             inner,
             https_origin: https_origin.into(),
+            relay_challenges: None,
         }
+    }
+
+    fn with_relay_challenges(mut self, challenges: Option<Arc<relay::ChallengeStore>>) -> Self {
+        self.relay_challenges = challenges;
+        self
     }
 }
 
@@ -77,6 +89,7 @@ where
     fn accept(&self, mut stream: tokio::net::TcpStream, service: S) -> Self::Future {
         let inner = self.inner.clone();
         let https_origin = self.https_origin.clone();
+        let relay_challenges = self.relay_challenges.clone();
         Box::pin(async move {
             let mut first_byte = [0_u8; 1];
             let read = stream.peek(&mut first_byte).await?;
@@ -85,6 +98,15 @@ where
 
                 let mut request = vec![0_u8; 8 * 1024];
                 let request_len = stream.read(&mut request).await?;
+                if let Some(response) = relay_challenges.as_deref().and_then(|store| {
+                    relay::plaintext_challenge_response(&request[..request_len], store)
+                }) {
+                    stream.write_all(response.as_bytes()).await?;
+                    stream.shutdown().await?;
+                    return Err(std::io::Error::other(
+                        "answered relay challenge over plaintext HTTP",
+                    ));
+                }
                 let target = plaintext_http_target(&request[..request_len]);
                 let location = format!("{https_origin}{target}");
                 let response = format!(
@@ -347,15 +369,7 @@ async fn serve() -> anyhow::Result<()> {
         }
     };
 
-    if let Some(bind_addr) = config.relay_dns_bind_addr {
-        tracing::info!(addr = %bind_addr, "authoritative relay DNS enabled inside playarr");
-        tokio::try_join!(
-            application_listener,
-            relay_dns::serve(bind_addr, config.relay_dns_acme_challenge.clone())
-        )?;
-    } else {
-        application_listener.await?;
-    }
+    application_listener.await?;
 
     Ok(())
 }
@@ -1334,7 +1348,28 @@ async fn boot_api(
 
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 
-    serve_application_router(config, router, Some(readiness)).await
+    let relay_runtime = match &config.relay {
+        Some(settings) => {
+            let identity = playarr_peer_sync::PeerIdentity::from_seed_b64(
+                node_identity.peer_id,
+                node_identity.private_key.expose_secret(),
+            )
+            .map_err(|err| {
+                anyhow::anyhow!("failed to load peer identity for relay registration: {err}")
+            })?;
+            let challenges = Arc::new(relay::ChallengeStore::default());
+            let client = Arc::new(relay::RelayClient::new(
+                &settings.base_url,
+                settings.public_ipv4,
+                identity,
+                challenges.clone(),
+            )?);
+            Some(relay::RelayRuntime { challenges, client })
+        }
+        None => None,
+    };
+
+    serve_application_router(config, router, Some(readiness), relay_runtime).await
 }
 
 /// Serves an application router over exactly one configured transport:
@@ -1350,8 +1385,39 @@ async fn serve_application_router(
     config: &Config,
     router: axum::Router,
     readiness: Option<playarr_api::ReadinessState>,
+    relay: Option<relay::RelayRuntime>,
 ) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.http_bind_addr).await?;
+    let router = match &relay {
+        Some(runtime) => router.merge(relay::well_known_router(runtime.challenges.clone())),
+        None => router,
+    };
+    if let Some(runtime) = &relay {
+        let client = runtime.client.clone();
+        tokio::spawn(async move {
+            // Give the listener a moment to accept the Worker's callback.
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            relay::run_registration_loop(client).await
+        });
+    }
+    let relay_challenges = relay.as_ref().map(|runtime| runtime.challenges.clone());
+
+    if let Some(acme) = config
+        .acme
+        .as_ref()
+        .filter(|acme| acme.challenge == playarr_config::AcmeChallenge::RelayDns01)
+    {
+        let runtime = relay
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("relay-dns-01 requires relay registration"))?;
+        if let Some(tls) = &config.tls {
+            return serve_relay_dns01_with_static_tls(
+                config, acme, tls, runtime, listener, router, readiness,
+            )
+            .await;
+        }
+        return serve_relay_dns01(config, acme, runtime, listener, router, readiness).await;
+    }
 
     if let Some(acme) = &config.acme {
         use futures::StreamExt;
@@ -1372,7 +1438,8 @@ async fn serve_application_router(
         let acceptor = HttpRedirectAcceptor::new(
             state.axum_acceptor(state.default_rustls_config()),
             redirect_origin.clone(),
-        );
+        )
+        .with_relay_challenges(relay_challenges);
         let challenge_service = state.http01_challenge_tower_service();
         let challenge_router = axum::Router::new()
             .route_service(
@@ -1549,6 +1616,325 @@ async fn watch_static_tls(
     loop {
         ticker.tick().await;
         reload_static_tls_if_changed(&config, &cert_path, &key_path, &mut last).await;
+    }
+}
+
+/// Serves HTTPS with the static (cert-manager) certificate as the active
+/// transport and the relay certificate (ACME DNS-01 through the Worker) added
+/// alongside it: a TLS SNI resolver presents the relay certificate for the
+/// `v4-*` relay name and the static one for everything else. The listener is
+/// HTTPS from the start (the static certificate exists), so there is no plain
+/// HTTP phase; the Worker's callback is answered in cleartext for relay
+/// challenge tokens only, as in the relay-only mode. Both certificates are
+/// reloaded without a restart: the static files are polled and the relay
+/// certificate is renewed in the background.
+async fn serve_relay_dns01_with_static_tls(
+    config: &Config,
+    acme: &playarr_config::AcmeConfig,
+    tls: &playarr_config::TlsConfig,
+    runtime: &relay::RelayRuntime,
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+    readiness: Option<playarr_api::ReadinessState>,
+) -> anyhow::Result<()> {
+    use axum_server::tls_rustls::{RustlsAcceptor, RustlsConfig};
+
+    let resolver = Arc::new(multi_cert::SniCertResolver::new(acme.domain.clone()));
+    let (cert, key) = (
+        tokio::fs::read(&tls.cert_path).await?,
+        tokio::fs::read(&tls.key_path).await?,
+    );
+    resolver.set_default(multi_cert::certified_key_from_pem(&cert, &key)?);
+
+    tokio::spawn(watch_static_tls_into_resolver(
+        resolver.clone(),
+        tls.cert_path.clone(),
+        tls.key_path.clone(),
+        Some((cert, key)),
+        STATIC_TLS_RELOAD_INTERVAL,
+    ));
+
+    let manager = Arc::new(relay_acme::CertificateManager::new(
+        acme.domain.clone(),
+        acme.environment.is_production(),
+        acme.contact.clone(),
+        acme_cache::SecureDirCache::new(acme.cache_dir.clone()),
+        runtime.client.clone(),
+    ));
+    // Issuance and renewal never block the listener: the static certificate
+    // already serves every other name.
+    tokio::spawn(maintain_relay_certificate(manager, resolver.clone()));
+
+    let mut server_config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()?
+    .with_no_client_auth()
+    .with_cert_resolver(resolver);
+    server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    let tls_config = RustlsConfig::from_config(Arc::new(server_config));
+    tracing::info!(
+        addr = %config.http_bind_addr,
+        relay_domain = %acme.domain,
+        "https server listening with static certificate and relay DNS-01 certificate (selected by SNI)"
+    );
+
+    let acceptor = HttpRedirectAcceptor::new(
+        RustlsAcceptor::new(tls_config),
+        https_origin(&acme.domain, config.http_bind_addr.port()),
+    )
+    .with_relay_challenges(Some(runtime.challenges.clone()));
+    if let Some(readiness) = &readiness {
+        readiness.set_ready(true);
+    }
+    axum_server::from_tcp(listener.into_std()?)?
+        .acceptor(acceptor)
+        .serve(router.into_make_service_with_connect_info::<std::net::SocketAddr>())
+        .await
+        .map_err(anyhow::Error::from)
+}
+
+/// Reloads the static certificate pair into the SNI resolver when either file
+/// changes. An unreadable, half-written or invalid pair keeps the previous
+/// certificate and is retried on the next tick.
+async fn reload_static_tls_into_resolver_if_changed(
+    resolver: &multi_cert::SniCertResolver,
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+    last: &mut Option<(Vec<u8>, Vec<u8>)>,
+) -> bool {
+    let (cert, key) = match (
+        tokio::fs::read(cert_path).await,
+        tokio::fs::read(key_path).await,
+    ) {
+        (Ok(cert), Ok(key)) => (cert, key),
+        (Err(err), _) | (_, Err(err)) => {
+            tracing::warn!(error = %err, "cannot read static TLS files; keeping current certificate");
+            return false;
+        }
+    };
+    if last.as_ref().is_some_and(|(c, k)| *c == cert && *k == key) {
+        return false;
+    }
+    match multi_cert::certified_key_from_pem(&cert, &key) {
+        Ok(certified) => {
+            resolver.set_default(certified);
+            tracing::info!("reloaded static TLS certificate");
+            *last = Some((cert, key));
+            true
+        }
+        Err(err) => {
+            tracing::warn!(error = %err, "static TLS files are invalid; keeping current certificate");
+            false
+        }
+    }
+}
+
+async fn watch_static_tls_into_resolver(
+    resolver: Arc<multi_cert::SniCertResolver>,
+    cert_path: std::path::PathBuf,
+    key_path: std::path::PathBuf,
+    mut last: Option<(Vec<u8>, Vec<u8>)>,
+    interval: Duration,
+) {
+    let mut ticker = tokio::time::interval(interval);
+    ticker.tick().await;
+    loop {
+        ticker.tick().await;
+        reload_static_tls_into_resolver_if_changed(&resolver, &cert_path, &key_path, &mut last)
+            .await;
+    }
+}
+
+/// Loads the cached relay certificate or issues one (retrying with backoff),
+/// then renews it for the lifetime of the process, publishing every new
+/// certificate to the SNI resolver.
+async fn maintain_relay_certificate(
+    manager: Arc<relay_acme::CertificateManager>,
+    resolver: Arc<multi_cert::SniCertResolver>,
+) {
+    let publish =
+        |certificate: &relay_acme::IssuedCertificate| match multi_cert::certified_key_from_pem(
+            &certificate.pem,
+            &certificate.pem,
+        ) {
+            Ok(key) => {
+                resolver.set_relay(key);
+                true
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "relay certificate could not be loaded");
+                false
+            }
+        };
+    let now = chrono::Utc::now().timestamp();
+    let mut current = manager
+        .load_cached()
+        .await
+        .filter(|certificate| !certificate.is_expired(now))
+        .filter(|certificate| publish(certificate));
+    if current.is_some() {
+        tracing::info!("using cached relay certificate");
+    }
+    let mut delay = Duration::from_secs(30);
+    loop {
+        let due = current
+            .as_ref()
+            .is_none_or(|certificate| certificate.needs_renewal(chrono::Utc::now().timestamp()));
+        if !due {
+            tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
+            continue;
+        }
+        match manager.issue().await {
+            Ok(certificate) => {
+                if publish(&certificate) {
+                    tracing::info!("deployed relay certificate without restart");
+                    current = Some(certificate);
+                    delay = Duration::from_secs(30);
+                    continue;
+                }
+            }
+            Err(error) => {
+                tracing::error!(error = %error, retry_in_secs = delay.as_secs(), "relay DNS-01 issuance failed");
+            }
+        }
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(Duration::from_secs(10 * 60));
+    }
+}
+
+/// Serves the API with a certificate obtained through ACME DNS-01 and the
+/// Playarr Worker as the DNS provider. Until the first certificate exists the
+/// listener speaks plain HTTP (the Worker's callback needs it); afterwards it
+/// is HTTPS-only, with plaintext requests redirected except for relay
+/// challenge tokens. Renewals reload the certificate without a restart.
+async fn serve_relay_dns01(
+    config: &Config,
+    acme: &playarr_config::AcmeConfig,
+    runtime: &relay::RelayRuntime,
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+    readiness: Option<playarr_api::ReadinessState>,
+) -> anyhow::Result<()> {
+    use axum_server::tls_rustls::{RustlsAcceptor, RustlsConfig};
+
+    let manager = Arc::new(relay_acme::CertificateManager::new(
+        acme.domain.clone(),
+        acme.environment.is_production(),
+        acme.contact.clone(),
+        acme_cache::SecureDirCache::new(acme.cache_dir.clone()),
+        runtime.client.clone(),
+    ));
+    let now = chrono::Utc::now().timestamp();
+    let (certificate, listener) = match manager.load_cached().await.filter(|c| !c.is_expired(now)) {
+        Some(certificate) => {
+            tracing::info!(domain = %acme.domain, "using cached relay certificate");
+            (certificate, listener)
+        }
+        None => {
+            tracing::info!(
+                domain = %acme.domain,
+                "no valid certificate; serving plain HTTP on the relay port until DNS-01 issuance completes"
+            );
+            let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+            let plain = tokio::spawn(
+                axum::serve(
+                    listener,
+                    router
+                        .clone()
+                        .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
+                .with_graceful_shutdown(async move {
+                    let _ = stopped.await;
+                })
+                .into_future(),
+            );
+            let mut delay = Duration::from_secs(30);
+            let certificate = loop {
+                match manager.issue().await {
+                    Ok(certificate) => break certificate,
+                    Err(error) => {
+                        tracing::error!(error = %error, retry_in_secs = delay.as_secs(), "relay DNS-01 issuance failed");
+                        tokio::time::sleep(delay).await;
+                        delay = (delay * 2).min(Duration::from_secs(10 * 60));
+                    }
+                }
+            };
+            let _ = stop.send(());
+            if tokio::time::timeout(Duration::from_secs(10), plain)
+                .await
+                .is_err()
+            {
+                tracing::warn!("plain HTTP listener did not stop within 10 seconds; continuing");
+            }
+            let mut attempts = 0;
+            let listener = loop {
+                match tokio::net::TcpListener::bind(config.http_bind_addr).await {
+                    Ok(listener) => break listener,
+                    Err(error) if attempts < 20 => {
+                        attempts += 1;
+                        tracing::debug!(error = %error, "waiting to rebind the relay port");
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            };
+            (certificate, listener)
+        }
+    };
+
+    let tls = RustlsConfig::from_pem(certificate.pem.clone(), certificate.pem.clone()).await?;
+    tracing::info!(domain = %acme.domain, addr = %config.http_bind_addr, "automatic HTTPS enabled with Let's Encrypt ACME DNS-01 through the Playarr relay");
+
+    let renewal = {
+        let tls = tls.clone();
+        let manager = manager.clone();
+        async move {
+            let mut current = certificate;
+            loop {
+                tokio::time::sleep(Duration::from_secs(6 * 60 * 60)).await;
+                if !current.needs_renewal(chrono::Utc::now().timestamp()) {
+                    continue;
+                }
+                match manager.issue().await {
+                    Ok(renewed) => {
+                        match tls
+                            .reload_from_pem(renewed.pem.clone(), renewed.pem.clone())
+                            .await
+                        {
+                            Ok(()) => {
+                                tracing::info!(
+                                    "deployed renewed relay certificate without restart"
+                                );
+                                current = renewed;
+                            }
+                            Err(error) => {
+                                tracing::error!(error = %error, "renewed certificate could not be loaded")
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(error = %error, "relay certificate renewal failed; will retry")
+                    }
+                }
+            }
+        }
+    };
+
+    let acceptor = HttpRedirectAcceptor::new(
+        RustlsAcceptor::new(tls),
+        https_origin(&acme.domain, config.http_bind_addr.port()),
+    )
+    .with_relay_challenges(Some(runtime.challenges.clone()));
+    if let Some(readiness) = &readiness {
+        readiness.set_ready(true);
+    }
+    let server = axum_server::from_tcp(listener.into_std()?)?
+        .acceptor(acceptor)
+        .serve(router.into_make_service_with_connect_info::<std::net::SocketAddr>());
+    tokio::select! {
+        result = server => result.map_err(anyhow::Error::from),
+        () = renewal => Ok(()),
     }
 }
 
@@ -2685,7 +3071,7 @@ mod bootstrap_tests {
     fn write_self_signed(dir: &std::path::Path, name: &str) -> Vec<u8> {
         let key = rcgen::generate_simple_self_signed(vec![name.to_string()]).unwrap();
         std::fs::write(dir.join("tls.crt"), key.cert.pem()).unwrap();
-        std::fs::write(dir.join("tls.key"), key.key_pair.serialize_pem()).unwrap();
+        std::fs::write(dir.join("tls.key"), key.signing_key.serialize_pem()).unwrap();
         key.cert.der().to_vec()
     }
 
@@ -2719,5 +3105,43 @@ mod bootstrap_tests {
         // A valid pair written afterwards is picked up.
         write_self_signed(dir.path(), "third.example");
         assert!(reload_static_tls_if_changed(&config, &cert, &key, &mut last).await);
+    }
+
+    #[tokio::test]
+    async fn plaintext_relay_challenge_is_answered_but_other_requests_still_redirect() {
+        use axum_server::accept::Accept as _;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let store = Arc::new(relay::ChallengeStore::default());
+        store.publish("tok-1");
+        for (request, expected) in [
+            (
+                "GET /.well-known/playarr-relay/tok-1 HTTP/1.1\r\nHost: 203.0.113.10:8484\r\n\r\n",
+                "HTTP/1.1 200 OK\r\n",
+            ),
+            (
+                "GET /.well-known/playarr-relay/unknown HTTP/1.1\r\nHost: 203.0.113.10:8484\r\n\r\n",
+                "HTTP/1.1 308 Permanent Redirect\r\n",
+            ),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+            let (server, _) = listener.accept().await.unwrap();
+            let acceptor = HttpRedirectAcceptor::new(
+                axum_server::accept::DefaultAcceptor::new(),
+                "https://v4-203-0-113-10.relay.playarr.app:8484".to_string(),
+            )
+            .with_relay_challenges(Some(store.clone()));
+            let task = tokio::spawn(async move { acceptor.accept(server, ()).await.unwrap_err() });
+            client.write_all(request.as_bytes()).await.unwrap();
+            let mut response = String::new();
+            client.read_to_string(&mut response).await.unwrap();
+            task.await.unwrap();
+            assert!(response.starts_with(expected), "{response}");
+            if expected.contains("200") {
+                assert!(response.ends_with("tok-1"));
+            }
+        }
     }
 }

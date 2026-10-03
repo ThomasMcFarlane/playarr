@@ -38,7 +38,7 @@ There is no download, no packaging step and no review gate: a new build is live 
 `playarr.app` is served over HTTPS, so reaching a plain-HTTP server on your LAN needs help from the browser:
 
 - **Local Network Access.** Playarr marks private and loopback addresses as local-network requests, so a browser that implements Local Network Access can prompt you for permission and relax mixed-content blocking. Approve the prompt the first time. A browser without that feature cannot connect to a private plain-HTTP server from the hosted app.
-- **Public IPv4 addresses.** Enter the public address and Playarr rewrites it to the deterministic hostname `https://v4-A-B-C-D.relay.playarr.app:8484`. Those DNS records are DNS-only, Playarr's own authoritative DNS resolves the name straight back to the address you typed, and **Playarr terminates TLS itself**. Set `PLAYARR_ACME_DOMAIN` on the server and accept the certificate authority's terms with `PLAYARR_ACME_ACCEPT_TERMS=true` so it can obtain and renew that certificate.
+- **Public IPv4 addresses.** Enter the public address and Playarr rewrites it to the deterministic hostname `https://v4-A-B-C-D.relay.playarr.app:8484`. Those DNS records are DNS-only and published by `playarr.app` for servers that opt in with `PLAYARR_RELAY_REGISTER=true`, and **Playarr terminates TLS itself**. Set `PLAYARR_ACME_DOMAIN` on the server and accept the certificate authority's terms with `PLAYARR_ACME_ACCEPT_TERMS=true` so it can obtain and renew that certificate.
 
 > Playarr never relays API or playback traffic through Cloudflare. Whatever URL you enter, the browser talks to your server directly.
 

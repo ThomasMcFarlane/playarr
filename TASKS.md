@@ -50,6 +50,7 @@ Documentation only: implementation is pending and unassigned.
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
 | 90 | Restore public relay (HTTPS on 8484, ACME DNS-01 through the Worker) for region-a and region-b in the playarr-dev chart | review PR open | task/restore-public-relay | Optional `acme` block extending the existing `hostExposure` (one mechanism, only 8484 published; no port 80, no DNS port) and coexisting with the static `tls` certificate, relay-registration and DNS-01 env; ships disabled until the cut-over; chart 0.4.0. Stacked on the server-capabilities PR (PR 35). Evidence: `tests/render.sh` and `helm lint --strict` pass. Not deployed: rollout needs owner approval per the README runbook, then a `targetRevision` bump in the deployment repository. |
+| 91 | Relay phone-home: Worker publishes DNS-only `v4-A-B-C-D.relay.playarr.app` records and DNS-01; remove in-process relay DNS | review PR open | task/relay-phone-home | Stacked on PR 36. Worker `/api/relay/*` and daily cron (inert until secrets exist), server registration client, well-known endpoint and `relay-dns-01` ACME. Evidence: Worker and backend tests pass. Not deployed: cut-over steps in `docs/deployment/playarr-relay.md` need owner approval. |
 
 ## Active — infrastructure reliability (2026-09-24)
 

@@ -17,6 +17,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or a 10-second up-next countdown with Play now and Cancel when a next item
   is queued. Music chains silently and only shows the card when its queue ends.
   The legacy VIDAA fallback player shows Replay and Back to details.
+- Public relay phone-home. With `PLAYARR_RELAY_REGISTER=true` Playarr Server tells the `playarr.app`
+  Worker its public IPv4 address (`PLAYARR_PUBLIC_IPV4` or the address the Worker sees) on start, on
+  change and hourly, signed with its existing Ed25519 node identity. The Worker issues a stateless
+  two-minute HMAC challenge, calls the server back on `/.well-known/playarr-relay/{token}` (port
+  8484) and publishes the DNS-only `v4-A-B-C-D.relay.playarr.app` record; a daily cron removes
+  stale records. `PLAYARR_ACME_CHALLENGE=relay-dns-01` obtains the certificate with ACME DNS-01
+  through the same Worker, so no port 80 is needed. Cloudflare only holds DNS and no streaming or
+  API traffic passes through it. With `relay-dns-01` the server can also keep a static
+  `PLAYARR_TLS_*` certificate (for example cert-manager's) as the active transport and serves
+  the relay certificate alongside it, selected by TLS SNI. The relay stays disabled until the Worker secrets exist. See
+  `docs/deployment/playarr-relay.md` for the trust model and cut-over plan.
 - Administrators can query `GET /api/v1/admin/system/capabilities` for the optional software and
   hardware available on the serving node: ffmpeg and ffprobe (path and version), key encoders
   (`libx264`, `aac`, `libx265`, `hevc_vaapi`, `hevc_nvenc`, `libsvtav1`, `libopus`), ffmpeg
@@ -51,12 +62,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   headroom without risking out-of-memory on TV devices. Playback starts after
   10 s buffered and resumes after 15 s following a stall (was 2.5 s and 5 s), so
   a remux on a link only slightly faster than its bitrate rides out peaks.
-
-### Changed
-
 - The regional servers `playarr-region-a` and `playarr-region-b` serve HTTPS on their public 8484 addresses
   using cert-manager certificates (optional per-instance `tls` in the `playarr-dev` chart). The
   server now hot-reloads a renewed static TLS certificate within a minute, without a restart.
+
+### Removed
+
+- The in-process authoritative relay DNS server and `PLAYARR_RELAY_DNS_BIND_ADDR` /
+  `PLAYARR_RELAY_DNS_ACME_CHALLENGE`. The Worker now publishes the relay records and answers
+  DNS-01, so Playarr Server no longer needs a public DNS port.
 
 ### Fixed
 

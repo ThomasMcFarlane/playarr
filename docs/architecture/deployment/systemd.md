@@ -87,9 +87,10 @@ PLAYARR_METRICS_BIND_ADDR=0.0.0.0:9090
 # PLAYARR_ACME_CONTACT=admin@example.com
 # PLAYARR_ACME_CACHE_DIR=/var/lib/playarr/acme
 # PLAYARR_ACME_HTTP01_BIND_ADDR=0.0.0.0:80
-# Optional authoritative DNS in this same Playarr Server process:
-# PLAYARR_RELAY_DNS_BIND_ADDR=0.0.0.0:53
-# PLAYARR_RELAY_DNS_ACME_CHALLENGE=_acme-challenge.v4-203-0-113-10.relay.playarr.app=VALIDATION
+# Optional relay phone-home and DNS-01 through the playarr.app Worker:
+# PLAYARR_RELAY_REGISTER=true
+# PLAYARR_PUBLIC_IPV4=203.0.113.10
+# PLAYARR_ACME_CHALLENGE=relay-dns-01
 PLAYARR_WEB_ASSETS_DIR=/var/lib/playarr/web
 ```
 
@@ -144,15 +145,16 @@ email address or a `mailto:` URI. Automatic ACME and the static
 `PLAYARR_ACME_ACCEPT_TERMS=true` explicitly accepts Let's Encrypt's current
 subscriber agreement; automatic HTTPS will not start without that setting.
 
-Setting `PLAYARR_RELAY_DNS_BIND_ADDR` also serves the authoritative
-`relay.playarr.app` DNS zone from this same Playarr Server process over UDP and
-TCP. For a node whose provider filters HTTP-01 port 80, temporarily set
-`PLAYARR_RELAY_DNS_ACME_CHALLENGE` on the authoritative DNS instance to the
-exact `_acme-challenge` hostname and unpadded base64url validation joined by
-`=`. It serves only that TXT record; remove the setting immediately after
-certificate issuance. The systemd unit grants only the low-port bind capability needed for
-ports 53 and 80; DNS and automatic ACME remain disabled unless their variables
-are set.
+Setting `PLAYARR_RELAY_REGISTER=true` makes the server tell `playarr.app` its
+public IPv4 address (override with `PLAYARR_PUBLIC_IPV4`) on start, on change
+and hourly, so the Worker can publish the DNS-only
+`v4-A-B-C-D.relay.playarr.app` record after calling the server back on
+`http://<ip>:8484/.well-known/playarr-relay/<token>`. With
+`PLAYARR_ACME_CHALLENGE=relay-dns-01` the certificate is obtained with ACME
+DNS-01 through the same Worker, so a node whose provider filters port 80 needs
+neither port 80 nor a DNS server. There is no in-process DNS server any more.
+The systemd unit's low-port bind capability is only needed for HTTP-01 on
+port 80. See `docs/deployment/playarr-relay.md`.
 
 ## Operating
 

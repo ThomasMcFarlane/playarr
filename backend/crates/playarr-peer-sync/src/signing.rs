@@ -65,6 +65,13 @@ impl PeerIdentity {
             .encode(self.signing_key.verifying_key().to_bytes())
     }
 
+    /// Signs an arbitrary message and returns the base64 Ed25519 signature.
+    /// Used by the `playarr.app` relay registration, whose canonical string
+    /// differs from the peer-to-peer one (it has no nonce or peer id header).
+    pub fn sign_message(&self, message: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(self.signing_key.sign(message).to_bytes())
+    }
+
     /// Signs `method|path|sha256(body)|timestamp|nonce` and returns the
     /// four header values a caller attaches to the outbound request:
     /// `(signature_b64, timestamp, nonce)`. `timestamp`/`nonce` are
