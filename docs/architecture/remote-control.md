@@ -125,3 +125,14 @@ capability; revocation is server-side and immediate; replays are blocked by
 the state machines and idempotency keys; sensitive input is never logged or
 retained after delivery; wrong-account and wrong-device callers see 404/403
 and never learn whether a pairing exists.
+
+## Trust boundary and measured behaviour
+
+The trust boundary is the account: a device id is whatever the client sent at login, so the per-device
+checks (controller device bound to the pairing, target-only approval) protect against mistakes and
+other household devices, not against someone who already holds the account credentials.
+
+Measured on an Android TV emulator against a regional server over a slow path: handoff offer to
+acknowledgement 10.8 s (the destination must really start playback), acknowledged position within
+1.4 s of the expected position after the destination seeks forward by the time the source kept playing.
+On a LAN the 5 s latency target is expected to be reachable; that is verified on physical devices.

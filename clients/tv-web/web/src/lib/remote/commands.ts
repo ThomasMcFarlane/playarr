@@ -74,6 +74,8 @@ export interface RemotePlayerControls {
   snapshot(): { positionMs: number; durationMs: number; paused: boolean };
   /** True once media is loaded and controllable (used to acknowledge a handoff). */
   isReady(): boolean;
+  /** True once playback has actually begun (or is ready and deliberately paused), not merely loaded. */
+  hasStarted(): boolean;
   title?: string;
   play(): void;
   pause(): void;

@@ -93,6 +93,8 @@ interface RemotePlayerControls {
     fun isPaused(): Boolean
     /** True once media is loaded and controllable. */
     fun isReady(): Boolean
+    /** True once playback has actually begun (or is ready and deliberately paused), not merely prepared. */
+    fun hasStarted(): Boolean
     fun play()
     fun pause()
     fun seekToMs(positionMs: Long)

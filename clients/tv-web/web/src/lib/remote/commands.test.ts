@@ -13,6 +13,7 @@ function fakePlayer(overrides: Partial<RemotePlayerControls> = {}) {
     mediaFileId: "m1",
     snapshot: () => ({ positionMs: 60_000, durationMs: 120_000, paused: false }),
     isReady: () => true,
+    hasStarted: () => true,
     play: () => calls.push("play"),
     pause: () => calls.push("pause"),
     seekToMs: (ms) => calls.push(`seek:${ms}`),

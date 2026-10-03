@@ -426,6 +426,7 @@ function PlayerPageInner({
       isReady: () =>
         engine().durationSeconds > 0 &&
         ["ready", "playing", "paused", "buffering"].includes(engine().state),
+      hasStarted: () => ["playing", "paused"].includes(engine().state) && engine().durationSeconds > 0,
       play: () => playerRef.current.play(),
       pause: () => playerRef.current.pause(),
       seekToMs: (ms) => playerRef.current.seek(ms / 1000),

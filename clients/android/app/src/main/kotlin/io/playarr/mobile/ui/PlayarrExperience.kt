@@ -992,6 +992,12 @@ internal fun PlayarrExperience(
             queue = { viewModel.playbackQueue.value },
             playerViewModel = playerViewModel,
             experience = viewModel,
+            onStopped = {
+                // Leave the (now empty) player screen so a remote stop does not strand the TV on a dark frame.
+                if (navController.currentBackStackEntry?.destination?.route?.startsWith("experience-player") == true) {
+                    navController.popBackStack()
+                }
+            },
         )
     }
     PlayarrRemoteHostEffect(

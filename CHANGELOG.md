@@ -18,6 +18,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Regional servers now run image `<image>`, adding batched external-reference loading for catalogue browse (task 100).
 - Regional servers now run image `<image>`, which carries the catalogue latency fix, sidecar subtitles and the Radarr release-date mapping (tasks 95, 98, 100).
 
+### Fixed
+
+- Phone remote on Android: the TV approval dialog now takes focus so a TV remote can press Allow, remote
+  D-pad commands are delivered as D-pad key events (they were ignored), a remote stop leaves the player
+  screen, and a handoff destination acknowledges only once playback has really started and catches up to
+  where the source is now (web does the same).
+
 ### Added
 
 - Availability lag (task 77): grab and import events from the Sonarr, Radarr, Lidarr and Readarr
@@ -26,6 +33,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (plus grab lag, sample list and counts). Upgrades and repeat imports never count, imports more than
   30 days after release are reported as backfills and excluded, and items with no release time are
   counted as unknown. Episode calendar entries carry `average_lag_seconds`.
+- `scripts/remote-control-smoke.sh`: black-box check of the phone remote and handoff API against a live server.
 - Regional region-b now runs image `<image>` as well (phone remote and playback handoff API; discovery and
   watchlist API), after region-a was verified.
 - Regional region-a now runs image `<image>`, which adds the phone remote and playback handoff API

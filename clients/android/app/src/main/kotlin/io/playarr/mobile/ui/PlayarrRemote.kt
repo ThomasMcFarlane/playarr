@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -366,6 +367,13 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
     val request: RemotePairingRequest = pending.firstOrNull() ?: return
     val scope = rememberCoroutineScope()
     var busy by remember(request.pairingId) { mutableStateOf(false) }
+    // A TV remote needs a focused control inside the dialog or its key presses
+    // fall through to the screen behind it.
+    val allowFocus = remember(request.pairingId) { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(request.pairingId) {
+        delay(150L)
+        runCatching { allowFocus.requestFocus() }
+    }
     AlertDialog(
         onDismissRequest = {},
         title = {
@@ -383,10 +391,14 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
             }
         },
         confirmButton = {
-            Button(enabled = !busy, onClick = {
-                busy = true
-                scope.launch { runCatching { controller.approve(request) }; busy = false }
-            }) { Text(playarrString(PlayarrString.RemotePromptAllow)) }
+            Button(
+                enabled = !busy,
+                modifier = Modifier.focusRequester(allowFocus),
+                onClick = {
+                    busy = true
+                    scope.launch { runCatching { controller.approve(request) }; busy = false }
+                },
+            ) { Text(playarrString(PlayarrString.RemotePromptAllow)) }
         },
         dismissButton = {
             OutlinedButton(enabled = !busy, onClick = {
@@ -532,6 +544,7 @@ internal class ExperienceRemotePlayerControls(
     private val queue: () -> PlayarrPlaybackQueue,
     private val playerViewModel: ExperiencePlayerViewModel,
     private val experience: PlayarrExperienceViewModel,
+    private val onStopped: () -> Unit = {},
 ) : RemotePlayerControls {
     private val player get() = playerViewModel.player
 
@@ -544,6 +557,11 @@ internal class ExperienceRemotePlayerControls(
         return durationMs() > 0L && state.error == null && !state.hasEnded
     }
 
+    override fun hasStarted(): Boolean {
+        val state = player.state.value
+        return isReady() && !state.isBuffering && (state.isPlaying || !state.playWhenReady)
+    }
+
     override fun play() = player.play()
     override fun pause() = player.pause()
     override fun seekToMs(positionMs: Long) = playerViewModel.seekToSourcePosition(positionMs)
@@ -554,6 +572,7 @@ internal class ExperienceRemotePlayerControls(
     override fun stop() {
         playerViewModel.stopPlayback()
         experience.clearPlayback()
+        onStopped()
     }
 
     override fun next(): Boolean {

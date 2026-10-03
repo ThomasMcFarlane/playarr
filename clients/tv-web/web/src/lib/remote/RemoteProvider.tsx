@@ -31,7 +31,8 @@ import {
 import { RemotePairingPrompt } from "../../components/remote/RemotePairingPrompt";
 
 const HOST_STORAGE_KEY = "playarr.remote.hostEnabled.v1";
-const HANDOFF_START_TIMEOUT_MS = 25_000;
+const HANDOFF_START_TIMEOUT_MS = 40_000;
+const CATCH_UP_THRESHOLD_MS = 1_500;
 
 function readHostEnabled(): boolean {
   try {
@@ -158,10 +159,23 @@ export function RemoteProvider({
     if (!active) return;
     const waitForPlayer = (offer: HandoffOffer): Promise<HandoffResult> =>
       new Promise((resolve) => {
-        const deadline = Date.now() + HANDOFF_START_TIMEOUT_MS;
+        const received = Date.now();
+        const deadline = received + HANDOFF_START_TIMEOUT_MS;
+        let compensated = offer.paused;
         const check = () => {
           const player = getRemotePlayer();
-          if (player && player.mediaFileId === offer.mediaFileId && player.isReady()) {
+          if (player && player.mediaFileId === offer.mediaFileId && player.hasStarted()) {
+            if (!compensated) {
+              // The source kept playing while this device prepared; catch up once so the
+              // acknowledged position is where the source would be now.
+              const behindMs = Date.now() - received;
+              compensated = true;
+              if (behindMs > CATCH_UP_THRESHOLD_MS) {
+                player.seekToMs(offer.positionMs + behindMs);
+                window.setTimeout(check, 500);
+                return;
+              }
+            }
             if (offer.paused) player.pause();
             else player.play();
             // Give the engine a beat so the acknowledged position is the started one.

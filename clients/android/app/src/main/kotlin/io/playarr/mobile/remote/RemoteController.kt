@@ -3,6 +3,8 @@ package io.playarr.mobile.remote
 import android.app.Activity
 import android.content.Context
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.playarr.mobile.isTelevision
@@ -146,24 +148,36 @@ class RemoteController @Inject constructor(
         }
 
         override suspend fun onHandoffOffer(offer: RemoteHandoffOffer): RemoteHandoffResult {
+            val received = SystemClock.elapsedRealtime()
             withContext(Dispatchers.Main) {
                 bridge?.startPlayback(offer.mediaFileId, offer.positionMs)
             }
-            val deadline = SystemClock.elapsedRealtime() + HANDOFF_START_TIMEOUT_MS
+            val deadline = received + HANDOFF_START_TIMEOUT_MS
+            var compensated = offer.paused
             while (SystemClock.elapsedRealtime() < deadline) {
-                val result = withContext(Dispatchers.Main) {
+                val started = withContext(Dispatchers.Main) {
                     val player = bridge?.playerControls()
-                    if (player != null && player.mediaFileId == offer.mediaFileId && player.isReady()) {
+                    if (player != null && player.mediaFileId == offer.mediaFileId && player.hasStarted()) {
+                        if (!compensated) {
+                            // The source kept playing while this device prepared; catch up once so the
+                            // acknowledged position is where the source would be now.
+                            val behindMs = SystemClock.elapsedRealtime() - received
+                            compensated = true
+                            if (behindMs > CATCH_UP_THRESHOLD_MS) {
+                                player.seekToMs(offer.positionMs + behindMs)
+                                return@withContext null
+                            }
+                        }
                         if (offer.paused) player.pause() else player.play()
                         player
                     } else {
                         null
                     }
                 }
-                if (result != null) {
+                if (started != null) {
                     // Give the engine a beat so the acknowledged position is the started one.
                     delay(300L)
-                    return RemoteHandoffResult.Playing(withContext(Dispatchers.Main) { result.positionMs() })
+                    return RemoteHandoffResult.Playing(withContext(Dispatchers.Main) { started.positionMs() })
                 }
                 delay(250L)
             }
@@ -205,14 +219,31 @@ class RemoteController @Inject constructor(
             RemoteKey.Back -> KeyEvent.KEYCODE_BACK
             RemoteKey.Home -> return RemoteOutcome.Ok
         }
-        val now = SystemClock.uptimeMillis()
-        activity.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
-        activity.dispatchKeyEvent(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, code, 0))
+        // Deliver through the decor view exactly as the input pipeline does, and
+        // mark the events as coming from a D-pad: Compose focus traversal ignores
+        // events with no source.
+        val decor = activity.window?.decorView ?: return RemoteOutcome.Failed("app is not ready")
+        val downTime = SystemClock.uptimeMillis()
+        fun key(action: Int) = KeyEvent(
+            downTime,
+            SystemClock.uptimeMillis(),
+            action,
+            code,
+            0,
+            0,
+            KeyCharacterMap.VIRTUAL_KEYBOARD,
+            0,
+            KeyEvent.FLAG_FROM_SYSTEM,
+            InputDevice.SOURCE_KEYBOARD or InputDevice.SOURCE_DPAD,
+        )
+        decor.dispatchKeyEvent(key(KeyEvent.ACTION_DOWN))
+        decor.dispatchKeyEvent(key(KeyEvent.ACTION_UP))
         return RemoteOutcome.Ok
     }
 
     private companion object {
         const val KEY_HOST_ENABLED = "host_enabled"
-        const val HANDOFF_START_TIMEOUT_MS = 25_000L
+        const val HANDOFF_START_TIMEOUT_MS = 40_000L
+        const val CATCH_UP_THRESHOLD_MS = 1_500L
     }
 }

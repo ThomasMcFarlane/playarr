@@ -23,6 +23,7 @@ class RemoteProtocolTest {
         override fun durationMs() = duration
         override fun isPaused() = paused
         override fun isReady() = true
+        override fun hasStarted() = true
         override fun play() { calls += "play" }
         override fun pause() { calls += "pause" }
         override fun seekToMs(positionMs: Long) { calls += "seek:$positionMs" }
