@@ -4572,6 +4572,497 @@ paths:
           description: No such playlist/item, or playlist not visible to the caller
       security:
       - bearer_auth: []
+  /api/v1/remote/commands/{id}:
+    get:
+      tags:
+      - remote
+      operationId: command_status_handler
+      parameters:
+      - name: id
+        in: path
+        description: Command id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Delivery outcome (never the payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandStatusResponse'
+        '404':
+          description: Unknown command, or not sent by this controller device
+      security:
+      - bearer_auth: []
+  /api/v1/remote/events/{id}/ack:
+    post:
+      tags:
+      - remote
+      operationId: ack_event_handler
+      parameters:
+      - name: id
+        in: path
+        description: Event id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AckEventRequest'
+        required: true
+      responses:
+        '204':
+          description: Acknowledged
+        '400':
+          description: Invalid status
+        '404':
+          description: Unknown event, or not addressed to this device
+        '409':
+          description: Already acknowledged or expired
+      security:
+      - bearer_auth: []
+  /api/v1/remote/handoffs:
+    post:
+      tags:
+      - remote
+      operationId: create_handoff_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHandoffRequest'
+        required: true
+      responses:
+        '200':
+          description: Idempotent replay of an existing handoff
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffResponse'
+        '201':
+          description: Handoff offered to the destination; the source keeps playing until the destination acknowledges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffResponse'
+        '400':
+          description: Invalid request
+        '403':
+          description: No library access, wrong account, or no active handoff pairing
+        '404':
+          description: Unknown device or media file
+        '409':
+          description: Destination offline/unsupported, stale source state, or key reused with different parameters
+      security:
+      - bearer_auth: []
+  /api/v1/remote/handoffs/{id}:
+    get:
+      tags:
+      - remote
+      operationId: get_handoff_handler
+      parameters:
+      - name: id
+        in: path
+        description: Handoff id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Current handoff state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffResponse'
+        '404':
+          description: Unknown handoff, or it belongs to another account
+      security:
+      - bearer_auth: []
+  /api/v1/remote/handoffs/{id}/ack:
+    post:
+      tags:
+      - remote
+      operationId: ack_handoff_handler
+      parameters:
+      - name: id
+        in: path
+        description: Handoff id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AckHandoffRequest'
+        required: true
+      responses:
+        '200':
+          description: Outcome recorded. Replays return the recorded outcome without a second stop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffResponse'
+        '400':
+          description: Invalid status
+        '403':
+          description: Only the destination device can acknowledge
+        '404':
+          description: Unknown handoff, or it belongs to another account
+        '410':
+          description: Handoff expired; the source keeps playing
+      security:
+      - bearer_auth: []
+  /api/v1/remote/handoffs/{id}/cancel:
+    post:
+      tags:
+      - remote
+      operationId: cancel_handoff_handler
+      parameters:
+      - name: id
+        in: path
+        description: Handoff id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cancelled (or the recorded outcome if already closed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffResponse'
+        '403':
+          description: Only the initiating device can cancel
+        '404':
+          description: Unknown handoff, or it belongs to another account
+      security:
+      - bearer_auth: []
+  /api/v1/remote/inbox:
+    get:
+      tags:
+      - remote
+      operationId: inbox_handler
+      parameters:
+      - name: after
+        in: query
+        description: Last seq already processed
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - name: wait
+        in: query
+        description: Seconds to wait for an event (max 25)
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Events for this target device (long poll)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: This device is not registered as a target
+      security:
+      - bearer_auth: []
+  /api/v1/remote/pairings:
+    get:
+      tags:
+      - remote
+      operationId: list_pairings_handler
+      responses:
+        '200':
+          description: Recent pairings of this account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PairingResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - remote
+      operationId: create_pairing_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePairingRequest'
+        required: true
+      responses:
+        '201':
+          description: A pending pairing; the target must approve it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingResponse'
+        '400':
+          description: Invalid scopes or pairing with itself
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+        '404':
+          description: Unknown target on this account
+        '409':
+          description: Target offline, or already paired
+        '429':
+          description: Too many pending pairing requests for this target
+      security:
+      - bearer_auth: []
+  /api/v1/remote/pairings/{id}:
+    get:
+      tags:
+      - remote
+      operationId: get_pairing_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The pairing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown pairing, or it belongs to another account
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - remote
+      operationId: revoke_pairing_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Pairing revoked (idempotent)
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown pairing, or it belongs to another account
+      security:
+      - bearer_auth: []
+  /api/v1/remote/pairings/{id}/approve:
+    post:
+      tags:
+      - remote
+      operationId: approve_pairing_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovePairingRequest'
+        required: true
+      responses:
+        '200':
+          description: Pairing is now active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingResponse'
+        '400':
+          description: Scopes are not a subset of those requested
+        '403':
+          description: Only the target device itself can approve
+        '404':
+          description: Unknown pairing, or it belongs to another account
+        '409':
+          description: Pairing is no longer pending
+        '410':
+          description: Pairing request expired
+      security:
+      - bearer_auth: []
+  /api/v1/remote/pairings/{id}/commands:
+    post:
+      tags:
+      - remote
+      operationId: send_command_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+        required: true
+      responses:
+        '202':
+          description: Command queued for the target
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandAccepted'
+        '400':
+          description: Invalid command
+        '403':
+          description: Pairing not active, scope not granted, or not this pairing's controller device
+        '404':
+          description: Unknown pairing, or it belongs to another account
+        '409':
+          description: Target is offline
+        '410':
+          description: Pairing expired
+      security:
+      - bearer_auth: []
+  /api/v1/remote/pairings/{id}/deny:
+    post:
+      tags:
+      - remote
+      operationId: deny_pairing_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Pairing denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingResponse'
+        '403':
+          description: Only the target device itself can deny
+        '404':
+          description: Unknown pairing, or it belongs to another account
+        '409':
+          description: Pairing is no longer pending
+      security:
+      - bearer_auth: []
+  /api/v1/remote/target:
+    put:
+      tags:
+      - remote
+      operationId: register_target_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTargetRequest'
+        required: true
+      responses:
+        '200':
+          description: This device is registered as a remotely controllable target
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoteTargetResponse'
+        '400':
+          description: Unknown capability or empty name
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - remote
+      operationId: unregister_target_handler
+      responses:
+        '204':
+          description: This device is no longer a remote target
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+      security:
+      - bearer_auth: []
+  /api/v1/remote/target/state:
+    put:
+      tags:
+      - remote
+      operationId: report_state_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportStateRequest'
+        required: true
+      responses:
+        '204':
+          description: State recorded
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+        '404':
+          description: This device is not registered as a target
+      security:
+      - bearer_auth: []
+  /api/v1/remote/targets:
+    get:
+      tags:
+      - remote
+      operationId: list_targets_handler
+      responses:
+        '200':
+          description: Remote targets registered by this account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RemoteTargetResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr streaming access
+      security:
+      - bearer_auth: []
   /api/v1/users/me/capabilities:
     get:
       tags:
@@ -5190,6 +5681,38 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PeerUserRow'
+    AckEventRequest:
+      type: object
+      required:
+      - status
+      properties:
+        detail:
+          type:
+          - string
+          - 'null'
+          description: Short non-sensitive reason (never user input).
+        status:
+          type: string
+          description: '`ok`, `failed` or `unsupported`.'
+    AckHandoffRequest:
+      type: object
+      required:
+      - status
+      properties:
+        position_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Position the destination actually started at (required for `playing`).
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          description: '`playing` or `failed`.'
     ActionKind:
       type: string
       enum:
@@ -5383,6 +5906,16 @@ components:
       - ep
       - single
       - soundtrack
+    ApprovePairingRequest:
+      type: object
+      properties:
+        scopes:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: Narrow the granted scopes to a subset of those requested.
     Availability:
       type: string
       description: |-
@@ -5657,6 +6190,47 @@ components:
           $ref: '#/components/schemas/MeasuredPlayback'
         reported:
           $ref: '#/components/schemas/ReportedCapabilities'
+    CommandAccepted:
+      type: object
+      required:
+      - command_id
+      - seq
+      properties:
+        command_id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          format: int64
+    CommandRequest:
+      type: object
+      required:
+      - kind
+      - payload
+      properties:
+        kind:
+          type: string
+          description: '`navigate`, `text`, `playback` or `input`.'
+        payload:
+          description: |-
+            navigate: `{key}`; text: `{value, mode?: insert|replace|backspace, submit?}`;
+            playback: `{action, position_ms?, delta_ms?, language?, level?}`; input: `{input_id}`.
+    CommandStatusResponse:
+      type: object
+      required:
+      - command_id
+      - status
+      properties:
+        command_id:
+          type: string
+          format: uuid
+        detail:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          description: '`queued`, `delivered`, `ok`, `failed`, `unsupported`, `revoked` or `expired`.'
     CompatibilityEntry:
       type: object
       description: |-
@@ -5700,6 +6274,54 @@ components:
           description: |-
             `"original"`, or a transcode profile name from
             `GET /api/v1/media/{media_file_id}/download-options`.
+    CreateHandoffRequest:
+      type: object
+      required:
+      - request_key
+      - source_device_id
+      - destination_device_id
+      properties:
+        destination_device_id:
+          type: string
+          format: uuid
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            Required when the initiator is the source; otherwise taken from the
+            source's last reported state.
+        request_key:
+          type: string
+          description: Client-chosen idempotency key (unique per initiating device).
+        snapshot:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PlaybackSnapshot'
+        source_device_id:
+          type: string
+          format: uuid
+    CreatePairingRequest:
+      type: object
+      required:
+      - target_device_id
+      properties:
+        controller_name:
+          type:
+          - string
+          - 'null'
+          description: Name shown on the target's approval prompt (e.g. "Alex's phone").
+        scopes:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: Requested scopes; defaults to every capability the target advertises.
+        target_device_id:
+          type: string
+          format: uuid
     CreatePlaylistRequest:
       type: object
       required:
@@ -6376,6 +6998,68 @@ components:
         updated_at:
           type: string
           format: date-time
+    HandoffResponse:
+      type: object
+      required:
+      - id
+      - status
+      - source_device_id
+      - destination_device_id
+      - media_file_id
+      - work_id
+      - snapshot
+      - created_ms
+      - expires_ms
+      properties:
+        acked_position_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        completed_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        created_ms:
+          type: integer
+          format: int64
+        destination_device_id:
+          type: string
+          format: uuid
+        expires_ms:
+          type: integer
+          format: int64
+        failure_reason:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          format: uuid
+        media_file_id:
+          type: string
+          format: uuid
+        position_drift_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: |-
+            Acknowledged position minus the position expected from the snapshot
+            after the elapsed time (task 53 measures this).
+        snapshot:
+          $ref: '#/components/schemas/PlaybackSnapshot'
+        source_device_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: '`pending`, `committed`, `failed`, `expired` or `cancelled`.'
+        work_id:
+          type: string
+          format: uuid
     HealthExportFact:
       type: object
       required:
@@ -6520,6 +7204,50 @@ components:
         user_id:
           type: string
           format: uuid
+    InboxEvent:
+      type: object
+      required:
+      - id
+      - seq
+      - kind
+      - created_ms
+      - expires_ms
+      properties:
+        created_ms:
+          type: integer
+          format: int64
+        expires_ms:
+          type: integer
+          format: int64
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: '`pairing_request`, `pairing_revoked`, `command`, `handoff_offer` or `handoff_stop`.'
+        pairing_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        payload: {}
+        seq:
+          type: integer
+          format: int64
+    InboxResponse:
+      type: object
+      required:
+      - events
+      - next
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/InboxEvent'
+        next:
+          type: integer
+          format: int64
+          description: Highest `seq` returned (or the caller's `after` when empty).
     InvitesResponse:
       type: object
       description: |-
@@ -6961,6 +7689,55 @@ components:
           description: |-
             One of RFC 8628 §3.5's four device-flow error codes, or RFC 6749
             §5.2's `unsupported_grant_type`.
+    PairingResponse:
+      type: object
+      required:
+      - id
+      - status
+      - controller_device_id
+      - controller_name
+      - target_device_id
+      - scopes
+      - created_ms
+      - expires_ms
+      - is_controller
+      - is_target
+      properties:
+        controller_device_id:
+          type: string
+          format: uuid
+        controller_name:
+          type: string
+        created_ms:
+          type: integer
+          format: int64
+        expires_ms:
+          type: integer
+          format: int64
+        id:
+          type: string
+          format: uuid
+        is_controller:
+          type: boolean
+          description: True when the calling device is this pairing's controller.
+        is_target:
+          type: boolean
+          description: True when the calling device is this pairing's target.
+        scopes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          description: '`pending`, `active`, `denied`, `revoked` or `expired`.'
+        target_device_id:
+          type: string
+          format: uuid
+        verification_code:
+          type:
+          - string
+          - 'null'
+          description: Six digits shown on both devices while the pairing is pending.
     PeerAddress:
       type: object
       description: |-
@@ -8344,6 +9121,31 @@ components:
         user_id:
           type: string
           format: uuid
+    PlaybackSnapshot:
+      type: object
+      required:
+      - position_ms
+      properties:
+        audio_language:
+          type:
+          - string
+          - 'null'
+        duration_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        paused:
+          type: boolean
+        position_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        subtitle_language:
+          type:
+          - string
+          - 'null'
     PlaybackSubtitleTrackOption:
       type: object
       required:
@@ -8713,6 +9515,25 @@ components:
           $ref: '#/components/schemas/ClientPlatform'
         token:
           type: string
+    RegisterTargetRequest:
+      type: object
+      required:
+      - name
+      - capabilities
+      properties:
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: 'Advertised capabilities: `navigate`, `text`, `playback`, `input`, `handoff`.'
+        name:
+          type: string
+          description: Human-readable device name shown on controllers.
+        platform:
+          type:
+          - string
+          - 'null'
+          description: Client platform wire name, e.g. `android-tv`.
     RemoteOnlyWork:
       type: object
       description: |-
@@ -8744,6 +9565,33 @@ components:
           - 'null'
         title:
           type: string
+    RemoteTargetResponse:
+      type: object
+      required:
+      - device_id
+      - name
+      - platform
+      - capabilities
+      - online
+      - is_self
+      properties:
+        capabilities:
+          type: array
+          items:
+            type: string
+        device_id:
+          type: string
+          format: uuid
+        is_self:
+          type: boolean
+        name:
+          type: string
+        online:
+          type: boolean
+        platform:
+          type: string
+        state:
+          description: Last reported playback state, when fresh.
     ReorderPlaylistItemsRequest:
       type: object
       required:
@@ -8758,6 +9606,15 @@ components:
             Every item id currently on this playlist, in the desired new order.
             An id that isn't actually one of this playlist's items is silently
             ignored -- see `PlaylistRepo::reorder_items`'s own doc comment.
+    ReportStateRequest:
+      type: object
+      required:
+      - state
+      properties:
+        state:
+          description: |-
+            `{media_file_id, work_id?, position_ms, duration_ms?, paused, audio_language?, subtitle_language?, title?}`
+            or `null`/empty object when nothing is playing.
     ReportedCapabilities:
       type: object
       properties:
@@ -10574,5 +11431,7 @@ tags:
   description: Cast/crew for a work, and every work a given person is credited on
 - name: downloads
   description: Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to
+- name: remote
+  description: Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)
 - name: peer-groups
   description: Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)

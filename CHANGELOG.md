@@ -32,6 +32,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   limits with a next action for each, a "technical detail" view that labels every value measured,
   reported by the device or not available, a short cancellable connection test, and an explicit
   Copy/Save of a redacted diagnostics export (tasks 58-60).
+- Phone remote and playback handoff, server side (tasks 50-53). A device registers as a remote
+  target with advertised capabilities; another device of the same account requests a pairing that
+  the target must explicitly approve. Active, unexpired, revocable pairings authorise scoped
+  navigation, text, playback and input commands over a durable long-poll inbox; wrong-account,
+  wrong-device, out-of-scope, revoked, expired and offline-target requests are rejected, and text
+  input is never logged or retained after delivery. Transactional handoff
+  (`/api/v1/remote/handoffs`) offers playback to a destination and stops the source only after the
+  destination acknowledges, with idempotency keys, replay protection and expiry. Design in
+  `docs/architecture/remote-control.md`; migrations 0045 (SQLite) and 0046 (Postgres); OpenAPI
+  updated.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

@@ -48,6 +48,7 @@ pub mod playback_health;
 pub mod playlists;
 pub mod readiness;
 pub mod refresh;
+pub mod remote;
 pub mod request_timing_middleware;
 pub mod routing;
 mod sidecar_subtitles;
@@ -222,6 +223,7 @@ impl Modify for SecurityAddon {
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
         (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
+        (name = "remote", description = "Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)"),
         (name = "peer-groups", description = "Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)")
     )
 )]
@@ -392,6 +394,30 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(credits::work_credits_handler))
         .routes(routes!(credits::get_person_handler))
         .routes(routes!(credits::person_works_handler))
+        .routes(routes!(
+            remote::register_target_handler,
+            remote::unregister_target_handler
+        ))
+        .routes(routes!(remote::list_targets_handler))
+        .routes(routes!(remote::report_state_handler))
+        .routes(routes!(
+            remote::create_pairing_handler,
+            remote::list_pairings_handler
+        ))
+        .routes(routes!(
+            remote::get_pairing_handler,
+            remote::revoke_pairing_handler
+        ))
+        .routes(routes!(remote::approve_pairing_handler))
+        .routes(routes!(remote::deny_pairing_handler))
+        .routes(routes!(remote::send_command_handler))
+        .routes(routes!(remote::command_status_handler))
+        .routes(routes!(remote::inbox_handler))
+        .routes(routes!(remote::ack_event_handler))
+        .routes(routes!(remote::create_handoff_handler))
+        .routes(routes!(remote::get_handoff_handler))
+        .routes(routes!(remote::ack_handoff_handler))
+        .routes(routes!(remote::cancel_handoff_handler))
         .routes(routes!(admin_peer::update_self_peer_node_handler))
         .routes(routes!(admin_peer::found_peer_group_handler))
         .routes(routes!(admin_peer::create_peer_join_token_handler))
@@ -675,6 +701,9 @@ pub struct AppState {
     /// restart, and each node in a multi-node deployment reports only its
     /// own traffic.
     pub request_timing: Arc<playarr_telemetry::request_timing::RequestTimingRegistry>,
+    /// Remote-control targets, pairings, per-target event queue and
+    /// handoffs (`docs/architecture/remote-control.md`).
+    pub remote_repo: Arc<dyn playarr_db::RemoteRepo>,
 }
 
 impl FromRef<AppState> for ReadinessState {

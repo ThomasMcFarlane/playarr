@@ -27,6 +27,7 @@ mod policy;
 mod profile_pin;
 mod push_registration;
 mod refresh_token;
+mod remote;
 mod rendition;
 mod routing_rule;
 mod source_instance;
@@ -62,6 +63,9 @@ pub use policy::{PolicyRepo, SqlxPolicyRepo};
 pub use profile_pin::{ProfilePinRepo, SqlxProfilePinRepo};
 pub use push_registration::{PushRegistrationRepo, SqlxPushRegistrationRepo};
 pub use refresh_token::{InMemoryRefreshTokenStore, RefreshTokenRepo, SqlxRefreshTokenRepo};
+pub use remote::{
+    RemoteEvent, RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget, SqlxRemoteRepo,
+};
 pub use rendition::{RenditionRepo, SqlxRenditionRepo};
 pub use routing_rule::{RoutingRuleRepo, SqlxRoutingRuleRepo};
 pub use source_instance::{SourceInstanceRepo, SqlxSourceInstanceRepo};

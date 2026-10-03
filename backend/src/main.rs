@@ -1168,7 +1168,7 @@ async fn boot_api(
             work_repo.clone(),
             media_file_repo.clone(),
             cache.clone(),
-            pool,
+            pool.clone(),
             watch_progress.clone(),
         )
         .with_embedding_repo(embedding_repo)
@@ -1315,6 +1315,7 @@ async fn boot_api(
         coordinator,
         peer_http,
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
+        remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 

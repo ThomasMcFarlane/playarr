@@ -686,6 +686,7 @@ pub async fn test_state() -> (Router, TestState) {
         coordinator: Arc::new(playarr_coordination::SingleNodeCoordinator::new()),
         peer_http: reqwest::Client::new(),
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
+        remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
     };
 
     let (router, _api) = build_router(app.clone(), test_version_gate(), None);
