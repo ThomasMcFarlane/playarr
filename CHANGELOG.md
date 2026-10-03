@@ -14,6 +14,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.
 - Design for the aggregated release calendar, iCal subscription and availability-lag statistic
   (`docs/architecture/release-calendar.md`, tasks 74-77); sub-rows 74.1-74.5 track the other clients.
+- Documented the server backup and recovery design (inventory, encrypted format, consistent
+  snapshots, retention, staged restore and verification plan) in
+  `docs/architecture/server-backups.md`, tracked as tasks 62-66.
 - Documented the cross-client end-of-playback requirement (ended card, up-next
   countdown, replay, exit, suggestions) in
   `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.
