@@ -7,6 +7,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Documented the cross-client end-of-playback requirement (ended card, up-next
+  countdown, replay, exit, suggestions) in
+  `docs/architecture/end-of-playback.md`, tracked as tasks 78-85.
+- Playarr Web (and the webOS/Tizen shells that share it) now shows an
+  end-of-playback card: Replay, Back to details and a "More like this" row,
+  or a 10-second up-next countdown with Play now and Cancel when a next item
+  is queued. Music chains silently and only shows the card when its queue ends.
+  The legacy VIDAA fallback player shows Replay and Back to details.
+
 ### Fixed
 
 - The development webOS route now uses `tv-web-webos.example.com`, which is

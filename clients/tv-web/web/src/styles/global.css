@@ -11414,3 +11414,153 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .tv-downloads-storage-bar {
   height: 4px;
 }
+
+/* End-of-playback card (docs/architecture/end-of-playback.md) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.end-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(0, 0, 0, 0.78);
+  color: #ffffff;
+}
+
+.end-screen-panel {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, calc(2.4 * var(--viewport-unit)), 1.8rem);
+  width: min(100%, 1100px);
+  margin: auto;
+  padding: clamp(1.25rem, 4vw, 3.5rem);
+}
+
+.end-screen-kicker {
+  color: #c5b8bd;
+  font-size: clamp(0.75rem, 1vw, 1rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.end-screen-title {
+  font-size: clamp(1.6rem, 3.4vw, 3.4rem);
+  font-weight: 470;
+  letter-spacing: -0.04em;
+}
+
+.end-screen-subtitle {
+  color: #c5b8bd;
+  font-size: clamp(0.9rem, 1.3vw, 1.3rem);
+}
+
+.end-screen-countdown {
+  width: min(100%, 420px);
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.end-screen-countdown-bar {
+  display: block;
+  height: 100%;
+  background: #ffffff;
+  transition: width 1s linear;
+}
+
+.end-screen-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.end-screen-actions .btn {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.end-screen-actions .btn:focus-visible,
+.end-screen-tile:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.end-screen-suggestions h3 {
+  margin-bottom: 0.6rem;
+  font-size: clamp(0.9rem, 1.2vw, 1.2rem);
+  font-weight: 500;
+}
+
+.end-screen-suggestion-row {
+  display: flex;
+  gap: 0.9rem;
+  padding: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.end-screen-tile {
+  display: flex;
+  flex: 0 0 clamp(150px, 16vw, 260px);
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.end-screen-tile-art {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.end-screen-tile-art > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.end-screen-tile-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .end-screen-actions .btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end-screen-countdown-bar {
+    transition: none;
+  }
+}

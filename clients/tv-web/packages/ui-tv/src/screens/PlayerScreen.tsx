@@ -19,6 +19,10 @@ export interface PlayerScreenProps {
  * `player-avplay` has no DOM media element at all, it draws to a native
  * plane via `setDisplayRect`). This screen is therefore reusable as-is by
  * every app shell regardless of which adapter is behind `engine`.
+ *
+ * When playback ends it shows Replay and Back to details (the minimal end
+ * state of docs/architecture/end-of-playback.md); this legacy fallback has no
+ * queue or catalogue data, so up-next and suggestions are not available here.
  */
 export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: PlayerScreenProps) {
   const [state, setState] = useState<PlaybackEngineState>(engine.getState());
@@ -26,6 +30,7 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
   useEffect(() => engine.onStateChange(setState), [engine]);
 
   const isPlaying = state.state === "playing";
+  const ended = state.state === "ended";
 
   return (
     <div
@@ -44,6 +49,12 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
         <h2 style={{ fontSize: typeScale.title.fontSize, margin: 0 }}>{title}</h2>
       )}
 
+      {ended && (
+        <p role="status" style={{ fontSize: typeScale.body.fontSize, margin: 0 }}>
+          Finished
+        </p>
+      )}
+
       <ProgressBar current={state.currentTimeSeconds} duration={state.durationSeconds} />
 
       <div style={{ display: "flex", alignItems: "center", gap: spacing.md }}>
@@ -54,9 +65,15 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
         />
         <TransportButton
           id="player-play-pause"
-          label={isPlaying ? "Pause" : "Play"}
+          label={ended ? "Replay" : isPlaying ? "Pause" : "Play"}
           primary
-          onSelect={() => void (isPlaying ? engine.pause() : engine.play())}
+          onSelect={() =>
+            void (ended
+              ? engine.seek(0).then(() => engine.play())
+              : isPlaying
+                ? engine.pause()
+                : engine.play())
+          }
         />
         <TransportButton
           id="player-forward"
@@ -65,7 +82,7 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
             void engine.seek(Math.min(state.durationSeconds, state.currentTimeSeconds + seekStepSeconds))
           }
         />
-        {onExit && <TransportButton id="player-exit" label="Exit" onSelect={onExit} />}
+        {onExit && <TransportButton id="player-exit" label={ended ? "Back to details" : "Exit"} onSelect={onExit} />}
       </div>
 
       <p style={{ fontSize: typeScale.caption.fontSize, color: color.text.secondary, margin: 0 }}>

@@ -5,6 +5,21 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active: End-of-playback experience on every client (2026-10-03)
+
+Owner requirement (3 October 2026): when media finishes, show a UI with exit, replay and suggestions, or a countdown to the next item in a playlist with Play now, exit and suggestions. Spec: [`docs/architecture/end-of-playback.md`](docs/architecture/end-of-playback.md).
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 78 | Epic: End-of-playback screen and up-next countdown on all clients | in progress | agent | Spec on branch `task/end-screen-web`. Per-client rows 79-85 must follow the spec; return evidence here. |
+| 79 | End screen: Web, webOS, Tizen, VIDAA fallback, Cast receiver | review PR open | agent | Branch `task/end-screen-web`. Parent: 78. Web/webOS/Tizen share `EndScreen.tsx`; VIDAA legacy player has minimal Replay/Back; Cast receiver renders no player end UI so nothing added. Typecheck and 435 web vitest tests pass. |
+| 80 | End screen: Android (phone, tablet, TV) | in progress | agent | Branch `task/android-end-screen`. Parent: 78. |
+| 81 | End screen: iOS / iPadOS | pending | agent | Parent: 78. |
+| 82 | End screen: tvOS | pending | agent | Parent: 78. |
+| 83 | End screen: Roku | pending | agent | Parent: 78. |
+| 84 | End screen: Xbox | pending | agent | Parent: 78. |
+| 85 | End screen: HarmonyOS | pending | agent | Parent: 78. |
+
 ## Planned: Release calendar and availability tracking (2026-10-01)
 
 Documentation only: implementation is pending and unassigned.

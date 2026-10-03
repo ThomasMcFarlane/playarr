@@ -22,6 +22,13 @@ import {
   navigationOriginFromState,
   type NavigationOrigin,
 } from "../lib/navigationLayer";
+import {
+  pickSuggestions,
+  resolveEndScreenKind,
+  workIdFromDetailRoute,
+} from "../lib/endScreen";
+import { EndScreen } from "../components/player/EndScreen";
+import type { Work } from "@playarr-tv/api-client";
 import { advanceMusicPlaybackLifecycle } from "../lib/musicPlaybackLifecycle";
 import { CastProvider, useCast } from "../lib/cast/CastProvider";
 import { CastUnavailableError } from "../lib/cast/castSdk";
@@ -417,6 +424,48 @@ function PlayerPageInner({
     shouldStopPlaybackOnPause,
   ]);
 
+  // --- End-of-playback card (docs/architecture/end-of-playback.md) ---------
+  const nextPlaylistItem = playlistItems[activePlaylistIndex + 1];
+  const endScreenKind = resolveEndScreenKind({
+    engineState: player.engineState.state,
+    minimised,
+    inlineMusic,
+    isMusic: isMusicPlayback,
+    hasNext: Boolean(nextPlaylistItem),
+  });
+  const finishedWorkId = workIdFromDetailRoute(locationState?.backTo);
+  const serverClient = useServerClient(locationState?.serverUrl);
+  const [suggestions, setSuggestions] = useState<Work[]>([]);
+  const suggestionsLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!endScreenKind || !finishedWorkId) return;
+    if (suggestionsLoadedFor.current === finishedWorkId) return;
+    suggestionsLoadedFor.current = finishedWorkId;
+    let cancelled = false;
+    void serverClient.getSimilarWorks(finishedWorkId, 12).then(
+      (works) => {
+        if (!cancelled) setSuggestions(pickSuggestions(works, finishedWorkId));
+      },
+      // 404 (no embedding yet) or any failure: the row is simply hidden.
+      () => {
+        if (!cancelled) setSuggestions([]);
+      }
+    );
+    return () => {
+      cancelled = true;
+      suggestionsLoadedFor.current = null;
+    };
+  }, [endScreenKind, finishedWorkId, serverClient]);
+  // New playback session from 0: the ended one is already closed as completed.
+  const handleEndReplay = useCallback(() => player.restart(), [player]);
+  const handleEndSuggestion = useCallback(
+    (route: string) => {
+      onClose();
+      navigate(route);
+    },
+    [navigate, onClose]
+  );
+
   useEffect(() => {
     if (minimised) return;
     const handleBackKey = (event: KeyboardEvent) => {
@@ -735,6 +784,19 @@ function PlayerPageInner({
         castState={castState}
         onToggleCast={handleToggleCast}
       />
+      {endScreenKind && (
+        <EndScreen
+          kind={endScreenKind}
+          title={activePlaylistItem?.title ?? playerTitle}
+          subtitle={activePlaylistItem?.subtitle}
+          next={nextPlaylistItem}
+          suggestions={suggestions}
+          onReplay={handleEndReplay}
+          onExit={handleBack}
+          onPlayNow={handleNext}
+          onSelectSuggestion={handleEndSuggestion}
+        />
+      )}
     </div>
   );
 

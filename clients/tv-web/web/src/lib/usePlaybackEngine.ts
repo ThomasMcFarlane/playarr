@@ -26,6 +26,7 @@ import type {
   PlaybackSubtitleTrack,
 } from "@playarr-tv/player-core";
 import { useServerAccessToken, useServerClient } from "./ApiClientProvider";
+import { replayNegotiationParams } from "./endScreen";
 import { WEB_PLAYBACK_CAPABILITIES } from "./playbackCapabilities";
 import {
   readPlayerDefaults,
@@ -195,6 +196,8 @@ export interface PlaybackEngineController {
   selectQuality: (qualityId: string) => void;
   /** Re-runs the negotiation call (e.g. a "Try again" button on the error state). */
   retryNegotiation: () => void;
+  /** Starts a fresh playback session from 0 (end-of-playback Replay). */
+  restart: () => void;
 }
 
 export interface PlaybackLaunchSettings {
@@ -1409,6 +1412,21 @@ export function usePlaybackEngine(
       switchToDownloadedQuality,
     ]
   );
+  // Replay after the end card. The server session was already closed as
+  // "completed" when playback ended, so a raw seek(0) would play on with no
+  // heartbeats or progress. Renegotiate a fresh playback session from 0 through
+  // the normal playback-info call instead.
+  const restart = useCallback(() => {
+    loadedForUrl.current = null;
+    automaticRecoveryUrlRef.current = null;
+    pendingQualitySwitchRef.current = null;
+    latestUserSeekRef.current = 0;
+    latestPlaybackRef.current.positionMs = 0;
+    negotiationRequestRef.current = replayNegotiationParams(negotiationRequestRef.current);
+    void stopActiveSession("user_stopped").finally(() => {
+      setRetryCount((n) => n + 1);
+    });
+  }, [stopActiveSession]);
   const retryNegotiation = useCallback(() => {
     loadedForUrl.current = null;
     automaticRecoveryUrlRef.current = null;
@@ -1484,5 +1502,6 @@ export function usePlaybackEngine(
     qualityError,
     selectQuality,
     retryNegotiation,
+    restart,
   };
 }
