@@ -10,6 +10,12 @@ interface MediaThumbnailArtworkProps {
   intersectionRootSelector?: string;
   rootMargin?: string;
   positionMs?: number;
+  /**
+   * The episode's own still, preferred over the extracted frame when the
+   * catalogue says the source supplied one. Failure falls back to the frame
+   * thumbnail, then to `fallback`.
+   */
+  still?: { seriesWorkId: string; episodeId: string };
 }
 
 interface MediaThumbnailRecord {
@@ -29,6 +35,37 @@ function mediaThumbnailCache(client: ApiClient): Map<string, MediaThumbnailRecor
     mediaThumbnailsByClient.set(client, cache);
   }
   return cache;
+}
+
+const episodeStillsByClient = new WeakMap<ApiClient, Map<string, MediaThumbnailRecord>>();
+
+function loadEpisodeStill(
+  client: ApiClient,
+  seriesWorkId: string,
+  episodeId: string
+): MediaThumbnailRecord {
+  let cache = episodeStillsByClient.get(client);
+  if (!cache) {
+    cache = new Map();
+    episodeStillsByClient.set(client, cache);
+  }
+  const key = `${seriesWorkId}:${episodeId}`;
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const record: MediaThumbnailRecord = {
+    promise: client.getEpisodeArtwork(seriesWorkId, episodeId).then((blob) => {
+      if (blob.size === 0) throw new Error("The episode still response was empty.");
+      const url = URL.createObjectURL(blob);
+      record.url = url;
+      return url;
+    }),
+  };
+  const owned = cache;
+  record.promise.catch(() => {
+    if (owned.get(key) === record) owned.delete(key);
+  });
+  cache.set(key, record);
+  return record;
 }
 
 function mediaThumbnailKey(mediaFileId: string, positionMs?: number): string {
@@ -76,6 +113,7 @@ export function MediaThumbnailArtwork({
   intersectionRootSelector,
   rootMargin = "0px 360px",
   positionMs,
+  still,
 }: MediaThumbnailArtworkProps) {
   const client = useApiClient();
   const containerRef = useRef<HTMLSpanElement>(null);
@@ -144,13 +182,28 @@ export function MediaThumbnailArtwork({
         });
     };
 
-    loadThumbnail();
+    if (still) {
+      const stillRecord = loadEpisodeStill(client, still.seriesWorkId, still.episodeId);
+      if (stillRecord.url) {
+        setSource(stillRecord.url);
+      } else {
+        stillRecord.promise
+          .then((url) => {
+            if (!cancelled) setSource(url);
+          })
+          .catch(() => {
+            if (!cancelled) loadThumbnail();
+          });
+      }
+    } else {
+      loadThumbnail();
+    }
 
     return () => {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [client, mediaFileId, positionMs, shouldLoad]);
+  }, [client, mediaFileId, positionMs, shouldLoad, still?.seriesWorkId, still?.episodeId]);
 
   return (
     <span className={className} ref={containerRef}>

@@ -483,6 +483,10 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
     schemaPath: "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}",
     method: "GET",
   },
+  {
+    schemaPath: "/api/v1/artwork/episode/{series_work_id}/{episode_id}/{kind}",
+    method: "GET",
+  },
   { schemaPath: "/api/v1/artwork/work/{work_id}/{kind}", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/chapters", method: "GET" },
   { schemaPath: "/api/v1/media/{media_file_id}/metadata", method: "GET" },
@@ -854,6 +858,33 @@ export class ApiClient {
             path: {
               artist_work_id: artistWorkId,
               album_id: albumId,
+              kind,
+            },
+          },
+          parseAs: "blob",
+        }
+      )
+    ) as Blob;
+  }
+
+  /**
+   * An episode's own still (the source's screenshot), fetched and durably
+   * cached by Playarr Server. Rejects with a 404 `ApiError` when the source
+   * supplied none, so callers can fall back to a frame thumbnail.
+   */
+  async getEpisodeArtwork(
+    seriesWorkId: string,
+    episodeId: string,
+    kind: ImageKind = "thumb"
+  ): Promise<Blob> {
+    return this.unwrap(
+      await this.raw.GET(
+        "/api/v1/artwork/episode/{series_work_id}/{episode_id}/{kind}",
+        {
+          params: {
+            path: {
+              series_work_id: seriesWorkId,
+              episode_id: episodeId,
               kind,
             },
           },

@@ -33,6 +33,8 @@ data class Episode(
     val episodeNumber: Int,
     val title: String? = null,
     val overview: String? = null,
+    /** Episode stills (normally [ImageKind.Thumb]); empty until the source supplies them. */
+    val images: List<ImageAsset> = emptyList(),
     @Serializable(with = LocalDateIsoSerializer::class)
     val airDate: LocalDate? = null,
     val runtimeMinutes: Int? = null,

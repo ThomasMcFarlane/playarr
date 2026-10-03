@@ -4115,7 +4115,9 @@ private fun EpisodeDetailCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // Web: the media-file frame thumbnail is primary, the series backdrop is the fallback.
+                // Layered bottom to top: series art, frame thumbnail, then the
+                // episode's own still, so the still wins when the source has one
+                // and each layer simply shows through if the one above fails.
                 episode.mediaFileId?.let { mediaFileId ->
                     AuthenticatedMediaThumbnail(
                         mediaFileId = mediaFileId,
@@ -4124,6 +4126,18 @@ private fun EpisodeDetailCard(
                         contentDescription = "",
                         modifier = Modifier.fillMaxSize(),
                     )
+                    if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
+                        AuthenticatedMediaThumbnail(
+                            mediaFileId = mediaFileId,
+                            serverUrl = serverUrl,
+                            accessToken = accessToken,
+                            contentDescription = "",
+                            modifier = Modifier.fillMaxSize(),
+                            artworkUrl = { base ->
+                                resolveEpisodeArtworkUrl(base, work.id, episode.episode.id)
+                            },
+                        )
+                    }
                 }
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)))))
                 if (isTelevision) {
@@ -6165,6 +6179,10 @@ private fun AuthenticatedAlbumArtwork(
 internal fun resolveAlbumArtworkUrl(serverUrl: String, artistWorkId: String, albumId: String): String =
     "${serverUrl.trimEnd('/')}/api/v1/artwork/album/${artistWorkId.asUrlPathSegment()}/${albumId.asUrlPathSegment()}/poster"
 
+/** `GET /api/v1/artwork/episode/{series}/{episode}/thumb`: the server-cached episode still. */
+internal fun resolveEpisodeArtworkUrl(serverUrl: String, seriesWorkId: String, episodeId: String): String =
+    "${serverUrl.trimEnd('/')}/api/v1/artwork/episode/${seriesWorkId.asUrlPathSegment()}/${episodeId.asUrlPathSegment()}/thumb"
+
 internal fun String.asUrlPathSegment(): String =
     URLEncoder.encode(this, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
@@ -6257,6 +6275,8 @@ private fun AuthenticatedMediaThumbnail(
     contentDescription: String,
     modifier: Modifier = Modifier,
     positionMs: Long? = null,
+    /** Overrides the frame-thumbnail URL (e.g. the episode still); receives the resolved server URL. */
+    artworkUrl: ((String) -> String)? = null,
 ) {
     val context = LocalContext.current
     val serverAccess = rememberPlayarrMediaServerAccess(mediaFileId, serverUrl, accessToken)
@@ -6265,7 +6285,8 @@ private fun AuthenticatedMediaThumbnail(
         return
     }
     val url = remember(serverAccess.serverUrl, mediaFileId, positionMs) {
-        playarrMediaThumbnailUrl(serverAccess.serverUrl, mediaFileId, positionMs)
+        artworkUrl?.invoke(serverAccess.serverUrl)
+            ?: playarrMediaThumbnailUrl(serverAccess.serverUrl, mediaFileId, positionMs)
     }
     val requestToken = playarrAccessTokenForUrl(serverAccess, url)
     val request = remember(url, requestToken) {

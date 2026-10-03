@@ -1307,6 +1307,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/api/v3/episode"))
             .and(query_param("seriesId", series_id.to_string()))
+            .and(query_param("includeImages", "true"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 sonarr_episode_json(10, 1, 1, "Pilot", 55),
                 sonarr_episode_json(11, 1, 2, "Test Episode Three", 0),

@@ -28,3 +28,13 @@ class PlayarrChapterThumbnailTest {
         )
     }
 }
+
+class PlayarrEpisodeArtworkUrlTest {
+    @Test
+    fun episodeStillUrlEncodesIdsAndTrimsServerSlash() {
+        assertEquals(
+            "https://s.example/api/v1/artwork/episode/a%20b/e1/thumb",
+            resolveEpisodeArtworkUrl("https://s.example/", "a b", "e1"),
+        )
+    }
+}

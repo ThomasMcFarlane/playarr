@@ -351,6 +351,73 @@ pub async fn album_artwork_handler(
     .await
 }
 
+/// Finds one episode's images inside a series' season tree.
+fn find_episode_images(
+    seasons: &[playarr_catalog::SeasonDetail],
+    episode_id: Uuid,
+) -> Option<&[ImageAsset]> {
+    seasons
+        .iter()
+        .flat_map(|season| season.episodes.iter())
+        .find(|detail| detail.episode.id == episode_id)
+        .map(|detail| detail.episode.images.as_slice())
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/artwork/episode/{series_work_id}/{episode_id}/{kind}",
+    tag = "catalog",
+    params(
+        ("series_work_id" = Uuid, Path, description = "Series work id"),
+        ("episode_id" = Uuid, Path, description = "Episode id"),
+        ("kind" = String, Path, description = "Normally thumb (the episode still)"),
+        ArtworkQuery
+    ),
+    responses(
+        (status = 200, description = "Playarr Server-cached episode artwork (optionally style-baked)", content_type = "image/*"),
+        (status = 304, description = "The caller already has the current cached artwork"),
+        (status = 400, description = "Unsupported artwork kind or style"),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller has neither Playarr streaming access nor admin access"),
+        (status = 404, description = "Unknown series, episode, or unavailable artwork kind"),
+        (status = 422, description = "Source artwork could not be styled"),
+        (status = 502, description = "The metadata-provider artwork could not be safely cached")
+    )
+)]
+pub async fn episode_artwork_handler(
+    State(state): State<AppState>,
+    viewer: CatalogViewer,
+    Path((series_work_id, episode_id, kind)): Path<(Uuid, Uuid, String)>,
+    Query(query): Query<ArtworkQuery>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let kind = parse_image_kind(&kind)?;
+    let style = parse_artwork_style(query.style.as_deref())?;
+    let allowed = viewer.allowed_libraries();
+    let detail = state
+        .catalog
+        .get_by_id(series_work_id, allowed.as_deref())
+        .await?;
+    let WorkChildren::Series(seasons) = detail.children else {
+        return Err(ApiError::not_found(format!(
+            "series {series_work_id} was not found"
+        )));
+    };
+    let images = find_episode_images(&seasons, episode_id)
+        .ok_or_else(|| ApiError::not_found(format!("episode {episode_id} was not found")))?;
+    let source =
+        artwork_source_from_images(&state, images, &format!("episode {episode_id}"), kind)?;
+    let cached = ensure_artwork_cached(episode_id, kind, source, style).await?;
+    artwork_response(
+        &cached.path,
+        cached.content_type,
+        cached.url_hash,
+        style,
+        &headers,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,6 +453,67 @@ mod tests {
             monitored: true,
             availability: Availability::Available,
         }
+    }
+
+    #[test]
+    fn episode_images_are_found_only_inside_the_series_tree() {
+        use playarr_catalog::{EpisodeDetail, SeasonDetail};
+        let still = ImageAsset {
+            kind: ImageKind::Thumb,
+            url: "https://artworks.thetvdb.com/episodes/1.jpg".to_string(),
+            width: None,
+            height: None,
+        };
+        let episode = playarr_model::Episode {
+            id: Uuid::new_v4(),
+            season_id: Uuid::new_v4(),
+            episode_number: 1,
+            title: Some("Pilot".to_string()),
+            overview: None,
+            images: vec![still.clone()],
+            air_date: None,
+            runtime_minutes: None,
+            monitored: true,
+            availability: Availability::Available,
+        };
+        let id = episode.id;
+        let seasons = vec![SeasonDetail {
+            season: playarr_model::Season {
+                id: episode.season_id,
+                series_work_id: Uuid::new_v4(),
+                season_number: 1,
+                title: None,
+                overview: None,
+                monitored: true,
+                availability: Availability::Available,
+            },
+            episodes: vec![EpisodeDetail {
+                episode,
+                media_file_id: None,
+                runtime_ms: None,
+            }],
+        }];
+        assert_eq!(find_episode_images(&seasons, id), Some(&[still][..]));
+        assert!(find_episode_images(&seasons, Uuid::new_v4()).is_none());
+    }
+
+    #[tokio::test]
+    async fn episode_artwork_route_requires_catalog_access() {
+        let (router, _state) = test_state().await;
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/api/v1/artwork/episode/{}/{}/thumb",
+                        Uuid::new_v4(),
+                        Uuid::new_v4()
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]

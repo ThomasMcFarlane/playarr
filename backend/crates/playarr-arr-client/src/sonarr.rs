@@ -205,8 +205,13 @@ impl SonarrClient {
         .await
     }
 
-    /// `GET /api/v3/episode?seriesId={id}` — every episode Sonarr tracks
-    /// for one series, including episodes with no file imported yet.
+    /// `GET /api/v3/episode?seriesId={id}&includeImages=true` — every
+    /// episode Sonarr tracks for one series, including episodes with no
+    /// file imported yet.
+    ///
+    /// Sonarr v4 omits each episode's `images` (the TheTVDB screenshot)
+    /// unless `includeImages=true` is sent, so without it every episode
+    /// still is silently empty.
     pub async fn list_episodes(
         &self,
         series_id: i64,
@@ -216,7 +221,7 @@ impl SonarrClient {
             "sonarr",
             &self.base_url,
             &self.api_key,
-            &format!("/api/v3/episode?seriesId={series_id}"),
+            &format!("/api/v3/episode?seriesId={series_id}&includeImages=true"),
         )
         .await
     }
@@ -463,6 +468,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/api/v3/episode"))
             .and(query_param("seriesId", "1"))
+            .and(query_param("includeImages", "true"))
             .and(header("X-Api-Key", "test-key"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!([
                 {

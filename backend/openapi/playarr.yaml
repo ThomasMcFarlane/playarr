@@ -1664,6 +1664,61 @@ paths:
           description: The metadata-provider artwork could not be safely cached
       security:
       - bearer_auth: []
+  /api/v1/artwork/episode/{series_work_id}/{episode_id}/{kind}:
+    get:
+      tags:
+      - catalog
+      operationId: episode_artwork_handler
+      parameters:
+      - name: series_work_id
+        in: path
+        description: Series work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: episode_id
+        in: path
+        description: Episode id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kind
+        in: path
+        description: Normally thumb (the episode still)
+        required: true
+        schema:
+          type: string
+      - name: style
+        in: query
+        description: 'Named bake: `original` (default) or `stage` (TV key-art greyscale blend).'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      responses:
+        '200':
+          description: Playarr Server-cached episode artwork (optionally style-baked)
+          content:
+            image/*: {}
+        '304':
+          description: The caller already has the current cached artwork
+        '400':
+          description: Unsupported artwork kind or style
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: Unknown series, episode, or unavailable artwork kind
+        '422':
+          description: Source artwork could not be styled
+        '502':
+          description: The metadata-provider artwork could not be safely cached
+      security:
+      - bearer_auth: []
   /api/v1/artwork/work/{work_id}/{kind}:
     get:
       tags:

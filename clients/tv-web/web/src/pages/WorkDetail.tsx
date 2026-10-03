@@ -844,10 +844,11 @@ function SeasonEpisodeTrack({
             const mediaFileId = episode.media_file_id;
             if (!mediaFileId) return null;
             const isSelected = episode.episode.id === selectedEpisodeId;
-            // The media-file thumbnail endpoint is the primary artwork.
-            // If extraction is temporarily unavailable, fall back to the
-            // series backdrop already cached by Playarr Server rather than
-            // loading the episode provider URL directly from the TV.
+            // Artwork preference: the episode's own still (cached by Playarr
+            // Server), then the media-file frame thumbnail, then the series
+            // backdrop already cached by Playarr Server. The TV never loads
+            // the episode provider URL directly.
+            const hasStill = episode.episode.images.some((image) => image.kind === "thumb");
             const episodeArtwork = backdrop;
             const progress = progressByMedia.get(mediaFileId);
             const episodeTitle =
@@ -936,6 +937,7 @@ function SeasonEpisodeTrack({
                   fallback={episodeArtwork ?? null}
                   className="tv-episode-art"
                   intersectionRootSelector=".tv-episode-rail"
+                  still={hasStill ? { seriesWorkId: workId, episodeId: episode.episode.id } : undefined}
                 >
                   <strong>{String(episode.episode.episode_number).padStart(2, "0")}</strong>
                   <WatchStateOverlay progress={progress} showUnwatched />

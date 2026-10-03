@@ -824,6 +824,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/artwork/episode/{series_work_id}/{episode_id}/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["episode_artwork_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/artwork/work/{work_id}/{kind}": {
         parameters: {
             query?: never;
@@ -6949,6 +6965,85 @@ export interface operations {
                 content?: never;
             };
             /** @description Unknown artist, album, or unavailable artwork kind */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source artwork could not be styled */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The metadata-provider artwork could not be safely cached */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    episode_artwork_handler: {
+        parameters: {
+            query?: {
+                /** @description Named bake: `original` (default) or `stage` (TV key-art greyscale blend). */
+                style?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Series work id */
+                series_work_id: string;
+                /** @description Episode id */
+                episode_id: string;
+                /** @description Normally thumb (the episode still) */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Playarr Server-cached episode artwork (optionally style-baked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description The caller already has the current cached artwork */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported artwork kind or style */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown series, episode, or unavailable artwork kind */
             404: {
                 headers: {
                     [name: string]: unknown;
