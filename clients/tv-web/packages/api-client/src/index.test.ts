@@ -5,6 +5,8 @@ import {
   buildCalendarQuery,
   DEVICE_CODE_GRANT_TYPE,
   describeApiError,
+  parsePinLockSeconds,
+  parseHouseholdBlock,
   type ActivityActiveResponse,
   type ActivityFacetsResponse,
   type ActivityHistoryRequest,
@@ -1535,5 +1537,47 @@ describe("ApiClient portable user data", () => {
     const fetchImpl = mockFetch(() => jsonResponse(410, { error: "gone", message: "expired" }));
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "tok" });
     await expect(client.downloadUserDataExport("abc")).rejects.toMatchObject({ status: 410 });
+  });
+});
+
+describe("household errors", () => {
+  const blocked = (details: Record<string, unknown>) =>
+    new ApiError(403, "Forbidden", {
+      error: "household_blocked",
+      message: "blocked",
+      details,
+    });
+
+  it("parses a schedule block with the next start time", () => {
+    const err = blocked({ reason: "outside_schedule", next_start_at: "2026-10-05T10:00:00Z" });
+    expect(parseHouseholdBlock(err)).toEqual({
+      reason: "outside_schedule",
+      nextStartAt: "2026-10-05T10:00:00Z",
+      resetsAt: undefined,
+    });
+    expect(describeApiError(err)).toContain("Back at");
+  });
+
+  it("parses an exhausted budget and describes when it resets", () => {
+    const err = blocked({ reason: "budget_exhausted", resets_at: "2026-10-04T00:00:00Z" });
+    expect(parseHouseholdBlock(err)?.reason).toBe("budget_exhausted");
+    expect(describeApiError(err)).toContain("watch time is used up");
+  });
+
+  it("does not treat an ordinary 403 as a household block", () => {
+    const err = new ApiError(403, "Forbidden", { error: "forbidden", message: "nope" });
+    expect(parseHouseholdBlock(err)).toBeNull();
+    expect(describeApiError(err)).toBe("nope");
+  });
+
+  it("reports PIN lockouts in minutes", () => {
+    const err = new ApiError(429, "Too Many Requests", {
+      error: "pin_locked",
+      message: "locked",
+      details: { retry_after_seconds: 90 },
+    });
+    expect(parsePinLockSeconds(err)).toBe(90);
+    expect(describeApiError(err)).toBe("Too many incorrect PIN attempts. Try again in 2 minutes.");
+    expect(parsePinLockSeconds(new ApiError(429, "x", { error: "other" }))).toBeNull();
   });
 });

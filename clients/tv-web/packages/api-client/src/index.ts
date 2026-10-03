@@ -232,6 +232,13 @@ export type StopReason = components["schemas"]["StopReason"];
 export type TranscodeReason = components["schemas"]["TranscodeReason"];
 
 export type ClientPlatform = components["schemas"]["ClientPlatform"];
+export type HouseholdStatus = components["schemas"]["HouseholdStatusResponse"];
+export type HouseholdSettings = components["schemas"]["HouseholdSettings"];
+export type HouseholdControls = components["schemas"]["HouseholdControls"];
+export type HouseholdApproval = components["schemas"]["Approval"];
+export type HouseholdApprovalKind = components["schemas"]["ApprovalKind"];
+export type CreateHouseholdApprovalRequest = components["schemas"]["CreateApprovalRequest"];
+export type DecideHouseholdApprovalRequest = components["schemas"]["DecideApprovalRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type LoginResponse = components["schemas"]["LoginResponse"];
 export type RefreshRequest = components["schemas"]["RefreshRequest"];
@@ -721,6 +728,13 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/users/profiles", method: "GET" },
   { schemaPath: "/api/v1/users/profiles/{id}/verify-pin", method: "POST" },
   { schemaPath: "/api/v1/oauth/device/authorize", method: "POST" },
+  { schemaPath: "/api/v1/household/status", method: "GET" },
+  { schemaPath: "/api/v1/household/approvals", method: "GET" },
+  { schemaPath: "/api/v1/household/approvals", method: "POST" },
+  { schemaPath: "/api/v1/household/approvals/{id}/decision", method: "POST" },
+  { schemaPath: "/api/v1/household/approvals/{id}/consume", method: "POST" },
+  { schemaPath: "/api/v1/admin/users/{id}/household", method: "GET" },
+  { schemaPath: "/api/v1/admin/users/{id}/household", method: "PUT" },
   { schemaPath: "/api/v1/catalog", method: "GET" },
   { schemaPath: "/api/v1/catalog/kinds", method: "GET" },
   { schemaPath: "/api/v1/catalog/{id}", method: "GET" },
@@ -788,6 +802,81 @@ function isProtectedOperation(schemaPath: string, method: string): boolean {
   return PROTECTED_OPERATIONS.some((op) => op.schemaPath === schemaPath && op.method === method);
 }
 
+/** Why the server refused a request for household/child-control reasons. */
+export type HouseholdBlockReason =
+  | "outside_schedule"
+  | "budget_exhausted"
+  | "rating_too_high"
+  | "unrated"
+  | "tag_blocked"
+  | "folder_blocked";
+
+export interface HouseholdBlock {
+  reason: HouseholdBlockReason;
+  /** Start of the next allowed window (`outside_schedule`). */
+  nextStartAt?: string;
+  /** When the daily budget resets (`budget_exhausted`). */
+  resetsAt?: string;
+}
+
+interface ErrorBodyLike {
+  error?: unknown;
+  message?: unknown;
+  details?: { reason?: unknown; next_start_at?: unknown; resets_at?: unknown; retry_after_seconds?: unknown };
+}
+
+/**
+ * The household block carried by a `403 household_blocked`, or `null` for
+ * any other error. Clients use it to show a "not available right now"
+ * state instead of a generic permission error.
+ */
+export function parseHouseholdBlock(err: unknown): HouseholdBlock | null {
+  if (!(err instanceof ApiError) || err.status !== 403) return null;
+  const body = err.body as ErrorBodyLike | undefined;
+  if (body?.error !== "household_blocked") return null;
+  const reason = body.details?.reason;
+  if (typeof reason !== "string") return null;
+  return {
+    reason: reason as HouseholdBlockReason,
+    nextStartAt:
+      typeof body.details?.next_start_at === "string" ? body.details.next_start_at : undefined,
+    resetsAt: typeof body.details?.resets_at === "string" ? body.details.resets_at : undefined,
+  };
+}
+
+/** Seconds until a `429 pin_locked` lifts, or `null` for any other error. */
+export function parsePinLockSeconds(err: unknown): number | null {
+  if (!(err instanceof ApiError) || err.status !== 429) return null;
+  const body = err.body as ErrorBodyLike | undefined;
+  if (body?.error !== "pin_locked") return null;
+  const seconds = body.details?.retry_after_seconds;
+  return typeof seconds === "number" ? seconds : 60;
+}
+
+function describeHouseholdError(err: ApiError): string | null {
+  const block = parseHouseholdBlock(err);
+  if (block) {
+    switch (block.reason) {
+      case "outside_schedule":
+        return block.nextStartAt
+          ? `Not available right now. Back at ${new Date(block.nextStartAt).toLocaleString()}.`
+          : "Not available right now.";
+      case "budget_exhausted":
+        return block.resetsAt
+          ? `Today's watch time is used up. It resets at ${new Date(block.resetsAt).toLocaleString()}.`
+          : "Today's watch time is used up.";
+      default:
+        return "This title is not available for this profile.";
+    }
+  }
+  const lock = parsePinLockSeconds(err);
+  if (lock !== null) {
+    const minutes = Math.max(1, Math.ceil(lock / 60));
+    return `Too many incorrect PIN attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+  }
+  return null;
+}
+
 /**
  * Human-readable summary of a caught error, distinguishing the two auth-
  * specific statuses `PROTECTED_OPERATIONS` can return (401 missing/invalid
@@ -800,6 +889,8 @@ function isProtectedOperation(schemaPath: string, method: string): boolean {
  */
 export function describeApiError(err: unknown): string {
   if (err instanceof ApiError) {
+    const household = describeHouseholdError(err);
+    if (household) return household;
     if (err.status === 401) return "Sign-in required -- could not obtain a valid access token.";
     if (err.status === 403) {
       const body = err.body as { message?: unknown } | undefined;
@@ -1521,6 +1612,51 @@ export class ApiClient {
   /** Sets an exactly four-digit PIN, or removes the profile lock with `pin: null`. */
   async updateProfilePinSetting(body: UpdateProfilePinRequest): Promise<ProfilePinSetting> {
     return this.unwrap(await this.raw.PATCH("/api/v1/users/me/profile-pin", { body }));
+  }
+
+  /** The signed-in profile's household state: schedule, remaining time, offline validity. */
+  async getHouseholdStatus(): Promise<HouseholdStatus> {
+    return this.unwrap(await this.raw.GET("/api/v1/household/status", {}));
+  }
+
+  /** Own requests plus requests from profiles this user guards. */
+  async listHouseholdApprovals(): Promise<HouseholdApproval[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/household/approvals", {}));
+  }
+
+  async createHouseholdApproval(
+    body: CreateHouseholdApprovalRequest
+  ): Promise<HouseholdApproval> {
+    return this.unwrap(await this.raw.POST("/api/v1/household/approvals", { body }));
+  }
+
+  /** Guardian decision; approving needs the guardian's own profile PIN. */
+  async decideHouseholdApproval(
+    id: string,
+    body: DecideHouseholdApprovalRequest
+  ): Promise<HouseholdApproval> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/household/approvals/{id}/decision", {
+        params: { path: { id } },
+        body,
+      })
+    );
+  }
+
+  /** Admin: a profile's rating, schedule, budget and guardian settings. */
+  async getUserHousehold(id: string): Promise<HouseholdSettings> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/users/{id}/household", { params: { path: { id } } })
+    );
+  }
+
+  async putUserHousehold(id: string, body: HouseholdSettings): Promise<HouseholdSettings> {
+    return this.unwrap(
+      await this.raw.PUT("/api/v1/admin/users/{id}/household", {
+        params: { path: { id } },
+        body,
+      })
+    );
   }
 
   /** Verifies a locked target profile before the browser activates its saved session. */

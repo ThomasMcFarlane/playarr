@@ -13,6 +13,7 @@ import { buildInviteUrl, type PeerAddressBundleLike } from "@playarr-tv/domain";
 import { useApiBaseUrl, useApiClient, useCurrentUserId } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { Modal } from "../components/Modal";
+import { HouseholdModal } from "../components/HouseholdModal";
 import { QrCode } from "../components/QrCode";
 import { KIND_LABELS } from "../components/PosterCard";
 
@@ -226,6 +227,27 @@ function PowerIcon() {
   );
 }
 
+/** "Household controls" icon for a user card's `.icon-btn` -- purely decorative. */
+function HouseholdIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 11l9-8 9 8" />
+      <path d="M5 10v10h14V10" />
+      <path d="M10 20v-6h4v6" />
+    </svg>
+  );
+}
+
 /** "Manage permissions" icon for a user card's `.icon-btn` -- purely decorative. */
 function LibraryIcon() {
   return (
@@ -352,6 +374,7 @@ export function UsersPage() {
   // the selection so toggling one checkbox doesn't need to scan/rebuild an
   // array on every click.
   const [libraryModalUser, setLibraryModalUser] = useState<UserResponse | null>(null);
+  const [householdModalUser, setHouseholdModalUser] = useState<UserResponse | null>(null);
   const [librarySelection, setLibrarySelection] = useState<Set<string>>(new Set());
   const [savingLibraries, setSavingLibraries] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
@@ -819,6 +842,17 @@ export function UsersPage() {
                   <button
                     type="button"
                     className="icon-btn"
+                    title="Household controls"
+                    aria-label="Household controls"
+                    disabled={busy}
+                    onClick={() => setHouseholdModalUser(user)}
+                    style={busy ? { opacity: 0.55, cursor: "default" } : undefined}
+                  >
+                    <HouseholdIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
                     title={user.is_admin ? "Revoke admin" : "Make admin"}
                     aria-label={user.is_admin ? "Revoke admin" : "Make admin"}
                     disabled={busy}
@@ -1096,6 +1130,15 @@ export function UsersPage() {
             </div>
           )}
         </Modal>
+      )}
+
+      {householdModalUser && users && (
+        <HouseholdModal
+          user={householdModalUser}
+          users={users}
+          onClose={() => setHouseholdModalUser(null)}
+          onSaved={() => undefined}
+        />
       )}
 
       {inviteLink && (

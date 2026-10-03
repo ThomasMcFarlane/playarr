@@ -50,6 +50,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stable synthetic stream indices (10000 and above). Audio tracks gain `profile` and
   `codec_label` (for example "DTS-HD MA", "TrueHD Atmos") and untitled tracks are
   labelled with language, codec and channel layout (task 98).
+- Playarr Admin: a Household controls editor on each account (highest content rating, unrated
+  handling, hidden tags, daily watch time, weekly schedule with time zone, guardians, approval
+  kinds, offline validity), saved through `PUT /api/v1/admin/users/{id}/household`.
+- Playarr Web: a "not available right now" screen with the next start time or reset time when a
+  profile is outside its schedule or out of daily time, with "Ask a guardian for more time" and
+  "Switch profile"; an "N min left" chip in the last hour; a Household page where a guardian
+  approves or denies requests with their own PIN; plain-language PIN lockout messages
+  (also in Thai and Japanese). The shared API client gains the household calls and
+  `parseHouseholdBlock`/`parsePinLockSeconds`.
 - The public Clients hub at `/clients` now lists Playarr Server (`/clients/server`) as a
   server, not a playback app: requirements (ffmpeg/ffprobe), Docker Compose, systemd and
   Helm install methods, and the optional playarr.app HTTPS relay. It states that no

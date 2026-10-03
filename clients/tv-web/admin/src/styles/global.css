@@ -3068,3 +3068,30 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Household controls editor (Users page). */
+.household-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.household-schedule-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.household-schedule-row .input {
+  width: 7rem;
+}
+.household-fieldset {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.household-fieldset legend {
+  padding: 0 0.4rem;
+}

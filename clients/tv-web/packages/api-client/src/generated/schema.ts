@@ -790,6 +790,22 @@ export interface paths {
         patch: operations["update_user_handler"];
         trace?: never;
     };
+    "/api/v1/admin/users/{id}/household": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_user_household_handler"];
+        put: operations["put_user_household_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{user_id}/impersonate": {
         parameters: {
             query?: never;
@@ -1244,6 +1260,70 @@ export interface paths {
             cookie?: never;
         };
         get: operations["download_ticket_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_approvals_handler"];
+        put?: never;
+        post: operations["create_approval_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/approvals/{id}/consume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["consume_approval_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/approvals/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decide_approval_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/household/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["household_status_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2834,6 +2914,58 @@ export interface components {
         };
         /** @enum {string} */
         AlbumType: "studio" | "live" | "compilation" | "ep" | "single" | "soundtrack";
+        /** @description A guardian approval request and, once decided, its bounded grant. */
+        Approval: {
+            /**
+             * Format: int64
+             * @description Extra watch seconds for a `Time`/`budget` grant.
+             */
+            bonus_seconds: number;
+            /** Format: date-time */
+            decided_at?: string | null;
+            /** Format: uuid */
+            decided_by?: string | null;
+            /**
+             * Format: date-time
+             * @description An approved grant is unusable at or after this time.
+             */
+            grant_expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ApprovalKind"];
+            /**
+             * Format: int32
+             * @description `None` = unlimited uses within the grant window (content/time grants
+             *     are re-checked on every request).
+             */
+            max_uses?: number | null;
+            note?: string | null;
+            /** Format: uuid */
+            profile_user_id: string;
+            /**
+             * Format: date-time
+             * @description A pending request that is not decided by this time can no longer be
+             *     approved.
+             */
+            request_expires_at: string;
+            /** Format: date-time */
+            requested_at: string;
+            status: components["schemas"]["ApprovalStatus"];
+            /**
+             * @description `Content`: the work id. `Time`: `"schedule"` or `"budget"`.
+             *     `Purchase`/`Install`: an opaque provider/app identifier.
+             */
+            subject: string;
+            /** Format: int32 */
+            uses: number;
+        };
+        /**
+         * @description Things a guardian can be asked to approve.
+         * @enum {string}
+         */
+        ApprovalKind: "purchase" | "install" | "content" | "time";
+        /** @enum {string} */
+        ApprovalStatus: "pending" | "approved" | "denied";
         ApprovePairingRequest: {
             /** @description Narrow the granted scopes to a subset of those requested. */
             scopes?: string[] | null;
@@ -3239,6 +3371,18 @@ export interface components {
              */
             sunset?: string | null;
         };
+        ConsumeApprovalResponse: {
+            consumed: boolean;
+        };
+        CreateApprovalRequest: {
+            kind: components["schemas"]["ApprovalKind"];
+            note?: string | null;
+            /**
+             * @description `content`: a work id. `time`: `schedule` or `budget`. `purchase`/
+             *     `install`: an opaque provider or application identifier.
+             */
+            subject: string;
+        };
         CreateDownloadTicketRequest: {
             /** Format: uuid */
             media_file_id: string;
@@ -3359,6 +3503,22 @@ export interface components {
             /** @description Present only on a crew credit. */
             job?: string | null;
             person: components["schemas"]["PersonResponse"];
+        };
+        DecideApprovalRequest: {
+            approve: boolean;
+            /**
+             * Format: int32
+             * @description `time`/`budget` only: extra watch minutes granted.
+             */
+            bonus_minutes?: number | null;
+            /**
+             * Format: int32
+             * @description How long an approval stays usable. Default 15 minutes for
+             *     purchase/install, 60 for content and time; at most 240.
+             */
+            duration_minutes?: number | null;
+            /** @description The guardian's own profile PIN (required to approve). */
+            pin?: string | null;
         };
         /**
          * @description How a stream resolved to a remote peer should actually reach the
@@ -3555,6 +3715,12 @@ export interface components {
         };
         ErrorBody: {
             /**
+             * @description Optional machine-readable context, e.g. `{"reason":"outside_schedule",
+             *     "next_start_at":"..."}` on a `household_blocked` response. Omitted
+             *     when empty so existing error bodies are unchanged.
+             */
+            details?: Record<string, never> | null;
+            /**
              * @description A short, stable, machine-matchable code -- e.g. `"not_found"`,
              *     `"invalid_transition"`. Deliberately not the `Display` text of the
              *     underlying error (which can change wording without that being a
@@ -3727,6 +3893,94 @@ export interface components {
         HealthSeverity: "ok" | "info" | "warning" | "problem";
         /** @enum {string} */
         HealthSource: "server" | "client";
+        HouseholdControls: {
+            app_allow?: string[] | null;
+            /** @description Approval kinds that must be granted by a guardian. */
+            approval_required?: components["schemas"]["ApprovalKind"][];
+            /**
+             * @description `None` = unrestricted; `Some(ids)` = allowlist (empty denies all).
+             *     Contract only until games/live TV/external apps have routes
+             *     (TASKS 22, 28, 36).
+             */
+            channel_allow?: string[] | null;
+            /**
+             * Format: int32
+             * @description Maximum watch time per local day, in minutes.
+             */
+            daily_budget_minutes?: number | null;
+            game_allow?: string[] | null;
+            /** @description Users who may approve requests for, and unlock, this profile. */
+            guardian_user_ids?: string[];
+            /**
+             * Format: int32
+             * @description Maximum age of a client's cached authorisation. `None` = default.
+             */
+            offline_ttl_hours?: number | null;
+            /**
+             * @description IANA zone name used for `access_schedule` and the budget day. `None`
+             *     means UTC.
+             */
+            timezone?: string | null;
+            /** @description Applies only when the policy has a `max_rating`. */
+            unrated?: components["schemas"]["UnratedContent"];
+        };
+        /**
+         * @description The household-relevant slice of an account's [`Policy`], edited as one
+         *     unit by `PUT /api/v1/admin/users/{id}/household`.
+         */
+        HouseholdSettings: {
+            /**
+             * @description Allowed windows in the profile's time zone; `null` = no schedule,
+             *     an empty list = locked out.
+             */
+            access_schedule?: components["schemas"]["AccessWindow"][] | null;
+            allowed_tags?: string[];
+            blocked_folders?: string[];
+            blocked_tags?: string[];
+            household?: components["schemas"]["HouseholdControls"];
+            /** @description Rating ceiling such as `PG-13`; `null` = no rating gate. */
+            max_rating?: string | null;
+        };
+        HouseholdStatusResponse: {
+            /** Format: int32 */
+            daily_budget_minutes?: number | null;
+            /** @description Profiles this user may approve requests for. */
+            guardian_for: string[];
+            max_rating?: string | null;
+            /**
+             * Format: date-time
+             * @description Start of the next schedule window while outside it.
+             */
+            next_start_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Cached authorisation on a client is valid until this instant.
+             */
+            offline_valid_until: string;
+            /** Format: int64 */
+            remaining_seconds?: number | null;
+            /**
+             * Format: date-time
+             * @description When the daily budget resets, once exhausted.
+             */
+            resets_at?: string | null;
+            /** @description Whether any household restriction applies to this profile. */
+            restricted: boolean;
+            /**
+             * Format: date-time
+             * @description Server time, so clients can show remaining time without trusting
+             *     their own clock.
+             */
+            server_time: string;
+            /** @description `unrestricted`, `allowed`, `outside_schedule` or `budget_exhausted`. */
+            state: string;
+            timezone?: string | null;
+            /**
+             * Format: date-time
+             * @description End of the current schedule window.
+             */
+            window_ends_at?: string | null;
+        };
         ImageAsset: {
             /** Format: int32 */
             height?: number | null;
@@ -4953,6 +5207,11 @@ export interface components {
              *     own deny-by-default semantics.
              */
             group_library_allow: string[];
+            /**
+             * @description Household and child controls (`docs/architecture/household-controls.md`).
+             *     Defaults to no extra restrictions, so existing policies are unchanged.
+             */
+            household?: components["schemas"]["HouseholdControls"];
             /** Format: uuid */
             id: string;
             /**
@@ -5635,6 +5894,13 @@ export interface components {
             peer_node_id: string;
             peer_node_name: string;
         };
+        /**
+         * @description What to do with content that has no usable rating when the profile has a
+         *     `max_rating` ceiling. Defaults to blocking: an unknown rating must not be
+         *     treated as "safe" for a child profile.
+         * @enum {string}
+         */
+        UnratedContent: "block" | "allow";
         UpdateMediaPlaybackPreferencesRequest: {
             audio_track_id?: string | null;
             quality_id: string;
@@ -8118,6 +8384,105 @@ export interface operations {
             };
         };
     };
+    get_user_household_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's household settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdSettings"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_user_household_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HouseholdSettings"];
+            };
+        };
+        responses: {
+            /** @description Settings saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdSettings"];
+                };
+            };
+            /** @description Invalid rating, time zone, schedule, budget or guardian */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     impersonate_user_handler: {
         parameters: {
             query?: never;
@@ -9948,6 +10313,225 @@ export interface operations {
             };
             /** @description The ticket expired or was canceled */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_approvals_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own requests and requests from profiles the caller guards, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_approval_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Approval request created (pending) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+            /** @description Invalid subject for this kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many pending requests */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    consume_approval_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Approval id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One use of the approval was consumed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsumeApprovalResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Approval is not approved, expired, exhausted or belongs to another profile */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decide_approval_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Approval id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Decision recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+            /** @description Missing or invalid access token, or wrong guardian PIN */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not a guardian of this profile, is restricted, has no PIN, or is the requester */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown approval */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already decided or expired */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PIN locked out */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    household_status_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in profile's household state: schedule, remaining time and offline validity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HouseholdStatusResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr streaming access */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14405,8 +14989,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Caller does not have Playarr streaming access */
+            /** @description Caller does not have Playarr streaming access, or a restricted caller targets a less restricted profile that has no PIN (`guardian_pin_required`) */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

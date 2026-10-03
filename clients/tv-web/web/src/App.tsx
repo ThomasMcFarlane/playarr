@@ -43,6 +43,13 @@ import { PlaylistsPage } from "./pages/Playlists";
 import { WatchlistPage } from "./pages/Watchlist";
 import { CalendarPage } from "./pages/Calendar";
 import { ProfilesPage } from "./pages/Profiles";
+import { HouseholdPage } from "./pages/Household";
+import {
+  HouseholdBlockedScreen,
+  HouseholdRemainingChip,
+  useHouseholdStatus,
+} from "./components/HouseholdGate";
+import { householdBlockFromStatus } from "./lib/householdState";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
 import { ClientsPage } from "./pages/Clients";
@@ -226,6 +233,12 @@ function AppShell() {
   const navigate = useNavigate();
   const now = useMinuteClock();
   const online = useOnlineStatus();
+  const { status: householdStatus } = useHouseholdStatus(
+    client,
+    currentUserId !== undefined && online,
+    location.pathname
+  );
+  const householdBlock = householdBlockFromStatus(householdStatus);
   const { canDownload, downloadStorageAvailable } = useDownloads();
   const playerRouteMatch = matchPath("/player/:mediaFileId", location.pathname);
   const routeMediaFileId = playerRouteMatch?.params.mediaFileId;
@@ -414,7 +427,13 @@ function AppShell() {
         </header>
       )}
 
-      {isOfflineGated ? (
+      {householdStatus && householdBlock ? (
+        <HouseholdBlockedScreen
+          client={client}
+          status={householdStatus}
+          onSwitchProfile={() => navigate("/profiles")}
+        />
+      ) : isOfflineGated ? (
         <div className="page tv-state-page">
           <TvEmptyState
             graphic="details"
@@ -435,7 +454,7 @@ function AppShell() {
         </PageScrollRoot>
       )}
 
-      {activePlayerSession && (
+      {activePlayerSession && !householdBlock && (
         <PlayerPage
           mediaFileId={activePlayerSession.mediaFileId}
           locationState={activePlayerSession.locationState}
@@ -504,6 +523,7 @@ function AppShell() {
 
       {!isPlayerRoute && (
         <div className="app-user-identity-cluster">
+          <HouseholdRemainingChip status={householdStatus} now={now} />
           <button
             type="button"
             className="app-user-identity"
@@ -601,6 +621,7 @@ export function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/link" element={<DeviceLinkPage />} />
       <Route path="/profiles" element={<ProfilesPage />} />
+      <Route path="/household" element={<HouseholdPage />} />
       <Route path="/clients/:clientId?" element={<ClientsPage />} />
       <Route path="/download" element={<Navigate to="/clients" replace />} />
       <Route path="/install" element={<Navigate to="/clients" replace />} />
