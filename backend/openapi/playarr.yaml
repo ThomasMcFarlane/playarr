@@ -10750,6 +10750,11 @@ components:
       properties:
         pin_locked:
           type: boolean
+    ProgressConflicts:
+      type: string
+      enum:
+      - newest
+      - keep_existing
     ProviderState:
       type: string
       description: One provider's health for a search.

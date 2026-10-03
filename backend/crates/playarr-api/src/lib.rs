@@ -214,7 +214,8 @@ impl Modify for SecurityAddon {
     components(schemas(
         playarr_model::PlaybackSession,
         playarr_model::discovery::DiscoveryScope,
-        playarr_model::discovery::DiscoveryKind
+        playarr_model::discovery::DiscoveryKind,
+        portability::ProgressConflicts
     )),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),

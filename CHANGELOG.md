@@ -244,6 +244,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Registered the portability `ProgressConflicts` schema so `backend/openapi/playarr.yaml` resolves and the
+  TypeScript API client can be regenerated.
 - Catalogue browse loads each page of works' external references with batched `IN (...)`
   queries instead of one query per title, removing the remaining ~0.4 s per uncached
   `/api/v1/catalog` call on region-b (task 100).

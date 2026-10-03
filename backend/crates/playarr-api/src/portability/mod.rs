@@ -30,7 +30,8 @@ use crate::AppState;
 
 pub use export::ExportRegistry;
 use export::{ExportCounts, ExportJob, ExportProgress, ExportStatus};
-use import::{ImportOptions, ImportResult, ImportSample, ImportSummary, ProgressConflicts};
+pub(crate) use import::ProgressConflicts;
+use import::{ImportOptions, ImportResult, ImportSample, ImportSummary};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ExportJobResponse {

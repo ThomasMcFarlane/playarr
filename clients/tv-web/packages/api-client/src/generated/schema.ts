@@ -973,6 +973,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["calendar_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -1102,6 +1118,22 @@ export interface paths {
         get: operations["discover_handler"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discover/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["request_title_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2284,6 +2316,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/data-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_exports_handler"];
+        put?: never;
+        post: operations["create_export_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-exports/{export_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_export_handler"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_export_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-exports/{export_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["download_export_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply_import_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_import_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-imports/unmatched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unmatched_import_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/player-preferences": {
         parameters: {
             query?: never;
@@ -2821,6 +2949,83 @@ export interface components {
             /** Format: uuid */
             media_file_id?: string | null;
         };
+        CalendarEntry: {
+            /**
+             * Format: int64
+             * @description Average seconds from air to library availability for the series.
+             */
+            average_lag_seconds?: number | null;
+            /**
+             * Format: date
+             * @description UTC calendar day of the release.
+             */
+            date: string;
+            /** Format: int64 */
+            episode_number?: number | null;
+            has_file: boolean;
+            /** @description Stable across refreshes; derived from the deduplication key. */
+            id: string;
+            media_kind: components["schemas"]["CalendarMediaKind"];
+            monitored: boolean;
+            /** @description Absolute external artwork URL only, never an instance-local path. */
+            poster_url?: string | null;
+            /**
+             * Format: date-time
+             * @description Exact instant when the source provides one; absent for all-day entries.
+             */
+            release_at?: string | null;
+            release_type: components["schemas"]["CalendarReleaseType"];
+            /** Format: int64 */
+            season_number?: number | null;
+            sources: components["schemas"]["CalendarEntrySource"][];
+            /** @description Episode, album or book title. */
+            subtitle?: string | null;
+            /** @description Series, movie, artist or author title. */
+            title: string;
+            /**
+             * Format: uuid
+             * @description The catalog `Work` this entry belongs to, when it is in the catalog.
+             */
+            work_id?: string | null;
+        };
+        /** @description One instance that reported a calendar entry. */
+        CalendarEntrySource: {
+            /**
+             * Format: int64
+             * @description The source app's own id for the episode, movie, album or book.
+             */
+            arr_id: number;
+            /** Format: uuid */
+            source_instance_id: string;
+            source_kind: components["schemas"]["SourceKind"];
+            source_name: string;
+        };
+        /** @enum {string} */
+        CalendarMediaKind: "episode" | "movie" | "album" | "book";
+        /** @enum {string} */
+        CalendarReleaseType: "air" | "cinema" | "digital" | "physical" | "release";
+        CalendarResponse: {
+            /** Format: date */
+            end: string;
+            entries: components["schemas"]["CalendarEntry"][];
+            sources: components["schemas"]["CalendarSourceStatus"][];
+            /** Format: date */
+            start: string;
+        };
+        /** @enum {string} */
+        CalendarSourceState: "ok" | "unreachable" | "rejected" | "error";
+        /** @description Per-instance outcome of one calendar query. */
+        CalendarSourceStatus: {
+            /** Format: int32 */
+            entry_count: number;
+            /** @description Short reason; never contains URLs or credentials. */
+            error?: string | null;
+            kind: components["schemas"]["SourceKind"];
+            name: string;
+            /** Format: uuid */
+            source_instance_id: string;
+            status: components["schemas"]["CalendarSourceState"];
+        };
         CapabilitiesResponse: {
             /** @description `true` when this response came from the short-lived cache. */
             cached: boolean;
@@ -3250,6 +3455,56 @@ export interface components {
             error: string;
             message: string;
         };
+        ExportCounts: {
+            playback_preferences: number;
+            playlist_items: number;
+            playlists: number;
+            /**
+             * @description Rows left out because their content no longer exists or is outside
+             *     this account's library permissions.
+             */
+            skipped: number;
+            watch_progress: number;
+            watchlist: number;
+        };
+        ExportJobResponse: {
+            counts: components["schemas"]["ExportCounts"];
+            /** Format: date-time */
+            created_at: string;
+            /** @description Relative URL of the package, present while `status` is `ready`. */
+            download_url?: string | null;
+            error?: string | null;
+            /**
+             * Format: date-time
+             * @description When the download stops working (set once the package is ready).
+             */
+            expires_at?: string | null;
+            /** @description Opaque, unguessable identifier; only the creating account can use it. */
+            id: string;
+            progress: components["schemas"]["ExportProgress"];
+            /** Format: int64 */
+            size_bytes?: number | null;
+            status: components["schemas"]["ExportStatus"];
+        };
+        ExportListResponse: {
+            exports: components["schemas"]["ExportJobResponse"][];
+            /**
+             * @description Always `own_account_only`: exports contain only the signed-in
+             *     account's data, never anyone else's.
+             */
+            scope: string;
+        };
+        ExportProgress: {
+            done: number;
+            /**
+             * @description Current stage: `queued`, `watch_progress`, `playback_preferences`,
+             *     `playlists`, `packaging` or `done`.
+             */
+            stage: string;
+            total: number;
+        };
+        /** @enum {string} */
+        ExportStatus: "queued" | "running" | "ready" | "failed" | "expired";
         /**
          * @description A cross-reference to the identifier this `Work` (or one of its source
          *     records) is known by in an external catalog/metadata provider.
@@ -3390,6 +3645,68 @@ export interface components {
             token_type: string;
             /** Format: uuid */
             user_id: string;
+        };
+        ImportPreviewResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            /**
+             * @description SHA-256 of the uploaded bytes. Send it back unchanged to apply, which
+             *     guarantees that what was previewed is what is applied.
+             */
+            package_sha256: string;
+            samples: components["schemas"]["ImportSample"][];
+            /** Format: int32 */
+            schema_version: number;
+            source_instance_name: string;
+            summary: components["schemas"]["ImportSummary"];
+            warnings: string[];
+        };
+        ImportResult: {
+            /** @description `true` when every planned change was written. */
+            completed: boolean;
+            /** @description The first failure, when `completed` is `false`. */
+            failure?: string | null;
+            playlist_items_added: number;
+            playlist_items_already_present: number;
+            playlists_created: number;
+            preferred_audio_language_updated: boolean;
+            progress_added: number;
+            progress_conflicts_kept: number;
+            progress_unchanged: number;
+            progress_updated: number;
+            /** @description Sections not attempted after a failure; re-running the import is safe. */
+            sections_not_attempted: string[];
+            unmatched_total: number;
+            watchlist_added: number;
+            watchlist_already_present: number;
+        };
+        ImportSample: {
+            candidates: string[];
+            /**
+             * @description `add`, `update`, `unchanged`, `conflict_kept`, `no_match`, `ambiguous`,
+             *     `unsupported_kind` or `invalid_record`.
+             */
+            outcome: string;
+            playlist?: string | null;
+            /** @description `watch_progress` or `playlist_item`. */
+            section: string;
+            title: string;
+        };
+        ImportSummary: {
+            /**
+             * @description Per-file playback choices are specific to one server's files and are
+             *     reported but never applied.
+             */
+            playback_preferences_not_applied: number;
+            playlists: components["schemas"]["PlaylistSummary"];
+            /**
+             * @description The audio language that would be set, when preferences are included
+             *     and it differs from the current one.
+             */
+            preferred_audio_language_change?: string | null;
+            unmatched_total: number;
+            watch_progress: components["schemas"]["SectionSummary"];
+            watchlist: components["schemas"]["WatchlistSummary"];
         };
         InboxEvent: {
             /** Format: int64 */
@@ -4462,6 +4779,15 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        PlaylistSummary: {
+            existing: number;
+            items_already_present: number;
+            items_to_add: number;
+            items_total: number;
+            items_unmatched: number;
+            new: number;
+            total: number;
+        };
         /**
          * @description The full set of gates an authorization check can consult for a user.
          *     Deliberately flat (no nested "permissions" sub-struct) so a policy
@@ -4564,6 +4890,8 @@ export interface components {
         ProfilePinSettingResponse: {
             pin_locked: boolean;
         };
+        /** @enum {string} */
+        ProgressConflicts: "newest" | "keep_existing";
         /**
          * @description One provider's health for a search.
          * @enum {string}
@@ -4668,6 +4996,11 @@ export interface components {
             max_height?: number | null;
             video_codecs?: string[];
         };
+        RequestResult: {
+            /** Format: uuid */
+            provider_instance_id: string;
+            status: string;
+        };
         ResolvedTitle: {
             actions: components["schemas"]["TitleAction"][];
             in_watchlist: boolean;
@@ -4768,6 +5101,16 @@ export interface components {
         SeasonDetailSchema: {
             episodes: components["schemas"]["EpisodeDetailSchema"][];
             season: components["schemas"]["Season"];
+        };
+        SectionSummary: {
+            already_present: number;
+            ambiguous: number;
+            /** @description Existing progress differs and was not replaced under the chosen policy. */
+            conflicts_kept: number;
+            total: number;
+            unmatched: number;
+            will_add: number;
+            will_update: number;
         };
         /**
          * @description The signed-in Playarr user's own capability grants -- the client-side
@@ -5399,6 +5742,13 @@ export interface components {
         };
         WatchlistResponse: {
             items: components["schemas"]["WatchlistEntry"][];
+        };
+        WatchlistSummary: {
+            already_present: number;
+            total: number;
+            /** @description Records that are invalid or of a kind this server does not know. */
+            unmatched: number;
+            will_add: number;
         };
         /** @enum {string} */
         Weekday: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -8417,6 +8767,59 @@ export interface operations {
             };
         };
     };
+    calendar_handler: {
+        parameters: {
+            query?: {
+                /** @description First day, inclusive (`YYYY-MM-DD`). Defaults to today (UTC). */
+                start?: string | null;
+                /**
+                 * @description Last day, inclusive. Defaults to `start` plus 30 days; at most 92 days
+                 *     after `start`.
+                 */
+                end?: string | null;
+                /** @description Comma-separated `episode,movie,album,book`. All when omitted. */
+                kind?: string | null;
+                /** @description Restrict to one source instance. */
+                source_instance_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Upcoming releases from every permitted instance, with per-instance status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarResponse"];
+                };
+            };
+            /** @description Invalid range or kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller may not view the catalog */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     browse_catalog_handler: {
         parameters: {
             query?: {
@@ -8902,6 +9305,65 @@ export interface operations {
             };
             /** @description Caller has neither Playarr streaming access nor admin access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    request_title_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleSnapshot"];
+            };
+        };
+        responses: {
+            /** @description The title was added to the request provider and is being searched for */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestResult"];
+                };
+            };
+            /** @description The caller may not request titles */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request provider does not know this title */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Already in the library or already requested */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No usable request provider is configured for this kind of title */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request provider did not accept the request */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12736,6 +13198,348 @@ export interface operations {
             };
             /** @description Caller does not have Playarr streaming access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_exports_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's own recent exports */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportListResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_export_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export started (or the caller's unfinished export returned) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account may not use the catalogue */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_export_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export id */
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export status and progress */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJobResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown export, or one belonging to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_export_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export id */
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export and its temporary file deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown export, or one belonging to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_export_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export id */
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The portable user-data package (ZIP) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown export, or one belonging to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The export is not ready yet */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The export expired; start a new one */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_import_handler: {
+        parameters: {
+            query: {
+                /** @description Digest returned by the preview of this exact upload. */
+                package_sha256: string;
+                include_preferences?: boolean;
+                progress_conflicts?: components["schemas"]["ProgressConflicts"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The same package that was previewed */
+        requestBody: {
+            content: {
+                "application/zip": number[];
+            };
+        };
+        responses: {
+            /** @description What was written. `completed` is false when a step failed; re-running is safe */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The upload does not match the previewed digest */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload or its expanded content is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a valid package, or an unsupported schema version */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_import_handler: {
+        parameters: {
+            query?: {
+                /** @description Include the audio-language preference in the preview. Default false. */
+                include_preferences?: boolean;
+                progress_conflicts?: components["schemas"]["ProgressConflicts"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A package produced by an export */
+        requestBody: {
+            content: {
+                "application/zip": number[];
+            };
+        };
+        responses: {
+            /** @description What an import would do; nothing is written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload or its expanded content is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a valid package, or an unsupported schema version */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unmatched_import_handler: {
+        parameters: {
+            query?: {
+                /** @description Include the audio-language preference in the preview. Default false. */
+                include_preferences?: boolean;
+                progress_conflicts?: components["schemas"]["ProgressConflicts"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The previewed package */
+        requestBody: {
+            content: {
+                "application/zip": number[];
+            };
+        };
+        responses: {
+            /** @description A package of everything that could not be placed, valid for a later import */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload or its expanded content is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a valid package, or an unsupported schema version */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
