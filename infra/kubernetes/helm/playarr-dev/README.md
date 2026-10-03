@@ -190,7 +190,7 @@ optional per-instance `acme` block adds the relay certificate on the same port:
 the server holds both certificates and presents the one matching the TLS SNI
 name (`v4-*.relay.playarr.app` gets the relay certificate, everything else the
 static one). `acme.enabled` requires `hostExposure`; the chart fails to render
-otherwise. It is `false` in `values.yaml` until the relay cut-over.
+otherwise. It is `true` for region-a and region-b since the 2026-10-03 relay cut-over.
 
 | Setting | region-a | region-b |
 | --- | --- | --- |
