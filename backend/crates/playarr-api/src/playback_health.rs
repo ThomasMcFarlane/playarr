@@ -498,7 +498,8 @@ pub(crate) fn build_report(inputs: ReportInputs<'_>) -> PlaybackHealthReport {
         "Source video",
         Some(format!(
             "{} in {}",
-            session.source_codec, session.source_container
+            playarr_transcode::normalise_codec(&session.source_codec),
+            session.source_container
         )),
         measured,
         srv,
@@ -508,7 +509,8 @@ pub(crate) fn build_report(inputs: ReportInputs<'_>) -> PlaybackHealthReport {
         "Delivered video",
         Some(format!(
             "{} in {}",
-            session.target_codec, session.target_container
+            playarr_transcode::normalise_codec(&session.target_codec),
+            session.target_container
         )),
         measured,
         srv,
@@ -709,7 +711,8 @@ pub(crate) fn build_report(inputs: ReportInputs<'_>) -> PlaybackHealthReport {
                 "This device cannot decode the video codec",
                 format!(
                     "The file uses {}; the device did not report support for it, so the server is converting it to {}.",
-                    session.source_codec, session.target_codec
+                    playarr_transcode::normalise_codec(&session.source_codec),
+                    playarr_transcode::normalise_codec(&session.target_codec)
                 ),
                 Some("Playback works as is. Another device with hardware support for this codec would avoid conversion."),
             )),
@@ -1202,6 +1205,30 @@ mod tests {
             &Default::default(),
         );
         assert!(codes(&r).contains(&"video_codec_unsupported"));
+        assert_eq!(
+            fact_of(&r, "delivered_video").value.as_deref(),
+            Some("h264 in hls")
+        );
+    }
+
+    #[test]
+    fn encoder_names_are_shown_as_codecs() {
+        let mut s = session(
+            PlayMethod::Transcode,
+            Some(TranscodeReason::VideoCodecNotSupported),
+        );
+        s.source_codec = "x265".into();
+        s.target_codec = "libx264".into();
+        let r = build(
+            &s,
+            Some(DynamicRange::Sdr),
+            Some("aac"),
+            &Default::default(),
+        );
+        assert_eq!(
+            fact_of(&r, "source_video").value.as_deref(),
+            Some("hevc in mkv")
+        );
         assert_eq!(
             fact_of(&r, "delivered_video").value.as_deref(),
             Some("h264 in hls")

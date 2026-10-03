@@ -1075,13 +1075,15 @@ impl TdarrDispatcher {
 }
 
 /// Canonicalises a codec name so common aliases compare equal:
-/// `h265`/`hevc`/`h.265`, `h264`/`avc`/`avc1`/`h.264`, `av1`/`av01`.
+/// `h265`/`hevc`/`h.265`/`x265`, `h264`/`avc`/`avc1`/`h.264`/`x264`, `av1`/`av01`.
+/// `x264`/`x265` (and `libx264`/`libx265`) are encoder names that Radarr and
+/// ffmpeg report instead of the codec; they are the same H.264/HEVC streams.
 /// Unknown names are returned lower-cased and trimmed.
 pub fn normalise_codec(codec: &str) -> String {
     let lower = codec.trim().to_ascii_lowercase();
     match lower.as_str() {
-        "h265" | "h.265" | "hevc" | "hev1" | "hvc1" => "hevc".to_string(),
-        "h264" | "h.264" | "avc" | "avc1" => "h264".to_string(),
+        "h265" | "h.265" | "hevc" | "hev1" | "hvc1" | "x265" | "libx265" => "hevc".to_string(),
+        "h264" | "h.264" | "avc" | "avc1" | "x264" | "libx264" => "h264".to_string(),
         "av1" | "av01" => "av1".to_string(),
         _ => lower,
     }
@@ -1272,6 +1274,10 @@ mod tests {
                 ("h264", "avc"),
                 ("av01", "av1"),
                 ("av1", "av01"),
+                ("x265", "hevc"),
+                ("x265", "h265"),
+                ("x264", "h264"),
+                ("libx264", "avc"),
             ] {
                 let mut media_file = sample_media_file();
                 media_file.container = "mp4".to_string();
