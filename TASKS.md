@@ -11,10 +11,11 @@ Owner decision (4 October 2026): publish public Playarr Server releases from the
 
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
-| 176 | Release workflow: Linux x86-64 and ARM64 tarballs plus a multi-arch GHCR image on tag `backend-v*` | in progress | server-release | `backend-release.yml` rewritten; `backend.Dockerfile` cross-compiles arm64 natively (no QEMU compile) and gains `binary`/`web` export targets; `scripts/package-server-release.sh`. First tag `backend-v0.1.0`. |
-| 177 | Serve server tarballs and checksums from the private R2 bucket via the playarr.app Worker | in progress | server-release | `/downloads/server/*` routes in `worker.js` (stable aliases, immutable versioned paths, `latest.json`). |
-| 178 | Clients hub `/clients/server`: Download buttons per architecture, checksums, GHCR snippets, release version status (en/th/ja) | in progress | server-release | Replaces "Build from source" status from PR 68. |
+| 176 | Release workflow: Linux x86-64 and ARM64 tarballs plus a multi-arch GHCR image on tag `backend-v*` | done — merged in PR 103 (`<image>`), tag `backend-v0.1.0` run <id> green | server-release | `backend-release.yml` rewritten; `backend.Dockerfile` cross-compiles arm64 natively (no QEMU compile) and gains `binary`/`web` export targets; `scripts/package-server-release.sh`. First tag `backend-v0.1.0`. |
+| 177 | Serve server tarballs and checksums from the private R2 bucket via the playarr.app Worker | done — v0.1.0 uploaded by hand with `scripts/upload-server-release.sh`; automation blocked on row 180 | server-release | `/downloads/server/*` routes in `worker.js` (stable aliases, immutable versioned paths, `latest.json`). |
+| 178 | Clients hub `/clients/server`: Download buttons per architecture, checksums, GHCR snippets, release version status (en/th/ja) | done — live on playarr.app | server-release | Replaces "Build from source" status from PR 68. |
 | 179 | Make the GHCR package `playarr-server` public | blocked on one owner click | Owner | GitHub's API cannot change package visibility. Run `scripts/ghcr-make-public.sh` for the exact step; verify with an anonymous `docker pull`. |
+| 180 | Add `CLOUDFLARE_R2_API_TOKEN` (Workers R2 Storage Edit) to the `release-android` environment | blocked on owner | Owner | The secret does not exist and the Workers deploy token has no R2 access (403), so the release workflow skips the R2 upload with a warning. Run `scripts/server-release-owner-setup.sh`. |
 
 ## Active: End-of-playback experience on every client (2026-10-03)
 
