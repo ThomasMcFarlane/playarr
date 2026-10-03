@@ -8,10 +8,6 @@ on:
       - completed
   workflow_dispatch:
 
-concurrency:
-  group: deploy-playarr-web-production
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -24,6 +20,11 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
+    # Job-level (not workflow-level) so skipped runs triggered by cancelled or
+    # failed CI never enter the group and displace a queued real deploy.
+    concurrency:
+      group: deploy-playarr-web-production
+      cancel-in-progress: false
     runs-on: playarr-runners
     timeout-minutes: 15
     environment:
