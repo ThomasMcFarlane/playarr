@@ -7,6 +7,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Regional servers now run image `<image>`, which carries the catalogue latency fix, sidecar subtitles and the Radarr release-date mapping (tasks 95, 98, 100).
+
 ### Added
 
 - Playback info and playback options now list sidecar subtitles
