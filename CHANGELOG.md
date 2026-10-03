@@ -143,6 +143,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Catalogue browse loads each page of works' external references with batched `IN (...)`
+  queries instead of one query per title, removing the remaining ~0.4 s per uncached
+  `/api/v1/catalog` call on region-b (task 100).
 - The playback connection test now holds its concurrency slot (four at once, extra callers get
   429) until the response body finishes or the client cancels, instead of only while the payload
   was built, and sends a `Content-Length`.
