@@ -40,11 +40,8 @@ import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
-<<<<<<< HEAD
 import { WatchlistPage } from "./pages/Watchlist";
-=======
 import { CalendarPage } from "./pages/Calendar";
->>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
 import { ProfilesPage } from "./pages/Profiles";
 import { MusicDetailPage } from "./pages/MusicDetail";
 import { NotFoundPage } from "./pages/NotFound";
@@ -143,11 +140,8 @@ const NAV_ICONS: Record<string, ComponentType> = {
   "/sites": SitesIcon,
   "/music": MusicIcon,
   "/playlists": PlaylistsIcon,
-<<<<<<< HEAD
   "/watchlist": WatchlistIcon,
-=======
   "/calendar": CalendarIcon,
->>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
 };
 
 /** Shell nav hierarchy from productSurfaces (shared with tv-vidaa parity tests). */

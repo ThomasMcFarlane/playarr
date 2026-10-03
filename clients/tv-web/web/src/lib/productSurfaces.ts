@@ -162,13 +162,13 @@ export const PRODUCT_NAV_GROUPS: readonly {
         end: false,
       },
       {
-<<<<<<< HEAD
         to: "/watchlist",
         labelKey: "shell.nav.watchlist",
-=======
+        end: false,
+      },
+      {
         to: "/calendar",
         labelKey: "shell.nav.calendar",
->>>>>>> 6afe4df0 (feat(web): add release calendar page, subscription and availability lag)
         end: false,
       },
     ],
