@@ -36,7 +36,11 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are cancelled by newer pushes. A run on main is never
+  # cancelled mid-flight, so the newest main commit always completes CI and
+  # triggers the deploy workflows (web, regional image, Android). Main runs
+  # queue per ref, in order; a newer queued run replaces an older queued one.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
