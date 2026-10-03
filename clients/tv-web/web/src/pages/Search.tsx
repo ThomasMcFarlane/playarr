@@ -1,4 +1,6 @@
 import {
+  memo,
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -159,6 +161,127 @@ function workTypeLabel(
         ? t("pages.search.kindArtist")
         : t("pages.search.kindMovie");
 }
+
+type MediaItemProps = ReturnType<typeof useMediaContextMenu>["itemProps"];
+
+interface SearchResultCardProps {
+  result: SearchResult;
+  isFirst: boolean;
+  isSelected: boolean;
+  requestedQuery: string;
+  requestedMediaType: SearchMediaType;
+  requestedLibraryId: string | null;
+  requestedFocusId: string | null;
+  playlists: PlaylistResponse[] | null;
+  progress: WatchProgress | undefined;
+  showUnwatched: boolean;
+  navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
+  onCapture: ReturnType<typeof useNavigationLayer>["captureLink"];
+  itemProps: MediaItemProps;
+  registerRef: (key: string, element: HTMLAnchorElement | null) => void;
+}
+
+/** One search hit; memoised so a selection change renders two cards, not all. */
+const SearchResultCard = memo(function SearchResultCard({
+  result,
+  isFirst,
+  isSelected,
+  requestedQuery,
+  requestedMediaType,
+  requestedLibraryId,
+  requestedFocusId,
+  playlists,
+  progress,
+  showUnwatched,
+  navigationOrigin,
+  onCapture,
+  itemProps,
+  registerRef,
+}: SearchResultCardProps) {
+  const { t } = useLanguage();
+  const key = resultKey(result);
+  const setRef = useCallback(
+    (element: HTMLAnchorElement | null) => registerRef(key, element),
+    [key, registerRef]
+  );
+  const backTo = searchRoute(requestedQuery, requestedMediaType, requestedLibraryId, key);
+  const linkState = useMemo(
+    () => ({ backTo, navigationOrigin }),
+    [backTo, navigationOrigin]
+  );
+  const isDefaultFocus = requestedFocusId === key || (!requestedFocusId && isFirst);
+
+  if (result.type === "playlist") {
+    const playlist = result.playlist;
+    return (
+      <Link
+        ref={setRef}
+        to={playlistPageTarget(playlist, playlists ?? [])}
+        state={linkState}
+        className={`tv-search-result is-playlist${isSelected ? " is-selected" : ""}`}
+        data-search-key={key}
+        onClick={onCapture}
+        data-navigation-focus-key={`search:${key}`}
+        data-tv-focus-default={isDefaultFocus ? true : undefined}
+      >
+        <span className="tv-search-result-art tv-search-playlist-art">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M8 11h23M8 20h23M8 29h14" />
+            <path d="m29 28 11 7-11 7Z" />
+          </svg>
+        </span>
+        <span className="tv-search-result-copy">
+          <strong>{playlist.name}</strong>
+          <small>
+            {playlist.is_system
+              ? t("pages.search.systemPlaylist")
+              : t("pages.search.playlist")}
+          </small>
+        </span>
+      </Link>
+    );
+  }
+
+  const work = result.work;
+  const detailRoute =
+    work.kind === "artist"
+      ? `/music/${work.id}`
+      : resultDetailRoute(requestedQuery, requestedMediaType, requestedLibraryId, work.id, key);
+  const contextProps = itemProps({
+    work,
+    detailRoute,
+    parentRoute: backTo,
+    progress,
+  });
+  return (
+    <Link
+      ref={setRef}
+      to={detailRoute}
+      state={linkState}
+      className={`tv-search-result${isSelected ? " is-selected" : ""}`}
+      {...contextProps}
+      data-search-key={key}
+      onClick={onCapture}
+      data-navigation-focus-key={`search:${key}`}
+      data-tv-focus-default={isDefaultFocus ? true : undefined}
+    >
+      <span className="tv-search-result-art">
+        <CachedArtworkImage
+          work={work}
+          kinds={["backdrop", "poster"]}
+          alt=""
+          loading="lazy"
+          fallback={<span>{work.title}</span>}
+        />
+        <WatchStateOverlay progress={progress} showUnwatched={showUnwatched} />
+      </span>
+      <span className="tv-search-result-copy">
+        <strong>{work.title}</strong>
+        <small>{workTypeLabel(work, t)}</small>
+      </span>
+    </Link>
+  );
+});
 
 export function SearchPage() {
   const { t } = useLanguage();
@@ -582,27 +705,30 @@ export function SearchPage() {
     });
   }
 
-  function handleResultKeyDown(event: KeyboardEvent<HTMLAnchorElement>) {
-    if (event.key !== "ArrowLeft") return;
-    const current = event.currentTarget;
-    const currentRect = current.getBoundingClientRect();
-    const hasResultToLeft = Array.from(resultRefs.current.values()).some((node) => {
-      if (node === current) return false;
-      const rect = node.getBoundingClientRect();
-      const verticalOverlap = Math.max(
-        0,
-        Math.min(currentRect.bottom, rect.bottom) - Math.max(currentRect.top, rect.top)
-      );
-      return (
-        rect.left < currentRect.left - 2 &&
-        verticalOverlap >= Math.min(currentRect.height, rect.height) * 0.45
-      );
-    });
-    if (hasResultToLeft) return;
-    event.preventDefault();
-    event.stopPropagation();
-    inputRef.current?.focus({ preventScroll: true });
-  }
+  const registerResultRef = useCallback(
+    (key: string, element: HTMLAnchorElement | null) => {
+      if (element) resultRefs.current.set(key, element);
+      else resultRefs.current.delete(key);
+    },
+    []
+  );
+
+  // Delegated focus: one handler for the grid, selection debounced under a
+  // remote hold so the preview/stage re-render never runs per key.
+  const selectTimerRef = useRef(0);
+  const handleResultsFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    const card = (event.target as Element | null)?.closest<HTMLElement>(
+      "[data-search-key]"
+    );
+    const key = card?.dataset.searchKey;
+    if (!key) return;
+    window.clearTimeout(selectTimerRef.current);
+    const remote = document.body.dataset.inputMode === "remote";
+    selectTimerRef.current = window.setTimeout(() => {
+      startTransition(() => setSelectedId(key));
+    }, remote ? 280 : 0);
+  }, []);
+  useEffect(() => () => window.clearTimeout(selectTimerRef.current), []);
 
   const selectedWork = selected?.type === "work" ? selected.work : null;
   const selectedPlaylist =
@@ -862,124 +988,33 @@ export function SearchPage() {
                 variant="rail"
               />
             ) : (
-              <div className="tv-search-results-grid tv-search-rail-grid">
-                {results.map((result, index) => {
-                  const key = resultKey(result);
-                  const backTo = searchRoute(
-                    requestedQuery,
-                    requestedMediaType,
-                    requestedLibraryId,
-                    key
-                  );
-                  if (result.type === "playlist") {
-                    const playlist = result.playlist;
-                    return (
-                      <Link
-                        key={key}
-                        ref={(element) => {
-                          if (element) resultRefs.current.set(key, element);
-                          else resultRefs.current.delete(key);
-                        }}
-                        to={playlistPageTarget(playlist, playlists ?? [])}
-                        state={{ backTo, navigationOrigin: navigationLayer.origin }}
-                        className={`tv-search-result is-playlist${
-                          selectedId === key ? " is-selected" : ""
-                        }`}
-                        onFocus={() => setSelectedId(key)}
-                        onKeyDown={handleResultKeyDown}
-                        onClick={navigationLayer.captureLink}
-                        data-navigation-focus-key={`search:${key}`}
-                        data-tv-focus-default={
-                          requestedFocusId === key ||
-                          (!requestedFocusId && index === 0)
-                            ? true
-                            : undefined
-                        }
-                      >
-                        <span className="tv-search-result-art tv-search-playlist-art">
-                          <svg viewBox="0 0 48 48" aria-hidden="true">
-                            <path d="M8 11h23M8 20h23M8 29h14" />
-                            <path d="m29 28 11 7-11 7Z" />
-                          </svg>
-                        </span>
-                        <span className="tv-search-result-copy">
-                          <strong>{playlist.name}</strong>
-                          <small>
-                            {playlist.is_system
-                              ? t("pages.search.systemPlaylist")
-                              : t("pages.search.playlist")}
-                          </small>
-                        </span>
-                      </Link>
-                    );
-                  }
-
-                  const work = result.work;
-                  const detailRoute =
-                    work.kind === "artist"
-                      ? `/music/${work.id}`
-                      : resultDetailRoute(
-                          requestedQuery,
-                          requestedMediaType,
-                          requestedLibraryId,
-                          work.id,
-                          key
-                        );
-                  const contextProps = mediaContext.itemProps({
-                    work,
-                    detailRoute,
-                    parentRoute: backTo,
-                    progress: progressByWork.get(work.id),
-                  });
-                  return (
-                    <Link
-                      key={key}
-                      ref={(element) => {
-                        if (element) resultRefs.current.set(key, element);
-                        else resultRefs.current.delete(key);
-                      }}
-                      to={detailRoute}
-                      state={{ backTo, navigationOrigin: navigationLayer.origin }}
-                      className={`tv-search-result${
-                        selectedId === key ? " is-selected" : ""
-                      }`}
-                      {...contextProps}
-                      onFocus={() => setSelectedId(key)}
-                      onKeyDown={(event) => {
-                        if (event.key === "ArrowLeft") {
-                          handleResultKeyDown(event);
-                          return;
-                        }
-                        contextProps.onKeyDown(event);
-                      }}
-                      onClick={navigationLayer.captureLink}
-                      data-navigation-focus-key={`search:${key}`}
-                      data-tv-focus-default={
-                        requestedFocusId === key || (!requestedFocusId && index === 0)
-                          ? true
-                          : undefined
-                      }
-                    >
-                      <span className="tv-search-result-art">
-                        <CachedArtworkImage
-                          work={work}
-                          kinds={["backdrop", "poster"]}
-                          alt=""
-                          loading="lazy"
-                          fallback={<span>{work.title}</span>}
-                        />
-                        <WatchStateOverlay
-                          progress={progressByWork.get(work.id)}
-                          showUnwatched={watchProgress !== null}
-                        />
-                      </span>
-                      <span className="tv-search-result-copy">
-                        <strong>{work.title}</strong>
-                        <small>{workTypeLabel(work, t)}</small>
-                      </span>
-                    </Link>
-                  );
-                })}
+              <div
+                className="tv-search-results-grid tv-search-rail-grid"
+                onFocus={handleResultsFocus}
+                data-tv-grid
+                data-tv-grid-edge-left=".tv-search input"
+              >
+                {results.map((result, index) => (
+                  <SearchResultCard
+                    key={resultKey(result)}
+                    result={result}
+                    isFirst={index === 0}
+                    isSelected={selectedId === resultKey(result)}
+                    requestedQuery={requestedQuery}
+                    requestedMediaType={requestedMediaType}
+                    requestedLibraryId={requestedLibraryId}
+                    requestedFocusId={requestedFocusId}
+                    playlists={playlists}
+                    progress={
+                      result.type === "work" ? progressByWork.get(result.work.id) : undefined
+                    }
+                    showUnwatched={watchProgress !== null}
+                    navigationOrigin={navigationLayer.origin}
+                    onCapture={navigationLayer.captureLink}
+                    itemProps={mediaContext.itemProps}
+                    registerRef={registerResultRef}
+                  />
+                ))}
               </div>
             )}
             {state.status === "ready" &&

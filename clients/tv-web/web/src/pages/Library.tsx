@@ -1,4 +1,5 @@
 import {
+  memo,
   startTransition,
   useCallback,
   useEffect,
@@ -24,6 +25,11 @@ import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
 import {
+  libraryChunkRanges,
+  sameLibraryChunkItems,
+} from "../lib/libraryChunks";
+import { whenNavigationIdle } from "../lib/navigationActivity";
+import {
   libraryExpandMountedEnd,
   libraryWindowContains,
 } from "../lib/focusGeometry";
@@ -39,6 +45,14 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
 const INITIAL_MOUNTED = 48;
+
+/** Rows kept mounted ahead of the settled selection (filled while idle). */
+const PREMOUNT_AHEAD_ROWS = 70;
+/** Rows above and below the viewport whose artwork is kept loaded. */
+const ARTWORK_MARGIN_ROWS = 2;
+/** Rows mounted per idle task, and the pause between tasks. */
+const PREMOUNT_SLICE_ROWS = 2;
+const PREMOUNT_GAP_MS = 24;
 
 const PAGE_SIZE = 200;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"] as const;
@@ -57,19 +71,23 @@ function workLetter(work: Work): string {
   return titleLetter(work.sort_title || work.title);
 }
 
+// One collator for every comparison: `localeCompare(..., options)` builds a new
+// collator per call, which made re-sorting a few hundred titles when a
+// catalogue page arrived a visible main-thread stall on TV-class CPUs.
+const TITLE_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
 function orderWorks(items: Work[], sort: LibrarySort, order: SortOrder): Work[] {
   const direction = order === "asc" ? 1 : -1;
-  return [...items].sort((a, b) => {
-    if (sort === "date_added") {
-      return (new Date(a.added_at).getTime() - new Date(b.added_at).getTime()) * direction;
-    }
-    return (
-      (a.sort_title || a.title).localeCompare(b.sort_title || b.title, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      }) * direction
-    );
-  });
+  if (sort === "date_added") {
+    const added = new Map(items.map((work) => [work.id, new Date(work.added_at).getTime()]));
+    return [...items].sort((a, b) => (added.get(a.id)! - added.get(b.id)!) * direction);
+  }
+  return [...items].sort(
+    (a, b) => TITLE_COLLATOR.compare(a.sort_title || a.title, b.sort_title || b.title) * direction
+  );
 }
 
 function afterTwoFrames(): Promise<void> {
@@ -163,7 +181,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
   const gridRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const letterRefs = useRef(new Map<string, HTMLAnchorElement>());
   const itemsRef = useRef<Work[]>([]);
   const totalRef = useRef<number | null>(null);
   const requestRef = useRef<Promise<Work[]> | null>(null);
@@ -191,7 +208,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     itemsRef.current = [];
     totalRef.current = null;
     requestRef.current = null;
-    letterRefs.current.clear();
     if (!hasVisibleItems) setItems(null);
     setTotal(null);
     if (!hasVisibleItems) setSelectedId(null);
@@ -300,24 +316,34 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const renderWindowRef = useRef(renderWindow);
   renderWindowRef.current = renderWindow;
 
-  // Publish grid metrics for O(1) remote title-grid nav (no layout change).
+  // Publish grid metrics for O(1) remote title-grid nav. Columns and row pitch
+  // do not change when more rows mount, so measure only when the layout can
+  // change (first items, view/size change, resize) -- never per expansion,
+  // which would force a full style+layout of every mounted card.
+  const hasItems = itemCount > 0;
   useEffect(() => {
     const grid = gridRef.current;
-    if (!grid || view === "cover-flow") return;
-    const content = grid.querySelector<HTMLElement>(".tv-title-grid-content");
-    const sample = content?.querySelector<HTMLElement>(".tv-title-card");
-    if (!content || !sample) return;
-    const styles = window.getComputedStyle(content);
-    const colCount = Math.max(
-      1,
-      styles.gridTemplateColumns.split(" ").filter(Boolean).length
-    );
-    const gap = Number.parseFloat(styles.rowGap || styles.gap || "0") || 0;
-    const rowHeight = Math.max(120, sample.offsetHeight + gap);
-    gridMetricsRef.current = { cols: colCount, rowHeight };
-    grid.dataset.libraryCols = String(colCount);
-    grid.dataset.libraryRowHeight = String(rowHeight);
-  }, [items, view, renderWindow.end]);
+    if (!grid || view === "cover-flow" || !hasItems) return;
+    const measure = () => {
+      const content = grid.querySelector<HTMLElement>(".tv-title-grid-content");
+      const sample = content?.querySelector<HTMLElement>(".tv-title-card");
+      if (!content || !sample) return;
+      const styles = window.getComputedStyle(content);
+      const colCount = Math.max(
+        1,
+        styles.gridTemplateColumns.split(" ").filter(Boolean).length
+      );
+      const gap = Number.parseFloat(styles.rowGap || styles.gap || "0") || 0;
+      const rowHeight = Math.max(120, sample.offsetHeight + gap);
+      gridMetricsRef.current = { cols: colCount, rowHeight };
+      grid.dataset.libraryCols = String(colCount);
+      grid.dataset.libraryRowHeight = String(rowHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, [view, artworkSize, hasItems]);
 
   // Grow mount prefix when remote nav leaves the mounted set.
   useLayoutEffect(() => {
@@ -353,6 +379,90 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       ).__tvEnsureLibraryIndex;
     };
   }, [view, kind, itemCount]);
+
+  // Cards near the viewport get artwork; everything else (pre-mounted rows,
+  // rows scrolled past) stays unloaded and unobserved. Driven by scroll position
+  // at idle instead of one IntersectionObserver target per mounted card, which
+  // cost a per-frame intersection pass over every card.
+  const [artworkRange, setArtworkRange] = useState({ start: 0, end: 36 });
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || view === "cover-flow" || itemCount === 0) return;
+    let frame = 0;
+    let cancelIdle = () => {};
+    const update = () => {
+      const cards = grid.querySelectorAll<HTMLElement>(".tv-title-card");
+      if (cards.length === 0) return;
+      const cols = Math.max(1, gridMetricsRef.current.cols);
+      const gridRect = grid.getBoundingClientRect();
+      let first = -1;
+      let last = -1;
+      for (let i = 0; i < cards.length; i += 1) {
+        const rect = cards[i]!.getBoundingClientRect();
+        if (rect.bottom < gridRect.top || rect.top > gridRect.bottom) continue;
+        const index = Number.parseInt(cards[i]!.dataset.libraryIndex ?? "", 10);
+        if (!Number.isFinite(index)) continue;
+        if (first < 0) first = index;
+        last = index;
+      }
+      if (first < 0) return;
+      const start = Math.max(0, first - ARTWORK_MARGIN_ROWS * cols);
+      const end = last + 1 + ARTWORK_MARGIN_ROWS * cols;
+      setArtworkRange((current) =>
+        current.start === start && current.end === end ? current : { start, end }
+      );
+    };
+    const schedule = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        cancelIdle();
+        cancelIdle = whenNavigationIdle(update);
+      });
+    };
+    schedule();
+    grid.addEventListener("scroll", schedule, { passive: true });
+    return () => {
+      grid.removeEventListener("scroll", schedule);
+      window.cancelAnimationFrame(frame);
+      cancelIdle();
+    };
+  }, [itemCount, view, mountedEnd]);
+
+  // Pre-mount rows ahead of the settled selection while the user is idle, a
+  // couple of rows per task with a gap between, so a later hold scrolls over
+  // rows that already exist instead of mounting them on the keypress path and
+  // a key pressed mid-way only ever waits for one small slice.
+  useEffect(() => {
+    if (view === "cover-flow" || itemCount === 0) return;
+    const cols = Math.max(1, gridMetricsRef.current.cols);
+    const settledIndex = selectedId
+      ? Math.max(0, itemsRef.current.findIndex((work) => work.id === selectedId))
+      : 0;
+    const desired = Math.min(
+      itemCount,
+      settledIndex + (PREMOUNT_AHEAD_ROWS + 1) * cols
+    );
+    let cursor = mountedEndRef.current;
+    if (desired <= cursor) return;
+    let cancelIdle = () => {};
+    let gap = 0;
+    const step = () => {
+      cursor = Math.min(desired, cursor + cols * PREMOUNT_SLICE_ROWS);
+      const next = cursor;
+      startTransition(() => setMountedEnd((current) => Math.max(current, next)));
+      if (cursor < desired) {
+        gap = window.setTimeout(() => {
+          cancelIdle = whenNavigationIdle(step);
+        }, PREMOUNT_GAP_MS);
+      }
+    };
+    cancelIdle = whenNavigationIdle(step);
+    return () => {
+      cancelIdle();
+      window.clearTimeout(gap);
+    };
+  }, [itemCount, selectedId, view]);
 
   // Reset mount prefix when the catalogue kind changes.
   useEffect(() => {
@@ -506,10 +616,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const mediaContext = useMediaContextMenu({
     onProgressChanged: handleProgressChanged,
   });
+  const itemIdsKey = useMemo(
+    () => items?.map((work) => work.id).join(",") ?? "loading",
+    [items]
+  );
+  const letters = useMemo(() => items?.map(workLetter) ?? [], [items]);
   const navigationLayer = useNavigationLayer(
-    `${kind}:${view}:${artworkSize}:${sort}:${order}:${
-      items?.map((work) => work.id).join(",") ?? "loading"
-    }`,
+    `${kind}:${view}:${artworkSize}:${sort}:${order}:${itemIdsKey}`,
     items !== null && !hasMore
   );
   const restoreFocusPrefix = `library:${kind}:`;
@@ -536,35 +649,106 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     restoreWorkId,
   ]);
 
+  // Returning from a detail page restores focus to a specific title; rows are
+  // mounted on demand, so mount up to it before the restore looks for it.
+  useLayoutEffect(() => {
+    if (!restoreWorkId || view === "cover-flow") return;
+    const index = itemsRef.current.findIndex((work) => work.id === restoreWorkId);
+    if (index < 0) return;
+    setMountedEnd((current) => Math.max(current, index + PREMOUNT_AHEAD_ROWS * 3));
+  }, [restoreWorkId, items, view]);
+
   async function jumpToLetter(letter: string) {
     setJumpingLetter(letter);
     try {
+      const letters = order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
+      const targetPosition = letters.indexOf(letter as (typeof ALPHABET)[number]);
+      // First title at or after the letter in the current sort order (a letter
+      // with no titles lands on the next one that has some).
+      const findIndex = () => {
+        const list = itemsRef.current;
+        for (let i = 0; i < list.length; i += 1) {
+          const position = letters.indexOf(
+            workLetter(list[i]!) as (typeof ALPHABET)[number]
+          );
+          if (position >= targetPosition) return i;
+        }
+        return -1;
+      };
+      let index = findIndex();
       while (
-        !letterRefs.current.has(letter) &&
+        index < 0 &&
         (totalRef.current === null || itemsRef.current.length < totalRef.current)
       ) {
         const added = await appendNextPage();
         if (added.length === 0) break;
+        index = findIndex();
       }
+      if (index < 0) index = itemsRef.current.length - 1;
+      if (index < 0) return;
 
+      const grid = gridRef.current as
+        | (HTMLDivElement & { __tvEnsureLibraryIndex?: (index: number) => void })
+        | null;
+      // Rows are mounted on demand; make sure the destination exists first.
+      grid?.__tvEnsureLibraryIndex?.(index);
       await afterTwoFrames();
-      const letters = order === "desc" ? [...ALPHABET].reverse() : [...ALPHABET];
-      const targetIndex = letters.indexOf(letter as (typeof ALPHABET)[number]);
-      const destinationLetter =
-        (letterRefs.current.has(letter)
-          ? letter
-          : letters.slice(targetIndex).find((candidate) => letterRefs.current.has(candidate))) ??
-        [...letters.slice(0, targetIndex)]
-          .reverse()
-          .find((candidate) => letterRefs.current.has(candidate));
-      const destination = destinationLetter ? letterRefs.current.get(destinationLetter) : undefined;
-
-      destination?.focus({ preventScroll: true });
-      destination?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      const destination = grid?.querySelector<HTMLElement>(
+        `[data-library-index="${index}"]`
+      );
+      if (!grid || !destination) return;
+      destination.focus({ preventScroll: true });
+      // A jump can cross hundreds of unmounted rows: scroll instantly.
+      grid.style.scrollBehavior = "auto";
+      destination.scrollIntoView({ block: "center", inline: "nearest" });
+      window.requestAnimationFrame(() => {
+        grid.style.scrollBehavior = "";
+      });
     } finally {
       setJumpingLetter(null);
     }
   }
+
+  // One delegated focus handler for the whole grid keeps every card free of
+  // per-render closures, so `LibraryTitleCard` can be memoised.
+  const focusStateRef = useRef({ items, hasMore, view, appendNextPage });
+  focusStateRef.current = { items, hasMore, view, appendNextPage };
+  const handleGridFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    const card = (event.target as Element | null)?.closest<HTMLElement>(
+      ".tv-title-card"
+    );
+    if (!card) return;
+    const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
+    const state = focusStateRef.current;
+    const work = state.items?.[index];
+    if (!work) return;
+    const remote = document.body.dataset.inputMode === "remote";
+    // Remote: debounce stage React work so holds stay lag-free.
+    // Card chrome uses :focus-visible; preview settles after idle.
+    pendingSelectIdRef.current = work.id;
+    window.clearTimeout(selectTimerRef.current);
+    selectTimerRef.current = window.setTimeout(() => {
+      const id = pendingSelectIdRef.current;
+      if (!id) return;
+      startTransition(() => {
+        setSelectedId(id);
+      });
+    }, remote ? 280 : 0);
+    if (state.view === "cover-flow" && !isNavigationLayerRestoring()) {
+      const grid = gridRef.current;
+      if (grid) {
+        const targetLeft =
+          card.offsetLeft + card.offsetWidth / 2 - grid.clientWidth / 2;
+        grid.scrollTo({
+          left: Math.max(0, targetLeft),
+          behavior: remote ? "auto" : "smooth",
+        });
+      }
+    }
+    if (state.items && index >= state.items.length - 12 && state.hasMore) {
+      void state.appendNextPage().catch(() => undefined);
+    }
+  }, []);
 
   if (items === null && !initialError) {
     return <CompactLibraryLoader label={plural} />;
@@ -665,63 +849,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
           className="tv-title-grid"
           ref={gridRef}
           onScroll={updateActiveLetter}
-          onContextMenu={(event) => {
-            const card = (event.target as Element | null)?.closest<HTMLElement>(
-              ".tv-title-card"
-            );
-            if (!card) return;
-            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
-            const work = Number.isFinite(index) ? items[index] : undefined;
-            if (!work) return;
-            mediaContext
-              .itemProps({
-                work,
-                detailRoute: `${routeBase}/${work.id}`,
-                parentRoute: routeBase,
-                progress: progressByWork.get(work.id),
-              })
-              .onContextMenu(event);
-          }}
-          onKeyDown={(event) => {
-            const card = event.target;
-            if (
-              !(card instanceof HTMLElement) ||
-              !card.classList.contains("tv-title-card")
-            ) {
-              return;
-            }
-            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
-            const work = Number.isFinite(index) ? items[index] : undefined;
-            if (!work) return;
-            mediaContext
-              .itemProps({
-                work,
-                detailRoute: `${routeBase}/${work.id}`,
-                parentRoute: routeBase,
-                progress: progressByWork.get(work.id),
-              })
-              .onKeyDown(event);
-          }}
-          onKeyUp={(event) => {
-            const card = event.target;
-            if (
-              !(card instanceof HTMLElement) ||
-              !card.classList.contains("tv-title-card")
-            ) {
-              return;
-            }
-            const index = Number.parseInt(card.dataset.libraryIndex ?? "", 10);
-            const work = Number.isFinite(index) ? items[index] : undefined;
-            if (!work) return;
-            mediaContext
-              .itemProps({
-                work,
-                detailRoute: `${routeBase}/${work.id}`,
-                parentRoute: routeBase,
-                progress: progressByWork.get(work.id),
-              })
-              .onKeyUp(event);
-          }}
+          onFocus={handleGridFocus}
           data-tv-scroll-container
           data-tv-scroll-axis={view === "cover-flow" ? "horizontal" : "vertical"}
           data-navigation-scroll-key={`library:${kind}:grid`}
@@ -749,113 +877,53 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               return style;
             })()}
           >
-            {(view === "cover-flow"
-              ? items
-              : items.slice(renderWindow.start, renderWindow.end)
-            ).map((work, sliceIndex) => {
-              const index =
-                view === "cover-flow"
-                  ? sliceIndex
-                  : renderWindow.start + sliceIndex;
-              const imageKinds =
-                view === "cover" || view === "cover-flow"
-                  ? (["poster", "backdrop"] as const)
-                  : (["backdrop", "poster"] as const);
-              const letter = workLetter(work);
-              const isFirstForLetter =
-                index === 0 || workLetter(items[index - 1]!) !== letter;
-              const isSelected = work.id === selected.id;
-              const coverFlowOffset =
-                view === "cover-flow"
-                  ? Math.max(-4, Math.min(4, index - selectedIndex))
-                  : 0;
-
-              return (
-                <Link
-                  key={work.id}
-                  to={`${routeBase}/${work.id}`}
-                  state={{ backTo: routeBase, navigationOrigin: navigationLayer.origin }}
-                  className={`tv-title-card${isSelected ? " is-selected" : ""}${
-                    view === "cover-flow"
-                      ? ` cover-flow-offset-${Math.abs(coverFlowOffset)}${
-                          coverFlowOffset < 0
-                            ? " is-before"
-                            : coverFlowOffset > 0
-                              ? " is-after"
-                              : ""
-                        }`
-                      : ""
-                  }`}
-                  ref={(element) => {
-                    if (isFirstForLetter) {
-                      if (element) letterRefs.current.set(letter, element);
-                      else letterRefs.current.delete(letter);
-                    }
-                  }}
-                  onFocus={(event) => {
-                    const remote =
-                      document.body.dataset.inputMode === "remote";
-                    // Remote: debounce stage React work so holds stay lag-free.
-                    // Card chrome uses :focus-visible; preview settles after idle.
-                    pendingSelectIdRef.current = work.id;
-                    window.clearTimeout(selectTimerRef.current);
-                    selectTimerRef.current = window.setTimeout(() => {
-                      const id = pendingSelectIdRef.current;
-                      if (!id) return;
-                      startTransition(() => {
-                        setSelectedId(id);
-                      });
-                    }, remote ? 280 : 0);
-                    if (view === "cover-flow" && !isNavigationLayerRestoring()) {
-                      const card = event.currentTarget;
-                      const grid = gridRef.current;
-                      if (grid) {
-                        const targetLeft =
-                          card.offsetLeft +
-                          card.offsetWidth / 2 -
-                          grid.clientWidth / 2;
-                        grid.scrollTo({
-                          left: Math.max(0, targetLeft),
-                          behavior: remote ? "auto" : "smooth",
-                        });
-                      }
-                    }
-                    if (index >= items.length - 12 && hasMore) {
-                      void appendNextPage().catch(() => undefined);
-                    }
-                  }}
-                  data-library-letter={letter}
-                  data-library-index={index}
-                  data-tv-focus-default={index === 0 ? true : undefined}
-                  data-navigation-focus-key={`library:${kind}:${work.id}`}
-                  onClick={navigationLayer.captureLink}
-                  aria-label={t("pages.library.openWork", { title: work.title })}
-                >
-                  <span className="tv-title-card-art">
-                    <CachedArtworkImage
+            {view === "cover-flow"
+              ? items.map((work, index) => {
+                  const letter = letters[index] ?? workLetter(work);
+                  return (
+                    <LibraryTitleCard
+                      key={work.id}
                       work={work}
-                      kinds={imageKinds}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      fallback={<span>{work.title}</span>}
-                    />
-                    <WatchStateOverlay
+                      index={index}
+                      routeBase={routeBase}
+                      kind={kind}
+                      view={view}
+                      imageKinds={COVER_KINDS}
+                      letter={letter}
+                      isSelected={work.id === selected.id}
+                      coverFlowOffset={Math.max(-4, Math.min(4, index - selectedIndex))}
                       progress={progressByWork.get(work.id)}
                       showUnwatched={watchProgress !== null}
+                      singular={singular}
+                      navigationOrigin={navigationLayer.origin}
+                      onCapture={navigationLayer.captureLink}
+                      itemProps={mediaContext.itemProps}
+                      artworkEnabled
                     />
-                  </span>
-                  <span className="tv-title-card-copy">
-                    <strong>{work.title}</strong>
-                    <span className="tv-list-card-meta">
-                      {work.genres.slice(0, 2).join(" · ") || singular}
-                      <i aria-hidden="true" />
-                      {new Date(work.added_at).getFullYear()}
-                    </span>
-                  </span>
-                </Link>
-              );
-            })}
+                  );
+                })
+              : libraryChunkRanges(renderWindow.end).map(({ chunk, start, end }) => (
+                  <LibraryChunk
+                    key={chunk}
+                    items={items}
+                    start={start}
+                    end={end}
+                    selectedId={
+                      selectedIndex >= start && selectedIndex < end ? selected.id : null
+                    }
+                    routeBase={routeBase}
+                    kind={kind}
+                    view={view}
+                    progressByWork={progressByWork}
+                    showUnwatched={watchProgress !== null}
+                    singular={singular}
+                    navigationOrigin={navigationLayer.origin}
+                    onCapture={navigationLayer.captureLink}
+                    itemProps={mediaContext.itemProps}
+                    artworkFrom={Math.min(end, Math.max(start, artworkRange.start))}
+                    artworkTo={Math.max(start, Math.min(end, artworkRange.end))}
+                  />
+                ))}
 
             <div ref={sentinelRef} className="tv-grid-sentinel" aria-live="polite">
               {loadingMore ? (
@@ -1029,6 +1097,198 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     </TvStageShell>
   );
 }
+
+type MediaItemProps = ReturnType<typeof useMediaContextMenu>["itemProps"];
+
+interface LibraryTitleCardProps {
+  work: Work;
+  index: number;
+  routeBase: string;
+  kind: LibraryKind;
+  view: LibraryView;
+  imageKinds: readonly ("poster" | "backdrop")[];
+  letter: string;
+  isSelected: boolean;
+  coverFlowOffset: number;
+  progress: WatchProgress | undefined;
+  showUnwatched: boolean;
+  singular: string;
+  navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
+  onCapture: ReturnType<typeof useNavigationLayer>["captureLink"];
+  itemProps: MediaItemProps;
+  artworkEnabled: boolean;
+}
+
+const COVER_KINDS = ["poster", "backdrop"] as const;
+const SCREEN_KINDS = ["backdrop", "poster"] as const;
+
+interface LibraryChunkProps {
+  items: Work[];
+  start: number;
+  end: number;
+  /** Selected work id when it lives in this chunk, otherwise null, so a selection change re-renders at most two chunks. */
+  selectedId: string | null;
+  routeBase: string;
+  kind: LibraryKind;
+  view: LibraryView;
+  progressByWork: Map<string, WatchProgress>;
+  showUnwatched: boolean;
+  singular: string;
+  navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
+  onCapture: ReturnType<typeof useNavigationLayer>["captureLink"];
+  itemProps: MediaItemProps;
+  /** Cards in `[artworkFrom, artworkTo)` load artwork (already clamped to this chunk). */
+  artworkFrom: number;
+  artworkTo: number;
+}
+
+/**
+ * A fixed-size run of library cards. Appending a catalogue page or mounting
+ * more rows only renders the chunks whose items changed, so cost per keypress
+ * no longer grows with how far down the list the user has travelled.
+ */
+const LibraryChunk = memo(
+  function LibraryChunk({
+    items,
+    start,
+    end,
+    selectedId,
+    routeBase,
+    kind,
+    view,
+    progressByWork,
+    showUnwatched,
+    singular,
+    navigationOrigin,
+    onCapture,
+    itemProps,
+    artworkFrom,
+    artworkTo,
+  }: LibraryChunkProps) {
+    const imageKinds = view === "cover" ? COVER_KINDS : SCREEN_KINDS;
+    const cards = [];
+    for (let index = start; index < end; index += 1) {
+      const work = items[index]!;
+      const letter = workLetter(work);
+      cards.push(
+        <LibraryTitleCard
+          key={work.id}
+          work={work}
+          index={index}
+          routeBase={routeBase}
+          kind={kind}
+          view={view}
+          imageKinds={imageKinds}
+          letter={letter}
+          isSelected={work.id === selectedId}
+          coverFlowOffset={0}
+          progress={progressByWork.get(work.id)}
+          showUnwatched={showUnwatched}
+          singular={singular}
+          navigationOrigin={navigationOrigin}
+          onCapture={onCapture}
+          itemProps={itemProps}
+          artworkEnabled={index >= artworkFrom && index < artworkTo}
+        />
+      );
+    }
+    return <>{cards}</>;
+  },
+  (prev, next) =>
+    sameLibraryChunkItems(prev, next) &&
+    prev.selectedId === next.selectedId &&
+    prev.routeBase === next.routeBase &&
+    prev.kind === next.kind &&
+    prev.view === next.view &&
+    prev.progressByWork === next.progressByWork &&
+    prev.showUnwatched === next.showUnwatched &&
+    prev.singular === next.singular &&
+    prev.navigationOrigin === next.navigationOrigin &&
+    prev.onCapture === next.onCapture &&
+    prev.itemProps === next.itemProps &&
+    prev.artworkFrom === next.artworkFrom &&
+    prev.artworkTo === next.artworkTo
+);
+
+/**
+ * One library title. Memoised: a selection change or a newly mounted row must
+ * only render the cards whose props actually changed, never the whole grid.
+ */
+const LibraryTitleCard = memo(function LibraryTitleCard({
+  work,
+  index,
+  routeBase,
+  kind,
+  view,
+  imageKinds,
+  letter,
+  isSelected,
+  coverFlowOffset,
+  progress,
+  showUnwatched,
+  singular,
+  navigationOrigin,
+  onCapture,
+  itemProps,
+  artworkEnabled,
+}: LibraryTitleCardProps) {
+  const { t } = useLanguage();
+  const contextProps = itemProps({
+    work,
+    detailRoute: `${routeBase}/${work.id}`,
+    parentRoute: routeBase,
+    progress,
+  });
+  const linkState = useMemo(
+    () => ({ backTo: routeBase, navigationOrigin }),
+    [routeBase, navigationOrigin]
+  );
+  return (
+    <Link
+      to={`${routeBase}/${work.id}`}
+      state={linkState}
+      className={`tv-title-card${isSelected ? " is-selected" : ""}${
+        view === "cover-flow"
+          ? ` cover-flow-offset-${Math.abs(coverFlowOffset)}${
+              coverFlowOffset < 0
+                ? " is-before"
+                : coverFlowOffset > 0
+                  ? " is-after"
+                  : ""
+            }`
+          : ""
+      }`}
+      {...contextProps}
+      data-library-letter={letter}
+      data-library-index={index}
+      data-tv-focus-default={index === 0 ? true : undefined}
+      data-navigation-focus-key={`library:${kind}:${work.id}`}
+      onClick={onCapture}
+      aria-label={t("pages.library.openWork", { title: work.title })}
+    >
+      <span className="tv-title-card-art">
+        <CachedArtworkImage
+          work={work}
+          kinds={imageKinds}
+          alt=""
+          loading={view === "cover-flow" ? "lazy" : undefined}
+          enabled={artworkEnabled}
+          decoding="async"
+          fallback={<span>{work.title}</span>}
+        />
+        <WatchStateOverlay progress={progress} showUnwatched={showUnwatched} />
+      </span>
+      <span className="tv-title-card-copy">
+        <strong>{work.title}</strong>
+        <span className="tv-list-card-meta">
+          {work.genres.slice(0, 2).join(" · ") || singular}
+          <i aria-hidden="true" />
+          {new Date(work.added_at).getFullYear()}
+        </span>
+      </span>
+    </Link>
+  );
+});
 
 function CompactLibraryLoader({ label }: { label: string }) {
   const { t } = useLanguage();

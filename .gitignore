@@ -170,3 +170,7 @@ secrets/
 .playwright-mcp/
 /scratch/
 /tvweb_*.png
+
+# nav-perf harness outputs
+clients/tv-web/web/nav-perf-results/
+clients/tv-web/web/dist-*/

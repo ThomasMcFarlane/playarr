@@ -6,6 +6,7 @@ import {
   shouldNavigateFromFormControl,
 } from "./arrowNavigationPolicy";
 import { findClosestItemInNextTrack } from "./trackNavigation";
+import { noteNavigationKey } from "./navigationActivity";
 import {
   type Direction,
   type FocusRect,
@@ -196,7 +197,7 @@ function ensureLibraryIndexMounted(
 /**
  * In-memory library focus for O(1) neighbour steps.
  * Under remote: skip native focus() mid-hold (dominant Vidaa lag source —
- * style/layout + React onFocus). Mark with is-remote-active and commit
+ * style/layout + React onFocus). Mark with data-remote-active and commit
  * focus only after the hold settles so Enter/OK and stage selection still work.
  */
 let remoteFocusElement: HTMLElement | null = null;
@@ -234,36 +235,30 @@ function readLibraryGridMetrics(grid: HTMLElement): {
   };
 }
 
+/**
+ * Element currently carrying `data-remote-active` (may lag `remoteFocusElement`
+ * within a frame). An attribute, not a class: React owns `className` and would
+ * wipe an imperative class whenever the card re-renders (e.g. `is-selected`).
+ */
+let markedElement: HTMLElement | null = null;
+/** Last-wins DOM application for the virtual focus moved this frame. */
+let pendingApply: (() => void) | null = null;
+
 function setRemoteActiveMarker(element: HTMLElement | null): void {
-  if (
-    remoteFocusElement &&
-    remoteFocusElement !== element &&
-    remoteFocusElement.isConnected
-  ) {
-    remoteFocusElement.classList.remove("is-remote-active");
+  if (markedElement && markedElement !== element && markedElement.isConnected) {
+    markedElement.removeAttribute("data-remote-active");
   }
-  if (element) element.classList.add("is-remote-active");
+  if (element && element !== markedElement) element.setAttribute("data-remote-active", "");
+  markedElement = element;
 }
 
-function markRemoteLibraryFocus(
-  grid: HTMLElement,
-  element: HTMLElement,
-  index: number,
-  _direction?: Direction
-): void {
-  setRemoteActiveMarker(element);
-  remoteFocusElement = element;
-  remoteFocusIndex = index;
-  remoteFocusGrid = grid;
+function runPendingApply(): void {
+  const apply = pendingApply;
+  pendingApply = null;
+  apply?.();
+}
 
-  const remote = document.body.dataset.inputMode === "remote";
-  if (!remote) {
-    window.clearTimeout(remoteFocusSettleTimer);
-    element.focus({ preventScroll: true });
-    return;
-  }
-
-  // No focus() during the hold — Vidaa reflows and React onFocus on every key.
+function armRemoteFocusSettle(element: HTMLElement): void {
   window.clearTimeout(remoteFocusSettleTimer);
   remoteFocusSettleTimer = window.setTimeout(() => {
     if (document.body.dataset.inputMode !== "remote") return;
@@ -272,8 +267,37 @@ function markRemoteLibraryFocus(
   }, 320);
 }
 
+/**
+ * Virtual remote focus. Logical state moves immediately (so queued keys chain
+ * correctly) but the DOM write (marker class, scroll, settle timer) is deferred
+ * to `runPendingApply`, which runs once per frame regardless of how many keys
+ * were queued behind a busy main thread.
+ */
+function markRemoteLibraryFocus(
+  grid: HTMLElement,
+  element: HTMLElement,
+  index: number,
+  apply: () => void
+): void {
+  remoteFocusElement = element;
+  remoteFocusIndex = index;
+  remoteFocusGrid = grid;
+  pendingApply = () => {
+    apply();
+    if (document.body.dataset.inputMode !== "remote") {
+      setRemoteActiveMarker(null);
+      window.clearTimeout(remoteFocusSettleTimer);
+      element.focus({ preventScroll: true });
+      return;
+    }
+    setRemoteActiveMarker(element);
+    armRemoteFocusSettle(element);
+  };
+}
+
 function clearRemoteLibraryFocus(): void {
   window.clearTimeout(remoteFocusSettleTimer);
+  pendingApply = null;
   setRemoteActiveMarker(null);
   remoteFocusElement = null;
   remoteFocusIndex = -1;
@@ -284,15 +308,60 @@ function clearRemoteLibraryFocus(): void {
   remoteCachedClientHeight = 0;
 }
 
-/** Activate the virtual remote focus target (Enter/OK while focus is deferred). */
-function activateRemoteFocusTarget(): boolean {
-  const target = remoteFocusElement;
-  if (!target?.isConnected) return false;
-  if (document.body.dataset.inputMode !== "remote") return false;
-  // Commit real focus then click so React Router Link activation works.
-  target.focus({ preventScroll: true });
-  target.click();
-  return true;
+function isConfirmKey(event: KeyboardEvent): boolean {
+  return (
+    event.key === "Enter" ||
+    event.key === " " ||
+    event.key === "Spacebar" ||
+    event.key === "Accept" ||
+    event.keyCode === 13 ||
+    event.keyCode === 23 // Android TV DPAD_CENTER / common OK
+  );
+}
+
+/**
+ * Capture-phase guard for OK/Enter. Native focus trails the virtual remote
+ * focus (it settles after the hold), so a confirm pressed right after a move
+ * would be dispatched to -- and handled by -- the previously focused card.
+ * Commit focus to the card the user sees and re-dispatch the key to it, so
+ * every handler (Link activation, long-press context menu) acts on the right
+ * title. The matching keyup then goes to the newly focused element.
+ */
+function commitVirtualFocusBeforeConfirm(event: KeyboardEvent): void {
+  if (!isConfirmKey(event) || event.defaultPrevented) return;
+  flushQueuedMoves();
+  const virtual = remoteFocusElement;
+  if (!virtual?.isConnected || document.activeElement === virtual) return;
+  if (document.body.dataset.inputMode !== "remote") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  window.clearTimeout(remoteFocusSettleTimer);
+  virtual.focus({ preventScroll: true });
+  const redispatched = new KeyboardEvent("keydown", {
+    key: event.key,
+    code: event.code,
+    repeat: event.repeat,
+    bubbles: true,
+    cancelable: true,
+  });
+  // keyCode is read-only on the constructor; TV handlers still consult it.
+  Object.defineProperty(redispatched, "keyCode", { value: event.keyCode });
+  virtual.dispatchEvent(redispatched);
+}
+
+let confirmCommitUsers = 0;
+/** Install the confirm guard once for all mounted navigation hooks. */
+function acquireConfirmCommit(): () => void {
+  if (confirmCommitUsers === 0) {
+    window.addEventListener("keydown", commitVirtualFocusBeforeConfirm, true);
+  }
+  confirmCommitUsers += 1;
+  return () => {
+    confirmCommitUsers -= 1;
+    if (confirmCommitUsers === 0) {
+      window.removeEventListener("keydown", commitVirtualFocusBeforeConfirm, true);
+    }
+  };
 }
 
 function libraryCardAt(
@@ -415,29 +484,111 @@ function focusWithinTitleGrid(
   }
   if (!next) return false;
 
-  // Vertical scroll using cached metrics only (no getBoundingClientRect /
-  // clientHeight per key). Interior holds usually stay in view — skip write.
-  if (
-    (direction === "up" || direction === "down") &&
-    metrics.rowHeight > 0
-  ) {
-    const nextRow = Math.floor(nextIndex / columns);
-    const targetTop = nextRow * metrics.rowHeight;
-    const viewTop = grid.scrollTop;
-    const clientHeight = metrics.clientHeight || grid.clientHeight;
-    const viewBottom = viewTop + clientHeight;
-    const verticalInset = Math.min(40, Math.max(24, clientHeight * 0.05));
-    if (targetTop < viewTop + verticalInset) {
-      grid.scrollTop = Math.max(0, targetTop - verticalInset);
-    } else if (targetTop + metrics.rowHeight > viewBottom - verticalInset) {
-      grid.scrollTop = Math.max(
-        0,
-        targetTop + metrics.rowHeight - clientHeight + verticalInset
-      );
+  markRemoteLibraryFocus(grid, next, nextIndex, () => {
+    // One pair of rect reads per frame (layout is clean at rAF start), then a
+    // single scroll write that keeps the card inside the safe viewport band.
+    const gridRect = grid.getBoundingClientRect();
+    const cardRect = next.getBoundingClientRect();
+    const inset = Math.min(40, Math.max(24, gridRect.height * 0.05));
+    if (cardRect.top < gridRect.top + inset) {
+      grid.scrollTop += cardRect.top - (gridRect.top + inset);
+    } else if (cardRect.bottom > gridRect.bottom - inset) {
+      grid.scrollTop += cardRect.bottom - (gridRect.bottom - inset);
     }
-  }
+  });
+  return true;
+}
 
-  markRemoteLibraryFocus(grid, next, nextIndex, direction);
+
+const uniformGridColumnCache = new WeakMap<
+  HTMLElement,
+  { cols: number; width: number; count: number }
+>();
+
+/** Columns of a DOM-ordered uniform grid, re-measured only when width or item count changes. */
+function uniformGridColumns(container: HTMLElement): number {
+  const width = container.clientWidth;
+  const count = container.children.length;
+  const cached = uniformGridColumnCache.get(container);
+  if (cached && cached.width === width && cached.count === count) return cached.cols;
+  const first = container.firstElementChild;
+  if (!(first instanceof HTMLElement)) return 1;
+  const top = first.offsetTop;
+  let cols = 0;
+  for (let i = 0; i < container.children.length; i += 1) {
+    const child = container.children[i];
+    if (!(child instanceof HTMLElement) || child.offsetTop !== top) break;
+    cols += 1;
+  }
+  cols = Math.max(1, cols);
+  uniformGridColumnCache.set(container, { cols, width, count });
+  return cols;
+}
+
+/** Scroll the nearest vertical scroller just enough to keep `element` inside its safe band. */
+function revealInVerticalScroller(element: HTMLElement): void {
+  const scroller = element.closest<HTMLElement>(
+    '[data-tv-scroll-container][data-tv-scroll-axis="vertical"]'
+  );
+  if (!scroller) return;
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const inset = Math.min(40, Math.max(24, scrollerRect.height * 0.05));
+  if (rect.top < scrollerRect.top + inset) {
+    scroller.scrollTop += rect.top - (scrollerRect.top + inset);
+  } else if (rect.bottom > scrollerRect.bottom - inset) {
+    scroller.scrollTop += rect.bottom - (scrollerRect.bottom - inset);
+  }
+}
+
+/**
+ * O(1) neighbour step for any DOM-ordered, equal-cell grid marked
+ * `data-tv-grid` (Search results). `data-tv-grid-edge-left` names a selector
+ * to focus when Left leaves the first column.
+ */
+function focusWithinUniformGrid(
+  current: HTMLElement,
+  direction: Direction
+): boolean {
+  const container =
+    remoteFocusGrid?.isConnected && remoteFocusGrid.hasAttribute("data-tv-grid")
+      ? remoteFocusGrid
+      : current.closest<HTMLElement>("[data-tv-grid]");
+  if (!container) return false;
+
+  let index = remoteFocusGrid === container ? remoteFocusIndex : -1;
+  if (index < 0) {
+    let cell: HTMLElement | null = current;
+    while (cell && cell.parentElement !== container) cell = cell.parentElement;
+    if (!cell) return false;
+    index = Array.prototype.indexOf.call(container.children, cell);
+    if (index < 0) return false;
+  }
+  const columns = uniformGridColumns(container);
+  const nextIndex = titleGridNeighbourIndex(
+    index,
+    container.children.length,
+    columns,
+    direction
+  );
+  if (nextIndex === null) {
+    const edgeSelector =
+      direction === "left" && index % columns === 0
+        ? container.dataset.tvGridEdgeLeft
+        : undefined;
+    const edgeTarget = edgeSelector
+      ? document.querySelector<HTMLElement>(edgeSelector)
+      : null;
+    if (edgeTarget) {
+      clearRemoteLibraryFocus();
+      edgeTarget.focus({ preventScroll: true });
+      return true;
+    }
+    return false;
+  }
+  const next = container.children[nextIndex];
+  if (!(next instanceof HTMLElement)) return false;
+  markRemoteLibraryFocus(container, next, nextIndex, () => revealInVerticalScroller(next));
   return true;
 }
 
@@ -822,21 +973,27 @@ function focusWithinHomeRails(
   const remote = document.body.dataset.inputMode === "remote";
 
   const commit = (target: HTMLElement) => {
-    setRemoteActiveMarker(target);
     remoteFocusElement = target;
     remoteFocusIndex = -1;
     remoteFocusGrid = null;
-    if (!remote) {
-      window.clearTimeout(remoteFocusSettleTimer);
-      target.focus({ preventScroll: true });
-      return;
-    }
-    window.clearTimeout(remoteFocusSettleTimer);
-    remoteFocusSettleTimer = window.setTimeout(() => {
-      if (document.body.dataset.inputMode !== "remote") return;
-      if (!target.isConnected) return;
-      target.focus({ preventScroll: true });
-    }, 320);
+    const sideways = direction === "left" || direction === "right";
+    pendingApply = () => {
+      if (!remote) {
+        setRemoteActiveMarker(null);
+        window.clearTimeout(remoteFocusSettleTimer);
+        target.focus({ preventScroll: true });
+        return;
+      }
+      // Reads and scroll writes first, marker write last, so no forced style
+      // recalc sits between them. Keep the virtual focus on screen: sideways
+      // moves only scroll the rail; moves between rails scroll the page's
+      // vertical track surface and reveal the card inside its own rail.
+      const rail = target.closest<HTMLElement>('[data-tv-scroll-axis="horizontal"]');
+      if (!sideways) revealInVerticalScroller(target);
+      if (rail) revealFullyWithinHorizontalContainer(rail, target);
+      setRemoteActiveMarker(target);
+      armRemoteFocusSettle(target);
+    };
   };
 
   if (direction === "left" || direction === "right") {
@@ -904,7 +1061,30 @@ function focusWithinHomeRails(
   return true;
 }
 
+/**
+ * The virtual focus only owns directional input while real focus is still in
+ * the same region (or nowhere). If focus has moved elsewhere -- a context-menu
+ * drawer, the nav rail, an input -- the marker is stale and must not steer
+ * keys behind it.
+ */
+function dropStaleVirtualFocus(): void {
+  const virtual = remoteFocusElement;
+  if (!virtual) return;
+  const active = document.activeElement;
+  if (!virtual.isConnected) {
+    clearRemoteLibraryFocus();
+    return;
+  }
+  if (!active || active === document.body || active === virtual) return;
+  const region = virtual.closest<HTMLElement>(
+    ".tv-title-grid, [data-tv-grid], .tv-home-rails"
+  );
+  if (region?.contains(active)) return;
+  clearRemoteLibraryFocus();
+}
+
 function moveFocus(direction: Direction): void {
+  dropStaleVirtualFocus();
   // Fast path: library title grids never need a whole-document scan.
   // Prefer in-memory remote focus so holds never re-query the DOM.
   const active =
@@ -913,7 +1093,18 @@ function moveFocus(direction: Direction): void {
       : null) ??
     (document.activeElement instanceof HTMLElement ? document.activeElement : null);
   if (active && focusWithinTitleGrid(active, direction)) return;
+  if (active && focusWithinUniformGrid(active, direction)) return;
   if (active && focusWithinHomeRails(active, direction)) return;
+
+  // Leaving the O(1) paths: hand the virtual focus to the browser so the
+  // geometric search starts from the card the user actually sees, and drop the
+  // marker so it cannot linger on a card focus has left.
+  if (remoteFocusElement) {
+    const virtual = remoteFocusElement;
+    clearRemoteLibraryFocus();
+    if (virtual.isConnected) virtual.focus({ preventScroll: true });
+    return moveFocus(direction);
+  }
 
   const entries = collectVisibleFocusables();
   if (entries.length === 0) return;
@@ -1102,21 +1293,39 @@ export function tvBackNavigationTarget(
   return target === routeKey ? null : target;
 }
 
-function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
-  // Enter/OK while virtual remote focus is ahead of native focus.
-  if (
-    event.key === "Enter" ||
-    event.key === " " ||
-    event.key === "Spacebar" ||
-    event.keyCode === 13 ||
-    event.keyCode === 23 // Android TV DPAD_CENTER / common OK
-  ) {
-    if (activateRemoteFocusTarget()) {
-      event.preventDefault();
-      return true;
-    }
-    return false;
+/**
+ * Directional keys are queued and applied once per animation frame. Under a
+ * busy main thread several keydowns can pile up; applying them in one task
+ * (index math only, a single DOM write) means the frame cost is paid once
+ * instead of once per key, so a held remote button cannot build a backlog.
+ */
+const queuedMoves: Direction[] = [];
+let moveFrame = 0;
+
+function flushQueuedMoves(): void {
+  if (moveFrame) {
+    window.cancelAnimationFrame(moveFrame);
+    moveFrame = 0;
   }
+  if (queuedMoves.length === 0) return;
+  const batch = queuedMoves.splice(0);
+  for (const direction of batch) moveFocus(direction);
+  runPendingApply();
+}
+
+function enqueueMove(direction: Direction): void {
+  queuedMoves.push(direction);
+  if (moveFrame) return;
+  moveFrame = window.requestAnimationFrame(() => {
+    moveFrame = 0;
+    flushQueuedMoves();
+  });
+}
+
+function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
+  // OK/Enter is handled by the focused element itself (the capture-phase guard
+  // has already moved focus to the virtual target).
+  if (isConfirmKey(event)) return false;
 
   const direction: Direction | undefined =
     event.key === "ArrowUp"
@@ -1136,8 +1345,11 @@ function handleDirectionalKeyDown(event: KeyboardEvent): boolean {
   }
 
   event.preventDefault();
-  document.body.dataset.inputMode = "remote";
-  moveFocus(direction);
+  noteNavigationKey();
+  if (document.body.dataset.inputMode !== "remote") {
+    document.body.dataset.inputMode = "remote";
+  }
+  enqueueMove(direction);
   return true;
 }
 
@@ -1173,9 +1385,11 @@ export function useTvDirectionalNavigation(disabled = false): void {
       document.body.dataset.inputMode = "pointer";
     };
 
+    const releaseConfirmCommit = acquireConfirmCommit();
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("pointerdown", handlePointer, { passive: true });
     return () => {
+      releaseConfirmCommit();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);
     };
@@ -1248,15 +1462,17 @@ export function useTvNavigation(
 
     const handlePointer = () => {
       userInteracted = true;
+      flushQueuedMoves();
       document.body.dataset.inputMode = "pointer";
       // Commit deferred remote marker when leaving remote mode.
-      if (remoteFocusElement?.isConnected) {
-        window.clearTimeout(remoteFocusSettleTimer);
-        remoteFocusElement.classList.remove("is-remote-active");
-        remoteFocusElement.focus({ preventScroll: true });
+      if (remoteFocusElement) {
+        const virtual = remoteFocusElement;
+        clearRemoteLibraryFocus();
+        if (virtual.isConnected) virtual.focus({ preventScroll: true });
       }
     };
 
+    const releaseConfirmCommit = acquireConfirmCommit();
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("pointerdown", handlePointer, { passive: true });
     // Debounce default-focus scans. A raw childList observer on `.app-main`
@@ -1286,6 +1502,7 @@ export function useTvNavigation(
       window.clearTimeout(initialFocus);
       if (defaultFocusFrame) window.cancelAnimationFrame(defaultFocusFrame);
       defaultFocusObserver.disconnect();
+      releaseConfirmCommit();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerdown", handlePointer);
     };

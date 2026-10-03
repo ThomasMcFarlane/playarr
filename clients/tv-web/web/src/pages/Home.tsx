@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -93,6 +94,9 @@ interface OnDeckEntry {
 
 const EMPTY_WORKS: Work[] = [];
 
+/** Longest Home holds its first render for the On Deck detail calls. */
+const ON_DECK_WAIT_MS = 2500;
+
 function findOnDeckEpisode(
   children: WorkChildren,
   mediaFileId: string
@@ -168,6 +172,15 @@ export function HomePage() {
   const railsRef = useRef<HTMLDivElement>(null);
   const focusedRailRef = useRef<HomeRailId | null>(null);
   const homeSelectTimerRef = useRef(0);
+  // Latest focus handler behind a stable identity so memoised rails never re-render for it.
+  const focusFromRailRef = useRef<
+    (rail: HomeRailId, id: string, section: HTMLElement) => void
+  >(() => undefined);
+  const stableFocusFromRail = useCallback(
+    (rail: HomeRailId, id: string, section: HTMLElement) =>
+      focusFromRailRef.current(rail, id, section),
+    []
+  );
   const pendingHomeSelectRef = useRef<{ rail: HomeRailId; id: string } | null>(
     null
   );
@@ -187,6 +200,14 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    // On Deck is resolved through one detail call per title. The rails must not
+    // be swapped under the viewer once they are interactive (the primary rail's
+    // cards would remount and take the focus ring with them), so Home waits for
+    // On Deck, but never longer than ON_DECK_WAIT_MS; late results are dropped.
+    const giveUp = window.setTimeout(() => {
+      cancelled = true;
+      setOnDeckSettled(true);
+    }, ON_DECK_WAIT_MS);
 
     client
       .listWatchProgress()
@@ -240,6 +261,7 @@ export function HomePage() {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(giveUp);
     };
   }, [client]);
 
@@ -349,6 +371,7 @@ export function HomePage() {
   const selectedOnDeck =
     activeRail === "primary" && selected ? onDeckByWork.get(selected.id) : undefined;
   const isLoading =
+    !onDeckSettled ||
     seriesState.status === "idle" ||
     seriesState.status === "loading" ||
     movieState.status === "idle" ||
@@ -436,6 +459,8 @@ export function HomePage() {
     });
   }
 
+  focusFromRailRef.current = focusFromRail;
+
   return (
     <TvStageShell
       className={`tv-home${homeView === "cover" ? " is-cover-view" : ""}`}
@@ -483,7 +508,7 @@ export function HomePage() {
             items={rail.items}
             selectedId={selectedByRail[rail.id] ?? rail.items[0]?.id ?? null}
             isActive={activeRail === rail.id}
-            onFocusItem={focusFromRail}
+            onFocusItem={stableFocusFromRail}
             progressByWork={progressByWork}
             progressReady={watchProgress !== null}
             onDeckByWork={rail.id === "primary" ? onDeckByWork : undefined}
@@ -544,7 +569,7 @@ function HomeRailArtwork({
   );
 }
 
-function HomeRail({
+const HomeRail = memo(function HomeRail({
   railId,
   title,
   items,
@@ -659,7 +684,7 @@ function HomeRail({
       })}
     </TvMediaTrack>
   );
-}
+});
 
 function HomeLoader() {
   const { t } = useLanguage();

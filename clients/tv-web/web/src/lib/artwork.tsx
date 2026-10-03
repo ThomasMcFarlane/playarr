@@ -13,6 +13,7 @@ import type {
   Work,
 } from "@playarr-tv/api-client";
 import { useApiClient } from "./ApiClientProvider";
+import { whenNavigationIdle } from "./navigationActivity";
 
 interface ArtworkRecord {
   promise: Promise<string>;
@@ -40,11 +41,17 @@ function loadArtwork(client: ApiClient, workId: string, kind: ImageKind): Artwor
   if (existing) return existing;
 
   const record: ArtworkRecord = {
-    promise: client.getWorkArtwork(workId, kind).then((blob) => {
-      const url = URL.createObjectURL(blob);
-      record.url = url;
-      return url;
-    }),
+    promise: client.getWorkArtwork(workId, kind).then(
+      (blob) =>
+        new Promise<string>((resolve) => {
+          // createObjectURL is synchronous main-thread work: never during a hold.
+          whenNavigationIdle(() => {
+            const url = URL.createObjectURL(blob);
+            record.url = url;
+            resolve(url);
+          });
+        })
+    ),
   };
   record.promise.catch(() => {
     // A provider outage should be retryable when the artwork mounts again,
@@ -134,29 +141,29 @@ export function useCachedArtwork(
     }
 
     let cancelled = false;
-    const record = loadArtwork(client, work.id, kind);
-    if (record.url) {
-      setUrl(record.url);
-      setLoading(false);
-      return;
-    }
+    const existing = artworkCache(client).get(`${work.id}:${kind}`);
     setUrl(null);
     setLoading(true);
-    record.promise
-      .then((resolvedUrl) => {
-        if (!cancelled) {
-          setUrl(resolvedUrl);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUrl(null);
-          setLoading(false);
-        }
-      });
+    const cancelStart = whenNavigationIdle(() => {
+      if (cancelled) return;
+      const record = existing ?? loadArtwork(client, work.id, kind);
+      record.promise
+        .then((resolvedUrl) => {
+          if (!cancelled) {
+            setUrl(resolvedUrl);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setUrl(null);
+            setLoading(false);
+          }
+        });
+    });
     return () => {
       cancelled = true;
+      cancelStart();
     };
   }, [client, enabled, kind, work.id]);
 
@@ -232,11 +239,47 @@ export function useCachedAlbumArtwork(
   return { url, available: kind !== null, loading };
 }
 
+
+// One shared IntersectionObserver for every lazy artwork anchor. A per-image
+// observer costs a construct + observe per card, which dominated the frames in
+// which a library row mounted.
+const visibleCallbacks = new WeakMap<Element, () => void>();
+let sharedVisibilityObserver: IntersectionObserver | null = null;
+
+function observeVisibleOnce(anchor: Element, onVisible: () => void): () => void {
+  if (!sharedVisibilityObserver) {
+    sharedVisibilityObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const callback = visibleCallbacks.get(entry.target);
+          sharedVisibilityObserver?.unobserve(entry.target);
+          visibleCallbacks.delete(entry.target);
+          callback?.();
+        }
+      },
+      { rootMargin: "320px" }
+    );
+  }
+  visibleCallbacks.set(anchor, onVisible);
+  sharedVisibilityObserver.observe(anchor);
+  return () => {
+    visibleCallbacks.delete(anchor);
+    sharedVisibilityObserver?.unobserve(anchor);
+  };
+}
+
 interface CachedArtworkImageProps
   extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   work: Pick<Work, "id" | "images">;
   kinds: readonly ImageKind[];
   fallback?: ReactNode;
+  /**
+   * False keeps the image unloaded and unobserved (the fallback shows). Dense
+   * grids that already know which cards are near the viewport drive this
+   * instead of observing every mounted card.
+   */
+  enabled?: boolean;
 }
 
 /** Authenticated `<img>` backed by Playarr Server's persistent artwork cache. */
@@ -244,31 +287,30 @@ export function CachedArtworkImage({
   work,
   kinds,
   fallback = null,
+  enabled = true,
   ...imageProps
 }: CachedArtworkImageProps) {
   const lazyAnchorRef = useRef<HTMLElement>(null);
   const [shouldLoad, setShouldLoad] = useState(imageProps.loading !== "lazy");
   useEffect(() => {
-    if (imageProps.loading !== "lazy" || shouldLoad) return;
+    if (imageProps.loading !== "lazy" || shouldLoad || !enabled) return;
     const anchor = lazyAnchorRef.current;
     if (!anchor || typeof IntersectionObserver === "undefined") {
       setShouldLoad(true);
       return;
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setShouldLoad(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "320px" }
-    );
-    observer.observe(anchor);
-    return () => observer.disconnect();
-  }, [imageProps.loading, shouldLoad]);
+    // Becoming visible during a remote hold must not cost a render per card.
+    let cancelDeferred = () => {};
+    const stopObserving = observeVisibleOnce(anchor, () => {
+      cancelDeferred = whenNavigationIdle(() => setShouldLoad(true));
+    });
+    return () => {
+      stopObserving();
+      cancelDeferred();
+    };
+  }, [imageProps.loading, shouldLoad, enabled]);
 
-  const artwork = useCachedArtwork(work, kinds, shouldLoad);
+  const artwork = useCachedArtwork(work, kinds, shouldLoad && enabled);
   if (!artwork.url) {
     return (
       <>
@@ -311,17 +353,15 @@ export function CachedAlbumArtworkImage({
       setShouldLoad(true);
       return;
     }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setShouldLoad(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "320px" }
-    );
-    observer.observe(anchor);
-    return () => observer.disconnect();
+    // Becoming visible during a remote hold must not cost a render per card.
+    let cancelDeferred = () => {};
+    const stopObserving = observeVisibleOnce(anchor, () => {
+      cancelDeferred = whenNavigationIdle(() => setShouldLoad(true));
+    });
+    return () => {
+      stopObserving();
+      cancelDeferred();
+    };
   }, [imageProps.loading, shouldLoad]);
 
   const artwork = useCachedAlbumArtwork(

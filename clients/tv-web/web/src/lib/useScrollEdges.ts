@@ -42,11 +42,18 @@ export function useScrollEdges<T extends HTMLElement>(
     if (!element) return;
 
     let frame: number | null = null;
+    let trailing = 0;
     let stopped = false;
     const scheduleMeasure = () => {
       if (stopped || frame !== null) return;
-      // Remote holds: skip edge chrome setState (long-task source under TV CPU).
-      if (document.body.dataset.inputMode === "remote") return;
+      // Remote holds: no edge-chrome setState while keys are arriving (a
+      // long-task source under TV CPUs). One trailing measure runs once the
+      // hold settles so the fade edges are never left stale.
+      if (document.body.dataset.inputMode === "remote") {
+        window.clearTimeout(trailing);
+        trailing = window.setTimeout(measure, 250);
+        return;
+      }
       frame = window.requestAnimationFrame(() => {
         frame = null;
         measure();
@@ -69,6 +76,7 @@ export function useScrollEdges<T extends HTMLElement>(
 
     return () => {
       stopped = true;
+      window.clearTimeout(trailing);
       if (frame !== null) window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       mutationObserver.disconnect();

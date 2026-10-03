@@ -4879,7 +4879,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  animation: tv-key-art-in 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-key-art-in 760ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-key-art::after {
@@ -4937,7 +4937,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   top: 31%;
   left: clamp(44px, 7.5vw, 150px);
   width: min(27vw, 520px);
-  animation: tv-copy-in 620ms 90ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 620ms 90ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-provider,
@@ -4995,7 +4995,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
     background 220ms ease,
     color 220ms ease;
-  animation: tv-action-in 620ms 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-action-in 620ms 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-primary-action span {
@@ -5030,7 +5030,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     0 30px 90px rgba(56, 38, 33, 0.08),
     inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(30px) saturate(112%);
-  animation: tv-rail-in 700ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-rail-in 700ms 120ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 :root[data-theme="dark"] .tv-rail-panel {
@@ -5406,7 +5406,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   color: var(--ink-muted);
   font-size: clamp(0.54rem, 0.62vw, 0.78rem);
   line-height: 1.45;
-  animation: tv-copy-in 420ms ease both;
+  animation: tv-copy-in 420ms ease backwards;
 }
 
 .tv-about-panel {
@@ -6067,7 +6067,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 
 .tv-library-preview {
   z-index: 7;
-  animation: tv-preview-expand 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-preview-expand 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-home-feature h2,
@@ -6326,35 +6326,63 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   transform: translateY(-5px) scale(1.015);
 }
 
-/* Vidaa / limited TV CPUs: drop transition cost during remote holds. */
-body[data-input-mode="remote"] .tv-title-grid .tv-title-card,
-body[data-input-mode="remote"] .tv-title-grid .tv-title-card-art,
-body[data-input-mode="remote"] .tv-home-card,
-body[data-input-mode="remote"] .tv-home-card-art {
+/*
+ * Remote navigation visuals. The remote moves a *virtual* focus (the
+ * `is-remote-active` marker) one frame at a time; native focus follows once
+ * the hold settles. While the remote is in use:
+ *   - no transitions/animations on cards (they would restart on every key);
+ *   - exactly one card looks focused: the marker. Lifts left behind by stale
+ *     :focus-visible / is-selected state are neutralised so two cards never
+ *     look focused at once;
+ *   - the marker is a ring + shadow rather than a scale (no re-raster).
+ */
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result),
+body[data-input-mode="remote"] :is(.tv-title-card-art, .tv-home-card-art, .tv-search-result-art) {
   transition: none !important;
   animation: none !important;
 }
-/* Virtual remote focus (no native focus mid-hold — avoids Vidaa reflow thrash). */
-body[data-input-mode="remote"] .tv-title-grid .tv-title-card.is-remote-active,
-body[data-input-mode="remote"] .tv-home-card.is-remote-active {
-  z-index: 2;
-  outline: 0;
-  /* Outline ring via box-shadow instead of lift transforms (cheaper on TV GPUs). */
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-search-result):not([data-remote-active]),
+body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card:not([data-remote-active]) {
+  transform: none !important;
 }
-body[data-input-mode="remote"] .tv-title-grid .tv-title-card.is-remote-active .tv-title-card-art,
-body[data-input-mode="remote"] .tv-home-card.is-remote-active .tv-home-card-art {
+body[data-input-mode="remote"] .tv-title-card:not([data-remote-active]) .tv-title-card-art {
+  transform: none !important;
+  box-shadow: 0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1) !important;
+}
+body[data-input-mode="remote"] .tv-home-card:not([data-remote-active]) .tv-home-card-art {
+  transform: none !important;
+  box-shadow: 0 10px 22px rgba(56, 38, 33, 0.16), 0 3px 9px rgba(56, 38, 33, 0.1) !important;
+}
+body[data-input-mode="remote"] .tv-search-result:not([data-remote-active]) .tv-search-result-art {
+  transform: none !important;
+  box-shadow: 0 12px 34px rgba(31, 14, 20, 0.16) !important;
+}
+/*
+ * No z-index on the marker: changing z-index of a grid/flex item makes the
+ * parent re-lay out (about 0.25 ms per toggle at 200 cards, and it grows with
+ * the item count), which dominated the per-key frame cost. The ring and shadow
+ * are painted by the card art instead.
+ */
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result)[data-remote-active] {
+  outline: 0;
+}
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-search-result)[data-remote-active],
+body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card[data-remote-active] {
+  transform: none !important;
+}
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result)[data-remote-active]
+  :is(.tv-title-card-art, .tv-home-card-art, .tv-search-result-art) {
+  transform: none !important;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--accent, #c4a484) 90%, white),
     0 18px 36px rgba(56, 38, 33, 0.28),
-    0 8px 16px rgba(56, 38, 33, 0.16);
+    0 8px 16px rgba(56, 38, 33, 0.16) !important;
 }
-body[data-input-mode="remote"] .tv-title-grid .tv-title-card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 220px;
+.tv-title-grid .tv-title-card {
+  /* Isolate each card's layout/style. (No content-visibility: toggling display
+     locks while scrolling re-laid-out hundreds of cards and, with a guessed
+     intrinsic size, broke row-height scroll maths at 4K.) */
   contain: layout style;
-}
-body[data-input-mode="pointer"] .is-remote-active {
-  /* safety: never leave remote marker styles when pointer is back */
 }
 
 .tv-title-grid .tv-title-card-art {
@@ -6639,7 +6667,7 @@ body[data-input-mode="pointer"] .is-remote-active {
 
 .tv-home-feature {
   z-index: 8;
-  animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-playlists {
@@ -7444,7 +7472,7 @@ body[data-input-mode="pointer"] .is-remote-active {
 
 .tv-detail-copy {
   z-index: 12;
-  animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 520ms 80ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-detail-copy h2 {
@@ -7671,7 +7699,7 @@ body[data-input-mode="pointer"] .is-remote-active {
     color-mix(in srgb, var(--tv-rail-frost) 96%, transparent) 62%,
     var(--tv-rail-frost) 100%
   );
-  animation: tv-rail-in 660ms 100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-rail-in 660ms 100ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 :root[data-theme="dark"] .tv-rail-surface {
@@ -8294,7 +8322,7 @@ body[data-input-mode="pointer"] .is-remote-active {
   top: clamp(86px, calc(12 * var(--viewport-unit)), 142px);
   left: clamp(102px, 8vw, 160px);
   width: min(31vw, 590px);
-  animation: tv-copy-in 520ms 70ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 520ms 70ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-search-heading {
@@ -8544,7 +8572,7 @@ body[data-input-mode="pointer"] .is-remote-active {
 .tv-search-preview {
   max-width: 48ch;
   margin-top: clamp(24px, calc(3.5 * var(--viewport-unit)), 44px);
-  animation: tv-copy-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 480ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .tv-search-preview > p:first-child {
@@ -8839,7 +8867,7 @@ body[data-input-mode="pointer"] .is-remote-active {
   right: 0;
   left: 0;
   text-align: center;
-  animation: tv-copy-in 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tv-copy-in 440ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .profiles-heading p {
@@ -11679,6 +11707,8 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 }
 @media (max-width: 640px) {
   .playback-health-panel { width: 100vw; }
+}
+
 /* Phone remote and handoff (docs/architecture/remote-control.md) */
 .remote-code {
   font-size: clamp(2rem, 6vw, 3.6rem);
@@ -11821,4 +11851,32 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 
 .tv-detail-watchlist {
   margin-top: 0.75rem;
+}
+
+/*
+ * Remote / keyboard navigation: frosted-glass chrome sits above scrolling
+ * artwork, so every backdrop-filter is re-blurred (and re-composited) on each
+ * scroll frame. TV-class GPUs cannot afford that at 4K, so the browse screens
+ * use flat translucency while the remote is in use. Pointer mode keeps glass.
+ */
+body[data-input-mode="remote"] :is(
+    .app-nav-group,
+    .app-nav-link,
+    .app-user-identity,
+    .tv-page-back,
+    .tv-filter-launcher,
+    .tv-search-form
+  ) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/*
+ * Remote scrolling is instant. `scroll-behavior: smooth` makes every
+ * programmatic scrollTop write start a new animation toward a target that is
+ * recomputed from the *mid-animation* position, so under a held button the
+ * viewport trails the focus by thousands of pixels (focus ends up off screen).
+ */
+body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media-track-scroll, .tv-episode-rail, .tv-title-rail, .tv-rail-surface, .app-main) {
+  scroll-behavior: auto;
 }

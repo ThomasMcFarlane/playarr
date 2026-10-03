@@ -252,6 +252,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The regional servers `playarr-region-a` and `playarr-region-b` serve HTTPS on their public 8484 addresses
   using cert-manager certificates (optional per-instance `tls` in the `playarr-dev` chart). The
   server now hot-reloads a renewed static TLS certificate within a minute, without a restart.
+- Playarr Web remote navigation (Home, Movies/Series/Sites/Music, Search) now applies directional
+  keys once per animation frame: keys queued behind a busy main thread move a virtual focus by
+  index arithmetic and cost one DOM write and one frame, not one per key. Library and Search cards
+  are memoised (Movies/Series render in 24-card chunks), artwork fetches, object URLs and row
+  pre-mounting wait for the remote to go quiet (350 ms), one shared IntersectionObserver replaces
+  one per image, catalogue pages sort with a single `Intl.Collator`, and frosted-glass chrome and
+  card transitions are flattened while the remote is in use. Entrance animations no longer keep
+  4K layers alive after they finish (`fill-mode: backwards`).
+- `clients/tv-web/web/scripts/nav-perf.mjs` (`pnpm perf:nav`) measures key-to-next-frame latency and
+  per-key main-thread cost on the real Home, Movies, Series and Search screens against a
+  deterministic mock API (1,746 movies, 944 series) at 3840x2160 with CPU throttling, and
+  `scripts/nav-smoke.mjs` (`pnpm smoke:nav`) runs the remote/pointer/context-menu smoke plan.
 
 ### Removed
 
@@ -279,6 +291,23 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (refined by an earlier-or-equal home-media date in that year), and only then from
   the digital/physical dates, so a library film no longer shows its 2005 DVD date.
   Existing titles correct on the next arr sync (task 95).
+- Movies and Series: OK/Enter opened nothing (the grid-level key handlers clicked the grid, not the
+  title) and the long-press menu used the grid as its origin; each card now owns its handlers
+  again, and a capture-phase guard re-targets OK to the title the remote is actually on.
+- Movies and Series: the alphabet strip jumped to the wrong letter because rows are mounted on
+  demand, Back from a title deep in the list lost focus, and holding Down left the focus far below
+  the visible rows because smooth scrolling restarted from its mid-animation position on every key.
+  Jumps and restores now mount the target row first and remote scrolling is instant.
+- Home: the focus highlight no longer vanishes about a second after navigation starts. The On Deck
+  detail calls replaced the first rail while it was already interactive, remounting the focused
+  card; Home now waits for On Deck (at most 2.5 s, late results are dropped) before rendering.
+- Home: remote Left/Right and Up/Down no longer leave the focused card off screen, and the focus
+  marker is an attribute React cannot overwrite when a card re-renders.
+- A missing `}` in `global.css` (the playback health panel's narrow-screen rule) nested every later
+  rule, including the phone-remote styles, inside `@media (max-width: 640px)`; the block is closed
+  and a test now fails on unbalanced braces.
+- Search: keyboard navigation no longer measures every result on each key, the preview/selection is
+  debounced under a held key, and Left from the first column returns to the search box.
 - Thumbnail ffmpeg processes are killed when the request that started them is dropped (for example a client
   scrolled past a chapter tile), so abandoned grabs no longer pile up memory behind the concurrency limit.
 - Frame thumbnails (`GET /api/v1/media/{id}/thumbnail`) now run at most two ffmpeg extractions at a
