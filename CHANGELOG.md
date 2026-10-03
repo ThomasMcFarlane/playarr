@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The public Clients hub at `/clients` now lists Playarr Server (`/clients/server`) as a
+  server, not a playback app: requirements (ffmpeg/ffprobe), Docker Compose, systemd and
+  Helm install methods, and the optional playarr.app HTTPS relay. It states that no
+  binaries or public image are published yet and offers no download. English, Thai and
+  Japanese; covered by `Clients.test.tsx`.
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

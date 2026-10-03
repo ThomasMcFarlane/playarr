@@ -25,7 +25,8 @@ type ClientIcon =
   | "chromecast"
   | "xbox"
   | "harmony"
-  | "firetv";
+  | "firetv"
+  | "server";
 
 interface PlayarrClient {
   id: string;
@@ -119,6 +120,16 @@ const PLAYARR_CLIENTS: readonly PlayarrClient[] = [
     status: "soon",
     icon: "firetv",
   },
+  {
+    // Not a playback client: the server every client above connects to. It
+    // has no download action because no server package is published yet.
+    id: "server",
+    nameKey: "pages.clients.server.name",
+    platformKey: "pages.clients.server.platform",
+    descriptionKey: "pages.clients.server.description",
+    status: "experimental",
+    icon: "server",
+  },
 ];
 
 function ClientPlatformIcon({ icon }: { icon: ClientIcon }) {
@@ -127,6 +138,16 @@ function ClientPlatformIcon({ icon }: { icon: ClientIcon }) {
       <svg viewBox="0 0 24 24" role="img" aria-label="VIDAA">
         <rect x="2.5" y="4.5" width="19" height="13" rx="2.5" />
         <path d="m8 9 4 5 4-5M9 21h6" />
+      </svg>
+    );
+  }
+
+  if (icon === "server") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-label="Server">
+        <rect x="3" y="3.5" width="18" height="7" rx="2" />
+        <rect x="3" y="13.5" width="18" height="7" rx="2" />
+        <path d="M7 7h.01M7 17h.01M11 7h6M11 17h6" />
       </svg>
     );
   }
@@ -150,7 +171,7 @@ function ClientPlatformIcon({ icon }: { icon: ClientIcon }) {
   // product mark and isn't in that CC0 set -- so, matching this page's own
   // precedent of using the parent brand for LG (webOS) and Samsung (Tizen),
   // the tile uses Amazon's own mark.
-  const paths: Record<Exclude<ClientIcon, "vidaa" | "xbox">, string> = {
+  const paths: Record<Exclude<ClientIcon, "vidaa" | "xbox" | "server">, string> = {
     firetv:
       "M.045 18.02c.072-.116.187-.124.348-.022 3.636 2.11 7.594 3.166 11.87 3.166 2.852 0 5.668-.533 8.447-1.595l.315-.14c.138-.06.234-.1.293-.13.226-.088.39-.046.525.13.12.174.09.336-.12.48-.256.19-.6.41-1.006.654-1.244.743-2.64 1.316-4.185 1.726a17.617 17.617 0 01-10.951-.577 17.88 17.88 0 01-5.43-3.35c-.1-.074-.151-.15-.151-.22 0-.047.021-.09.051-.13zm6.565-6.218c0-1.005.247-1.863.743-2.577.495-.71 1.17-1.25 2.04-1.615.796-.335 1.756-.575 2.912-.72.39-.046 1.033-.103 1.92-.174v-.37c0-.93-.105-1.558-.3-1.875-.302-.43-.78-.65-1.44-.65h-.182c-.48.046-.896.196-1.246.46-.35.27-.575.63-.675 1.096-.06.3-.206.465-.435.51l-2.52-.315c-.248-.06-.372-.18-.372-.39 0-.046.007-.09.022-.15.247-1.29.855-2.25 1.82-2.88.976-.616 2.1-.975 3.39-1.05h.54c1.65 0 2.957.434 3.888 1.29.135.15.27.3.405.48.12.165.224.314.283.45.075.134.15.33.195.57.06.254.105.42.135.51.03.104.062.3.076.615.01.313.02.493.02.553v5.28c0 .376.06.72.165 1.036.105.313.21.54.315.674l.51.674c.09.136.136.256.136.36 0 .12-.06.226-.18.314-1.2 1.05-1.86 1.62-1.963 1.71-.165.135-.375.15-.63.045a6.062 6.062 0 01-.526-.496l-.31-.347a9.391 9.391 0 01-.317-.42l-.3-.435c-.81.886-1.603 1.44-2.4 1.665-.494.15-1.093.227-1.83.227-1.11 0-2.04-.343-2.76-1.034-.72-.69-1.08-1.665-1.08-2.94l-.05-.076zm3.753-.438c0 .566.14 1.02.425 1.364.285.34.675.512 1.155.512.045 0 .106-.007.195-.02.09-.016.134-.023.166-.023.614-.16 1.08-.553 1.424-1.178.165-.28.285-.58.36-.91.09-.32.12-.59.135-.8.015-.195.015-.54.015-1.005v-.54c-.84 0-1.484.06-1.92.18-1.275.36-1.92 1.17-1.92 2.43l-.035-.02zm9.162 7.027c.03-.06.075-.11.132-.17.362-.243.714-.41 1.05-.5a8.094 8.094 0 011.612-.24c.14-.012.28 0 .41.03.65.06 1.05.168 1.172.33.063.09.099.228.099.39v.15c0 .51-.149 1.11-.424 1.8-.278.69-.664 1.248-1.156 1.68-.073.06-.14.09-.197.09-.03 0-.06 0-.09-.012-.09-.044-.107-.12-.064-.24.54-1.26.806-2.143.806-2.64 0-.15-.03-.27-.087-.344-.145-.166-.55-.257-1.224-.257-.243 0-.533.016-.87.046-.363.045-.7.09-1 .135-.09 0-.148-.014-.18-.044-.03-.03-.036-.047-.02-.077 0-.017.006-.03.02-.063v-.06z",
     android:
@@ -720,6 +741,158 @@ function SmartTvInstallGuide({
   );
 }
 
+const SERVER_INSTALL_COMMANDS: Record<"docker" | "systemd" | "helm" | "relay", readonly string[]> = {
+  docker: [
+    "docker compose -f infra/docker/docker-compose.standalone.yml up -d --build",
+    "docker compose -f infra/docker/docker-compose.standalone.yml logs -f",
+  ],
+  systemd: [
+    "sudo ./infra/systemd/install.sh /path/to/playarr-server",
+    "sudoedit /etc/playarr/playarr.env",
+    "sudo systemctl enable --now playarr.service",
+    "journalctl -u playarr.service -f",
+  ],
+  helm: [
+    "helm template playarr infra/kubernetes/helm/playarr-standalone --values my-values.yaml",
+  ],
+  relay: [
+    "PLAYARR_RELAY_REGISTER=true",
+    "PLAYARR_ACME_CHALLENGE=relay-dns-01",
+    "PLAYARR_ACME_DOMAIN=v4-<A>-<B>-<C>-<D>.relay.playarr.app",
+    "PLAYARR_ACME_ACCEPT_TERMS=true",
+  ],
+};
+
+function ServerInstallDetails({ client }: { client: PlayarrClient }) {
+  const { t } = useLanguage();
+  const commands = (id: keyof typeof SERVER_INSTALL_COMMANDS, label: string) => (
+    <ul className="smart-tv-commands" aria-label={label}>
+      {SERVER_INSTALL_COMMANDS[id].map((command) => (
+        <li key={command}>
+          <code>{command}</code>
+        </li>
+      ))}
+    </ul>
+  );
+
+  return (
+    <>
+      <section
+        className={`android-inline-details client-details-summary smart-tv-overview server-overview is-${client.icon}`}
+        aria-labelledby="server-details-title"
+      >
+        <span
+          className="client-platform-icon client-details-icon"
+          data-client-icon={client.icon}
+          aria-hidden="true"
+        >
+          <ClientPlatformIcon icon={client.icon} />
+        </span>
+        <p className="page-kicker">{t("pages.clients.serverPage.kicker")}</p>
+        <h1 id="server-details-title">{t("pages.clients.serverPage.title")}</h1>
+        <p className="smart-tv-description">
+          {t("pages.clients.serverPage.description")}
+        </p>
+        <span className="client-details-status">
+          {t("pages.clients.status.sourceBuild")}
+        </span>
+        <p className="smart-tv-package-note" id="server-package-note">
+          {t("pages.clients.serverPage.packageNote")}
+        </p>
+      </section>
+
+      <section
+        className="vidaa-steps server-requirements"
+        aria-labelledby="server-requirements-title"
+      >
+        <div className="vidaa-section-heading">
+          <span aria-hidden="true">01</span>
+          <div>
+            <p>{t("pages.clients.serverPage.requirementsKicker")}</p>
+            <h2 id="server-requirements-title">
+              {t("pages.clients.serverPage.requirementsTitle")}
+            </h2>
+          </div>
+        </div>
+        <ol>
+          {([1, 2, 3, 4] as const).map((item, index) => (
+            <li key={item}>
+              <span>0{index + 1}</span>
+              <div>
+                <h3>{t(`pages.clients.serverPage.req${item}Title`)}</h3>
+                <p>{t(`pages.clients.serverPage.req${item}Description`)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section
+        className="vidaa-steps server-install-guide"
+        aria-labelledby="server-install-title"
+      >
+        <div className="vidaa-section-heading">
+          <span aria-hidden="true">02</span>
+          <div>
+            <p>{t("pages.clients.serverPage.installKicker")}</p>
+            <h2 id="server-install-title">{t("pages.clients.serverPage.installTitle")}</h2>
+          </div>
+        </div>
+        <p className="vidaa-section-copy">
+          {t("pages.clients.serverPage.installDescription")}
+        </p>
+        <ol>
+          {(["docker", "systemd", "helm"] as const).map((method, index) => (
+            <li key={method}>
+              <span>0{index + 1}</span>
+              <div>
+                <h3>{t(`pages.clients.serverPage.${method}Title`)}</h3>
+                <p>{t(`pages.clients.serverPage.${method}Description`)}</p>
+                {commands(method, t(`pages.clients.serverPage.${method}Title`))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section
+        className="vidaa-steps server-connect"
+        aria-labelledby="server-connect-title"
+      >
+        <div className="vidaa-section-heading">
+          <span aria-hidden="true">03</span>
+          <div>
+            <p>{t("pages.clients.serverPage.connectKicker")}</p>
+            <h2 id="server-connect-title">{t("pages.clients.serverPage.connectTitle")}</h2>
+          </div>
+        </div>
+        <p className="vidaa-section-copy">
+          {t("pages.clients.serverPage.connectDescription")}
+        </p>
+        <ol>
+          <li>
+            <span>01</span>
+            <div>
+              <h3>{t("pages.clients.serverPage.relayTitle")}</h3>
+              <p>{t("pages.clients.serverPage.relayDescription")}</p>
+              {commands("relay", t("pages.clients.serverPage.relayTitle"))}
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section
+        className="vidaa-safety server-privacy-note"
+        aria-labelledby="server-privacy-title"
+      >
+        <p className="page-kicker">{t("pages.clients.serverPage.privacyKicker")}</p>
+        <h2 id="server-privacy-title">{t("pages.clients.serverPage.privacyTitle")}</h2>
+        <p>{t("pages.clients.serverPage.privacyDescription")}</p>
+      </section>
+    </>
+  );
+}
+
 function ClientOverviewDetails({ client }: { client: PlayarrClient }) {
   const { t } = useLanguage();
 
@@ -817,6 +990,8 @@ export function ClientsPage() {
                 <ClientOverviewDetails client={client} />
                 <RokuInstallGuide />
               </>
+            ) : client.id === "server" ? (
+              <ServerInstallDetails client={client} />
             ) : client.id === "webos" || client.id === "tizen" ? (
               <SmartTvInstallGuide
                 client={client as PlayarrClient & { id: SmartTvClientId }}

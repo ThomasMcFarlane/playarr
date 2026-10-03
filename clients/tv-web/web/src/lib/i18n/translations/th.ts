@@ -871,6 +871,76 @@ export const th: Translations = {
   "pages.clients.firetv.name": "Fire TV",
   "pages.clients.firetv.platform": "อุปกรณ์ Amazon Fire TV",
   "pages.clients.firetv.description": "ไคลเอนต์ Fire TV แบบเนทีฟกำลังอยู่ระหว่างการพัฒนา โดยจะติดตั้งเป็นแพ็กเกจที่ลงลายเซ็นแล้ว จึงยังไม่มีรุ่นให้ดาวน์โหลด",
+  "pages.clients.status.sourceBuild":
+    "สร้างจากซอร์ส · ยังไม่มีไฟล์ดาวน์โหลดสาธารณะ",
+  "pages.clients.server.name":
+    "Playarr Server",
+  "pages.clients.server.platform":
+    "โฮสต์ Linux, Docker และ Kubernetes",
+  "pages.clients.server.description":
+    "เซิร์ฟเวอร์ที่เก็บคลังของคุณและสตรีมไปยังไคลเอนต์ Playarr ทุกตัว ไม่ใช่แอปเล่นวิดีโอ ติดตั้งบนเครื่องที่เปิดตลอดเวลา",
+  "pages.clients.serverPage.kicker":
+    "เซิร์ฟเวอร์ ไม่ใช่แอปเล่นวิดีโอ",
+  "pages.clients.serverPage.title":
+    "Playarr Server",
+  "pages.clients.serverPage.description":
+    "Playarr Server จัดทำแคตตาล็อกคลังของคุณจากอินสแตนซ์ Sonarr, Radarr, Lidarr, Bazarr, Prowlarr และ Readarr ที่คุณใช้อยู่ สร้างภาพขนาดย่อ ตรวจสอบแทร็กเสียงและคำบรรยาย และแปลงรหัสตามต้องการ ไคลเอนต์ Playarr ทุกตัวในหน้านี้เชื่อมต่อกับเซิร์ฟเวอร์นี้ สื่อของคุณอยู่บนฮาร์ดแวร์ของคุณเอง",
+  "pages.clients.serverPage.packageNote":
+    "ยังไม่มีการเผยแพร่ไบนารีรุ่นเผยแพร่และอิมเมจคอนเทนเนอร์สาธารณะ จึงยังไม่มีปุ่มดาวน์โหลด วิธีด้านล่างคือรูปแบบการติดตั้งที่ซอร์สของ Playarr รองรับ โดยสร้างหรือติดตั้งจากซอร์สของ Playarr ที่ checkout ไว้",
+  "pages.clients.serverPage.requirementsKicker":
+    "ก่อนติดตั้ง",
+  "pages.clients.serverPage.requirementsTitle":
+    "ความต้องการของระบบ",
+  "pages.clients.serverPage.req1Title":
+    "Linux 64 บิต",
+  "pages.clients.serverPage.req1Description":
+    "x86-64 หรือ ARM64 Docker เป็นตัวเลือก อิมเมจคอนเทนเนอร์สร้างสำหรับทั้งสองสถาปัตยกรรม เซิร์ฟเวอร์เก็บฐานข้อมูล SQLite และแคชภาพปกในไดเรกทอรีข้อมูลที่เขียนได้ จึงต้องมีพื้นที่จัดเก็บถาวร",
+  "pages.clients.serverPage.req2Title":
+    "ffmpeg และ ffprobe",
+  "pages.clients.serverPage.req2Description":
+    "จำเป็นสำหรับภาพขนาดย่อ การตรวจสอบแทร็ก และการแปลงรหัสตามต้องการ อิมเมจ Docker มีมาให้แล้ว สำหรับการติดตั้งแบบ systemd หรือ Kubernetes ที่ไม่ใช้อิมเมจดังกล่าว ให้ติดตั้ง ffmpeg (ซึ่งมี ffprobe) บนโฮสต์ และตรวจสอบว่าทั้งสองอยู่ใน PATH ของเซิร์ฟเวอร์",
+  "pages.clients.serverPage.req3Title":
+    "メディアアプリ",
+  "pages.clients.serverPage.req3Description":
+    "Playarr Server อ่านข้อมูลจากอินสแตนซ์ Sonarr, Radarr, Lidarr, Bazarr, Prowlarr และ Readarr ที่คุณใช้อยู่ ลงทะเบียนแต่ละตัวผ่าน admin API ของเซิร์ฟเวอร์หลังเริ่มทำงาน",
+  "pages.clients.serverPage.req4Title":
+    "พอร์ตเครือข่าย 8484",
+  "pages.clients.serverPage.req4Description":
+    "API รับฟังที่ TCP 8484 โดยค่าเริ่มต้นเป็น HTTP ธรรมดา ไคลเอนต์ในเครือข่ายเดียวกันเชื่อมต่อได้โดยตรง เมตริกอยู่ที่พอร์ต 9090 และควรอยู่ในเครือข่ายส่วนตัวของคุณ",
+  "pages.clients.serverPage.installKicker":
+    "วิธีติดตั้งที่รองรับ",
+  "pages.clients.serverPage.installTitle":
+    "เลือกหนึ่งวิธี",
+  "pages.clients.serverPage.installDescription":
+    "รันคำสั่งจากรูทของซอร์ส Playarr ที่ checkout ไว้ ทุกวิธีรันกระบวนการเซิร์ฟเวอร์แบบรวมตัวเดียวกัน",
+  "pages.clients.serverPage.dockerTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.dockerDescription":
+    "สร้างอิมเมจเซิร์ฟเวอร์ที่รวม ffmpeg และเริ่มคอนเทนเนอร์เดียวโดยเก็บสถานะ SQLite ใน named volume เซสชันจะคงอยู่หลังรีสตาร์ทก็ต่อเมื่อคุณตั้งค่า PLAYARR_JWT_SECRET",
+  "pages.clients.serverPage.systemdTitle":
+    "systemd (โฮสต์ Linux)",
+  "pages.clients.serverPage.systemdDescription":
+    "ติดตั้งไบนารี playarr-server ผู้ใช้ playarr แบบไม่มีสิทธิ์พิเศษ และไฟล์ unit โดยจะไม่เปิดใช้งานหรือเริ่มทำงานจนกว่าคุณจะสั่ง กรอก DATABASE_URL ในไฟล์ env ก่อน",
+  "pages.clients.serverPage.helmTitle":
+    "Kubernetes (Helm chart)",
+  "pages.clients.serverPage.helmDescription":
+    "ชาร์ต playarr-standalone รันหนึ่ง Pod ด้วยกลยุทธ์ Recreate สำหรับเซิร์ฟเวอร์ SQLite เครื่องเดียว คุณต้องจัดหาอิมเมจคอนเทนเนอร์ Secret ที่มีอยู่ และพื้นที่จัดเก็บถาวร ชาร์ตไม่สร้าง Secret และไม่มี hook สำหรับย้ายหรือลบข้อมูล เรนเดอร์และตรวจสอบก่อนนำไปใช้",
+  "pages.clients.serverPage.connectKicker":
+    "เชื่อมต่อไคลเอนต์",
+  "pages.clients.serverPage.connectTitle":
+    "HTTPS และรีเลย์ playarr.app",
+  "pages.clients.serverPage.connectDescription":
+    "แอปเนทีฟเชื่อมต่อกับที่อยู่ของเซิร์ฟเวอร์ในเครือข่ายของคุณได้ ไคลเอนต์เว็บที่โฮสต์ที่ playarr.app ให้บริการผ่าน HTTPS จึงต้องมีใบรับรองที่เบราว์เซอร์เชื่อถือสำหรับเซิร์ฟเวอร์ ใช้ของคุณเอง หรือใช้รีเลย์ที่เป็นตัวเลือก",
+  "pages.clients.serverPage.relayTitle":
+    "รีเลย์ที่เป็นตัวเลือก (ปิดโดยค่าเริ่มต้น)",
+  "pages.clients.serverPage.relayDescription":
+    "สำหรับเซิร์ฟเวอร์ที่มีที่อยู่ IPv4 สาธารณะและเข้าถึง TCP 8484 ได้จากอินเทอร์เน็ต เซิร์ฟเวอร์ลงทะเบียนกับ playarr.app ซึ่งเผยแพร่ชื่อแบบ DNS อย่างเดียว เช่น v4-203-0-113-10.relay.playarr.app ชี้ไปยังที่อยู่ของคุณ จากนั้นเซิร์ฟเวอร์ขอใบรับรอง Let's Encrypt ของตัวเองผ่าน DNS-01 จึงไม่ต้องใช้พอร์ต 80 ช่วงสั้น ๆ หลังเริ่มทำงาน โดยทั่วไปไม่ถึงสองนาที API จะเป็น HTTP ธรรมดา แล้วสลับเป็น HTTPS บนพอร์ตเดิม",
+  "pages.clients.serverPage.privacyKicker":
+    "สิ่งที่รีเลย์แชร์",
+  "pages.clients.serverPage.privacyTitle":
+    "ที่อยู่ของคุณ ไม่ใช่สื่อของคุณ",
+  "pages.clients.serverPage.privacyDescription":
+    "การเปิดรีเลย์จะส่งที่อยู่ IPv4 สาธารณะและลายนิ้วมือของคีย์ไปยัง playarr.app และชื่อนั้นเป็นข้อมูล DNS สาธารณะ ไม่มีทราฟฟิกสตรีมหรือ API ผ่าน Cloudflare การลงทะเบียนพิสูจน์การควบคุมที่อยู่ ไม่ได้พิสูจน์ว่าใครเป็นเจ้าของเซิร์ฟเวอร์ ปิดไว้หากต้องการใช้ใบรับรองและชื่อของคุณเอง",
   "pages.clients.vidaaSetup": "ติดตั้ง",
   "pages.clients.downloadApk": "ดาวน์โหลด APK",
   "pages.clients.downloadApp": "ดาวน์โหลดแอป",

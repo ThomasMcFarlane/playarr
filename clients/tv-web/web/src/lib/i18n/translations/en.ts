@@ -959,6 +959,76 @@ export const en = {
   "pages.clients.firetv.platform": "Amazon Fire TV devices",
   "pages.clients.firetv.description":
     "The native Fire TV client is in development. It will install as a signed package, so no release is available to download yet.",
+  "pages.clients.status.sourceBuild":
+    "Build from source · No public download yet",
+  "pages.clients.server.name":
+    "Playarr Server",
+  "pages.clients.server.platform":
+    "Linux, Docker and Kubernetes hosts",
+  "pages.clients.server.description":
+    "The server that holds your library and streams it to every Playarr client. It is not a playback app. Install it on a machine that stays on.",
+  "pages.clients.serverPage.kicker":
+    "Server, not a playback app",
+  "pages.clients.serverPage.title":
+    "Playarr Server.",
+  "pages.clients.serverPage.description":
+    "Playarr Server catalogues your library from the Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr instances you already run, generates thumbnails, probes audio and subtitle tracks and transcodes on demand. Every Playarr client on this page connects to it. Your media stays on your own hardware.",
+  "pages.clients.serverPage.packageNote":
+    "Release binaries and a public container image have not been published yet, so there is no download button. The methods below are the install layouts the Playarr source tree supports; they build or install from a Playarr source checkout.",
+  "pages.clients.serverPage.requirementsKicker":
+    "Before you install",
+  "pages.clients.serverPage.requirementsTitle":
+    "System requirements",
+  "pages.clients.serverPage.req1Title":
+    "64-bit Linux",
+  "pages.clients.serverPage.req1Description":
+    "x86-64 or ARM64. Docker is optional; the container image is built for both architectures. The server stores its SQLite database and artwork cache in a writable data directory, so it needs persistent storage.",
+  "pages.clients.serverPage.req2Title":
+    "ffmpeg and ffprobe",
+  "pages.clients.serverPage.req2Description":
+    "Required for thumbnails, track probing and on-demand transcoding. The Docker image includes them. On systemd or Kubernetes installs without that image, install ffmpeg (which provides ffprobe) on the host and make sure both are on the server's PATH.",
+  "pages.clients.serverPage.req3Title":
+    "Your media apps",
+  "pages.clients.serverPage.req3Description":
+    "Playarr Server reads from Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr instances that you already run. Register each one through the server's admin API after it starts.",
+  "pages.clients.serverPage.req4Title":
+    "Network port 8484",
+  "pages.clients.serverPage.req4Description":
+    "The API listens on TCP 8484, plain HTTP by default. Clients on the same network can connect to it directly. Metrics are on 9090 and should stay on your private network.",
+  "pages.clients.serverPage.installKicker":
+    "Supported install methods",
+  "pages.clients.serverPage.installTitle":
+    "Choose one",
+  "pages.clients.serverPage.installDescription":
+    "Run the commands from the root of a Playarr source checkout. Each method runs the same single all-in-one server process.",
+  "pages.clients.serverPage.dockerTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.dockerDescription":
+    "Builds the server image, with ffmpeg included, and starts one container with SQLite state in a named volume. Sessions survive restarts only if you set PLAYARR_JWT_SECRET.",
+  "pages.clients.serverPage.systemdTitle":
+    "systemd on a Linux host",
+  "pages.clients.serverPage.systemdDescription":
+    "Installs the playarr-server binary, an unprivileged playarr user and the unit files. It does not enable or start anything until you do. Fill in DATABASE_URL in the env file first.",
+  "pages.clients.serverPage.helmTitle":
+    "Kubernetes (Helm chart)",
+  "pages.clients.serverPage.helmDescription":
+    "The playarr-standalone chart runs one Pod with a Recreate strategy for a single SQLite-backed server. You supply the container image, an existing Secret and persistent storage. The chart never creates Secrets and has no migration or deletion hooks. Render and review it before applying.",
+  "pages.clients.serverPage.connectKicker":
+    "Connect your clients",
+  "pages.clients.serverPage.connectTitle":
+    "HTTPS and the playarr.app relay",
+  "pages.clients.serverPage.connectDescription":
+    "Native apps can connect to the server's address on your network. The hosted web client at playarr.app is served over HTTPS, so it needs a browser-trusted certificate for the server. Bring your own, or use the optional relay.",
+  "pages.clients.serverPage.relayTitle":
+    "Optional relay (off by default)",
+  "pages.clients.serverPage.relayDescription":
+    "For a server with a public IPv4 address and TCP 8484 reachable from the internet. The server registers with playarr.app, which publishes a DNS-only name such as v4-203-0-113-10.relay.playarr.app pointing at your address. The server then obtains its own Let's Encrypt certificate over DNS-01, so port 80 is not needed. For a short period after start, typically under two minutes, the API is plain HTTP; it then switches to HTTPS on the same port.",
+  "pages.clients.serverPage.privacyKicker":
+    "What the relay shares",
+  "pages.clients.serverPage.privacyTitle":
+    "Your address, not your media.",
+  "pages.clients.serverPage.privacyDescription":
+    "Enabling the relay sends your public IPv4 address and a key fingerprint to playarr.app, and the name is public DNS data. No streaming or API traffic passes through Cloudflare. Registration proves control of the address, not who owns the server. Leave it off if you would rather use your own certificate and name.",
   "pages.clients.vidaaSetup": "Install",
   "pages.clients.downloadApk": "Download APK",
   "pages.clients.downloadApp": "Download app",

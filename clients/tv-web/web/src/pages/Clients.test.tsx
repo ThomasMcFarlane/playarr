@@ -76,6 +76,7 @@ describe("ClientsPage", () => {
         "xbox",
         "harmony",
         "firetv",
+        "server",
       ]) {
         expect(markup).toContain(`id="client-${client}"`);
       }
@@ -234,6 +235,7 @@ describe("ClientsPage", () => {
         "xbox",
         "harmony",
         "firetv",
+        "server",
       ]) {
         const markup = renderClientRoute(`/clients/${client}`);
 
@@ -371,6 +373,36 @@ describe("ClientsPage", () => {
         // its own with data-tv-focus-default -- only the active tile.
         expect(markup.match(/data-tv-focus-default="true"/g)).toHaveLength(1);
       }
+    });
+
+    it("lists Playarr Server as a server with truthful install methods", () => {
+      const markup = renderClientRoute("/clients/server");
+      const text = markup.replace(/<[^>]+>/g, " ");
+
+      expect(markup).toContain('data-navigation-scroll-key="clients:server"');
+      expect(markup).toMatch(/class="client-choice is-experimental is-server is-active"/);
+      expect(markup).toContain('data-client-icon="server"');
+      expect(markup).toContain("Server, not a playback app");
+      expect(markup).toContain("Build from source · No public download yet");
+      expect(markup).toContain("have not been published yet");
+      // No fabricated download, and no link into the private repository.
+      expect(markup).not.toContain("download=");
+      expect(markup).not.toContain("github.com");
+      expect(markup).not.toContain("/downloads/server");
+      expect(text).toContain("ffmpeg and ffprobe");
+      expect(text).toContain("Docker Compose");
+      expect(text).toContain("systemd on a Linux host");
+      expect(text).toContain("Kubernetes (Helm chart)");
+      expect(markup).toContain(
+        "docker compose -f infra/docker/docker-compose.standalone.yml up -d --build"
+      );
+      expect(markup).toContain("sudo systemctl enable --now playarr.service");
+      expect(markup).toContain("infra/kubernetes/helm/playarr-standalone");
+      expect(markup).toContain("PLAYARR_RELAY_REGISTER=true");
+      expect(text).toContain("off by default");
+      expect(text).toContain("No streaming or API traffic passes through Cloudflare");
+      expect(markup.match(/id="client-[a-z]+"/g)).toHaveLength(allClientTileCount());
+      expect(markup.match(/tabindex="0"/gi)).toHaveLength(1);
     });
 
     it("moves Roku downloads and coming-soon details onto their own URLs", () => {

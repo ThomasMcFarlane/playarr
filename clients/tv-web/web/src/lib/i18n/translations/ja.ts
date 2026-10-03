@@ -867,6 +867,76 @@ export const ja: Translations = {
   "pages.clients.firetv.name": "Fire TV",
   "pages.clients.firetv.platform": "Amazon Fire TVデバイス",
   "pages.clients.firetv.description": "Fire TV向けネイティブクライアントは開発中です。署名済みパッケージとしてインストールされるため、ダウンロードできるリリースはまだありません。",
+  "pages.clients.status.sourceBuild":
+    "ソースからビルド · 公開ダウンロードはまだありません",
+  "pages.clients.server.name":
+    "Playarr Server",
+  "pages.clients.server.platform":
+    "Linux、Docker、Kubernetesホスト",
+  "pages.clients.server.description":
+    "ライブラリを保持し、すべてのPlayarrクライアントへストリーミングするサーバーです。再生アプリではありません。常時稼働するマシンにインストールしてください。",
+  "pages.clients.serverPage.kicker":
+    "サーバー(再生アプリではありません)",
+  "pages.clients.serverPage.title":
+    "Playarr Server",
+  "pages.clients.serverPage.description":
+    "Playarr Serverは、すでに運用しているSonarr、Radarr、Lidarr、Bazarr、Prowlarr、Readarrからライブラリをカタログ化し、サムネイルの生成、音声・字幕トラックの解析、オンデマンドのトランスコードを行います。このページのすべてのPlayarrクライアントがこのサーバーに接続します。メディアはお客様自身のハードウェアに残ります。",
+  "pages.clients.serverPage.packageNote":
+    "リリースバイナリと公開コンテナイメージはまだ公開されていないため、ダウンロードボタンはありません。以下はPlayarrのソースツリーが対応するインストール方法で、Playarrのソースチェックアウトからビルドまたはインストールします。",
+  "pages.clients.serverPage.requirementsKicker":
+    "インストール前に",
+  "pages.clients.serverPage.requirementsTitle":
+    "システム要件",
+  "pages.clients.serverPage.req1Title":
+    "64ビットLinux",
+  "pages.clients.serverPage.req1Description":
+    "x86-64またはARM64。Dockerは任意で、コンテナイメージは両アーキテクチャ向けにビルドされます。SQLiteデータベースとアートワークキャッシュは書き込み可能なデータディレクトリに保存されるため、永続ストレージが必要です。",
+  "pages.clients.serverPage.req2Title":
+    "ffmpegとffprobe",
+  "pages.clients.serverPage.req2Description":
+    "サムネイル、トラック解析、オンデマンドのトランスコードに必要です。Dockerイメージには含まれています。そのイメージを使わないsystemdまたはKubernetesのインストールでは、ホストにffmpeg(ffprobeを含む)をインストールし、サーバーのPATHに両方があることを確認してください。",
+  "pages.clients.serverPage.req3Title":
+    "メディアアプリ",
+  "pages.clients.serverPage.req3Description":
+    "Playarr Serverは、すでに運用しているSonarr、Radarr、Lidarr、Bazarr、Prowlarr、Readarrから読み取ります。起動後、サーバーの管理APIから各インスタンスを登録してください。",
+  "pages.clients.serverPage.req4Title":
+    "ネットワークポート8484",
+  "pages.clients.serverPage.req4Description":
+    "APIはTCP 8484で待ち受け、デフォルトは通常のHTTPです。同じネットワーク上のクライアントは直接接続できます。メトリクスは9090で、プライベートネットワーク内に留めてください。",
+  "pages.clients.serverPage.installKicker":
+    "対応するインストール方法",
+  "pages.clients.serverPage.installTitle":
+    "いずれか1つを選択",
+  "pages.clients.serverPage.installDescription":
+    "Playarrのソースチェックアウトのルートでコマンドを実行してください。どの方法でも同じ単一のオールインワンサーバープロセスが動作します。",
+  "pages.clients.serverPage.dockerTitle":
+    "Docker Compose",
+  "pages.clients.serverPage.dockerDescription":
+    "ffmpegを含むサーバーイメージをビルドし、SQLiteの状態を名前付きボリュームに保存する1つのコンテナを起動します。PLAYARR_JWT_SECRETを設定した場合のみ、再起動後もセッションが維持されます。",
+  "pages.clients.serverPage.systemdTitle":
+    "Linuxホスト上のsystemd",
+  "pages.clients.serverPage.systemdDescription":
+    "playarr-serverバイナリ、権限のないplayarrユーザー、ユニットファイルをインストールします。ユーザーが有効化するまで何も起動しません。先にenvファイルのDATABASE_URLを設定してください。",
+  "pages.clients.serverPage.helmTitle":
+    "Kubernetes(Helmチャート)",
+  "pages.clients.serverPage.helmDescription":
+    "playarr-standaloneチャートは、SQLiteを使う単一サーバー用にRecreate戦略で1つのPodを実行します。コンテナイメージ、既存のSecret、永続ストレージはご自身で用意してください。チャートはSecretを作成せず、移行や削除のフックもありません。適用前にレンダリングして内容を確認してください。",
+  "pages.clients.serverPage.connectKicker":
+    "クライアントを接続",
+  "pages.clients.serverPage.connectTitle":
+    "HTTPSとplayarr.appリレー",
+  "pages.clients.serverPage.connectDescription":
+    "ネイティブアプリは、ネットワーク上のサーバーのアドレスに接続できます。playarr.appでホストされるWebクライアントはHTTPSで配信されるため、サーバーにはブラウザが信頼する証明書が必要です。ご自身の証明書を使うか、任意のリレーを利用してください。",
+  "pages.clients.serverPage.relayTitle":
+    "任意のリレー(デフォルトはオフ)",
+  "pages.clients.serverPage.relayDescription":
+    "パブリックIPv4アドレスを持ち、TCP 8484がインターネットから到達可能なサーバー向けです。サーバーはplayarr.appに登録され、v4-203-0-113-10.relay.playarr.appのようなDNSのみの名前があなたのアドレスを指すよう公開されます。その後サーバーはDNS-01でLet's Encrypt証明書を自身で取得するため、ポート80は不要です。起動後しばらく(通常2分未満)はAPIが通常のHTTPで、その後同じポートでHTTPSに切り替わります。",
+  "pages.clients.serverPage.privacyKicker":
+    "リレーが共有する情報",
+  "pages.clients.serverPage.privacyTitle":
+    "共有されるのはアドレスであり、メディアではありません。",
+  "pages.clients.serverPage.privacyDescription":
+    "リレーを有効にすると、パブリックIPv4アドレスと鍵のフィンガープリントがplayarr.appに送信され、その名前は公開DNSデータになります。ストリーミングやAPIのトラフィックはCloudflareを経由しません。登録が証明するのはアドレスの管理であり、サーバーの所有者ではありません。ご自身の証明書と名前を使いたい場合はオフのままにしてください。",
   "pages.clients.vidaaSetup": "インストール",
   "pages.clients.downloadApk": "APKをダウンロード",
   "pages.clients.downloadApp": "アプリをダウンロード",

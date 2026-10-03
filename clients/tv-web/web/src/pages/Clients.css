@@ -166,6 +166,18 @@
   stroke-width: 1.6;
 }
 
+.client-choice.is-server .client-platform-icon {
+  color: var(--ink);
+}
+
+.client-choice.is-server .client-platform-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
 .client-choice.is-android .client-platform-icon {
   color: #3ddc84;
 }
@@ -342,6 +354,18 @@
 
 .client-details-summary.is-harmony .client-details-icon {
   color: var(--ink);
+}
+
+.client-details-summary.is-server .client-details-icon {
+  color: var(--ink);
+}
+
+.client-details-summary.is-server .client-details-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
 }
 
 .client-details-summary.is-firetv .client-details-icon {
