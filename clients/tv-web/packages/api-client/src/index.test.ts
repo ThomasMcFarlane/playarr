@@ -1492,3 +1492,48 @@ describe("release calendar client", () => {
     expect(lag.backfill_count).toBe(1);
   });
 });
+describe("ApiClient portable user data", () => {
+  it("sends the package as a bound, bearer-authenticated binary upload and never a user id", async () => {
+    const seen: { url: URL; method: string; auth: string | null; type: string | null }[] = [];
+    const fetchImpl = mockFetch(async (request) => {
+      const url = new URL(request.url);
+      seen.push({
+        url,
+        method: request.method,
+        auth: request.headers.get("Authorization"),
+        type: request.headers.get("Content-Type"),
+      });
+      if (url.pathname.endsWith("/preview")) {
+        return jsonResponse(200, { package_sha256: "abc123" });
+      }
+      return jsonResponse(200, { completed: true });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "tok" });
+    const file = new Blob([new Uint8Array([80, 75, 3, 4])]);
+
+    const preview = await client.previewUserDataImport(file, {
+      includePreferences: true,
+      progressConflicts: "keep_existing",
+    });
+    expect(preview.package_sha256).toBe("abc123");
+    await client.applyUserDataImport(file, preview.package_sha256, { progressConflicts: "newest" });
+
+    expect(seen[0]!.url.pathname).toBe("/api/v1/users/me/data-imports/preview");
+    expect(seen[0]!.url.searchParams.get("include_preferences")).toBe("true");
+    expect(seen[0]!.url.searchParams.get("progress_conflicts")).toBe("keep_existing");
+    expect(seen[1]!.url.pathname).toBe("/api/v1/users/me/data-imports");
+    expect(seen[1]!.url.searchParams.get("package_sha256")).toBe("abc123");
+    for (const call of seen) {
+      expect(call.method).toBe("POST");
+      expect(call.auth).toBe("Bearer tok");
+      expect(call.type).toBe("application/zip");
+      expect(call.url.search).not.toMatch(/user_id/);
+    }
+  });
+
+  it("surfaces an expired export as an ApiError with status 410", async () => {
+    const fetchImpl = mockFetch(() => jsonResponse(410, { error: "gone", message: "expired" }));
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "tok" });
+    await expect(client.downloadUserDataExport("abc")).rejects.toMatchObject({ status: 410 });
+  });
+});

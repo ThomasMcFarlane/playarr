@@ -81,6 +81,7 @@ export const COMPLETE_CLIENT_SHELL_ROUTES: readonly ProductRoute[] = [
   { path: "/settings/profile-lock", id: "settings-profile-lock", label: "Settings: profile lock", shelled: true },
   { path: "/settings/invite", id: "settings-invite", label: "Settings: invite", shelled: true },
   { path: "/settings/request-latency", id: "settings-request-latency", label: "Settings: request latency", shelled: true },
+  { path: "/settings/your-data", id: "settings-your-data", label: "Settings: your data", shelled: true },
 ] as const;
 
 /** Pre-auth and account surfaces shared by web and hosted TV identities. */
@@ -229,6 +230,12 @@ export const PRODUCT_SETTINGS_SECTIONS: readonly ProductSettingsSection[] = [
     titleKey: "settings.index.remote.title",
     descriptionKey: "settings.index.remote.description",
   },
+  {
+    to: "/settings/your-data",
+    number: "10",
+    titleKey: "settings.index.yourData.title",
+    descriptionKey: "settings.index.yourData.description",
+  },
 ] as const;
 
 /** Platforms that share the ten-foot television chrome/CSS profile. */
@@ -273,6 +280,11 @@ export function intentionalDegradationsFor(
       id: "custom-avatar-upload",
       reason: "capability-file-picker",
       note: "Hide custom avatar file upload where TV remotes lack a usable file picker",
+    },
+    {
+      id: "user-data-file-transfer",
+      reason: "capability-file-picker",
+      note: "Your data export/import needs a file picker and file save; TV identities point to a phone, tablet or computer instead",
     },
     {
       id: "downloads-storage",

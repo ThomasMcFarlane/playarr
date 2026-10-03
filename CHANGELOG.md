@@ -136,15 +136,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   New `calendar_feed_tokens` migration (SQLite 0046, Postgres 0047).
 <<<<<<< HEAD
 <<<<<<< HEAD
-<<<<<<< HEAD
 - Playarr Web (and the TV shells that share it): a Watchlist page and nav item with Resume/Play
   that opens the exact media file and explained unavailable actions, a watchlist toggle on title
   pages, "Other sources" results (peers) in Search and a Games filter with provider status.
+<<<<<<< HEAD
 =======
 =======
 =======
-=======
->>>>>>> 86428119 (docs(calendar): resolve conflict markers and TASKS rows after rebase)
 - Playarr Web (and the webOS/Tizen shells that share it) now has a Calendar page in the main navigation
   with agenda, week and month views (agenda by default on TV, touch and narrow screens), previous/next/today
   navigation, media-kind filters, a visible banner naming every source that could not be read, and
@@ -153,14 +151,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   subscription link (create, regenerate and revoke with confirmation, copy once, last-used time), and the
   series detail page shows "Usually available about X after release" with an honest no-data state and
   the excluded backfill/unknown counts (tasks 75-77). Includes English, Thai and Japanese strings.
-<<<<<<< HEAD
 >>>>>>> (feat(web): add release calendar page, subscription and availability lag)
 >>>>>>> (feat(web): add release calendar page, subscription and availability lag)
-=======
->>>>>>> 86428119 (docs(calendar): resolve conflict markers and TASKS rows after rebase)
 - Shared web API client methods and types for the release calendar (`getCalendar`, feed status, create,
   regenerate and revoke, and `getAvailabilityLag`), with unit tests (tasks 75-77).
 >>>>>>> (feat(api-client): add release calendar, feed and availability-lag methods)
+=======
+- Playarr Web settings now has a "Your data" section (task 130): prepare and download an export of
+  your own watch progress, playlists and preferences with visible progress and expiry, and import a
+  package through a preview of exactly what would change (new, updated, kept, unmatched) followed
+  by an explicit Apply, with a download of anything that could not be matched. TV identities show
+  an honest message instead, as they have no file picker. English, Japanese and Thai strings.
+>>>>>>> (feat(web): add Your data export and import to settings)
 - Documented the portable per-user data export/import format
   (`docs/formats/user-data-export-v1.md`) and its design
   (`docs/architecture/user-portability.md`), tracked as tasks 67-71 and 130-134.

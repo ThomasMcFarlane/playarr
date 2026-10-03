@@ -36,6 +36,99 @@ export type { paths, components } from "./generated/schema";
 // one source of truth for the shapes the real backend actually sends/expects.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Portable user data (export/import). Hand-written wire types: these routes
+// carry binary bodies, so they go through `requestRaw` rather than the
+// generated `paths` client. Shapes mirror `backend/openapi/playarr.yaml`.
+// ---------------------------------------------------------------------------
+
+export type UserDataExportStatus = "queued" | "running" | "ready" | "failed" | "expired";
+
+export interface UserDataExportJob {
+  id: string;
+  status: UserDataExportStatus;
+  created_at: string;
+  expires_at: string | null;
+  progress: { stage: string; done: number; total: number };
+  counts: {
+    watch_progress: number;
+    playback_preferences: number;
+    playlists: number;
+    playlist_items: number;
+    skipped: number;
+  };
+  size_bytes: number | null;
+  download_url: string | null;
+  error: string | null;
+}
+
+export interface UserDataExportList {
+  scope: "own_account_only";
+  exports: UserDataExportJob[];
+}
+
+export type UserDataProgressConflicts = "newest" | "keep_existing";
+
+export interface UserDataImportOptions {
+  includePreferences?: boolean;
+  progressConflicts?: UserDataProgressConflicts;
+}
+
+export interface UserDataImportSample {
+  section: string;
+  title: string;
+  outcome: string;
+  playlist: string | null;
+  candidates: string[];
+}
+
+export interface UserDataImportPreview {
+  package_sha256: string;
+  schema_version: number;
+  generated_at: string;
+  source_instance_name: string;
+  summary: {
+    watch_progress: {
+      total: number;
+      will_add: number;
+      will_update: number;
+      already_present: number;
+      conflicts_kept: number;
+      unmatched: number;
+      ambiguous: number;
+    };
+    playlists: {
+      total: number;
+      new: number;
+      existing: number;
+      items_total: number;
+      items_to_add: number;
+      items_already_present: number;
+      items_unmatched: number;
+    };
+    preferred_audio_language_change: string | null;
+    playback_preferences_not_applied: number;
+    unmatched_total: number;
+  };
+  samples: UserDataImportSample[];
+  warnings: string[];
+}
+
+export interface UserDataImportResult {
+  completed: boolean;
+  progress_added: number;
+  progress_updated: number;
+  progress_unchanged: number;
+  progress_conflicts_kept: number;
+  playlists_created: number;
+  playlist_items_added: number;
+  playlist_items_already_present: number;
+  preferred_audio_language_updated: boolean;
+  unmatched_total: number;
+  failure: string | null;
+  sections_not_attempted: string[];
+}
+
 export type Work = components["schemas"]["Work"];
 export type WorkKind = components["schemas"]["WorkKind"];
 export type Availability = components["schemas"]["Availability"];
@@ -818,6 +911,111 @@ export class ApiClient {
     if (response.status === 204) return undefined as T;
     const text = await response.text();
     return (text ? JSON.parse(text) : undefined) as T;
+  }
+
+
+  /** Request with a raw (binary) body or response; same bearer auth as `requestJson`. */
+  private async requestRaw(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    body?: Blob | ArrayBuffer
+  ): Promise<Response> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/zip";
+    const response = await this.rawFetch(
+      new Request(this.resolveUrl(path), { method, headers, body })
+    );
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = undefined;
+      }
+      throw new ApiError(response.status, response.statusText, errorBody);
+    }
+    return response;
+  }
+
+  // ---------------------------------------------------------------------
+  // portable user data (the signed-in account's own data only)
+  // ---------------------------------------------------------------------
+
+  /** Starts (or returns the unfinished) export of the caller's own data. */
+  async startUserDataExport(): Promise<UserDataExportJob> {
+    return this.requestJson("POST", "/api/v1/users/me/data-exports");
+  }
+
+  async listUserDataExports(): Promise<UserDataExportList> {
+    return this.requestJson("GET", "/api/v1/users/me/data-exports");
+  }
+
+  async getUserDataExport(id: string): Promise<UserDataExportJob> {
+    return this.requestJson("GET", `/api/v1/users/me/data-exports/${encodeURIComponent(id)}`);
+  }
+
+  async deleteUserDataExport(id: string): Promise<void> {
+    await this.requestJson("DELETE", `/api/v1/users/me/data-exports/${encodeURIComponent(id)}`);
+  }
+
+  /** Downloads a ready export package. */
+  async downloadUserDataExport(id: string): Promise<Blob> {
+    const response = await this.requestRaw(
+      "GET",
+      `/api/v1/users/me/data-exports/${encodeURIComponent(id)}/download`
+    );
+    return response.blob();
+  }
+
+  private importQuery(options: UserDataImportOptions): string {
+    const query = new URLSearchParams();
+    if (options.includePreferences) query.set("include_preferences", "true");
+    if (options.progressConflicts) query.set("progress_conflicts", options.progressConflicts);
+    return query.toString();
+  }
+
+  /** Validates and matches a package without writing anything. */
+  async previewUserDataImport(
+    file: Blob,
+    options: UserDataImportOptions = {}
+  ): Promise<UserDataImportPreview> {
+    const response = await this.requestRaw(
+      "POST",
+      `/api/v1/users/me/data-imports/preview?${this.importQuery(options)}`,
+      file
+    );
+    return (await response.json()) as UserDataImportPreview;
+  }
+
+  /** Applies the exact package that was previewed (bound by its SHA-256). */
+  async applyUserDataImport(
+    file: Blob,
+    packageSha256: string,
+    options: UserDataImportOptions = {}
+  ): Promise<UserDataImportResult> {
+    const query = new URLSearchParams(this.importQuery(options));
+    query.set("package_sha256", packageSha256);
+    const response = await this.requestRaw(
+      "POST",
+      `/api/v1/users/me/data-imports?${query.toString()}`,
+      file
+    );
+    return (await response.json()) as UserDataImportResult;
+  }
+
+  /** A package of everything the importer could not place, valid for a later import. */
+  async downloadUnmatchedUserData(
+    file: Blob,
+    options: UserDataImportOptions = {}
+  ): Promise<Blob> {
+    const response = await this.requestRaw(
+      "POST",
+      `/api/v1/users/me/data-imports/unmatched?${this.importQuery(options)}`,
+      file
+    );
+    return response.blob();
   }
 
   // ---------------------------------------------------------------------

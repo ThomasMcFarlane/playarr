@@ -58,7 +58,7 @@ describe("SettingsIndexPage", () => {
       'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
     expect(markup).toContain('class="tv-page-back"');
-    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(9);
+    expect(markup.match(/class="settings-option(?: is-active)?"/g)).toHaveLength(10);
     expect(markup).toContain('data-tv-scroll-container="true"');
     expect(markup).toContain('data-tv-scroll-axis="vertical"');
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');

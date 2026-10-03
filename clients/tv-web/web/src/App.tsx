@@ -34,6 +34,7 @@ import { SettingsRequestLatencyPage } from "./pages/settings/RequestLatency";
 import { SettingsRemotePage } from "./pages/settings/Remote";
 import { RemoteProvider } from "./lib/remote/RemoteProvider";
 import { SettingsProfileAvatarPage } from "./pages/settings/ProfileAvatar";
+import { SettingsYourDataPage } from "./pages/settings/YourData";
 import { LoginPage, QrLoginPage } from "./pages/Login";
 import { SignupPage } from "./pages/Signup";
 import { DeviceLinkPage } from "./pages/DeviceLink";
@@ -649,6 +650,7 @@ export function App() {
           <Route path="invite" element={<SettingsInvitePage />} />
           <Route path="request-latency" element={<SettingsRequestLatencyPage />} />
           <Route path="remote" element={<SettingsRemotePage />} />
+          <Route path="your-data" element={<SettingsYourDataPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -58,6 +58,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "settings-profile-lock",
       "settings-invite",
       "settings-request-latency",
+      "settings-your-data",
       "clients",
       "downloads",
     ]) {
@@ -86,7 +87,7 @@ describe("productSurfaces — complete client catalogue", () => {
     ]);
   });
 
-  it("registers all nine settings sections", () => {
+  it("registers all ten settings sections", () => {
     expect(PRODUCT_SETTINGS_SECTIONS.map((section) => section.to)).toEqual([
       "/settings/appearance",
       "/settings/profile-avatar",
@@ -97,6 +98,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "/settings/invite",
       "/settings/request-latency",
       "/settings/remote",
+      "/settings/your-data",
     ]);
   });
 });
@@ -121,6 +123,7 @@ describe("productSurfaces — web vs tv-vidaa parity", () => {
         "downloads-storage",
         "playback-codecs",
         "ten-foot-chrome",
+        "user-data-file-transfer",
       ].sort()
     );
     expect(intentionalDegradationsFor("web")).toEqual([]);
