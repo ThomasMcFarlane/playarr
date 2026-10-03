@@ -5,6 +5,19 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active: Filter media by audio and subtitle language (2026-10-04)
+
+Owner request (4 October 2026): filter the library by available subtitle language and available audio-track language on every client. Languages are indexed per media file (Sonarr/Radarr `mediaInfo` at sync time, ffprobe for files the *arr app could not describe, sidecar subtitle files next to the video), normalised to ISO 639 codes, aggregated per work (a series is the union of its episode files; `lang_scope=every_file` requires every file) and exposed as `audio_lang=` / `subtitle_lang=` on catalogue browse and search plus a `GET /api/v1/catalog/languages` facet endpoint.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 180 | Epic: audio/subtitle language filters (server, web, Android, other clients) | in progress | lang-filters | Parent of 181-185. |
+| 181 | Server: language index (migration, *arr mediaInfo at sync, ffprobe and sidecar backfill), browse/search params, facet endpoint, OpenAPI | in progress | lang-filters | Parent: 180. Semantics: OR within a list (`lang_match=all` for AND), audio AND subtitle, series = union of episodes. |
+| 182 | Web: language filters in the library filters UI (including TV layout), persisted in the URL query, localised names | pending | lang-filters | Parent: 180. Depends on 181. |
+| 183 | Android: language filters in the native Compose Filters sheet (TV and phone), localised names | pending | lang-filters | Parent: 180. Depends on 181. |
+| 184 | Other clients: iOS, Apple TV, Fire TV Vega, Xbox, Harmony, Roku, VIDAA language filters | pending | Unassigned | Parent: 180. Depends on 181; use `audio_lang`/`subtitle_lang` and `/api/v1/catalog/languages`. |
+| 185 | Validate language filters on region-b, web and the Android emulator | pending | lang-filters | Parent: 180. Depends on 181-183. |
+
 ## Active: Public Playarr Server releases (2026-10-04)
 
 Owner decision (4 October 2026): publish public Playarr Server releases from the private repository, artefacts only. See [`docs/deployment/server-releases.md`](docs/deployment/server-releases.md).
