@@ -28,7 +28,7 @@ grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
 grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 # Regional servers pull a self-contained image from the registry: no hostPath runtime.
 test "$(grep -c 'image: "registry.example.com/playarr-regional:' "$rendered")" -eq 2
-! grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never' "$rendered"
+if grep -v '^ *#' "$rendered" | grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never'; then echo "forbidden hostPath runtime reference rendered" >&2; exit 1; fi
 # Declarative source-instance URLs reach both regional servers as one env var.
 test "$(grep -c '^            - name: PLAYARR_SOURCE_INSTANCE_URLS$' "$rendered")" -eq 2
 grep -q 'radarr=http://radarr.media.svc.cluster.local:7878,' "$rendered"
@@ -36,7 +36,7 @@ test "$(grep -c '^            - name: PLAYARR_WEB_ASSETS_DIR$' "$rendered")" -eq
 # TLS instances: Emissary originates TLS to the pod on the https Service port.
 grep -q 'service: "https://playarr-region-a.playarr:443"' "$rendered"
 grep -q 'service: "https://playarr-region-b.playarr:443"' "$rendered"
-! grep -q 'service: "playarr-eu[34].playarr:80"' "$rendered"
+if grep -q 'service: "playarr-eu[34].playarr:80"' "$rendered"; then echo "forbidden pattern rendered: line '$LINENO'" >&2; exit 1; fi
 test "$(grep -c '^kind: Certificate$' "$rendered")" -eq 2
 grep -q '^    - "playarr-a.example.com"$' "$rendered"
 grep -q '^    - "playarr-b.example.com"$' "$rendered"
@@ -47,34 +47,42 @@ test "$(grep -c 'value: /tls/tls.key$' "$rendered")" -eq 2
 test "$(grep -c '^              scheme: HTTPS$' "$rendered")" -eq 4
 test "$(grep -c '^            secretName: playarr-eu[34]-tls$' "$rendered")" -eq 2
 test "$(grep -c '^              mountPath: /tls$' "$rendered")" -eq 2
-# tls is optional: omitting it restores plain HTTP wiring and drops the Certificate.
+# The relay (acme) is enabled by default and serves HTTPS on its own, so the
+# plain-HTTP opt-out needs both static tls and the relay turned off.
 no_tls="$(mktemp)"
 trap 'rm -f "$rendered" "$no_tls"' EXIT
 helm template playarr-dev "$chart_dir" --namespace playarr \
   --set regionalInstances.playarr-region-a.tls=null \
-  --set regionalInstances.playarr-region-b.tls=null >"$no_tls"
+  --set regionalInstances.playarr-region-b.tls=null \
+  --set regionalInstances.playarr-region-a.acme.enabled=false \
+  --set regionalInstances.playarr-region-b.acme.enabled=false >"$no_tls"
 test "$(grep -c '^kind: Certificate$' "$no_tls")" -eq 0
 test "$(grep -c 'PLAYARR_TLS_' "$no_tls")" -eq 0
 grep -q 'service: "playarr-region-a.playarr:80"' "$no_tls"
+grep -q 'service: "playarr-region-b.playarr:80"' "$no_tls"
+test "$(grep -c 'PLAYARR_ACME\|PLAYARR_RELAY_REGISTER' "$no_tls")" -eq 0
 test "$(grep -c '^              hostPort: ' "$rendered")" -eq 2
 test "$(grep -c '^              hostIP: ' "$rendered")" -eq 2
 grep -q '^              hostIP: "203.0.113.10"$' "$rendered"
 grep -q '^              hostIP: "203.0.113.20"$' "$rendered"
 test "$(grep -c '^              hostPort: 8484$' "$rendered")" -eq 2
-# hostExposure is optional: omitting it must remove hostIP/hostPort.
+# hostExposure is optional: omitting it must remove hostIP/hostPort (the relay
+# registers hostExposure.hostIP, so it is turned off for this opt-out too).
 no_host="$(mktemp)"
 trap 'rm -f "$rendered" "$no_tls" "$no_host"' EXIT
 helm template playarr-dev "$chart_dir" --namespace playarr \
   --set regionalInstances.playarr-region-a.hostExposure=null \
-  --set regionalInstances.playarr-region-b.hostExposure=null >"$no_host"
+  --set regionalInstances.playarr-region-b.hostExposure=null \
+  --set regionalInstances.playarr-region-a.acme.enabled=false \
+  --set regionalInstances.playarr-region-b.acme.enabled=false >"$no_host"
 test "$(grep -c 'hostPort:' "$no_host")" -eq 0
 # Invalid values must be rejected by the schema.
 if helm template playarr-dev "$chart_dir" --set regionalInstances.playarr-region-a.hostExposure.hostPort=70000 >/dev/null 2>&1; then
   echo "schema accepted an out-of-range hostPort" >&2
   exit 1
 fi
-# Relay (acme) is disabled until the cut-over: nothing relay-related renders.
-! grep -q 'PLAYARR_ACME\|PLAYARR_RELAY_REGISTER\|PLAYARR_PUBLIC_IPV4' "$rendered"
+# The relay is enabled by default on both regional servers.
+test "$(grep -c 'PLAYARR_RELAY_REGISTER' "$rendered")" -eq 2
 # Enabling the relay on top of static TLS: both certificates are configured, the
 # transport stays HTTPS, and only 8484 is published (no port 80, no DNS port).
 relay="$(mktemp)"
@@ -92,7 +100,7 @@ grep -A1 'name: PLAYARR_PUBLIC_IPV4' "$relay" | grep -q 'value: "203.0.113.20"'
 grep -q 'service: "https://playarr-region-a.playarr:443"' "$relay"
 test "$(grep -c '^              scheme: HTTPS$' "$relay")" -eq 4
 test "$(grep -c '^          startupProbe:$' "$relay")" -eq 6
-! grep -Eq 'hostPort: (53|80)$|containerPort: (53|80|443)$|hostNetwork|PLAYARR_RELAY_DNS|PLAYARR_ACME_HTTP01' "$relay"
+if grep -Eq 'hostPort: (53|80)$|containerPort: (53|80|443)$|hostNetwork|PLAYARR_RELAY_DNS|PLAYARR_ACME_HTTP01' "$relay"; then echo "forbidden pattern rendered: line '$LINENO'" >&2; exit 1; fi
 # Relay without static TLS: HTTPS wiring plus a startup probe for the first issuance.
 relay_only="$(mktemp)"
 trap 'rm -f "$rendered" "$no_tls" "$no_host" "$relay" "$relay_only"' EXIT

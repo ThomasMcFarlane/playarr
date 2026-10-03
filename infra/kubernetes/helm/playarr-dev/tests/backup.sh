@@ -15,7 +15,7 @@ test "$(grep -c 'value: "/data/backups"$' "$rendered")" -eq 2
 test "$(grep -c '^            - name: PLAYARR_BACKUP_RECIPIENTS$' "$rendered")" -eq 2
 test "$(grep -c 'value: "age1[02-9ac-hj-np-z]\{58\}"$' "$rendered")" -eq 2
 test "$(grep -c 'PLAYARR_BACKUP_KEEP_LAST' "$rendered")" -eq 2
-! grep -q 'AGE-SECRET-KEY' "$rendered"
+if grep -q 'AGE-SECRET-KEY' "$rendered"; then echo "forbidden pattern rendered: line '$LINENO'" >&2; exit 1; fi
 
 # Backups are optional: omitting the block removes every backup variable.
 helm template playarr-dev "$chart_dir" --namespace playarr \
