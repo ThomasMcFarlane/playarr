@@ -9,6 +9,8 @@ import type {
   MediaChapter,
   MediaPlaybackOptions,
   MediaPlaybackPreferences,
+  ResumeOption,
+  ResumePlan,
   SeasonDetail,
   WatchProgress,
   Work,
@@ -40,6 +42,12 @@ import {
 } from "../lib/navigationLayer";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { ServerChoiceModal } from "../components/ServerChoiceModal";
+import { ResumeChooserModal } from "../components/ResumeChooserModal";
+import {
+  resumeButtonLabelKey,
+  resumeButtonTitleKey,
+  resumePlayerState,
+} from "../lib/resumePlan";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import {
@@ -964,6 +972,9 @@ export function WorkDetailPage() {
     useState(false);
   const [movieDownloadOpen, setMovieDownloadOpen] = useState(false);
   const [movieDownloadBusy, setMovieDownloadBusy] = useState(false);
+  const [resumePlan, setResumePlan] = useState<ResumePlan | null>(null);
+  const [resumeChooserOpen, setResumeChooserOpen] = useState(false);
+  const resumeButtonRef = useRef<HTMLButtonElement>(null);
   const seriesBrowserRef = useRef<HTMLDivElement>(null);
   const moviePlaybackSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const movieDownloadButtonRef = useRef<HTMLButtonElement>(null);
@@ -1006,6 +1017,24 @@ export function WorkDetailPage() {
   const detailWork = state.status === "ready" ? state.data.work : null;
   const detailWorkId = detailWork?.id ?? null;
   const detailWorkGenres = detailWork?.genres.join("\u0000") ?? "";
+  const resumeSeriesId = detailWork?.kind === "series" ? detailWork.id : null;
+  useEffect(() => {
+    if (!resumeSeriesId) return;
+    let cancelled = false;
+    // The plan depends on watch history, so it is re-read when progress changes.
+    client
+      .getResumePlan(resumeSeriesId)
+      .then((plan) => {
+        if (!cancelled) setResumePlan(plan);
+      })
+      .catch(() => {
+        // An older server has no resume plan: the page simply has no Start/Resume button.
+        if (!cancelled) setResumePlan(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, resumeSeriesId, progressByMedia]);
   const artworkWork =
     state.status === "ready"
       ? state.data.work
@@ -1589,6 +1618,30 @@ export function WorkDetailPage() {
     activeProgress?.state === "part_watched"
       ? t("pages.workDetail.resumeFrom", { position: formatClock(activeProgress.position_ms) })
       : t("pages.workDetail.play");
+  const activeResumePlan =
+    work.kind === "series" && resumePlan?.series_work_id === work.id && resumePlan.target
+      ? resumePlan
+      : null;
+  const playResumeOption = (option: ResumeOption) => {
+    const playerState = resumePlayerState(
+      option,
+      work.title,
+      playlistItems,
+      {
+        serverUrl: workSources[0]?.url,
+        backTo: detailRoute,
+        detailParentBackTo: backTo,
+        navigationOrigin: navigationLayer.origin,
+        detailNavigationOrigin: parentNavigationOrigin,
+      },
+      t
+    );
+    if (workSources.length > 1) {
+      setPendingServerPlayback(playerState);
+    } else {
+      navigate(`/player/${option.media_file_id}`, { state: playerState });
+    }
+  };
   const displayedMovieChapters =
     movieChapters.length > 0 ? movieChapters : generatedMovieChapters(runtimeMs ?? 0, t);
   const savedMoviePlaybackOptions =
@@ -1795,6 +1848,28 @@ export function WorkDetailPage() {
           </span>
         ) : null}
         <div className="tv-detail-actions tv-detail-watchlist">
+          {activeResumePlan?.target ? (
+            <button
+              ref={resumeButtonRef}
+              type="button"
+              className="tv-detail-play"
+              data-resume-action={activeResumePlan.action}
+              data-navigation-focus-key={`detail:${work.id}:resume`}
+              aria-haspopup={activeResumePlan.needs_choice ? "dialog" : undefined}
+              aria-label={t(resumeButtonTitleKey(activeResumePlan), { title: work.title })}
+              onClick={(event) => {
+                navigationLayer.captureLink(event);
+                if (activeResumePlan.needs_choice) {
+                  setResumeChooserOpen(true);
+                } else if (activeResumePlan.target) {
+                  playResumeOption(activeResumePlan.target);
+                }
+              }}
+            >
+              <span aria-hidden="true">▶</span>
+              <strong>{t(resumeButtonLabelKey(activeResumePlan))}</strong>
+            </button>
+          ) : null}
           <WatchlistToggle
             snapshot={snapshotFromWork(work)}
             className="tv-detail-download"
@@ -1913,6 +1988,27 @@ export function WorkDetailPage() {
       ) : null}
 
       {detailMediaContext.contextMenu}
+
+      {activeResumePlan && resumeChooserOpen ? (
+        <ResumeChooserModal
+          plan={activeResumePlan}
+          seriesTitle={work.title}
+          onCancel={() => {
+            setResumeChooserOpen(false);
+            resumeButtonRef.current?.focus({ preventScroll: true });
+          }}
+          onSelect={(option) => {
+            setResumeChooserOpen(false);
+            if (resumeButtonRef.current) navigationLayer.capture(resumeButtonRef.current);
+            // Report the pick so declined gaps and rewatch answers are remembered.
+            void client
+              .recordResumeChoice(work.id, option)
+              .then(setResumePlan)
+              .catch(() => undefined);
+            playResumeOption(option);
+          }}
+        />
+      ) : null}
 
       {pendingServerPlayback && workSources.length > 1 ? (
         <ServerChoiceModal

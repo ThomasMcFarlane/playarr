@@ -1161,6 +1161,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/{id}/resume-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_resume_plan_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{id}/resume-plan/choice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["record_resume_choice_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{id}/resume-plan/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["clear_resume_choices_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/{id}/similar": {
         parameters: {
             query?: never;
@@ -2036,6 +2084,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_watch_progress_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/resume-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_resume_plans_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5587,6 +5651,90 @@ export interface components {
             in_watchlist: boolean;
             title: components["schemas"]["DiscoveryTitle"];
         };
+        /** @enum {string} */
+        ResumeAction: "start" | "resume" | "restart";
+        /**
+         * @description What made the chooser necessary.
+         * @enum {string}
+         */
+        ResumeAskReason: "multiple_unfinished" | "unfinished_not_latest" | "unfinished_behind_progress" | "missed_episode" | "rewatch_behind_progress";
+        ResumeChoiceRequest: {
+            /**
+             * Format: uuid
+             * @description That option's `episode_id`.
+             */
+            episode_id: string;
+            /** @description The option the viewer picked. */
+            kind: components["schemas"]["ResumeOptionKind"];
+        };
+        ResumeClearResponse: {
+            /** Format: int64 */
+            removed: number;
+        };
+        ResumeOption: {
+            /**
+             * Format: uuid
+             * @description For `continue_from_last_watched`: the finished episode it follows.
+             */
+            anchor_episode_id?: string | null;
+            /** Format: int64 */
+            duration_ms: number;
+            /**
+             * Format: uuid
+             * @description First episode of the unit (the id to navigate to and to report back).
+             */
+            episode_id: string;
+            /** Format: int32 */
+            episode_number: number;
+            /**
+             * Format: int32
+             * @description Last episode number for a multi-episode file, otherwise absent.
+             */
+            episode_number_end?: number | null;
+            kind: components["schemas"]["ResumeOptionKind"];
+            /** @description `S01E05`, or `S01E01-E02` for a multi-episode file. */
+            label: string;
+            /**
+             * Format: date-time
+             * @description When the viewer last played it; absent when never.
+             */
+            last_watched_at?: string | null;
+            /** Format: uuid */
+            media_file_id: string;
+            /** Format: int64 */
+            position_ms: number;
+            /**
+             * Format: int32
+             * @description Whole percent played, 0 when unknown.
+             */
+            progress_percent: number;
+            /** Format: int32 */
+            season_number: number;
+            title?: string | null;
+        };
+        /** @enum {string} */
+        ResumeOptionKind: "unfinished" | "missed_episode" | "continue_from_last_watched" | "next_in_series" | "start_over";
+        ResumePlan: {
+            action: components["schemas"]["ResumeAction"];
+            ask_reasons: components["schemas"]["ResumeAskReason"][];
+            /** @description True when the client must show the chooser before playing. */
+            needs_choice: boolean;
+            /**
+             * @description Choices for the chooser; contains `target` first. A single entry
+             *     unless `needs_choice`.
+             */
+            options: components["schemas"]["ResumeOption"][];
+            reason: components["schemas"]["ResumeReason"];
+            /** Format: uuid */
+            series_work_id: string;
+            target?: null | components["schemas"]["ResumeOption"];
+        };
+        /**
+         * @description Why the plan is what it is. Deterministic and stable for clients to key
+         *     copy on.
+         * @enum {string}
+         */
+        ResumeReason: "no_playable_episodes" | "not_started" | "next_in_order" | "resume_unfinished" | "continue_rewatch" | "rewatch_resolved_continue_series" | "completed_restart" | "choice_required";
         ReviewUserInviteRequest: {
             /** @description `true` grants exactly one generation; `false` denies this request. */
             approved: boolean;
@@ -10214,6 +10362,173 @@ export interface operations {
             };
         };
     };
+    get_resume_plan_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What a Start/Resume press should do for this viewer: the episode to play, or the options to offer when the history is ambiguous */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "action": "resume",
+                     *       "ask_reasons": [
+                     *         "missed_episode"
+                     *       ],
+                     *       "needs_choice": true,
+                     *       "options": [],
+                     *       "reason": "choice_required",
+                     *       "series_work_id": "7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e",
+                     *       "target": {
+                     *         "duration_ms": 1800000,
+                     *         "episode_id": "11111111-1111-4111-8111-111111111101",
+                     *         "episode_number": 1,
+                     *         "kind": "missed_episode",
+                     *         "label": "S01E01",
+                     *         "media_file_id": "22222222-2222-4222-8222-222222222201",
+                     *         "position_ms": 0,
+                     *         "progress_percent": 0,
+                     *         "season_number": 1,
+                     *         "title": "Pilot"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ResumePlan"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No series with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_resume_choice_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeChoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer was recorded; the plan as it now stands */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumePlan"];
+                };
+            };
+            /** @description The picked option is not one the current plan offers */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No series with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_resume_choices_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series work id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every recorded answer for this series was forgotten */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeClearResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No series with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     similar_works_handler: {
         parameters: {
             query?: {
@@ -12769,6 +13084,40 @@ export interface operations {
                 content?: never;
             };
             /** @description Caller does not have Playarr streaming access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_resume_plans_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resume plans for the series this viewer has watch history in, newest activity first; series outside the caller's allowed libraries are omitted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumePlan"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
             403: {
                 headers: {
                     [name: string]: unknown;

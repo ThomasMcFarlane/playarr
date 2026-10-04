@@ -67,7 +67,7 @@ Owner request (4 October 2026): the series detail page leads with a primary Star
 |---|------|--------|--------------|-------|
 | 280 | Epic: smart Start/Resume (server, web, Android, other clients) | in progress | smart-resume | Parent of 281-287. |
 | 281 | Server: pure rule engine (`playarr_model::resume`), `resume_dismissals` table and migration, plan/choice/clear/list endpoints, OpenAPI | in progress | smart-resume | Parent: 280. 47 engine unit tests (each scenario, specials, multi-episode files, missing library episodes, 5% and 90% thresholds, rewatches) and 8 API tests. |
-| 282 | Web (including the ten-foot TV layout): series detail Start/Resume button, chooser modal with D-pad focus, Continue Watching stack card | pending | smart-resume | Parent: 280. Depends on 281. |
+| 282 | Web (including the ten-foot TV layout): series detail Start/Resume button, chooser modal with D-pad focus, Continue Watching stack card | in progress: implemented on `feat/smart-resume-web`; live verification pending (row 284) | smart-resume | Parent: 280. Depends on 281. |
 | 283 | Android (TV and phone): series detail Start/Resume button, chooser dialog, Continue Watching stack card | pending | smart-resume | Parent: 280. Depends on 281. |
 | 284 | Validate on region-b with a dedicated test profile: web and emulator-host Android emulator screenshots for each scenario | pending | smart-resume | Parent: 280. Depends on 281-283. Scenario state is created on a test profile, never on a real viewer's. |
 | 285 | Other clients: iOS, Apple TV, Fire TV Vega, Xbox, Harmony, Roku, VIDAA smart Start/Resume | pending | Unassigned | Parent: 280. Depends on 281; use `GET /api/v1/catalog/{id}/resume-plan`, `POST .../resume-plan/choice` and `GET /api/v1/playback/resume-plans`. |

@@ -29,6 +29,47 @@ function jsonResponse(status: number, body: unknown): Response {
 
 const BASE_URL = "http://localhost:8484";
 
+describe("ApiClient resume plan", () => {
+  it("reads the plan, records a choice, clears answers and lists Home plans", async () => {
+    const seen: string[] = [];
+    let choiceBody: unknown;
+    const plan = {
+      series_work_id: "s1",
+      action: "resume",
+      reason: "next_in_order",
+      needs_choice: false,
+      ask_reasons: [],
+      target: null,
+      options: [],
+    };
+    const fetchImpl = mockFetch(async (request) => {
+      const url = new URL(request.url);
+      seen.push(`${request.method} ${url.pathname}`);
+      if (request.method === "POST") choiceBody = await request.json();
+      if (request.method === "DELETE") return jsonResponse(200, { removed: 2 });
+      if (url.pathname === "/api/v1/playback/resume-plans") return jsonResponse(200, [plan]);
+      return jsonResponse(200, plan);
+    });
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: () => "viewer-token",
+    });
+
+    expect((await client.getResumePlan("s1")).action).toBe("resume");
+    await client.recordResumeChoice("s1", { kind: "missed_episode", episode_id: "e1" });
+    expect(choiceBody).toEqual({ kind: "missed_episode", episode_id: "e1" });
+    expect(await client.clearResumeChoices("s1")).toEqual({ removed: 2 });
+    expect(await client.listResumePlans()).toHaveLength(1);
+    expect(seen).toEqual([
+      "GET /api/v1/catalog/s1/resume-plan",
+      "POST /api/v1/catalog/s1/resume-plan/choice",
+      "DELETE /api/v1/catalog/s1/resume-plan/choices",
+      "GET /api/v1/playback/resume-plans",
+    ]);
+  });
+});
+
 describe("ApiClient", () => {
   it("fetches the peer-group active-session envelope with origin metadata", async () => {
     const responseBody: ActivityActiveResponse = {

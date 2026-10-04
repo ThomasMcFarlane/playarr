@@ -8,9 +8,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type {
   EpisodeDetail,
+  ResumeOption,
+  ResumePlan,
   WatchProgress,
   Work,
   WorkChildren,
@@ -39,6 +41,12 @@ import {
   TvStageShell,
 } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { ResumeChooserModal } from "../components/ResumeChooserModal";
+import {
+  isStackedPlan,
+  resumePlayerState,
+  seriesPlaylist,
+} from "../lib/resumePlan";
 
 function detailRoute(work: Work): string {
   return work.kind === "site"
@@ -87,7 +95,8 @@ interface HomeRailDefinition {
 
 interface OnDeckEntry {
   work: Work;
-  progress: WatchProgress;
+  /** Absent for a series that is on deck only because it needs a Resume choice. */
+  progress: WatchProgress | null;
   episode: {
     detail: EpisodeDetail;
     seasonNumber: number;
@@ -173,6 +182,11 @@ export function HomePage() {
   });
   const [onDeck, setOnDeck] = useState<OnDeckEntry[]>([]);
   const [onDeckSettled, setOnDeckSettled] = useState(false);
+  const [resumeChooser, setResumeChooser] = useState<{ work: Work; plan: ResumePlan } | null>(
+    null
+  );
+  const [stackedPlans, setStackedPlans] = useState<Map<string, ResumePlan>>(new Map());
+  const navigate = useNavigate();
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   const railsRef = useRef<HTMLDivElement>(null);
   const focusedRailRef = useRef<HomeRailId | null>(null);
@@ -218,10 +232,15 @@ export function HomePage() {
           }, ON_DECK_WAIT_MS)
         : undefined;
 
+    // Series whose history is ambiguous are shown as a stacked card (ask on Home).
+    const plansRequest: Promise<ResumePlan[]> = client.listResumePlans().catch(() => []);
     client
       .listWatchProgress()
       .then(async (progressRows) => {
         if (!cancelled) setWatchProgress(progressRows);
+        const stackedPlans = (await plansRequest).filter(isStackedPlan);
+        const plansByWork = new Map(stackedPlans.map((plan) => [plan.series_work_id, plan]));
+        if (!cancelled) setStackedPlans(plansByWork);
         const resumableRows = [...progressRows]
           .filter((progress) => progress.state === "part_watched")
           .sort(
@@ -237,12 +256,14 @@ export function HomePage() {
             return true;
           })
           .slice(0, 10);
-        const resolved = await Promise.all(
+        const resolvedRows = await Promise.all(
           resumable.map(async (progress) => {
             try {
               const detail = await client.getWork(progress.work_id);
+              // A stacked series shows the plan's lead episode, not just the last one played.
+              const lead = plansByWork.get(progress.work_id)?.target;
               const episode = isEpisodic(detail.work)
-                ? findOnDeckEpisode(detail.children, progress.media_file_id)
+                ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
                 : null;
               if (isEpisodic(detail.work) && !episode) return null;
               return { work: detail.work, progress, episode };
@@ -251,6 +272,25 @@ export function HomePage() {
             }
           })
         );
+        // Series that need a choice but have no part-watched episode still belong here.
+        const rowWorkIds = new Set(resumable.map((progress) => progress.work_id));
+        const planOnly = await Promise.all(
+          stackedPlans
+            .filter((plan) => !rowWorkIds.has(plan.series_work_id))
+            .slice(0, Math.max(0, 10 - resumable.length))
+            .map(async (plan): Promise<OnDeckEntry | null> => {
+              try {
+                const detail = await client.getWork(plan.series_work_id);
+                const episode = plan.target
+                  ? findOnDeckEpisode(detail.children, plan.target.media_file_id)
+                  : null;
+                return episode ? { work: detail.work, progress: null, episode } : null;
+              } catch {
+                return null;
+              }
+            })
+        );
+        const resolved = [...resolvedRows, ...planOnly];
         if (!cancelled) {
           setOnDeck(
             resolved.filter(
@@ -470,6 +510,34 @@ export function HomePage() {
 
   focusFromRailRef.current = focusFromRail;
 
+  function openResumeChooser(work: Work, plan: ResumePlan) {
+    setResumeChooser({ work, plan });
+  }
+
+  async function playResumeOption(work: Work, option: ResumeOption) {
+    setResumeChooser(null);
+    // Report the pick so declined gaps and rewatch answers are remembered.
+    void client.recordResumeChoice(work.id, option).catch(() => undefined);
+    try {
+      const detail = await client.getWork(work.id);
+      navigate(`/player/${option.media_file_id}`, {
+        state: resumePlayerState(
+          option,
+          work.title,
+          seriesPlaylist(detail, t),
+          {
+            backTo: detailRoute(work),
+            detailParentBackTo: "/",
+            navigationOrigin: navigationLayer.origin,
+          },
+          t
+        ),
+      });
+    } catch {
+      navigate(detailRoute(work));
+    }
+  }
+
   return (
     <TvStageShell
       className={`tv-home${homeView === "cover" ? " is-cover-view" : ""}`}
@@ -521,6 +589,8 @@ export function HomePage() {
             progressByWork={progressByWork}
             progressReady={watchProgress !== null}
             onDeckByWork={rail.id === "primary" ? onDeckByWork : undefined}
+            stackedPlans={rail.id === "primary" ? stackedPlans : undefined}
+            onOpenStack={openResumeChooser}
             onProgressChanged={handleProgressChanged}
             navigationOrigin={navigationLayer.origin}
             onNavigate={navigationLayer.captureLink}
@@ -528,6 +598,14 @@ export function HomePage() {
           />
         ))}
       </TvRailSurface>
+      {resumeChooser ? (
+        <ResumeChooserModal
+          plan={resumeChooser.plan}
+          seriesTitle={resumeChooser.work.title}
+          onCancel={() => setResumeChooser(null)}
+          onSelect={(option) => void playResumeOption(resumeChooser.work, option)}
+        />
+      ) : null}
     </TvStageShell>
   );
 }
@@ -588,6 +666,8 @@ const HomeRail = memo(function HomeRail({
   progressByWork = new Map(),
   progressReady,
   onDeckByWork = new Map(),
+  stackedPlans = new Map(),
+  onOpenStack,
   onProgressChanged,
   navigationOrigin,
   onNavigate,
@@ -606,6 +686,8 @@ const HomeRail = memo(function HomeRail({
   progressByWork?: Map<string, WatchProgress>;
   progressReady: boolean;
   onDeckByWork?: Map<string, OnDeckEntry>;
+  stackedPlans?: Map<string, ResumePlan>;
+  onOpenStack: (work: Work, plan: ResumePlan) => void;
   onProgressChanged: (workId: string, progress: WatchProgress[]) => void;
   navigationOrigin: ReturnType<typeof useNavigationLayer>["origin"];
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
@@ -630,9 +712,10 @@ const HomeRail = memo(function HomeRail({
             const mediaFileId =
               episode?.detail.media_file_id ??
               (work.kind === "artist"
-                ? onDeckEntry?.progress.media_file_id
+                ? onDeckEntry?.progress?.media_file_id
                 : undefined);
             const progress = onDeckEntry?.progress ?? progressByWork.get(work.id);
+            const stackedPlan = stackedPlans.get(work.id);
             const title =
               episode?.detail.episode.title ??
               (episode
@@ -657,12 +740,21 @@ const HomeRail = memo(function HomeRail({
                 }}
                 className={`tv-home-card${
                   isActive && work.id === selectedId ? " is-selected" : ""
-                }`}
+                }${stackedPlan ? " is-stacked" : ""}`}
+                data-resume-stack={stackedPlan ? stackedPlan.options.length : undefined}
                 data-tv-focus-default={
                   railId === "primary" && work.id === items[0]?.id ? true : undefined
                 }
                 data-navigation-focus-key={`home:${railId}:${work.id}`}
-                onClick={onNavigate}
+                onClick={(event) => {
+                  if (stackedPlan) {
+                    // Several ways to continue: ask here instead of opening the series.
+                    event.preventDefault();
+                    onOpenStack(work, stackedPlan);
+                    return;
+                  }
+                  onNavigate(event);
+                }}
                 onFocus={(event) => {
                   const section = event.currentTarget.closest<HTMLElement>(
                     ".tv-media-track"
@@ -673,7 +765,7 @@ const HomeRail = memo(function HomeRail({
                   work,
                   detailRoute: detailRoute(work),
                   parentRoute: "/",
-                  progress,
+                  progress: progress ?? undefined,
                   preferredMediaFileId: mediaFileId,
                   preferredEpisodeId: episode?.detail.episode.id,
                 })}
@@ -684,7 +776,15 @@ const HomeRail = memo(function HomeRail({
                   title={title}
                   view={view}
                 >
-                  <WatchStateOverlay progress={progress} showUnwatched={progressReady} />
+                  <WatchStateOverlay
+                    progress={progress ?? undefined}
+                    showUnwatched={progressReady && !stackedPlan}
+                  />
+                  {stackedPlan ? (
+                    <i className="tv-home-card-stack-badge">
+                      {t("pages.home.resumeOptions", { count: stackedPlan.options.length })}
+                    </i>
+                  ) : null}
                 </HomeRailArtwork>
                 <strong>{title}</strong>
                 <small>{subtitle}</small>

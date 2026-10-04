@@ -252,6 +252,10 @@ export type MediaPlaybackPreferences =
 export type UpdateMediaPlaybackPreferencesRequest =
   components["schemas"]["UpdateMediaPlaybackPreferencesRequest"];
 export type WatchProgress = components["schemas"]["WatchProgress"];
+export type ResumePlan = components["schemas"]["ResumePlan"];
+export type ResumeOption = components["schemas"]["ResumeOption"];
+export type ResumeOptionKind = components["schemas"]["ResumeOptionKind"];
+export type ResumeAskReason = components["schemas"]["ResumeAskReason"];
 export type RemoteTarget = components["schemas"]["RemoteTargetResponse"];
 export type RemotePairing = components["schemas"]["PairingResponse"];
 export type RemoteCommandRequest = components["schemas"]["CommandRequest"];
@@ -845,6 +849,10 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/playback/sessions/{session_id}/health", method: "POST" },
   { schemaPath: "/api/v1/playback/connection-test", method: "GET" },
   { schemaPath: "/api/v1/playback/progress", method: "GET" },
+  { schemaPath: "/api/v1/playback/resume-plans", method: "GET" },
+  { schemaPath: "/api/v1/catalog/{id}/resume-plan", method: "GET" },
+  { schemaPath: "/api/v1/catalog/{id}/resume-plan/choice", method: "POST" },
+  { schemaPath: "/api/v1/catalog/{id}/resume-plan/choices", method: "DELETE" },
   { schemaPath: "/api/v1/playback/{media_file_id}/progress", method: "GET" },
   { schemaPath: "/api/v1/playback/{media_file_id}/progress", method: "PUT" },
   { schemaPath: "/api/v1/admin/views", method: "POST" },
@@ -2312,6 +2320,45 @@ export class ApiClient {
   /** Every durable progress row for the signed-in viewer, newest first. */
   async listWatchProgress(): Promise<WatchProgress[]> {
     return this.unwrap(await this.raw.GET("/api/v1/playback/progress"));
+  }
+
+  /**
+   * Smart Start/Resume (docs/architecture/smart-resume.md): what a Start or
+   * Resume press should play for this series, or the options to offer.
+   */
+  async getResumePlan(seriesWorkId: string): Promise<ResumePlan> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/catalog/{id}/resume-plan", {
+        params: { path: { id: seriesWorkId } },
+      })
+    );
+  }
+
+  /** Reports the option the viewer picked; the server records declined gaps. */
+  async recordResumeChoice(
+    seriesWorkId: string,
+    option: Pick<ResumeOption, "kind" | "episode_id">
+  ): Promise<ResumePlan> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/catalog/{id}/resume-plan/choice", {
+        params: { path: { id: seriesWorkId } },
+        body: { kind: option.kind, episode_id: option.episode_id },
+      })
+    );
+  }
+
+  /** Forgets every recorded Resume answer for a series ("ask again"). */
+  async clearResumeChoices(seriesWorkId: string): Promise<{ removed: number }> {
+    return this.unwrap(
+      await this.raw.DELETE("/api/v1/catalog/{id}/resume-plan/choices", {
+        params: { path: { id: seriesWorkId } },
+      })
+    );
+  }
+
+  /** Resume plans for the series the viewer has history in, newest first. */
+  async listResumePlans(): Promise<ResumePlan[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/playback/resume-plans"));
   }
 
   /** Resume position for one file; returns `state: "unseen"` before first playback. */

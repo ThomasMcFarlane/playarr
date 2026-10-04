@@ -1478,6 +1478,23 @@ export const en = {
   "settings.yourData.transferReceiving": "Receiving the file...",
   "settings.yourData.transferReceived": "File received ({{size}}). Review it below.",
   "settings.yourData.transferExpired": "This code has expired. Show a new one to try again.",
+  "pages.workDetail.startSeries": "Start",
+  "pages.workDetail.resumeSeries": "Resume",
+  "pages.workDetail.watchAgain": "Watch again",
+  "pages.workDetail.startSeriesTitle": "Start {{title}}",
+  "pages.workDetail.resumeSeriesTitle": "Resume {{title}}",
+  "pages.workDetail.watchAgainTitle": "Watch {{title}} again",
+  "components.resumeChooser.title": "Resume {{title}}",
+  "components.resumeChooser.subtitle": "Choose where to pick up.",
+  "components.resumeChooser.unfinished": "Unfinished",
+  "components.resumeChooser.missedEpisode": "Missed episode",
+  "components.resumeChooser.continueFromLast": "Continue from last watched",
+  "components.resumeChooser.nextInSeries": "Next in series",
+  "components.resumeChooser.startOver": "Start over",
+  "components.resumeChooser.lastWatched": "Last watched {{date}}",
+  "components.resumeChooser.percentWatched": "{{percent}}% watched",
+  "components.resumeChooser.cancel": "Cancel",
+  "pages.home.resumeOptions": "{{count}} ways to continue",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -2310,6 +2310,89 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   background: color-mix(in srgb, #cf3157 12%, var(--surface));
 }
 
+.resume-chooser-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 8, 10, 0.76);
+  backdrop-filter: blur(12px);
+}
+
+.resume-chooser-modal {
+  width: min(640px, 100%);
+  max-height: min(760px, calc(calc(100 * var(--viewport-unit)) - 48px));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  gap: 1.15rem;
+  padding: clamp(24px, 4vw, 48px);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.34);
+}
+
+.resume-chooser-modal h2 {
+  font-size: clamp(1.5rem, 3vw, 2.8rem);
+  font-weight: 480;
+  letter-spacing: -0.04em;
+}
+
+.resume-chooser-options {
+  display: grid;
+  gap: 8px;
+}
+
+.resume-chooser-option {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.resume-chooser-caption {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.resume-chooser-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.resume-chooser-option small {
+  color: var(--ink-muted);
+}
+
+.resume-chooser-progress {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.resume-chooser-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #cf3157;
+}
+
+.resume-chooser-option:hover,
+.resume-chooser-option:focus-visible {
+  outline: 0;
+  border-color: #cf3157;
+  background: color-mix(in srgb, #cf3157 12%, var(--surface));
+}
+
 .profile-pin-settings {
   max-width: 420px;
 }
@@ -7422,6 +7505,37 @@ body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-res
     0 26px 52px rgba(56, 38, 33, 0.32),
     0 11px 22px rgba(56, 38, 33, 0.22);
   transform: scale(1.025);
+}
+
+.tv-home-card.is-stacked .tv-home-card-art {
+  margin-top: 10px;
+  box-shadow:
+    0 -5px 0 -2px color-mix(in srgb, var(--ink) 24%, var(--surface-soft)),
+    0 -10px 0 -4px color-mix(in srgb, var(--ink) 13%, var(--surface-soft)),
+    0 10px 22px rgba(56, 38, 33, 0.16);
+}
+
+.tv-home-card.is-stacked:hover .tv-home-card-art,
+.tv-home-card.is-stacked:focus-visible .tv-home-card-art,
+.tv-home-rail:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art,
+.tv-media-track-scroll:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art {
+  box-shadow:
+    0 -5px 0 -2px color-mix(in srgb, var(--ink) 30%, var(--surface-soft)),
+    0 -10px 0 -4px color-mix(in srgb, var(--ink) 18%, var(--surface-soft)),
+    0 26px 52px rgba(56, 38, 33, 0.32);
+}
+
+.tv-home-card-stack-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(8, 8, 10, 0.72);
+  color: #fff;
+  font-size: 0.56rem;
+  font-style: normal;
+  letter-spacing: 0.04em;
 }
 
 .tv-home.is-cover-view .tv-home-card {
