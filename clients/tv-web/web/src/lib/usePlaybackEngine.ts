@@ -1,3 +1,4 @@
+import { shouldKeepEngineAttached } from "./playerMounting";
 import {
   useCallback,
   useEffect,
@@ -796,6 +797,10 @@ export function usePlaybackEngine(
   // sends negotiation back through "loading" unmounts `PlayerSurface`
   // (and the `<video>` with it), so re-attaching to the fresh element on
   // the next "ready" transition is correct, not wasted churn.
+  // A source switch (seek restarting the transcode, quality or audio change)
+  // is different: `qualitySwitching` keeps `PlayerSurface`, the `<video>` and
+  // this engine alive across its brief "loading" so the last frame stays
+  // visible under the inline spinner.
   useEffect(() => {
     if (!videoRef.current) return;
 
@@ -835,7 +840,7 @@ export function usePlaybackEngine(
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the loading/error <-> ready transition (see comment above), not on every negotiation object identity change.
-  }, [negotiation.kind === "ready", getAccessToken]);
+  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching), getAccessToken]);
 
   // Load whatever the negotiation resolved to, once there's both a ready
   // negotiation result and an attached engine. Guarded by `loadedForUrl` so

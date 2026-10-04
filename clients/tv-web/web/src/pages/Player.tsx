@@ -16,6 +16,7 @@ import {
 } from "../lib/usePlaybackEngine";
 import { useServerAccessToken, useServerClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { showPreparingScreen } from "../lib/playerMounting";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { watchInlineMusicHost } from "../lib/inlineMusicHost";
 import {
@@ -744,7 +745,13 @@ function PlayerPageInner({
   ]);
   // --- /Chromecast ---------------------------------------------------------
 
-  if (negotiation.kind === "loading" && !keepInlinePlayerMounted) {
+  if (
+    showPreparingScreen({
+      negotiationKind: negotiation.kind,
+      keepInlinePlayerMounted,
+      sourceSwitching: player.qualitySwitching,
+    })
+  ) {
     if (minimised) {
       if (inlineMiniPlayer) return inlineMiniPlayer;
       return (

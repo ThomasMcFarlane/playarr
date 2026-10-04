@@ -56,6 +56,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web player: scrubbing no longer drops to the full-screen "Preparing playback" view. A seek that restarts the transcode (and quality/audio switches) keeps the player UI, video element and engine mounted and shows only the inline buffering spinner; the full screen is for the initial start only. Android already behaved this way.
 - Remote control: the first D-pad presses sent to a TV app nobody had pressed a key in were silently
   lost (the view tree had no focus); a pairing that was never approved no longer leaves the Pair
   buttons disabled (web and Android); an older server answering the stream path with its HTML shell is
