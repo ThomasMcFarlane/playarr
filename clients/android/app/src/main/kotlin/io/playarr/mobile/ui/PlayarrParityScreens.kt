@@ -394,23 +394,12 @@ internal fun ExperiencePlaylistsScreen(
     var createError by remember { mutableStateOf<PlayarrMessage?>(null) }
     var createBusy by remember { mutableStateOf(false) }
     val language = LocalPlayarrLanguage.current
-    Box(Modifier.fillMaxSize().background(WebSurface)) {
-        Column(
-            Modifier.fillMaxSize().padding(
-                start = if (isTelevision) 118.dp else 16.dp,
-                end = if (isTelevision) 64.dp else 16.dp,
-                top = if (isTelevision) 82.dp else 72.dp,
-                bottom = 96.dp,
-            ),
+    Box(Modifier.fillMaxSize()) {
+        PlayarrPageScaffold(
+            title = playarrString(PlayarrString.PlaylistsTitle),
+            onBack = { navController.openExperienceTopLevel("home") },
+            isTelevision = isTelevision,
         ) {
-            Column {
-                Text(
-                    playarrString(PlayarrString.PlaylistsTitle),
-                    color = WebInk,
-                    fontSize = if (isTelevision) 38.sp else 28.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
             when (val current = state) {
                 ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsPreparing))
                 is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)

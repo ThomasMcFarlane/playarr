@@ -11,9 +11,15 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -33,20 +39,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonSize
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -90,60 +99,66 @@ import java.util.Locale
 @Composable
 internal fun ExperienceCalendarScreen(
     isTelevision: Boolean,
+    onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val state by viewModel.calendar.state.collectAsState()
     val language = LocalPlayarrLanguage.current
+    val holder = viewModel.calendar
     val today = remember { LocalDate.now() }
-    var detailEntry by remember { mutableStateOf<CalendarEntry?>(null) }
-    var subscriptionOpen by remember { mutableStateOf(false) }
-    val openEntry: (CalendarEntry) -> Unit = { entry ->
-        val workId = entry.workId
-        if (workId.isNullOrBlank()) detailEntry = entry else onOpenWork(workId)
+    val zone = remember { ZoneId.systemDefault() }
+    val ready = (state.load as? CalendarLoad.Ready)?.response
+    val loading = state.load == CalendarLoad.Loading
+    val filtered = remember(ready, state.filters) {
+        ready?.entries?.let { applyCalendarFilters(it, state.filters, today, zone) }.orEmpty()
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WebSurface)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(
-                start = if (isTelevision) 72.dp else 16.dp,
-                end = if (isTelevision) 72.dp else 16.dp,
-                top = if (isTelevision) 40.dp else 24.dp,
-            ),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                playarrString(PlayarrString.CalendarTitle),
-                color = WebInk,
-                fontSize = if (isTelevision) 44.sp else 30.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-1).sp,
-                modifier = Modifier.weight(1f).semantics { heading() },
+    val groups = remember(filtered, state.window, state.mode) {
+        groupCalendarEntries(filtered, emptySet(), state.window, fillEmptyDays = state.mode == CalendarViewMode.Week)
+    }
+    val items = remember(groups) { groups.flatMap { groupSeriesEpisodes(it.entries, zone) } }
+    val selectedItem = items.firstOrNull { it.key == state.selectedKey }
+    // Agenda is master-detail: with nothing selected yet, the first release is previewed.
+    val detailItem = if (state.mode == CalendarViewMode.Agenda) selectedItem ?: items.firstOrNull() else selectedItem
+    val filtersLabel = playarrString(PlayarrString.LibraryFilters)
+    var jumpOpen by rememberSaveable { mutableStateOf(false) }
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.CalendarTitle),
+        onBack = onBack,
+        isTelevision = isTelevision,
+        filters = PlayarrFilterAction(
+            label = filtersLabel,
+            active = state.panel == CalendarPanel.Filters,
+            badge = state.filters.activeCount,
+            onClick = { holder.openPanel(CalendarPanel.Filters) },
+        ),
+        panelActions = {
+            PlayarrHeaderButton(
+                label = playarrString(PlayarrString.CalendarLinkTitle),
+                icon = Icons.Outlined.Link,
+                isTelevision = isTelevision,
+                active = state.panel == CalendarPanel.Subscription,
+                onClick = { holder.openPanel(CalendarPanel.Subscription) },
             )
-            TextButton(onClick = { subscriptionOpen = true }) {
-                Text(playarrString(PlayarrString.CalendarSubscribe), color = WebPink, fontWeight = FontWeight.SemiBold)
+        },
+        trailingNav = {
+            PlayarrIconButton(
+                onClick = holder::previous,
+                contentDescription = playarrString(PlayarrString.CalendarPrevious),
+                variant = PlayarrButtonVariant.Secondary,
+            ) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = null, tint = WebInk) }
+            PlayarrButton(onClick = holder::goToToday, variant = PlayarrButtonVariant.Secondary) {
+                Text(playarrString(PlayarrString.CalendarToday), fontWeight = FontWeight.SemiBold)
             }
-        }
-        CalendarControls(
-            state = state,
-            isTelevision = isTelevision,
-            locale = language.locale,
-            onPrevious = viewModel.calendar::previous,
-            onNext = viewModel.calendar::next,
-            onToday = viewModel.calendar::goToToday,
-            onMode = viewModel.calendar::setMode,
-            onToggleKind = viewModel.calendar::toggleKind,
-            onClearKinds = viewModel.calendar::clearKinds,
-        )
+            PlayarrIconButton(
+                onClick = holder::next,
+                contentDescription = playarrString(PlayarrString.CalendarNext),
+                variant = PlayarrButtonVariant.Secondary,
+            ) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = WebInk) }
+        },
+    ) {
+        CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         when (val load = state.load) {
-            CalendarLoad.Loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(color = WebPink)
-                    Text(playarrString(PlayarrString.CalendarLoading), color = WebInkMuted, fontSize = 12.sp)
-                }
-            }
             is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -151,40 +166,644 @@ internal fun ExperienceCalendarScreen(
                     modifier = Modifier.padding(32.dp),
                 ) {
                     Text(playarrText(load.message), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-                    Button(onClick = viewModel.calendar::load) { Text(playarrString(PlayarrString.CommonTryAgain)) }
+                    PlayarrButton(onClick = holder::load) { Text(playarrString(PlayarrString.CommonTryAgain)) }
                 }
             }
-            is CalendarLoad.Ready -> {
-                val failed = failedCalendarSources(load.response.sources)
-                if (failed.isNotEmpty()) {
-                    CalendarSourceBanner(failed, onRetry = viewModel.calendar::load)
+            else -> {
+                if (ready != null) {
+                    val failed = failedCalendarSources(ready.sources)
+                    if (failed.isNotEmpty()) CalendarSourceBanner(failed, onRetry = holder::load)
                 }
-                CalendarBody(
-                    state = state,
-                    entries = load.response.entries,
-                    isTelevision = isTelevision,
-                    today = today,
-                    locale = language.locale,
-                    onSelectDay = viewModel.calendar::selectDay,
-                    onOpen = openEntry,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
+                val empty = !loading && items.isEmpty()
+                if (empty) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        ExperienceEmpty(
+                            playarrString(PlayarrString.CalendarEmptyTitle),
+                            playarrString(PlayarrString.CalendarEmptyDescription),
+                        )
+                    }
+                } else {
+                    // The whole view structure renders immediately; skeletons fill it while loading, so content never shifts.
+                    val body = Modifier.weight(1f).fillMaxWidth()
+                    when (state.mode) {
+                        CalendarViewMode.Agenda -> CalendarAgenda(
+                            groups = groups, loading = loading, selected = detailItem, isTelevision = isTelevision,
+                            today = today, zone = zone, locale = language.locale,
+                            onSelect = { holder.select(it.key) }, onOpenWork = onOpenWork, modifier = body,
+                        )
+                        CalendarViewMode.Week -> CalendarWeek(
+                            groups = groups, loading = loading, isTelevision = isTelevision, today = today, zone = zone,
+                            locale = language.locale, selectedKey = selectedItem?.key,
+                            onSelect = { holder.select(it.key) }, modifier = body,
+                        )
+                        CalendarViewMode.Month -> CalendarMonth(
+                            state = state, entries = filtered, loading = loading, isTelevision = isTelevision, today = today,
+                            zone = zone, locale = language.locale, onSelectDay = holder::selectDay,
+                            onSelect = { holder.select(it.key) }, modifier = body,
+                        )
+                    }
+                }
             }
         }
     }
-    detailEntry?.let { entry ->
-        CalendarEntryDetails(entry, isTelevision, language.locale) { detailEntry = null }
+    if (jumpOpen) {
+        CalendarJumpDialog(
+            anchor = state.anchor,
+            locale = language.locale,
+            onDismiss = { jumpOpen = false },
+            onJump = { day -> jumpOpen = false; holder.showDay(state.mode, day) },
+        )
     }
-    if (subscriptionOpen) {
-        CalendarSubscriptionDialog(
+    if (state.mode != CalendarViewMode.Agenda && selectedItem != null) {
+        CalendarItemDialog(
+            item = selectedItem, isTelevision = isTelevision, locale = language.locale, zone = zone,
+            onDismiss = { holder.select(null) },
+            onOpenWork = { holder.select(null); onOpenWork(it) },
+        )
+    }
+    when (state.panel) {
+        CalendarPanel.Filters -> CalendarFiltersSheet(state, ready?.sources.orEmpty(), isTelevision, holder)
+        CalendarPanel.Subscription -> CalendarSubscriptionSheet(
             holder = viewModel.subscription,
             isTelevision = isTelevision,
             locale = language.locale,
             onDismiss = {
                 viewModel.subscription.dismissCreated()
-                subscriptionOpen = false
+                holder.openPanel(null)
             },
         )
+        null -> Unit
+    }
+}
+
+/** Period label: selectable, opens the month/year jump picker. */
+@Composable
+private fun CalendarPeriodLabel(state: CalendarUiState, isTelevision: Boolean, locale: Locale, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        PlayarrButton(onClick = onClick, variant = PlayarrButtonVariant.Ghost, size = PlayarrButtonSize.Medium) {
+            Text(
+                calendarWindowTitle(state.mode, state.anchor, state.window, locale),
+                color = WebInk,
+                fontSize = if (isTelevision) 22.sp else 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = playarrString(PlayarrString.CalendarJumpTo), tint = WebInk)
+        }
+    }
+}
+
+/** Fast month and year jump: two scrolling lists, D-pad friendly; choosing a month applies immediately. */
+@Composable
+private fun CalendarJumpDialog(anchor: LocalDate, locale: Locale, onDismiss: () -> Unit, onJump: (LocalDate) -> Unit) {
+    var year by remember { mutableStateOf(anchor.year) }
+    val years = remember { (anchor.year - 30..anchor.year + 30).toList() }
+    val yearState = rememberLazyListState(initialFirstVisibleItemIndex = (years.indexOf(anchor.year) - 2).coerceAtLeast(0))
+    val monthState = rememberLazyListState(initialFirstVisibleItemIndex = (anchor.monthValue - 2).coerceAtLeast(0))
+    val focus = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(playarrString(PlayarrString.CalendarJumpTo)) },
+        text = {
+            Row(Modifier.fillMaxWidth().height(320.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyColumn(Modifier.weight(1f), state = yearState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(years) { y ->
+                        PlayarrChoice(y.toString(), y == year) { year = y }
+                    }
+                }
+                LazyColumn(Modifier.weight(1.4f), state = monthState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(12) { index ->
+                        val month = index + 1
+                        val name = java.time.Month.of(month).getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, locale)
+                        PlayarrChoice(name, year == anchor.year && month == anchor.monthValue) { onJump(calendarJumpTarget(year, month)) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost, modifier = Modifier.focusRequester(focus)) {
+                Text(playarrString(PlayarrString.CommonClose))
+            }
+        },
+    )
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+// ---- Filters / subscription panels ----------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CalendarFiltersSheet(
+    state: CalendarUiState,
+    sources: List<CalendarSourceStatus>,
+    isTelevision: Boolean,
+    holder: CalendarStateHolder,
+) {
+    val filters = state.filters
+    var picking by remember { mutableStateOf<Boolean?>(null) }
+    PlayarrFiltersSheet(
+        title = playarrString(PlayarrString.LibraryFilters),
+        kicker = playarrString(PlayarrString.CalendarTitle),
+        closeLabel = playarrString(PlayarrString.LibraryCloseFilters),
+        onClose = { holder.openPanel(null) },
+    ) {
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarView)) {
+            PlayarrViewToggle(
+                options = CalendarViewMode.entries.map { it to calendarModeLabel(it) },
+                value = state.mode,
+                onChange = holder::setMode,
+            )
+        }
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarFilterType)) {
+            PlayarrMultiSelect(
+                options = CalendarType.entries.map { it to calendarKindLabel(it.kind) },
+                selected = filters.types,
+                onChange = { holder.setFilters(filters.copy(types = it)) },
+            )
+        }
+        if (sources.isNotEmpty()) {
+            PlayarrFilterSection(playarrString(PlayarrString.CalendarFilterSource)) {
+                PlayarrMultiSelect(
+                    options = sources.map { it.sourceInstanceId to it.name },
+                    selected = filters.sources,
+                    onChange = { holder.setFilters(filters.copy(sources = it)) },
+                )
+            }
+        }
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarFilterStatus)) {
+            PlayarrMultiSelect(
+                options = CalendarStatus.entries.map { it to calendarStatusLabel(it) },
+                selected = filters.statuses,
+                onChange = { holder.setFilters(filters.copy(statuses = it)) },
+            )
+        }
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarFilterRange)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val fmt = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+                PlayarrChoice(
+                    filters.from?.let { "${playarrString(PlayarrString.CalendarRangeFrom)}: ${fmt.format(it)}" }
+                        ?: playarrString(PlayarrString.CalendarRangePickFrom),
+                    filters.from != null,
+                ) { picking = true }
+                PlayarrChoice(
+                    filters.to?.let { "${playarrString(PlayarrString.CalendarRangeTo)}: ${fmt.format(it)}" }
+                        ?: playarrString(PlayarrString.CalendarRangePickTo),
+                    filters.to != null,
+                ) { picking = false }
+                if (filters.from != null || filters.to != null) {
+                    PlayarrChoice(playarrString(PlayarrString.CalendarRangeClear), false) {
+                        holder.setFilters(filters.copy(from = null, to = null))
+                    }
+                }
+            }
+        }
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarFilterMonitoring)) {
+            PlayarrMultiSelect(
+                options = listOf(true to playarrString(PlayarrString.CalendarMonitoredOnly)),
+                selected = if (filters.monitoredOnly) setOf(true) else emptySet(),
+                onChange = { holder.setFilters(filters.copy(monitoredOnly = true in it)) },
+            )
+        }
+        if (filters.activeCount > 0) {
+            PlayarrChoice(playarrString(PlayarrString.CalendarClearFilters), false, holder::clearFilters)
+        }
+    }
+    picking?.let { isFrom ->
+        val initial = (if (isFrom) filters.from else filters.to) ?: state.anchor
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initial.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { picking = null },
+            confirmButton = {
+                PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = {
+                    val day = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneId.of("UTC")).toLocalDate() }
+                    if (day != null) {
+                        val next = if (isFrom) filters.copy(from = day) else filters.copy(to = day)
+                        holder.setFilters(
+                            if (next.from != null && next.to != null && next.from.isAfter(next.to)) next.copy(from = next.to, to = next.from) else next,
+                        )
+                        if (isFrom) holder.showDay(state.mode, day)
+                    }
+                    picking = null
+                }) { Text(playarrString(PlayarrString.CommonDone)) }
+            },
+            dismissButton = { PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = { picking = null }) { Text(playarrString(PlayarrString.CommonCancel)) } },
+        ) { DatePicker(state = pickerState) }
+    }
+}
+
+private enum class SubscriptionConfirm { Reset }
+
+/** The personal calendar link: created on first open, then Copy, QR, instructions and a confirmed Reset. */
+@Composable
+private fun CalendarSubscriptionSheet(
+    holder: CalendarSubscriptionHolder,
+    isTelevision: Boolean,
+    locale: Locale,
+    onDismiss: () -> Unit,
+) {
+    val state by holder.state.collectAsState()
+    var confirmReset by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { holder.ensureLink() }
+    val created = state.created
+    PlayarrFiltersSheet(
+        title = playarrString(PlayarrString.CalendarLinkTitle),
+        kicker = playarrString(PlayarrString.CalendarTitle),
+        closeLabel = playarrString(PlayarrString.CommonClose),
+        onClose = onDismiss,
+        footer = {
+            if (state.status?.active == true || created != null) {
+                PlayarrButton(
+                    onClick = { confirmReset = true },
+                    variant = PlayarrButtonVariant.Secondary,
+                    size = PlayarrButtonSize.Small,
+                    enabled = !state.busy,
+                ) { Text(playarrString(PlayarrString.CalendarLinkReset)) }
+            }
+        },
+    ) {
+        Text(playarrString(PlayarrString.CalendarLinkIntro), color = WebInkMuted, fontSize = 13.sp)
+        when {
+            created != null -> CalendarCreatedLink(created.url, isTelevision)
+            state.error != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(playarrText(state.error!!), color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                PlayarrButton(onClick = holder::ensureLink, variant = PlayarrButtonVariant.Secondary, size = PlayarrButtonSize.Small) {
+                    Text(playarrString(PlayarrString.CommonTryAgain))
+                }
+            }
+            state.loading || state.busy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(color = WebPink, modifier = Modifier.size(20.dp))
+                Text(playarrString(PlayarrString.CalendarLinkPreparing), color = WebInkMuted, fontSize = 13.sp)
+            }
+            state.status?.active == true -> Text(playarrString(PlayarrString.CalendarLinkHidden), color = WebInkMuted, fontSize = 13.sp)
+        }
+        PlayarrFilterSection(playarrString(PlayarrString.CalendarSubscribeInstructionsTitle)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    PlayarrString.CalendarSubscribeInstructionGoogle,
+                    PlayarrString.CalendarSubscribeInstructionApple,
+                    PlayarrString.CalendarSubscribeInstructionOutlook,
+                ).forEach { Text(playarrString(it), color = WebInkSoft, fontSize = 13.sp) }
+            }
+        }
+    }
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text(playarrString(PlayarrString.CalendarLinkResetTitle)) },
+            text = { Text(playarrString(PlayarrString.CalendarLinkResetBody)) },
+            confirmButton = {
+                PlayarrButton(
+                    onClick = { confirmReset = false; holder.createOrRegenerate() },
+                    variant = PlayarrButtonVariant.Ghost,
+                ) { Text(playarrString(PlayarrString.CalendarLinkReset)) }
+            },
+            dismissButton = {
+                PlayarrButton(onClick = { confirmReset = false }, variant = PlayarrButtonVariant.Ghost) {
+                    Text(playarrString(PlayarrString.CommonCancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun calendarStatusLabel(status: CalendarStatus): String = playarrString(
+    when (status) {
+        CalendarStatus.Aired -> PlayarrString.CalendarStatusAired
+        CalendarStatus.Upcoming -> PlayarrString.CalendarStatusUpcoming
+        CalendarStatus.Downloaded -> PlayarrString.CalendarStatusDownloaded
+        CalendarStatus.Missing -> PlayarrString.CalendarStatusMissing
+    },
+)
+
+// ---- Views -----------------------------------------------------------------
+
+private val CalendarRowSpacing = 16.dp
+
+/** Agenda: details of the selected release on the LEFT, the day-by-day list on the RIGHT. */
+@Composable
+private fun CalendarAgenda(
+    groups: List<CalendarDayGroup>,
+    loading: Boolean,
+    selected: CalendarItem?,
+    isTelevision: Boolean,
+    today: LocalDate,
+    zone: ZoneId,
+    locale: Locale,
+    onSelect: (CalendarItem) -> Unit,
+    onOpenWork: (String) -> Unit,
+    modifier: Modifier,
+) {
+    PlayarrMasterDetail(
+        isTelevision = isTelevision,
+        modifier = modifier,
+        detail = {
+            when {
+                loading -> CalendarDetailSkeleton()
+                selected != null -> CalendarItemDetails(selected, locale, zone, onOpenWork)
+                else -> Text(playarrString(PlayarrString.CalendarSelectPrompt), color = WebInkMuted)
+            }
+        },
+        list = {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+            ) {
+                if (loading) {
+                    items(3) { index ->
+                        Column(verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
+                            PlayarrSkeleton(Modifier.width(180.dp).height(18.dp))
+                            repeat(1 + index % 2) { CalendarRowSkeleton() }
+                        }
+                    }
+                } else {
+                    groups.forEach { group ->
+                        item(key = "day-${group.date}") { CalendarDayHeading(group.date, today, locale, isTelevision) }
+                        items(groupSeriesEpisodes(group.entries, zone), key = { "${group.date}-${it.key}" }) { item ->
+                            CalendarItemRow(item, selected = item.key == selected?.key, isTelevision = isTelevision, zone = zone, onClick = { onSelect(item) })
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+/** Week: wide day columns on a horizontally scrolling track (D-pad left/right moves between days). */
+@Composable
+private fun CalendarWeek(
+    groups: List<CalendarDayGroup>,
+    loading: Boolean,
+    isTelevision: Boolean,
+    today: LocalDate,
+    zone: ZoneId,
+    locale: Locale,
+    selectedKey: String?,
+    onSelect: (CalendarItem) -> Unit,
+    modifier: Modifier,
+) {
+    val columnWidth = if (isTelevision) 400.dp else 296.dp
+    val days = remember(groups) { groups }
+    val skeletonDays = remember(days) { if (days.isEmpty()) 7 else days.size }
+    LazyRow(modifier, horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(end = 24.dp)) {
+        if (loading) {
+            items(skeletonDays) { index ->
+                Column(Modifier.width(columnWidth), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
+                    PlayarrSkeleton(Modifier.width(160.dp).height(18.dp))
+                    repeat(1 + index % 2) { CalendarRowSkeleton() }
+                }
+            }
+        } else {
+            items(days, key = { "week-${it.date}" }) { group ->
+                LazyColumn(
+                    Modifier.width(columnWidth).fillMaxHeight(),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+                ) {
+                    item { CalendarDayHeading(group.date, today, locale, isTelevision) }
+                    if (group.entries.isEmpty()) {
+                        item { Text(playarrString(PlayarrString.CalendarEmptyDay), color = WebInkMuted, fontSize = 12.sp) }
+                    } else {
+                        items(groupSeriesEpisodes(group.entries, zone), key = { it.key }) { item ->
+                            CalendarItemRow(item, selected = item.key == selectedKey, isTelevision = isTelevision, zone = zone, wrapTitle = true, onClick = { onSelect(item) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarRowSkeleton() {
+    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        PlayarrSkeleton(Modifier.size(width = 44.dp, height = 64.dp))
+        Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlayarrSkeleton(Modifier.fillMaxWidth(0.6f).height(16.dp))
+            PlayarrSkeleton(Modifier.fillMaxWidth(0.4f).height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun CalendarDetailSkeleton() {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        PlayarrSkeleton(Modifier.size(width = 120.dp, height = 176.dp))
+        PlayarrSkeleton(Modifier.fillMaxWidth(0.8f).height(28.dp))
+        PlayarrSkeleton(Modifier.fillMaxWidth(0.5f).height(16.dp))
+        PlayarrSkeleton(Modifier.fillMaxWidth().height(14.dp))
+        PlayarrSkeleton(Modifier.fillMaxWidth(0.7f).height(14.dp))
+    }
+}
+
+@Composable
+private fun calendarItemSubtitle(item: CalendarItem): String = when (item) {
+    is CalendarItem.Series -> playarrString(PlayarrString.CalendarGroupSummary, "count" to item.entries.size, "codes" to item.codes)
+    is CalendarItem.Single -> calendarEntryDetail(item.entry)
+}
+
+@Composable
+private fun CalendarItemRow(
+    item: CalendarItem,
+    selected: Boolean,
+    isTelevision: Boolean,
+    zone: ZoneId,
+    onClick: () -> Unit,
+    wrapTitle: Boolean = false,
+) {
+    val source = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(12.dp)
+    val entry = item.first
+    val state = when (item) {
+        is CalendarItem.Series -> item.entries.let { all ->
+            when {
+                all.all { it.hasFile } -> CalendarLibraryState.InLibrary
+                all.any { it.monitored } -> CalendarLibraryState.Monitored
+                else -> CalendarLibraryState.NotMonitored
+            }
+        }
+        is CalendarItem.Single -> entry.libraryState()
+    }
+    val stateLabel = calendarStateLabel(state)
+    val subtitle = calendarItemSubtitle(item)
+    val time = entry.releaseAt?.atZone(zone)?.let { "%02d:%02d".format(it.hour, it.minute) }
+        ?: playarrString(PlayarrString.CalendarAllDay)
+    val description = playarrString(PlayarrString.CalendarEntryDescription, "title" to item.title, "detail" to subtitle, "state" to stateLabel)
+    Surface(
+        onClick = onClick,
+        color = if (selected) WebPink.copy(alpha = 0.18f) else WebSurfaceSoft.copy(alpha = 0.62f),
+        shape = shape,
+        border = if (selected) BorderStroke(1.5.dp, WebInk) else null,
+        interactionSource = source,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .calendarFocusRing(source, shape)
+            .semantics(mergeDescendants = true) { contentDescription = description },
+    ) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CalendarPoster(entry.posterUrl, Modifier.size(width = 44.dp, height = 64.dp))
+            Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    item.title,
+                    color = WebInk,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = if (isTelevision) 18.sp else 15.sp,
+                    maxLines = if (wrapTitle) 3 else 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(subtitle, color = WebInkSoft, fontSize = if (isTelevision) 14.sp else 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("$time · $stateLabel", color = WebInkMuted, fontSize = if (isTelevision) 13.sp else 11.sp)
+            }
+        }
+    }
+}
+
+/** Details of the selected release: facts plus Open when it exists in the library. */
+@Composable
+private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId, onOpenWork: (String) -> Unit) {
+    val entry = item.first
+    val time = remember(entry.releaseAt, locale) { entry.localReleaseTime(zone, locale) }
+    val workId = entry.workId?.takeIf(String::isNotBlank)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 24.dp)) {
+        CalendarPoster(entry.posterUrl, Modifier.size(width = 120.dp, height = 176.dp))
+        Text(item.title, color = WebInk, fontSize = 28.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() })
+        Text(calendarItemSubtitle(item), color = WebInkSoft, fontSize = 14.sp)
+        Text(
+            time?.let { playarrString(PlayarrString.CalendarReleasesAt, "time" to it) }
+                ?: "${formatCalendarDay(entry.date, locale)} · ${playarrString(PlayarrString.CalendarAllDay)}",
+            color = WebInk,
+            fontSize = 14.sp,
+        )
+        if (item is CalendarItem.Series) {
+            Text(playarrString(PlayarrString.CalendarEpisodes), color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+            item.entries.forEach { ep ->
+                Text(
+                    "${ep.episodeCode().orEmpty()}  ${ep.subtitle ?: ep.title}  ·  ${calendarStateLabel(ep.libraryState())}",
+                    color = WebInkSoft,
+                    fontSize = 13.sp,
+                )
+            }
+        } else {
+            Text(calendarStateLabel(entry.libraryState()), color = WebPink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+        entry.averageLagSeconds?.takeIf { it > 0 }?.let {
+            Text(
+                playarrString(PlayarrString.AvailabilityLagUsually, "duration" to calendarLagText(it)),
+                color = WebInkMuted,
+                fontSize = 12.sp,
+            )
+        }
+        val sources = (item as? CalendarItem.Series)?.entries?.flatMap { it.sources } ?: entry.sources
+        if (sources.isNotEmpty()) {
+            Text(playarrString(PlayarrString.CalendarSourcesHeading), color = WebInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+            sources.distinctBy { it.sourceInstanceId to it.arrId }.forEach {
+                Text("${it.sourceName} · ${it.sourceKind}", color = WebInkSoft, fontSize = 13.sp)
+            }
+        }
+        if (workId != null) {
+            PlayarrButton(onClick = { onOpenWork(workId) }) {
+                Text(playarrString(if (item is CalendarItem.Series) PlayarrString.CalendarOpenSeries else PlayarrString.CalendarOpen))
+            }
+        } else {
+            Text(playarrString(PlayarrString.CalendarNotInCatalogue), color = WebInkMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+/** Month and week selections open the same details in a dialog (agenda shows them in its left pane). */
+@Composable
+private fun CalendarItemDialog(
+    item: CalendarItem,
+    isTelevision: Boolean,
+    locale: Locale,
+    zone: ZoneId,
+    onDismiss: () -> Unit,
+    onOpenWork: (String) -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        text = { Box(Modifier.heightIn(max = if (isTelevision) 520.dp else 480.dp).verticalScroll(rememberScrollState())) { CalendarItemDetails(item, locale, zone, onOpenWork) } },
+        confirmButton = {
+            PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = onDismiss, modifier = Modifier.focusRequester(focus)) { Text(playarrString(PlayarrString.CommonClose)) }
+        },
+    )
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+@Composable
+private fun CalendarMonth(
+    state: CalendarUiState,
+    entries: List<CalendarEntry>,
+    loading: Boolean,
+    isTelevision: Boolean,
+    today: LocalDate,
+    zone: ZoneId,
+    locale: Locale,
+    onSelectDay: (LocalDate?) -> Unit,
+    onSelect: (CalendarItem) -> Unit,
+    modifier: Modifier,
+) {
+    val counts = remember(entries) { calendarEntryCountsByDay(entries, emptySet()) }
+    val rows = remember(state.window) { calendarGridRows(state.window) }
+    val firstDay = remember(locale) { firstDayOfWeek(locale) }
+    val selected = state.selectedDay
+    val dayItems = remember(entries, selected) {
+        selected?.let { day -> groupSeriesEpisodes(entries.filter { it.date == day }.sortedBy { it.releaseAt }, zone) }.orEmpty()
+    }
+    BoxWithConstraints(modifier) {
+        val wide = isTelevision || maxWidth >= 840.dp
+        val grid: @Composable (Modifier) -> Unit = { gridModifier ->
+            Column(gridModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    calendarWeekdayLabels(firstDay, locale).forEach { label ->
+                        Text(label, color = WebInkMuted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                    }
+                }
+                rows.forEach { week ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        week.forEach { day ->
+                            CalendarDayCell(
+                                day = day,
+                                count = if (loading) 0 else counts[day] ?: 0,
+                                inMonth = day.month == state.anchor.month,
+                                isToday = day == today,
+                                selected = day == selected,
+                                isTelevision = isTelevision,
+                                locale = locale,
+                                onClick = { onSelectDay(day) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val dayList: LazyListScope.() -> Unit = {
+            if (selected != null) {
+                item(key = "month-day-heading") { CalendarDayHeading(selected, today, locale, isTelevision) }
+                items(dayItems, key = { it.key }) { item ->
+                    CalendarItemRow(item, selected = item.key == state.selectedKey, isTelevision = isTelevision, zone = zone, onClick = { onSelect(item) })
+                }
+            }
+        }
+        if (wide) {
+            Row(Modifier.fillMaxSize().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                grid(Modifier.weight(1.4f).verticalScroll(rememberScrollState()))
+                LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) { dayList() }
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
+                item(key = "month-grid") { grid(Modifier.fillMaxWidth()) }
+                dayList()
+            }
+        }
     }
 }
 
@@ -246,90 +865,6 @@ private fun Modifier.calendarFocusRing(source: MutableInteractionSource, shape: 
 }
 
 @Composable
-private fun CalendarControls(
-    state: CalendarUiState,
-    isTelevision: Boolean,
-    locale: Locale,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onToday: () -> Unit,
-    onMode: (CalendarViewMode) -> Unit,
-    onToggleKind: (CalendarMediaKind) -> Unit,
-    onClearKinds: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onPrevious) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                    contentDescription = playarrString(PlayarrString.CalendarPrevious),
-                    tint = WebInk,
-                )
-            }
-            TextButton(onClick = onToday) {
-                Text(playarrString(PlayarrString.CalendarToday), color = WebPink, fontWeight = FontWeight.SemiBold)
-            }
-            IconButton(onClick = onNext) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = playarrString(PlayarrString.CalendarNext),
-                    tint = WebInk,
-                )
-            }
-            Text(
-                calendarWindowTitle(state.mode, state.anchor, state.window, locale),
-                color = WebInk,
-                fontSize = if (isTelevision) 22.sp else 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
-        val viewLabel = playarrString(PlayarrString.CalendarViewSwitcher)
-        val filterLabel = playarrString(PlayarrString.CalendarFilterLabel)
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = viewLabel },
-        ) {
-            items(CalendarViewMode.entries.toList(), key = { "mode-${it.name}" }) { mode ->
-                CalendarChip(calendarModeLabel(mode), selected = state.mode == mode) { onMode(mode) }
-            }
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = filterLabel },
-        ) {
-            item(key = "kind-all") {
-                CalendarChip(playarrString(PlayarrString.CalendarKindAll), selected = state.kinds.isEmpty(), onClick = onClearKinds)
-            }
-            items(CalendarMediaKind.entries.toList(), key = { "kind-${it.name}" }) { kind ->
-                CalendarChip(calendarKindLabel(kind), selected = kind in state.kinds) { onToggleKind(kind) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        interactionSource = source,
-        colors = FilterChipDefaults.filterChipColors(
-            labelColor = WebInk,
-            selectedContainerColor = WebPink.copy(alpha = 0.22f),
-            selectedLabelColor = WebInk,
-        ),
-        modifier = Modifier.calendarFocusRing(source, RoundedCornerShape(8.dp)),
-    )
-}
-
-@Composable
 private fun CalendarSourceBanner(failed: List<CalendarSourceStatus>, onRetry: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
@@ -365,65 +900,7 @@ private fun CalendarSourceBanner(failed: List<CalendarSourceStatus>, onRetry: ()
                     fontSize = 12.sp,
                 )
             }
-            TextButton(onClick = onRetry) { Text(playarrString(PlayarrString.CalendarSourceRetry)) }
-        }
-    }
-}
-
-@Composable
-private fun CalendarBody(
-    state: CalendarUiState,
-    entries: List<CalendarEntry>,
-    isTelevision: Boolean,
-    today: LocalDate,
-    locale: Locale,
-    onSelectDay: (LocalDate?) -> Unit,
-    onOpen: (CalendarEntry) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    when (state.mode) {
-        CalendarViewMode.Month -> CalendarMonth(state, entries, isTelevision, today, locale, onSelectDay, onOpen, modifier)
-        else -> {
-            val groups = remember(entries, state.kinds, state.window, state.mode) {
-                groupCalendarEntries(entries, state.kinds, state.window, fillEmptyDays = state.mode == CalendarViewMode.Week)
-            }
-            if (groups.all { it.entries.isEmpty() }) {
-                Box(modifier) {
-                    ExperienceEmpty(
-                        playarrString(PlayarrString.CalendarEmptyTitle),
-                        playarrString(PlayarrString.CalendarEmptyDescription),
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = modifier,
-                    contentPadding = PaddingValues(bottom = 104.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    groups.forEach { group -> calendarDaySection(group, isTelevision, today, locale, onOpen) }
-                }
-            }
-        }
-    }
-}
-
-private fun LazyListScope.calendarDaySection(
-    group: CalendarDayGroup,
-    isTelevision: Boolean,
-    today: LocalDate,
-    locale: Locale,
-    onOpen: (CalendarEntry) -> Unit,
-) {
-    item(key = "day-${group.date}") {
-        CalendarDayHeading(group.date, today, locale, isTelevision)
-    }
-    if (group.entries.isEmpty()) {
-        item(key = "empty-${group.date}") {
-            Text(playarrString(PlayarrString.CalendarEmptyDay), color = WebInkMuted, fontSize = 12.sp)
-        }
-    } else {
-        items(group.entries, key = { "${group.date}-${it.id}" }) { entry ->
-            CalendarEntryRow(entry, isTelevision, onClick = { onOpen(entry) })
+            PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = onRetry) { Text(playarrString(PlayarrString.CalendarSourceRetry)) }
         }
     }
 }
@@ -457,47 +934,6 @@ private fun CalendarDayHeading(day: LocalDate, today: LocalDate, locale: Locale,
 }
 
 @Composable
-private fun CalendarEntryRow(entry: CalendarEntry, isTelevision: Boolean, onClick: () -> Unit) {
-    val source = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(12.dp)
-    val stateLabel = calendarStateLabel(entry.libraryState())
-    val detail = calendarEntryDetail(entry)
-    val description = playarrString(
-        PlayarrString.CalendarEntryDescription,
-        "title" to entry.title,
-        "detail" to detail,
-        "state" to stateLabel,
-    )
-    Surface(
-        onClick = onClick,
-        color = WebSurfaceSoft.copy(alpha = 0.62f),
-        shape = shape,
-        interactionSource = source,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 72.dp)
-            .calendarFocusRing(source, shape)
-            .semantics(mergeDescendants = true) { contentDescription = description },
-    ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            CalendarPoster(entry.posterUrl, Modifier.size(width = 44.dp, height = 64.dp))
-            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(
-                    entry.title,
-                    color = WebInk,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = if (isTelevision) 18.sp else 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(detail, color = WebInkSoft, fontSize = if (isTelevision) 14.sp else 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(stateLabel, color = WebInkMuted, fontSize = if (isTelevision) 13.sp else 11.sp)
-            }
-        }
-    }
-}
-
-@Composable
 private fun calendarEntryDetail(entry: CalendarEntry): String {
     val kind = CalendarMediaKind.fromWire(entry.mediaKind)
     return listOfNotNull(
@@ -523,86 +959,6 @@ private fun CalendarPoster(url: String?, modifier: Modifier) {
             contentScale = ContentScale.Crop,
             modifier = modifier.background(WebSurfaceSoft, shape),
         )
-    }
-}
-
-@Composable
-private fun CalendarMonth(
-    state: CalendarUiState,
-    entries: List<CalendarEntry>,
-    isTelevision: Boolean,
-    today: LocalDate,
-    locale: Locale,
-    onSelectDay: (LocalDate?) -> Unit,
-    onOpen: (CalendarEntry) -> Unit,
-    modifier: Modifier,
-) {
-    val counts = remember(entries, state.kinds) { calendarEntryCountsByDay(entries, state.kinds) }
-    val rows = remember(state.window) { calendarGridRows(state.window) }
-    val firstDay = remember(locale) { firstDayOfWeek(locale) }
-    val selected = state.selectedDay
-    val dayGroup = remember(entries, state.kinds, selected) {
-        selected?.let { day ->
-            groupCalendarEntries(entries, state.kinds, CalendarWindow(day, day), fillEmptyDays = true)
-                .firstOrNull { it.date == day }
-        }
-    }
-    BoxWithConstraints(modifier) {
-        val wide = isTelevision || maxWidth >= 840.dp
-        val grid: @Composable (Modifier) -> Unit = { gridModifier ->
-            Column(gridModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth()) {
-                    calendarWeekdayLabels(firstDay, locale).forEach { label ->
-                        Text(
-                            label,
-                            color = WebInkMuted,
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                rows.forEach { week ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        week.forEach { day ->
-                            CalendarDayCell(
-                                day = day,
-                                count = counts[day] ?: 0,
-                                inMonth = day.month == state.anchor.month,
-                                isToday = day == today,
-                                selected = day == selected,
-                                isTelevision = isTelevision,
-                                locale = locale,
-                                onClick = { onSelectDay(day) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        val dayList: LazyListScope.() -> Unit = {
-            if (selected != null && dayGroup != null) calendarDaySection(dayGroup, isTelevision, today, locale, onOpen)
-        }
-        if (wide) {
-            Row(Modifier.fillMaxSize().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                grid(Modifier.weight(1.4f).verticalScroll(rememberScrollState()))
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 104.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) { dayList() }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 104.dp, top = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                item(key = "month-grid") { grid(Modifier.fillMaxWidth()) }
-                dayList()
-            }
-        }
     }
 }
 
@@ -658,185 +1014,7 @@ private fun CalendarDayCell(
     }
 }
 
-// ---- Entry details ---------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CalendarEntryDetails(entry: CalendarEntry, isTelevision: Boolean, locale: Locale, onDismiss: () -> Unit) {
-    if (isTelevision) {
-        val focus = remember { FocusRequester() }
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(entry.title) },
-            text = {
-                Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    CalendarEntryDetailsContent(entry, locale)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onDismiss, modifier = Modifier.focusRequester(focus)) {
-                    Text(playarrString(PlayarrString.CommonClose))
-                }
-            },
-        )
-        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    } else {
-        ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState())) {
-                Text(entry.title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp))
-                CalendarEntryDetailsContent(entry, locale)
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-                    Text(playarrString(PlayarrString.CommonClose))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarEntryDetailsContent(entry: CalendarEntry, locale: Locale) {
-    val zone = remember { ZoneId.systemDefault() }
-    val time = remember(entry.releaseAt, locale) { entry.localReleaseTime(zone, locale) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CalendarPoster(entry.posterUrl, Modifier.size(width = 72.dp, height = 106.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(calendarEntryDetail(entry), color = WebInkSoft, fontSize = 14.sp)
-                Text(
-                    time?.let { playarrString(PlayarrString.CalendarReleasesAt, "time" to it) }
-                        ?: "${formatCalendarDay(entry.date, locale)} · ${playarrString(PlayarrString.CalendarAllDay)}",
-                    color = WebInk,
-                    fontSize = 14.sp,
-                )
-                Text(calendarStateLabel(entry.libraryState()), color = WebPink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                entry.averageLagSeconds?.takeIf { it > 0 }?.let {
-                    Text(
-                        playarrString(PlayarrString.AvailabilityLagUsually, "duration" to calendarLagText(it)),
-                        color = WebInkMuted,
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-        }
-        Text(playarrString(PlayarrString.CalendarNotInCatalogue), color = WebInkMuted, fontSize = 12.sp)
-        if (entry.sources.isNotEmpty()) {
-            Text(
-                playarrString(PlayarrString.CalendarSourcesHeading),
-                color = WebInk,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.semantics { heading() },
-            )
-            entry.sources.forEach { source ->
-                Text("${source.sourceName} · ${source.sourceKind}", color = WebInkSoft, fontSize = 13.sp)
-            }
-        }
-    }
-}
-
-// ---- Subscription ----------------------------------------------------------
-
-private enum class SubscriptionConfirm { Regenerate, Revoke }
-
-@Composable
-private fun CalendarSubscriptionDialog(
-    holder: CalendarSubscriptionHolder,
-    isTelevision: Boolean,
-    locale: Locale,
-    onDismiss: () -> Unit,
-) {
-    val state by holder.state.collectAsState()
-    var confirm by remember { mutableStateOf<SubscriptionConfirm?>(null) }
-    LaunchedEffect(Unit) { holder.refresh() }
-    val formatter = remember(locale) {
-        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(locale).withZone(ZoneId.systemDefault())
-    }
-    fun format(instant: Instant?): String? = instant?.let(formatter::format)
-    val created = state.created
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(playarrString(if (created != null) PlayarrString.CalendarSubscribeUrlTitle else PlayarrString.CalendarSubscribeTitle))
-        },
-        text = {
-            Column(
-                Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (created != null) {
-                    CalendarCreatedLink(created.url, isTelevision)
-                } else {
-                    Text(playarrString(PlayarrString.CalendarSubscribeDescription), color = WebInkMuted, fontSize = 13.sp)
-                    when {
-                        state.loading -> CircularProgressIndicator(color = WebPink)
-                        state.status?.active == true -> {
-                            Text(playarrString(PlayarrString.CalendarSubscribeActive), color = WebInk, fontWeight = FontWeight.SemiBold)
-                            format(state.status?.createdAt)?.let {
-                                Text(playarrString(PlayarrString.CalendarSubscribeCreated, "date" to it), color = WebInkMuted, fontSize = 12.sp)
-                            }
-                            Text(
-                                format(state.status?.lastUsedAt)
-                                    ?.let { playarrString(PlayarrString.CalendarSubscribeLastUsed, "date" to it) }
-                                    ?: playarrString(PlayarrString.CalendarSubscribeNeverUsed),
-                                color = WebInkMuted,
-                                fontSize = 12.sp,
-                            )
-                        }
-                        state.status != null -> Text(playarrString(PlayarrString.CalendarSubscribeInactive), color = WebInkMuted)
-                    }
-                    if (!state.loading && state.status != null) {
-                        val active = state.status?.active == true
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                enabled = !state.busy,
-                                onClick = { if (active) confirm = SubscriptionConfirm.Regenerate else holder.createOrRegenerate() },
-                            ) {
-                                Text(playarrString(if (active) PlayarrString.CalendarSubscribeRegenerate else PlayarrString.CalendarSubscribeCreate))
-                            }
-                            if (active) {
-                                OutlinedButton(enabled = !state.busy, onClick = { confirm = SubscriptionConfirm.Revoke }) {
-                                    Text(playarrString(PlayarrString.CalendarSubscribeRevoke))
-                                }
-                            }
-                        }
-                    }
-                }
-                state.error?.let {
-                    Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-                    if (state.status == null) TextButton(onClick = holder::refresh) { Text(playarrString(PlayarrString.CommonTryAgain)) }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonDone)) }
-        },
-    )
-    confirm?.let { pending ->
-        val regenerate = pending == SubscriptionConfirm.Regenerate
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = {
-                Text(playarrString(if (regenerate) PlayarrString.CalendarSubscribeRegenerateTitle else PlayarrString.CalendarSubscribeRevokeTitle))
-            },
-            text = {
-                Text(playarrString(if (regenerate) PlayarrString.CalendarSubscribeRegenerateBody else PlayarrString.CalendarSubscribeRevokeBody))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirm = null
-                        if (regenerate) holder.createOrRegenerate() else holder.revoke()
-                    },
-                ) {
-                    Text(playarrString(if (regenerate) PlayarrString.CalendarSubscribeRegenerate else PlayarrString.CalendarSubscribeRevoke))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirm = null }) { Text(playarrString(PlayarrString.CommonCancel)) }
-            },
-        )
-    }
-}
+// ---- Subscription link ------------------------------------------------------
 
 /** The one-time secret URL: warning, copy and share (phones) or a QR code (television). */
 @Composable
@@ -859,15 +1037,13 @@ private fun CalendarCreatedLink(url: String, isTelevision: Boolean) {
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth(),
     )
-    if (isTelevision) {
-        PlayarrQrCode(value = url, contentDescription = label, modifier = Modifier.size(220.dp))
-    }
+    PlayarrQrCode(value = url, contentDescription = playarrString(PlayarrString.CalendarSubscribeQrLabel), modifier = Modifier.size(if (isTelevision) 220.dp else 180.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { copied = copyCalendarLink(context, label, url) }) {
+        PlayarrButton(onClick = { copied = copyCalendarLink(context, label, url) }) {
             Text(playarrString(if (copied) PlayarrString.CalendarSubscribeCopied else PlayarrString.CalendarSubscribeCopy))
         }
         if (!isTelevision) {
-            OutlinedButton(onClick = { shareCalendarLink(context, chooser, url) }) {
+            PlayarrButton(variant = PlayarrButtonVariant.Secondary, onClick = { shareCalendarLink(context, chooser, url) }) {
                 Text(playarrString(PlayarrString.CalendarSubscribeShare))
             }
         }

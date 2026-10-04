@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +32,7 @@ fun SectionHeader(
     ) {
         Text(text = title, style = MaterialTheme.typography.titleLarge)
         if (actionLabel != null && onActionClick != null) {
-            TextButton(onClick = onActionClick) {
+            PlayarrButton(onClick = onActionClick, variant = PlayarrButtonVariant.Ghost, size = PlayarrButtonSize.Small) {
                 Text(text = actionLabel)
             }
         }

@@ -394,6 +394,7 @@ private fun DiscoveryTitleRow(
 @Composable
 internal fun ExperienceWatchlistScreen(
     isTelevision: Boolean,
+    onBack: () -> Unit,
     navController: NavHostController,
     onPlay: (mediaFileId: String, title: String) -> Unit,
     viewModel: DiscoveryViewModel = hiltViewModel(),
@@ -401,19 +402,11 @@ internal fun ExperienceWatchlistScreen(
     val state by viewModel.watchlist.collectAsState()
     val requested by viewModel.requested.collectAsState()
     LaunchedEffect(Unit) { viewModel.loadWatchlist() }
-    Column(
-        Modifier.fillMaxSize().background(WebSurface).padding(
-            start = if (isTelevision) 118.dp else 16.dp,
-            end = if (isTelevision) 64.dp else 16.dp,
-            top = if (isTelevision) 82.dp else 72.dp,
-        ),
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.WatchlistTitle),
+        onBack = onBack,
+        isTelevision = isTelevision,
     ) {
-        Text(
-            playarrString(PlayarrString.WatchlistTitle),
-            color = WebInk,
-            fontSize = if (isTelevision) 38.sp else 28.sp,
-            fontWeight = FontWeight.Medium,
-        )
         DiscoveryMessageText(viewModel)
         when (val current = state) {
             ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.WatchlistLoading))

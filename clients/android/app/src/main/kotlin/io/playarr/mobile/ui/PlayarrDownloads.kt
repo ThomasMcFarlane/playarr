@@ -221,6 +221,7 @@ internal fun ExperienceDownloadsScreen(
     accessToken: String?,
     isTelevision: Boolean,
     isOnline: Boolean,
+    onBack: () -> Unit,
     onOpen: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
@@ -252,38 +253,12 @@ internal fun ExperienceDownloadsScreen(
             ?.takeIf { it.work.id == entry.workId }
             ?.let { resolveDownloadFocusedPreview(it, entry.mediaFileId) }
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WebSurface)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(
-                start = if (isTelevision) 72.dp else 16.dp,
-                end = if (isTelevision) 72.dp else 16.dp,
-                top = if (isTelevision) 40.dp else 24.dp,
-            ),
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.DownloadsTitle),
+        subtitle = if (isOnline) null else playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
+        onBack = onBack,
+        isTelevision = isTelevision,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                playarrString(PlayarrString.DownloadsTitle),
-                color = WebInk,
-                fontSize = if (isTelevision) 44.sp else 30.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-1).sp,
-            )
-            if (!isOnline) {
-                Surface(color = WebPink.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
-                    Text(
-                        playarrString(PlayarrString.DownloadsOffline).uppercase(LocalPlayarrLanguage.current.locale),
-                        color = WebPink,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                    )
-                }
-            }
-        }
         Text(
             playarrString(
                 PlayarrString.DownloadsStorageUsed,

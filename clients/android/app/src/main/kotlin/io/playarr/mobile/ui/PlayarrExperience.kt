@@ -1424,7 +1424,7 @@ private fun PlayarrMiniPlayer(
     }
 }
 
-private fun NavHostController.openExperienceTopLevel(route: String) {
+internal fun NavHostController.openExperienceTopLevel(route: String) {
     navigate(route) {
         popUpTo("home") { saveState = true }
         launchSingleTop = true
@@ -1759,6 +1759,7 @@ private fun ExperienceNavHost(
             ExperienceOnlineGate(isOnline, isTelevision, "calendar") {
                 ExperienceCalendarScreen(
                     isTelevision = isTelevision,
+                    onBack = { navController.openExperienceTopLevel("home") },
                     onOpenWork = { navController.navigate("experience-detail/$it") },
                 )
             }
@@ -1767,6 +1768,7 @@ private fun ExperienceNavHost(
             ExperienceOnlineGate(isOnline, isTelevision, "watchlist") {
                 ExperienceWatchlistScreen(
                     isTelevision = isTelevision,
+                    onBack = { navController.openExperienceTopLevel("home") },
                     navController = navController,
                     onPlay = { mediaFileId, title ->
                         viewModel.startPlayback(
@@ -1827,6 +1829,7 @@ private fun ExperienceNavHost(
                     accessToken = accessToken,
                     isTelevision = isTelevision,
                     isOnline = isOnline,
+                    onBack = { navController.openExperienceTopLevel("home") },
                     onOpen = { download ->
                         navController.navigate(
                             "experience-detail/${download.workId}?mediaFileId=${Uri.encode(download.mediaFileId)}",
@@ -2498,11 +2501,14 @@ private fun LibraryFiltersDialog(
     } else {
         LibraryViewMode.entries.filter { it != LibraryViewMode.CoverFlow }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(playarrString(PlayarrString.LibraryFilters)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    PlayarrFiltersSheet(
+        title = playarrString(PlayarrString.LibraryFilters),
+        kicker = null,
+        closeLabel = playarrString(PlayarrString.LibraryCloseFilters),
+        onClose = onDismiss,
+    ) {
+        run {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 LibraryFilterChoices(
                     playarrString(PlayarrString.LibraryView),
                     availableViewModes,
@@ -2566,14 +2572,11 @@ private fun LibraryFiltersDialog(
                     languageSelection.subtitle,
                 ) { onLanguageSelection(languageSelection.toggleSubtitle(it)) }
                 if (!languageSelection.isEmpty) {
-                    TextButton(onClick = { onLanguageSelection(LanguageSelection()) }) {
-                        Text(playarrString(PlayarrString.LibraryClearLanguages))
-                    }
+                    PlayarrChoice(playarrString(PlayarrString.LibraryClearLanguages), false) { onLanguageSelection(LanguageSelection()) }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.LibraryCloseFilters)) } },
-    )
+        }
+    }
 }
 
 /** Multi-select language chips: toggle any number, counts come from the server facets. */
@@ -2598,11 +2601,7 @@ private fun LibraryLanguageChoices(
                     val name = languageDisplayName(entry.code, language.locale, entry.name)
                     val active = entry.code in selected
                     val label = if (entry.count >= 0) "$name · ${entry.count}" else name
-                    if (active) {
-                        Button(onClick = { onToggle(entry.code) }) { Text(label) }
-                    } else {
-                        OutlinedButton(onClick = { onToggle(entry.code) }) { Text(label) }
-                    }
+                    PlayarrChoice(label, active) { onToggle(entry.code) }
                 }
             }
         }
@@ -2621,7 +2620,7 @@ private fun <T> LibraryFilterChoices(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(values) { value -> OutlinedButton(onClick = { onSelected(value) }, enabled = value != selected) { Text(label(value)) } }
+            items(values) { value -> PlayarrChoice(label(value), value == selected) { onSelected(value) } }
         }
     }
 }
@@ -2750,20 +2749,16 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                         onBack = { navController.openExperienceTopLevel("home") },
                     )
                 }
-                Surface(
-                    onClick = { filtersOpen = true },
-                    color = WebSurfaceStrong.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
-                        .padding(top = if (isTelevision) 116.dp else 14.dp, end = if (isTelevision) 14.dp else 66.dp)
-                        .size(44.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.FilterList, playarrString(PlayarrString.LibraryFilters), tint = WebInkMuted)
-                    }
-                }
+                PlayarrHeaderActions(
+                    isTelevision = isTelevision,
+                    filters = PlayarrFilterAction(
+                        label = playarrString(PlayarrString.LibraryFilters),
+                        active = filtersOpen,
+                        badge = languageSelection.audio.size + languageSelection.subtitle.size,
+                        onClick = { filtersOpen = true },
+                    ),
+                    modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars),
+                )
                 if (isTelevision && sortMode == "title") {
                     LazyColumn(
                         modifier = Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight(0.72f),
@@ -2862,39 +2857,20 @@ private fun ExperienceSearchScreen(
             viewModel.search(query, mediaFilter, libraryId, debounce = false)
         }
     }
-    Column(
-        modifier = Modifier.fillMaxSize().background(WebSurface).padding(
-            // Television: clear the 118 px navigation rail so results and filters stay reachable.
-            start = if (isTelevision) 154.dp else 16.dp,
-            end = if (isTelevision) 72.dp else 16.dp,
-            top = if (isTelevision) 92.dp else 72.dp,
-        ),
+    val resultStatus = if (query.isBlank()) null else when (val current = state) {
+        ExperienceLoad.Loading -> playarrString(PlayarrString.SearchSearching)
+        is ExperienceLoad.Ready -> playarrString(
+            if (current.value.count == 1) PlayarrString.SearchResultCountOne else PlayarrString.SearchResultCountOther,
+            "count" to current.value.count,
+        )
+        is ExperienceLoad.Failed -> playarrString(PlayarrString.SearchZeroResults)
+    }
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.SearchTitle),
+        subtitle = resultStatus,
+        onBack = { navController.openExperienceTopLevel("home") },
+        isTelevision = isTelevision,
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                playarrString(PlayarrString.SearchTitle),
-                color = WebInk,
-                fontSize = if (isTelevision) 44.sp else 30.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-1).sp,
-            )
-            if (query.isNotBlank()) {
-                val resultStatus = when (val current = state) {
-                    ExperienceLoad.Loading -> playarrString(PlayarrString.SearchSearching)
-                    is ExperienceLoad.Ready -> playarrString(
-                        if (current.value.count == 1) PlayarrString.SearchResultCountOne else PlayarrString.SearchResultCountOther,
-                        "count" to current.value.count,
-                    )
-                    is ExperienceLoad.Failed -> playarrString(PlayarrString.SearchZeroResults)
-                }
-                Text(
-                    resultStatus,
-                    color = WebInkMuted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 12.dp, bottom = 5.dp),
-                )
-            }
-        }
         OutlinedTextField(
             value = query,
             onValueChange = {

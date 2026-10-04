@@ -379,6 +379,19 @@ One button family (`components/ui/Button.tsx`): `primary`, `secondary`, `ghost`,
 colour tokens. New UI must not style raw `btn` classes: `buttonAudit.test.ts` keeps an allow-list of legacy
 files that may only shrink.
 
+### Buttons (Android)
+
+Android has one button family in `core-designsystem` (`PlayarrButtons.kt`): `PlayarrButton` (variants
+`Primary`, `Secondary`, `Ghost`; sizes `Small`, `Medium`, `Large`; optional `active`) and `PlayarrIconButton`
+(round, mandatory content description). Every button is fully rounded, shows a 3 dp focus ring and grows to the
+shared `FocusMotion.tileFocusScale` on focus so D-pad users always see where they are. Header actions
+(Filters, Calendar subscription, previous / today / next) use `PlayarrHeaderButton` and the scaffold's
+`trailingNav` slot, all built on this family. Screens never call the raw Material `Button`, `OutlinedButton`,
+`TextButton` or `IconButton`: `PlayarrButtonUsageTest` fails on any new use and lets legacy files only shrink
+(TASKS row 224 tracks the migration). The page header breadcrumb never renders under the television clock: it
+stays on the title line behind a vertical divider when it fits before the clock, otherwise wraps beneath the
+title behind a horizontal rule (`decideSubtitlePlacement`, covered by `PlayarrPageHeaderLayoutTest`).
+
 ## 5. Explicitly out of scope / not yet observed
 
 Being direct about the boundaries of this document so a future pass knows what still needs
