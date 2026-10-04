@@ -224,10 +224,10 @@ impl PeerClient {
 
     /// Configured in-cluster routes replace advertised peer addresses for
     /// server-to-server requests. There is intentionally no public fallback.
-    pub fn addresses_for_peer<'a>(
+    pub fn addresses_for_peer(
         &self,
         peer_id: uuid::Uuid,
-        addresses: &'a [PeerAddress],
+        addresses: &[PeerAddress],
     ) -> Vec<String> {
         if let Some(url) = self.routes.outbound_url(peer_id) {
             vec![url]
