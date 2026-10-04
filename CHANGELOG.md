@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Server: `playarr-server create-admin --username <name>` creates an administrator (password on standard input, never in arguments) or resets that administrator's password, so operators can provision a dedicated operator or test account without touching the database.
 - Household controls rolled out to region-a and region-b (image `<image>`) with live verification recorded on TASKS rows 104-114.
 - Playarr Android (phone, tablet and TV): a native "Not available right now" screen when the
   server reports the profile outside its schedule or out of daily time (shows when it lifts,

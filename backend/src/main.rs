@@ -179,6 +179,15 @@ enum Command {
         #[arg(long, default_value = DEFAULT_BOOTSTRAP_ADMIN_USERNAME)]
         username: String,
     },
+    /// Create an administrator account (password from standard input), or
+    /// reset the password when that administrator already exists. Intended
+    /// for provisioning a dedicated operator or test account without touching
+    /// the database directly.
+    CreateAdmin {
+        /// Username for the administrator account.
+        #[arg(long)]
+        username: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -270,6 +279,7 @@ async fn main() -> anyhow::Result<()> {
         } => update(check, yes, channel).await,
         Command::Backup { command } => backup_command(command).await,
         Command::ResetAdminPassword { username } => reset_admin_password(&username).await,
+        Command::CreateAdmin { username } => create_admin(&username).await,
     }
 }
 
@@ -424,6 +434,100 @@ async fn reset_admin_password(username: &str) -> anyhow::Result<()> {
     user_repo.upsert(&user).await?;
     println!("reset password for administrator {username}");
     Ok(())
+}
+
+/// Provisions (or re-passwords) one administrator that may also stream, so a
+/// dedicated operator/test account can exercise the whole product. The
+/// password is read from standard input only; the database stores its
+/// Argon2id hash. Refuses to touch an existing non-administrator account.
+async fn create_admin(username: &str) -> anyhow::Result<()> {
+    let database_url =
+        env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL is required"))?;
+    let pool = playarr_db::connect(&database_url).await?;
+    let user_repo: Arc<dyn playarr_db::UserRepo> =
+        Arc::new(playarr_db::repo::SqlxUserRepo::new(pool.clone()));
+    let policy_repo: Arc<dyn playarr_db::PolicyRepo> =
+        Arc::new(playarr_db::repo::SqlxPolicyRepo::new(pool));
+
+    let mut password = String::new();
+    std::io::stdin().read_to_string(&mut password)?;
+    let password = password.trim_end_matches(['\r', '\n']);
+    let created = create_admin_with(&user_repo, &policy_repo, username, password).await?;
+    println!(
+        "{} administrator {username}",
+        if created {
+            "created"
+        } else {
+            "reset password for"
+        }
+    );
+    Ok(())
+}
+
+/// Env- and stdin-independent core of [`create_admin`]. Returns `true` when a
+/// new account was created, `false` when an existing administrator's password
+/// was reset.
+async fn create_admin_with(
+    user_repo: &Arc<dyn playarr_db::UserRepo>,
+    policy_repo: &Arc<dyn playarr_db::PolicyRepo>,
+    username: &str,
+    password: &str,
+) -> anyhow::Result<bool> {
+    if username.trim().is_empty() {
+        anyhow::bail!("username must not be empty");
+    }
+    if password.len() < 12 {
+        anyhow::bail!("password must contain at least 12 characters");
+    }
+    let hash = playarr_model::Sensitive::new(playarr_auth::login::hash_password(password));
+
+    if let Some(mut user) = user_repo.find_by_username(username).await? {
+        let is_admin = policy_repo
+            .find_by_id(user.policy_id)
+            .await?
+            .is_some_and(|policy| policy.is_admin);
+        if !is_admin {
+            anyhow::bail!("user {username} exists and is not an administrator");
+        }
+        user.password_hash = hash;
+        user_repo.upsert(&user).await?;
+        return Ok(false);
+    }
+
+    let policy = playarr_model::Policy {
+        id: uuid::Uuid::new_v4(),
+        name: format!("Administrator ({username})"),
+        library_allow: Vec::new(),
+        group_library_allow: Vec::new(),
+        blocked_folders: Vec::new(),
+        max_rating: None,
+        blocked_tags: Vec::new(),
+        allowed_tags: Vec::new(),
+        can_transcode: true,
+        can_download: true,
+        can_delete: true,
+        can_share_public: false,
+        device_allow: Vec::new(),
+        max_concurrent_sessions: None,
+        household: Default::default(),
+        access_schedule: None,
+        can_stream: true,
+        is_admin: true,
+    };
+    policy_repo.upsert(&policy).await?;
+    let user = playarr_model::User {
+        id: uuid::Uuid::new_v4(),
+        username: username.to_string(),
+        display_name: username.to_string(),
+        email: None,
+        password_hash: hash,
+        policy_id: policy.id,
+        created_at: chrono::Utc::now(),
+        disabled: false,
+        preferred_audio_language: playarr_model::DEFAULT_PREFERRED_AUDIO_LANGUAGE.to_string(),
+    };
+    user_repo.upsert(&user).await?;
+    Ok(true)
 }
 
 async fn serve() -> anyhow::Result<()> {
@@ -3159,6 +3263,58 @@ mod bootstrap_tests {
                 user.password_hash.expose_secret()
             ),
             "an arbitrary wrong password must never verify against the real hash"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_admin_creates_then_resets_and_refuses_non_admins() {
+        let pool = test_pool().await;
+        let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
+        let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool));
+
+        assert!(create_admin_with(&user_repo, &policy_repo, "ops", "short")
+            .await
+            .is_err());
+        assert!(
+            create_admin_with(&user_repo, &policy_repo, "ops", "first-password-123")
+                .await
+                .unwrap()
+        );
+        let user = user_repo.find_by_username("ops").await.unwrap().unwrap();
+        let policy = policy_repo
+            .find_by_id(user.policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(policy.is_admin && policy.can_stream);
+        assert!(playarr_auth::login::Argon2PasswordVerifier
+            .verify("first-password-123", user.password_hash.expose_secret()));
+
+        // Second run resets the password on the same account.
+        assert!(
+            !create_admin_with(&user_repo, &policy_repo, "ops", "second-password-123")
+                .await
+                .unwrap()
+        );
+        assert_eq!(user_repo.list_all().await.unwrap().len(), 1);
+        let user = user_repo.find_by_username("ops").await.unwrap().unwrap();
+        assert!(playarr_auth::login::Argon2PasswordVerifier
+            .verify("second-password-123", user.password_hash.expose_secret()));
+
+        // A non-admin account of the same name is never promoted.
+        let mut viewer_policy = policy.clone();
+        viewer_policy.id = uuid::Uuid::new_v4();
+        viewer_policy.is_admin = false;
+        policy_repo.upsert(&viewer_policy).await.unwrap();
+        let mut viewer = user.clone();
+        viewer.id = uuid::Uuid::new_v4();
+        viewer.username = "viewer".into();
+        viewer.policy_id = viewer_policy.id;
+        user_repo.upsert(&viewer).await.unwrap();
+        assert!(
+            create_admin_with(&user_repo, &policy_repo, "viewer", "third-password-123")
+                .await
+                .is_err()
         );
     }
 
