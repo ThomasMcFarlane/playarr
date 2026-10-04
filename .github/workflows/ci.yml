@@ -75,13 +75,16 @@ jobs:
           filters: |
             rust:
               - 'backend/**'
+              - '.github/workflows/ci.yml'
             android:
               - 'clients/android/**'
+              - '.github/workflows/ci.yml'
             ios:
               - 'clients/ios/**'
               - 'clients/apple-tv/**'
             xbox:
               - 'clients/xbox/**'
+              - '.github/workflows/ci.yml'
             harmony:
               - 'clients/harmony/**'
             tv-web:
@@ -100,6 +103,11 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # No debuginfo for dev/test builds: shorter compile + link and a much
+      # smaller rust-cache archive to save/restore.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - uses: actions/checkout@v4
 
@@ -119,6 +127,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
+          # Persist the partial target dir even when clippy/test fails so the
+          # re-run after a fix does not start cold.
+          cache-on-failure: true
 
       - name: cargo fmt -- --check
         run: cargo fmt --all -- --check
@@ -159,7 +170,12 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
+      # PR branches may write their own Gradle cache (ephemeral runners start
+      # empty; default is read-only off main), so pushes to the same PR reuse
+      # the dependency and build-cache entries of the previous run.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Gradle build (all modules)
         working-directory: clients/android
@@ -247,6 +263,12 @@ jobs:
 
       - name: Put the SDK on PATH
         run: echo "$RUNNER_TEMP/dotnet" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('clients/xbox/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: dotnet build (Playarr.Core)
         run: dotnet build src/Playarr.Core/Playarr.Core.csproj
@@ -357,6 +379,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
+          # Persist the partial target dir even when clippy/test fails so the
+          # re-run after a fix does not start cold.
+          cache-on-failure: true
 
       - name: Regenerate backend/openapi/playarr.yaml and diff
         run: |
