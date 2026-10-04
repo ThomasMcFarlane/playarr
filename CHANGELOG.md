@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Operations: pin REGION-A and REGION-B to regional image `<image>` (TASKS 295, 298), built from main commit and verified at digest `sha256:19297805e9d0f13f2017bb9826cecacc630d7b226e34c4b8c0e9aa297b83228d`; explicitly configure one concurrent transcode and two FFmpeg threads per regional node.
 - Operations: pin both regional servers to verified image `<image>` (TASK 292); deployment rollout and authenticated peer sync remain pending.
 - CI: push regional server image builds through the image registry while keeping public image names and tags unchanged (TASK 296).
 - Server: cap node-local on-demand FFmpeg jobs with an atomic child-lifetime permit and positive-value configuration; default to one job and two decoder, encoder and filter threads per job (TASK 295).

@@ -168,6 +168,8 @@
           "secretName",
           "podSecurityContext",
           "thumbnailConcurrency",
+          "transcodeMaxConcurrentJobs",
+          "ffmpegThreads",
           "resources",
           "persistence",
           "mediaPath",
@@ -201,6 +203,14 @@
             "type": "object"
           },
           "thumbnailConcurrency": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "transcodeMaxConcurrentJobs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ffmpegThreads": {
             "type": "integer",
             "minimum": 1
           },

@@ -116,6 +116,10 @@ spec:
               value: all
             - name: PLAYARR_THUMBNAIL_CONCURRENCY
               value: {{ $instance.thumbnailConcurrency | quote }}
+            - name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS
+              value: {{ $instance.transcodeMaxConcurrentJobs | quote }}
+            - name: PLAYARR_FFMPEG_THREADS
+              value: {{ $instance.ffmpegThreads | quote }}
             {{- with $instance.peerInternalRoutes }}
             - name: PLAYARR_PEER_INTERNAL_ROUTES
               value: {{ join "," . | quote }}

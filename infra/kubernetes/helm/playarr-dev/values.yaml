@@ -112,7 +112,7 @@ workloads:
 # node-local state, runtime trees, security identities and public routes.
 regionalInstances:
   playarr-region-a:
-    image: registry.example.com/playarr-regional:80c3cb62
+    image: registry.example.com/playarr-regional:8a4c391a
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-a
@@ -131,6 +131,9 @@ regionalInstances:
     # limit was too small; 4 GiB leaves room for
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
+    # Keep on-demand transcodes bounded on each regional node.
+    transcodeMaxConcurrentJobs: 1
+    ffmpegThreads: 2
     # Optional server-to-server routes in peerUUID=certificate-host@service-FQDN:443
     # form. The certificate host stays the HTTPS identity; public peer
     # addresses continue to be advertised to client apps.
@@ -215,7 +218,7 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-region-b:
-    image: registry.example.com/playarr-regional:80c3cb62
+    image: registry.example.com/playarr-regional:8a4c391a
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-b
@@ -234,6 +237,9 @@ regionalInstances:
     # limit was too small; 4 GiB leaves room for
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
+    # Keep on-demand transcodes bounded on each regional node.
+    transcodeMaxConcurrentJobs: 1
+    ffmpegThreads: 2
     # Optional server-to-server routes in peerUUID=certificate-host@service-FQDN:443
     # form. The certificate host stays the HTTPS identity; public peer
     # addresses continue to be advertised to client apps.
