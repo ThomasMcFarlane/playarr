@@ -129,9 +129,9 @@ export function HomeCustomisePage() {
                   </li>
                 ))}
               </ul>
-              <Button onClick={reset}>
-                {t("pages.home.customise.reset")}
-              </Button>
+              <div className="tv-home-customise-actions">
+                <Button onClick={reset}>{t("pages.home.customise.reset")}</Button>
+              </div>
             </>
           )}
           {saveError ? (

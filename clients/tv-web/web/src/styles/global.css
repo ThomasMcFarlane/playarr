@@ -12559,3 +12559,9 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 .tv-home-customise-title {
   flex: 1;
 }
+
+/* Secondary action row: the grid parent would stretch a bare button full width. */
+.tv-home-customise-actions {
+  display: flex;
+  justify-content: flex-start;
+}
