@@ -51,6 +51,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Regional servers region-a and region-b now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
 - Regional region-b now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after region-a was rolled to the same image.
 - Regional servers region-a and region-b now run image `<image>`, which carries the release calendar, iCal
   subscription and availability-lag endpoints (tasks 75-77).
