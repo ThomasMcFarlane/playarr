@@ -45,8 +45,35 @@ for (const [name, path] of [["movies", "/movies"], ["series", "/series"], ["play
     return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), cls: document.querySelector("[data-filters-button]").className };
   });
 }
+// Wrapped header detail: the horizontal rule must be no wider than the title/detail block.
+const ruleResults = [];
+for (const vp of [{ width: 1920, height: 1080 }, { width: 1280, height: 720 }]) {
+  await page.setViewportSize(vp);
+  await page.goto(`${base}/settings/appearance`);
+  await page.waitForSelector(".page-header-detail", { timeout: 20000 });
+  await page.waitForTimeout(500);
+  ruleResults.push(
+    await page.evaluate((width) => {
+      const header = document.querySelector(".page-header");
+      const detail = document.querySelector(".page-header-detail");
+      const title = document.querySelector(".page-header h1");
+      if (!header.classList.contains("is-detail-wrapped")) return { width, skipped: true };
+      const range = document.createRange();
+      range.selectNodeContents(detail);
+      const textWidth = range.getBoundingClientRect().width;
+      const rule = detail.getBoundingClientRect().width;
+      const limit = Math.max(title.getBoundingClientRect().width, textWidth);
+      return { width, rule: Math.round(rule), limit: Math.round(limit), ok: rule <= limit + 1 };
+    }, vp.width)
+  );
+}
 await browser.close();
 server.close?.();
+for (const r of ruleResults) {
+  if (r.skipped) { console.log(`PASS  ${r.width}: detail fits inline, no rule to measure`); continue; }
+  console.log(`${r.ok ? "PASS" : "FAIL"}  ${r.width}: wrapped separator ${r.rule}px <= max(title, subtitle) ${r.limit}px`);
+  if (!r.ok) process.exitCode = 1;
+}
 let failed = false;
 for (const name of ["series", "playlists", "calendar"]) {
   const a = boxes.movies;
@@ -55,4 +82,4 @@ for (const name of ["series", "playlists", "calendar"]) {
   console.log(`${ok ? "PASS" : "FAIL"}  Filters button on ${name} matches movies`, ok ? "" : JSON.stringify({ movies: a, [name]: b }));
   failed ||= !ok;
 }
-process.exit(failed ? 1 : 0);
+process.exit(failed || process.exitCode ? 1 : 0);

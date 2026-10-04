@@ -77,6 +77,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the wrapped page-header separator spans only the title/subtitle block instead of the whole header row; `scripts/header-parity.mjs` asserts it.
+
 - Web player: scrubbing no longer drops to the full-screen "Preparing playback" view. A seek that restarts the transcode (and quality/audio switches) keeps the player UI, video element and engine mounted and shows only the inline buffering spinner; the full screen is for the initial start only. Android already behaved this way.
 - Playarr Android: when a direct-played title cannot be decoded by any device decoder (for example 4K HEVC Main 10 / Dolby Vision on the TV emulator, which PR 98 now correctly negotiates as HEVC instead of an unknown `x265` codec), the app re-negotiates once as a 1080p H.264 transcode at the same position instead of stopping with "decoding failed".
 

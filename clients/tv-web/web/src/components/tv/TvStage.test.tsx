@@ -25,10 +25,10 @@ describe("TvDetailHeading", () => {
 
     const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8");
     const sharedDividerRule = css.match(
-      /\.tv-library-heading > span\s*\{(?<declarations>[^}]*)\}/
+      /\.tv-library-heading > \.page-header-title-block > span\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
     const detailItemRule = css.match(
-      /\.tv-library-heading > \.tv-detail-heading-item\s*\{(?<declarations>[^}]*)\}/
+      /\.tv-library-heading > \.page-header-title-block > \.tv-detail-heading-item\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
     expect(sharedDividerRule).toContain("padding-left: clamp(14px, 1.2vw, 24px)");

@@ -166,12 +166,14 @@ export function PageHeader({
           <span aria-hidden="true">←</span>
         </ButtonLink>
       )}
-      <h1 ref={titleRef}>{title}</h1>
-      {detail ? (
-        <span ref={detailRef} className={`page-header-detail${detailClassName ? ` ${detailClassName}` : ""}`}>
-          {detail}
-        </span>
-      ) : null}
+      <div className="page-header-title-block">
+        <h1 ref={titleRef}>{title}</h1>
+        {detail ? (
+          <span ref={detailRef} className={`page-header-detail${detailClassName ? ` ${detailClassName}` : ""}`}>
+            {detail}
+          </span>
+        ) : null}
+      </div>
       {hasActions ? (
         <div ref={actionsRef} className="page-header-actions">
           {navigation}

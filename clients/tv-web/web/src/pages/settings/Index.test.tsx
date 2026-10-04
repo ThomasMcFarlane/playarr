@@ -124,7 +124,7 @@ describe("SettingsIndexPage", () => {
       /\.settings-index-route \.settings-detail-panel,\s*\.settings-detail-route \.settings-options-panel\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
-      /\.settings-index-route \.tv-library-heading > \.settings-heading-detail,\s*\.settings-detail-route \.tv-library-heading h1\s*\{[^}]*display:\s*none/s
+      /\.settings-index-route \.tv-library-heading > \.page-header-title-block > \.settings-heading-detail,\s*\.settings-detail-route \.tv-library-heading h1\s*\{[^}]*display:\s*none/s
     );
     expect(css).toMatch(
       /\.settings-index-route \.settings-option-copy small,\s*\.settings-index-route \.settings-option-arrow\s*\{[^}]*display:\s*block/s
