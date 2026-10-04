@@ -23,18 +23,12 @@ private workflow also accepts `source_repository`, `source_sha`, `marketing_vers
 
 ### Owner setup for source-side dispatch
 
-The source workflow currently has no `APPLE_DISPATCH_TOKEN` Actions secret. Until the owner adds it,
-the source-side dispatch stops at its credential check. To configure it:
-
-1. [Create a fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
-   with resource owner `example-org`, repository access limited to
-   `REDACTED`, and the Actions repository permission set to read and write. Choose an
-   appropriate expiry and do not paste the token into source, issues, or chat.
-2. [Add the repository Actions secret](https://github.com/ThomasMcFarlane/playarr/settings/secrets/actions/new)
-   named `APPLE_DISPATCH_TOKEN` and enter the token value there.
-3. Start the private signed Apple workflow
-   only when an authorised build is intended. The private workflow has the signing and App Store
-   Connect credentials; the source Playarr workflow receives only the scoped dispatch token.
+The `APPLE_DISPATCH_TOKEN` GitHub Actions secret is already configured, and the credential is also
+provisioned as an out-of-band Kubernetes Secret. The existing OAuth token is broader than a
+dedicated dispatch credential. At the next planned rotation, replace it with a short-lived,
+least-privilege token limited to dispatching the private Apple workflow, then update both secret
+stores without exposing its value. The private workflow holds the signing and App Store Connect
+credentials; the source workflow uses its dispatch credential only to request an authorised build.
 
 ## Verified internal TestFlight state
 
