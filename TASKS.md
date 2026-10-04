@@ -7,6 +7,12 @@ is the current-work board. Newest and most active work goes first.
 
 ## Active: iOS build and TestFlight pipeline (2026-10-04)
 
+## Active: regional streaming reliability (2026-10-04)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 294 | Fix REGION-A/REGION-B playback and streaming reliability across Android, web and iOS | in progress | playback_repair | Proven REGION-A cause: its pod lacks a supplemental group, required to traverse/read the read-only media tree's permissions; REGION-B has the group and can read/probe the same file. Chart fix adds the group only to REGION-A and preserves deployed image on both nodes. REGION-B login 200/400 sequence remains unattributed; no auth changes made. Awaiting PR and durable deployment rollout, then verify playback manifest and segment delivery in both regions. Keep peer database retry work (tasks 292-293) separate. |
+
 | # | Task | Status | Picked up by | Notes |
 |---|---|---|---|---|
 | 279 | iOS: replace placeholder release workflow with signed-only TestFlight dispatch | done | ios-testflight | Manual dispatch on `main` and `ios-v*` tags send an immutable full source SHA to the Apple release pipeline; there is no unsigned or build-only release mode. Apple release pipeline checks source ancestry on Playarr `main` and signs/exports/uploads both targets. `APPLE_DISPATCH_TOKEN` is provisioned in GitHub Actions and as an out-of-band Kubernetes Secret. The existing OAuth token is broader than a dedicated least-privilege token. Source dispatch run <id> succeeded; child signed iOS/tvOS dispatcher run <id> was accepted and queued. Fresh build completion is pending; historical signed builds remain valid. See [source workflow](.github/workflows/ios-ci.yml), Apple release pipeline, and owner setup steps in `docs/apple-testflight/README.md`. |
