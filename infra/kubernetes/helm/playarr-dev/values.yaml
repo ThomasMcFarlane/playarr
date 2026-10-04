@@ -112,7 +112,7 @@ workloads:
 # node-local state, runtime trees, security identities and public routes.
 regionalInstances:
   playarr-region-a:
-    image: registry.example.com/playarr-regional:b654af86
+    image: registry.example.com/playarr-regional:ae60b05e
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-a
@@ -129,14 +129,15 @@ regionalInstances:
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
     # In-cluster Service URLs for the *arr apps (media namespace); the public
-    # host ports on the node are closed. Prowlarr has no in-cluster Service
-    # (only a cloudflared tunnel), so it is intentionally left as registered.
+    # host ports on the node are closed. Prowlarr may run outside the cluster,
+    # behind a path prefix (the client keeps the prefix).
     sourceInstanceUrls:
       radarr: http://radarr.media.svc.cluster.local:7878
       sonarr: http://sonarr.media.svc.cluster.local:8989
       lidarr: http://lidarr.media.svc.cluster.local:8686
       whisparr: http://whisparr.media.svc.cluster.local:6969
       bazarr: http://bazarr.media.svc.cluster.local:6767
+      prowlarr: https://prowlarr.example.com
       # Dubarr (AI dubbing companion). Together with
       # dubarrApiKeySecret the server creates the "Dubarr" source instance.
       dubarr: http://dubarr.dubarr.svc.cluster.local:8686
@@ -226,8 +227,8 @@ regionalInstances:
     # the default concurrency of 2 plus the server itself.
     thumbnailConcurrency: 2
     # In-cluster Service URLs for the *arr apps (media namespace); the public
-    # host ports on the node are closed. Prowlarr has no in-cluster Service
-    # (only a cloudflared tunnel), so it is intentionally left as registered.
+    # host ports on the node are closed. Prowlarr may run outside the cluster,
+    # behind a path prefix (the client keeps the prefix).
     sourceInstanceUrls:
       radarr: http://radarr.media.svc.cluster.local:7878
       sonarr: http://sonarr.media.svc.cluster.local:8989
