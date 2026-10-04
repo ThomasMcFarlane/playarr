@@ -35,9 +35,9 @@ targets:
         product: PlayarrKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.playarr.playarr.tvos
+        PRODUCT_BUNDLE_IDENTIFIER: app.playarr.ios
         PRODUCT_MODULE_NAME: PlayarrTV
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 1.0.0
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: 5.0
         SWIFT_STRICT_CONCURRENCY: complete

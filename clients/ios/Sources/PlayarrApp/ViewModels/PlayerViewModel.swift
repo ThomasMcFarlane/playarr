@@ -109,7 +109,7 @@ public final class PlayerViewModel {
     @ObservationIgnored private var lastMediaFileID: UUID?
     @ObservationIgnored private var qualityOverrideID: String?
 
-    public init(
+    init(
         engine: PlayerEngine,
         apiClient: PlayarrAPIClient,
         downloadRepository: DownloadRepository,

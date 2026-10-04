@@ -1,64 +1,63 @@
-# =============================================================================
-# iOS Release
-# =============================================================================
-#
-# Release-track workflow for the iOS client. Triggered by pushing a tag
-# like `ios-v1.0.4`.
-#
-# NOTE: lightweight skeleton. clients/ios is currently a source-only Swift
-# Package skeleton (Package.swift, Sources/, a SwiftUI placeholder) with no
-# app target, signing configuration, or Xcode project wired up yet -- see
-# the iOS client shell scaffolding task. A plain SwiftPM package can't
-# produce a distributable, signed .ipa on its own; that needs either a thin
-# wrapping Xcode project/app target, or `xcodebuild` driving the package
-# directly with a real scheme + provisioning profile. The build/sign/
-# publish steps below are TODO placeholders for that reason. Xcode
-# selection IS a real step (doesn't depend on repo content). Replace the
-# placeholders with real `xcodebuild archive`/`fastlane ios beta` steps
-# once a signable app target exists. See ci.yml's ios-check job for the
-# PR-time `swift build` gate that already runs today.
-# =============================================================================
-
-name: iOS Release
+name: iOS build and release dispatch
 
 on:
   push:
-    tags:
-      - 'ios-v*'
+    tags: ['ios-v*']
+    paths-ignore:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'TASKS.md'
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Optional full commit SHA for the signed TestFlight release
+        type: string
+        required: false
+      marketing_version:
+        description: Numeric three-part marketing version
+        type: string
+        default: '1.0.0'
+        required: false
+      build_number:
+        description: Optional unique Apple-valid build number (for example 123.1)
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  build-and-publish:
-    name: Build & publish iOS release
-    runs-on: macos-latest
-    environment: release-ios
+  dispatch-apple:
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/ios-v'))
+    name: Dispatch signed TestFlight release to Apple runner
+    runs-on:
+      group: playarr-runners
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      # TODO: once clients/ios has a signable app target (scheme
-      # "Playarr", matching the Justfile's ios-build recipe), replace with:
-      #   xcodebuild -scheme Playarr -configuration Release \
-      #     -archivePath build/Playarr.xcarchive archive
-      - name: Archive build (placeholder)
+      - name: Validate dispatch credential
+        env:
+          APPLE_DISPATCH_TOKEN: ${{ secrets.APPLE_DISPATCH_TOKEN }}
         run: |
-          echo "TODO: xcodebuild archive for clients/ios (scheme Playarr) at tag ${GITHUB_REF_NAME}"
-
-      # TODO: export a signed .ipa. Requires importing a distribution
-      # certificate + provisioning profile (e.g. via secrets + a temporary
-      # keychain setup step, or `fastlane match`).
-      - name: Export & sign .ipa (placeholder)
-        run: |
-          echo "TODO: xcodebuild -exportArchive (or fastlane match for signing)"
-
-      # TODO: wire a Fastlane 'pilot'/'deliver' lane, or App Store Connect
-      # API upload action, to push to TestFlight. Requires an App Store
-      # Connect API key secret (issuer ID, key ID, .p8 contents).
-      - name: Publish to TestFlight (placeholder)
-        run: |
-          echo "TODO: bundle exec fastlane ios beta"
-          echo "Would upload the signed .ipa to TestFlight for tag ${GITHUB_REF_NAME}."
+          if [[ -z "$APPLE_DISPATCH_TOKEN" ]]; then
+            echo 'APPLE_DISPATCH_TOKEN is required. Install a fine-grained token scoped to actions:write on the Apple release pipeline.' >&2
+            exit 2
+          fi
+      - name: Send immutable build request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.APPLE_DISPATCH_TOKEN }}
+          script: |
+            const tag = context.ref.startsWith('refs/tags/ios-v') ? context.ref.slice('refs/tags/ios-v'.length) : '';
+            const inputs = {
+              source_repository: context.repo.owner + '/' + context.repo.repo,
+              source_sha: context.eventName === 'workflow_dispatch' && context.payload.inputs.source_sha ? context.payload.inputs.source_sha : context.sha,
+              marketing_version: context.eventName === 'workflow_dispatch' ? (context.payload.inputs.marketing_version || '1.0.0') : (tag || '1.0.0'),
+              build_number: context.eventName === 'workflow_dispatch' ? context.payload.inputs.build_number : ''
+            };
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'example-org',
+              repo: 'REDACTED',
+              workflow_id: 'ios-release.yml',
+              ref: 'main',
+              inputs
+            });

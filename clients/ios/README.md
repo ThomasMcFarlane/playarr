@@ -13,7 +13,7 @@ authentication, update compatibility, and AVPlayer-backed playback.
 
 ## Open and run
 
-1. Open `Playarr Server.xcodeproj`.
+1. Open `Playarr.xcodeproj`.
 2. Select the shared `PlayarrApp` scheme.
 3. Choose an iPhone or iPad destination.
 4. For a physical device, select the `PlayarrApp` target and set your development team under
@@ -29,7 +29,7 @@ disable transport security.
 
 ```text
 clients/ios/
-  Playarr Server.xcodeproj/             # installable iOS app and shared scheme
+  Playarr.xcodeproj/             # installable iOS app and shared scheme
   project.yml                      # XcodeGen source for the project
   Package.swift                    # PlayarrKit package manifest
   Resources/
@@ -62,7 +62,7 @@ line, use an available simulator name from `xcrun simctl list devices available`
 
 ```sh
 xcodebuild \
-  -project Playarr Server.xcodeproj \
+  -project Playarr.xcodeproj \
   -scheme PlayarrApp \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   test
@@ -72,7 +72,7 @@ Compile an unsigned simulator bundle without launching a runtime:
 
 ```sh
 xcodebuild \
-  -project Playarr Server.xcodeproj \
+  -project Playarr.xcodeproj \
   -target PlayarrApp \
   -configuration Debug \
   -sdk iphonesimulator \
@@ -86,8 +86,7 @@ Regenerate the project after changing `project.yml` with XcodeGen 2.45 or newer:
 xcodegen generate --spec project.yml
 ```
 
-Commit both `project.yml` and the generated `Playarr Server.xcodeproj` so contributors do not need
-XcodeGen just to build the app.
+The CI release workflow regenerates `Playarr.xcodeproj` from `project.yml` before CocoaPods setup.
 
 ## Distribution configuration
 

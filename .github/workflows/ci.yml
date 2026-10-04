@@ -4,7 +4,7 @@
 #
 # Single CI workflow for pull requests and pushes to `main`. A `changes` job
 # runs dorny/paths-filter once and every platform-specific check job is
-# gated on its boolean output, so a PR that only touches the iOS client
+# gated on its boolean output, so a PR that only touches a client
 # doesn't pay for a Rust/Android/tv-web build.
 #
 # BRANCH PROTECTION -- READ THIS BEFORE CONFIGURING REQUIRED STATUS CHECKS:
@@ -62,7 +62,6 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       android: ${{ steps.filter.outputs.android }}
-      ios: ${{ steps.filter.outputs.ios }}
       xbox: ${{ steps.filter.outputs.xbox }}
       harmony: ${{ steps.filter.outputs.harmony }}
       tv-web: ${{ steps.filter.outputs.tv-web }}
@@ -79,9 +78,6 @@ jobs:
             android:
               - 'clients/android/**'
               - '.github/workflows/ci.yml'
-            ios:
-              - 'clients/ios/**'
-              - 'clients/apple-tv/**'
             xbox:
               - 'clients/xbox/**'
               - '.github/workflows/ci.yml'
@@ -182,54 +178,9 @@ jobs:
         run: ./gradlew build
 
   # ---------------------------------------------------------------------
-  # iOS (Swift Package under clients/ios)
+  # iOS validation runs only through the explicit/tag Apple release pipeline
+  # in ios-ci.yml. It is a manual release gate, not an automatic PR/main check.
   # ---------------------------------------------------------------------
-  ios-check:
-    name: iOS build
-    needs: changes
-    if: needs.changes.outputs.ios == 'true'
-    runs-on: macos-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      # `swift build` cannot type-check the package on the macOS host (it
-      # declares only iOS/tvOS platforms), so build and test through Xcode.
-      - name: Pick an iPhone simulator
-        id: sim
-        run: |
-          udid=$(xcrun simctl list devices available -j | python3 -c "
-          import json, sys
-          for runtime, devices in json.load(sys.stdin)['devices'].items():
-              if 'iOS' not in runtime:
-                  continue
-              for d in devices:
-                  if d['name'].startswith('iPhone') and d['isAvailable']:
-                      print(d['udid']); sys.exit(0)
-          sys.exit(1)")
-          echo "udid=$udid" >> "$GITHUB_OUTPUT"
-
-      # The app target needs the GoogleCast xcframework (see
-      # Sources/PlayarrApp/Cast/README-DEPENDENCY.md), which is not vendored,
-      # so CI runs the PlayarrKit test bundle only.
-      - name: PlayarrKit unit tests (xcodebuild)
-        working-directory: clients/ios
-        run: |
-          xcodebuild test -project Playarr.xcodeproj -scheme PlayarrKitTests \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: tvOS build (xcodebuild)
-        working-directory: clients/apple-tv
-        run: |
-          xcodebuild build -project PlayarrTV.xcodeproj -scheme PlayarrTV \
-            -destination 'generic/platform=tvOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO
-
   # ---------------------------------------------------------------------
   # Xbox (clients/xbox -- .NET solution). Only src/Playarr.Core (the
   # portable, netstandard2.0 client core) is checked here: it's buildable
@@ -401,7 +352,6 @@ jobs:
       - changes
       - backend-check
       - android-check
-      - ios-check
       - xbox-check
       - harmony-check
       - tv-web-check
@@ -416,7 +366,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check ios-check xbox-check harmony-check tv-web-check openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check tv-web-check openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

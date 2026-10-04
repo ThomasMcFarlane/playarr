@@ -166,7 +166,15 @@ final class CastSessionCoordinator: NSObject {
         guard let channel, channel.isConnected else { return }
         do {
             let text = try encodePlayarrCastMessage(.sender(message))
-            try channel.sendTextMessage(text)
+            var sendError: GCKError?
+            guard channel.sendTextMessage(text, error: &sendError) else {
+                lastError = PlayarrCastErrorMessage(
+                    code: .unknown,
+                    message: sendError?.localizedDescription ?? "The Cast message could not be sent.",
+                    retryable: false
+                )
+                return
+            }
         } catch {
             lastError = PlayarrCastErrorMessage(code: .unknown, message: error.localizedDescription, retryable: false)
         }

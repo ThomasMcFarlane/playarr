@@ -1,0 +1,12 @@
+platform :ios, '17.0'
+use_frameworks! :linkage => :static
+
+project 'Playarr.xcodeproj'
+
+target 'PlayarrApp' do
+  pod 'google-cast-sdk', '= 4.8.6'
+end
+
+target 'PlayarrAppTests' do
+  inherit! :search_paths
+end

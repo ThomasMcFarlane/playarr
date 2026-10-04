@@ -9,6 +9,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS and tvOS: release dispatch now always requests a signed TestFlight upload for both platforms from an immutable source commit. Missing dispatch/signing credentials fail the workflow; the source release flow no longer offers build-only or unsigned archive modes. Release script archives also require signing credentials and the Apple runner. Marketing version defaults to 1.0.0, matching the existing App Store Connect app (TASKS 279, 284).
+- iOS: remove the obsolete `mode` input from the source workflow's private TestFlight dispatch payload, matching the dispatcher's signed-only interface (TASK 279).
+- iOS: the Apple release pipeline retains immutable source SHA handoff, signing preflight for profile bundle ID/team/expiry/certificate match, and temporary keychain/profile cleanup. XcodeGen 2.45.4 and Google Cast SDK 4.8.6 remain pinned; CocoaPods setup selects Ruby 3+ and uses `--project-directory=<path>` (TASKS 279-283).
+- iOS: handle Google Cast SDK 4.8.6's nonthrowing `sendTextMessage(_:error:)` result and preserve its reported error in the sender's existing error state (TASKS 280, 284).
+- iOS: make `PlayerViewModel`'s initializer app-internal so its internal `CastSessionCoordinator` parameter and `.shared` default do not violate Swift access control (TASK 284).
+- iOS and tvOS: historical private Mac run <id> passed both full simulator app builds and unsigned archive tooling. This is not signed TestFlight acceptance evidence; signed exports, upload and invitation remain pending (TASKS 280, 284-285).
 - Playarr web and Android TV: keyboard and D-pad navigation on Home now glides. Rails ease sideways (about 240 ms, interruptible, held keys coalesce to the latest target, no CSS smooth scrolling) and Up/Down eases the focused rail to a stable anchor; `prefers-reduced-motion` keeps the instant behaviour. Rail spacing on Home is tighter. `nav-smoke` gains a held-Right eased-scroll check.
 
 - Web: one shared right-side `Drawer` (title and round icon close, body, footer, Tab focus trap, Esc/Back closes, `?panel=` URL state, focus returns to the opener) now backs Filters on every page, the Calendar link, playback settings, download quality, keep-until and create-playlist; `drawerAudit.test.ts` blocks new ad-hoc panels.

@@ -1,4 +1,4 @@
-name: Playarr Server
+name: Playarr
 
 options:
   bundleIdPrefix: com.playarr
@@ -40,8 +40,8 @@ targets:
         DEVELOPMENT_TEAM: ""
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Resources/Info.plist
-        MARKETING_VERSION: 0.1.0
-        PRODUCT_BUNDLE_IDENTIFIER: com.playarr.ios
+        MARKETING_VERSION: 1.0.0
+        PRODUCT_BUNDLE_IDENTIFIER: app.playarr.ios
         PRODUCT_MODULE_NAME: PlayarrApp
         PRODUCT_NAME: Playarr
         SUPPORTS_MACCATALYST: NO

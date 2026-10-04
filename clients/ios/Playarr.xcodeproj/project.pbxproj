@@ -431,7 +431,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.ios;
 				PRODUCT_MODULE_NAME = PlayarrApp;
 				PRODUCT_NAME = Playarr;
@@ -545,7 +545,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.playarr.ios;
 				PRODUCT_MODULE_NAME = PlayarrApp;
 				PRODUCT_NAME = Playarr;
