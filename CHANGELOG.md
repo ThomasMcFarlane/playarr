@@ -118,6 +118,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- CI/deploy: main CI runs are never cancelled (per-SHA concurrency group; the shared per-ref group cancelled older pending runs), and the web deploy uses group `deploy-web-prod` with a guard that skips stale commits via `build-info.json` in the bundle.
+
 - Web: the wrapped page-header separator spans only the title/subtitle block instead of the whole header row; `scripts/header-parity.mjs` asserts it.
 
 - Web player: scrubbing no longer drops to the full-screen "Preparing playback" view. A seek that restarts the transcode (and quality/audio switches) keeps the player UI, video element and engine mounted and shows only the inline buffering spinner; the full screen is for the initial start only. Android already behaved this way.

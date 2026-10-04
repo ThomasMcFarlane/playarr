@@ -20,10 +20,12 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
+    # One production deploy at a time, never cancelled mid-flight; the guard
+    # steps skip any run whose commit is older than what is live or not main HEAD.
     # Job-level (not workflow-level) so skipped runs triggered by cancelled or
     # failed CI never enter the group and displace a queued real deploy.
     concurrency:
-      group: deploy-playarr-web-production
+      group: deploy-web-prod
       cancel-in-progress: false
     runs-on: playarr-runners
     timeout-minutes: 15
@@ -37,6 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -48,21 +51,49 @@ jobs:
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
+      - name: Deploy guard (guard_early)
+        id: guard_early
+        working-directory: .
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: clients/tv-web/web/scripts/deploy-guard.sh
+
       - name: Install dependencies
+        if: steps.guard_early.outputs.deploy == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build web client and workspace dependencies
+        if: steps.guard_early.outputs.deploy == 'true'
         run: pnpm --filter @playarr-tv/web... run build
 
       - name: Test web client
+        if: steps.guard_early.outputs.deploy == 'true'
         run: pnpm --filter @playarr-tv/web run test
 
+      - name: Write build-info.json into the bundle
+        if: steps.guard_early.outputs.deploy == 'true'
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          printf '{"sha":"%s","builtAt":"%s","run":"%s"}\n' "$DEPLOY_SHA" "$(date -u +%FT%TZ)" "$GITHUB_RUN_ID" > web/dist/build-info.json
+          cat web/dist/build-info.json
+
       - name: Bundle Cloudflare Worker
+        if: steps.guard_early.outputs.deploy == 'true'
         run: >-
           pnpm --filter @playarr-tv/web exec esbuild worker.js --bundle
           --format=esm --platform=browser --target=es2022 --external:cloudflare:sockets --outfile=dist-worker.mjs
 
+      - name: Deploy guard (guard_final)
+        id: guard_final
+        if: steps.guard_early.outputs.deploy == 'true'
+        working-directory: .
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: clients/tv-web/web/scripts/deploy-guard.sh
+
       - name: Deploy to Cloudflare Workers
+        if: steps.guard_early.outputs.deploy == 'true' && steps.guard_final.outputs.deploy == 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
