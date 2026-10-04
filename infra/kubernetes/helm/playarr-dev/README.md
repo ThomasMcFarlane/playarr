@@ -295,6 +295,24 @@ is `Released` and still points at the correct node/path; remove only its stale
 removing the old route. Never delete or recreate the PV object, and never have
 old and new Deployments writing the same volume concurrently.
 
+## Dubarr (AI dubbing companion)
+
+Each regional instance can register Dubarr declaratively. `sourceInstanceUrls.dubarr`
+is the in-cluster URL (`http://dubarr.dubarr.svc.cluster.local:8686`) and
+`dubarrApiKeySecret` names a Secret in the `playarr` namespace whose key holds the
+Dubarr API key. At boot the server ensures a `Dubarr` source instance exists with
+that URL and key (a rotated key is applied on the next restart; the Secret is
+`optional`, so the pod starts without it and Dubarr is simply not registered).
+The key never appears in Git. Create or rotate the Secret from the Dubarr one, never
+echoing it:
+
+```sh
+kubectl -n dubarr get secret dubarr-secrets -o jsonpath='{.data.DUBARR_API_KEY}' | base64 -d |
+  kubectl -n playarr create secret generic playarr-dubarr --from-file=DUBARR_API_KEY=/dev/stdin \
+    --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n playarr rollout restart deploy/playarr-region-a deploy/playarr-region-b
+```
+
 ## Server backups
 
 Each regional instance has an optional `backup` block that turns on encrypted

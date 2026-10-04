@@ -137,6 +137,14 @@ regionalInstances:
       lidarr: http://lidarr.media.svc.cluster.local:8686
       whisparr: http://whisparr.media.svc.cluster.local:6969
       bazarr: http://bazarr.media.svc.cluster.local:6767
+      # Dubarr (AI dubbing companion). Together with
+      # dubarrApiKeySecret the server creates the "Dubarr" source instance.
+      dubarr: http://dubarr.dubarr.svc.cluster.local:8686
+    # Secret in this namespace holding the Dubarr API key (copied out of band from
+    # Dubarr's own API key Secret; see README, Dubarr).
+    dubarrApiKeySecret:
+      name: playarr-dubarr
+      key: DUBARR_API_KEY
     resources:
       requests:
         cpu: 100m
@@ -215,6 +223,14 @@ regionalInstances:
       lidarr: http://lidarr.media.svc.cluster.local:8686
       whisparr: http://whisparr.media.svc.cluster.local:6969
       bazarr: http://bazarr.media.svc.cluster.local:6767
+      # Dubarr (AI dubbing companion). Together with
+      # dubarrApiKeySecret the server creates the "Dubarr" source instance.
+      dubarr: http://dubarr.dubarr.svc.cluster.local:8686
+    # Secret in this namespace holding the Dubarr API key (copied out of band from
+    # Dubarr's own API key Secret; see README, Dubarr).
+    dubarrApiKeySecret:
+      name: playarr-dubarr
+      key: DUBARR_API_KEY
     resources:
       requests:
         cpu: 100m

@@ -14,6 +14,12 @@
 //! move an *arr app (for example into the cluster) without an admin token or a
 //! database edit. Only `base_url` is written: API keys and every other
 //! field are carried through untouched, and logs name hosts only.
+//!
+//! Dubarr is the one kind that is also *created* declaratively: when a
+//! `dubarr=<url>` entry and `PLAYARR_DUBARR_API_KEY` are both set, boot ensures
+//! exactly one Dubarr instance exists with that URL and key (an existing one has
+//! its key brought in line). Without the key variable Dubarr behaves like any
+//! other kind (URL reconciliation only).
 
 use std::sync::Arc;
 
@@ -21,6 +27,9 @@ use playarr_db::SourceInstanceRepo;
 use playarr_model::{SourceInstance, SourceKind};
 
 pub const ENV_VAR: &str = "PLAYARR_SOURCE_INSTANCE_URLS";
+/// API key for the declaratively managed Dubarr instance (see [`ensure_dubarr`]).
+pub const DUBARR_KEY_ENV_VAR: &str = "PLAYARR_DUBARR_API_KEY";
+const DUBARR_DEFAULT_NAME: &str = "Dubarr";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UrlOverride {
@@ -38,6 +47,7 @@ fn parse_kind(raw: &str) -> Option<SourceKind> {
         "prowlarr" => SourceKind::Prowlarr,
         "readarr" => SourceKind::Readarr,
         "whisparr" => SourceKind::Whisparr,
+        "dubarr" => SourceKind::Dubarr,
         _ => return None,
     })
 }
@@ -125,6 +135,56 @@ pub async fn reconcile(
     Ok(changed)
 }
 
+/// Ensures the Dubarr instance named by a bare `dubarr=<url>` override exists with
+/// `api_key`. Returns true when a row was created or changed. A second Dubarr
+/// instance added by hand is left alone: only the first one is managed.
+pub async fn ensure_dubarr(
+    repo: &Arc<dyn SourceInstanceRepo>,
+    overrides: &[UrlOverride],
+    api_key: &str,
+) -> Result<bool, playarr_db::DbError> {
+    let api_key = api_key.trim();
+    let Some(o) = overrides
+        .iter()
+        .find(|o| o.kind == SourceKind::Dubarr && o.name.is_none())
+    else {
+        return Ok(false);
+    };
+    if api_key.is_empty() {
+        return Ok(false);
+    }
+    let existing = repo
+        .list_all()
+        .await?
+        .into_iter()
+        .find(|i| i.kind == SourceKind::Dubarr);
+    let mut row = match existing {
+        Some(i) if i.api_key_encrypted.expose_secret() == api_key => return Ok(false),
+        Some(i) => i,
+        None => SourceInstance {
+            id: uuid::Uuid::new_v4(),
+            kind: SourceKind::Dubarr,
+            name: DUBARR_DEFAULT_NAME.into(),
+            base_url: o.base_url.clone(),
+            api_key_encrypted: playarr_model::Sensitive::new(String::new()),
+            priority: 10,
+            default_root_folder_id: None,
+            folder_mappings: Default::default(),
+            default_quality_profile_id: None,
+            best_effort: true,
+            group_library_id: None,
+        },
+    };
+    row.api_key_encrypted = playarr_model::Sensitive::new(api_key.to_string());
+    tracing::info!(
+        source_instance_id = %row.id,
+        host = host_of(&row.base_url),
+        "ensuring Dubarr source instance from {DUBARR_KEY_ENV_VAR}"
+    );
+    repo.upsert(&row).await?;
+    Ok(true)
+}
+
 /// Reads [`ENV_VAR`] and reconciles; failures are logged, never fatal.
 pub async fn reconcile_from_env(repo: &Arc<dyn SourceInstanceRepo>) {
     let Ok(raw) = std::env::var(ENV_VAR) else {
@@ -132,10 +192,29 @@ pub async fn reconcile_from_env(repo: &Arc<dyn SourceInstanceRepo>) {
     };
     match parse(&raw) {
         Err(err) => tracing::error!(%err, "ignoring invalid {ENV_VAR}"),
-        Ok(overrides) => match reconcile(repo, &overrides).await {
-            Ok(n) => tracing::info!(changed = n, entries = overrides.len(), "{ENV_VAR} applied"),
-            Err(err) => tracing::error!(%err, "failed to apply {ENV_VAR}"),
-        },
+        Ok(overrides) => {
+            match ensure_dubarr_from_env(repo, &overrides).await {
+                Ok(true) => tracing::info!("Dubarr source instance ensured"),
+                Ok(false) => {}
+                Err(err) => tracing::error!(%err, "failed to ensure the Dubarr source instance"),
+            }
+            match reconcile(repo, &overrides).await {
+                Ok(n) => {
+                    tracing::info!(changed = n, entries = overrides.len(), "{ENV_VAR} applied")
+                }
+                Err(err) => tracing::error!(%err, "failed to apply {ENV_VAR}"),
+            }
+        }
+    }
+}
+
+async fn ensure_dubarr_from_env(
+    repo: &Arc<dyn SourceInstanceRepo>,
+    overrides: &[UrlOverride],
+) -> Result<bool, playarr_db::DbError> {
+    match std::env::var(DUBARR_KEY_ENV_VAR) {
+        Ok(key) => ensure_dubarr(repo, overrides, &key).await,
+        Err(_) => Ok(false),
     }
 }
 
@@ -234,5 +313,36 @@ mod tests {
         let r = by_id(r1.id).await;
         assert_eq!(r.api_key_encrypted, r1.api_key_encrypted);
         assert_eq!(r.priority, 3);
+    }
+
+    #[tokio::test]
+    async fn dubarr_is_created_once_then_key_follows_the_env() {
+        let repo = repo().await;
+        let o = parse("dubarr=http://dubarr.dubarr:8686").unwrap();
+        assert_eq!(o[0].kind, SourceKind::Dubarr);
+        // No key: nothing created. No entry: nothing created.
+        assert!(!ensure_dubarr(&repo, &o, "").await.unwrap());
+        assert!(!ensure_dubarr(&repo, &[], "k1").await.unwrap());
+        assert!(repo.list_all().await.unwrap().is_empty());
+
+        assert!(ensure_dubarr(&repo, &o, "k1").await.unwrap());
+        assert!(!ensure_dubarr(&repo, &o, "k1").await.unwrap());
+        let all = repo.list_all().await.unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].kind, SourceKind::Dubarr);
+        assert_eq!(all[0].base_url, "http://dubarr.dubarr:8686");
+        assert_eq!(all[0].api_key_encrypted.expose_secret().as_str(), "k1");
+
+        // Rotated key updates the same row; the URL path then applies as usual.
+        assert!(ensure_dubarr(&repo, &o, "k2").await.unwrap());
+        let all = repo.list_all().await.unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].api_key_encrypted.expose_secret().as_str(), "k2");
+        let o2 = parse("dubarr=http://elsewhere:1").unwrap();
+        assert_eq!(reconcile(&repo, &o2).await.unwrap(), 1);
+        assert_eq!(
+            repo.list_all().await.unwrap()[0].base_url,
+            "http://elsewhere:1"
+        );
     }
 }

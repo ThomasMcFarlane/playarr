@@ -211,6 +211,15 @@
               "pattern": "^https?://"
             }
           },
+          "dubarrApiKeySecret": {
+            "type": "object",
+            "required": ["name", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "key": { "type": "string", "minLength": 1 }
+            }
+          },
           "resources": {
             "type": "object"
           },

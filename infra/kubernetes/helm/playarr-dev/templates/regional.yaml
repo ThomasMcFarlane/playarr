@@ -122,6 +122,18 @@ spec:
             - name: PLAYARR_SOURCE_INSTANCE_URLS
               value: {{ include "playarr-dev.sourceInstanceUrls" . | quote }}
             {{- end }}
+            {{- with $instance.dubarrApiKeySecret }}
+            # Dubarr API key (created out of band, never in Git). With a
+            # `dubarr` entry in sourceInstanceUrls the server ensures one Dubarr
+            # source instance exists with this key and URL. Optional: the pod
+            # starts without the Secret and Dubarr is simply not registered.
+            - name: PLAYARR_DUBARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ .key | quote }}
+                  optional: true
+            {{- end }}
             # The image bakes in the Admin UI; overrides the legacy hostPath
             # value (/opt/streamarr/web) that the runtime Secret still carries.
             - name: PLAYARR_WEB_ASSETS_DIR
