@@ -144,6 +144,8 @@ import io.playarr.shared.data.model.PlaylistMediaType
 import io.playarr.shared.data.model.ProfileAvatarPreference
 import io.playarr.shared.data.model.ProfileAvatarSetting
 import io.playarr.shared.data.model.ProfilePinSetting
+import io.playarr.shared.data.remote.apiErrorCode
+import io.playarr.shared.data.remote.pinLockSeconds
 import io.playarr.shared.data.model.ReorderPlaylistItemsRequest
 import io.playarr.shared.data.model.UpdatePlayerPreferencesRequest
 import io.playarr.shared.data.model.UpdatePlaylistRequest
@@ -1770,11 +1772,8 @@ internal fun ExperienceProfilesScreen(
                     enabled = pin.length == 4 && !busy,
                     onClick = {
                         switchProfile(profile, pinAction, pin) { failure ->
-                            pinError = if (failure is HttpException && failure.code() == 401) {
-                                PlayarrMessage.Localized(PlayarrString.ProfilesPinNotAccepted)
-                            } else {
-                                failure.playarrMessage(PlayarrFailureSubject.Profile)
-                            }
+                            pinError = profilePinFailureMessage(failure)
+                                ?: failure.playarrMessage(PlayarrFailureSubject.Profile)
                         }
                     },
                 ) {
@@ -3714,6 +3713,25 @@ internal fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
 @Composable
 private fun ParityEmpty(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(message, color = WebInkMuted) }
+}
+
+/**
+ * The message for a failed profile PIN check, or `null` to fall back to the
+ * generic one: wrong PIN, a brute-force lockout with its wait, or a
+ * restricted profile switching up into a profile that has no PIN.
+ */
+internal fun profilePinFailureMessage(failure: Throwable): PlayarrMessage? {
+    if (failure !is HttpException) return null
+    failure.pinLockSeconds()?.let { seconds ->
+        val minutes = ((seconds + 59) / 60).coerceAtLeast(1)
+        return PlayarrMessage.Localized(PlayarrString.ProfilesPinLocked, mapOf("minutes" to minutes))
+    }
+    return when {
+        failure.code() == 401 -> PlayarrMessage.Localized(PlayarrString.ProfilesPinNotAccepted)
+        failure.code() == 403 && failure.apiErrorCode() == "guardian_pin_required" ->
+            PlayarrMessage.Localized(PlayarrString.ProfilesGuardianPinRequired)
+        else -> null
+    }
 }
 
 internal fun Throwable.playarrMessage(subject: PlayarrFailureSubject): PlayarrMessage = when (this) {

@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Playarr Android (phone, tablet and TV): a native "Not available right now" screen when the
+  server reports the profile outside its schedule or out of daily time (shows when it lifts,
+  stops playback, offers "Ask a guardian for more time" and "Switch profile"), an "N min left"
+  pill in the last hour, and clear PIN messages for brute-force lockouts and for switching into a
+  profile that has no PIN. English, Thai and Japanese.
 - Dubarr integration (task 195): a new `dubarr` source kind (Settings, Sources) connects Playarr to Dubarr. Dub tracks for a media file are listed as extra audio options in playback info; choosing one starts an on-demand HLS transcode with the dub as the audio track (video from the original, seeking aligned). Lookups are cached for 60 seconds, invalidated by Dubarr's change feed, and never block playback when Dubarr is down. Covered by wiremock tests for the client and lookup and a unit test for the ffmpeg arguments.
 - Web "Your data" and Android Settings import previews now show the watchlist section the server already returns (new, already here, could not be placed), in English, Thai and Japanese, with tests.
 - Dubarr integration (task 190): a new `dubarr` source kind (Settings, Sources) connects Playarr to Dubarr. Dub tracks for a media file are listed as extra audio options in playback info; choosing one starts an on-demand HLS transcode with the dub as the audio track (video from the original, seeking aligned). Lookups are cached for 60 seconds, invalidated by Dubarr's change feed, and never block playback when Dubarr is down. Covered by wiremock tests for the client and lookup and a unit test for the ffmpeg arguments.

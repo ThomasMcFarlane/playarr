@@ -459,6 +459,33 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _canDownload = MutableStateFlow<Boolean?>(null)
     val canDownload: StateFlow<Boolean?> = _canDownload.asStateFlow()
 
+    private val _household = MutableStateFlow<io.playarr.shared.data.model.HouseholdStatus?>(null)
+
+    /** The server's household state for the signed-in profile; `null` until known. */
+    val household: StateFlow<io.playarr.shared.data.model.HouseholdStatus?> = _household.asStateFlow()
+
+    /**
+     * Re-reads the household state. A failed read keeps the last value: the
+     * server enforces regardless, this only lets the app say "not right now"
+     * before a request fails.
+     */
+    fun refreshHousehold() {
+        viewModelScope.launch {
+            runCatching { api.getHouseholdStatus() }.onSuccess { _household.value = it }
+        }
+    }
+
+    fun clearHousehold() {
+        _household.value = null
+    }
+
+    /** Asks a guardian for more time; `true` when the request was recorded. */
+    suspend fun askGuardian(subject: String): Boolean = runCatching {
+        api.createHouseholdApproval(
+            io.playarr.shared.data.model.CreateHouseholdApprovalRequest(kind = "time", subject = subject),
+        )
+    }.isSuccess
+
     private val _progress = MutableStateFlow<List<WatchProgress>>(emptyList())
     val progress: StateFlow<List<WatchProgress>> = _progress.asStateFlow()
 
@@ -977,6 +1004,19 @@ internal fun PlayarrExperience(
     LaunchedEffect(currentUserId) {
         if (currentUserId != null) viewModel.reloadForProfile()
     }
+    val household by viewModel.household.collectAsState()
+    val householdBlock = householdBlockState(household)
+    // Poll every 30 s, and on every route change, so a spent budget or a
+    // closing schedule window is noticed promptly; the server enforces either way.
+    LaunchedEffect(currentUserId) {
+        viewModel.clearHousehold()
+        if (currentUserId == null) return@LaunchedEffect
+        while (true) {
+            viewModel.refreshHousehold()
+            kotlinx.coroutines.delay(30_000L)
+        }
+    }
+    LaunchedEffect(currentRoute) { if (currentUserId != null) viewModel.refreshHousehold() }
     LaunchedEffect(currentRoute, currentUserId) {
         if (currentUserId != null) viewModel.refreshProfileAvatar()
     }
@@ -1093,6 +1133,12 @@ internal fun PlayarrExperience(
         }
     }
 
+    // A schedule boundary or spent budget stops playback at once instead of
+    // letting the player run into a refused segment request.
+    LaunchedEffect(householdBlock != null) {
+        if (householdBlock != null && activePlaybackItem != null) closePlayback()
+    }
+
     if (activePlaybackItem != null && persistentPlayerState is ExperienceLoad.Ready) {
         PlayarrMediaSession(
             player = playerViewModel.player.rawPlayer,
@@ -1130,7 +1176,22 @@ internal fun PlayarrExperience(
                 playerViewModel,
             )
 
-            if (!isPlayer && !isProfiles) {
+            val remainingMinutes = householdRemainingMinutes(household, java.time.Instant.now())
+            if (remainingMinutes != null && !isPlayer && !isProfiles && householdBlock == null) {
+                HouseholdRemainingBadge(
+                    minutes = remainingMinutes,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            }
+            if (householdBlock != null && !isProfiles) {
+                HouseholdBlockedScreen(
+                    block = householdBlock,
+                    onAskGuardian = viewModel::askGuardian,
+                    onSwitchProfile = { navController.openExperienceTopLevel("profiles") },
+                )
+            }
+
+            if (!isPlayer && !isProfiles && householdBlock == null) {
                 val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload)
                 if (visibleDestinations.isNotEmpty()) {
                     ExperienceNavigation(

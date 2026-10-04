@@ -32,6 +32,10 @@ import io.playarr.shared.data.model.PlaylistItem
 import io.playarr.shared.data.model.PlaybackInfoResponse
 import io.playarr.shared.data.model.PlaybackEventRequest
 import io.playarr.shared.data.model.ProfileAvatarSetting
+import io.playarr.shared.data.model.CreateHouseholdApprovalRequest
+import io.playarr.shared.data.model.DecideHouseholdApprovalRequest
+import io.playarr.shared.data.model.HouseholdApproval
+import io.playarr.shared.data.model.HouseholdStatus
 import io.playarr.shared.data.model.ProfilePinSetting
 import io.playarr.shared.data.model.ReorderPlaylistItemsRequest
 import io.playarr.shared.data.model.SelfCapabilitiesResponse
@@ -347,6 +351,25 @@ interface PlayarrApi {
         @Path("id") id: String,
         @Body request: VerifyProfilePinRequest,
     ): VerifyProfilePinResponse
+
+    // ---- Household and child controls --------------------------------------
+
+    @GET("api/v1/household/status")
+    suspend fun getHouseholdStatus(): HouseholdStatus
+
+    @GET("api/v1/household/approvals")
+    suspend fun listHouseholdApprovals(): List<HouseholdApproval>
+
+    @POST("api/v1/household/approvals")
+    suspend fun createHouseholdApproval(
+        @Body request: CreateHouseholdApprovalRequest,
+    ): HouseholdApproval
+
+    @POST("api/v1/household/approvals/{id}/decision")
+    suspend fun decideHouseholdApproval(
+        @Path("id") id: String,
+        @Body request: DecideHouseholdApprovalRequest,
+    ): HouseholdApproval
 
     @GET("api/v1/users/me/profile-pin")
     suspend fun getProfilePinSetting(): ProfilePinSetting

@@ -1442,6 +1442,54 @@ internal enum class PlayarrString(
         "PIN นั้นไม่ถูกต้อง",
         "そのPINは承認されませんでした。",
     ),
+    HouseholdScheduleTitle("Not available right now", "ยังไม่สามารถใช้งานได้ในตอนนี้", "今は利用できません"),
+    HouseholdScheduleDescription(
+        "This profile can watch again at {{time}}.",
+        "โปรไฟล์นี้จะดูได้อีกครั้งเมื่อ {{time}}",
+        "このプロフィールは{{time}}から再び視聴できます。",
+    ),
+    HouseholdScheduleDescriptionNoTime(
+        "This profile can't watch at this time.",
+        "โปรไฟล์นี้ไม่สามารถดูได้ในเวลานี้",
+        "このプロフィールは今の時間は視聴できません。",
+    ),
+    HouseholdBudgetTitle("That's all for today", "หมดเวลาดูของวันนี้แล้ว", "今日はここまでです"),
+    HouseholdBudgetDescription(
+        "Today's watch time is used up. It resets at {{time}}.",
+        "เวลาดูของวันนี้หมดแล้ว จะรีเซ็ตเมื่อ {{time}}",
+        "今日の視聴時間を使い切りました。{{time}}にリセットされます。",
+    ),
+    HouseholdBudgetDescriptionNoTime(
+        "Today's watch time is used up.",
+        "เวลาดูของวันนี้หมดแล้ว",
+        "今日の視聴時間を使い切りました。",
+    ),
+    HouseholdAskGuardian(
+        "Ask a guardian for more time",
+        "ขอเวลาเพิ่มจากผู้ปกครอง",
+        "保護者に時間の追加をお願いする",
+    ),
+    HouseholdRequestSent(
+        "Request sent. A guardian can approve it on their profile.",
+        "ส่งคำขอแล้ว ผู้ปกครองสามารถอนุมัติได้จากโปรไฟล์ของตน",
+        "リクエストを送信しました。保護者が自分のプロフィールで承認できます。",
+    ),
+    HouseholdRequestFailed(
+        "Couldn't send the request. Try again.",
+        "ส่งคำขอไม่สำเร็จ ลองอีกครั้ง",
+        "リクエストを送信できませんでした。もう一度お試しください。",
+    ),
+    HouseholdRemaining("{{minutes}} min left", "เหลือ {{minutes}} นาที", "残り{{minutes}}分"),
+    ProfilesPinLocked(
+        "Too many incorrect PIN attempts. Try again in {{minutes}} min.",
+        "ป้อน PIN ผิดหลายครั้งเกินไป ลองอีกครั้งใน {{minutes}} นาที",
+        "PINの入力を間違えた回数が多すぎます。{{minutes}}分後にもう一度お試しください。",
+    ),
+    ProfilesGuardianPinRequired(
+        "Ask a guardian to set a PIN on that profile first.",
+        "ให้ผู้ปกครองตั้ง PIN ให้โปรไฟล์นั้นก่อน",
+        "先に保護者がそのプロフィールにPINを設定してください。",
+    ),
     ProfilesChecking("Checking…", "กำลังตรวจสอบ…", "確認しています…"),
     ProfilesContinue("Continue", "ดำเนินการต่อ", "続ける"),
     ProfilesUseAccountSignIn(
