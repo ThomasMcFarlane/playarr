@@ -1620,7 +1620,11 @@ async fn forward_negotiation_to_peer(
             ApiError::no_peer_available(format!("peer {peer_node_id} is no longer known"))
         })?;
     let identity = crate::admin_peer::own_peer_identity(state).await?;
-    let client = playarr_peer_sync::PeerClient::new(state.peer_http.clone(), identity);
+    let client = playarr_peer_sync::PeerClient::new_with_routes(
+        state.peer_http.clone(),
+        identity,
+        state.peer_transport_routes.clone(),
+    );
 
     let body = PeerPlaybackInfoRequest {
         user_id,
@@ -1631,7 +1635,7 @@ async fn forward_negotiation_to_peer(
         query: query.clone(),
     };
 
-    let addresses = playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    let addresses = client.addresses_for_peer(peer.id, &peer.addresses);
     if addresses.is_empty() {
         return Err(ApiError::no_peer_available(format!(
             "peer {peer_node_id} has no known address"
@@ -1640,7 +1644,7 @@ async fn forward_negotiation_to_peer(
     let mut last_error = None;
     for base_url in addresses {
         match client
-            .signed_post::<_, PlaybackInfoResponse>(base_url, "/api/v1/peer/playback-info", &body)
+            .signed_post::<_, PlaybackInfoResponse>(&base_url, "/api/v1/peer/playback-info", &body)
             .await
         {
             Ok(response) => return Ok(Json(rewrite_for_delivery(response, &peer, delivery)?)),

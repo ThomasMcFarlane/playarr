@@ -12,6 +12,8 @@
 //! than building their own `reqwest` calls, so the signing/header/error
 //! handling lives in exactly one place.
 
+use std::net::SocketAddr;
+
 use playarr_model::PeerAddress;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -22,6 +24,152 @@ pub const PEER_ID_HEADER: &str = "x-playarr-peer-id";
 pub const SIGNATURE_HEADER: &str = "x-playarr-signature";
 pub const TIMESTAMP_HEADER: &str = "x-playarr-timestamp";
 pub const NONCE_HEADER: &str = "x-playarr-nonce";
+pub const INTERNAL_PEER_ROUTES_ENV: &str = "PLAYARR_PEER_INTERNAL_ROUTES";
+
+/// An opt-in server-to-server route. The request URL keeps `tls_hostname`
+/// (and therefore SNI and certificate verification) while DNS resolution is
+/// directed to `service_host` inside the cluster.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InternalPeerRoute {
+    pub peer_id: uuid::Uuid,
+    pub tls_hostname: String,
+    pub service_host: String,
+    pub service_port: u16,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PeerTransportRoutes {
+    routes: std::collections::HashMap<uuid::Uuid, InternalPeerRoute>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PeerTransportConfigError {
+    #[error("invalid {INTERNAL_PEER_ROUTES_ENV} entry `{entry}`: {reason}")]
+    InvalidEntry { entry: String, reason: String },
+    #[error("failed resolving in-cluster peer service {host}:{port}: {source}")]
+    Resolve {
+        host: String,
+        port: u16,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("in-cluster peer service {host}:{port} resolved to no addresses")]
+    NoAddresses { host: String, port: u16 },
+    #[error("failed to build peer HTTP client: {0}")]
+    Client(#[from] reqwest::Error),
+}
+
+/// Parses comma-separated `peer-uuid=tls-host@service.namespace.svc.cluster.local:443` entries.
+pub fn parse_internal_peer_routes(
+    raw: &str,
+) -> Result<Vec<InternalPeerRoute>, PeerTransportConfigError> {
+    let mut routes = Vec::new();
+    let mut peer_ids = std::collections::HashSet::new();
+    let mut tls_hosts = std::collections::HashSet::new();
+    for entry in raw
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+    {
+        let invalid = |reason: &str| PeerTransportConfigError::InvalidEntry {
+            entry: entry.to_string(),
+            reason: reason.to_string(),
+        };
+        let (peer_id, endpoint) = entry
+            .split_once('=')
+            .ok_or_else(|| invalid("expected peer-uuid=tls-host@service:443"))?;
+        let peer_id = peer_id
+            .parse()
+            .map_err(|_| invalid("peer id must be a UUID"))?;
+        let (tls_hostname, service) = endpoint
+            .split_once('@')
+            .ok_or_else(|| invalid("expected TLS hostname and service separated by @"))?;
+        let tls_url = reqwest::Url::parse(&format!("https://{tls_hostname}"))
+            .map_err(|_| invalid("TLS hostname is not a valid DNS hostname"))?;
+        if tls_url.host_str() != Some(tls_hostname) || tls_url.path() != "/" {
+            return Err(invalid("TLS hostname must be a bare hostname"));
+        }
+        let service_url = reqwest::Url::parse(&format!("https://{service}"))
+            .map_err(|_| invalid("service must be a DNS name and port"))?;
+        let service_host = service_url.host_str().unwrap_or_default();
+        let service_port = service_url.port().unwrap_or(443);
+        if !service_host.ends_with(".svc.cluster.local")
+            || service_url.path() != "/"
+            || service_url.username() != ""
+            || service_url.password().is_some()
+            || service_port != 443
+        {
+            return Err(invalid(
+                "service must be an in-cluster DNS name on port 443",
+            ));
+        }
+        if !peer_ids.insert(peer_id) || !tls_hosts.insert(tls_hostname.to_ascii_lowercase()) {
+            return Err(invalid("peer UUIDs and TLS hostnames must be unique"));
+        }
+        routes.push(InternalPeerRoute {
+            peer_id,
+            tls_hostname: tls_hostname.to_ascii_lowercase(),
+            service_host: service_host.to_string(),
+            service_port,
+        });
+    }
+    Ok(routes)
+}
+
+impl PeerTransportRoutes {
+    pub fn from_env() -> Result<Self, PeerTransportConfigError> {
+        let raw = std::env::var(INTERNAL_PEER_ROUTES_ENV).unwrap_or_default();
+        Ok(Self {
+            routes: parse_internal_peer_routes(&raw)?
+                .into_iter()
+                .map(|route| (route.peer_id, route))
+                .collect(),
+        })
+    }
+
+    /// Returns the configured internal TLS endpoint, if this peer has one.
+    pub fn outbound_url(&self, peer_id: uuid::Uuid) -> Option<String> {
+        self.routes
+            .get(&peer_id)
+            .map(|route| format!("https://{}:{}", route.tls_hostname, route.service_port))
+    }
+
+    pub async fn build_client(&self) -> Result<reqwest::Client, PeerTransportConfigError> {
+        let mut builder = reqwest::Client::builder();
+        if !self.routes.is_empty() {
+            // An explicit in-cluster route must stay direct and must not
+            // follow a redirect to a public relay. The client is used only
+            // for server-to-server peer calls; peers without an explicit
+            // route still use their advertised URLs directly.
+            builder = builder
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none());
+        }
+        for route in self.routes.values() {
+            let addrs: Vec<SocketAddr> =
+                tokio::net::lookup_host((route.service_host.as_str(), route.service_port))
+                    .await
+                    .map_err(|source| PeerTransportConfigError::Resolve {
+                        host: route.service_host.clone(),
+                        port: route.service_port,
+                        source,
+                    })?
+                    .collect();
+            if addrs.is_empty() {
+                return Err(PeerTransportConfigError::NoAddresses {
+                    host: route.service_host.clone(),
+                    port: route.service_port,
+                });
+            }
+            builder = builder.resolve_to_addrs(&route.tls_hostname, &addrs);
+        }
+        Ok(builder.build()?)
+    }
+}
+
+/// Builds the shared client with per-peer in-cluster socket routing. No TLS
+/// verification options are changed; only DNS for each configured public
+/// certificate hostname is overridden to the service's resolved addresses.
 
 #[derive(Debug, thiserror::Error)]
 pub enum PeerClientError {
@@ -54,11 +202,41 @@ pub enum PeerClientError {
 pub struct PeerClient {
     http: reqwest::Client,
     identity: PeerIdentity,
+    routes: PeerTransportRoutes,
 }
 
 impl PeerClient {
     pub fn new(http: reqwest::Client, identity: PeerIdentity) -> Self {
-        Self { http, identity }
+        Self::new_with_routes(http, identity, PeerTransportRoutes::default())
+    }
+
+    pub fn new_with_routes(
+        http: reqwest::Client,
+        identity: PeerIdentity,
+        routes: PeerTransportRoutes,
+    ) -> Self {
+        Self {
+            http,
+            identity,
+            routes,
+        }
+    }
+
+    /// Configured in-cluster routes replace advertised peer addresses for
+    /// server-to-server requests. There is intentionally no public fallback.
+    pub fn addresses_for_peer<'a>(
+        &self,
+        peer_id: uuid::Uuid,
+        addresses: &'a [PeerAddress],
+    ) -> Vec<String> {
+        if let Some(url) = self.routes.outbound_url(peer_id) {
+            vec![url]
+        } else {
+            addresses_by_priority(addresses)
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        }
     }
 
     /// This client's own peer identity -- callers building request bodies
@@ -359,5 +537,71 @@ mod tests {
     #[test]
     fn addresses_by_priority_empty_for_no_addresses() {
         assert!(addresses_by_priority(&[]).is_empty());
+    }
+
+    #[test]
+    fn internal_routes_preserve_tls_hostname_and_replace_public_targets_without_fallback() {
+        let peer_id = Uuid::new_v4();
+        let parsed = parse_internal_peer_routes(&format!(
+            "{peer_id}=playarr-b.example.com@playarr-region-b.playarr.svc.cluster.local:443"
+        ))
+        .unwrap();
+        let routes = PeerTransportRoutes {
+            routes: parsed
+                .into_iter()
+                .map(|route| (route.peer_id, route))
+                .collect(),
+        };
+
+        assert_eq!(
+            routes.outbound_url(peer_id).as_deref(),
+            Some("https://playarr-b.example.com:443")
+        );
+        let public_address = PeerAddress {
+            url: "https://public-relay.example.net".to_string(),
+            priority: 0,
+            label: "relay".to_string(),
+            client_reachable: true,
+        };
+        let client = PeerClient::new_with_routes(reqwest::Client::new(), identity(), routes);
+        assert_eq!(
+            client.addresses_for_peer(peer_id, std::slice::from_ref(&public_address)),
+            vec!["https://playarr-b.example.com:443"]
+        );
+        assert_eq!(
+            client.addresses_for_peer(Uuid::new_v4(), std::slice::from_ref(&public_address)),
+            vec!["https://public-relay.example.net"]
+        );
+        assert_eq!(public_address.url, "https://public-relay.example.net");
+    }
+
+    #[test]
+    fn omitted_internal_routes_keep_advertised_address_fallback() {
+        let peer_id = Uuid::new_v4();
+        let public_address = PeerAddress {
+            url: "https://public-relay.example.net".to_string(),
+            priority: 0,
+            label: "relay".to_string(),
+            client_reachable: true,
+        };
+        let client = PeerClient::new(reqwest::Client::new(), identity());
+
+        assert_eq!(
+            client.addresses_for_peer(peer_id, std::slice::from_ref(&public_address)),
+            vec!["https://public-relay.example.net"]
+        );
+    }
+
+    #[test]
+    fn internal_route_parser_rejects_non_service_or_non_tls_targets() {
+        let peer_id = Uuid::new_v4();
+        assert!(parse_internal_peer_routes(&format!(
+            "{peer_id}=peer.example.net@peer.example.net:443"
+        ))
+        .is_err());
+        assert!(parse_internal_peer_routes(&format!(
+            "{peer_id}=peer.example.net@peer.playarr.svc.cluster.local:80"
+        ))
+        .is_err());
     }
 }

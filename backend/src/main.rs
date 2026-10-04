@@ -1622,7 +1622,8 @@ async fn boot_api(
     // this is the API role's own client, `boot_worker`'s is the worker
     // role's -- the same two-roles-can-run-in-different-processes split
     // `PLAYARR_ROLE=api`/`worker` already makes everywhere else.
-    let peer_http = reqwest::Client::new();
+    let peer_transport_routes = playarr_peer_sync::peer_client::PeerTransportRoutes::from_env()?;
+    let peer_http = peer_transport_routes.build_client().await?;
 
     let state = AppState {
         readiness: readiness.clone(),
@@ -1682,6 +1683,7 @@ async fn boot_api(
         sync_conflict_log_repo,
         coordinator,
         peer_http,
+        peer_transport_routes,
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         live_events,
@@ -1726,7 +1728,11 @@ async fn boot_api(
         node_identity.private_key.expose_secret(),
     )
     .map_err(|err| anyhow::anyhow!("failed to load peer identity for push sync: {err}"))?;
-    let push_client = playarr_peer_sync::PeerClient::new(state.peer_http.clone(), push_identity);
+    let push_client = playarr_peer_sync::PeerClient::new_with_routes(
+        state.peer_http.clone(),
+        push_identity,
+        state.peer_transport_routes.clone(),
+    );
     tokio::spawn(playarr_api::peer::run_push_sync_loop(
         state.clone(),
         push_client,
@@ -2458,6 +2464,7 @@ fn spawn_peer_sync_poller_for(
     peer: &playarr_model::PeerNode,
     self_identity: &playarr_peer_sync::PeerIdentity,
     http_client: reqwest::Client,
+    transport_routes: playarr_peer_sync::peer_client::PeerTransportRoutes,
     poll_interval: Duration,
     unreachable_threshold: u32,
     coordinator: Arc<dyn playarr_coordination::ClusterCoordinator>,
@@ -2477,7 +2484,8 @@ fn spawn_peer_sync_poller_for(
     use playarr_peer_sync::{PeerClient, PeerSyncPoller};
     use playarr_telemetry::correlation::spawn::spawn_traced;
 
-    let peer_client = PeerClient::new(http_client, self_identity.clone());
+    let peer_client =
+        PeerClient::new_with_routes(http_client, self_identity.clone(), transport_routes);
     let poller = PeerSyncPoller::new(
         self_identity.peer_id,
         peer.id,
@@ -2586,7 +2594,8 @@ async fn boot_worker(
     // internally) reused across every `PeerSyncPoller` this process spawns,
     // rather than one per poller -- same "share, don't reconstruct per
     // task" reasoning as every other pooled resource in this function.
-    let peer_http_client = reqwest::Client::new();
+    let peer_transport_routes = playarr_peer_sync::peer_client::PeerTransportRoutes::from_env()?;
+    let peer_http_client = peer_transport_routes.build_client().await?;
     let peer_sync_interval = peer_sync_interval_secs_from_env();
     let peer_sync_unreachable_threshold = peer_sync_unreachable_threshold_from_env();
 
@@ -2699,6 +2708,7 @@ async fn boot_worker(
         let peer_sync_state_repo = peer_sync_state_repo.clone();
         let sync_conflict_log_repo = sync_conflict_log_repo.clone();
         let peer_http_client = peer_http_client.clone();
+        let peer_transport_routes = peer_transport_routes.clone();
         let mut spawned_peer_node_ids: HashSet<uuid::Uuid> = HashSet::new();
         // Resolved lazily (below) and cached once found -- this node's own
         // signing identity may not exist yet the very first time a fresh,
@@ -2822,6 +2832,7 @@ async fn boot_worker(
                                     &peer,
                                     self_identity,
                                     peer_http_client.clone(),
+                                    peer_transport_routes.clone(),
                                     peer_sync_interval,
                                     peer_sync_unreachable_threshold,
                                     coordinator.clone(),

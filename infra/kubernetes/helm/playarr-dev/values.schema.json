@@ -204,6 +204,13 @@
             "type": "integer",
             "minimum": 1
           },
+          "peerInternalRoutes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F-]{36}=[A-Za-z0-9.-]+@[A-Za-z0-9.-]+\\.svc\\.cluster\\.local:443$"
+            }
+          },
           "sourceInstanceUrls": {
             "type": "object",
             "additionalProperties": {

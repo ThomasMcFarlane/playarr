@@ -736,6 +736,7 @@ pub async fn test_state() -> (Router, TestState) {
         sync_conflict_log_repo,
         coordinator: Arc::new(playarr_coordination::SingleNodeCoordinator::new()),
         peer_http: reqwest::Client::new(),
+        peer_transport_routes: playarr_peer_sync::peer_client::PeerTransportRoutes::default(),
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
         live_events,

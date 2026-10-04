@@ -789,6 +789,9 @@ pub struct AppState {
     /// instance from that one (a different role/process in a split Tier-2/3
     /// deployment), not a duplicate of the same resource.
     pub peer_http: reqwest::Client,
+    /// Per-peer internal transport overrides used only for outbound server
+    /// requests; peer address records and client-facing URLs remain public.
+    pub peer_transport_routes: playarr_peer_sync::peer_client::PeerTransportRoutes,
     /// In-process, per-(method, route template) HTTP request-duration
     /// recorder -- written by `request_timing_middleware::record_request_timing`
     /// (layered over the whole router in `build_router`) on every request

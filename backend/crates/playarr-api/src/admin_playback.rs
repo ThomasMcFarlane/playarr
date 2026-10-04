@@ -1232,7 +1232,7 @@ async fn fetch_peer_active(
     client: playarr_peer_sync::PeerClient,
     peer: PeerNode,
 ) -> Result<(PeerNode, PlaybackActivityActiveResponse), UnavailableNodeView> {
-    let addresses = playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    let addresses = client.addresses_for_peer(peer.id, &peer.addresses);
     if addresses.is_empty() {
         return Err(unavailable_node(&peer, "no known address"));
     }
@@ -1241,7 +1241,7 @@ async fn fetch_peer_active(
         match tokio::time::timeout(
             PEER_ACTIVITY_TIMEOUT,
             client.signed_get::<PlaybackActivityActiveResponse>(
-                address,
+                &address,
                 "/api/v1/peer/playback/activity/active",
             ),
         )
@@ -1276,7 +1276,7 @@ async fn fetch_peer_history(
     peer: PeerNode,
     request: PlaybackActivityHistoryRequest,
 ) -> Result<(PeerNode, PlaybackActivityHistoryResponse), UnavailableNodeView> {
-    let addresses = playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    let addresses = client.addresses_for_peer(peer.id, &peer.addresses);
     if addresses.is_empty() {
         return Err(unavailable_node(&peer, "no known address"));
     }
@@ -1285,7 +1285,7 @@ async fn fetch_peer_history(
         match tokio::time::timeout(
             PEER_ACTIVITY_TIMEOUT,
             client.signed_post::<_, PlaybackActivityHistoryResponse>(
-                address,
+                &address,
                 "/api/v1/peer/playback/activity/history",
                 &request,
             ),
@@ -1454,9 +1454,10 @@ pub async fn playback_activity_active_handler(
     let (peers, mut unavailable_nodes, _) = activity_peers(&state, &local_node, &[]).await?;
 
     if !peers.is_empty() {
-        let client = playarr_peer_sync::PeerClient::new(
+        let client = playarr_peer_sync::PeerClient::new_with_routes(
             state.peer_http.clone(),
             own_peer_identity(&state).await?,
+            state.peer_transport_routes.clone(),
         );
         let calls = peers
             .into_iter()
@@ -1525,9 +1526,10 @@ pub async fn playback_activity_history_handler(
     let mut has_more = local.has_more;
 
     if !peers.is_empty() {
-        let client = playarr_peer_sync::PeerClient::new(
+        let client = playarr_peer_sync::PeerClient::new_with_routes(
             state.peer_http.clone(),
             own_peer_identity(&state).await?,
+            state.peer_transport_routes.clone(),
         );
         let calls = peers
             .into_iter()

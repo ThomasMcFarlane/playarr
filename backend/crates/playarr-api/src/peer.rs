@@ -1281,7 +1281,7 @@ pub async fn run_push_sync_loop(
             }
         };
 
-        for peer in peers {
+        for peer in peers.into_iter().filter(is_active_push_target) {
             let lock_key = format!("peer-push:{}", peer.id);
             let _guard = match state.coordinator.try_lock(&lock_key, poll_interval).await {
                 Ok(Some(guard)) => guard,
@@ -1314,10 +1314,10 @@ pub async fn run_push_sync_loop(
             };
             let next_cursor = request.accounts.server_time.clone();
             let mut delivered = false;
-            for address in playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses) {
+            for address in peer_client.addresses_for_peer(peer.id, &peer.addresses) {
                 match peer_client
                     .signed_post::<_, playarr_peer_sync::PushSyncResponse>(
-                        address,
+                        &address,
                         "/api/v1/peer/sync-push",
                         &request,
                     )
@@ -1353,6 +1353,10 @@ pub async fn run_push_sync_loop(
     }
 }
 
+fn is_active_push_target(peer: &PeerNode) -> bool {
+    peer.status == PeerNodeStatus::Active
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Body;
@@ -1361,6 +1365,29 @@ mod tests {
 
     use super::*;
     use crate::test_support::test_state;
+
+    #[test]
+    fn push_fanout_skips_unreachable_and_left_peers() {
+        let mut peer = PeerNode {
+            id: Uuid::new_v4(),
+            group_id: Uuid::new_v4(),
+            name: "remote".to_string(),
+            addresses: Vec::new(),
+            public_key: "key".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: None,
+            last_sync_error: None,
+            joined_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert!(is_active_push_target(&peer));
+
+        peer.status = PeerNodeStatus::Unreachable;
+        assert!(!is_active_push_target(&peer));
+        peer.status = PeerNodeStatus::Left;
+        assert!(!is_active_push_target(&peer));
+    }
 
     async fn seed_group_and_token(
         state: &crate::test_support::TestState,

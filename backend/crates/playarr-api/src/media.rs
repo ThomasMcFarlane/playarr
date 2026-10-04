@@ -1556,7 +1556,16 @@ pub async fn proxy_stream_media_handler(
         })?;
     let identity = crate::admin_peer::own_peer_identity(&state).await?;
 
-    let addresses = playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses);
+    let addresses = state
+        .peer_transport_routes
+        .outbound_url(peer.id)
+        .map(|url| vec![url])
+        .unwrap_or_else(|| {
+            playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses)
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        });
     if addresses.is_empty() {
         return Err(ApiError::no_peer_available(format!(
             "peer {peer_node_id} has no known address"
