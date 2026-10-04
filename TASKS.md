@@ -19,6 +19,7 @@ is the current-work board. Newest and most active work goes first.
 | 288 | iOS and tvOS: replace the App Store listing ID placeholder in update deep links | pending | Unassigned | App Store Connect record exists, but `InstalledAppVersion.appStoreID` remains . Update the app and verify the App Store deep link when preparing the public listing; the source is intentionally unchanged during internal TestFlight work. |
 | 289 | iOS and tvOS: prepare public App Store listing screenshots, metadata, and review access | pending | Unassigned | Create and review public listing screenshots/metadata and App Review access instructions for both platforms. Separate from internal TestFlight processing and not completed by run <id>. |
 | 290 | iOS and tvOS: public App Store submission and review | pending: not authorised | Unassigned | Requires completion of tasks 285 and 288-289 plus explicit owner authorisation. No public submission or App Review request has been made. |
+| 291 | iOS: add native QR login parity with Android | pending | Unassigned | Add a native QR, pairing-code, and verification-link sign-in flow using the existing hosted device-link contract. Browser approval selects the server and saves the session; handle expiry, denial, retry, cancellation, and network states while preserving password login. Acceptance: signed iPhone and iPad builds complete the full pairing and approval flow on device. Current `LoginView` lacks QR sign-in; shared `HostedDeviceLinkClient` exists. |
 
 ## Active: Shared page shell and release calendar layout (2026-10-04)
 
