@@ -39,6 +39,29 @@ data class UserDataExportJob(
     val error: String? = null,
 )
 
+/** A one-time, 15-minute link for another device, shown as a QR code on television. */
+@Serializable
+data class UserDataTransferLink(
+    val path: String = "",
+    /** Absolute URL built by the server from the address the request used. */
+    val url: String = "",
+    @SerialName("expires_at") val expiresAt: String = "",
+)
+
+/** An import session whose one-time upload link another device uses (television). */
+@Serializable
+data class UserDataImportSession(
+    val id: String,
+    /** `waiting`, `uploading` or `uploaded`; kept as text so a newer server does not break decoding. */
+    val status: String = "waiting",
+    @SerialName("upload_path") val uploadPath: String? = null,
+    @SerialName("upload_url") val uploadUrl: String? = null,
+    @SerialName("expires_at") val expiresAt: String = "",
+    @SerialName("size_bytes") val sizeBytes: Long? = null,
+) {
+    val isUploaded: Boolean get() = status == "uploaded"
+}
+
 @Serializable
 data class UserDataSectionSummary(
     val total: Int = 0,

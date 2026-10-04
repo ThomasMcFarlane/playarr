@@ -38,6 +38,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controlled TV is playing (controller-initiated handoff).
 - `scripts/remote-control-smoke.sh` (commands over push and long poll, handoff offer, commit and stop
   timings, revocation) and `docs/validation/remote-physical-devices.md` (hardware checklist, row 174).
+- Android TV and ten-foot web: "Your data" no longer stops at "needs a file picker". Export shows a one-time download QR code to open on a phone or computer; import shows a one-time upload QR code, waits for the file from that device, then previews and applies it on the television after confirmation. Strings in English, Thai and Japanese; web and Android tests added.
 
 ### Changed
 

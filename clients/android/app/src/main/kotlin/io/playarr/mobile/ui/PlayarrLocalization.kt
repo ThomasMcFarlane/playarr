@@ -879,10 +879,36 @@ internal enum class PlayarrString(
         "ส่งออกความคืบหน้าการรับชม เพลย์ลิสต์ และการตั้งค่า หรือนำเข้าจาก Playarr Server เครื่องอื่น",
         "視聴の進捗、プレイリスト、設定を書き出したり、別のPlayarr Serverから取り込んだりできます。",
     ),
-    YourDataUnavailableOnTv(
-        "Exporting and importing your data needs a file picker. Use Playarr on a phone, tablet or computer for this.",
-        "การส่งออกและนำเข้าข้อมูลต้องใช้ตัวเลือกไฟล์ โปรดใช้ Playarr บนโทรศัพท์ แท็บเล็ต หรือคอมพิวเตอร์",
-        "データの書き出しと取り込みにはファイル選択が必要です。スマートフォン、タブレット、パソコンのPlayarrをご利用ください。",
+    YourDataTransferShowDownloadCode("Show download code", "แสดงรหัสดาวน์โหลด", "ダウンロード用コードを表示"),
+    YourDataTransferNewCode("Show a new code", "แสดงรหัสใหม่", "新しいコードを表示"),
+    YourDataTransferDownloadHelp(
+        "Scan this code with your phone or computer camera, open the link and save the file there. The link works once.",
+        "สแกนรหัสนี้ด้วยกล้องโทรศัพท์หรือคอมพิวเตอร์ เปิดลิงก์แล้วบันทึกไฟล์ที่นั่น ลิงก์ใช้ได้ครั้งเดียว",
+        "スマートフォンまたはパソコンのカメラでこのコードを読み取り、リンクを開いてファイルを保存します。リンクは1回だけ使えます。",
+    ),
+    YourDataTransferQrLabel("QR code for another device", "คิวอาร์โค้ดสำหรับอุปกรณ์อื่น", "別の端末用のQRコード"),
+    YourDataTransferLinkExpires(
+        "This code stops working at {{time}} or after it is used once.",
+        "รหัสนี้จะหมดอายุเวลา {{time}} หรือหลังใช้ครั้งเดียว",
+        "このコードは{{time}}、または1回使用すると無効になります。",
+    ),
+    YourDataTransferStartUpload("Upload from another device", "อัปโหลดจากอุปกรณ์อื่น", "別の端末からアップロード"),
+    YourDataTransferCancel("Cancel", "ยกเลิก", "キャンセル"),
+    YourDataTransferUploadHelp(
+        "Scan this code with your phone or computer camera, then choose your Playarr data file on that device. You review everything here before it is applied.",
+        "สแกนรหัสนี้ด้วยกล้องโทรศัพท์หรือคอมพิวเตอร์ แล้วเลือกไฟล์ข้อมูล Playarr บนอุปกรณ์นั้น คุณจะตรวจสอบทุกอย่างที่นี่ก่อนนำไปใช้",
+        "スマートフォンまたはパソコンのカメラでこのコードを読み取り、その端末でPlayarrデータファイルを選びます。適用前にここで内容を確認できます。",
+    ),
+    YourDataTransferReceiving("Receiving the file...", "กำลังรับไฟล์...", "ファイルを受信中..."),
+    YourDataTransferReceived(
+        "File received ({{size}}). Review it below.",
+        "ได้รับไฟล์แล้ว ({{size}}) ตรวจสอบด้านล่าง",
+        "ファイルを受信しました（{{size}}）。下で確認してください。",
+    ),
+    YourDataTransferExpired(
+        "This code has expired. Show a new one to try again.",
+        "รหัสนี้หมดอายุแล้ว แสดงรหัสใหม่เพื่อลองอีกครั้ง",
+        "このコードは期限切れです。新しいコードを表示してもう一度お試しください。",
     ),
     YourDataExportTitle("Export my data", "ส่งออกข้อมูลของฉัน", "データを書き出す"),
     YourDataExportDescription(

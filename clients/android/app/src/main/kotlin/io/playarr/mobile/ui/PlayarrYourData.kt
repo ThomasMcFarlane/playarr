@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,7 @@ import io.playarr.shared.data.model.UserDataExportJob
 import io.playarr.shared.data.model.UserDataExportStatus
 import io.playarr.shared.data.model.UserDataImportPreview
 import io.playarr.shared.data.model.UserDataImportResult
+import io.playarr.shared.data.model.UserDataImportSession
 import io.playarr.shared.data.model.UserDataProgressConflicts
 import io.playarr.shared.data.remote.PlayarrApi
 import javax.inject.Inject
@@ -47,6 +49,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 
 /** Largest package the server accepts; larger files are refused before upload. */
 internal const val USER_DATA_MAX_IMPORT_BYTES = 50 * 1024 * 1024
@@ -63,11 +66,21 @@ internal data class YourDataState(
     val importBusy: Boolean = false,
     val importError: PlayarrMessage? = null,
     val notice: PlayarrString? = null,
+    /** Television: the absolute one-time download link for the ready export. */
+    val exportLinkUrl: String? = null,
+    val exportLinkExpiresAt: String? = null,
+    val exportLinkBusy: Boolean = false,
+    /** Television: the open import session and its absolute one-time upload link. */
+    val session: UserDataImportSession? = null,
+    val uploadUrl: String? = null,
+    val sessionBusy: Boolean = false,
+    val sessionExpired: Boolean = false,
 ) {
     val exportRunning: Boolean
         get() = exportJob?.status == UserDataExportStatus.Queued ||
             exportJob?.status == UserDataExportStatus.Running
     val canPreview: Boolean get() = fileName != null && !importBusy
+    val canPreviewSession: Boolean get() = session?.isUploaded == true && !importBusy
     val canApply: Boolean get() = preview != null && result == null && !importBusy
 }
 
@@ -95,6 +108,7 @@ internal class YourDataViewModel @Inject constructor(
     val state: StateFlow<YourDataState> = _state.asStateFlow()
     private var pollJob: Job? = null
     private var packageBytes: ByteArray? = null
+    private var sessionJob: Job? = null
 
     fun startExport() {
         if (_state.value.exportBusy || _state.value.exportRunning) return
@@ -185,10 +199,101 @@ internal class YourDataViewModel @Inject constructor(
     fun setConflicts(value: UserDataProgressConflicts) =
         _state.update { it.copy(conflicts = value, preview = null, result = null) }
 
+    /** Television: asks the server for a one-time link to download the ready export on another device. */
+    fun showExportLink() {
+        val job = _state.value.exportJob ?: return
+        if (_state.value.exportLinkBusy) return
+        _state.update { it.copy(exportLinkBusy = true, exportError = null) }
+        viewModelScope.launch {
+            runCatching {
+                val link = api.createUserDataTransferLink(job.id)
+                check(link.url.isNotBlank()) { "the server returned no transfer link" }
+                link
+            }.onSuccess { link ->
+                _state.update {
+                    it.copy(exportLinkUrl = link.url, exportLinkExpiresAt = link.expiresAt, exportLinkBusy = false)
+                }
+            }.onFailure { failure ->
+                _state.update { it.copy(exportLinkBusy = false, exportError = failure.yourDataMessage()) }
+            }
+        }
+    }
+
+    /**
+     * Television: opens an import session, shows its upload link, then polls until the other
+     * device has uploaded (or the session runs out) and previews what arrived.
+     */
+    fun startSession() {
+        if (_state.value.sessionBusy || _state.value.session?.status == "uploading") return
+        sessionJob?.cancel()
+        _state.update {
+            it.copy(sessionBusy = true, sessionExpired = false, preview = null, result = null, importError = null)
+        }
+        sessionJob = viewModelScope.launch {
+            try {
+                val created = api.createUserDataImportSession()
+                check(!created.uploadUrl.isNullOrBlank()) { "the server returned no upload link" }
+                _state.update { it.copy(session = created, uploadUrl = created.uploadUrl, sessionBusy = false) }
+                while (true) {
+                    delay(SESSION_POLL_MILLIS)
+                    val next = try {
+                        api.getUserDataImportSession(created.id)
+                    } catch (failure: HttpException) {
+                        if (failure.code() == 404 || failure.code() == 410) {
+                            _state.update { it.copy(sessionExpired = true, uploadUrl = null) }
+                            return@launch
+                        }
+                        throw failure
+                    }
+                    _state.update { it.copy(session = next) }
+                    if (next.isUploaded) {
+                        previewSession(created.id)
+                        return@launch
+                    }
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (failure: Throwable) {
+                _state.update {
+                    it.copy(sessionBusy = false, session = null, uploadUrl = null, importError = failure.yourDataMessage())
+                }
+            }
+        }
+    }
+
+    fun cancelSession() {
+        sessionJob?.cancel()
+        val id = _state.value.session?.id
+        _state.update {
+            it.copy(session = null, uploadUrl = null, preview = null, result = null, sessionExpired = false, sessionBusy = false)
+        }
+        if (id != null) {
+            // The session may already have expired; nothing is left to close then.
+            viewModelScope.launch { runCatching { api.deleteUserDataImportSession(id) } }
+        }
+    }
+
+    private suspend fun previewSession(id: String) {
+        val current = _state.value
+        _state.update { it.copy(importBusy = true, importError = null, result = null) }
+        runCatching {
+            api.previewUserDataImportSession(id, current.includePreferences, current.conflicts.wire)
+        }.onSuccess { preview ->
+            _state.update { it.copy(preview = preview, importBusy = false) }
+        }.onFailure { failure ->
+            if (failure is CancellationException) throw failure
+            _state.update { it.copy(preview = null, importBusy = false, importError = failure.yourDataMessage()) }
+        }
+    }
+
     fun preview() {
-        val bytes = packageBytes ?: return
         val current = _state.value
         if (current.importBusy) return
+        current.session?.let { session ->
+            if (session.isUploaded) viewModelScope.launch { previewSession(session.id) }
+            return
+        }
+        val bytes = packageBytes ?: return
         _state.update { it.copy(importBusy = true, importError = null, result = null) }
         viewModelScope.launch {
             runCatching {
@@ -206,24 +311,38 @@ internal class YourDataViewModel @Inject constructor(
     }
 
     fun apply() {
-        val bytes = packageBytes ?: return
         val current = _state.value
+        val session = current.session
+        val bytes = packageBytes
+        if (session == null && bytes == null) return
         val preview = current.preview ?: return
         if (current.importBusy || current.result != null) return
         _state.update { it.copy(importBusy = true, importError = null) }
         viewModelScope.launch {
             runCatching {
-                api.applyUserDataImport(
-                    bytes.toRequestBody(ZIP_MEDIA_TYPE),
-                    preview.packageSha256,
-                    current.includePreferences,
-                    current.conflicts.wire,
-                )
+                if (session != null) {
+                    api.applyUserDataImportSession(
+                        session.id,
+                        preview.packageSha256,
+                        current.includePreferences,
+                        current.conflicts.wire,
+                    )
+                } else {
+                    api.applyUserDataImport(
+                        bytes!!.toRequestBody(ZIP_MEDIA_TYPE),
+                        preview.packageSha256,
+                        current.includePreferences,
+                        current.conflicts.wire,
+                    )
+                }
             }.onSuccess { result ->
                 _state.update {
                     it.copy(
                         result = result,
                         importBusy = false,
+                        // The server closes the session once everything applied.
+                        session = if (session != null && result.completed) null else it.session,
+                        uploadUrl = if (session != null && result.completed) null else it.uploadUrl,
                         notice = if (result.completed) PlayarrString.YourDataImported else null,
                     )
                 }
@@ -259,6 +378,7 @@ internal class YourDataViewModel @Inject constructor(
     }
 
     private companion object {
+        const val SESSION_POLL_MILLIS = 2_000L
         val ZIP_MEDIA_TYPE = "application/zip".toMediaType()
     }
 }
@@ -271,8 +391,8 @@ internal fun userDataExportFileName(isoDate: String): String = "playarr-user-dat
 @Composable
 internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataViewModel = hiltViewModel()) {
     if (isTelevision) {
-        // Android TV has no usable document picker; say so instead of offering a dead control.
-        Text(playarrString(PlayarrString.YourDataUnavailableOnTv), color = WebInkMuted, fontSize = 12.sp)
+        // Android TV has no usable document picker: move the package through a phone or computer.
+        YourDataTelevision(viewModel)
         return
     }
     val state by viewModel.state.collectAsState()
@@ -358,6 +478,148 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
             Text(playarrString(it), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
+}
+
+/** Television: QR codes for one-time links; no file picker, no file save. */
+@Composable
+private fun YourDataTelevision(viewModel: YourDataViewModel) {
+    val state by viewModel.state.collectAsState()
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(playarrString(PlayarrString.YourDataExportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
+        Text(playarrString(PlayarrString.YourDataExportDescription), color = WebInkMuted, fontSize = 11.sp)
+        Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 11.sp)
+        Button(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
+            Text(
+                playarrString(
+                    if (state.exportRunning) PlayarrString.YourDataExportPreparing
+                    else PlayarrString.YourDataExportStart,
+                ),
+            )
+        }
+        state.exportJob?.let { job ->
+            Text(exportStatusText(job), color = WebInkSoft, fontSize = 12.sp)
+            if (job.status == UserDataExportStatus.Ready) {
+                OutlinedButton(onClick = viewModel::showExportLink, enabled = !state.exportLinkBusy) {
+                    Text(
+                        playarrString(
+                            if (state.exportLinkUrl != null) PlayarrString.YourDataTransferNewCode
+                            else PlayarrString.YourDataTransferShowDownloadCode,
+                        ),
+                    )
+                }
+            }
+        }
+        state.exportLinkUrl?.let { url ->
+            Text(playarrString(PlayarrString.YourDataTransferDownloadHelp), color = WebInkMuted, fontSize = 11.sp)
+            PlayarrQrCode(
+                value = url,
+                contentDescription = playarrString(PlayarrString.YourDataTransferQrLabel),
+                modifier = Modifier.size(220.dp),
+            )
+            Text(
+                playarrString(PlayarrString.YourDataTransferLinkExpires, "time" to expiryClock(state.exportLinkExpiresAt)),
+                color = WebInkMuted,
+                fontSize = 11.sp,
+            )
+        }
+        state.exportError?.let { ErrorLine(playarrText(it)) }
+
+        Text(playarrString(PlayarrString.YourDataImportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
+        Text(playarrString(PlayarrString.YourDataImportDescription), color = WebInkMuted, fontSize = 11.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = viewModel::startSession,
+                enabled = !state.sessionBusy && state.session?.status != "uploading",
+            ) {
+                Text(
+                    playarrString(
+                        if (state.session != null) PlayarrString.YourDataTransferNewCode
+                        else PlayarrString.YourDataTransferStartUpload,
+                    ),
+                )
+            }
+            if (state.session != null) {
+                OutlinedButton(onClick = viewModel::cancelSession) {
+                    Text(playarrString(PlayarrString.YourDataTransferCancel))
+                }
+            }
+        }
+        val session = state.session
+        if (session?.status == "waiting") {
+            state.uploadUrl?.let { url ->
+                Text(playarrString(PlayarrString.YourDataTransferUploadHelp), color = WebInkMuted, fontSize = 11.sp)
+                PlayarrQrCode(
+                    value = url,
+                    contentDescription = playarrString(PlayarrString.YourDataTransferQrLabel),
+                    modifier = Modifier.size(220.dp),
+                )
+                Text(
+                    playarrString(PlayarrString.YourDataTransferLinkExpires, "time" to expiryClock(session.expiresAt)),
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+        if (session?.status == "uploading") {
+            Text(playarrString(PlayarrString.YourDataTransferReceiving), color = WebInkSoft, fontSize = 12.sp)
+        }
+        if (session?.isUploaded == true) {
+            Text(
+                playarrString(PlayarrString.YourDataTransferReceived, "size" to formatTransferSize(session.sizeBytes)),
+                color = WebInkSoft,
+                fontSize = 12.sp,
+            )
+        }
+        if (state.sessionExpired) ErrorLine(playarrString(PlayarrString.YourDataTransferExpired))
+        ConflictChoices(state.conflicts, viewModel::setConflicts)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = state.includePreferences, onCheckedChange = viewModel::setIncludePreferences)
+            Text(playarrString(PlayarrString.YourDataIncludePreferences), color = WebInkSoft, fontSize = 12.sp)
+        }
+        OutlinedButton(onClick = viewModel::preview, enabled = state.canPreviewSession) {
+            Text(playarrString(PlayarrString.YourDataPreviewButton))
+        }
+        state.importError?.let { ErrorLine(playarrText(it)) }
+        state.preview?.let { preview ->
+            PreviewSummary(preview)
+            Text(playarrString(PlayarrString.YourDataConfirmNote), color = WebInkMuted, fontSize = 11.sp)
+            Button(onClick = viewModel::apply, enabled = state.canApply) {
+                Text(playarrString(PlayarrString.YourDataApplyButton))
+            }
+        }
+        state.result?.let { result ->
+            Text(
+                if (result.completed) {
+                    playarrString(
+                        PlayarrString.YourDataResultDone,
+                        "added" to (result.progressAdded + result.progressUpdated),
+                        "items" to result.playlistItemsAdded,
+                    )
+                } else {
+                    playarrString(PlayarrString.YourDataResultFailed, "failure" to result.failure.orEmpty())
+                },
+                color = if (result.completed) WebInkSoft else MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+            )
+        }
+        state.notice?.let {
+            Text(playarrString(it), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Local wall-clock time of an ISO-8601 instant, for "stops working at ..."; blank when unparseable. */
+internal fun expiryClock(iso: String?, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    runCatching {
+        java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+            .format(java.time.Instant.parse(iso).atZone(zone))
+    }.getOrDefault("")
+
+internal fun formatTransferSize(bytes: Long?): String = when {
+    bytes == null -> ""
+    bytes < 1024 -> "$bytes B"
+    bytes < 1024 * 1024 -> "%.1f KB".format(java.util.Locale.ROOT, bytes / 1024.0)
+    else -> "%.1f MB".format(java.util.Locale.ROOT, bytes / (1024.0 * 1024.0))
 }
 
 @Composable

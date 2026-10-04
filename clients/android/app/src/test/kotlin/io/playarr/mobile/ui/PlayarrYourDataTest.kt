@@ -4,6 +4,8 @@ import io.playarr.shared.data.model.UserDataExportJob
 import io.playarr.shared.data.model.UserDataExportStatus
 import io.playarr.shared.data.model.UserDataImportPreview
 import io.playarr.shared.data.model.UserDataImportResult
+import io.playarr.shared.data.model.UserDataImportSession
+import io.playarr.shared.data.model.UserDataTransferLink
 import io.playarr.shared.data.model.UserDataProgressConflicts
 import java.io.ByteArrayInputStream
 import kotlinx.serialization.json.Json
@@ -75,6 +77,40 @@ class PlayarrYourDataTest {
             mapOf("add" to 3, "same" to 2, "unmatched" to 1),
         )
         assertEquals("Watchlist: 3 new, 2 already here, 1 could not be placed.", text)
+    }
+
+    @Test
+    fun `transfer link and import session decode and gate the television preview`() {
+        val link = json.decodeFromString<UserDataTransferLink>(
+            """{"path":"/api/v1/transfer/export/abc","url":"https://server.example/api/v1/transfer/export/abc","expires_at":"2026-10-03T12:15:00Z","future":1}""",
+        )
+        assertEquals("https://server.example/api/v1/transfer/export/abc", link.url)
+        val waiting = json.decodeFromString<UserDataImportSession>(
+            """{"id":"s1","status":"waiting","upload_path":"/api/v1/transfer/import/t","upload_url":"https://server.example/api/v1/transfer/import/t","expires_at":"2026-10-03T12:15:00Z","size_bytes":null}""",
+        )
+        assertEquals("https://server.example/api/v1/transfer/import/t", waiting.uploadUrl)
+        assertFalse(waiting.isUploaded)
+        val uploaded = waiting.copy(status = "uploaded", sizeBytes = 2048)
+        assertTrue(uploaded.isUploaded)
+
+        assertFalse(YourDataState().canPreviewSession)
+        assertFalse(YourDataState(session = waiting).canPreviewSession)
+        assertTrue(YourDataState(session = uploaded).canPreviewSession)
+        assertFalse(YourDataState(session = uploaded, importBusy = true).canPreviewSession)
+        // The television path never needs a chosen file.
+        assertFalse(YourDataState(session = uploaded).canPreview)
+    }
+
+    @Test
+    fun `expiry clock and sizes are readable and tolerate bad input`() {
+        val zone = java.time.ZoneId.of("UTC")
+        assertTrue(expiryClock("2026-10-03T12:15:00Z", zone).contains("15"))
+        assertEquals("", expiryClock(null, zone))
+        assertEquals("", expiryClock("not a time", zone))
+        assertEquals("", formatTransferSize(null))
+        assertEquals("512 B", formatTransferSize(512))
+        assertEquals("2.0 KB", formatTransferSize(2048))
+        assertEquals("1.5 MB", formatTransferSize(1_572_864))
     }
 
     @Test

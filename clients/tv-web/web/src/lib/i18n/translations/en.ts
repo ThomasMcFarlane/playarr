@@ -1427,6 +1427,17 @@ export const en = {
   "household.status.pending": "Waiting",
   "household.status.approved": "Approved",
   "household.status.denied": "Denied",
+  "settings.yourData.transferShowDownloadCode": "Show download code",
+  "settings.yourData.transferNewCode": "Show a new code",
+  "settings.yourData.transferDownloadHelp": "Scan this code with your phone or computer camera, open the link and save the file there. The link works once.",
+  "settings.yourData.transferQrLabel": "QR code for another device",
+  "settings.yourData.transferLinkExpires": "This code stops working at {{time}} or after it is used once.",
+  "settings.yourData.transferStartUpload": "Upload from another device",
+  "settings.yourData.transferCancel": "Cancel",
+  "settings.yourData.transferUploadHelp": "Scan this code with your phone or computer camera, then choose your Playarr data file on that device. You review everything here before it is applied.",
+  "settings.yourData.transferReceiving": "Receiving the file...",
+  "settings.yourData.transferReceived": "File received ({{size}}). Review it below.",
+  "settings.yourData.transferExpired": "This code has expired. Show a new one to try again.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

@@ -284,7 +284,7 @@ export function intentionalDegradationsFor(
     {
       id: "user-data-file-transfer",
       reason: "capability-file-picker",
-      note: "Your data export/import needs a file picker and file save; TV identities point to a phone, tablet or computer instead",
+      note: "Your data export/import has no on-TV file picker or file save; TV identities show a one-time QR code to download on, or upload from, a phone or computer instead",
     },
     {
       id: "downloads-storage",

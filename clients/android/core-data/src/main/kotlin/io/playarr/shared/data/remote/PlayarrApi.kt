@@ -49,6 +49,8 @@ import io.playarr.shared.data.model.UpdateProfilePinRequest
 import io.playarr.shared.data.model.UpdateWatchProgressRequest
 import io.playarr.shared.data.model.UserDataExportJob
 import io.playarr.shared.data.model.UserDataImportPreview
+import io.playarr.shared.data.model.UserDataImportSession
+import io.playarr.shared.data.model.UserDataTransferLink
 import io.playarr.shared.data.model.UserDataImportResult
 import io.playarr.shared.data.model.UserInvite
 import io.playarr.shared.data.model.UserInviteRequest
@@ -423,6 +425,35 @@ interface PlayarrApi {
     @Streaming
     @GET("api/v1/users/me/data-exports/{id}/download")
     suspend fun downloadUserDataExport(@Path("id") id: String): ResponseBody
+
+    /** A one-time link to download a ready export on another device (television). */
+    @POST("api/v1/users/me/data-exports/{id}/transfer-link")
+    suspend fun createUserDataTransferLink(@Path("id") id: String): UserDataTransferLink
+
+    /** Opens an import session whose one-time upload link another device uses (television). */
+    @POST("api/v1/users/me/data-import-sessions")
+    suspend fun createUserDataImportSession(): UserDataImportSession
+
+    @GET("api/v1/users/me/data-import-sessions/{id}")
+    suspend fun getUserDataImportSession(@Path("id") id: String): UserDataImportSession
+
+    @DELETE("api/v1/users/me/data-import-sessions/{id}")
+    suspend fun deleteUserDataImportSession(@Path("id") id: String)
+
+    @POST("api/v1/users/me/data-import-sessions/{id}/preview")
+    suspend fun previewUserDataImportSession(
+        @Path("id") id: String,
+        @Query("include_preferences") includePreferences: Boolean,
+        @Query("progress_conflicts") progressConflicts: String,
+    ): UserDataImportPreview
+
+    @POST("api/v1/users/me/data-import-sessions/{id}/apply")
+    suspend fun applyUserDataImportSession(
+        @Path("id") id: String,
+        @Query("package_sha256") packageSha256: String,
+        @Query("include_preferences") includePreferences: Boolean,
+        @Query("progress_conflicts") progressConflicts: String,
+    ): UserDataImportResult
 
     @POST("api/v1/users/me/data-imports/preview")
     suspend fun previewUserDataImport(

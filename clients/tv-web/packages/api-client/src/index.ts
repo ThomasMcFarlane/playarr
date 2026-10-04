@@ -136,6 +136,27 @@ export interface UserDataImportResult {
   sections_not_attempted: string[];
 }
 
+/** A one-time, 15-minute link for another device (shown as a QR code). */
+export interface UserDataTransferLink {
+  /** Origin-relative; resolve with `ApiClient.resolveUrl` when `url` is absent. */
+  path: string;
+  /** Absolute URL built by the server from the address the request used. */
+  url?: string;
+  expires_at: string;
+}
+
+export type UserDataImportSessionStatus = "waiting" | "uploading" | "uploaded";
+
+export interface UserDataImportSession {
+  id: string;
+  status: UserDataImportSessionStatus;
+  /** Only present in the response that created the session. */
+  upload_path: string | null;
+  upload_url?: string | null;
+  expires_at: string;
+  size_bytes: number | null;
+}
+
 export type Work = components["schemas"]["Work"];
 export type WorkKind = components["schemas"]["WorkKind"];
 export type Availability = components["schemas"]["Availability"];
@@ -1111,6 +1132,54 @@ export class ApiClient {
       `/api/v1/users/me/data-exports/${encodeURIComponent(id)}/download`
     );
     return response.blob();
+  }
+
+  /** A one-time link to download a ready export on another device. */
+  async createUserDataTransferLink(exportId: string): Promise<UserDataTransferLink> {
+    return this.requestJson(
+      "POST",
+      `/api/v1/users/me/data-exports/${encodeURIComponent(exportId)}/transfer-link`
+    );
+  }
+
+  /** Opens an import session whose one-time upload link another device uses. */
+  async createUserDataImportSession(): Promise<UserDataImportSession> {
+    return this.requestJson("POST", "/api/v1/users/me/data-import-sessions");
+  }
+
+  async getUserDataImportSession(id: string): Promise<UserDataImportSession> {
+    return this.requestJson("GET", `/api/v1/users/me/data-import-sessions/${encodeURIComponent(id)}`);
+  }
+
+  async deleteUserDataImportSession(id: string): Promise<void> {
+    await this.requestJson("DELETE", `/api/v1/users/me/data-import-sessions/${encodeURIComponent(id)}`);
+  }
+
+  /** Previews the package uploaded to a session; nothing is written. */
+  async previewUserDataImportSession(
+    id: string,
+    options: UserDataImportOptions = {}
+  ): Promise<UserDataImportPreview> {
+    const response = await this.requestRaw(
+      "POST",
+      `/api/v1/users/me/data-import-sessions/${encodeURIComponent(id)}/preview?${this.importQuery(options)}`
+    );
+    return (await response.json()) as UserDataImportPreview;
+  }
+
+  /** Applies the previewed package of a session (bound by its SHA-256). */
+  async applyUserDataImportSession(
+    id: string,
+    packageSha256: string,
+    options: UserDataImportOptions = {}
+  ): Promise<UserDataImportResult> {
+    const query = new URLSearchParams(this.importQuery(options));
+    query.set("package_sha256", packageSha256);
+    const response = await this.requestRaw(
+      "POST",
+      `/api/v1/users/me/data-import-sessions/${encodeURIComponent(id)}/apply?${query.toString()}`
+    );
+    return (await response.json()) as UserDataImportResult;
   }
 
   private importQuery(options: UserDataImportOptions): string {
