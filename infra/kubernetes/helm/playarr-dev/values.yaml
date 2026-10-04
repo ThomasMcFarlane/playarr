@@ -173,6 +173,17 @@ regionalInstances:
       keepLast: 3
       keepDays: 7
       maxAssetMiB: 1024
+      # Off-node replica in a private Cloudflare R2 bucket. The access key pair
+      # lives in the Secret below (created out of band, never in Git); set
+      # enabled once that Secret exists in the namespace.
+      s3:
+        enabled: false
+        endpoint: https://REDACTED_CF_ACCOUNT_ID.r2.cloudflarestorage.com
+        bucket: playarr-backups
+        region: auto
+        prefix: playarr-region-a/
+        credentialsSecret:
+          name: playarr-backup-s3
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:
@@ -259,6 +270,17 @@ regionalInstances:
       keepLast: 3
       keepDays: 7
       maxAssetMiB: 1024
+      # Off-node replica in a private Cloudflare R2 bucket. The access key pair
+      # lives in the Secret below (created out of band, never in Git); set
+      # enabled once that Secret exists in the namespace.
+      s3:
+        enabled: false
+        endpoint: https://REDACTED_CF_ACCOUNT_ID.r2.cloudflarestorage.com
+        bucket: playarr-backups
+        region: auto
+        prefix: playarr-region-b/
+        credentialsSecret:
+          name: playarr-backup-s3
     # HTTPS on the node's public address (owner-approved public server). The
     # certificate comes from cert-manager (DNS-01) and is hot-reloaded.
     hostExposure:

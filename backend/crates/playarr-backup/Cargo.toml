@@ -12,6 +12,9 @@ tar = "0.4"
 flate2 = "1"
 sha2 = "0.10"
 hex = "0.4"
+hmac = "0.12"
+base64 = "0.22"
+reqwest = { workspace = true }
 fs4 = "0.13"
 sqlx = { workspace = true, features = ["any", "sqlite", "postgres"] }
 tokio = { workspace = true }
@@ -25,3 +28,4 @@ futures = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+axum = { workspace = true }

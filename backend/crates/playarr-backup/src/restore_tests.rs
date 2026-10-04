@@ -375,6 +375,7 @@ async fn an_older_backup_is_migrated_forward_after_restore() {
             keep_days: 30,
             artwork_dir: None,
             max_asset_bytes: 0,
+            s3: None,
         },
         pool.clone(),
         "old",

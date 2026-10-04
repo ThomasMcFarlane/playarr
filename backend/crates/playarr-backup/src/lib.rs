@@ -13,6 +13,9 @@ pub mod restore;
 #[cfg(test)]
 mod restore_tests;
 pub mod runner;
+pub mod s3;
+#[cfg(test)]
+mod s3_tests;
 pub mod snapshot;
 pub mod store;
 #[cfg(test)]

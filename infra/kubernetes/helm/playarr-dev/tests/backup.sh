@@ -34,4 +34,32 @@ if helm template playarr-dev "$chart_dir" \
   echo "schema accepted a malformed recovery key" >&2
   exit 1
 fi
+# Off-node replica: off by default (the Secret is created out of band), and
+# when enabled the keys come from a Secret reference, never from values.
+test "$(grep -c 'PLAYARR_BACKUP_S3_' "$rendered")" -eq 0
+s3="$(mktemp)"
+trap 'rm -f "$rendered" "$no_backup" "$s3"' EXIT
+helm template playarr-dev "$chart_dir" --namespace playarr \
+  --set regionalInstances.playarr-region-a.backup.s3.enabled=true \
+  --set regionalInstances.playarr-region-b.backup.s3.enabled=true >"$s3"
+test "$(grep -c '^            - name: PLAYARR_BACKUP_S3_BUCKET$' "$s3")" -eq 2
+test "$(grep -c 'value: "playarr-backups"$' "$s3")" -eq 2
+grep -q 'value: "playarr-region-a/"$' "$s3"
+grep -q 'value: "playarr-region-b/"$' "$s3"
+test "$(grep -c '^                  name: "playarr-backup-s3"$' "$s3")" -eq 4
+test "$(grep -c '^                  key: "secret-access-key"$' "$s3")" -eq 2
+if grep -q '^kind: Secret$' "$s3"; then echo "chart rendered a Secret" >&2; exit 1; fi
+# Enabling the replica without an endpoint and bucket is rejected.
+if helm template playarr-dev "$chart_dir" \
+  --set regionalInstances.playarr-region-a.backup.s3.enabled=true \
+  --set regionalInstances.playarr-region-a.backup.s3.bucket=null >/dev/null 2>&1; then
+  echo "schema accepted an S3 replica without a bucket" >&2
+  exit 1
+fi
+if helm template playarr-dev "$chart_dir" \
+  --set regionalInstances.playarr-region-a.backup.s3.enabled=true \
+  --set regionalInstances.playarr-region-a.backup.s3.endpoint=not-a-url >/dev/null 2>&1; then
+  echo "schema accepted a malformed S3 endpoint" >&2
+  exit 1
+fi
 echo "backup chart checks passed"

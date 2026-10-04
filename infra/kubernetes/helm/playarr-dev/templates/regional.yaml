@@ -157,6 +157,43 @@ spec:
               value: {{ $backup.keepDays | default 30 | quote }}
             - name: PLAYARR_BACKUP_MAX_ASSET_MIB
               value: {{ $backup.maxAssetMiB | default 4096 | quote }}
+            {{- $s3 := $backup.s3 | default dict }}
+            {{- if $s3.enabled }}
+            {{- $creds := $s3.credentialsSecret | default dict }}
+            # Off-node replica in an S3-compatible bucket (Cloudflare R2,
+            # MinIO, AWS). The access key pair is read from a Kubernetes
+            # Secret that is created out of band; it is never rendered here.
+            - name: PLAYARR_BACKUP_S3_ENDPOINT
+              value: {{ $s3.endpoint | quote }}
+            - name: PLAYARR_BACKUP_S3_BUCKET
+              value: {{ $s3.bucket | quote }}
+            - name: PLAYARR_BACKUP_S3_REGION
+              value: {{ $s3.region | default "auto" | quote }}
+            - name: PLAYARR_BACKUP_S3_PREFIX
+              value: {{ $s3.prefix | default (printf "%s/" $name) | quote }}
+            - name: PLAYARR_BACKUP_S3_PATH_STYLE
+              value: {{ $s3.pathStyle | default true | quote }}
+            - name: PLAYARR_BACKUP_S3_PART_MIB
+              value: {{ $s3.partMiB | default 16 | quote }}
+            {{- if $s3.keepLast }}
+            - name: PLAYARR_BACKUP_S3_KEEP_LAST
+              value: {{ $s3.keepLast | quote }}
+            {{- end }}
+            {{- if hasKey $s3 "keepDays" }}
+            - name: PLAYARR_BACKUP_S3_KEEP_DAYS
+              value: {{ $s3.keepDays | quote }}
+            {{- end }}
+            - name: PLAYARR_BACKUP_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $creds.name | default "playarr-backup-s3" | quote }}
+                  key: {{ $creds.accessKeyIdKey | default "access-key-id" | quote }}
+            - name: PLAYARR_BACKUP_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $creds.name | default "playarr-backup-s3" | quote }}
+                  key: {{ $creds.secretAccessKeyKey | default "secret-access-key" | quote }}
+            {{- end }}
             {{- end }}
             {{- if $tlsOn }}
             - name: PLAYARR_TLS_CERT_PATH

@@ -339,6 +339,33 @@ not against losing the node: download backups from Admin, Backups (or copy
 below twice the database size, and retention never removes the last complete
 backup.
 
+### Off-node copies (S3-compatible)
+
+`backup.s3` replicates each completed backup to a bucket (Cloudflare R2, MinIO,
+AWS S3) while keeping the local copy. The archive is uploaded as a multipart
+upload with per-part SHA-256 checksums, read back with `HEAD` to compare the
+server-held composite checksum and size (a full read-back hash is the fallback
+when a server reports no checksum), and only then committed by writing the
+sidecar. Retention (`keepLast`/`keepDays`, defaulting to the local values) is
+applied to the bucket too, and a missed upload is retried by the next run.
+
+```yaml
+s3:
+  enabled: true
+  endpoint: https://<account>.r2.cloudflarestorage.com
+  bucket: playarr-backups
+  region: auto
+  prefix: playarr-region-a/      # one prefix per server sharing a bucket
+  credentialsSecret:
+    name: playarr-backup-s3 # keys: access-key-id, secret-access-key
+```
+
+Create the Secret out of band (never in Git) with an access key limited to
+that bucket, for example
+`kubectl -n playarr create secret generic playarr-backup-s3 --from-literal=access-key-id=... --from-literal=secret-access-key=...`.
+Only the encrypted archive and the plaintext sidecar (names and counts) leave
+the node.
+
 Restore only ever targets a replacement or scratch instance, with the server
 stopped: `playarr-server backup restore --archive <file> --identity-file <key>`.
 Never restore over a live server's data for testing.

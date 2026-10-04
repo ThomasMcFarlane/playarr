@@ -168,10 +168,45 @@ fn remove_backup_files(dir: &Path, sidecar: &Sidecar) {
     let _ = std::fs::remove_file(dir.join(&sidecar.archive_name));
 }
 
-/// Applies retention after a successful run. Keeps the newest `keep_last`
-/// complete backups and any complete backup younger than `keep_days`, and
-/// always at least one complete backup. Incomplete records (sidecar without a
-/// matching archive) are cleared. Returns the ids removed.
+/// One backup as seen by retention, whichever destination holds it.
+#[derive(Debug, Clone)]
+pub struct RetentionItem {
+    pub id: String,
+    pub created_at: DateTime<Utc>,
+    pub complete: bool,
+}
+
+/// Decides which backups retention removes. `items` must be newest first.
+/// Keeps the newest `keep_last` complete backups and any complete backup
+/// younger than `keep_days`, and always at least one complete backup.
+/// Incomplete items are always removed. Returns the indexes to remove.
+pub fn plan_retention(
+    items: &[RetentionItem],
+    keep_last: usize,
+    keep_days: i64,
+    now: DateTime<Utc>,
+) -> Vec<usize> {
+    let cutoff = now - Duration::days(keep_days);
+    let mut remove = Vec::new();
+    let mut kept_complete = 0usize;
+    for (index, item) in items.iter().enumerate() {
+        if !item.complete {
+            remove.push(index);
+            continue;
+        }
+        let within_count = kept_complete < keep_last.max(1);
+        let within_age = keep_days > 0 && item.created_at >= cutoff;
+        if kept_complete == 0 || within_count || within_age {
+            kept_complete += 1;
+        } else {
+            remove.push(index);
+        }
+    }
+    remove
+}
+
+/// Applies retention after a successful run. Incomplete records (sidecar
+/// without a matching archive) are cleared. Returns the ids removed.
 pub fn apply_retention(
     dir: &Path,
     keep_last: usize,
@@ -179,23 +214,18 @@ pub fn apply_retention(
     now: DateTime<Utc>,
 ) -> Result<Vec<String>> {
     let records = list_backups(dir)?;
-    let cutoff = now - Duration::days(keep_days);
+    let items: Vec<RetentionItem> = records
+        .iter()
+        .map(|record| RetentionItem {
+            id: record.sidecar.manifest.backup_id.clone(),
+            created_at: record.sidecar.manifest.created_at,
+            complete: record.complete,
+        })
+        .collect();
     let mut removed = Vec::new();
-    let mut kept_complete = 0usize;
-    for record in &records {
-        if !record.complete {
-            remove_backup_files(dir, &record.sidecar);
-            removed.push(record.sidecar.manifest.backup_id.clone());
-            continue;
-        }
-        let within_count = kept_complete < keep_last.max(1);
-        let within_age = keep_days > 0 && record.sidecar.manifest.created_at >= cutoff;
-        if kept_complete == 0 || within_count || within_age {
-            kept_complete += 1;
-        } else {
-            remove_backup_files(dir, &record.sidecar);
-            removed.push(record.sidecar.manifest.backup_id.clone());
-        }
+    for index in plan_retention(&items, keep_last, keep_days, now) {
+        remove_backup_files(dir, &records[index].sidecar);
+        removed.push(records[index].sidecar.manifest.backup_id.clone());
     }
     prune_failures(dir, now);
     Ok(removed)

@@ -32,6 +32,10 @@ pub async fn open_sqlite(path: &Path) -> DbPool {
 }
 
 pub async fn fixture(mode: BackupMode) -> Fixture {
+    fixture_with(mode, None).await
+}
+
+pub async fn fixture_with(mode: BackupMode, s3: Option<crate::s3::S3Config>) -> Fixture {
     let root = tempfile::tempdir().unwrap();
     let dest = root.path().join("backups");
     let db_path = root.path().join("playarr.db");
@@ -54,6 +58,7 @@ pub async fn fixture(mode: BackupMode) -> Fixture {
         keep_days: 30,
         artwork_dir: Some(artwork),
         max_asset_bytes: 1 << 30,
+        s3,
     };
     let service = BackupService::new(config, pool.clone(), "test");
     Fixture {

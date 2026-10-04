@@ -28,6 +28,8 @@ pub enum BackupError {
     Refused(String),
     #[error("encryption error: {0}")]
     Crypto(String),
+    #[error("object storage error: {0}")]
+    Remote(String),
 }
 
 impl From<sqlx::Error> for BackupError {

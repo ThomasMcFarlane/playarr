@@ -13,6 +13,7 @@ use crate::archive::{sha256_of, write_archive};
 use crate::config::BackupConfig;
 use crate::error::{BackupError, Result};
 use crate::manifest::*;
+use crate::s3::S3Store;
 use crate::snapshot::{database_size_bytes, hash_file, take_snapshot};
 use crate::store;
 
@@ -34,18 +35,21 @@ pub struct BackupService {
     server_version: String,
     current: Arc<Mutex<Option<CurrentRun>>>,
     gate: Arc<AsyncMutex<()>>,
+    remote: Option<S3Store>,
     fault: Option<FaultHook>,
     free_space_override: Option<u64>,
 }
 
 impl BackupService {
     pub fn new(config: BackupConfig, pool: DbPool, server_version: impl Into<String>) -> Self {
+        let remote = config.s3.clone().map(S3Store::new);
         Self {
             config: Arc::new(config),
             pool,
             server_version: server_version.into(),
             current: Arc::new(Mutex::new(None)),
             gate: Arc::new(AsyncMutex::new(())),
+            remote,
             fault: None,
             free_space_override: None,
         }
@@ -296,6 +300,45 @@ impl BackupService {
             Utc::now(),
         ) {
             tracing::warn!(%error, "backup retention failed; new backup is intact");
+        }
+
+        // Off-node replication never fails the run: the local backup is
+        // already complete. A failure is recorded and the next run uploads
+        // whatever the bucket still lacks.
+        if let Some(remote) = &self.remote {
+            self.set_phase("replicate", None);
+            let result = match self.fault("before_replicate") {
+                Ok(()) => {
+                    remote
+                        .sync(
+                            &dir,
+                            self.config.keep_last,
+                            self.config.keep_days,
+                            Utc::now(),
+                        )
+                        .await
+                }
+                Err(error) => Err(error),
+            };
+            match result {
+                Ok(report) => tracing::info!(
+                    uploaded = report.uploaded.len(),
+                    removed = report.removed.len(),
+                    "off-node backup copies are current"
+                ),
+                Err(error) => {
+                    tracing::error!(%error, "off-node replication failed; local backup is intact");
+                    let _ = store::record_failure(
+                        &dir,
+                        &store::FailureRecord {
+                            id: id.to_string(),
+                            at: Utc::now(),
+                            phase: "replicate".to_string(),
+                            error: error.to_string(),
+                        },
+                    );
+                }
+            }
         }
         Ok(sidecar)
     }

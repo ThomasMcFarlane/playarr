@@ -154,8 +154,25 @@ info endpoint pointing at a test library directory.
 - **Where backups go.** `PLAYARR_BACKUP_DIR` is a directory. On the regional
   servers it is `/data/backups` on the state volume, which is the same disk as
   the database: it protects against corruption and mistakes, not against losing
-  the node. Copy archives off the node (Admin, Backups, Download) or mount a
-  separate volume or share. Object-storage destinations are not implemented.
+  the node. Set `PLAYARR_BACKUP_S3_*` to also replicate every completed backup to
+  an S3-compatible bucket (Cloudflare R2, MinIO, AWS), or copy archives off the
+  node (Admin, Backups, Download).
+- **Off-node replica.** `PLAYARR_BACKUP_S3_BUCKET` turns it on, with
+  `_ENDPOINT`, `_REGION` (`auto` for R2), `_PREFIX`, `_ACCESS_KEY_ID`,
+  `_SECRET_ACCESS_KEY` (from a Secret), `_PATH_STYLE`, `_PART_MIB` (16, minimum
+  5) and optional `_KEEP_LAST` / `_KEEP_DAYS` (default: the local values). After
+  the local publish and retention, each complete local backup the bucket lacks is
+  uploaded as a multipart upload with per-part SHA-256 checksums (the server
+  rejects a damaged part), read back with `HEAD` to compare the server-held
+  composite checksum and size (falling back to a full read-back hash when the
+  server reports none), and only then committed by uploading the sidecar last.
+  A failed or corrupted upload deletes its objects and records a `replicate`
+  failure; the local backup is untouched and the next run uploads what is
+  missing. Retention is applied to the bucket with the same rules (never the
+  last complete backup), orphaned archives and stale multipart uploads older
+  than 24 hours are cleared, and one prefix per server keeps shared buckets
+  apart. The archive is already age-encrypted, so the bucket never holds
+  plaintext.
 - **Restore is a CLI action**, not a button: replacing the database under a
   running server is unsafe. The Admin page shows the exact command.
 - **Repeatable proof.** `scripts/verify-backup-recovery.sh` starts a scratch

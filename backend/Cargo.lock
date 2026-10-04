@@ -3729,12 +3729,16 @@ name = "playarr-backup"
 version = "0.1.0"
 dependencies = [
  "age",
+ "axum 0.8.9",
+ "base64 0.22.1",
  "chrono",
  "flate2",
  "fs4",
  "futures",
  "hex",
+ "hmac",
  "playarr-db",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.10.9",

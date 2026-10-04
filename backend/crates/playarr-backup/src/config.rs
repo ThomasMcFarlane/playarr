@@ -1,5 +1,6 @@
 //! Environment-driven backup configuration. Backups are off unless
-//! `PLAYARR_BACKUP_DIR` is set.
+//! `PLAYARR_BACKUP_DIR` is set. `PLAYARR_BACKUP_S3_*` adds an off-node replica
+//! (see `s3.rs`).
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -9,6 +10,7 @@ use age::x25519::Recipient;
 use crate::crypto::{fingerprint, parse_recipients};
 use crate::error::{BackupError, Result};
 use crate::manifest::BackupMode;
+use crate::s3::S3Config;
 
 pub const DEFAULT_KEEP_LAST: usize = 7;
 pub const DEFAULT_KEEP_DAYS: i64 = 30;
@@ -26,6 +28,9 @@ pub struct BackupConfig {
     pub keep_days: i64,
     pub artwork_dir: Option<PathBuf>,
     pub max_asset_bytes: u64,
+    /// Optional off-node replica (`PLAYARR_BACKUP_S3_*`). The local
+    /// destination always stays.
+    pub s3: Option<S3Config>,
 }
 
 impl BackupConfig {
@@ -73,6 +78,7 @@ impl BackupConfig {
             keep_days: keep_days as i64,
             artwork_dir: None,
             max_asset_bytes: max_asset_mib.saturating_mul(1024 * 1024),
+            s3: S3Config::from_lookup(lookup)?,
         }))
     }
 

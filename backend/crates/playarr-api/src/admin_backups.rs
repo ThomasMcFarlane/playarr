@@ -403,6 +403,7 @@ mod tests {
                 keep_days: 30,
                 artwork_dir: None,
                 max_asset_bytes: 0,
+                s3: None,
             };
             // A file-backed database, like every real SQLite deployment; the
             // router's own in-memory test pool cannot be copied with VACUUM INTO.

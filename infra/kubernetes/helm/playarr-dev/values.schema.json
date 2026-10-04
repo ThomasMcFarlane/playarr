@@ -390,6 +390,79 @@
               "maxAssetMiB": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "s3": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "endpoint": {
+                    "type": "string",
+                    "pattern": "^https?://[^/\\s]+/?$"
+                  },
+                  "bucket": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+                  },
+                  "region": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prefix": {
+                    "type": "string"
+                  },
+                  "pathStyle": {
+                    "type": "boolean"
+                  },
+                  "partMiB": {
+                    "type": "integer",
+                    "minimum": 5
+                  },
+                  "keepLast": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "keepDays": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "credentialsSecret": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "accessKeyIdKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "secretAccessKeyKey": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "enabled": {
+                      "const": true
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "endpoint",
+                    "bucket"
+                  ]
+                }
               }
             },
             "if": {

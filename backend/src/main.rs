@@ -465,6 +465,8 @@ async fn serve() -> anyhow::Result<()> {
                 mode = ?backup_config.mode,
                 interval_hours = backup_config.interval.map(|i| i.as_secs() / 3600),
                 keep_last = backup_config.keep_last,
+                offsite_bucket = backup_config.s3.as_ref().map(|s3| s3.bucket.as_str()),
+                offsite_prefix = backup_config.s3.as_ref().map(|s3| s3.prefix.as_str()),
                 "server backups enabled"
             );
             Some(Arc::new(playarr_backup::BackupService::new(
