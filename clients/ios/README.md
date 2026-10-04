@@ -1,8 +1,9 @@
 # Playarr for iOS
 
-Native SwiftUI client for iPhone and iPad. The checked-in Xcode project produces a real
-`Playarr.app` bundle and consumes the local `PlayarrKit` Swift package for networking,
-authentication, update compatibility, and AVPlayer-backed playback.
+Native SwiftUI client for iPhone and iPad. `project.yml` generates the Xcode project and the
+CocoaPods dependency declaration pins Google Cast SDK 4.8.6. The app consumes the local
+`PlayarrKit` Swift package for networking, authentication, update compatibility, and AVPlayer-backed
+playback. The signed release workflow also builds the native Apple TV app from `clients/apple-tv`.
 
 ## Requirements
 
@@ -13,12 +14,19 @@ authentication, update compatibility, and AVPlayer-backed playback.
 
 ## Open and run
 
-1. Open `Playarr.xcodeproj`.
-2. Select the shared `PlayarrApp` scheme.
-3. Choose an iPhone or iPad destination.
-4. For a physical device, select the `PlayarrApp` target and set your development team under
+1. Generate the project with XcodeGen and install the CocoaPods dependency:
+
+   ```sh
+   xcodegen generate --spec project.yml
+   pod install
+   ```
+
+2. Open `Playarr.xcworkspace` so the Google Cast pod is linked.
+3. Select the shared `PlayarrApp` scheme.
+4. Choose an iPhone or iPad destination.
+5. For a physical device, select the `PlayarrApp` target and set your development team under
    Signing & Capabilities.
-5. Run the app and sign in with the Playarr Server URL, username, and password.
+6. Run the app and sign in with the Playarr Server URL, username, and password.
 
 The app defaults to `http://localhost:8484`, which is useful when the simulator and server run on
 the same Mac. A physical device needs a server address it can reach. Use HTTPS for remote hosts;
@@ -29,8 +37,9 @@ disable transport security.
 
 ```text
 clients/ios/
-  Playarr.xcodeproj/             # installable iOS app and shared scheme
-  project.yml                      # XcodeGen source for the project
+  project.yml                    # XcodeGen source for the iOS app project
+  Playarr.xcodeproj/             # generated iOS app project
+  Playarr.xcworkspace/           # generated after CocoaPods setup
   Package.swift                    # PlayarrKit package manifest
   Resources/
     Assets.xcassets/               # Playarr app icon and accent colour
@@ -62,7 +71,7 @@ line, use an available simulator name from `xcrun simctl list devices available`
 
 ```sh
 xcodebuild \
-  -project Playarr.xcodeproj \
+  -workspace Playarr.xcworkspace \
   -scheme PlayarrApp \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   test
@@ -72,8 +81,8 @@ Compile an unsigned simulator bundle without launching a runtime:
 
 ```sh
 xcodebuild \
-  -project Playarr.xcodeproj \
-  -target PlayarrApp \
+  -workspace Playarr.xcworkspace \
+  -scheme PlayarrApp \
   -configuration Debug \
   -sdk iphonesimulator \
   CODE_SIGNING_ALLOWED=NO \
@@ -90,14 +99,26 @@ The CI release workflow regenerates `Playarr.xcodeproj` from `project.yml` befor
 
 ## Distribution configuration
 
-The checked-in bundle identifier is `com.playarr.ios`, marketing version `0.1.0`, and build
-number `1`. Before App Store or TestFlight distribution:
+Both distribution targets use the registered App Store Connect bundle identifier
+`app.playarr.ios`. The source project defaults to marketing version `1.0.0`; the private signed
+release workflow assigns a fresh Apple-valid build number for each release. The iOS and tvOS
+targets have separate active App Store provisioning profiles and use the Apple runner
+for signed archive, export, and TestFlight upload. There is no unsigned release stage.
 
-1. Confirm the final registered bundle identifier and development team.
-2. Replace `InstalledAppVersion.appStoreID` after App Store Connect assigns the numeric app ID.
-3. Set the release version and build number in the `PlayarrApp` target.
-4. Review the privacy declaration and local-network transport policy for the release environment.
-5. Archive with a distribution certificate and validate the archive in Xcode Organizer.
+The source repository's automatic/manual dispatcher requires the owner to create a fine-grained
+GitHub token with `Actions: read and write` access limited to the Apple release pipeline,
+then add it as `APPLE_DISPATCH_TOKEN` in this repository's Actions secrets. It is currently
+absent, so source-side dispatch is not ready. The private workflow can be inspected or dispatched
+from the Apple release workflow.
+See [the TestFlight runbook](../../docs/apple-testflight/README.md) for the owner setup links and
+current build evidence.
+
+Before public App Store release:
+
+1. Replace the numeric App Store listing ID placeholder used by the update deep link.
+2. Complete Apple-platform privacy-policy coverage, store screenshots and listing metadata, and
+   App Review access instructions.
+3. Obtain explicit release authorisation and complete App Store review and submission.
 
 Apple distribution remains App Store/TestFlight based; the update gate in the app can prompt or
 block its own UI, but it cannot install code outside Apple's reviewed release process.
@@ -118,8 +139,9 @@ block its own UI, but it cannot install code outside Apple's reviewed release pr
 - Foreground update checks compare this installed bundle version with the server's iOS
   compatibility entry.
 
-The App Store ID and production signing team are intentionally unset because they are allocated
-outside the repository.
+The App Store Connect app record and signing setup now exist. TestFlight processing and internal
+beta state are verified, but these records do not prove that a build was delivered to or installed
+on a physical device. Public listing preparation and submission remain separate work.
 
 ## Chromecast
 
@@ -130,14 +152,7 @@ The receiver App ID is read from the `PlayarrCastReceiverAppID` key in
 `Resources/Info.plist`, left empty on purpose; `AppDelegate` only initialises
 `GCKCastContext` when that value is non-empty.
 
-**This code is entirely unverified.** There is no Google Cast iOS SDK
-distribution via Swift Package Manager (confirmed by checking the SDK's SPM
-repository directly: it remains an empty placeholder with no
-`Package.swift`), so `GoogleCast.framework` has not been vendored into this
-project at all; the Cast Swift files will not compile until a human adds it
-via CocoaPods or a manually vendored XCFramework in Xcode. Separately, this
-development environment has no macOS or Xcode toolchain, so even the parts of
-this code that don't touch the Cast SDK (e.g. the `PlayerEngine` protocol
-changes it required) have never been built or run here. Treat every file
-under `Cast/` as a first draft that needs real-Xcode verification before
-relying on it.
+The `google-cast-sdk` CocoaPod is pinned to 4.8.6, and the signed iOS archive and export completed
+successfully with the Cast sources included. The Cast receiver application ID is still empty in
+`Resources/Info.plist`, so receiver discovery and Cast playback have not been validated as an
+end-to-end feature. Configure a real receiver ID before claiming that runtime path is ready.

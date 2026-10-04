@@ -19,16 +19,11 @@ platform or App Store capability limits (for example binary OTA rules).
   (iOS 15.0), chosen because `PlayarrKit`/`PlayarrApp` lean on modern
   Swift Concurrency and Observation-framework APIs (`@Observable`) without
   back-compat shims.
-- **Built with:** whatever Xcode release is available when the app is
-  actually opened and built as an Xcode project — see "No Xcode in this
-  build environment" below for the current, real state of that.
-- **tvOS:** not a separately shipped client. `PlayarrKit` (Networking,
-  Player, Auth) has zero UIKit import anywhere — Foundation, Combine,
-  Observation, AVFoundation, and AVKit are all available on iOS, tvOS, and
-  macOS alike — so a tvOS target sharing this package's `PlayarrKit`
-  product remains a low-cost, additive future step (add `.tvOS(.v17)` to
-  `platforms`, add a new executable target). It is deliberately not
-  committed to yet.
+- **Build toolchain:** the Apple release runner currently builds with Xcode 26.5.
+- **tvOS:** a native SwiftUI/AVKit Apple TV app exists at `clients/apple-tv` and shares
+  `PlayarrKit` with iOS. It has its own target and active App Store provisioning profile. Both
+  Apple targets use the App Store Connect bundle identifier `app.playarr.ios` and are uploaded
+  together by the signed-only TestFlight workflow.
 
 ## Tech stack
 
@@ -145,27 +140,26 @@ platform's client from one command.
 
 ## Xcode project and local validation
 
-`clients/ios/Playarr Server.xcodeproj` is a checked-in, installable application
-project generated from `project.yml`. It builds the SwiftUI sources as
-`Playarr.app`, links the local `PlayarrKit` package, and includes bundle
-metadata, entitlements, the privacy manifest, the accent colour, and a real
-1024 px application icon. The shared scheme also contains `PlayarrKitTests`
-and `PlayarrAppTests` XCTest targets.
+`clients/ios/project.yml` is the iOS project source and generates the SwiftUI application project.
+The release workflow regenerates it, installs the pinned Google Cast 4.8.6 CocoaPod, and builds
+from the resulting workspace. The iOS and Apple TV targets both link the local `PlayarrKit`
+package. Release builds are signed and exported by the Apple runner.
 
-Local validation now compiles the complete application, including its asset
-catalogue and privacy manifest, against the iOS Simulator SDK. The shared
-scheme executes all eleven `PlayarrKitTests` and `PlayarrAppTests` successfully
-on an iPhone 17 Pro simulator running iOS 26.5. The responsive shell is also
-render-checked on an iPad Air 11-inch simulator. Signing, archive validation,
-physical-device testing, TestFlight and App Store submission still require the
-appropriate Apple developer account and distribution configuration.
+Private Apple run <id>
+successfully signed, archived, exported, and uploaded both platforms from immutable source commit
+`b47fda4956f6a0adee39027689504bfcdd2b2adb` as marketing version `1.0.0`, build `1.2`. App Store
+Connect reports both platform builds `VALID`, with internal beta state `IN_BETA_TESTING` and
+`usesNonExemptEncryption=false`. This proves build and upload processing, not delivery to or
+installation on a physical device. Source-side workflow dispatch still requires the owner to add
+the missing `APPLE_DISPATCH_TOKEN`; see the [TestFlight runbook](../../apple-testflight/README.md).
 
 ## Store submission process and constraints
 
-- Distributed via the **App Store**, through App Store Connect, with
-  **TestFlight** used for beta/internal distribution ahead of release —
-  both require signing and App Store Connect registration, which have not
-  happened yet.
+- Distributed through App Store Connect, with TestFlight used for internal and external beta
+  distribution ahead of public release. The app record, shared bundle identifier, distribution
+  signing and provisioning, and internal TestFlight build processing are in place. Public listing
+  readiness is separate: Apple-platform privacy coverage, screenshots and metadata, App Review
+  access instructions, and explicit authorisation for public submission remain outstanding.
 - Full App Review applies to every release, including patch releases —
   there is no fast-track or self-service publish path, and review turnaround
   is outside Playarr Server's control.
@@ -188,7 +182,11 @@ appropriate Apple developer account and distribution configuration.
   app's own UI but cannot stop a determined user from working around it
   and has no effect at the network/API layer; real enforcement, if ever
   needed, has to happen server-side.
+- The source currently keeps `InstalledAppVersion.appStoreID` at the placeholder
+  `0000000000`; the App Store Connect app record exists, but the deep link must be updated before
+  public release.
 - Content/privacy: the app collects no data beyond what's needed to talk to
-  the user's own configured Playarr Server, simplifying the App Privacy
-  "nutrition label" disclosure in App Store Connect considerably (no
-  third-party SDKs, no analytics, no advertising identifiers).
+  the user's own configured Playarr Server and Google Cast. The app includes
+  the Google Cast SDK; it has no analytics or advertising identifiers. Confirm
+  the final App Privacy disclosure against the configured Cast receiver before
+  public submission.
