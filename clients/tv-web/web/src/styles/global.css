@@ -11990,3 +11990,297 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   opacity: 0.7;
   font-size: 0.9rem;
 }
+
+/* Shared page header actions + Filters button (components/shell). */
+.tv-library-heading.has-actions {
+  right: clamp(24px, 4vw, 96px);
+}
+
+.tv-library-heading > .page-header-detail {
+  min-width: 0;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 0.8vw, 16px);
+  margin-left: auto;
+}
+
+.page-filters-button {
+  min-height: clamp(38px, 2.8vw, 50px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 clamp(12px, 1vw, 20px);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 66%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+  color: var(--ink-soft);
+  font-size: clamp(0.62rem, 0.7vw, 0.9rem);
+  font-weight: 680;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.page-filters-button svg {
+  width: clamp(16px, 1.2vw, 22px);
+  height: clamp(16px, 1.2vw, 22px);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.page-filters-button:hover,
+.page-filters-button:focus-visible,
+.page-filters-button.is-active {
+  outline: 0;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.page-filters-count {
+  min-width: 1.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--accent, var(--ink));
+  color: var(--bg);
+  font-size: 0.8em;
+  text-align: center;
+}
+
+.filters-date-range {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.filters-date-range label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, 0.58vw, 0.72rem);
+  font-weight: 680;
+}
+
+.filters-date-range input[type="date"] {
+  min-height: clamp(40px, 3.2vw, 52px);
+  padding: 0 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  color-scheme: light dark;
+  font: inherit;
+}
+
+.filters-date-range input[type="date"]:focus-visible,
+.filters-date-clear:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.filters-date-clear {
+  justify-self: start;
+  padding: 0.5rem 0.9rem;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-weight: 680;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  /* The profile avatar floats top-right on phones; keep actions clear of it. */
+  .tv-library-heading.has-actions {
+    right: 72px;
+  }
+
+  .tv-library-heading .page-header-actions.is-stacked {
+    flex-direction: row;
+  }
+
+  .tv-library-heading.has-actions > h1 {
+    font-size: 1.1rem;
+  }
+
+  /* Keep the drawer's close control clear of the floating avatar and bottom nav. */
+  .tv-filter-drawer > header {
+    padding-right: 60px;
+  }
+
+  .tv-filter-drawer {
+    padding-bottom: 110px;
+  }
+
+  .page-filters-button span {
+    display: none;
+  }
+
+  .page-filters-button {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* Shared page frame, master-detail, skeleton and safe areas (components/shell). */
+.app-shell {
+  /* The profile chip lives bottom-left on every screen; pages must not render beneath it. */
+  --page-safe-bottom: clamp(92px, calc(11 * var(--viewport-unit)), 124px);
+  --page-safe-left: clamp(220px, 12vw, 260px);
+}
+
+.page-header-actions.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.page-shell {
+  position: relative;
+  width: 100%;
+  height: var(--viewport-height);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(104px, calc(15 * var(--viewport-unit)), 168px) clamp(24px, 4vw, 96px) var(--page-safe-bottom)
+    clamp(102px, 8vw, 160px);
+  background: var(--surface);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.page-shell-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.master-detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
+  gap: clamp(24px, 3vw, 64px);
+}
+
+.master-detail-pane {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.master-detail-list {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-soft) 25%,
+    color-mix(in srgb, var(--surface-strong) 60%, var(--line)) 50%,
+    var(--surface-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-lines {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .page-shell {
+    padding: calc(var(--mobile-top-inset, 0px) + 72px) var(--mobile-page-gutter, 16px)
+      var(--page-safe-bottom);
+  }
+
+  .master-detail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .master-detail-pane {
+    max-height: calc(38 * var(--viewport-unit));
+  }
+}
+
+/* Long page titles must not run into the shell clock sitting at the stage divider. */
+.app-shell:has(.page-header) .app-clock {
+  right: calc(65% - clamp(10px, 2vw, 40px));
+}
+
+.tv-library-heading.has-actions {
+  align-items: flex-start;
+}
+
+.tv-library-heading.has-actions > h1 {
+  align-self: flex-start;
+  min-height: clamp(38px, 2.8vw, 50px);
+  display: flex;
+  align-items: center;
+}
+
+.tv-library-heading.has-actions > .tv-page-back {
+  align-self: flex-start;
+}
+
+.tv-library-heading.has-actions > .page-header-detail {
+  align-self: flex-start;
+  min-height: clamp(38px, 2.8vw, 50px);
+  display: flex;
+  align-items: center;
+}
+
+.tv-filter-drawer .calendar-subscription {
+  display: grid;
+  gap: 0.75rem;
+  font-size: clamp(0.62rem, 0.72vw, 0.9rem);
+}
+
+.tv-filter-drawer .calendar-subscription h2 {
+  display: none;
+}
+
+.tv-filter-drawer .calendar-subscription p,
+.tv-filter-drawer .calendar-subscription li {
+  font-size: inherit;
+  line-height: 1.5;
+}
+
+.tv-filter-drawer .calendar-subscription-instructions {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}

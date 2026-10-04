@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Web: a shared page shell (`components/shell`): `PageHeader` (back button top-left, large title, divider/detail, right-aligned actions), `PageShell` (reserves the bottom-left profile chip safe area), `FiltersButton`/`FiltersDrawer`, `MultiSelect`, `DateRangeField`, `ViewToggle`, `MasterDetail` and skeleton primitives. Library, Playlists, Search, Watchlist, Downloads, Settings and detail pages now render their heading through it, and `pageHeaderRegistry.test.ts` fails when a page bypasses it.
+- Web: the Release Calendar follows the page layout (back, "Release Calendar", Filters and Calendar subscription on the right). Filters cover View, type, source, status, date range and monitored; the subscription opens its own drawer with link, QR, instructions and status. View, date, filters, selection and open panel all live in the URL (`?view=agenda&date=2026-10-04&type=tv,movie&status=upcoming&selected=...&panel=subscription`).
+- Web: episodes of one series released on the same day at the same time collapse into one calendar event ("The Show - 3 episodes - S02E04-E06"); the agenda is master-detail (details left, list right) with skeleton loading, and the week view scrolls horizontally with wide snapping day columns.
 - Server: `playarr-server create-admin --username <name>` creates an administrator (password on standard input, never in arguments) or resets that administrator's password, so operators can provision a dedicated operator or test account without touching the database.
 - Household controls rolled out to region-a and region-b (image `<image>`) with live verification recorded on TASKS rows 104-114.
 - Playarr Android (phone, tablet and TV): a native "Not available right now" screen when the

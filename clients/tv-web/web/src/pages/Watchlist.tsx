@@ -6,6 +6,7 @@ import {
   type WatchlistEntry,
 } from "@playarr-tv/api-client";
 import { RequestButton } from "../components/RequestButton";
+import { PageHeader } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -80,12 +81,7 @@ export function WatchlistPage() {
 
   return (
     <TvStageShell className="tv-library tv-downloads tv-watchlist" ariaLabel={t("pages.watchlist.title")}>
-      <header className="tv-library-heading">
-        <Link to="/" className="tv-page-back" aria-label={t("pages.watchlist.backToHome")}>
-          <span aria-hidden="true">←</span>
-        </Link>
-        <h1>{t("pages.watchlist.title")}</h1>
-      </header>
+      <PageHeader title={t("pages.watchlist.title")} backLabel={t("pages.watchlist.backToHome")} />
       <TvRailSurface
         className="tv-rail-panel tv-library-grid-panel tv-downloads-panel"
         mode="content"

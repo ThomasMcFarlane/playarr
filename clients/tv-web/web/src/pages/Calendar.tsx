@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   CalendarEntry,
   CalendarMediaKind,
@@ -8,31 +8,61 @@ import type {
 } from "@playarr-tv/api-client";
 import { useAsyncData } from "@playarr-tv/api-client/react";
 import { CalendarSubscription } from "../components/CalendarSubscription";
+import {
+  DateRangeField,
+  FilterSection,
+  FiltersButton,
+  FiltersDrawer,
+  MasterDetail,
+  MultiSelect,
+  PageShell,
+  SkeletonBlock,
+  SkeletonLines,
+  ViewToggle,
+} from "../components/shell";
+import { RequestButton } from "../components/RequestButton";
+import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
 import {
-  CALENDAR_KINDS,
   CALENDAR_VIEWS,
   anchorForView,
+  addDays,
   buildMonthGrid,
   buildWeekDays,
   defaultCalendarView,
   entryState,
+  entryLocalDay,
   episodeCode,
   failedSources,
   fetchWindow,
-  filterByKinds,
   formatHumanDuration,
   groupByLocalDay,
+  groupSeriesEpisodes,
   localDayOf,
   parseDay,
   shiftAnchor,
   visibleRange,
   weekStartsOn,
   workRouteForEntry,
+  type CalendarItem,
   type CalendarView,
   type Day,
   type DayGroup,
 } from "../lib/calendar";
+import {
+  activeFilterCount,
+  applyCalendarFilters,
+  CALENDAR_STATUSES,
+  CALENDAR_TYPE_PARAMS,
+  kindForType,
+  parseCalendarFilters,
+  parseCalendarUrl,
+  writeCalendarFilters,
+  writeCalendarUrl,
+  type CalendarFilters,
+  type CalendarStatus,
+  type CalendarTypeParam,
+} from "../lib/calendarFilters";
 import { IS_TV } from "../lib/clientPlatform";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
@@ -50,6 +80,20 @@ const KIND_KEYS: Record<CalendarMediaKind, TranslationKey> = {
   movie: "pages.calendar.kindMovie",
   album: "pages.calendar.kindAlbum",
   book: "pages.calendar.kindBook",
+};
+
+const TYPE_KEYS: Record<CalendarTypeParam, TranslationKey> = {
+  tv: "pages.calendar.typeTv",
+  movie: "pages.calendar.typeMovies",
+  music: "pages.calendar.typeMusic",
+  book: "pages.calendar.typeBooks",
+};
+
+const STATUS_KEYS: Record<CalendarStatus, TranslationKey> = {
+  aired: "pages.calendar.statusAired",
+  upcoming: "pages.calendar.statusUpcoming",
+  downloaded: "pages.calendar.statusDownloaded",
+  missing: "pages.calendar.statusMissing",
 };
 
 const VIEW_KEYS: Record<CalendarView, TranslationKey> = {
@@ -145,40 +189,68 @@ function StateBadge({ entry, t }: { entry: CalendarEntry; t: TFunction }) {
   );
 }
 
-interface EntryHandlers {
-  onOpen: (entry: CalendarEntry, target: HTMLElement) => void;
+type SeriesGroup = Extract<CalendarItem, { kind: "series" }>;
+
+interface SelectHandlers {
+  selectedKey: string | null;
+  onSelect: (item: CalendarItem, target: HTMLElement) => void;
 }
 
-function EntryRow({
-  entry,
+function groupState(group: SeriesGroup): "inLibrary" | "monitored" | "notMonitored" {
+  if (group.entries.every((entry) => entry.has_file)) return "inLibrary";
+  return group.entries.some((entry) => entry.monitored) ? "monitored" : "notMonitored";
+}
+
+function itemEntry(item: CalendarItem): CalendarEntry {
+  return item.kind === "single" ? item.entry : item.entries[0]!;
+}
+
+function itemTitle(item: CalendarItem): string {
+  return item.kind === "single" ? item.entry.title : item.title;
+}
+
+function Poster({ entry }: { entry: CalendarEntry }) {
+  return entry.poster_url ? (
+    <img
+      className="calendar-poster"
+      src={entry.poster_url}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+    />
+  ) : (
+    <span className="calendar-poster calendar-poster-empty" aria-hidden="true" />
+  );
+}
+
+function ItemRow({
+  item,
   t,
   locale,
-  onOpen,
-}: { entry: CalendarEntry; t: TFunction; locale: string } & EntryHandlers) {
-  const time = entryTime(entry);
-  const subtitle = entrySubtitle(entry);
+  selectedKey,
+  onSelect,
+}: { item: CalendarItem; t: TFunction; locale: string } & SelectHandlers) {
+  const first = itemEntry(item);
+  const time = entryTime(first);
+  const isGroup = item.kind === "series";
+  const subtitle = isGroup
+    ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
+    : entrySubtitle(item.entry);
+  const state = isGroup ? groupState(item) : entryState(first);
+  const selected = selectedKey === item.key;
   return (
     <li>
       <button
         type="button"
-        className={`calendar-entry calendar-kind-${entry.media_kind}`}
-        data-navigation-focus-key={`calendar:${entry.id}`}
-        onClick={(event) => onOpen(entry, event.currentTarget)}
+        className={`calendar-entry calendar-kind-${first.media_kind}${isGroup ? " calendar-entry-group" : ""}${selected ? " is-selected" : ""}`}
+        data-navigation-focus-key={`calendar:${item.key}`}
+        aria-pressed={selected}
+        onClick={(event) => onSelect(item, event.currentTarget)}
       >
-        {entry.poster_url ? (
-          <img
-            className="calendar-poster"
-            src={entry.poster_url}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span className="calendar-poster calendar-poster-empty" aria-hidden="true" />
-        )}
+        <Poster entry={first} />
         <span className="calendar-entry-body">
-          <span className="calendar-entry-title">{entry.title}</span>
+          <span className="calendar-entry-title">{itemTitle(item)}</span>
           {subtitle ? <span className="calendar-entry-subtitle">{subtitle}</span> : null}
           <span className="calendar-entry-meta">
             <span>
@@ -186,12 +258,25 @@ function EntryRow({
                 ? new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(time)
                 : t("pages.calendar.allDay")}
             </span>
-            <span>{t(RELEASE_KEYS[entry.release_type])}</span>
-            <span>{t(KIND_KEYS[entry.media_kind])}</span>
-            <StateBadge entry={entry} t={t} />
+            <span>{t(RELEASE_KEYS[first.release_type])}</span>
+            {isGroup ? null : <span>{t(KIND_KEYS[first.media_kind])}</span>}
+            <span className={`calendar-badge calendar-badge-${state}`}>{t(STATE_KEYS[state])}</span>
           </span>
         </span>
       </button>
+    </li>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <li className="calendar-entry calendar-entry-skeleton" aria-hidden="true">
+      <SkeletonBlock className="calendar-poster" />
+      <span className="calendar-entry-body">
+        <SkeletonBlock width="60%" height="1rem" />
+        <SkeletonBlock width="40%" height="0.8rem" />
+        <SkeletonBlock width="75%" height="0.7rem" />
+      </span>
     </li>
   );
 }
@@ -202,32 +287,49 @@ function DaySections({
   locale,
   today,
   showEmpty,
-  onOpen,
+  loading,
+  selectedKey,
+  onSelect,
 }: {
   days: readonly { day: Day; entries: CalendarEntry[] }[];
   t: TFunction;
   locale: string;
   today: Day;
   showEmpty: boolean;
-} & EntryHandlers) {
+  loading?: boolean;
+} & SelectHandlers) {
   return (
     <div className={`calendar-days calendar-days-${showEmpty ? "week" : "agenda"}`}>
       {days
-        .filter((group) => showEmpty || group.entries.length > 0)
-        .map((group) => (
+        .filter((group) => loading || showEmpty || group.entries.length > 0)
+        .map((group, index) => (
           <section
             key={group.day}
             className={`calendar-day${group.day === today ? " is-today" : ""}`}
             aria-label={formatDayHeading(group.day, locale)}
+            aria-busy={loading ? true : undefined}
           >
             <h3>
               <time dateTime={group.day}>{formatDayHeading(group.day, locale)}</time>
               {group.day === today ? <span className="calendar-today-tag">{t("pages.calendar.today")}</span> : null}
             </h3>
-            {group.entries.length > 0 ? (
+            {loading ? (
               <ul>
-                {group.entries.map((entry) => (
-                  <EntryRow key={entry.id} entry={entry} t={t} locale={locale} onOpen={onOpen} />
+                {Array.from({ length: 1 + ((index + 1) % 2) }, (_, i) => (
+                  <SkeletonRow key={i} />
+                ))}
+              </ul>
+            ) : group.entries.length > 0 ? (
+              <ul>
+                {groupSeriesEpisodes(group.entries).map((item) => (
+                  <ItemRow
+                    key={item.key}
+                    item={item}
+                    t={t}
+                    locale={locale}
+                    selectedKey={selectedKey}
+                    onSelect={onSelect}
+                  />
                 ))}
               </ul>
             ) : (
@@ -239,6 +341,20 @@ function DaySections({
   );
 }
 
+/** Week view: one wide column per day on a horizontally scrolling, snapping track. */
+function WeekTrack(props: Parameters<typeof DaySections>[0]) {
+  return (
+    <div
+      className="calendar-week-scroll"
+      data-tv-scroll-container
+      data-tv-scroll-axis="horizontal"
+      data-navigation-scroll-key="calendar:week-x"
+    >
+      <DaySections {...props} />
+    </div>
+  );
+}
+
 function MonthGrid({
   anchor,
   firstDay,
@@ -246,7 +362,9 @@ function MonthGrid({
   today,
   t,
   locale,
-  onOpen,
+  loading,
+  selectedKey,
+  onSelect,
   onMore,
 }: {
   anchor: Day;
@@ -255,8 +373,9 @@ function MonthGrid({
   today: Day;
   t: TFunction;
   locale: string;
+  loading?: boolean;
   onMore: (day: Day) => void;
-} & EntryHandlers) {
+} & SelectHandlers) {
   const weeks = buildMonthGrid(anchor, firstDay, groups, today);
   const weekdayFormat = utcFormatter(locale, { weekday: "short" });
   return (
@@ -265,6 +384,7 @@ function MonthGrid({
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="calendar:month-x"
+      aria-busy={loading ? true : undefined}
     >
       <table className="calendar-month">
         <thead>
@@ -277,11 +397,12 @@ function MonthGrid({
           </tr>
         </thead>
         <tbody>
-          {weeks.map((week) => (
+          {weeks.map((week, weekIndex) => (
             <tr key={week[0]!.day}>
-              {week.map((cell) => {
-                const shown = cell.entries.slice(0, MONTH_CHIP_LIMIT);
-                const hidden = cell.entries.length - shown.length;
+              {week.map((cell, cellIndex) => {
+                const items = groupSeriesEpisodes(cell.entries);
+                const shown = items.slice(0, MONTH_CHIP_LIMIT);
+                const hidden = items.length - shown.length;
                 return (
                   <td
                     key={cell.day}
@@ -291,19 +412,34 @@ function MonthGrid({
                       {parseDay(cell.day).getUTCDate()}
                     </time>
                     <ul>
-                      {shown.map((entry) => (
-                        <li key={entry.id}>
-                          <button
-                            type="button"
-                            className={`calendar-chip calendar-kind-${entry.media_kind}`}
-                            title={[entry.title, entrySubtitle(entry)].filter(Boolean).join(" · ")}
-                            data-navigation-focus-key={`calendar:${entry.id}`}
-                            onClick={(event) => onOpen(entry, event.currentTarget)}
-                          >
-                            {entry.title}
-                          </button>
+                      {loading && (weekIndex + cellIndex) % 3 !== 0 ? (
+                        <li aria-hidden="true">
+                          <SkeletonBlock className="calendar-chip-skeleton" />
                         </li>
-                      ))}
+                      ) : null}
+                      {shown.map((item) => {
+                        const entry = itemEntry(item);
+                        return (
+                          <li key={item.key}>
+                            <button
+                              type="button"
+                              className={`calendar-chip calendar-kind-${entry.media_kind}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
+                              title={
+                                item.kind === "series"
+                                  ? `${item.title} · ${t("pages.calendar.groupSummary", {
+                                      count: item.entries.length,
+                                      codes: item.codes,
+                                    })}`
+                                  : [entry.title, entrySubtitle(entry)].filter(Boolean).join(" · ")
+                              }
+                              data-navigation-focus-key={`calendar:${item.key}`}
+                              onClick={(event) => onSelect(item, event.currentTarget)}
+                            >
+                              {item.kind === "series" ? `${item.title} · ${item.entries.length}×` : entry.title}
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                     {hidden > 0 ? (
                       <button type="button" className="calendar-more" onClick={() => onMore(cell.day)}>
@@ -321,20 +457,157 @@ function MonthGrid({
   );
 }
 
-function EntrySheet({
-  entry,
+function snapshotKind(entry: CalendarEntry): "movie" | "series" | "artist" | "author" {
+  switch (entry.media_kind) {
+    case "movie":
+      return "movie";
+    case "album":
+      return "artist";
+    case "book":
+      return "author";
+    default:
+      return "series";
+  }
+}
+
+/** Details of the selected item: facts, plus Open (in library) or Request / Watchlist (not yet). */
+function ItemDetails({
+  item,
   t,
   locale,
-  onClose,
+  onOpen,
 }: {
-  entry: CalendarEntry;
+  item: CalendarItem;
   t: TFunction;
   locale: string;
+  onOpen: ((route: string) => void) | null;
+}) {
+  const first = itemEntry(item);
+  const entries = item.kind === "series" ? item.entries : [item.entry];
+  const time = entryTime(first);
+  const route = workRouteForEntry(first);
+  const subtitle = item.kind === "series"
+    ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
+    : entrySubtitle(first);
+  const snapshot = {
+    kind: snapshotKind(first),
+    title: first.title,
+    poster_url: first.poster_url ?? null,
+    work_id: first.work_id ?? null,
+    year: Number(first.date.slice(0, 4)) || null,
+  } as const;
+  return (
+    <article className="calendar-details">
+      <p className="page-kicker">
+        {t(KIND_KEYS[first.media_kind])} · {t(RELEASE_KEYS[first.release_type])}
+      </p>
+      <h2 id="calendar-details-title">{itemTitle(item)}</h2>
+      {subtitle ? <p className="calendar-sheet-subtitle">{subtitle}</p> : null}
+      <dl className="calendar-sheet-facts">
+        <div>
+          <dt>{t("pages.calendar.sheetWhen")}</dt>
+          <dd>
+            {time ? (
+              <time dateTime={first.release_at ?? undefined}>
+                {new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(time)}
+              </time>
+            ) : (
+              <>
+                <time dateTime={first.date}>{formatDayHeading(first.date, locale)}</time>
+                {" · "}
+                {t("pages.calendar.allDay")}
+              </>
+            )}
+          </dd>
+        </div>
+        {item.kind === "series" ? (
+          <div>
+            <dt>{t("pages.calendar.sheetEpisodes")}</dt>
+            <dd>
+              <ul className="calendar-group-episodes">
+                {item.entries.map((entry) => (
+                  <li key={entry.id}>
+                    <span className="calendar-group-code">{episodeCode(entry)}</span>
+                    <span className="calendar-group-name">{entry.subtitle ?? entry.title}</span>
+                    <StateBadge entry={entry} t={t} />
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        ) : (
+          <div>
+            <dt>{t("pages.calendar.sheetState")}</dt>
+            <dd>
+              <StateBadge entry={first} t={t} />
+            </dd>
+          </div>
+        )}
+        {first.average_lag_seconds != null ? (
+          <div>
+            <dt>{t("pages.calendar.sheetUsually")}</dt>
+            <dd>
+              {t("pages.workDetail.availabilityLag", {
+                duration: formatHumanDuration(first.average_lag_seconds, locale),
+              })}
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{t("pages.calendar.sheetSources")}</dt>
+          <dd>
+            <ul className="calendar-sheet-sources">
+              {[...new Map(entries.flatMap((e) => e.sources).map((s) => [s.source_instance_id, s])).values()].map(
+                (source) => (
+                  <li key={source.source_instance_id}>
+                    {source.source_name} <span className="muted">({source.source_kind})</span>
+                  </li>
+                )
+              )}
+            </ul>
+          </dd>
+        </div>
+      </dl>
+      <div className="calendar-sheet-actions">
+        {route && onOpen ? (
+          <button type="button" className="btn btn-primary" onClick={() => onOpen(route)}>
+            {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
+          </button>
+        ) : (
+          <>
+            <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p>
+            <RequestButton snapshot={snapshot} className="btn btn-primary" />
+            <WatchlistToggle snapshot={snapshot} className="btn btn-secondary" />
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function DetailsSkeleton() {
+  return (
+    <div className="calendar-details" aria-hidden="true">
+      <SkeletonBlock width="30%" height="0.8rem" />
+      <SkeletonBlock width="80%" height="2rem" />
+      <SkeletonBlock width="50%" height="1rem" />
+      <SkeletonLines count={4} />
+      <SkeletonBlock width="9rem" height="2.75rem" />
+    </div>
+  );
+}
+
+/** Modal details for the month/week views (agenda shows them in its left pane). */
+function DetailSheet({
+  children,
+  closeLabel,
+  onClose,
+}: {
+  children: React.ReactNode;
+  closeLabel: string;
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  const time = entryTime(entry);
-  const subtitle = entrySubtitle(entry);
 
   useEffect(() => {
     closeRef.current?.focus({ preventScroll: true });
@@ -362,80 +635,41 @@ function EntrySheet({
         className="calendar-sheet"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="calendar-sheet-title"
+        aria-labelledby="calendar-details-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <p className="page-kicker">
-          {t(KIND_KEYS[entry.media_kind])} · {t(RELEASE_KEYS[entry.release_type])}
-        </p>
-        <h2 id="calendar-sheet-title">{entry.title}</h2>
-        {subtitle ? <p className="calendar-sheet-subtitle">{subtitle}</p> : null}
-        <dl className="calendar-sheet-facts">
-          <div>
-            <dt>{t("pages.calendar.sheetWhen")}</dt>
-            <dd>
-              {time ? (
-                <time dateTime={entry.release_at ?? undefined}>
-                  {new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(time)}
-                </time>
-              ) : (
-                <>
-                  <time dateTime={entry.date}>{formatDayHeading(entry.date, locale)}</time>
-                  {" · "}
-                  {t("pages.calendar.allDay")}
-                </>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>{t("pages.calendar.sheetState")}</dt>
-            <dd>
-              <StateBadge entry={entry} t={t} />
-            </dd>
-          </div>
-          {entry.average_lag_seconds != null ? (
-            <div>
-              <dt>{t("pages.calendar.sheetUsually")}</dt>
-              <dd>
-                {t("pages.workDetail.availabilityLag", {
-                  duration: formatHumanDuration(entry.average_lag_seconds, locale),
-                })}
-              </dd>
-            </div>
-          ) : null}
-          <div>
-            <dt>{t("pages.calendar.sheetSources")}</dt>
-            <dd>
-              <ul className="calendar-sheet-sources">
-                {entry.sources.map((source) => (
-                  <li key={`${source.source_instance_id}:${source.arr_id}`}>
-                    {source.source_name} <span className="muted">({source.source_kind})</span>
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        </dl>
-        {!entry.work_id ? <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p> : null}
+        {children}
         <button ref={closeRef} type="button" className="btn btn-secondary" onClick={onClose}>
-          {t("pages.calendar.sheetClose")}
+          {closeLabel}
         </button>
       </section>
     </div>
   );
 }
 
-/** Aggregated release calendar: agenda, week and month views over every connected *arr source. */
+
+const VIEW_ICONS: Record<CalendarView, "list" | "screen" | "cover"> = {
+  agenda: "list",
+  week: "screen",
+  month: "cover",
+};
+
+/**
+ * Aggregated release calendar: agenda, week and month views over every connected *arr source.
+ * All state (view, date, filters, selection, open panel) lives in the URL.
+ */
 export function CalendarPage() {
   const { t, language } = useLanguage();
   const locale = LOCALE_TAGS[language] ?? "en-GB";
   const client = useApiClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   useDocumentTitle(t("pages.calendar.title"));
 
   const firstDay = useMemo(() => weekStartsOn(locale), [locale]);
-  const [view, setView] = useState<CalendarView>(() =>
+  const [today] = useState<Day>(() => localDayOf(new Date()));
+  const [defaultView] = useState<CalendarView>(() =>
     defaultCalendarView({
       isTv: IS_TV,
       matches: (query) =>
@@ -444,11 +678,27 @@ export function CalendarPage() {
           : false,
     })
   );
-  const [today] = useState<Day>(() => localDayOf(new Date()));
-  const [anchor, setAnchor] = useState<Day>(() => anchorForView(view, today));
-  const [kinds, setKinds] = useState<ReadonlySet<CalendarMediaKind>>(() => new Set());
+
+  const searchKey = searchParams.toString();
+  const filters = useMemo(() => parseCalendarFilters(new URLSearchParams(searchKey)), [searchKey]);
+  const urlState = useMemo(() => parseCalendarUrl(new URLSearchParams(searchKey)), [searchKey]);
+  const view: CalendarView = urlState.view ?? defaultView;
+  const anchor: Day = anchorForView(view, urlState.date ?? filters.from ?? today);
+  const panel = urlState.panel;
+
+  const updateParams = useCallback(
+    (mutate: (params: URLSearchParams) => URLSearchParams) => {
+      setSearchParams((current) => mutate(new URLSearchParams(current)), { replace: true });
+    },
+    [setSearchParams]
+  );
+  const setAnchor = (next: Day) => updateParams((params) => writeCalendarUrl(params, { date: next }));
+  const setFilters = (next: CalendarFilters) => updateParams((params) => writeCalendarFilters(params, next));
+  const setPanel = (next: "filters" | "subscription" | null) =>
+    updateParams((params) => writeCalendarUrl(params, { panel: next }));
+
   const [reloadNonce, setReloadNonce] = useState(0);
-  const [selected, setSelected] = useState<{ entry: CalendarEntry; opener: HTMLElement } | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const range = visibleRange(view, anchor, firstDay);
   const fetchRange = fetchWindow(range);
@@ -458,49 +708,53 @@ export function CalendarPage() {
   );
 
   const data = state.status === "ready" ? state.data : null;
+  const loading = state.status !== "ready" && state.status !== "error";
   const groups = useMemo(
-    () => (data ? groupByLocalDay(filterByKinds(data.entries, kinds), range) : []),
+    () => (data ? groupByLocalDay(applyCalendarFilters(data.entries, filters, today), range) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, kinds, range.start, range.end]
+    [data, filters, today, range.start, range.end]
   );
+  const items = useMemo(() => groups.flatMap((group) => groupSeriesEpisodes(group.entries)), [groups]);
+  const sourceOptions = useMemo(
+    () => (data?.sources ?? []).map((source) => ({ value: source.source_instance_id, label: source.name })),
+    [data]
+  );
+
+  const selectedItem = items.find((item) => item.key === urlState.selected) ?? null;
+  // Agenda is master-detail: with nothing explicitly selected the first item is previewed.
+  const detailItem = view === "agenda" ? (selectedItem ?? items[0] ?? null) : selectedItem;
+
+  function select(item: CalendarItem, target: HTMLElement) {
+    openerRef.current = target;
+    updateParams((params) => writeCalendarUrl(params, { selected: item.key }));
+  }
+
+  function clearSelection() {
+    updateParams((params) => writeCalendarUrl(params, { selected: null }));
+    openerRef.current?.focus({ preventScroll: true });
+  }
+  const clearSelectionCb = useCallback(clearSelection, [updateParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openRoute(route: string) {
+    const origin = captureNavigationLayer(location.pathname, location.key, openerRef.current);
+    navigate(route, { state: { backTo: `/calendar${location.search}`, navigationOrigin: origin } });
+  }
 
   function changeView(next: CalendarView) {
     if (next === view) return;
-    setView(next);
-    setAnchor(anchorForView(next, anchor));
-  }
-
-  function toggleKind(kind: CalendarMediaKind) {
-    setKinds((current) => {
-      const next = new Set(current);
-      if (next.has(kind)) next.delete(kind);
-      else next.add(kind);
-      return next;
-    });
-  }
-
-  function openEntry(entry: CalendarEntry, target: HTMLElement) {
-    const route = workRouteForEntry(entry);
-    if (route) {
-      const origin = captureNavigationLayer(location.pathname, location.key, target);
-      navigate(route, { state: { backTo: "/calendar", navigationOrigin: origin } });
-      return;
-    }
-    setSelected({ entry, opener: target });
-  }
-
-  function closeSheet() {
-    selected?.opener.focus({ preventScroll: true });
-    setSelected(null);
+    updateParams((params) =>
+      writeCalendarUrl(params, { view: next, date: anchorForView(next, anchor), selected: null })
+    );
   }
 
   const rangeLabel = formatRangeLabel(view, anchor, firstDay, locale);
   const visibleCount = groups.reduce((total, group) => total + group.entries.length, 0);
   const sources = data?.sources ?? [];
+  const activeCount = activeFilterCount(filters);
+  const selectProps: SelectHandlers = { selectedKey: view === "agenda" ? (detailItem?.key ?? null) : (selectedItem?.key ?? null), onSelect: select };
 
-  let body;
-  if (state.status === "error") {
-    body = (
+  const stateMessage =
+    state.status === "error" ? (
       <div className="calendar-state" role="alert">
         <h2 className="calendar-state-title error-text">{t("pages.calendar.loadError")}</h2>
         <p className="muted">{state.message}</p>
@@ -508,23 +762,23 @@ export function CalendarPage() {
           {t("pages.calendar.retry")}
         </button>
       </div>
-    );
-  } else if (state.status !== "ready") {
-    body = (
-      <p className="calendar-state muted" role="status" aria-live="polite">
-        {t("pages.calendar.loading")}
-      </p>
-    );
-  } else if (visibleCount === 0) {
-    body = (
+    ) : state.status === "ready" && visibleCount === 0 ? (
       <div className="calendar-state">
         <h2 className="calendar-state-title">{t("pages.calendar.emptyTitle")}</h2>
         <p className="muted">
-          {kinds.size > 0 ? t("pages.calendar.emptyFiltered") : t("pages.calendar.emptyDescription")}
+          {activeCount > 0 ? t("pages.calendar.emptyFiltered") : t("pages.calendar.emptyDescription")}
         </p>
       </div>
-    );
-  } else if (view === "month") {
+    ) : null;
+
+  const skeletonDays = (): { day: Day; entries: CalendarEntry[] }[] =>
+    Array.from({ length: view === "week" ? 7 : 4 }, (_, i) => ({
+      day: addDays(view === "week" ? range.start : anchor, i),
+      entries: [],
+    }));
+
+  let body;
+  if (view === "month") {
     body = (
       <MonthGrid
         anchor={anchor}
@@ -533,32 +787,93 @@ export function CalendarPage() {
         today={today}
         t={t}
         locale={locale}
-        onOpen={openEntry}
-        onMore={(day) => {
-          setView("agenda");
-          setAnchor(day);
-        }}
+        loading={loading}
+        {...selectProps}
+        onMore={(day) =>
+          updateParams((params) => writeCalendarUrl(params, { view: "agenda", date: day, selected: null }))
+        }
       />
     );
   } else if (view === "week") {
     body = (
-      <DaySections
-        days={buildWeekDays(anchor, firstDay, groups, today)}
+      <WeekTrack
+        days={loading ? skeletonDays() : buildWeekDays(anchor, firstDay, groups, today)}
         t={t}
         locale={locale}
         today={today}
         showEmpty
-        onOpen={openEntry}
+        loading={loading}
+        {...selectProps}
       />
     );
   } else {
-    body = <DaySections days={groups} t={t} locale={locale} today={today} showEmpty={false} onOpen={openEntry} />;
+    body = (
+      <MasterDetail
+        detailLabel={t("pages.calendar.detailsLabel")}
+        detail={
+          loading ? (
+            <DetailsSkeleton />
+          ) : detailItem ? (
+            <ItemDetails item={detailItem} t={t} locale={locale} onOpen={openRoute} />
+          ) : (
+            <p className="muted calendar-details">{t("pages.calendar.selectPrompt")}</p>
+          )
+        }
+      >
+        <div
+          className="calendar-list-scroll"
+          data-tv-scroll-container
+          data-tv-scroll-axis="vertical"
+          data-navigation-scroll-key="calendar:list"
+        >
+          <DaySections
+            days={loading ? skeletonDays() : groups}
+            t={t}
+            locale={locale}
+            today={today}
+            showEmpty={false}
+            loading={loading}
+            {...selectProps}
+          />
+        </div>
+      </MasterDetail>
+    );
   }
 
+  const stackedActions = (
+    <>
+      <FiltersButton
+        label={t("pages.library.filters")}
+        open={panel === "filters"}
+        onToggle={() => setPanel(panel === "filters" ? null : "filters")}
+        controls="calendar-filters-drawer"
+        activeCount={activeCount}
+      />
+      <button
+        type="button"
+        className={`page-filters-button${panel === "subscription" ? " is-active" : ""}`}
+        aria-expanded={panel === "subscription"}
+        aria-controls="calendar-subscribe-drawer"
+        onClick={() => setPanel(panel === "subscription" ? null : "subscription")}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" />
+        </svg>
+        <span>{t("pages.calendar.subscription.title")}</span>
+      </button>
+    </>
+  );
+
   return (
-    <div className="calendar-page">
-      <header className="calendar-header">
-        <h1>{t("pages.calendar.title")}</h1>
+    <PageShell
+      className={`calendar-page calendar-view-${view}`}
+      ariaLabel={t("pages.calendar.title")}
+      title={t("pages.calendar.title")}
+      backLabel={t("pages.calendar.backToHome")}
+      actions={stackedActions}
+      stackActions
+    >
+      <div className="calendar-header">
         <div className="calendar-toolbar">
           <div className="calendar-nav" role="group" aria-label={t("pages.calendar.navigationLabel")}>
             <button
@@ -589,47 +904,139 @@ export function CalendarPage() {
           <p className="calendar-range" aria-live="polite">
             {rangeLabel}
           </p>
-          <div className="calendar-views" role="group" aria-label={t("pages.calendar.viewsLabel")}>
-            {CALENDAR_VIEWS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className="btn calendar-view-btn"
-                aria-pressed={view === option}
-                onClick={() => changeView(option)}
-              >
-                {t(VIEW_KEYS[option])}
-              </button>
-            ))}
-          </div>
         </div>
-        <div className="calendar-filters" role="group" aria-label={t("pages.calendar.filterLabel")}>
-          {CALENDAR_KINDS.map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              className="calendar-filter-chip"
-              aria-pressed={kinds.has(kind)}
-              onClick={() => toggleKind(kind)}
-            >
-              {t(KIND_KEYS[kind])}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div
-        className="calendar-scroll"
-        data-tv-scroll-container
-        data-tv-scroll-axis="vertical"
-        data-navigation-scroll-key="calendar:body"
-      >
-        <CalendarSourceBanner sources={sources} t={t} />
-        {body}
-        <CalendarSubscription localeTag={locale} />
       </div>
 
-      {selected ? <EntrySheet entry={selected.entry} t={t} locale={locale} onClose={closeSheet} /> : null}
-    </div>
+      <CalendarSourceBanner sources={sources} t={t} />
+      {stateMessage}
+      <div
+        className={`calendar-scroll${view === "agenda" ? " is-master-detail" : ""}${stateMessage ? " is-hidden" : ""}`}
+        data-tv-scroll-container={view === "agenda" ? undefined : true}
+        data-tv-scroll-axis={view === "agenda" ? undefined : "vertical"}
+        data-navigation-scroll-key="calendar:body"
+      >
+        {body}
+      </div>
+
+      <FiltersDrawer
+        id="calendar-filters-drawer"
+        open={panel === "filters"}
+        kicker={t("pages.calendar.title")}
+        title={t("pages.library.filters")}
+        ariaLabel={t("pages.calendar.filterDrawerAriaLabel")}
+        closeLabel={t("pages.library.closeFilters")}
+        onClose={() => setPanel(null)}
+      >
+        <FilterSection title={t("pages.library.view")}>
+          <ViewToggle
+            ariaLabel={t("pages.calendar.viewsLabel")}
+            value={view}
+            onChange={changeView}
+            options={CALENDAR_VIEWS.map((value) => ({
+              value,
+              icon: VIEW_ICONS[value],
+              label: t(VIEW_KEYS[value]),
+            }))}
+          />
+        </FilterSection>
+        <FilterSection title={t("pages.calendar.filterType")}>
+          <MultiSelect
+            ariaLabel={t("pages.calendar.filterLabel")}
+            options={CALENDAR_TYPE_PARAMS.map((value) => ({ value, label: t(TYPE_KEYS[value]) }))}
+            selected={filters.types}
+            onChange={(types) => setFilters({ ...filters, types })}
+          />
+        </FilterSection>
+        {sourceOptions.length > 0 ? (
+          <FilterSection title={t("pages.calendar.filterSource")}>
+            <MultiSelect
+              ariaLabel={t("pages.calendar.filterSource")}
+              options={sourceOptions}
+              selected={filters.sources}
+              onChange={(next) => setFilters({ ...filters, sources: next })}
+            />
+          </FilterSection>
+        ) : null}
+        <FilterSection title={t("pages.calendar.filterStatus")}>
+          <MultiSelect
+            ariaLabel={t("pages.calendar.filterStatus")}
+            options={CALENDAR_STATUSES.map((value) => ({ value, label: t(STATUS_KEYS[value]) }))}
+            selected={filters.statuses}
+            onChange={(statuses) => setFilters({ ...filters, statuses })}
+          />
+        </FilterSection>
+        <FilterSection title={t("pages.calendar.filterDateRange")}>
+          <DateRangeField
+            from={filters.from}
+            to={filters.to}
+            fromLabel={t("pages.calendar.rangeFrom")}
+            toLabel={t("pages.calendar.rangeTo")}
+            clearLabel={t("pages.calendar.rangeClear")}
+            onChange={({ from, to }) => {
+              updateParams((params) => {
+                const next = writeCalendarFilters(params, { ...filters, from, to });
+                return from ? writeCalendarUrl(next, { date: from }) : next;
+              });
+            }}
+          />
+        </FilterSection>
+        <FilterSection title={t("pages.calendar.filterMonitored")}>
+          <MultiSelect
+            ariaLabel={t("pages.calendar.filterMonitored")}
+            options={[{ value: "monitored", label: t("pages.calendar.monitoredOnly") }]}
+            selected={new Set(filters.monitoredOnly ? ["monitored"] : [])}
+            onChange={(next) => setFilters({ ...filters, monitoredOnly: next.has("monitored") })}
+          />
+        </FilterSection>
+        {activeCount > 0 ? (
+          <section>
+            <div className="tv-filter-choice-grid">
+              <button
+                type="button"
+                onClick={() =>
+                  updateParams((params) =>
+                    writeCalendarFilters(params, {
+                      types: new Set(),
+                      sources: new Set(),
+                      statuses: new Set(),
+                      from: null,
+                      to: null,
+                      monitoredOnly: false,
+                    })
+                  )
+                }
+              >
+                {t("pages.calendar.clearFilters")}
+              </button>
+            </div>
+          </section>
+        ) : null}
+      </FiltersDrawer>
+
+      <FiltersDrawer
+        id="calendar-subscribe-drawer"
+        open={panel === "subscription"}
+        kicker={t("pages.calendar.title")}
+        title={t("pages.calendar.subscription.title")}
+        ariaLabel={t("pages.calendar.subscription.title")}
+        closeLabel={t("pages.library.closeFilters")}
+        onClose={() => setPanel(null)}
+      >
+        <CalendarSubscription localeTag={locale} />
+      </FiltersDrawer>
+
+      {view !== "agenda" && selectedItem ? (
+        <DetailSheet closeLabel={t("pages.calendar.sheetClose")} onClose={clearSelectionCb}>
+          <ItemDetails
+            item={selectedItem}
+            t={t}
+            locale={locale}
+            onOpen={(route) => {
+              openRoute(route);
+            }}
+          />
+        </DetailSheet>
+      ) : null}
+    </PageShell>
   );
 }

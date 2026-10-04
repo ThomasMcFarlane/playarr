@@ -17,6 +17,7 @@ import {
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import { PRODUCT_SETTINGS_SECTIONS } from "../../lib/productSurfaces";
+import { PageHeader } from "../../components/shell";
 import { TvStageShell } from "../../components/tv/TvStage";
 
 interface SettingsSection {
@@ -229,22 +230,19 @@ export function SettingsIndexPage() {
       }`}
       ariaLabel={t("settings.index.sectionsAriaLabel")}
     >
-      <header className="tv-library-heading">
-        <button
-          type="button"
-          className="tv-page-back"
-          aria-label={t("settings.sectionLayout.backLink")}
-          onClick={leaveSettings}
-          data-tv-focus-default
-        >
-          <span aria-hidden="true">←</span>
-        </button>
-        <h1>{t("settings.index.title")}</h1>
-        <span className="settings-heading-detail">
-          <strong>{activeSection.title}</strong>
-          <small>{activeSection.description}</small>
-        </span>
-      </header>
+      <PageHeader
+        title={t("settings.index.title")}
+        backLabel={t("settings.sectionLayout.backLink")}
+        onBack={leaveSettings}
+        backProps={{ "data-tv-focus-default": true }}
+        detailClassName="settings-heading-detail"
+        detail={
+          <>
+            <strong>{activeSection.title}</strong>
+            <small>{activeSection.description}</small>
+          </>
+        }
+      />
 
       <div className="settings-workspace">
         <div className="settings-workspace-track">

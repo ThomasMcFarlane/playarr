@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CalendarFeedCreated, CalendarFeedStatus } from "@playarr-tv/api-client";
 import { describeApiError } from "@playarr-tv/api-client";
+import { QrCode } from "./QrCode";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 
@@ -96,6 +97,12 @@ export function CalendarSubscription({ localeTag }: { localeTag: string }) {
     <section className="calendar-subscription" aria-labelledby="calendar-subscription-title">
       <h2 id="calendar-subscription-title">{t("pages.calendar.subscription.title")}</h2>
       <p className="muted">{t("pages.calendar.subscription.description")}</p>
+      <h3 className="calendar-subscription-howto">{t("pages.calendar.subscription.instructionsTitle")}</h3>
+      <ul className="calendar-subscription-instructions">
+        <li>{t("pages.calendar.subscription.instructionGoogle")}</li>
+        <li>{t("pages.calendar.subscription.instructionApple")}</li>
+        <li>{t("pages.calendar.subscription.instructionOutlook")}</li>
+      </ul>
 
       {loadError ? (
         <p className="error-text" role="alert">
@@ -147,6 +154,7 @@ export function CalendarSubscription({ localeTag }: { localeTag: string }) {
                   ? t("pages.calendar.subscription.copied")
                   : t("pages.calendar.subscription.copy")}
               </button>
+              <QrCode value={created.url} size={168} label={t("pages.calendar.subscription.qrLabel")} />
               {copyState === "failed" ? (
                 <p className="error-text" role="alert">
                   {t("pages.calendar.subscription.copyFailed")}

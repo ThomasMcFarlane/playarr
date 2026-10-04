@@ -53,7 +53,7 @@ describe("SettingsIndexPage", () => {
     const markup = renderSettingsRoute("/settings");
 
     expect(markup).toContain('class="settings-options-list"');
-    expect(markup).toContain('class="tv-library-heading"');
+    expect(markup).toContain('class="tv-library-heading page-header"');
     expect(markup).toContain(
       'class="tv-library tv-directory settings-page settings-workspace-page settings-index-route"'
     );
@@ -64,7 +64,7 @@ describe("SettingsIndexPage", () => {
     expect(markup).toContain('data-navigation-scroll-key="settings:options"');
     expect(markup).toContain('id="settings-active-option"');
     expect(markup).toContain("Appearance controls");
-    expect(markup).toContain('<span class="settings-heading-detail"><strong>Appearance</strong>');
+    expect(markup).toContain('<span class="page-header-detail settings-heading-detail"><strong>Appearance</strong>');
   });
 
   it("returns focus to the list only at the detail panel's left boundary", () => {

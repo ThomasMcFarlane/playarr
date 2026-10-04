@@ -336,3 +336,94 @@ export function formatHumanDuration(seconds: number, locale?: string): string {
     return `${value} ${unit}${value === 1 ? "" : "s"}`;
   }
 }
+
+/** One episode release grouped with its siblings, or a standalone entry. */
+export type CalendarItem =
+  | { kind: "single"; key: string; entry: CalendarEntry }
+  | {
+      kind: "series";
+      key: string;
+      /** Series title shared by every grouped episode. */
+      title: string;
+      entries: CalendarEntry[];
+      /** Compact episode label, e.g. `S02E04–E06` or `S02E01, E03`. */
+      codes: string;
+    };
+
+function seasonLabel(season: number): string {
+  return `S${String(season).padStart(2, "0")}`;
+}
+
+function episodeLabel(episode: number): string {
+  return `E${String(episode).padStart(2, "0")}`;
+}
+
+/**
+ * Compact label for a set of episodes: contiguous runs within a season become
+ * `S02E04–E06`, gaps are listed (`S02E01, E03, E05`), and multiple seasons are
+ * joined with commas (`S01E10, S02E01–E02`). Entries without numbers are ignored.
+ */
+export function formatEpisodeCodes(entries: readonly CalendarEntry[]): string {
+  const bySeason = new Map<number, number[]>();
+  for (const entry of entries) {
+    if (entry.season_number == null || entry.episode_number == null) continue;
+    const list = bySeason.get(entry.season_number) ?? [];
+    if (!list.includes(entry.episode_number)) list.push(entry.episode_number);
+    bySeason.set(entry.season_number, list);
+  }
+  const parts: string[] = [];
+  for (const season of [...bySeason.keys()].sort((a, b) => a - b)) {
+    const episodes = bySeason.get(season)!.sort((a, b) => a - b);
+    const runs: Array<[number, number]> = [];
+    for (const episode of episodes) {
+      const last = runs[runs.length - 1];
+      if (last && episode === last[1] + 1) last[1] = episode;
+      else runs.push([episode, episode]);
+    }
+    runs.forEach(([from, to], index) => {
+      const prefix = index === 0 ? seasonLabel(season) : "";
+      parts.push(
+        from === to
+          ? `${prefix}${episodeLabel(from)}`
+          : `${prefix}${episodeLabel(from)}–${episodeLabel(to)}`
+      );
+    });
+  }
+  return parts.join(", ");
+}
+
+function entryTimeSlot(entry: CalendarEntry): string {
+  if (!entry.release_at) return "all-day";
+  const date = new Date(entry.release_at);
+  if (Number.isNaN(date.getTime())) return "all-day";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Collapses episodes of the same series released on the same local day (and at
+ * the same air time) into one grouped item. Movies, albums, books and lone
+ * episodes stay individual. Input order is preserved for the first member of
+ * each group. Pass the entries of ONE day.
+ */
+export function groupSeriesEpisodes(entries: readonly CalendarEntry[]): CalendarItem[] {
+  const buckets = new Map<string, CalendarEntry[]>();
+  const order: Array<string> = [];
+  for (const entry of entries) {
+    const groupable = entry.media_kind === "episode" && entry.season_number != null && entry.episode_number != null;
+    const key = groupable
+      ? `series:${entry.work_id ?? entry.title}:${entryLocalDay(entry)}:${entryTimeSlot(entry)}`
+      : `single:${entry.id}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(entry);
+    else {
+      buckets.set(key, [entry]);
+      order.push(key);
+    }
+  }
+  return order.map((key): CalendarItem => {
+    const members = buckets.get(key)!;
+    if (members.length === 1) return { kind: "single", key: members[0]!.id, entry: members[0]! };
+    const sorted = [...members].sort(compareEntries);
+    return { kind: "series", key, title: sorted[0]!.title, entries: sorted, codes: formatEpisodeCodes(sorted) };
+  });
+}

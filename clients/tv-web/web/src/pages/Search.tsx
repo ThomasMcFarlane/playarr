@@ -25,6 +25,7 @@ import {
   WatchStateOverlay,
 } from "../components/WatchStateOverlay";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { PageHeader } from "../components/shell";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { CachedArtworkImage } from "../lib/artwork";
@@ -750,20 +751,15 @@ export function SearchPage() {
         ) : undefined
       }
     >
-      <header className="tv-library-heading tv-search-heading">
-        <Link
-          ref={backButtonRef}
-          to="/"
-          className="tv-page-back"
-          aria-label={t("pages.search.backToHome")}
-          onKeyDown={handleBackKeyDown}
-        >
-          <span aria-hidden="true">←</span>
-        </Link>
-        <h1>{t("pages.search.title")}</h1>
-        {requestedQuery ? (
-          <span>
-            {state.status === "ready"
+      <PageHeader
+        className="tv-search-heading"
+        title={t("pages.search.title")}
+        backLabel={t("pages.search.backToHome")}
+        backRef={backButtonRef}
+        backProps={{ onKeyDown: handleBackKeyDown }}
+        detail={
+          requestedQuery ? (
+            state.status === "ready"
               ? t(
                   results.length === 1
                     ? "pages.search.resultCountOne"
@@ -772,10 +768,10 @@ export function SearchPage() {
                 )
               : state.status === "loading"
                 ? t("pages.search.searching")
-                : t("pages.search.zeroResults")}
-          </span>
-        ) : null}
-      </header>
+                : t("pages.search.zeroResults")
+          ) : null
+        }
+      />
 
       <div className="tv-search-copy">
         <div className="tv-search-form" role="search">

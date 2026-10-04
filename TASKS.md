@@ -5,6 +5,26 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active: Shared page shell and release calendar layout (2026-10-04)
+
+Owner feedback (4 October 2026): the Release Calendar ignored the page layout design. Every page must use one shared header (back button top-left, large title, divider/detail, Filters button on the right opening a shared filters pane), with filters persisted in the URL, reusable multiselect/calendar-range/view-toggle components, and nothing rendered under the bottom-left profile chip.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 200 | Epic: shared page shell + Release Calendar redesign (web, Android, other clients) | in progress | page-shell | Parent of 201-219. |
+| 201 | Web: shared `PageHeader`/`PageShell`/`FiltersDrawer`/`MultiSelect`/`DateRangeField`/`ViewToggle`/`MasterDetail`/skeleton primitives in `components/shell`; Library, Playlists, Search, Watchlist, Downloads, Settings, detail pages refactored onto them | in progress: PR open | page-shell | Parent: 200. |
+| 202 | Web: determinism test (`pageHeaderRegistry.test.ts`) fails when a page bypasses the shared shell or is not registered | in progress: PR open | page-shell | Parent: 200. |
+| 203 | Web: Release Calendar on the shell: Filters (type, source, status, date range, monitored, View), Calendar subscription drawer, all state in the URL (`view,date,type,source,status,from,to,monitored,selected,panel`) | in progress: PR open | page-shell | Parent: 200. |
+| 204 | Web: calendar groups same-series same-day same-slot episodes into one expandable event (shared tested `groupSeriesEpisodes`); agenda master-detail (details left, list right); skeleton loading; wide snapping week track | in progress: PR open | page-shell | Parent: 200. |
+| 205 | Server: calendar entries carry server-computed actions (open/play, request, watchlist) and an optional `group=series_day` parameter, so clients stop guessing request snapshots | pending | Unassigned | Parent: 200. Web currently builds a best-effort `TitleSnapshot` from the entry. |
+| 206 | Web: remaining non-URL page state (library view/size/sort/order live in localStorage) moves into URL query strings per the owner rule | pending | Unassigned | Parent: 200. Audio/subtitle language filters already persist in the URL. |
+| 220 | Android: `PlayarrPageScaffold` + filters sheet + master-detail + skeletons on every page, Calendar parity, screen-registry test | in progress | page-shell (Android) | Parent: 200. |
+| 210 | iOS: shared page header + filters sheet, Release Calendar parity (grouping, agenda master-detail, subscription sheet) | pending | Unassigned | Parent: 200. |
+| 211 | tvOS: shared page header + filters panel, Release Calendar parity | pending | Unassigned | Parent: 200. |
+| 212 | Roku: shared page header + filters panel, Release Calendar parity | pending | Unassigned | Parent: 200. |
+| 213 | Xbox: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
+| 214 | Harmony: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
+
 ## Active: Filter media by audio and subtitle language (2026-10-04)
 
 Owner request (4 October 2026): filter the library by available subtitle language and available audio-track language on every client. Languages are indexed per media file (Sonarr/Radarr `mediaInfo` at sync time, ffprobe for files the *arr app could not describe, sidecar subtitle files next to the video), normalised to ISO 639 codes, aggregated per work (a series is the union of its episode files; `lang_scope=every_file` requires every file) and exposed as `audio_lang=` / `subtitle_lang=` on catalogue browse and search plus a `GET /api/v1/catalog/languages` facet endpoint.

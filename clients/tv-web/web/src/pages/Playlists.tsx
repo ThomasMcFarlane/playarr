@@ -1,3 +1,4 @@
+import { FiltersButton, FiltersDrawer, PageHeader } from "../components/shell";
 import {
   useCallback,
   useEffect,
@@ -1070,30 +1071,60 @@ export function PlaylistsPage() {
         ) : undefined
       }
     >
-      <header className="tv-library-heading tv-playlists-heading">
-        {isDetail ? (
-          <button
-            type="button"
-            className="tv-page-back"
-            aria-label={t("pages.playlists.backToPlaylists")}
-            onClick={leavePlaylistDetail}
-            data-tv-focus-default={!selectedPlaylist ? true : undefined}
-            data-tv-edge-target-right={activeContentSelector}
-          >
-            <span aria-hidden="true">←</span>
-          </button>
-        ) : (
-          <Link
-            to="/"
-            className="tv-page-back"
-            aria-label={t("pages.playlists.backToHome")}
-          >
-            <span aria-hidden="true">←</span>
-          </Link>
-        )}
-        <h1>{selectedPlaylist?.playlist.name ?? t("pages.playlists.title")}</h1>
-        <span>
-          {isDetail
+      <PageHeader
+        className="tv-playlists-heading"
+        actions={
+          <>
+            {!isDetail || fixedParentPlaylist ? (
+              <button
+                ref={createButtonRef}
+                type="button"
+                className={`page-filters-button${
+                  drawer === "create" ? " is-active" : ""
+                }`}
+                onClick={() => openDrawer("create")}
+                data-navigation-focus-key="playlists:create"
+                data-tv-edge-target-left={activeContentSelector}
+                data-tv-focus-default={
+                  (!isDetail && !rootTracks.length) ||
+                  (isDetail && detailTracks.every((track) => !track.items.length))
+                    ? true
+                    : undefined
+                }
+                aria-expanded={drawer === "create"}
+                aria-controls="playlist-create-drawer"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>{t("pages.playlists.create")}</span>
+              </button>
+            ) : null}
+            {!isDetail ? (
+              <FiltersButton
+                label={t("pages.playlists.filters")}
+                open={drawer === "filters"}
+                onToggle={() => openDrawer("filters")}
+                controls="playlist-filter-drawer"
+                buttonRef={filterButtonRef}
+                buttonProps={{ "data-navigation-focus-key": "playlists:filters" }}
+              />
+            ) : null}
+          </>
+        }
+        title={selectedPlaylist?.playlist.name ?? t("pages.playlists.title")}
+        backLabel={isDetail ? t("pages.playlists.backToPlaylists") : t("pages.playlists.backToHome")}
+        onBack={isDetail ? leavePlaylistDetail : undefined}
+        backProps={
+          isDetail
+            ? {
+                "data-tv-focus-default": !selectedPlaylist ? true : undefined,
+                "data-tv-edge-target-right": activeContentSelector,
+              }
+            : undefined
+        }
+        detail={
+          isDetail
             ? `${
                 selectedPlaylist
                   ? t(playlistMediaTypeKey(selectedPlaylist.playlist.media_type))
@@ -1109,9 +1140,9 @@ export function PlaylistsPage() {
                   ? "pages.playlists.playlistCountOne"
                   : "pages.playlists.playlistCountOther",
                 { count: rootTracks.length.toLocaleString() }
-              )}
-        </span>
-      </header>
+              )
+        }
+      />
 
       <aside
         className="tv-home-feature tv-playlist-feature"
@@ -1271,55 +1302,6 @@ export function PlaylistsPage() {
         </TvRailSurface>
       )}
 
-      <div className="tv-playlist-controls" aria-hidden={drawer ? true : undefined}>
-        {!isDetail || fixedParentPlaylist ? (
-          <button
-            ref={createButtonRef}
-            type="button"
-            className={`tv-filter-launcher${
-              drawer === "create" ? " is-active" : ""
-            }`}
-            onClick={() => openDrawer("create")}
-            data-navigation-focus-key="playlists:create"
-            data-tv-edge-target-left={activeContentSelector}
-            data-tv-focus-default={
-              (!isDetail && !rootTracks.length) ||
-              (isDetail && detailTracks.every((track) => !track.items.length))
-                ? true
-                : undefined
-            }
-            aria-expanded={drawer === "create"}
-            aria-controls="playlist-create-drawer"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span>{t("pages.playlists.create")}</span>
-          </button>
-        ) : null}
-        {!isDetail ? (
-          <button
-            ref={filterButtonRef}
-            type="button"
-            className={`tv-filter-launcher${
-              drawer === "filters" ? " is-active" : ""
-            }`}
-            onClick={() => openDrawer("filters")}
-            data-navigation-focus-key="playlists:filters"
-            aria-expanded={drawer === "filters"}
-            aria-controls="playlist-filter-drawer"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 6h16M7 12h10m-7 6h4" />
-              <circle cx="8" cy="6" r="1.5" />
-              <circle cx="15" cy="12" r="1.5" />
-              <circle cx="12" cy="18" r="1.5" />
-            </svg>
-            <span>{t("pages.playlists.filters")}</span>
-          </button>
-        ) : null}
-      </div>
-
       {drawer === "create" ? (
         <aside
           id="playlist-create-drawer"
@@ -1452,29 +1434,19 @@ export function PlaylistsPage() {
         </aside>
       ) : null}
 
-      {drawer === "filters" ? (
-        <aside
-          ref={filterDrawerRef}
-          id="playlist-filter-drawer"
-          className="tv-filter-drawer tv-playlist-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="playlist-filter-title"
-          onKeyDown={handleDrawerKeyDown}
-        >
-          <header>
-            <div>
-              <p>{t("pages.playlists.playlistControls")}</p>
-              <h2 id="playlist-filter-title">{t("pages.playlists.filters")}</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => closeDrawer("filters")}
-              aria-label={t("pages.playlists.closeFiltersDrawer")}
-            >
-              ×
-            </button>
-          </header>
+      <FiltersDrawer
+        id="playlist-filter-drawer"
+        open={drawer === "filters"}
+        drawerRef={filterDrawerRef}
+        modal
+        titleId="playlist-filter-title"
+        kicker={t("pages.playlists.playlistControls")}
+        title={t("pages.playlists.filters")}
+        ariaLabel={t("pages.playlists.filters")}
+        closeLabel={t("pages.playlists.closeFiltersDrawer")}
+        onClose={() => closeDrawer("filters")}
+        onKeyDown={handleDrawerKeyDown}
+      >
           <section>
             <h3>{t("pages.playlists.showLabel")}</h3>
             <div className="tv-filter-choice-grid">
@@ -1518,8 +1490,7 @@ export function PlaylistsPage() {
               </button>
             </div>
           </section>
-        </aside>
-      ) : null}
+      </FiltersDrawer>
       {playlistContext.contextMenu}
     </TvStageShell>
   );

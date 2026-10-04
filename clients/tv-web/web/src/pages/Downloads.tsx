@@ -11,6 +11,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useOnlineStatus } from "../lib/useOnlineStatus";
 import { EditKeepUntilDrawer } from "../components/EditKeepUntilDrawer";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { PageHeader } from "../components/shell";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { NotFoundPage } from "./NotFound";
 import type { Work, WorkDetail } from "@playarr-tv/api-client";
@@ -365,21 +366,19 @@ export function DownloadsPage() {
         ) : undefined
       }
     >
-      <header className="tv-library-heading">
-        <Link to="/" className="tv-page-back" aria-label={t("pages.downloads.backToHome")}>
-          <span aria-hidden="true">←</span>
-        </Link>
-        <h1>{t("pages.downloads.title")}</h1>
-        {storageSupported && storageUsage ? (
-          <span>
-            {t("pages.downloads.storageUsed", {
-              used: formatBytes(storageUsage.usageBytes),
-              quota: formatBytes(storageUsage.quotaBytes),
-            })}
-          </span>
-        ) : null}
-        {!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
-      </header>
+      <PageHeader
+        title={t("pages.downloads.title")}
+        backLabel={t("pages.downloads.backToHome")}
+        detail={
+          storageSupported && storageUsage
+            ? t("pages.downloads.storageUsed", {
+                used: formatBytes(storageUsage.usageBytes),
+                quota: formatBytes(storageUsage.quotaBytes),
+              })
+            : null
+        }
+        actions={!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
+      />
 
       {focused ? (
         <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>

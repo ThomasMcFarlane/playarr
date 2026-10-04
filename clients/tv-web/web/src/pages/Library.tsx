@@ -48,6 +48,7 @@ import {
   toggleLanguage,
 } from "../lib/languageFilters";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { FiltersButton, FiltersDrawer, PageHeader, ViewToggle } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
@@ -885,15 +886,20 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         />
       }
     >
-      <header className="tv-library-heading">
-        <Link to="/" className="tv-page-back" aria-label={t("pages.library.backToHome")}>
-          <span aria-hidden="true">←</span>
-        </Link>
-        <h1>{plural}</h1>
-        <span>
-          {(total ?? items.length).toLocaleString()} {collectionNoun}
-        </span>
-      </header>
+      <PageHeader
+        title={plural}
+        backLabel={t("pages.library.backToHome")}
+        detail={`${(total ?? items.length).toLocaleString()} ${collectionNoun}`}
+        actions={
+          <FiltersButton
+            label={t("pages.library.filters")}
+            open={filtersOpen}
+            onToggle={() => setFiltersOpen((open) => !open)}
+            controls={`${kind}-library-filters`}
+            activeCount={audioLangs.length + subtitleLangs.length}
+          />
+        }
+      />
 
       <aside className="tv-library-preview" key={`preview-${selected.id}`}>
         <p className="tv-provider">{selected.genres[0] ?? singular}</p>
@@ -1028,70 +1034,39 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         )}
       </TvRailSurface>
 
-      <button
-        type="button"
-        className={`tv-filter-launcher${filtersOpen ? " is-active" : ""}`}
-        onClick={() => setFiltersOpen((open) => !open)}
-        aria-expanded={filtersOpen}
-        aria-controls={`${kind}-library-filters`}
+      <FiltersDrawer
+        id={`${kind}-library-filters`}
+        open={filtersOpen}
+        kicker={t("pages.library.libraryControls")}
+        title={t("pages.library.filters")}
+        ariaLabel={t("pages.library.filterDrawerAriaLabel", { plural })}
+        closeLabel={t("pages.library.closeFilters")}
+        onClose={() => setFiltersOpen(false)}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16M7 12h10m-7 6h4" />
-          <circle cx="8" cy="6" r="1.5" />
-          <circle cx="15" cy="12" r="1.5" />
-          <circle cx="12" cy="18" r="1.5" />
-        </svg>
-        <span>{t("pages.library.filters")}</span>
-      </button>
-
-      {filtersOpen ? (
-        <aside
-          id={`${kind}-library-filters`}
-          className="tv-filter-drawer"
-          aria-label={t("pages.library.filterDrawerAriaLabel", { plural })}
-        >
-          <header>
-            <div>
-              <p>{t("pages.library.libraryControls")}</p>
-              <h2>{t("pages.library.filters")}</h2>
-            </div>
-            <button type="button" onClick={() => setFiltersOpen(false)} aria-label={t("pages.library.closeFilters")}>
-              ×
-            </button>
-          </header>
-
           <section>
             <h3>{t("pages.library.view")}</h3>
-            <div className="tv-filter-choice-grid tv-filter-view-options">
-              {(
-                kind === "artist"
+            <ViewToggle
+              ariaLabel={t("pages.library.view")}
+              value={view}
+              onChange={changeView}
+              options={(
+                (kind === "artist"
                   ? (["list", "screen", "cover", "cover-flow"] as LibraryView[])
                   : (["list", "screen", "cover"] as LibraryView[])
-              ).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={view === option ? "is-active" : ""}
-                  onClick={() => changeView(option)}
-                  aria-pressed={view === option}
-                >
-                  <span className={`tv-view-icon tv-view-icon-${option}`} aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  <strong>
-                    {option === "cover-flow"
+                ).map((option) => ({
+                  value: option,
+                  icon: option,
+                  label:
+                    option === "cover-flow"
                       ? t("pages.library.viewCoverFlow")
                       : option === "list"
                         ? t("pages.library.viewList")
                         : option === "screen"
                           ? t("pages.library.viewScreen")
-                          : t("pages.library.viewCover")}
-                  </strong>
-                </button>
-              ))}
-            </div>
+                          : t("pages.library.viewCover"),
+                }))
+              )}
+            />
           </section>
 
           <section>
@@ -1198,8 +1173,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               </div>
             </section>
           ) : null}
-        </aside>
-      ) : null}
+      </FiltersDrawer>
 
       {sort === "title" ? (
         <nav className="tv-alphabet" aria-label={t("pages.library.jumpThrough", { plural: plural.toLowerCase() })}>

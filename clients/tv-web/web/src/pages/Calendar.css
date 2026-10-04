@@ -3,32 +3,12 @@
  * (.calendar-scroll) beneath a fixed header; the month grid adds a native
  * horizontal viewport on narrow screens. Both carry data-tv-scroll-container.
  */
-.calendar-page {
-  position: relative;
-  width: 100%;
-  height: var(--viewport-height);
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: clamp(44px, calc(6 * var(--viewport-unit)), 76px) clamp(24px, 4vw, 96px) 0
-    clamp(102px, 8vw, 160px);
-  background: var(--surface);
-  color: var(--ink);
-  overflow: hidden;
-}
-
 .calendar-header {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.calendar-header h1 {
-  font-size: clamp(1.2rem, 1.75vw, 2.35rem);
-  font-weight: 580;
-  letter-spacing: -0.045em;
-}
 
 .calendar-toolbar {
   display: flex;
@@ -135,7 +115,7 @@
 .calendar-days {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 2rem;
 }
 
 .calendar-day h3 {
@@ -171,7 +151,7 @@
 .calendar-day ul {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.85rem;
 }
 
 .calendar-day-empty {
@@ -472,27 +452,137 @@
   }
 }
 
+.calendar-scroll.is-hidden {
+  display: none;
+}
+
+/* Agenda is master-detail: its panes scroll on their own. */
+.calendar-scroll.is-master-detail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.calendar-scroll.is-master-detail > .master-detail {
+  flex: 1 1 auto;
+}
+
+.calendar-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 8px 2rem 4px;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.calendar-entry.is-selected,
+.calendar-chip.is-selected {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.calendar-entry-skeleton {
+  pointer-events: none;
+}
+
+.calendar-chip-skeleton {
+  width: 100%;
+  height: 24px;
+}
+
+.calendar-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.25rem 0 2rem;
+}
+
+.calendar-details h2 {
+  font-size: clamp(1.4rem, 2vw, 2.6rem);
+  font-weight: 590;
+  letter-spacing: -0.04em;
+}
+
+.calendar-details .calendar-sheet-facts {
+  width: 100%;
+}
+
+/* Week view: wide day columns on a horizontally snapping track. */
+.calendar-week-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--line-strong) transparent;
+  padding-bottom: 0.75rem;
+}
+
+.calendar-week-scroll .calendar-days-week {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1.25rem;
+  width: max-content;
+}
+
+.calendar-week-scroll .calendar-day {
+  flex: 0 0 clamp(300px, 24vw, 440px);
+  scroll-snap-align: start;
+}
+
+.calendar-week-scroll .calendar-entry-title,
+.calendar-week-scroll .calendar-entry-subtitle {
+  white-space: normal;
+}
+
 @media (max-width: 760px) {
-  .calendar-page {
-    padding: 56px 16px 0 16px;
+  .calendar-week-scroll .calendar-day {
+    flex-basis: 82vw;
   }
+}
 
-  .calendar-scroll {
-    padding-bottom: 8rem; /* clears the bottom navigation pill */
-  }
+.calendar-group-episodes {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
 
-  .calendar-views {
-    margin-left: 0;
-  }
+.calendar-group-episodes li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
 
-  .calendar-sheet-backdrop {
-    place-items: end center;
-    padding: 0;
-  }
+.calendar-group-code {
+  font-variant-numeric: tabular-nums;
+  font-weight: 680;
+}
 
-  .calendar-sheet {
-    width: 100%;
-    max-height: 85%;
-    border-radius: 18px 18px 0 0;
-  }
+.calendar-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.calendar-chip-group {
+  font-weight: 680;
+}
+
+.calendar-entry-skeleton .calendar-entry-body {
+  flex: 1 1 auto;
+}
+
+.tv-filter-drawer .calendar-subscription {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  max-width: none;
 }

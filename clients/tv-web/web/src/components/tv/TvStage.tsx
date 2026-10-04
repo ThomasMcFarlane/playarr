@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useScrollEdges } from "../../lib/useScrollEdges";
+import { PageHeader } from "../shell/PageHeader";
 import { LanguageDropdown } from "../LanguageDropdown";
 import { ThemeDropdown } from "../ThemeDropdown";
 
@@ -57,22 +58,14 @@ export function TvDetailHeading({
   sectionTitle: string;
 }) {
   return (
-    <header
-      className={`tv-library-heading tv-detail-heading${className ? ` ${className}` : ""}`}
-    >
-      <button
-        type="button"
-        className="tv-page-back"
-        aria-label={backLabel}
-        onClick={onBack}
-      >
-        <span aria-hidden="true">←</span>
-      </button>
-      <h1>{sectionTitle}</h1>
-      <span className="tv-detail-heading-item">
-        <strong>{itemTitle}</strong>
-      </span>
-    </header>
+    <PageHeader
+      className={`tv-detail-heading${className ? ` ${className}` : ""}`}
+      title={sectionTitle}
+      backLabel={backLabel}
+      onBack={onBack}
+      detailClassName="tv-detail-heading-item"
+      detail={<strong>{itemTitle}</strong>}
+    />
   );
 }
 

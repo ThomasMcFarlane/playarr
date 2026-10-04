@@ -19,7 +19,7 @@ describe("TvDetailHeading", () => {
 
     expect(markup).toContain("<h1>Music</h1>");
     expect(markup).toContain(
-      '<span class="tv-detail-heading-item"><strong>Sample Band Two</strong></span>'
+      '<span class="page-header-detail tv-detail-heading-item"><strong>Sample Band Two</strong></span>'
     );
     expect(markup).not.toContain(">|<");
 
