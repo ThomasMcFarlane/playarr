@@ -11,12 +11,10 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { ButtonLink } from "../components/ui";
 import type {
-  EpisodeDetail,
   ResumeOption,
   ResumePlan,
   WatchProgress,
   Work,
-  WorkChildren,
 } from "@playarr-tv/api-client";
 import { useCatalogBrowse, useHomeRails } from "@playarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -44,10 +42,10 @@ import {
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { ResumeChooserModal } from "../components/ResumeChooserModal";
 import {
-  isStackedPlan,
   resumePlayerState,
   seriesPlaylist,
 } from "../lib/resumePlan";
+import { loadOnDeck, type OnDeckEntry } from "../lib/onDeck";
 
 function detailRoute(work: Work): string {
   return work.kind === "site"
@@ -57,10 +55,6 @@ function detailRoute(work: Work): string {
       : work.kind === "artist"
         ? `/music/${work.id}`
       : `/movies/${work.id}`;
-}
-
-function isEpisodic(work: Work): boolean {
-  return work.kind === "series" || work.kind === "site";
 }
 
 function workKindLabel(work: Work, t: ReturnType<typeof useLanguage>["t"]): string {
@@ -88,41 +82,10 @@ interface HomeRailDefinition {
   items: Work[];
 }
 
-interface OnDeckEntry {
-  work: Work;
-  /** Absent for a series that is on deck only because it needs a Resume choice. */
-  progress: WatchProgress | null;
-  episode: {
-    detail: EpisodeDetail;
-    seasonNumber: number;
-  } | null;
-}
-
 const EMPTY_WORKS: Work[] = [];
 
 /** Longest Home holds its first render for the On Deck detail calls. */
 const ON_DECK_WAIT_MS = 2500;
-
-function findOnDeckEpisode(
-  children: WorkChildren,
-  mediaFileId: string
-): OnDeckEntry["episode"] {
-  if (typeof children !== "object" || children === null || !("Series" in children)) {
-    return null;
-  }
-  for (const season of children.Series) {
-    const detail = season.episodes.find(
-      (episode) => episode.media_file_id === mediaFileId
-    );
-    if (detail) {
-      return {
-        detail,
-        seasonNumber: season.season.season_number,
-      };
-    }
-  }
-  return null;
-}
 
 function centreHomeRail(
   container: HTMLElement,
@@ -196,93 +159,31 @@ export function HomePage() {
   useEffect(() => {
     let cancelled = false;
     // On Deck is resolved through one detail call per title. The rails must not
-    // be swapped under the viewer once they are interactive (the primary rail's
-    // cards would remount and take the focus ring with them), so Home waits for
-    // On Deck, but never longer than ON_DECK_WAIT_MS; late results are dropped.
-    // A live refresh (revision > 0) updates in place and has no such deadline.
+    // be swapped under the viewer once they are interactive, so Home waits for
+    // On Deck, but never longer than ON_DECK_WAIT_MS. That deadline only stops
+    // the wait: results that arrive later are still applied (the rail then
+    // fills in place and focus is kept, see the layout effect below). A live
+    // refresh (revision > 0) updates in place and has no deadline.
     const giveUp =
       liveOnDeckRevision === 0
-        ? window.setTimeout(() => {
-            cancelled = true;
-            setOnDeckSettled(true);
-          }, ON_DECK_WAIT_MS)
+        ? window.setTimeout(() => setOnDeckSettled(true), ON_DECK_WAIT_MS)
         : undefined;
 
-    // Series whose history is ambiguous are shown as a stacked card (ask on Home).
-    const plansRequest: Promise<ResumePlan[]> = client.listResumePlans().catch(() => []);
-    client
-      .listWatchProgress()
-      .then(async (progressRows) => {
-        if (!cancelled) setWatchProgress(progressRows);
-        const stackedPlans = (await plansRequest).filter(isStackedPlan);
-        const plansByWork = new Map(stackedPlans.map((plan) => [plan.series_work_id, plan]));
-        if (!cancelled) setStackedPlans(plansByWork);
-        const resumableRows = [...progressRows]
-          .filter((progress) => progress.state === "part_watched")
-          .sort(
-            (a, b) =>
-              new Date(b.updated_at ?? 0).getTime() -
-              new Date(a.updated_at ?? 0).getTime()
-          );
-        const seenWorkIds = new Set<string>();
-        const resumable = resumableRows
-          .filter((progress) => {
-            if (seenWorkIds.has(progress.work_id)) return false;
-            seenWorkIds.add(progress.work_id);
-            return true;
-          })
-          .slice(0, 10);
-        const resolvedRows = await Promise.all(
-          resumable.map(async (progress) => {
-            try {
-              const detail = await client.getWork(progress.work_id);
-              // A stacked series shows the plan's lead episode, not just the last one played.
-              const lead = plansByWork.get(progress.work_id)?.target;
-              const episode = isEpisodic(detail.work)
-                ? findOnDeckEpisode(detail.children, lead?.media_file_id ?? progress.media_file_id)
-                : null;
-              if (isEpisodic(detail.work) && !episode) return null;
-              return { work: detail.work, progress, episode };
-            } catch {
-              return null;
-            }
-          })
-        );
-        // Series that need a choice but have no part-watched episode still belong here.
-        const rowWorkIds = new Set(resumable.map((progress) => progress.work_id));
-        const planOnly = await Promise.all(
-          stackedPlans
-            .filter((plan) => !rowWorkIds.has(plan.series_work_id))
-            .slice(0, Math.max(0, 10 - resumable.length))
-            .map(async (plan): Promise<OnDeckEntry | null> => {
-              try {
-                const detail = await client.getWork(plan.series_work_id);
-                const episode = plan.target
-                  ? findOnDeckEpisode(detail.children, plan.target.media_file_id)
-                  : null;
-                return episode ? { work: detail.work, progress: null, episode } : null;
-              } catch {
-                return null;
-              }
-            })
-        );
-        const resolved = [...resolvedRows, ...planOnly];
-        if (!cancelled) {
-          setOnDeck(
-            resolved.filter(
-              (entry): entry is OnDeckEntry => entry !== null
-            )
-          );
-          setOnDeckSettled(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && liveOnDeckRevision === 0) {
-          setOnDeck([]);
-          setWatchProgress(null);
-          setOnDeckSettled(true);
-        }
-      });
+    loadOnDeck(client, {
+      isActive: () => !cancelled,
+      onProgress: setWatchProgress,
+      onStackedPlans: setStackedPlans,
+      onEntries: (entries) => {
+        setOnDeck(entries);
+        setOnDeckSettled(true);
+      },
+    }).catch(() => {
+      if (!cancelled && liveOnDeckRevision === 0) {
+        setOnDeck([]);
+        setWatchProgress(null);
+        setOnDeckSettled(true);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -375,6 +276,21 @@ export function HomePage() {
     focusedRailRef.current =
       (firstSection.dataset.tvTrackId as HomeRailId | undefined) ?? null;
   }, [navigationLayer.hasSnapshot, railsKey]);
+
+  // A late On Deck result swaps the primary rail's cards. If the viewer was
+  // focused on one that was replaced, hand focus to the new first card instead
+  // of dropping it to the page.
+  const primaryItemsKey = rails.find((rail) => rail.id === "primary")?.items
+    .map((item) => item.id)
+    .join(",");
+  useLayoutEffect(() => {
+    if (focusedRailRef.current !== "primary") return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    railsRef.current
+      ?.querySelector<HTMLElement>("[data-tv-focus-default]")
+      ?.focus({ preventScroll: true });
+  }, [primaryItemsKey]);
 
   const activeItems = rails.find((rail) => rail.id === activeRail)?.items ?? rails[0]?.items ?? [];
   const selected =
