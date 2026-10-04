@@ -25,6 +25,7 @@ const EMPTY_FORM: CreateUserRequest = {
   is_admin: false,
   can_stream: true,
   can_download: false,
+  can_request: false,
 };
 
 type TypePermission = {
@@ -187,6 +188,25 @@ function PlayIcon() {
 }
 
 /** "Grant/Revoke download access" icon for a user card's `.icon-btn` -- purely decorative. */
+function RequestIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+
 function DownloadIcon() {
   return (
     <svg
@@ -671,6 +691,19 @@ export function UsersPage() {
     }
   }
 
+  async function handleToggleRequest(user: UserResponse) {
+    setBusyId(user.id);
+    setError(null);
+    try {
+      const updated = await client.updateUser(user.id, { can_request: !user.can_request });
+      setUsers((current) => current?.map((u) => (u.id === user.id ? updated : u)) ?? current);
+    } catch (err) {
+      setError(describeApiError(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function handleToggleDisabled(user: UserResponse) {
     const nextDisabled = !user.disabled;
     void withSelfLockoutGuard(
@@ -810,6 +843,9 @@ export function UsersPage() {
                   <span className={`badge badge-pill ${user.can_download ? "badge-success" : "badge-neutral"}`}>
                     {user.can_download ? "can download" : "no downloads"}
                   </span>
+                  <span className={`badge badge-pill ${user.is_admin || user.can_request ? "badge-success" : "badge-neutral"}`}>
+                    {user.is_admin || user.can_request ? "can request titles" : "no requests"}
+                  </span>
                   <span className={`badge badge-pill ${user.disabled ? "badge-danger" : "badge-success"}`}>
                     {user.disabled ? "disabled" : "enabled"}
                   </span>
@@ -882,6 +918,18 @@ export function UsersPage() {
                     style={busy ? { opacity: 0.55, cursor: "default" } : undefined}
                   >
                     <DownloadIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={user.can_request ? "Revoke request access" : "Grant request access"}
+                    aria-label={user.can_request ? "Revoke request access" : "Grant request access"}
+                    aria-pressed={user.can_request}
+                    disabled={busy}
+                    onClick={() => void handleToggleRequest(user)}
+                    style={busy ? { opacity: 0.55, cursor: "default" } : undefined}
+                  >
+                    <RequestIcon />
                   </button>
                   <button
                     type="button"
@@ -967,6 +1015,14 @@ export function UsersPage() {
               onChange={(e) => setForm((f) => ({ ...f, can_download: e.target.checked }))}
             />
             Download access
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.can_request ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, can_request: e.target.checked }))}
+            />
+            Can request titles
           </label>
           <label className="checkbox-label">
             <input

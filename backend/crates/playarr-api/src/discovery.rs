@@ -173,7 +173,7 @@ fn request_instances(state: &AppState, kind: DiscoveryKind) -> Vec<SourceInstanc
 }
 
 fn can_request(state: &AppState, viewer: &CatalogViewer) -> bool {
-    viewer.policy.is_admin || state.discovery_requests_allow_all_users
+    viewer.policy.is_admin || viewer.policy.can_request || state.discovery_requests_allow_all_users
 }
 
 enum RequestLookup {
@@ -267,6 +267,7 @@ async fn request_provider_search(
     state: &AppState,
     q: &str,
     kind_filter: Option<DiscoveryKind>,
+    may_request: bool,
 ) -> (Vec<DiscoveryCandidate>, ProviderStatus) {
     let mut instances = Vec::new();
     for kind in [DiscoveryKind::Movie, DiscoveryKind::Series] {
@@ -299,7 +300,19 @@ async fn request_provider_search(
     for (instance, kind, hits) in futures::future::join_all(lookups).await {
         match hits {
             Some(hits) => {
-                candidates.extend(hits.iter().map(|h| lookup_candidate(instance, kind, h)))
+                candidates.extend(hits.iter().map(|h| {
+                    let mut candidate = lookup_candidate(instance, kind, h);
+                    // Clients show a Request action only for `requestable`
+                    // sources, so a viewer without the grant must not get one.
+                    if !may_request
+                        && candidate.source.availability == SourceAvailability::Requestable
+                    {
+                        candidate.source.availability = SourceAvailability::Unavailable;
+                        candidate.source.reason =
+                            Some("Your account is not allowed to request titles".into());
+                    }
+                    candidate
+                }))
             }
             None => failed.push(instance.name.clone()),
         }
@@ -453,7 +466,8 @@ pub async fn discover_handler(
         }
     }
     if scope != DiscoveryScope::Games {
-        let (found, status) = request_provider_search(&state, q, params.kind).await;
+        let (found, status) =
+            request_provider_search(&state, q, params.kind, can_request(&state, &viewer)).await;
         candidates.extend(found);
         providers.push(status);
     }
@@ -1286,6 +1300,7 @@ mod tests {
         let work = seed_work(&state, "Orbit", "949").await;
         seed_media_file(&state, work, LeafRef::Work, instance).await;
         seed_streaming_user_with_library_allow(&state, user, vec![instance]).await;
+        grant_can_request(&state, user).await;
         let server = mock_radarr(serde_json::json!([
             {"title": "Orbit", "year": 1995, "tmdbId": 949, "id": 0},
             {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0},
@@ -1328,6 +1343,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_hides_requestable_for_user_without_can_request() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        let server = mock_radarr(serde_json::json!([
+            {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0}
+        ]))
+        .await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        let body: DiscoverResponse = json_body(
+            router
+                .oneshot(get("/api/v1/discover?q=heat", &token))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let sequel = body
+            .titles
+            .iter()
+            .find(|t| t.title.title_key == "tmdb:movie:5000")
+            .unwrap();
+        assert_eq!(
+            sequel.title.sources[0].availability,
+            SourceAvailability::Unavailable
+        );
+        assert!(sequel.title.sources[0]
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("not allowed"));
+    }
+
+    #[tokio::test]
     async fn unreachable_request_provider_degrades_without_failing_search() {
         let (router, state) = test_state().await;
         let user = Uuid::new_v4();
@@ -1350,6 +1401,19 @@ mod tests {
             .unwrap();
         assert_eq!(status.state, ProviderState::Unavailable);
         assert!(status.reason.as_deref().unwrap().contains("Radarr 4K"));
+    }
+
+    async fn grant_can_request(state: &TestState, user: Uuid) {
+        let stored = state.user_repo.find_by_id(user).await.unwrap().unwrap();
+        let mut policy = state
+            .policy_repo
+            .find_by_id(stored.policy_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!policy.can_request, "least privilege by default");
+        policy.can_request = true;
+        state.policy_repo.upsert(&policy).await.unwrap();
     }
 
     fn missing_title() -> serde_json::Value {
@@ -1443,6 +1507,50 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn user_with_can_request_grant_can_request_and_sees_enabled_action() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user(&state, user).await;
+        grant_can_request(&state, user).await;
+
+        let server = mock_radarr(serde_json::json!([
+            {"title": "Orbit 2", "year": 2030, "tmdbId": 5000, "id": 0}
+        ]))
+        .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v3/movie"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({"id": 3})))
+            .expect(1)
+            .mount(&server)
+            .await;
+        state
+            .source_instances
+            .upsert(radarr_instance(&server.uri(), true));
+        let token = mint_access_token(&state, user);
+        let resolved: ResolvedTitle = json_body(
+            router
+                .clone()
+                .oneshot(post("/api/v1/discover/resolve", &token, missing_title()))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let request = resolved
+            .actions
+            .iter()
+            .find(|a| a.action == ActionKind::Request)
+            .unwrap();
+        assert!(request.enabled);
+        let response = router
+            .oneshot(post("/api/v1/discover/request", &token, missing_title()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

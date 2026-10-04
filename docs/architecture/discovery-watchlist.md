@@ -57,7 +57,7 @@ Providers in this iteration:
 | Provider | State |
 |----------|-------|
 | `library` | Local catalogue search plus peer remote-only titles. |
-| `request` | Radarr/Sonarr lookup (`/lookup?term=`) through the highest-priority source instance per kind; `unavailable` when none is configured or it cannot be reached. `POST /api/v1/discover/request` adds the title to the instance's default root folder and quality profile. Admins may request; `PLAYARR_REQUESTS_ALLOW_ALL_USERS=true` extends it to every user (per-user policy tracked as a follow-up). |
+| `request` | Radarr/Sonarr lookup (`/lookup?term=`) through the highest-priority source instance per kind; `unavailable` when none is configured or it cannot be reached. `POST /api/v1/discover/request` adds the title to the instance's default root folder and quality profile. Administrators may always request; other accounts need `Policy.can_request` (default off, toggled per user in the admin Users page or `PATCH /api/v1/admin/users/{id}`). Search results mark the request source `unavailable` for accounts without the grant, so clients hide the Request action. `PLAYARR_REQUESTS_ALLOW_ALL_USERS=true` remains as a deployment-wide override that grants it to every user. |
 | `live_tv` | Stub, `unavailable` until rows 27-28. |
 | `games` | Stub, `unavailable` until row 22. |
 

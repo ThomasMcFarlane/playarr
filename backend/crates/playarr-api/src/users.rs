@@ -63,6 +63,11 @@ pub struct CreateUserRequest {
     /// grant download access, it is never on by default.
     #[serde(default)]
     pub can_download: bool,
+    /// Grants permission to request titles that are not in the library --
+    /// see `playarr_model::Policy::can_request`'s doc comment. Defaults to
+    /// `false` (least privilege).
+    #[serde(default)]
+    pub can_request: bool,
 }
 
 /// Public account-creation body. The bearer invitation is write-only and
@@ -213,6 +218,10 @@ pub struct UpdateUserRequest {
     /// shape as every other field here.
     #[serde(default)]
     pub can_download: Option<bool>,
+    /// `Some(bool)` replaces the account's `Policy::can_request`; `None`
+    /// leaves it untouched.
+    #[serde(default)]
+    pub can_request: Option<bool>,
 }
 
 /// The redacted, admin-facing projection of [`playarr_model::User`] --
@@ -243,6 +252,9 @@ pub struct UserResponse {
     /// of `can_stream`/`library_allow`; defaults to `false` for a newly
     /// created account.
     pub can_download: bool,
+    /// Whether this account may request titles that are not in the
+    /// library -- see `playarr_model::Policy::can_request`'s doc comment.
+    pub can_request: bool,
     pub disabled: bool,
     pub created_at: DateTime<Utc>,
     pub preferred_audio_language: String,
@@ -261,6 +273,7 @@ impl UserResponse {
         can_stream: bool,
         library_allow: Vec<Uuid>,
         can_download: bool,
+        can_request: bool,
     ) -> Self {
         Self {
             id: user.id,
@@ -271,6 +284,7 @@ impl UserResponse {
             can_stream,
             library_allow,
             can_download,
+            can_request,
             disabled: user.disabled,
             created_at: user.created_at,
             preferred_audio_language: user.preferred_audio_language,
@@ -297,6 +311,10 @@ pub struct PlayerPreferencesResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SelfCapabilitiesResponse {
     pub can_download: bool,
+    /// Whether this account may request titles that are not in the library
+    /// (administrators always may; `PLAYARR_REQUESTS_ALLOW_ALL_USERS`
+    /// overrides for everyone).
+    pub can_request: bool,
 }
 
 #[utoipa::path(
@@ -305,17 +323,22 @@ pub struct SelfCapabilitiesResponse {
     tag = "users",
     responses(
         (status = 200, description = "The signed-in user's own capability grants", body = SelfCapabilitiesResponse, example = json!({
-            "can_download": true
+            "can_download": true,
+            "can_request": false
         })),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller does not have Playarr streaming access")
     )
 )]
 pub async fn get_self_capabilities_handler(
+    State(state): State<AppState>,
     streaming: AnytimeStreamingUser,
 ) -> Json<SelfCapabilitiesResponse> {
     Json(SelfCapabilitiesResponse {
         can_download: streaming.policy.can_download,
+        can_request: streaming.policy.is_admin
+            || streaming.policy.can_request
+            || state.discovery_requests_allow_all_users,
     })
 }
 
@@ -475,12 +498,14 @@ fn invalid_pin() -> ApiError {
 /// set from the caller's request, `false` unless explicitly granted --
 /// being able to stream a library does not imply being allowed to copy it
 /// off the server.
+#[allow(clippy::too_many_arguments)]
 fn default_policy(
     id: Uuid,
     username: &str,
     is_admin: bool,
     can_stream: bool,
     can_download: bool,
+    can_request: bool,
     library_allow: Vec<Uuid>,
     group_library_allow: Vec<Uuid>,
 ) -> Policy {
@@ -497,6 +522,7 @@ fn default_policy(
         can_download,
         can_delete: false,
         can_share_public: false,
+        can_request,
         device_allow: Vec::new(),
         max_concurrent_sessions: None,
         household: Default::default(),
@@ -536,6 +562,7 @@ async fn persist_new_user(
         body.is_admin,
         body.can_stream,
         body.can_download,
+        body.can_request,
         body.library_allow,
         group_library_allow,
     );
@@ -608,6 +635,7 @@ async fn persist_new_user(
         policy.can_stream,
         policy.library_allow,
         policy.can_download,
+        policy.can_request,
     ))
 }
 
@@ -1140,6 +1168,7 @@ pub async fn signup_handler(
             // same as everywhere else in this handler; an admin can grant
             // it afterward via `PATCH /api/v1/admin/users/{id}`.
             can_download: false,
+            can_request: false,
         },
         invite.group_library_allow,
     )
@@ -1195,7 +1224,7 @@ pub async fn list_users_handler(
 
     let mut responses = Vec::with_capacity(users.len());
     for user in users {
-        let (is_admin, can_stream, library_allow, can_download) = match state
+        let (is_admin, can_stream, library_allow, can_download, can_request) = match state
             .policy_repo
             .find_by_id(user.policy_id)
             .await
@@ -1205,6 +1234,7 @@ pub async fn list_users_handler(
                 policy.can_stream,
                 policy.library_allow,
                 policy.can_download,
+                policy.can_request,
             ),
             Ok(None) => {
                 tracing::warn!(
@@ -1212,7 +1242,7 @@ pub async fn list_users_handler(
                     policy_id = %user.policy_id,
                     "user references a policy that no longer exists; treating as non-admin, non-streaming"
                 );
-                (false, false, Vec::new(), false)
+                (false, false, Vec::new(), false, false)
             }
             Err(err) => {
                 tracing::warn!(
@@ -1221,7 +1251,7 @@ pub async fn list_users_handler(
                     %err,
                     "failed to load policy for user; treating as non-admin, non-streaming"
                 );
-                (false, false, Vec::new(), false)
+                (false, false, Vec::new(), false, false)
             }
         };
         responses.push(UserResponse::from_user(
@@ -1230,6 +1260,7 @@ pub async fn list_users_handler(
             can_stream,
             library_allow,
             can_download,
+            can_request,
         ));
     }
 
@@ -1701,10 +1732,13 @@ pub async fn update_user_handler(
     // `is_admin`/`can_stream`/`library_allow`/`can_download` all live on
     // `Policy`, not `User` -- only touch (and only persist) the policy at
     // all when the caller actually asked to change one of them.
-    let (is_admin, can_stream, library_allow, can_download) = if body.is_admin.is_some()
+    let (is_admin, can_stream, library_allow, can_download, can_request) = if body
+        .is_admin
+        .is_some()
         || body.can_stream.is_some()
         || body.library_allow.is_some()
         || body.can_download.is_some()
+        || body.can_request.is_some()
     {
         let mut policy = state
             .policy_repo
@@ -1734,6 +1768,9 @@ pub async fn update_user_handler(
         if let Some(can_download) = body.can_download {
             policy.can_download = can_download;
         }
+        if let Some(can_request) = body.can_request {
+            policy.can_request = can_request;
+        }
         state.policy_repo.upsert(&policy).await.map_err(|err| {
             ApiError::internal(format!("failed to persist policy {}: {err}", policy.id))
         })?;
@@ -1742,6 +1779,7 @@ pub async fn update_user_handler(
             policy.can_stream,
             policy.library_allow,
             policy.can_download,
+            policy.can_request,
         )
     } else {
         match state.policy_repo.find_by_id(user.policy_id).await {
@@ -1750,6 +1788,7 @@ pub async fn update_user_handler(
                 policy.can_stream,
                 policy.library_allow,
                 policy.can_download,
+                policy.can_request,
             ),
             Ok(None) => {
                 tracing::warn!(
@@ -1757,7 +1796,7 @@ pub async fn update_user_handler(
                     policy_id = %user.policy_id,
                     "user references a policy that no longer exists; treating as non-admin, non-streaming"
                 );
-                (false, false, Vec::new(), false)
+                (false, false, Vec::new(), false, false)
             }
             Err(err) => {
                 tracing::warn!(
@@ -1766,7 +1805,7 @@ pub async fn update_user_handler(
                     %err,
                     "failed to load policy for user; treating as non-admin, non-streaming"
                 );
-                (false, false, Vec::new(), false)
+                (false, false, Vec::new(), false, false)
             }
         }
     };
@@ -1794,6 +1833,7 @@ pub async fn update_user_handler(
         can_stream,
         library_allow,
         can_download,
+        can_request,
     )))
 }
 

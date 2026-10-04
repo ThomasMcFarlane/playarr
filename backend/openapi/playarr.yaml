@@ -5967,6 +5967,7 @@ paths:
                 $ref: '#/components/schemas/SelfCapabilitiesResponse'
               example:
                 can_download: true
+                can_request: false
         '401':
           description: Missing or invalid access token
         '403':
@@ -8289,6 +8290,12 @@ components:
             doc comment. Defaults to `false` (least privilege), same philosophy
             as `can_stream`/`library_allow` above: an admin has to explicitly
             grant download access, it is never on by default.
+        can_request:
+          type: boolean
+          description: |-
+            Grants permission to request titles that are not in the library --
+            see `playarr_model::Policy::can_request`'s doc comment. Defaults to
+            `false` (least privilege).
         can_stream:
           type: boolean
           description: |-
@@ -11787,6 +11794,13 @@ components:
             browse and play a library does not imply being allowed to copy it
             off the server. Defaults to `false` (least privilege) for every
             newly created account -- an admin has to explicitly turn it on.
+        can_request:
+          type: boolean
+          description: |-
+            Grants permission to request titles that are not in the library
+            (discovery's Radarr/Sonarr request flow). Defaults to `false` (least
+            privilege): an admin has to turn it on per account. Administrators
+            may always request regardless of this flag.
         can_share_public:
           type: boolean
         can_stream:
@@ -12391,9 +12405,16 @@ components:
         renders.
       required:
       - can_download
+      - can_request
       properties:
         can_download:
           type: boolean
+        can_request:
+          type: boolean
+          description: |-
+            Whether this account may request titles that are not in the library
+            (administrators always may; `PLAYARR_REQUESTS_ALLOW_ALL_USERS`
+            overrides for everyone).
     SelfPeerNodeRequest:
       type: object
       description: Request body for [`update_self_peer_node_handler`].
@@ -13402,6 +13423,13 @@ components:
             `Some(bool)` replaces the account's `Policy::can_download`; `None`
             (the field omitted) leaves it untouched -- same all-optional-patch
             shape as every other field here.
+        can_request:
+          type:
+          - boolean
+          - 'null'
+          description: |-
+            `Some(bool)` replaces the account's `Policy::can_request`; `None`
+            leaves it untouched.
         can_stream:
           type:
           - boolean
@@ -13559,6 +13587,7 @@ components:
       - can_stream
       - library_allow
       - can_download
+      - can_request
       - disabled
       - created_at
       - preferred_audio_language
@@ -13570,6 +13599,11 @@ components:
             `playarr_model::Policy::can_download`'s doc comment. Independent
             of `can_stream`/`library_allow`; defaults to `false` for a newly
             created account.
+        can_request:
+          type: boolean
+          description: |-
+            Whether this account may request titles that are not in the
+            library -- see `playarr_model::Policy::can_request`'s doc comment.
         can_stream:
           type: boolean
           description: |-

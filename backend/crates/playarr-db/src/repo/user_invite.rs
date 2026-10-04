@@ -344,6 +344,7 @@ mod tests {
             can_download: true,
             can_delete: false,
             can_share_public: false,
+            can_request: false,
             device_allow: vec![],
             max_concurrent_sessions: None,
             household: Default::default(),

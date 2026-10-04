@@ -7,7 +7,7 @@
 //! **Conflict model** (§3.5): `users`/`policies`/`group_libraries` resolve
 //! by plain last-writer-wins on `updated_at`. `policies` additionally gate
 //! its privilege-bearing fields (`is_admin`/`can_stream`/`can_download`/
-//! `can_delete`/`can_share_public`/`library_allow`/`group_library_allow`/
+//! `can_delete`/`can_share_public`/`can_request`/`library_allow`/`group_library_allow`/
 //! `device_allow`/`access_schedule`) behind an `origin_peer_id` match -- see
 //! [`resolve_policy`]'s doc comment.
 //!
@@ -249,6 +249,7 @@ pub fn merge_non_privileged_policy_fields(local: &Policy, incoming: &Policy) -> 
         can_download: local.can_download,
         can_delete: local.can_delete,
         can_share_public: local.can_share_public,
+        can_request: local.can_request,
         device_allow: local.device_allow.clone(),
         max_concurrent_sessions: incoming.max_concurrent_sessions,
         access_schedule: local.access_schedule.clone(),
@@ -847,6 +848,7 @@ mod tests {
             can_download: false,
             can_delete: false,
             can_share_public: false,
+            can_request: false,
             device_allow: vec![ClientPlatform::Web],
             max_concurrent_sessions: None,
             access_schedule: None,

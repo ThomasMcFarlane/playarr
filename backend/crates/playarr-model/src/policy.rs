@@ -87,6 +87,12 @@ pub struct Policy {
     pub can_download: bool,
     pub can_delete: bool,
     pub can_share_public: bool,
+    /// Grants permission to request titles that are not in the library
+    /// (discovery's Radarr/Sonarr request flow). Defaults to `false` (least
+    /// privilege): an admin has to turn it on per account. Administrators
+    /// may always request regardless of this flag.
+    #[serde(default)]
+    pub can_request: bool,
 
     pub device_allow: Vec<ClientPlatform>,
     pub max_concurrent_sessions: Option<u32>,

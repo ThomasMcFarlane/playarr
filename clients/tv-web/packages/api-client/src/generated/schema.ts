@@ -3627,6 +3627,12 @@ export interface components {
              */
             can_download?: boolean;
             /**
+             * @description Grants permission to request titles that are not in the library --
+             *     see `playarr_model::Policy::can_request`'s doc comment. Defaults to
+             *     `false` (least privilege).
+             */
+            can_request?: boolean;
+            /**
              * @description Grants Playarr streaming access -- see `playarr_model::Policy::
              *     can_stream`'s doc comment. Independent of `is_admin`; defaults to
              *     `false` (least privilege), same as every other grant this handler
@@ -5378,6 +5384,13 @@ export interface components {
              *     newly created account -- an admin has to explicitly turn it on.
              */
             can_download: boolean;
+            /**
+             * @description Grants permission to request titles that are not in the library
+             *     (discovery's Radarr/Sonarr request flow). Defaults to `false` (least
+             *     privilege): an admin has to turn it on per account. Administrators
+             *     may always request regardless of this flag.
+             */
+            can_request?: boolean;
             can_share_public: boolean;
             /**
              * @description Whether this account may sign in to Playarr (the consumer streaming
@@ -5695,6 +5708,12 @@ export interface components {
          */
         SelfCapabilitiesResponse: {
             can_download: boolean;
+            /**
+             * @description Whether this account may request titles that are not in the library
+             *     (administrators always may; `PLAYARR_REQUESTS_ALLOW_ALL_USERS`
+             *     overrides for everyone).
+             */
+            can_request: boolean;
         };
         /** @description Request body for [`update_self_peer_node_handler`]. */
         SelfPeerNodeRequest: {
@@ -6156,6 +6175,11 @@ export interface components {
              *     shape as every other field here.
              */
             can_download?: boolean | null;
+            /**
+             * @description `Some(bool)` replaces the account's `Policy::can_request`; `None`
+             *     leaves it untouched.
+             */
+            can_request?: boolean | null;
             can_stream?: boolean | null;
             disabled?: boolean | null;
             display_name?: string | null;
@@ -6240,6 +6264,11 @@ export interface components {
              *     created account.
              */
             can_download: boolean;
+            /**
+             * @description Whether this account may request titles that are not in the
+             *     library -- see `playarr_model::Policy::can_request`'s doc comment.
+             */
+            can_request: boolean;
             /**
              * @description Whether this account is permitted to sign in to Playarr -- see
              *     `playarr_model::Policy::can_stream`'s doc comment. Independent of
@@ -14657,7 +14686,8 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "can_download": true
+                     *       "can_download": true,
+                     *       "can_request": false
                      *     }
                      */
                     "application/json": components["schemas"]["SelfCapabilitiesResponse"];
