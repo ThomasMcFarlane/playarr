@@ -25,6 +25,7 @@ import {
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
+import { smoothScrollTo } from "../lib/smoothScroll";
 import {
   isNavigationLayerRestoring,
   useNavigationLayer,
@@ -122,15 +123,16 @@ function findOnDeckEpisode(
 function centreHomeRail(
   container: HTMLElement,
   section: HTMLElement,
-  behavior: ScrollBehavior
+  animate: boolean
 ): void {
   const target =
     section.offsetTop + section.offsetHeight / 2 - container.clientHeight / 2;
   const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-  container.scrollTo({
-    top: Math.max(0, Math.min(maxScrollTop, target)),
-    behavior,
-  });
+  const top = Math.max(0, Math.min(maxScrollTop, target));
+  // Eased, interruptible, retargeting scroll (shared with remote navigation);
+  // the focused rail glides to a stable vertical anchor at the viewport centre.
+  if (animate) smoothScrollTo(container, { top });
+  else container.scrollTop = top;
 }
 
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
@@ -365,7 +367,7 @@ export function HomePage() {
     const container = railsRef.current;
     const firstSection = container?.querySelector<HTMLElement>(".tv-media-track");
     if (!container || !firstSection) return;
-    centreHomeRail(container, firstSection, "auto");
+    centreHomeRail(container, firstSection, false);
     focusedRailRef.current =
       (firstSection.dataset.tvTrackId as HomeRailId | undefined) ?? null;
   }, [navigationLayer.hasSnapshot, railsKey]);
@@ -461,7 +463,7 @@ export function HomePage() {
     window.requestAnimationFrame(() => {
       const container = railsRef.current;
       if (container && section.isConnected) {
-        centreHomeRail(container, section, remote ? "auto" : "smooth");
+        centreHomeRail(container, section, true);
       }
     });
   }

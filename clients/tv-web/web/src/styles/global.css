@@ -7233,7 +7233,7 @@ body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-res
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: clamp(38px, calc(5 * var(--viewport-unit)), 64px);
+  gap: clamp(24px, calc(3.4 * var(--viewport-unit)), 44px);
   min-width: 0;
   max-width: none;
   padding-block: var(--viewport-half-height);
@@ -11896,7 +11896,8 @@ body[data-input-mode="remote"] :is(
 }
 
 /*
- * Remote scrolling is instant. `scroll-behavior: smooth` makes every
+ * Remote scrolling is driven by lib/smoothScroll.ts (rAF, eased, retargeting),
+ * never by CSS smooth scrolling. `scroll-behavior: smooth` makes every
  * programmatic scrollTop write start a new animation toward a target that is
  * recomputed from the *mid-animation* position, so under a held button the
  * viewport trails the focus by thousands of pixels (focus ends up off screen).

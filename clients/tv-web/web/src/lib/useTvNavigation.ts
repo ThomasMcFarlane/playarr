@@ -7,6 +7,7 @@ import {
 } from "./arrowNavigationPolicy";
 import { findClosestItemInNextTrack } from "./trackNavigation";
 import { noteNavigationKey } from "./navigationActivity";
+import { smoothScrollTo } from "./smoothScroll";
 import {
   type Direction,
   type FocusRect,
@@ -766,7 +767,7 @@ function snapToVerticalTrackBoundary({
 }: VerticalTrackNavigation): void {
   const surfaceRect = surface.getBoundingClientRect();
   const trackRect = currentTrack.getBoundingClientRect();
-  surface.scrollTo({
+  smoothScrollTo(surface, {
     top: centredVerticalTrackScrollTop({
       clientHeight: surface.clientHeight,
       containerTop: surfaceRect.top,
@@ -775,7 +776,6 @@ function snapToVerticalTrackBoundary({
       trackHeight: trackRect.height,
       trackTop: trackRect.top,
     }),
-    behavior: remoteScrollBehavior(),
   });
 }
 
@@ -850,10 +850,7 @@ function revealFullyWithinHorizontalContainer(
 
   const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
   const targetScrollLeft = Math.max(0, Math.min(maxScrollLeft, container.scrollLeft + delta));
-  container.scrollTo({
-    left: targetScrollLeft,
-    behavior: remoteScrollBehavior(),
-  });
+  smoothScrollTo(container, { left: targetScrollLeft });
 }
 
 function parsePixelValue(value: string): number {
@@ -908,7 +905,7 @@ function scrollVerticalContainer(
       scrollTop: element.scrollTop,
     });
     if (Math.abs(target - element.scrollTop) < 1) continue;
-    element.scrollTo({ top: target, behavior: remoteScrollBehavior() });
+    smoothScrollTo(element, { top: target });
     return true;
   }
   return false;
@@ -1221,10 +1218,9 @@ function moveFocus(direction: Direction): void {
         // Directory rows should glide into their safe viewport area. Each
         // new key press retargets the native animation to the newly focused
         // card, avoiding the hard row-by-row jumps of a forced auto scroll.
-        scrollContainer.scrollTo({
+        smoothScrollTo(scrollContainer, {
           left: scrollContainer.scrollLeft + horizontalDelta,
           top: scrollContainer.scrollTop + verticalDelta,
-          behavior: remoteScrollBehavior(),
         });
       }
     } else if (!homeMove) {

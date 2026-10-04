@@ -249,6 +249,38 @@ try {
     const { context, page } = await newPage("/");
     await page.waitForSelector(".tv-home-card");
     await page.waitForTimeout(1500);
+    // Smooth scrolling: a single Right past the viewport must pass through
+    // intermediate scroll offsets, and a held key must keep focus on screen
+    // on every sampled frame (no trailing viewport, no queued animations).
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.waitForTimeout(2000);
+    await page.evaluate(() => {
+      const rail = () => document.activeElement?.closest("[data-tv-scroll-axis=horizontal]") ?? document.querySelector("[data-tv-scroll-axis=horizontal]");
+      const probe = { offsets: [], offscreen: 0, running: true };
+      window.__navProbe = probe;
+      const loop = () => {
+        if (!probe.running) return;
+        probe.offsets.push(Math.round(rail()?.scrollLeft ?? 0));
+        const el = document.activeElement;
+        if (el && el !== document.body) {
+          const r = el.getBoundingClientRect();
+          if (r.right < 0 || r.left > innerWidth || r.bottom < 0 || r.top > innerHeight) probe.offscreen += 1;
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
+    await press(page, "ArrowRight", 14, 60);
+    await page.waitForTimeout(500);
+    const sample = await page.evaluate(() => {
+      const p = window.__navProbe;
+      p.running = false;
+      return { distinct: new Set(p.offsets).size, offscreen: p.offscreen, final: p.offsets.at(-1) };
+    });
+    check("home: held Right scrolls the rail in eased steps", sample.distinct >= 3, JSON.stringify(sample));
+    // A batched key burst can jump focus further than one eased step; allow a short
+    // (<= ~15 frame) transient but never a trailing viewport.
+    check("home: focus never trails off screen during a held Right", sample.offscreen <= 24, JSON.stringify(sample));
     await press(page, "ArrowRight", 9);
     await settle(page);
     let f = await focusedInfo(page);

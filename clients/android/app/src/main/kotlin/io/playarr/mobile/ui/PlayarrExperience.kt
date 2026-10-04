@@ -2011,13 +2011,24 @@ private fun ExperienceHomeScreen(
                     FeatureCopy(selected, true)
                 },
                 rails = {
+                    val railsState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    var focusedRailTitle by remember { mutableStateOf<PlayarrString?>(null) }
+                    // D-pad Up/Down glides the focused rail to the same anchor (the top
+                    // of the content padding) instead of nudging by whatever bring-into-view
+                    // needs. animateScrollToItem is cancelled and restarted by the next
+                    // focused rail, so a held key coalesces to the latest target.
+                    LaunchedEffect(focusedRailTitle) {
+                        val index = current.value.indexOfFirst { it.title == focusedRailTitle }
+                        if (isTelevision && index >= 0) railsState.animateScrollToItem(index)
+                    }
                     LazyColumn(
+                        state = railsState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             top = if (isTelevision) 480.dp else 68.dp,
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 48.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 16.dp),
                     ) {
                         items(current.value, key = HomeRail::title) { rail ->
                             ExperienceMediaRail(
@@ -2039,6 +2050,7 @@ private fun ExperienceHomeScreen(
                                     )
                                 },
                                 onContext = { contextWork = it },
+                                onRailFocused = { focusedRailTitle = rail.title },
                             )
                         }
                     }
@@ -2204,9 +2216,15 @@ private fun ExperienceMediaRail(
     onSelected: (Work) -> Unit,
     onClick: (Work, PlayarrOnDeckEntry?) -> Unit,
     onContext: (Work) -> Unit,
+    onRailFocused: () -> Unit = {},
 ) {
     val collection = playarrString(PlayarrString.LibraryCollectionTitles)
-    Column(modifier = Modifier.fillMaxWidth().padding(start = if (isTelevision) 46.dp else 16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (it.hasFocus) onRailFocused() }
+            .padding(start = if (isTelevision) 46.dp else 16.dp),
+    ) {
         Text(playarrString(rail.title), color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
         Text(
             playarrString(PlayarrString.LibraryCollectionCount, "count" to rail.works.size, "collection" to collection),

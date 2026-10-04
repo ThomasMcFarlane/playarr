@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Playarr web and Android TV: keyboard and D-pad navigation on Home now glides. Rails ease sideways (about 240 ms, interruptible, held keys coalesce to the latest target, no CSS smooth scrolling) and Up/Down eases the focused rail to a stable anchor; `prefers-reduced-motion` keeps the instant behaviour. Rail spacing on Home is tighter. `nav-smoke` gains a held-Right eased-scroll check.
+
 - Web: one shared right-side `Drawer` (title and round icon close, body, footer, Tab focus trap, Esc/Back closes, `?panel=` URL state, focus returns to the opener) now backs Filters on every page, the Calendar link, playback settings, download quality, keep-until and create-playlist; `drawerAudit.test.ts` blocks new ad-hoc panels.
 - Web: "Calendar link" replaces "Calendar subscription": the personal iCal link is created automatically on first open, with Copy, QR, Google/Apple/Outlook steps and a confirmed "Reset link". Load failures now say whether the server is unreachable, too old to support calendar links, or the sign-in expired, instead of "Failed to fetch".
 - Web: Filters and the calendar's Calendar link and navigation render through the page header's shared slots (Playlists pattern: panel buttons left of Filters, same style and position on Movies, Series, Playlists and Calendar); the calendar skeleton fills exactly the area of the loaded view. `scripts/header-parity.mjs` and `scripts/calendar-layout.mjs` check both in a headless browser.
