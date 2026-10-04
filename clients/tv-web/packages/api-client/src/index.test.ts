@@ -1656,3 +1656,27 @@ describe("remote push stream", () => {
     );
   });
 });
+
+describe("ApiClient live event stream", () => {
+  it("opens /api/v1/events with the bearer token, SSE accept header and Last-Event-ID", async () => {
+    const fetchImpl = mockFetch(
+      () => new Response("", { status: 200, headers: { "content-type": "text/event-stream" } })
+    );
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: async () => "tok" });
+    const controller = new AbortController();
+    const response = await client.openEventStream({ lastEventId: "42", signal: controller.signal });
+    expect(response.status).toBe(200);
+    const request = fetchImpl.mock.calls[0]![0];
+    expect(new URL(request.url).pathname).toBe("/api/v1/events");
+    expect(request.headers.get("authorization")).toBe("Bearer tok");
+    expect(request.headers.get("accept")).toBe("text/event-stream");
+    expect(request.headers.get("last-event-id")).toBe("42");
+  });
+
+  it("returns non-200 responses instead of throwing so the caller can detect unsupported servers", async () => {
+    const fetchImpl = mockFetch(() => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const response = await client.openEventStream();
+    expect(response.headers.get("content-type")).toBe("text/html");
+  });
+});

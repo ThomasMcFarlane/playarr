@@ -25,6 +25,7 @@ import {
   type WorkDetail,
 } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
@@ -258,6 +259,8 @@ export function PlaylistsPage() {
   const parentSelectRef = useRef<HTMLButtonElement | null>(null);
   const createSubmitRef = useRef<HTMLButtonElement>(null);
 
+  const livePlaylistsRevision = useLiveRevision({ areas: ["playlists", "catalog"] });
+  const liveProgressRevision = useLiveRevision({ areas: ["progress"] });
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -304,17 +307,21 @@ export function PlaylistsPage() {
             }),
         }));
         if (cancelled) return;
-        setSelectedByTrack(
+        // A live refresh keeps the user's current track selection where it still exists.
+        setSelectedByTrack((current) =>
           Object.fromEntries(
             tracks.map((track) => [
               track.playlist.id,
-              track.items[0]?.id ?? null,
+              livePlaylistsRevision > 0 &&
+              track.items.some((item) => item.id === current[track.playlist.id])
+                ? (current[track.playlist.id] ?? null)
+                : (track.items[0]?.id ?? null),
             ])
           )
         );
         setPageState({ status: "ready", tracks });
       } catch (error: unknown) {
-        if (!cancelled) {
+        if (!cancelled && livePlaylistsRevision === 0) {
           setPageState({ status: "error", message: describeApiError(error) });
         }
       }
@@ -323,7 +330,7 @@ export function PlaylistsPage() {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, livePlaylistsRevision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -333,12 +340,12 @@ export function PlaylistsPage() {
         if (!cancelled) setWatchProgress(rows);
       })
       .catch(() => {
-        if (!cancelled) setWatchProgress(null);
+        if (!cancelled && liveProgressRevision === 0) setWatchProgress(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, liveProgressRevision]);
 
   const tracks = pageState.status === "ready" ? pageState.tracks : [];
   const tracksById = useMemo(

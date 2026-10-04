@@ -65,6 +65,7 @@ import {
   type CalendarTypeParam,
 } from "../lib/calendarFilters";
 import { IS_TV } from "../lib/clientPlatform";
+import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer } from "../lib/navigationLayer";
@@ -729,9 +730,11 @@ export function CalendarPage() {
 
   const range = visibleRange(view, anchor, firstDay);
   const fetchRange = fetchWindow(range);
+  const liveCalendar = useLiveSubscription({ areas: ["calendar"] });
   const state = useAsyncData<CalendarResponse>(
     () => client.getCalendar({ start: fetchRange.start, end: fetchRange.end }),
-    [client, fetchRange.start, fetchRange.end, reloadNonce]
+    [client, fetchRange.start, fetchRange.end, reloadNonce],
+    { subscribe: liveCalendar }
   );
 
   const data = state.status === "ready" ? state.data : null;

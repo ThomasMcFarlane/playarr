@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { describeApiError, type ApiClient, type HouseholdStatus } from "@playarr-tv/api-client";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { useLiveSubscription } from "../lib/liveEvents";
 import {
   approvalSubjectFor,
   householdBlockFromStatus,
@@ -52,6 +53,10 @@ export function useHouseholdStatus(
   // Route changes re-check promptly so a spent budget is noticed on the
   // next navigation rather than up to 30 s later.
   useEffect(refresh, [refresh, refreshKey]);
+
+  // Household and account events refresh the gate straight away (schedule, budget, approval).
+  const liveHousehold = useLiveSubscription({ areas: ["household", "account"] });
+  useEffect(() => liveHousehold(refresh), [liveHousehold, refresh]);
 
   return { status, refresh };
 }

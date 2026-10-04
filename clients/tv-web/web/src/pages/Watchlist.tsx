@@ -10,6 +10,7 @@ import { PageHeader } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision } from "../lib/liveEvents";
 import {
   actionLabelKey,
   discoveryUnsupportedByServer,
@@ -35,6 +36,7 @@ export function WatchlistPage() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [removeError, setRemoveError] = useState<string | null>(null);
 
+  const liveRevision = useLiveRevision({ areas: ["watchlist"] });
   useEffect(() => {
     let cancelled = false;
     void client
@@ -43,7 +45,7 @@ export function WatchlistPage() {
         if (!cancelled) setState({ status: "ready", items: response.items });
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
+        if (!cancelled && liveRevision === 0) {
           setState({
             status: "error",
             message: discoveryUnsupportedByServer(error)
@@ -55,7 +57,7 @@ export function WatchlistPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, t]);
+  }, [client, t, liveRevision]);
 
   const remove = useCallback(
     async (entry: WatchlistEntry) => {

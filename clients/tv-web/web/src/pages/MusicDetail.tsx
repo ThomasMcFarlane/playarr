@@ -37,6 +37,7 @@ import {
 } from "../components/tv/TvStage";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import { CachedAlbumArtworkImage, CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
@@ -492,7 +493,13 @@ export function MusicDetailPage() {
     useOutletContext<AppShellOutletContext>();
   const { t } = useLanguage();
   const client = useApiClient();
-  const state = useWorkDetail(client, workId);
+  const liveWorkScope = useMemo(
+    () => ({ areas: ["catalog", "progress"] as const, keys: workId ? [workId] : [] }),
+    [workId]
+  );
+  const liveWork = useLiveSubscription(liveWorkScope);
+  const liveProgressRevision = useLiveRevision(liveWorkScope);
+  const state = useWorkDetail(client, workId, { subscribe: liveWork });
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const restoredMediaFileIdRef = useRef<string | null>(null);
@@ -747,12 +754,12 @@ export function MusicDetailPage() {
         }
       })
       .catch(() => {
-        if (!cancelled) setProgressByMedia(new Map());
+        if (!cancelled && liveProgressRevision === 0) setProgressByMedia(new Map());
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, liveProgressRevision]);
 
   const handleProgressChanged = useCallback(
     (_workId: string, updated: WatchProgress[]) => {

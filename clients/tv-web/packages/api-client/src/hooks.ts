@@ -14,7 +14,7 @@
  * response with nothing to show, `"error"` a rejected fetch, `"ready"` data
  * in hand) are identical everywhere rather than reimplemented per surface.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ApiClient, BrowseCatalogParams, CatalogPage, PlaybackInfo, WorkDetail } from "./index";
 
 export type AsyncState<T> =
@@ -28,6 +28,13 @@ export interface UseAsyncDataOptions<T> {
   /** When false, skips fetching entirely and reports `{status: "idle"}` -- useful while a required id is unknown. */
   enabled?: boolean;
   isEmpty?: (data: T) => boolean;
+  /**
+   * Live refresh hook-up: called with a `refresh` function, returns an unsubscribe.
+   * `refresh` refetches in place -- the current data stays on screen (no "loading"
+   * flash, no remount) and is replaced only when the new data arrives; a failed
+   * background refetch keeps the old data. Pass a stable function (memoise it).
+   */
+  subscribe?: (refresh: () => void) => () => void;
 }
 
 /**
@@ -40,8 +47,13 @@ export function useAsyncData<T>(
   deps: unknown[],
   options: UseAsyncDataOptions<T> = {}
 ): AsyncState<T> {
-  const { enabled = true, isEmpty } = options;
+  const { enabled = true, isEmpty, subscribe } = options;
   const [state, setState] = useState<AsyncState<T>>(enabled ? { status: "loading" } : { status: "idle" });
+  // Latest closures, so a background refresh uses current params without re-subscribing.
+  const latest = useRef({ fetcher, isEmpty });
+  latest.current = { fetcher, isEmpty };
+  // Bumped whenever the primary effect restarts, so an older background refresh never wins.
+  const generation = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -50,6 +62,7 @@ export function useAsyncData<T>(
     }
 
     let cancelled = false;
+    generation.current += 1;
     setState({ status: "loading" });
 
     fetcher()
@@ -70,21 +83,58 @@ export function useAsyncData<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps]);
 
+  useEffect(() => {
+    if (!enabled || !subscribe) return;
+    return subscribe(() => {
+      const started = generation.current;
+      latest.current
+        .fetcher()
+        .then((data) => {
+          if (generation.current !== started) return;
+          const next: AsyncState<T> = latest.current.isEmpty?.(data) ? { status: "empty" } : { status: "ready", data };
+          setState((current) => (sameAsyncState(current, next) ? current : next));
+        })
+        .catch(() => undefined);
+    });
+  }, [enabled, subscribe]);
+
   return state;
 }
 
+function sameAsyncState<T>(a: AsyncState<T>, b: AsyncState<T>): boolean {
+  if (a.status !== b.status) return false;
+  if (a.status === "ready" && b.status === "ready") {
+    try {
+      return JSON.stringify(a.data) === JSON.stringify(b.data);
+    } catch {
+      return false;
+    }
+  }
+  return a.status === "empty";
+}
+
 /** Browse the catalog (optionally filtered/sorted/paged); `{status: "empty"}` when the page has no items. */
-export function useCatalogBrowse(client: ApiClient, params: BrowseCatalogParams = {}): AsyncState<CatalogPage> {
+export function useCatalogBrowse(
+  client: ApiClient,
+  params: BrowseCatalogParams = {},
+  options: Pick<UseAsyncDataOptions<CatalogPage>, "subscribe"> = {}
+): AsyncState<CatalogPage> {
   const key = JSON.stringify(params);
   return useAsyncData(() => client.browseCatalog(params), [client, key], {
     isEmpty: (data) => data.items.length === 0,
+    subscribe: options.subscribe,
   });
 }
 
 /** Fetch a single work's full detail tree. Idle until `workId` is defined. */
-export function useWorkDetail(client: ApiClient, workId: string | undefined): AsyncState<WorkDetail> {
+export function useWorkDetail(
+  client: ApiClient,
+  workId: string | undefined,
+  options: Pick<UseAsyncDataOptions<WorkDetail>, "subscribe"> = {}
+): AsyncState<WorkDetail> {
   return useAsyncData(() => client.getWork(workId as string), [client, workId], {
     enabled: Boolean(workId),
+    subscribe: options.subscribe,
   });
 }
 

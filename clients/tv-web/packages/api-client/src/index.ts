@@ -42,6 +42,43 @@ export type { paths, components } from "./generated/schema";
 // generated `paths` client. Shapes mirror `backend/openapi/playarr.yaml`.
 // ---------------------------------------------------------------------------
 
+/** `ready` frame body of `GET /api/v1/events` (docs/architecture/live-events.md). */
+export interface LiveReadyEvent {
+  seq: number;
+  retention_ms: number;
+  heartbeat_ms: number;
+  max_age_ms: number;
+  server_time_ms: number;
+}
+
+export type LiveChangeType =
+  | "watch"
+  | "library"
+  | "calendar"
+  | "playlist"
+  | "watchlist"
+  | "download"
+  | "household"
+  | "account"
+  | "admin";
+
+/** `change` frame body: a pointer to what moved, never the entity body. */
+export interface LiveChangeEvent {
+  seq: number;
+  type: LiveChangeType | (string & {});
+  entity: string;
+  id?: string | null;
+  changed: string[];
+  /** Server commit time, epoch milliseconds. */
+  at: number;
+}
+
+/** `resync` frame body: the cursor could not be honoured; refetch everything shown. */
+export interface LiveResyncEvent {
+  reason: string;
+  seq: number;
+}
+
 export type UserDataExportStatus = "queued" | "running" | "ready" | "failed" | "expired";
 
 export interface UserDataExportJob {
@@ -1078,6 +1115,22 @@ export class ApiClient {
     return (text ? JSON.parse(text) : undefined) as T;
   }
 
+
+  /**
+   * Opens the per-account live event stream (`GET /api/v1/events`). Returns the raw
+   * response so the caller can read `response.body`; `EventSource` cannot send the
+   * bearer header, hence fetch. Never throws on a non-2xx status: the caller decides
+   * whether that means "unsupported" (older server) or "retry".
+   */
+  async openEventStream(options: { lastEventId?: string; signal?: AbortSignal } = {}): Promise<Response> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = { Accept: "text/event-stream" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (options.lastEventId) headers["Last-Event-ID"] = options.lastEventId;
+    return this.rawFetch(
+      new Request(this.resolveUrl("/api/v1/events"), { method: "GET", headers, signal: options.signal })
+    );
+  }
 
   /** Request with a raw (binary) body or response; same bearer auth as `requestJson`. */
   private async requestRaw(

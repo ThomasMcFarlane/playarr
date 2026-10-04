@@ -28,6 +28,7 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { PageHeader } from "../components/shell";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
@@ -543,6 +544,7 @@ export function SearchPage() {
     requestedQuery,
   ]);
 
+  const liveProgressRevision = useLiveRevision({ areas: ["progress"] });
   useEffect(() => {
     let cancelled = false;
     void client
@@ -551,12 +553,12 @@ export function SearchPage() {
         if (!cancelled) setWatchProgress(rows);
       })
       .catch(() => {
-        if (!cancelled) setWatchProgress(null);
+        if (!cancelled && liveProgressRevision === 0) setWatchProgress(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, liveProgressRevision]);
 
   const results = state.status === "ready" ? state.results : [];
   const selected = useMemo(

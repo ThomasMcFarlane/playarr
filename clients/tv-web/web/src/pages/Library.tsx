@@ -24,6 +24,7 @@ import {
 } from "../components/WatchStateOverlay";
 import { useMediaContextMenu } from "../components/MediaContextMenu";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
 import {
   libraryChunkRanges,
@@ -294,22 +295,64 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
+  const liveProgressRevision = useLiveRevision({ areas: ["progress"] });
   useEffect(() => {
     let cancelled = false;
-    setWatchProgress(null);
+    // A live refresh keeps the current badges until the new rows arrive.
+    if (liveProgressRevision === 0) setWatchProgress(null);
     client
       .listWatchProgress()
       .then((rows) => {
         if (!cancelled) setWatchProgress(rows);
       })
       .catch(() => {
-        if (!cancelled) setWatchProgress(null);
+        if (!cancelled && liveProgressRevision === 0) setWatchProgress(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, liveProgressRevision]);
+
+  // Live catalogue changes refresh the first page in place: the grid keeps its
+  // items, selection and focus, and only changed works are swapped.
+  const liveCatalog = useLiveSubscription({ areas: ["catalog"] });
+  useEffect(
+    () =>
+      liveCatalog(() => {
+        const generation = generationRef.current;
+        client
+          .browseCatalog({
+            kind,
+            available_only: true,
+            sort,
+            order,
+            limit: PAGE_SIZE,
+            offset: 0,
+            ...languageParams,
+          })
+          .then((page) => {
+            if (generation !== generationRef.current || itemsRef.current.length === 0) return;
+            const head = orderWorks(page.items, sort, order);
+            const headIds = new Set(head.map((work) => work.id));
+            const tail = itemsRef.current.slice(PAGE_SIZE).filter((work) => !headIds.has(work.id));
+            const merged = orderWorks([...head, ...tail], sort, order);
+            const nextTotal = page.total ?? merged.length;
+            if (
+              nextTotal === totalRef.current &&
+              JSON.stringify(merged) === JSON.stringify(itemsRef.current)
+            ) {
+              return;
+            }
+            itemsRef.current = merged;
+            totalRef.current = nextTotal;
+            setItems(merged);
+            setTotal(nextTotal);
+          })
+          .catch(() => undefined);
+      }),
+    [client, kind, languageParams, liveCatalog, order, sort]
+  );
 
   // Facets follow the other active filters, so only offer languages that
   // still match something. Fetched while the drawer is open.

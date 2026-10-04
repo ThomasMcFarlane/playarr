@@ -6,6 +6,7 @@ import {
   type HouseholdStatus,
 } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
@@ -68,6 +69,8 @@ export function HouseholdPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  const liveHousehold = useLiveSubscription({ areas: ["household", "account"] });
+  useEffect(() => liveHousehold(() => void load()), [liveHousehold, load]);
 
   async function decide(approval: HouseholdApproval, approve: boolean) {
     if (approve && !/^\d{4}$/.test(pin)) {

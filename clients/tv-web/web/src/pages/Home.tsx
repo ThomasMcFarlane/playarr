@@ -31,6 +31,7 @@ import {
 } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useHomeView, type HomeViewPreference } from "../lib/homeView";
+import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import {
   TvMediaTrack,
   TvRailSurface,
@@ -138,24 +139,26 @@ export function HomePage() {
   const { preference: homeView } = useHomeView();
   useDocumentTitle(t("pages.home.title"));
   const client = useApiClient();
+  const liveCatalog = useLiveSubscription({ areas: ["catalog"] });
+  const liveOnDeckRevision = useLiveRevision({ areas: ["progress", "catalog"] });
   const seriesState = useCatalogBrowse(client, {
     kind: "series",
     available_only: true,
     sort: "recent",
     limit: 36,
-  });
+  }, { subscribe: liveCatalog });
   const movieState = useCatalogBrowse(client, {
     kind: "movie",
     available_only: true,
     sort: "recent",
     limit: 36,
-  });
+  }, { subscribe: liveCatalog });
   const siteState = useCatalogBrowse(client, {
     kind: "site",
     available_only: true,
     sort: "recent",
     limit: 36,
-  });
+  }, { subscribe: liveCatalog });
   const [activeRail, setActiveRail] = useState<HomeRailId>("primary");
   const [selectedByRail, setSelectedByRail] = useState<Record<HomeRailId, string | null>>({
     primary: null,
@@ -204,10 +207,14 @@ export function HomePage() {
     // be swapped under the viewer once they are interactive (the primary rail's
     // cards would remount and take the focus ring with them), so Home waits for
     // On Deck, but never longer than ON_DECK_WAIT_MS; late results are dropped.
-    const giveUp = window.setTimeout(() => {
-      cancelled = true;
-      setOnDeckSettled(true);
-    }, ON_DECK_WAIT_MS);
+    // A live refresh (revision > 0) updates in place and has no such deadline.
+    const giveUp =
+      liveOnDeckRevision === 0
+        ? window.setTimeout(() => {
+            cancelled = true;
+            setOnDeckSettled(true);
+          }, ON_DECK_WAIT_MS)
+        : undefined;
 
     client
       .listWatchProgress()
@@ -252,7 +259,7 @@ export function HomePage() {
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && liveOnDeckRevision === 0) {
           setOnDeck([]);
           setWatchProgress(null);
           setOnDeckSettled(true);
@@ -261,9 +268,9 @@ export function HomePage() {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(giveUp);
+      if (giveUp !== undefined) window.clearTimeout(giveUp);
     };
-  }, [client]);
+  }, [client, liveOnDeckRevision]);
 
   const seriesItems = seriesState.status === "ready" ? seriesState.data.items : EMPTY_WORKS;
   const movieItems = movieState.status === "ready" ? movieState.data.items : EMPTY_WORKS;

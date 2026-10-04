@@ -6,6 +6,7 @@ import { ApiClientProvider } from "./lib/ApiClientProvider";
 import { DownloadsProvider } from "./lib/DownloadsProvider";
 import { HomeViewProvider } from "./lib/homeView";
 import { LanguageProvider } from "./lib/i18n/LanguageProvider";
+import { LiveEventsRoot } from "./lib/liveEvents/LiveEventsRoot";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
 import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
@@ -69,9 +70,11 @@ createRoot(container).render(
             <HomeViewProvider>
               <ApiClientProvider>
                 <ToastProvider>
-                  <DownloadsProvider>
-                    <App />
-                  </DownloadsProvider>
+                  <LiveEventsRoot>
+                    <DownloadsProvider>
+                      <App />
+                    </DownloadsProvider>
+                  </LiveEventsRoot>
                 </ToastProvider>
               </ApiClientProvider>
             </HomeViewProvider>

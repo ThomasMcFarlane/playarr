@@ -1284,6 +1284,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["events_stream_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/household/approvals": {
         parameters: {
             query?: never;
@@ -10652,6 +10668,43 @@ export interface operations {
             };
             /** @description The ticket expired or was canceled */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    events_stream_handler: {
+        parameters: {
+            query?: {
+                /** @description Last event seq already processed (or send Last-Event-ID) */
+                after?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-sent events. `ready` (id = newest seq, body `ReadyEvent`), then `change` frames (id = seq, body `ChangeEvent`) for this account's data, plus `resync` (body `ResyncEvent`) when the resume cursor is too old. `:` comment lines are heartbeats. The stream ends after five minutes; reconnect with `Last-Event-ID`. A server without this route answers non-event-stream content (for example HTML), which clients treat as unsupported and fall back to polling. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller lacks Playarr access */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

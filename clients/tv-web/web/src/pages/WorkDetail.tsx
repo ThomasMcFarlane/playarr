@@ -20,6 +20,7 @@ import { describeApiError } from "@playarr-tv/api-client";
 import { useWorkDetail } from "@playarr-tv/api-client/react";
 import { AvailabilityLagNote } from "../components/AvailabilityLag";
 import { useApiClient } from "../lib/ApiClientProvider";
+import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
 import { CachedArtworkImage, useCachedArtwork } from "../lib/artwork";
 import { useDownloads } from "../lib/DownloadsProvider";
 import type { PlaybackLaunchSettings } from "../lib/usePlaybackEngine";
@@ -936,7 +937,13 @@ export function WorkDetailPage() {
   const navigate = useNavigate();
   const client = useApiClient();
   const downloads = useDownloads();
-  const state = useWorkDetail(client, workId);
+  const liveWorkScope = useMemo(
+    () => ({ areas: ["catalog", "progress"] as const, keys: workId ? [workId] : [] }),
+    [workId]
+  );
+  const liveWork = useLiveSubscription(liveWorkScope);
+  const liveProgressRevision = useLiveRevision(liveWorkScope);
+  const state = useWorkDetail(client, workId, { subscribe: liveWork });
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [progressByMedia, setProgressByMedia] = useState<Map<string, WatchProgress>>(new Map());
@@ -1165,12 +1172,12 @@ export function WorkDetailPage() {
         }
       })
       .catch(() => {
-        if (!cancelled) setProgressByMedia(new Map());
+        if (!cancelled && liveProgressRevision === 0) setProgressByMedia(new Map());
       });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, liveProgressRevision]);
 
   useEffect(() => {
     if (!runtimeTarget) return;

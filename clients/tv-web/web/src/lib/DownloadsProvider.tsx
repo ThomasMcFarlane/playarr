@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { DownloadTicket } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useApiClient, useAuth, useCurrentUserId } from "./ApiClientProvider";
+import { useLiveSubscription } from "./liveEvents";
 import {
   abortDownload,
   deleteStoredBytes,
@@ -242,6 +243,8 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   const activeEngineRunsRef = useRef(new Set<string>());
   const pendingQueueRef = useRef<string[]>([]);
   const pollTimersRef = useRef(new Map<string, number>());
+  // Runs a ticket's status check immediately (live `download` events); see `pollTicket`.
+  const pollNowRef = useRef(new Map<string, () => void>());
   const blobUrlCacheRef = useRef(new Map<string, LocalPlaybackSource>());
   const loadedScopeRef = useRef<string | null>(null);
 
@@ -425,6 +428,10 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
             pollTimersRef.current.set(id, window.setTimeout(tick, TICKET_POLL_MS));
           });
       };
+      pollNowRef.current.set(id, () => {
+        clearPoll(id);
+        tick();
+      });
       pollTimersRef.current.set(id, window.setTimeout(tick, TICKET_POLL_MS));
     },
     [beginFetch, client, clearPoll, patchRecord]
@@ -546,6 +553,19 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
   // without `userId` ever changing, and this is the only dependency that
   // transition touches -- omitting it left `canDownload` stuck on the
   // fail-closed `false` from the earlier failure until a full page reload.
+  const liveAccount = useLiveSubscription({ areas: ["account"] });
+  const liveDownloads = useLiveSubscription({ areas: ["downloads"] });
+  // A server-side ticket change brings its next status check forward instead of waiting for the timer.
+  useEffect(
+    () =>
+      liveDownloads(() => {
+        for (const [id, runNow] of pollNowRef.current) {
+          if (pollTimersRef.current.has(id)) runNow();
+        }
+      }),
+    [liveDownloads]
+  );
+
   useEffect(() => {
     if (!userId || authFailed) {
       setCanDownload(null);
@@ -570,11 +590,13 @@ export function DownloadsProvider({ children }: { children: ReactNode }) {
 
     fetchCapabilities();
     const interval = window.setInterval(fetchCapabilities, CAPABILITIES_POLL_MS);
+    const unsubscribeLive = liveAccount(fetchCapabilities);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      unsubscribeLive();
     };
-  }, [apiBaseUrl, authFailed, client, userId]);
+  }, [apiBaseUrl, authFailed, client, liveAccount, userId]);
 
   useEffect(
     () => () => {
