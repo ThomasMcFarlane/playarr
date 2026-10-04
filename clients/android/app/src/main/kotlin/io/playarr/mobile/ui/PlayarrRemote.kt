@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.app.Activity
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -13,14 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -320,13 +318,13 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
             if (me == null) {
                 Text(playarrString(PlayarrString.RemoteMoveNeedsHost), color = WebInkMuted, fontSize = 12.sp)
             } else {
-                Button(onClick = { viewModel.movePlayback(source, me) }, enabled = !moving, modifier = Modifier.fillMaxWidth()) {
+                PlayarrButton(onClick = { viewModel.movePlayback(source, me) }, enabled = !moving, modifier = Modifier.fillMaxWidth()) {
                     Text(playarrString(PlayarrString.RemoteMoveHere))
                 }
             }
             targets.filter { !it.isSelf && it.deviceId != source.deviceId && it.online && RemoteCapability.Handoff in it.capabilities }
                 .forEach { other ->
-                    OutlinedButton(onClick = { viewModel.movePlayback(source, other) }, enabled = !moving, modifier = Modifier.fillMaxWidth()) {
+                    PlayarrButton(onClick = { viewModel.movePlayback(source, other) }, enabled = !moving, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
                         Text(playarrString(PlayarrString.RemoteMoveTo, "name" to other.name))
                     }
                 }
@@ -347,10 +345,11 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     val controllerName = viewModel.controller.deviceName()
     others.forEach { target ->
         val existing = viewModel.activePairingFor(target.deviceId)
-        OutlinedButton(
+        PlayarrButton(
             onClick = { if (existing != null) viewModel.control(target.deviceId) else viewModel.pair(target, controllerName) },
             enabled = target.online && pending == null,
             modifier = Modifier.fillMaxWidth(),
+            variant = PlayarrButtonVariant.Secondary,
         ) {
             Text(
                 "${target.name}  ·  " + when {
@@ -389,14 +388,14 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    PlayarrButton(
                         onClick = {
                             viewModel.rename(pairing, editing.second)
                             renaming = null
                         },
                         enabled = editing.second.isNotBlank(),
                     ) { Text(playarrString(PlayarrString.RemoteSave)) }
-                    TextButton(onClick = { renaming = null }) { Text(playarrString(PlayarrString.RemoteCancel)) }
+                    PlayarrButton(onClick = { renaming = null }, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.RemoteCancel)) }
                 }
             }
         } else {
@@ -425,10 +424,10 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
                         fontSize = 11.sp,
                     )
                 }
-                TextButton(onClick = { renaming = pairing.id to pairing.controllerName }) {
+                PlayarrButton(onClick = { renaming = pairing.id to pairing.controllerName }, variant = PlayarrButtonVariant.Ghost) {
                     Text(playarrString(PlayarrString.RemoteRename))
                 }
-                TextButton(onClick = { viewModel.revoke(pairing) }) { Text(playarrString(PlayarrString.RemoteRevoke)) }
+                PlayarrButton(onClick = { viewModel.revoke(pairing) }, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.RemoteRevoke)) }
             }
         }
     }
@@ -504,11 +503,11 @@ private fun PadButton(
 ) {
     val sized = modifier.defaultMinSize(minHeight = 52.dp)
     if (subdued) {
-        OutlinedButton(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp)) {
+        PlayarrButton(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp), variant = PlayarrButtonVariant.Secondary) {
             Text(playarrString(label), maxLines = 1, fontSize = 13.sp)
         }
     } else {
-        Button(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp)) {
+        PlayarrButton(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp)) {
             Text(playarrString(label), maxLines = 1, fontSize = 15.sp)
         }
     }
@@ -528,8 +527,9 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
         delay(150L)
         runCatching { allowFocus.requestFocus() }
     }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = {},
+        dismissible = false,
         title = {
             Text(
                 playarrString(
@@ -545,7 +545,7 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
             }
         },
         confirmButton = {
-            Button(
+            PlayarrButton(
                 enabled = !busy,
                 modifier = Modifier.focusRequester(allowFocus),
                 onClick = {
@@ -555,10 +555,14 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
             ) { Text(playarrString(PlayarrString.RemotePromptAllow)) }
         },
         dismissButton = {
-            OutlinedButton(enabled = !busy, onClick = {
+            PlayarrButton(
+                enabled = !busy,
+                onClick = {
                 busy = true
                 scope.launch { controller.deny(request); busy = false }
-            }) { Text(playarrString(PlayarrString.RemotePromptDeny)) }
+            },
+                variant = PlayarrButtonVariant.Secondary,
+) { Text(playarrString(PlayarrString.RemotePromptDeny)) }
         },
     )
 }
@@ -588,7 +592,7 @@ internal fun PlayOnDeviceDialog(
         targets = list
     }
     val candidates = targets.orEmpty().filter { !it.isSelf && it.online && RemoteCapability.Handoff in it.capabilities }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.RemotePlayOnTitle)) },
         text = {
@@ -598,14 +602,14 @@ internal fun PlayOnDeviceDialog(
                         if (targets == null) Text(playarrString(PlayarrString.RemotePlayOnLoading))
                         else if (candidates.isEmpty()) Text(playarrString(PlayarrString.RemotePlayOnNone))
                         candidates.forEach { target ->
-                            OutlinedButton(
+                            PlayarrButton(
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {
                                     val controls = viewModel.controller.bridge?.playerControls()
                                     val source = selfId
                                     if (controls == null || source == null) {
                                         phase = PlayOnPhase.Error(notReady)
-                                        return@OutlinedButton
+                                        return@PlayarrButton
                                     }
                                     phase = PlayOnPhase.Busy(target, HandoffProgress.Offering)
                                     scope.launch {
@@ -623,6 +627,7 @@ internal fun PlayOnDeviceDialog(
                                         }
                                     }
                                 },
+                                variant = PlayarrButtonVariant.Secondary,
                             ) { Text(target.name) }
                         }
                     }
@@ -645,7 +650,7 @@ internal fun PlayOnDeviceDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.RemotePlayOnClose)) } },
+        confirmButton = { PlayarrButton(onClick = onDismiss) { Text(playarrString(PlayarrString.RemotePlayOnClose)) } },
     )
 }
 

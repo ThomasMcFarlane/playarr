@@ -52,6 +52,19 @@ class PlayarrNavigationParityTest {
     }
 
     @Test
+    fun `library routes restore their view size and sort state`() {
+        assertEquals("series", restorableExperienceRoute("series?view={view}&size={size}&sort={sort}&order={order}"))
+        assertEquals(
+            "movies?view=cover&sort=date_added&order=desc",
+            restorableExperienceRoute(
+                "movies?view={view}&size={size}&sort={sort}&order={order}",
+                library = LibraryUrlState(view = LibraryViewMode.Cover, sort = LibrarySort.DateAdded, descending = true),
+            ),
+        )
+        assertEquals("calendar", restorableExperienceRoute("calendar?query={query}"))
+    }
+
+    @Test
     fun `profile and player routes retain the previous return destination`() {
         assertEquals(null, restorableExperienceRoute("profiles"))
         assertEquals(null, restorableExperienceRoute("experience-player/{mediaFileId}", mediaFileId = "media"))

@@ -97,23 +97,33 @@ internal fun PlayarrPageScaffold(
     panelActions: (@Composable RowScope.() -> Unit)? = null,
     /** Period navigation (previous / today / next) in the same right cluster, left of the panel buttons. */
     trailingNav: (@Composable RowScope.() -> Unit)? = null,
+    /**
+     * False for pages whose body is a full-bleed hero (library, detail pages): the body fills the screen and
+     * draws its own insets and padding, while the shared header (back, title, breadcrumb, actions) floats above.
+     */
+    padBody: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
     Box(
         modifier
             .fillMaxSize()
             .background(WebSurface)
-            .then(if (isTelevision) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)),
+            .then(if (isTelevision || !padBody) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)),
     ) {
         Column(
-            Modifier
-                .fillMaxSize()
-                .padding(
-                    start = playarrPageStart(isTelevision),
-                    end = playarrPageEnd(isTelevision),
-                    top = if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp + (if (subtitle != null) 18.dp else 0.dp),
-                    bottom = playarrPageSafeBottom(isTelevision),
-                ),
+            if (padBody) {
+                Modifier
+                    .fillMaxSize()
+                    .padding(
+                        start = playarrPageStart(isTelevision),
+                        end = playarrPageEnd(isTelevision),
+                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp),
+                        bottom = playarrPageSafeBottom(isTelevision),
+                    )
+            } else {
+                Modifier.fillMaxSize()
+            },
             content = content,
         )
         PlayarrPageHeaderRow(
@@ -123,6 +133,7 @@ internal fun PlayarrPageScaffold(
             isTelevision = isTelevision,
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .then(headerInsets)
                 .padding(start = if (isTelevision) 154.dp else 8.dp, top = if (isTelevision) 56.dp else 16.dp),
         )
         if (filters != null || panelActions != null || trailingNav != null) {
@@ -131,7 +142,7 @@ internal fun PlayarrPageScaffold(
                 filters = filters,
                 panelActions = panelActions,
                 trailingNav = trailingNav,
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier.align(Alignment.TopEnd).then(headerInsets),
             )
         }
     }
@@ -159,7 +170,8 @@ internal fun PlayarrHeaderActions(
     trailingNav: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
-        modifier.padding(end = playarrPageEnd(isTelevision), top = if (isTelevision) 56.dp else 16.dp),
+        // On phones the profile chip is pinned top-right, so the cluster stops short of it.
+        modifier.padding(end = if (isTelevision) playarrPageEnd(true) else 72.dp, top = if (isTelevision) 56.dp else 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -345,12 +357,71 @@ internal fun PlayarrFiltersSheet(
     footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    PlayarrSheetFrame(
+        titleContent = { Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() }) },
+        kicker = kicker,
+        closeLabel = closeLabel,
+        onClose = onClose,
+        dismissible = true,
+        footer = footer,
+        content = content,
+    )
+}
+
+/**
+ * Drop-in replacement for Material `AlertDialog` that renders in the shared right-hand sheet: [title] in the
+ * header beside the shared close button, [text] as the body, [dismissButton] then [confirmButton] as the footer.
+ * Every pop-out (confirmations, pickers, playback settings, pairing prompts) goes through this so none drifts
+ * from the canonical panel; PlayarrSidePanelUsageTest bans AlertDialog, DatePickerDialog and ModalBottomSheet.
+ * [dismissible] = false (the pairing approval) hides the close button and ignores Back and scrim taps.
+ */
+@Composable
+internal fun PlayarrPanel(
+    onDismissRequest: () -> Unit,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    dismissible: Boolean = true,
+) {
+    PlayarrSheetFrame(
+        titleContent = title?.let { t ->
+            { androidx.compose.material3.ProvideTextStyle(androidx.compose.ui.text.TextStyle(fontSize = 26.sp, fontWeight = FontWeight(590), color = WebInk)) { Box(Modifier.semantics { heading() }) { t() } } }
+        },
+        kicker = null,
+        closeLabel = playarrString(PlayarrString.CommonClose),
+        onClose = onDismissRequest,
+        dismissible = dismissible,
+        footer = {
+            dismissButton?.invoke()
+            confirmButton()
+        },
+        content = { text?.invoke() },
+    )
+}
+
+@Composable
+private fun PlayarrSheetFrame(
+    titleContent: (@Composable () -> Unit)?,
+    kicker: String?,
+    closeLabel: String,
+    onClose: () -> Unit,
+    dismissible: Boolean,
+    footer: (@Composable RowScope.() -> Unit)?,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val focus = remember { FocusRequester() }
+    val dismiss = if (dismissible) onClose else ({})
     Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        onDismissRequest = dismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = dismissible,
+            dismissOnClickOutside = dismissible,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(onClick = onClose)) {
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(onClick = dismiss)) {
             BoxWithConstraints(Modifier.align(Alignment.CenterEnd).fillMaxHeight()) {
                 Surface(
                     color = WebSurfaceStrong,
@@ -369,10 +440,12 @@ internal fun PlayarrFiltersSheet(
                                 if (kicker != null) {
                                     Text(kicker.uppercase(), color = WebInkMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 }
-                                Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() })
+                                titleContent?.invoke()
                             }
-                            PlayarrIconButton(onClick = onClose, contentDescription = closeLabel, modifier = Modifier.focusRequester(focus)) {
-                                Icon(Icons.Outlined.Close, contentDescription = null, tint = WebInk)
+                            if (dismissible) {
+                                PlayarrIconButton(onClick = onClose, contentDescription = closeLabel, modifier = Modifier.focusRequester(focus)) {
+                                    Icon(Icons.Outlined.Close, contentDescription = null, tint = WebInk)
+                                }
                             }
                         }
                         content()

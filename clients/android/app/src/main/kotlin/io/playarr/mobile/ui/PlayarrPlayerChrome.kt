@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,16 +43,12 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material.icons.outlined.Subtitles
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
@@ -379,7 +378,7 @@ internal fun PlayarrPlayerChrome(
 }
 
 /**
- * A plain Material3 `AlertDialog` device picker/connected-session menu --
+ * A plain Material3 `PlayarrPanel` device picker/connected-session menu --
  * this app's theme is not AppCompat, so the stock
  * `MediaRouteChooserDialog`/`MediaRouteControllerDialog` cannot be used
  * here (see `PlayarrCastSession`'s KDoc).
@@ -390,7 +389,7 @@ private fun PlayarrCastDialog(
     cast: PlayarrPlayerCastState,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.CastPickerTitle)) },
         text = {
@@ -420,13 +419,13 @@ private fun PlayarrCastDialog(
         },
         confirmButton = {
             if (kind == PlayarrCastDialogKind.Connected) {
-                TextButton(onClick = { cast.onStopCasting(); onDismiss() }) {
+                PlayarrButton(onClick = { cast.onStopCasting(); onDismiss() }) {
                     Text(playarrString(PlayarrString.CastStopCasting))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+            PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonClose)) }
         },
     )
 }
@@ -565,46 +564,46 @@ private fun PlayarrPlayerControlBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val onPreviousSource = remember { MutableInteractionSource() }
-            IconButton(
+            PlayarrIconButton(
                 onClick = onPrevious,
+                contentDescription = playarrString(PlayarrString.PlayerPreviousEpisode),
                 enabled = canPrevious && !controls.switching,
                 interactionSource = onPreviousSource,
                 modifier = Modifier.playerFocusRing(onPreviousSource, CircleShape),
             ) {
                 Icon(
                     Icons.Outlined.SkipPrevious,
-                    contentDescription = playarrString(PlayarrString.PlayerPreviousEpisode),
-                    tint = if (canPrevious && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
-                )
+                    contentDescription = null,
+                    tint = if (canPrevious && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f))
             }
             val onTogglePlaybackSource = remember { MutableInteractionSource() }
-            IconButton(
+            PlayarrIconButton(
                 onClick = onTogglePlayback,
+                contentDescription = playarrString(
+                        if (playbackState.playWhenReady) PlayarrString.PlayerPause else PlayarrString.PlayerPlay,
+                    ),
                 enabled = !controls.switching,
                 interactionSource = onTogglePlaybackSource,
                 modifier = Modifier.playerFocusRing(onTogglePlaybackSource, CircleShape),
             ) {
                 Icon(
                     if (playbackState.playWhenReady) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                    contentDescription = playarrString(
-                        if (playbackState.playWhenReady) PlayarrString.PlayerPause else PlayarrString.PlayerPlay,
-                    ),
+                    contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(if (isTelevision) 34.dp else 28.dp),
-                )
+                    modifier = Modifier.size(if (isTelevision) 34.dp else 28.dp))
             }
             val onNextSource = remember { MutableInteractionSource() }
-            IconButton(
+            PlayarrIconButton(
                 onClick = onNext,
+                contentDescription = playarrString(PlayarrString.PlayerNextEpisode),
                 enabled = canNext && !controls.switching,
                 interactionSource = onNextSource,
                 modifier = Modifier.playerFocusRing(onNextSource, CircleShape),
             ) {
                 Icon(
                     Icons.Outlined.SkipNext,
-                    contentDescription = playarrString(PlayarrString.PlayerNextEpisode),
-                    tint = if (canNext && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f),
-                )
+                    contentDescription = null,
+                    tint = if (canNext && !controls.switching) Color.White else Color.White.copy(alpha = 0.35f))
             }
             if (isTelevision) {
                 Text(
@@ -710,9 +709,10 @@ private fun PlayarrPlayerPlaylistPanel(
                         fontSize = 12.sp,
                     )
                 }
-                TextButton(
+                PlayarrButton(
                     onClick = onClose,
                     modifier = Modifier.semantics { contentDescription = closeDescription },
+                    variant = PlayarrButtonVariant.Ghost,
                 ) {
                     Text("×", color = Color.White, fontSize = 24.sp)
                 }
@@ -817,18 +817,19 @@ private fun PlayerMenuButton(
 ) {
     if (isTelevision) {
         val source = remember { MutableInteractionSource() }
-        TextButton(
+        PlayarrButton(
             onClick = onClick,
             enabled = enabled,
             interactionSource = source,
             modifier = Modifier.playerFocusRing(source, CircleShape),
+            variant = PlayarrButtonVariant.Ghost,
         ) {
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
             Text(label, color = Color.White, modifier = Modifier.padding(start = 6.dp))
         }
     } else {
-        IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription = accessibilityLabel ?: label, tint = Color.White)
+        PlayarrIconButton(onClick = onClick, contentDescription = accessibilityLabel ?: label, enabled = enabled) {
+            Icon(icon, contentDescription = null, tint = Color.White)
         }
     }
 }
@@ -843,7 +844,7 @@ private fun PlayarrPlayerOptionsDialog(
     onSubtitle: (String?) -> Unit,
 ) {
     val locale = LocalPlayarrLanguage.current.locale
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -903,7 +904,7 @@ private fun PlayarrPlayerOptionsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+            PlayarrButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
         },
     )
 }
@@ -922,7 +923,7 @@ private fun PlayerDialogOption(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    PlayarrButton(onClick = onClick, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
             Text(label)
             detail?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }

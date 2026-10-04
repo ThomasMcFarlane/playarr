@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,7 +37,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -263,7 +261,7 @@ private fun CalendarJumpDialog(anchor: LocalDate, locale: Locale, onDismiss: () 
     val yearState = rememberLazyListState(initialFirstVisibleItemIndex = (years.indexOf(anchor.year) - 2).coerceAtLeast(0))
     val monthState = rememberLazyListState(initialFirstVisibleItemIndex = (anchor.monthValue - 2).coerceAtLeast(0))
     val focus = remember { FocusRequester() }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.CalendarJumpTo)) },
         text = {
@@ -283,7 +281,7 @@ private fun CalendarJumpDialog(anchor: LocalDate, locale: Locale, onDismiss: () 
             }
         },
         confirmButton = {
-            PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost, modifier = Modifier.focusRequester(focus)) {
+            PlayarrButton(onClick = onDismiss, modifier = Modifier.focusRequester(focus)) {
                 Text(playarrString(PlayarrString.CommonClose))
             }
         },
@@ -375,7 +373,7 @@ private fun CalendarFiltersSheet(
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = initial.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli(),
         )
-        DatePickerDialog(
+        PlayarrPanel(
             onDismissRequest = { picking = null },
             confirmButton = {
                 PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = {
@@ -391,7 +389,8 @@ private fun CalendarFiltersSheet(
                 }) { Text(playarrString(PlayarrString.CommonDone)) }
             },
             dismissButton = { PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = { picking = null }) { Text(playarrString(PlayarrString.CommonCancel)) } },
-        ) { DatePicker(state = pickerState) }
+            text = { DatePicker(state = pickerState) },
+        )
     }
 }
 
@@ -451,14 +450,13 @@ private fun CalendarSubscriptionSheet(
         }
     }
     if (confirmReset) {
-        AlertDialog(
+        PlayarrPanel(
             onDismissRequest = { confirmReset = false },
             title = { Text(playarrString(PlayarrString.CalendarLinkResetTitle)) },
             text = { Text(playarrString(PlayarrString.CalendarLinkResetBody)) },
             confirmButton = {
                 PlayarrButton(
                     onClick = { confirmReset = false; holder.createOrRegenerate() },
-                    variant = PlayarrButtonVariant.Ghost,
                 ) { Text(playarrString(PlayarrString.CalendarLinkReset)) }
             },
             dismissButton = {
@@ -727,11 +725,11 @@ private fun CalendarItemDialog(
     onOpenWork: (String) -> Unit,
 ) {
     val focus = remember { FocusRequester() }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         text = { Box(Modifier.heightIn(max = if (isTelevision) 520.dp else 480.dp).verticalScroll(rememberScrollState())) { CalendarItemDetails(item, locale, zone, onOpenWork) } },
         confirmButton = {
-            PlayarrButton(variant = PlayarrButtonVariant.Ghost, onClick = onDismiss, modifier = Modifier.focusRequester(focus)) { Text(playarrString(PlayarrString.CommonClose)) }
+            PlayarrButton(onClick = onDismiss, modifier = Modifier.focusRequester(focus)) { Text(playarrString(PlayarrString.CommonClose)) }
         },
     )
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }

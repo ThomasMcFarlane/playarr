@@ -6,12 +6,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Every pop-out panel uses the one shared [PlayarrFiltersSheet] (title, shared icon close button, body,
- * footer actions, focus trap, Back closes). Ad-hoc bottom sheets and hand-made close icons are blocked;
- * the legacy allowance below may only shrink (TASKS row 225 tracks converting the remaining panels).
+ * Every pop-out panel uses the one shared sheet ([PlayarrFiltersSheet], or [PlayarrPanel] which renders in it:
+ * title, shared icon close button, body, footer actions, focus trap, Back closes). Ad-hoc bottom sheets,
+ * Material dialogs and hand-made close icons are blocked with no allowance left (TASKS row 225). Anchored
+ * dropdown menus (language and theme pickers) are menus, not pop-outs, and stay as they are.
  */
 class PlayarrSidePanelUsageTest {
-    private val legacyBottomSheets = mapOf("PlayarrDownloads.kt" to 1)
+    private val bannedPopOuts = listOf("ModalBottomSheet(", "AlertDialog(", "DatePickerDialog(", "BasicAlertDialog(")
     private val closeIcon = Regex("""Icons\.(Outlined|Default|Filled|Rounded)\.Close""")
 
     private fun uiFiles(): List<File> {
@@ -22,9 +23,14 @@ class PlayarrSidePanelUsageTest {
 
     @Test
     fun `no new ad-hoc bottom sheets or hand-made close buttons`() {
-        val sheets = uiFiles().associate { it.name to it.readText().split("ModalBottomSheet(").size - 1 }
-            .filterValues { it > 0 }.filter { (name, n) -> n > (legacyBottomSheets[name] ?: 0) }
-        assertEquals("use PlayarrFiltersSheet", emptyMap<String, Int>(), sheets)
+        val popOuts = uiFiles().associate { f ->
+            val text = f.readText()
+            f.name to bannedPopOuts.sumOf { call -> Regex("""(^|[^A-Za-z.])""" + Regex.escape(call)).findAll(text).count() }
+        }.filterValues { it > 0 }
+        assertEquals("use PlayarrFiltersSheet / PlayarrPanel", emptyMap<String, Int>(), popOuts)
+        val rawDialogs = uiFiles().filter { it.name != "PlayarrPageScaffold.kt" }
+            .filter { Regex("""(^|[^A-Za-z.])Dialog\(""").containsMatchIn(it.readText()) }.map { it.name }
+        assertEquals("only the shared sheet frame may open a Dialog", emptyList<String>(), rawDialogs)
         val closes = uiFiles().filter { it.name != "PlayarrPageScaffold.kt" }
             .filter { closeIcon.containsMatchIn(it.readText()) }.map { it.name }
         assertEquals("close controls come from PlayarrFiltersSheet's shared icon button", emptyList<String>(), closes)
@@ -35,14 +41,15 @@ class PlayarrSidePanelUsageTest {
         val scaffold = uiFiles().first { it.name == "PlayarrPageScaffold.kt" }.readText()
         assertTrue(scaffold.contains("footer: (@Composable RowScope.() -> Unit)? = null"))
         assertTrue(scaffold.contains("fun PlayarrHeaderActions("))
-        // Calendar goes through the scaffold's filters slot, Library through PlayarrHeaderActions directly:
+        // Calendar and Library both pass `filters = PlayarrFilterAction(...)` to the scaffold, which draws:
         // the same composable draws Filters on both, so bounds are identical by construction.
         assertTrue(scaffold.contains("PlayarrHeaderActions("))
         val calendar = uiFiles().first { it.name == "PlayarrCalendar.kt" }.readText()
         val library = uiFiles().first { it.name == "PlayarrExperience.kt" }.readText()
         assertTrue(calendar.contains("filters = PlayarrFilterAction("))
-        assertTrue(library.contains("PlayarrHeaderActions("))
+        assertTrue(library.contains("filters = PlayarrFilterAction("))
         assertTrue("Library must not keep its floating Filters launcher", !library.contains("Icons.Outlined.FilterList, playarrString(PlayarrString.LibraryFilters)"))
         assertTrue("the library filters open in the shared sheet", library.contains("PlayarrFiltersSheet("))
+        assertTrue("Library must render its Filters through the scaffold", library.contains("filters = PlayarrFilterAction("))
     }
 }

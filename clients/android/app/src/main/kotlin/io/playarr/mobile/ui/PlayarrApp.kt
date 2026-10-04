@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -29,17 +32,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.runtime.Composable
@@ -728,8 +728,8 @@ private fun MobileLoginScreen(
                 modifier = Modifier.size(30.dp),
             )
             onBack?.let {
-                IconButton(onClick = it, modifier = Modifier.padding(start = 14.dp)) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = playarrString(PlayarrString.CommonBack))
+                PlayarrIconButton(onClick = it, contentDescription = playarrString(PlayarrString.CommonBack), modifier = Modifier.padding(start = 14.dp)) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -770,11 +770,10 @@ private fun MobileLoginScreen(
             if (state is LoginState.Failed) {
                 Text(playarrString(state.failure.messageKey), color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             }
-            Button(
+            PlayarrButton(
                 onClick = onSubmit,
                 enabled = state != LoginState.Submitting && serverUrl.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(48.dp),
-                shape = CircleShape,
             ) {
                 if (state == LoginState.Submitting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 else Text(playarrString(PlayarrString.LoginSubmit), fontWeight = FontWeight.Bold)
@@ -790,7 +789,7 @@ internal fun PlayarrLanguageDropdown(modifier: Modifier = Modifier) {
     val selected = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
         ?: playarrUiLanguageOptions.first()
     Box(modifier) {
-        TextButton(onClick = { expanded = true }) {
+        PlayarrButton(onClick = { expanded = true }, variant = PlayarrButtonVariant.Ghost) {
             Text(
                 "◎  ${selected.label()}",
                 color = WebInk,
@@ -1029,13 +1028,10 @@ private fun TelevisionPairingScreen(
                                 textAlign = TextAlign.Center,
                                 fontSize = 15.sp,
                             )
-                            Button(
+                            PlayarrButton(
                                 onClick = onStart,
-                                shape = CircleShape,
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = LocalAuthTokens.current.inkSoft,
-                                    contentColor = LocalAuthTokens.current.surfaceStrong,
-                                ),
+                                containerColor = LocalAuthTokens.current.inkSoft,
+                                contentColor = LocalAuthTokens.current.surfaceStrong,
                             ) {
                                 Text(playarrString(PlayarrString.DeviceLoginTryAgain))
                             }
@@ -1165,15 +1161,12 @@ private fun TelevisionManualLoginScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     )
                 }
-                Button(
+                PlayarrButton(
                     onClick = onSubmit,
                     enabled = state != LoginState.Submitting && serverUrl.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp).height(52.dp),
-                    shape = CircleShape,
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = LocalAuthTokens.current.inkSoft,
-                        contentColor = Color.White,
-                    ),
+                    containerColor = LocalAuthTokens.current.inkSoft,
+                    contentColor = Color.White,
                 ) {
                     if (state == LoginState.Submitting) {
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)

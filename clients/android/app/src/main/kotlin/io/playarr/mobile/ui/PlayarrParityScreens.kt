@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import io.playarr.shared.designsystem.theme.FocusMotion
 
 import android.app.Activity
@@ -59,17 +62,12 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -342,7 +340,7 @@ internal fun AddToPlaylistDialog(
     val state by viewModel.playlists.collectAsState()
     val message by viewModel.message.collectAsState()
     LaunchedEffect(mediaType) { viewModel.load(mediaType) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.ContextAddToPlaylistHeading)) },
         text = {
@@ -371,7 +369,7 @@ internal fun AddToPlaylistDialog(
                 message?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error) }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
+        confirmButton = { PlayarrButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
     )
 }
 
@@ -399,6 +397,20 @@ internal fun ExperiencePlaylistsScreen(
             title = playarrString(PlayarrString.PlaylistsTitle),
             onBack = { navController.openExperienceTopLevel("home") },
             isTelevision = isTelevision,
+            filters = PlayarrFilterAction(
+                label = playarrString(PlayarrString.LibraryFilters),
+                onClick = { filtering = true },
+                active = filtering,
+                badge = listOf(visibility != PlaylistVisibility.All, order != PlaylistOrder.Ascending).count { it },
+            ),
+            panelActions = {
+                PlayarrHeaderButton(
+                    label = playarrString(PlayarrString.PlaylistsCreate),
+                    icon = Icons.Outlined.Add,
+                    isTelevision = isTelevision,
+                    onClick = { creating = true },
+                )
+            },
         ) {
             when (val current = state) {
                 ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsPreparing))
@@ -454,24 +466,6 @@ internal fun ExperiencePlaylistsScreen(
                 }
             }
         }
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
-                .padding(top = if (isTelevision) 116.dp else 14.dp, end = if (isTelevision) 14.dp else 66.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Surface(onClick = { creating = true }, color = WebSurfaceStrong, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(44.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.Add, contentDescription = playarrString(PlayarrString.PlaylistsCreateLabel), tint = WebInk)
-                }
-            }
-            Surface(onClick = { filtering = true }, color = WebSurfaceStrong, shape = RoundedCornerShape(14.dp), modifier = Modifier.size(44.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.FilterList, contentDescription = playarrString(PlayarrString.PlaylistsFilterLabel), tint = WebInk)
-                }
-            }
-        }
     }
     if (creating) {
         val directory = (state as? ParityLoad.Ready)?.value
@@ -479,7 +473,7 @@ internal fun ExperiencePlaylistsScreen(
             visibleRootPlaylists(it, PlaylistVisibility.Personal, PlaylistOrder.Ascending, language.locale)
                 .filter { playlist -> playlist.mediaType == mediaType }
         }.orEmpty()
-        AlertDialog(
+        PlayarrPanel(
             onDismissRequest = { if (!createBusy) creating = false },
             title = { Text(playarrString(PlayarrString.PlaylistsCreateTitle)) },
             text = {
@@ -502,13 +496,14 @@ internal fun ExperiencePlaylistsScreen(
                             PlaylistMediaType.Video to playarrString(PlayarrString.PlaylistsMediaTypeVideo),
                             PlaylistMediaType.Audio to playarrString(PlayarrString.PlaylistsMediaTypeAudio),
                         ).forEach { (type, label) ->
-                            OutlinedButton(
+                            PlayarrButton(
                                 onClick = {
                                     mediaType = type
                                     parentPlaylistId = null
                                     createError = null
                                 },
                                 enabled = !createBusy && mediaType != type,
+                                variant = PlayarrButtonVariant.Secondary,
                             ) { Text(label) }
                         }
                     }
@@ -525,12 +520,12 @@ internal fun ExperiencePlaylistsScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                PlayarrButton(
                     enabled = name.isNotBlank() && !createBusy,
                     onClick = {
                         if (name.isBlank()) {
                             createError = PlayarrMessage.Localized(PlayarrString.PlaylistsNameRequired)
-                            return@TextButton
+                            return@PlayarrButton
                         }
                         createBusy = true
                         viewModel.create(
@@ -558,14 +553,14 @@ internal fun ExperiencePlaylistsScreen(
                 ) { Text(playarrString(if (createBusy) PlayarrString.PlaylistsCreating else PlayarrString.PlaylistsCreate)) }
             },
             dismissButton = {
-                TextButton(onClick = { creating = false }, enabled = !createBusy) {
+                PlayarrButton(onClick = { creating = false }, enabled = !createBusy, variant = PlayarrButtonVariant.Ghost) {
                     Text(playarrString(PlayarrString.CommonCancel))
                 }
             },
         )
     }
     if (filtering) {
-        AlertDialog(
+        PlayarrPanel(
             onDismissRequest = { filtering = false },
             title = { Text(playarrString(PlayarrString.PlaylistsFilters)) },
             text = {
@@ -592,7 +587,7 @@ internal fun ExperiencePlaylistsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { filtering = false }) { Text(playarrString(PlayarrString.CommonDone)) }
+                PlayarrButton(onClick = { filtering = false }) { Text(playarrString(PlayarrString.CommonDone)) }
             },
         )
     }
@@ -607,16 +602,18 @@ private fun PlaylistParentChoices(
     onSelected: (String?) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        OutlinedButton(
+        PlayarrButton(
             onClick = { onSelected(null) },
             enabled = enabled && selectedId != null,
             modifier = Modifier.fillMaxWidth(),
+            variant = PlayarrButtonVariant.Secondary,
         ) { Text(playarrString(PlayarrString.PlaylistsNoParent)) }
         parents.forEach { parent ->
-            OutlinedButton(
+            PlayarrButton(
                 onClick = { onSelected(parent.id) },
                 enabled = enabled && selectedId != parent.id,
                 modifier = Modifier.fillMaxWidth(),
+                variant = PlayarrButtonVariant.Secondary,
             ) { Text(labels[parent.id] ?: parent.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
@@ -899,55 +896,29 @@ internal fun ExperiencePlaylistDetailScreen(
         is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }
         is ParityLoad.Ready -> {
             val value = current.value
-            Box(Modifier.fillMaxSize().background(WebSurface)) {
-                Column(
-                    Modifier.fillMaxSize().padding(
-                        start = if (isTelevision) 118.dp else 16.dp,
-                        end = if (isTelevision) 58.dp else 16.dp,
-                        top = if (isTelevision) 72.dp else 64.dp,
-                        bottom = 98.dp,
-                    ),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                playarrString(PlayarrString.PlaylistsBack),
-                                tint = WebInk,
-                            )
-                        }
-                        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                            Text(
-                                value.root.name,
-                                color = WebInk,
-                                fontSize = if (isTelevision) 34.sp else 25.sp,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                playarrString(
-                                    if (value.tracks.size == 1) {
-                                        PlayarrString.PlaylistsTrackCountOne
-                                    } else {
-                                        PlayarrString.PlaylistsTrackCountOther
-                                    },
-                                    "count" to value.tracks.size,
-                                ),
-                                color = WebInkMuted,
-                                fontSize = 10.sp,
-                            )
-                        }
-                        if (!value.root.isSystem) {
-                            IconButton(onClick = { creatingUnder = value.root }) {
-                                Icon(
-                                    Icons.Outlined.Add,
-                                    playarrString(PlayarrString.PlaylistsCreateSubPlaylist),
-                                    tint = WebInk,
-                                )
-                            }
-                        }
+            PlayarrPageScaffold(
+                title = value.root.name,
+                subtitle = playarrString(
+                    if (value.tracks.size == 1) PlayarrString.PlaylistsTrackCountOne else PlayarrString.PlaylistsTrackCountOther,
+                    "count" to value.tracks.size,
+                ).uppercase(LocalPlayarrLanguage.current.locale),
+                onBack = onBack,
+                isTelevision = isTelevision,
+                panelActions = if (value.root.isSystem) {
+                    null
+                } else {
+                    {
+                        PlayarrHeaderButton(
+                            label = playarrString(PlayarrString.PlaylistsCreateSubPlaylist),
+                            icon = Icons.Outlined.Add,
+                            isTelevision = isTelevision,
+                            onClick = { creatingUnder = value.root },
+                        )
                     }
+                },
+            ) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(top = 22.dp),
+                        modifier = Modifier.fillMaxSize().padding(top = 8.dp),
                         contentPadding = PaddingValues(bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(22.dp),
                     ) {
@@ -994,19 +965,17 @@ internal fun ExperiencePlaylistDetailScreen(
                                         )
                                     }
                                     if (!track.playlist.isSystem) {
-                                        IconButton(onClick = { editing = track.playlist }) {
+                                        PlayarrIconButton(onClick = { editing = track.playlist }, contentDescription = playarrString(PlayarrString.PlaylistActionsEdit)) {
                                             Icon(
                                                 Icons.Outlined.Edit,
-                                                playarrString(PlayarrString.PlaylistActionsEdit),
-                                                tint = WebInkMuted,
-                                            )
+                                                contentDescription = null,
+                                                tint = WebInkMuted)
                                         }
-                                        IconButton(onClick = { deleting = track.playlist }) {
+                                        PlayarrIconButton(onClick = { deleting = track.playlist }, contentDescription = playarrString(PlayarrString.PlaylistActionsDelete)) {
                                             Icon(
                                                 Icons.Outlined.Delete,
-                                                playarrString(PlayarrString.PlaylistActionsDelete),
-                                                tint = MaterialTheme.colorScheme.error,
-                                            )
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error)
                                         }
                                     }
                                 }
@@ -1046,7 +1015,6 @@ internal fun ExperiencePlaylistDetailScreen(
                             }
                         }
                     }
-                }
             }
 
             creatingUnder?.let { parent ->
@@ -1140,21 +1108,21 @@ private fun PlaylistDetailItem(
                     )
                 }
                 if (mediaFileId != null) {
-                    IconButton(onClick = { onPlay(mediaFileId) }) {
-                        Icon(Icons.Outlined.PlayArrow, playarrString(PlayarrString.PlaylistItemPlay), tint = WebPink)
+                    PlayarrIconButton(onClick = { onPlay(mediaFileId) }, contentDescription = playarrString(PlayarrString.PlaylistItemPlay)) {
+                        Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = WebPink)
                     }
                 }
             }
             if (editable) {
                 Row(Modifier.align(Alignment.End)) {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Outlined.ArrowUpward, playarrString(PlayarrString.PlaylistItemMoveUp), tint = WebInkMuted)
+                    PlayarrIconButton(onClick = onMoveUp, contentDescription = playarrString(PlayarrString.PlaylistItemMoveUp), enabled = canMoveUp) {
+                        Icon(Icons.Outlined.ArrowUpward, contentDescription = null, tint = WebInkMuted)
                     }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Outlined.ArrowDownward, playarrString(PlayarrString.PlaylistItemMoveDown), tint = WebInkMuted)
+                    PlayarrIconButton(onClick = onMoveDown, contentDescription = playarrString(PlayarrString.PlaylistItemMoveDown), enabled = canMoveDown) {
+                        Icon(Icons.Outlined.ArrowDownward, contentDescription = null, tint = WebInkMuted)
                     }
-                    IconButton(onClick = onRemove) {
-                        Icon(Icons.Outlined.Delete, playarrString(PlayarrString.PlaylistItemRemove), tint = WebInkMuted)
+                    PlayarrIconButton(onClick = onRemove, contentDescription = playarrString(PlayarrString.PlaylistItemRemove)) {
+                        Icon(Icons.Outlined.Delete, contentDescription = null, tint = WebInkMuted)
                     }
                 }
             }
@@ -1178,7 +1146,7 @@ private fun CreateSubPlaylistDialog(
             PlayarrString.PlaylistsMediaTypeVideo
         },
     )
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistsCreateSubPlaylist)) },
         text = {
@@ -1198,7 +1166,7 @@ private fun CreateSubPlaylistDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            PlayarrButton(
                 enabled = name.isNotBlank() && !busy,
                 onClick = {
                     busy = true
@@ -1218,7 +1186,7 @@ private fun CreateSubPlaylistDialog(
             ) { Text(playarrString(if (busy) PlayarrString.PlaylistsCreating else PlayarrString.PlaylistsCreate)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+            PlayarrButton(onClick = onDismiss, enabled = !busy, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) }
         },
     )
 }
@@ -1235,7 +1203,7 @@ private fun EditPlaylistDialog(
     var parentId by remember(playlist.id) { mutableStateOf(playlist.parentPlaylistId) }
     var busy by remember(playlist.id) { mutableStateOf(false) }
     var error by remember(playlist.id) { mutableStateOf<PlayarrMessage?>(null) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistActionsEdit)) },
         text = {
@@ -1263,7 +1231,7 @@ private fun EditPlaylistDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            PlayarrButton(
                 enabled = name.isNotBlank() && !busy,
                 onClick = {
                     busy = true
@@ -1277,7 +1245,7 @@ private fun EditPlaylistDialog(
             ) { Text(playarrString(if (busy) PlayarrString.PlaylistActionsSaving else PlayarrString.PlaylistActionsSave)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+            PlayarrButton(onClick = onDismiss, enabled = !busy, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) }
         },
     )
 }
@@ -1290,7 +1258,7 @@ private fun DeletePlaylistDialog(
 ) {
     var busy by remember(playlist.id) { mutableStateOf(false) }
     var error by remember(playlist.id) { mutableStateOf<PlayarrMessage?>(null) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(playarrString(PlayarrString.PlaylistActionsConfirmDelete)) },
         text = {
@@ -1300,7 +1268,7 @@ private fun DeletePlaylistDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            PlayarrButton(
                 enabled = !busy,
                 onClick = {
                     busy = true
@@ -1319,7 +1287,7 @@ private fun DeletePlaylistDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(playarrString(PlayarrString.CommonCancel)) }
+            PlayarrButton(onClick = onDismiss, enabled = !busy, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) }
         },
     )
 }
@@ -1721,7 +1689,7 @@ internal fun ExperienceProfilesScreen(
     }
     pinProfile?.let { profile ->
         val busy = switchingProfileId == profile.id
-        AlertDialog(
+        PlayarrPanel(
             onDismissRequest = { if (!busy) { pinProfile = null; pin = ""; pinError = null } },
             title = { Text(playarrString(PlayarrString.ProfilesSwitchProfile)) },
             text = {
@@ -1751,13 +1719,13 @@ internal fun ExperienceProfilesScreen(
                     pinError?.let {
                         Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
                     }
-                    TextButton(onClick = onAddProfile, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    PlayarrButton(onClick = onAddProfile, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally), variant = PlayarrButtonVariant.Ghost) {
                         Text(playarrString(PlayarrString.ProfilesUseAccountSignIn))
                     }
                 }
             },
             confirmButton = {
-                TextButton(
+                PlayarrButton(
                     enabled = pin.length == 4 && !busy,
                     onClick = {
                         switchProfile(profile, pinAction, pin) { failure ->
@@ -1770,9 +1738,10 @@ internal fun ExperienceProfilesScreen(
                 }
             },
             dismissButton = {
-                TextButton(
+                PlayarrButton(
                     onClick = { pinProfile = null; pin = ""; pinError = null },
                     enabled = !busy,
+                    variant = PlayarrButtonVariant.Ghost,
                 ) { Text(playarrString(PlayarrString.CommonCancel)) }
             },
         )
@@ -2986,6 +2955,7 @@ private enum class SettingsSection(val label: PlayarrString) {
 internal fun ExperienceParitySettingsScreen(
     serverUrl: String,
     isTelevision: Boolean,
+    onBack: () -> Unit,
     viewModel: ParitySettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -3005,12 +2975,17 @@ internal fun ExperienceParitySettingsScreen(
             viewModel.refreshInviteRequest()
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(WebSurface)) {
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.SettingsTitle),
+        subtitle = playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
+        onBack = onBack,
+        isTelevision = isTelevision,
+    ) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = isTelevision || maxWidth >= 760.dp
         Row(Modifier.fillMaxSize()) {
             if (wide) {
-                Column(Modifier.width(310.dp).fillMaxHeight().padding(start = 112.dp, top = 90.dp, bottom = 70.dp)) {
-                    Text(playarrString(PlayarrString.SettingsTitle), color = WebInk, fontSize = 32.sp, fontWeight = FontWeight.Medium)
+                Column(Modifier.width(260.dp).fillMaxHeight()) {
                     SettingsSection.entries.forEachIndexed { index, candidate ->
                         Text(
                             "0${index + 1}  ${playarrString(candidate.label)}",
@@ -3023,15 +2998,14 @@ internal fun ExperienceParitySettingsScreen(
             }
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxHeight().background(Brush.horizontalGradient(listOf(Color.Transparent, WebSurfaceStrong.copy(alpha = 0.88f), WebSurface))),
-                contentPadding = PaddingValues(start = if (wide) 48.dp else 16.dp, end = if (wide) 72.dp else 16.dp, top = if (wide) 88.dp else 72.dp, bottom = 110.dp),
+                contentPadding = PaddingValues(start = if (wide) 48.dp else 0.dp, end = 0.dp, top = 8.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 if (!wide) {
-                    item { Text(playarrString(PlayarrString.SettingsTitle), color = WebInk, fontSize = 28.sp, fontWeight = FontWeight.Medium) }
                     item {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(SettingsSection.entries) { candidate ->
-                                OutlinedButton(onClick = { section = candidate }, enabled = candidate != section) { Text(playarrString(candidate.label)) }
+                                PlayarrButton(onClick = { section = candidate }, enabled = candidate != section, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(candidate.label)) }
                             }
                         }
                     }
@@ -3066,12 +3040,13 @@ internal fun ExperienceParitySettingsScreen(
                     }
                 }
                 item {
-                    OutlinedButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth()) {
+                    PlayarrButton(onClick = viewModel::signOut, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
                         Text(playarrString(PlayarrString.ProfilesSignOut), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         }
+    }
     }
     invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
 }
@@ -3174,12 +3149,13 @@ private fun SettingsSectionContent(
                     playarrString(PlayarrString.SettingsPlayerQualityTitle),
                     playarrString(PlayarrString.SettingsPlayerQualityDescription),
                 )
-                OutlinedButton(
+                PlayarrButton(
                     onClick = {
                         display.setPlayerQuality("original")
                         localNotice = PlayarrString.SettingsPlayerDefaultsSaved
                     },
                     enabled = display.playerDefaults.qualityId != "original",
+                    variant = PlayarrButtonVariant.Secondary,
                 ) {
                     Text(
                         "${playarrString(PlayarrString.SettingsQualityOriginal)} · " +
@@ -3194,12 +3170,13 @@ private fun SettingsSectionContent(
                         }
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             items(tier.options) { option ->
-                                OutlinedButton(
+                                PlayarrButton(
                                     onClick = {
                                         display.setPlayerQuality(option.id)
                                         localNotice = PlayarrString.SettingsPlayerDefaultsSaved
                                     },
                                     enabled = display.playerDefaults.qualityId != option.id,
+                                    variant = PlayarrButtonVariant.Secondary,
                                 ) {
                                     Text(
                                         playarrString(
@@ -3296,7 +3273,7 @@ private fun SettingsSectionContent(
                     modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    PlayarrButton(
                         enabled = pin.length == 4 && !pinBusy,
                         onClick = { viewModel.savePin(pin) { pin = "" } },
                     ) {
@@ -3311,9 +3288,10 @@ private fun SettingsSectionContent(
                         )
                     }
                     if (snapshot.pin.pinLocked) {
-                        OutlinedButton(
+                        PlayarrButton(
                             enabled = !pinBusy,
                             onClick = { viewModel.savePin(null) { pin = "" } },
+                            variant = PlayarrButtonVariant.Secondary,
                         ) { Text(playarrString(PlayarrString.SettingsProfileLockRemovePin)) }
                     }
                 }
@@ -3339,7 +3317,7 @@ private fun SettingsSectionContent(
                     color = WebInkSoft,
                 )
                 when (request?.status) {
-                    InviteRequestStatus.Approved -> Button(
+                    InviteRequestStatus.Approved -> PlayarrButton(
                         onClick = { viewModel.generateInvite(serverUrl) },
                         enabled = !inviteBusy,
                     ) {
@@ -3350,7 +3328,7 @@ private fun SettingsSectionContent(
                             ),
                         )
                     }
-                    InviteRequestStatus.Pending -> Button(onClick = {}, enabled = false) {
+                    InviteRequestStatus.Pending -> PlayarrButton(onClick = {}, enabled = false) {
                         Text(playarrString(PlayarrString.SettingsInviteRequestPending))
                     }
                     else -> {
@@ -3364,7 +3342,7 @@ private fun SettingsSectionContent(
                             enabled = !inviteBusy,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Button(
+                        PlayarrButton(
                             onClick = { viewModel.requestInvite(requestMessage) },
                             enabled = !inviteBusy,
                         ) {
@@ -3382,15 +3360,17 @@ private fun SettingsSectionContent(
             SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
             SettingsSection.Legal -> {
-                OutlinedButton(
+                PlayarrButton(
                     onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },
                     modifier = Modifier.fillMaxWidth(),
+                    variant = PlayarrButtonVariant.Secondary,
                 ) {
                     Text(playarrString(PlayarrString.SettingsPrivacyNotice))
                 }
-                OutlinedButton(
+                PlayarrButton(
                     onClick = { uriHandler.openUri(PLAYARR_ACCOUNT_DELETION_URL) },
                     modifier = Modifier.fillMaxWidth(),
+                    variant = PlayarrButtonVariant.Secondary,
                 ) {
                     Text(playarrString(PlayarrString.SettingsAccountDeletion))
                 }
@@ -3470,18 +3450,20 @@ private fun SettingsServerSection(
                             fontWeight = FontWeight.ExtraBold,
                         )
                         if (hasKnownServerGroup) {
-                            OutlinedButton(
+                            PlayarrButton(
                                 onClick = viewModel::forgetKnownServerGroup,
                                 enabled = !serverBusy,
+                                variant = PlayarrButtonVariant.Secondary,
                             ) {
                                 Text(playarrString(PlayarrString.SettingsServerForget), fontSize = 10.sp)
                             }
                         }
                     }
                 } else {
-                    OutlinedButton(
+                    PlayarrButton(
                         onClick = { viewModel.disconnectServer(server.serverUrl) },
                         enabled = !serverBusy,
+                        variant = PlayarrButtonVariant.Secondary,
                     ) { Text(playarrString(PlayarrString.SettingsServerDisconnect), fontSize = 10.sp) }
                 }
             }
@@ -3520,7 +3502,7 @@ private fun SettingsServerSection(
         singleLine = true,
         modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
-    Button(
+    PlayarrButton(
         onClick = {
             viewModel.connectServer(serverUrl, username, password, isTelevision) {
                 serverUrl = ""
@@ -3546,9 +3528,10 @@ private fun SettingsServerSection(
     )
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(
+        PlayarrButton(
             onClick = viewModel::testPrimaryConnection,
             enabled = connectionTest != SettingsConnectionTest.Testing,
+            variant = PlayarrButtonVariant.Secondary,
         ) {
             Text(
                 playarrString(
@@ -3603,7 +3586,7 @@ private fun SettingsServerSection(
         singleLine = true,
         modifier = Modifier.fillMaxWidth().playarrSingleLineArrowNavigation(),
     )
-    Button(
+    PlayarrButton(
         onClick = { viewModel.changeServer(primaryValue) },
         enabled = primaryValue.isNotBlank(),
     ) { Text(playarrString(PlayarrString.SettingsServerChangeAppHost)) }
@@ -3631,7 +3614,7 @@ private fun PlayerLanguageChoices(
     Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(playarrLanguageOptions) { option ->
-            OutlinedButton(onClick = { onSelected(option.code) }, enabled = option.code != selected) {
+            PlayarrButton(onClick = { onSelected(option.code) }, enabled = option.code != selected, variant = PlayarrButtonVariant.Secondary) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(option.label, fontSize = 10.sp)
                     Text(option.code, color = WebInkMuted, fontSize = 8.sp)
@@ -3660,7 +3643,7 @@ private fun SettingsCard(
 private fun SettingChoices(label: String, choices: List<String>, selected: String? = null, onSelected: (String) -> Unit) {
     Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(choices) { choice -> OutlinedButton(onClick = { onSelected(choice) }, enabled = choice != selected) { Text(choice) } }
+        items(choices) { choice -> PlayarrButton(onClick = { onSelected(choice) }, enabled = choice != selected, variant = PlayarrButtonVariant.Secondary) { Text(choice) } }
     }
 }
 
@@ -3674,7 +3657,7 @@ private fun <T> SettingChoiceOptions(
     if (label.isNotBlank()) Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices, key = { it.first.toString() }) { (value, choiceLabel) ->
-            OutlinedButton(onClick = { onSelected(value) }, enabled = value != selected) { Text(choiceLabel) }
+            PlayarrButton(onClick = { onSelected(value) }, enabled = value != selected, variant = PlayarrButtonVariant.Secondary) { Text(choiceLabel) }
         }
     }
 }
@@ -3693,7 +3676,7 @@ internal fun ParityLoading(label: String) {
 internal fun ParityFailure(message: PlayarrMessage, retry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(playarrText(message), color = MaterialTheme.colorScheme.error)
-        Button(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {
+        PlayarrButton(onClick = retry, modifier = Modifier.padding(top = 14.dp)) {
             Text(playarrString(PlayarrString.CommonTryAgain))
         }
     }

@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -28,13 +30,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -302,7 +300,7 @@ internal fun PlayarrAvatarSettings(
     if (isTelevision) {
         Text(playarrString(PlayarrString.SettingsAvatarPresetsOnly), color = WebInkMuted, fontSize = 11.sp)
     } else {
-        Button(
+        PlayarrButton(
             onClick = { picker.launch(arrayOf("image/jpeg", "image/png", "image/webp")) },
             enabled = !loading && !processing,
         ) {
@@ -363,7 +361,7 @@ private fun PlayarrAvatarCropDialog(
     var crop by remember(source) { mutableStateOf(PlayarrAvatarCrop()) }
     val preview = remember(source, crop) { renderPlayarrAvatarBitmap(source, crop, PlayarrAvatarPreviewSize) }
     DisposableEffect(preview) { onDispose(preview::recycle) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.SettingsAvatarCropTitle)) },
         text = {
@@ -411,15 +409,16 @@ private fun PlayarrAvatarCropDialog(
                     crop.offsetY,
                     -1f..1f,
                 ) { crop = crop.copy(offsetY = it) }
-                OutlinedButton(
+                PlayarrButton(
                     onClick = { crop = PlayarrAvatarCrop() },
                     enabled = !processing,
                     modifier = Modifier.fillMaxWidth(),
+                    variant = PlayarrButtonVariant.Secondary,
                 ) { Text(playarrString(PlayarrString.SettingsAvatarResetCrop)) }
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(crop) }, enabled = !processing) {
+            PlayarrButton(onClick = { onSave(crop) }, enabled = !processing) {
                 if (processing) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
@@ -428,7 +427,7 @@ private fun PlayarrAvatarCropDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !processing) {
+            PlayarrButton(onClick = onDismiss, enabled = !processing, variant = PlayarrButtonVariant.Ghost) {
                 Text(playarrString(PlayarrString.CommonCancel))
             }
         },

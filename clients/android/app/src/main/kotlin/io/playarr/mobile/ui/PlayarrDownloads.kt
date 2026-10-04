@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import android.os.StatFs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,14 +39,10 @@ import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -51,7 +50,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -610,33 +608,24 @@ private fun DownloadListActions(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier) {
-        IconButton(onClick = onEditKeepUntil) {
-            Icon(Icons.Outlined.Edit, contentDescription = playarrString(PlayarrString.DownloadsEdit), tint = WebInkMuted)
+        PlayarrIconButton(onClick = onEditKeepUntil, contentDescription = playarrString(PlayarrString.DownloadsEdit)) {
+            Icon(Icons.Outlined.Edit, contentDescription = null, tint = WebInkMuted)
         }
         if (entry.state != DownloadState.Completed && entry.state != DownloadState.Removing) {
-            IconButton(onClick = onTogglePauseOrRetry) {
-                val resuming = entry.state == DownloadState.Paused || entry.state == DownloadState.Failed
-                Icon(
-                    if (resuming) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                    contentDescription = playarrString(
-                        if (resuming) PlayarrString.DownloadsResume else PlayarrString.DownloadsPause,
-                    ),
-                    tint = WebInkMuted,
-                )
+            val resuming = entry.state == DownloadState.Paused || entry.state == DownloadState.Failed
+            PlayarrIconButton(
+                onClick = onTogglePauseOrRetry,
+                contentDescription = playarrString(if (resuming) PlayarrString.DownloadsResume else PlayarrString.DownloadsPause),
+            ) {
+                Icon(if (resuming) Icons.Outlined.PlayArrow else Icons.Outlined.Pause, contentDescription = null, tint = WebInkMuted)
             }
         }
-        IconButton(onClick = onCancel) {
-            Icon(
-                Icons.Outlined.Delete,
-                contentDescription = playarrString(
-                    if (entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)) {
-                        PlayarrString.DownloadsCancel
-                    } else {
-                        PlayarrString.DownloadsDelete
-                    },
-                ),
-                tint = WebInkMuted,
-            )
+        val cancelling = entry.state in setOf(DownloadState.Queued, DownloadState.Downloading, DownloadState.Paused)
+        PlayarrIconButton(
+            onClick = onCancel,
+            contentDescription = playarrString(if (cancelling) PlayarrString.DownloadsCancel else PlayarrString.DownloadsDelete),
+        ) {
+            Icon(Icons.Outlined.Delete, contentDescription = null, tint = WebInkMuted)
         }
     }
 }
@@ -738,7 +727,7 @@ private fun KeepUntilEditDialog(entry: DownloadEntity, onDismiss: () -> Unit, on
             entry.keepUntilSelection,
         )
     }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = {
             Text(playarrString(PlayarrString.DownloadsEditKeepUntil, "title" to entry.title))
@@ -749,10 +738,10 @@ private fun KeepUntilEditDialog(entry: DownloadEntity, onDismiss: () -> Unit, on
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selection) }) { Text(playarrString(PlayarrString.DownloadsSave)) }
+            PlayarrButton(onClick = { onConfirm(selection) }) { Text(playarrString(PlayarrString.DownloadsSave)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonCancel)) }
+            PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) }
         },
     )
 }
@@ -823,33 +812,17 @@ internal fun DownloadOptionsSheet(
         return
     }
 
-    val sheetState = rememberModalBottomSheetState()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp),
-        ) {
-            Text(
-                playarrString(PlayarrString.DownloadDrawerKicker).uppercase(LocalPlayarrLanguage.current.locale),
-                color = WebPink,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.2.sp,
-            )
-            Text(
-                if (candidates.size == 1) {
-                    playarrString(PlayarrString.DownloadDrawerDialogLabel, "title" to candidates.first().title)
-                } else {
-                    playarrString(PlayarrString.ContextDownloadCount, "count" to candidates.size)
-                },
-                color = WebInk,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(16.dp))
+    PlayarrFiltersSheet(
+        title = if (candidates.size == 1) {
+            playarrString(PlayarrString.DownloadDrawerDialogLabel, "title" to candidates.first().title)
+        } else {
+            playarrString(PlayarrString.ContextDownloadCount, "count" to candidates.size)
+        },
+        kicker = playarrString(PlayarrString.DownloadDrawerKicker),
+        closeLabel = playarrString(PlayarrString.CommonClose),
+        onClose = onDismiss,
+    ) {
+        Column(Modifier.fillMaxWidth()) {
             when (val current = state) {
                 ExperienceLoad.Loading -> Column(
                     Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -909,9 +882,9 @@ internal fun DownloadOptionsSheet(
                         Spacer(Modifier.height(12.dp))
                         KeepUntilPicker(keepUntilSelection) { keepUntilSelection = it }
                         Spacer(Modifier.height(20.dp))
-                        Button(
+                        PlayarrButton(
                             onClick = {
-                                val qualityId = selectedQualityId ?: return@Button
+                                val qualityId = selectedQualityId ?: return@PlayarrButton
                                 val qualityLabel = current.value.first { it.id == qualityId }.label
                                 enqueuing = true
                                 viewModel.enqueue(candidates, qualityId, qualityLabel, keepUntilSelection, onDismiss)
@@ -1029,18 +1002,22 @@ private fun KeepUntilPicker(selection: KeepUntilSelection, onSelectionChange: (K
         val initialDate = (selection as? KeepUntilSelection.SpecificDate)?.epochMillis
             ?: System.currentTimeMillis() + DEFAULT_KEEP_UNTIL_DAYS * MILLIS_PER_DAY
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialDate)
-        DatePickerDialog(
+        PlayarrPanel(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                PlayarrButton(
+                    onClick = {
                     datePickerState.selectedDateMillis?.let { onSelectionChange(KeepUntilSelection.SpecificDate(it)) }
                     showDatePicker = false
-                }) { Text(playarrString(PlayarrString.DownloadsSave)) }
+                },
+                    variant = PlayarrButtonVariant.Ghost,
+) { Text(playarrString(PlayarrString.DownloadsSave)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text(playarrString(PlayarrString.CommonCancel)) }
+                PlayarrButton(onClick = { showDatePicker = false }, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) }
             },
-        ) { DatePicker(state = datePickerState) }
+            text = { DatePicker(state = datePickerState) },
+        )
     }
 }
 

@@ -7,26 +7,9 @@ import org.junit.Test
 
 /**
  * Enforces the single Playarr button family (`PlayarrButton` / `PlayarrIconButton` in core-designsystem).
- * Raw Material buttons may not appear in a migrated file, and the legacy files below may only shrink:
- * lower a count when you migrate buttons, never raise it. New files get no allowance.
+ * Raw Material buttons may not appear anywhere in the client; there is no allowance left (TASKS row 224).
  */
 class PlayarrButtonUsageTest {
-    /** Remaining raw Material button call sites per legacy file (ratchet; see TASKS row 224). */
-    private val legacyAllowance = mapOf(
-        "PlayarrPlaybackHealth.kt" to 7,
-        "PlayarrYourData.kt" to 13,
-        "PlayarrAvatarEditor.kt" to 4,
-        "PlayarrInvite.kt" to 3,
-        "PlayarrApp.kt" to 5,
-        "PlayarrRemote.kt" to 13,
-        "PlayarrPlayerChrome.kt" to 10,
-        "PlayarrHousehold.kt" to 2,
-        "PlayarrParityScreens.kt" to 44,
-        "PlayarrDownloads.kt" to 8,
-        "PlayarrDiscovery.kt" to 8,
-        "PlayarrExperience.kt" to 34,
-    )
-
     private val raw = Regex("""(^|[^A-Za-z])(Button|OutlinedButton|TextButton|IconButton|FilledTonalButton|ElevatedButton|FilledIconButton|OutlinedIconButton)\(""")
 
     private fun roots(): List<File> {
@@ -36,12 +19,11 @@ class PlayarrButtonUsageTest {
     }
 
     @Test
-    fun `raw Material buttons stay inside the legacy allowance`() {
+    fun `no raw Material buttons remain anywhere in the client`() {
         val counts = roots().flatMap { root -> root.walkTopDown().filter { it.extension == "kt" }.toList() }
             .associate { it.name to it.readLines().count { line -> raw.containsMatchIn(line) } }
             .filterValues { it > 0 }
-        val over = counts.filter { (file, n) -> n > (legacyAllowance[file] ?: 0) }
-        assertEquals("use PlayarrButton / PlayarrIconButton from core-designsystem instead of raw Material buttons", emptyMap<String, Int>(), over)
+        assertEquals("use PlayarrButton / PlayarrIconButton from core-designsystem instead of raw Material buttons", emptyMap<String, Int>(), counts)
     }
 
     @Test

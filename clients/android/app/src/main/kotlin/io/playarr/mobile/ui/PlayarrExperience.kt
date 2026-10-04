@@ -1,5 +1,8 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
+import io.playarr.shared.designsystem.component.PlayarrIconButton
 import android.util.Log
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -72,17 +75,12 @@ import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tv
-import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -141,6 +139,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
@@ -405,14 +404,12 @@ internal fun HeroOutlinedButton(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) {
-    OutlinedButton(
+    PlayarrButton(
         onClick = onClick,
         modifier = modifier,
-        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-            containerColor = WebSurfaceStrong.copy(alpha = 0.88f),
-            contentColor = WebInk,
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, WebInkSoft),
+        variant = PlayarrButtonVariant.Secondary,
+        containerColor = WebSurfaceStrong.copy(alpha = 0.88f),
+        contentColor = WebInk,
         content = content,
     )
 }
@@ -1031,7 +1028,7 @@ internal fun PlayarrExperience(
 ) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
-    val currentRoute = entry?.destination?.route.orEmpty()
+    val currentRoute = entry?.destination?.route.orEmpty().substringBefore('?')
     var detailSectionRoute by remember { mutableStateOf<String?>(null) }
     // Detail pages highlight the section they belong to (Series for a series, etc.), as the web rail does.
     val activeNavRoute = if (currentRoute.startsWith("experience-detail")) detailSectionRoute ?: currentRoute else currentRoute
@@ -1050,8 +1047,17 @@ internal fun PlayarrExperience(
     val isProfiles = currentRoute == "profiles"
     val online by rememberPlayarrOnlineStatus()
     var profileReturnRoute by remember { mutableStateOf(initialRoute) }
+    val libraryHandle = entry?.savedStateHandle
+    val libraryState = LibraryUrlState.of(
+        libraryHandle?.get<String>(LibraryUrlState.VIEW),
+        libraryHandle?.get<String>(LibraryUrlState.SIZE),
+        libraryHandle?.get<String>(LibraryUrlState.SORT),
+        libraryHandle?.get<String>(LibraryUrlState.ORDER),
+        allowCoverFlow = currentRoute == "music",
+    )
     val restorableRoute = restorableExperienceRoute(
         route = entry?.destination?.route,
+        library = libraryState,
         workId = entry?.arguments?.getString("workId"),
         mediaFileId = entry?.arguments?.getString("mediaFileId"),
         playlistId = entry?.arguments?.getString("playlistId"),
@@ -1696,9 +1702,21 @@ private fun ExperienceNavHost(
             "sites" to WorkKind.Site,
             "music" to WorkKind.Artist,
         ).forEach { (route, kind) ->
-            composable(route) {
+            // View, size and sort travel as the web query params (`series?view=cover&size=large&sort=date_added&order=desc`):
+            // they seed the entry's SavedStateHandle, so deep links, rotation, process death and the saved back stack agree.
+            composable(
+                route = libraryRoutePattern(route),
+                arguments = listOf(LibraryUrlState.VIEW, LibraryUrlState.SIZE, LibraryUrlState.SORT, LibraryUrlState.ORDER).map { name ->
+                    navArgument(name) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                },
+                deepLinks = listOf(navDeepLink { uriPattern = "playarr://app/$route$LIBRARY_ROUTE_QUERY" }),
+            ) { entry ->
                 ExperienceOnlineGate(isOnline, isTelevision, route) {
-                    ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel)
+                    ExperienceLibraryScreen(kind, serverUrl, accessToken, isTelevision, canDownload == true, navController, viewModel, entry.savedStateHandle)
                 }
             }
         }
@@ -1755,7 +1773,19 @@ private fun ExperienceNavHost(
                 viewModel = playerViewModel,
             )
         }
-        composable("calendar") {
+        // `calendar?query=view%3Dagenda%26date%3D2026-10-04` seeds the calendar's SavedStateHandle (the nav arg name is
+        // the handle key), carrying the exact query string the web calendar puts in its URL.
+        composable(
+            route = "calendar?query={query}",
+            arguments = listOf(
+                navArgument("query") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+            deepLinks = listOf(navDeepLink { uriPattern = "playarr://app/calendar?query={query}" }),
+        ) {
             ExperienceOnlineGate(isOnline, isTelevision, "calendar") {
                 ExperienceCalendarScreen(
                     isTelevision = isTelevision,
@@ -1817,7 +1847,7 @@ private fun ExperienceNavHost(
         }
         composable("settings") {
             ExperienceOnlineGate(isOnline, isTelevision, "settings") {
-                ExperienceParitySettingsScreen(serverUrl, isTelevision)
+                ExperienceParitySettingsScreen(serverUrl, isTelevision, onBack = { navController.openExperienceTopLevel("home") })
             }
         }
         composable("downloads") {
@@ -1846,20 +1876,25 @@ internal fun restorableExperienceRoute(
     workId: String? = null,
     mediaFileId: String? = null,
     playlistId: String? = null,
-): String? = when (route) {
-    "home", "search", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist", "settings", "downloads" -> route
-    "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
-        buildString {
-            append("experience-detail/")
-            append(id.asUrlPathSegment())
-            mediaFileId?.takeIf(String::isNotBlank)?.let {
-                append("?mediaFileId=")
-                append(it.asUrlPathSegment())
+    library: LibraryUrlState = LibraryUrlState(),
+): String? {
+    val base = route?.substringBefore('?')
+    return when {
+        base in libraryRoutes -> libraryRouteFor(base!!, library)
+        base in setOf("home", "search", "calendar", "playlists", "watchlist", "settings", "downloads") -> base
+        route == "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
+            buildString {
+                append("experience-detail/")
+                append(id.asUrlPathSegment())
+                mediaFileId?.takeIf(String::isNotBlank)?.let {
+                    append("?mediaFileId=")
+                    append(it.asUrlPathSegment())
+                }
             }
         }
+        route == "playlists/{playlistId}" -> playlistId?.takeIf(String::isNotBlank)?.let { "playlists/${it.asUrlPathSegment()}" }
+        else -> null
     }
-    "playlists/{playlistId}" -> playlistId?.takeIf(String::isNotBlank)?.let { "playlists/${it.asUrlPathSegment()}" }
-    else -> null
 }
 
 @Composable
@@ -2123,13 +2158,12 @@ internal fun PlayarrPageHeader(
         modifier = modifier.padding(start = 154.dp, top = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(50.dp).glass(CircleShape, WebGlass.Control)) {
+        PlayarrIconButton(onClick = onBack, contentDescription = playarrString(PlayarrString.CommonBack), modifier = Modifier.size(50.dp).glass(CircleShape, WebGlass.Control)) {
             Icon(
                 Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = playarrString(PlayarrString.CommonBack),
+                contentDescription = null,
                 tint = WebInk,
-                modifier = Modifier.size(20.dp),
-            )
+                modifier = Modifier.size(20.dp))
         }
         Text(
             title,
@@ -2652,7 +2686,19 @@ private fun ExperienceLibraryScreen(
     canDownload: Boolean,
     navController: NavHostController,
     viewModel: PlayarrExperienceViewModel,
+    savedState: androidx.lifecycle.SavedStateHandle,
 ) {
+    val rawView by savedState.getStateFlow<String?>(LibraryUrlState.VIEW, null).collectAsState()
+    val rawSize by savedState.getStateFlow<String?>(LibraryUrlState.SIZE, null).collectAsState()
+    val rawSort by savedState.getStateFlow<String?>(LibraryUrlState.SORT, null).collectAsState()
+    val rawOrder by savedState.getStateFlow<String?>(LibraryUrlState.ORDER, null).collectAsState()
+    val library = LibraryUrlState.of(rawView, rawSize, rawSort, rawOrder, allowCoverFlow = kind == WorkKind.Artist)
+    val updateLibrary: (LibraryUrlState) -> Unit = { next ->
+        savedState[LibraryUrlState.VIEW] = next.view.wire
+        savedState[LibraryUrlState.SIZE] = next.size.wire
+        savedState[LibraryUrlState.SORT] = next.sort.wire
+        savedState[LibraryUrlState.ORDER] = if (next.descending) "desc" else "asc"
+    }
     val states by viewModel.libraries.collectAsState()
     val languageSelections by viewModel.languageSelections.collectAsState()
     val languageMatches by viewModel.languageMatches.collectAsState()
@@ -2684,10 +2730,10 @@ private fun ExperienceLibraryScreen(
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var activeLetter by remember(kind) { mutableStateOf("#") }
             var filtersOpen by remember { mutableStateOf(false) }
-            var viewMode by remember { mutableStateOf(LibraryViewMode.Screen) }
-            var artworkSize by remember { mutableStateOf(LibraryArtworkSize.Medium) }
-            var sortMode by remember { mutableStateOf("title") }
-            var descending by remember { mutableStateOf(false) }
+            val viewMode = library.view
+            val artworkSize = library.size
+            val sortMode = if (library.sort == LibrarySort.DateAdded) "recent" else "title"
+            val descending = library.descending
             val filteredWorks = remember(state.value, activeLetter, sortMode, descending, matchingIds) {
                 val matching = state.value.filter { work ->
                     (matchingIds == null || work.id in matchingIds) &&
@@ -2697,6 +2743,23 @@ private fun ExperienceLibraryScreen(
                 if (descending) sorted.reversed() else sorted
             }
             val selected = filteredWorks.firstOrNull { it.id == selectedId } ?: filteredWorks.firstOrNull() ?: state.value.first()
+            PlayarrPageScaffold(
+                title = plural,
+                subtitle = playarrString(
+                    PlayarrString.LibraryCollectionCount,
+                    "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(state.value.size),
+                    "collection" to collection,
+                ).uppercase(language.locale),
+                onBack = { navController.openExperienceTopLevel("home") },
+                isTelevision = isTelevision,
+                padBody = false,
+                filters = PlayarrFilterAction(
+                    label = playarrString(PlayarrString.LibraryFilters),
+                    active = filtersOpen,
+                    badge = languageSelection.audio.size + languageSelection.subtitle.size,
+                    onClick = { filtersOpen = true },
+                ),
+            ) {
             Box(modifier = Modifier.fillMaxSize().background(WebSurface)) {
         HeroBackdropStack {
                 AuthenticatedArtwork(
@@ -2720,17 +2783,7 @@ private fun ExperienceLibraryScreen(
                         .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
                         .padding(top = if (isTelevision) 76.dp else 18.dp),
                 ) {
-                    if (isTelevision) {
-                        Spacer(Modifier.height(64.dp))
-                    } else {
-                        Text(plural, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 16.dp))
-                        Text(
-                            playarrString(PlayarrString.LibraryCollectionCount, "count" to state.value.size, "collection" to collection),
-                            color = WebInkMuted,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
-                    }
+                    Spacer(Modifier.height(if (isTelevision) 64.dp else 54.dp))
 if (filteredWorks.isEmpty() && matchingIds != null) {
                         Text(
                             playarrString(PlayarrString.LibraryNoMatches),
@@ -2755,28 +2808,6 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     )
                     }
                 }
-                if (isTelevision) {
-                    PlayarrPageHeader(
-                        title = plural,
-                        subtitle = playarrString(
-                            PlayarrString.LibraryCollectionCount,
-                            "count" to java.text.NumberFormat.getIntegerInstance(language.locale).format(state.value.size),
-                            "collection" to collection,
-                        )
-                            .uppercase(language.locale),
-                        onBack = { navController.openExperienceTopLevel("home") },
-                    )
-                }
-                PlayarrHeaderActions(
-                    isTelevision = isTelevision,
-                    filters = PlayarrFilterAction(
-                        label = playarrString(PlayarrString.LibraryFilters),
-                        active = filtersOpen,
-                        badge = languageSelection.audio.size + languageSelection.subtitle.size,
-                        onClick = { filtersOpen = true },
-                    ),
-                    modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars),
-                )
                 if (isTelevision && sortMode == "title") {
                     LazyColumn(
                         modifier = Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight(0.72f),
@@ -2795,6 +2826,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     }
                 }
             }
+            }
             if (filtersOpen) {
                 LibraryFiltersDialog(
                     kind = kind,
@@ -2805,10 +2837,13 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     languageSelection = languageSelection,
                     languageFacets = languageFacets,
                     onLanguageSelection = { viewModel.setLanguageSelection(kind, it) },
-                    onViewMode = { viewMode = it },
-                    onArtworkSize = { artworkSize = it },
-                    onSortMode = { sortMode = it; if (it != "title") activeLetter = "#" },
-                    onDescending = { descending = it },
+                    onViewMode = { updateLibrary(library.copy(view = it)) },
+                    onArtworkSize = { updateLibrary(library.copy(size = it)) },
+                    onSortMode = {
+                        updateLibrary(library.copy(sort = if (it == "title") LibrarySort.Title else LibrarySort.DateAdded))
+                        if (it != "title") activeLetter = "#"
+                    },
+                    onDescending = { updateLibrary(library.copy(descending = it)) },
                     onDismiss = { filtersOpen = false },
                 )
             }
@@ -2903,11 +2938,12 @@ private fun ExperienceSearchScreen(
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             trailingIcon = if (query.isNotEmpty()) {
                 {
-                    TextButton(
+                    PlayarrButton(
                         onClick = {
                             query = ""
                             viewModel.search("", mediaFilter, libraryId, debounce = false)
                         },
+                        variant = PlayarrButtonVariant.Ghost,
                     ) {
                         Text(playarrString(PlayarrString.SearchClear))
                     }
@@ -2920,10 +2956,10 @@ private fun ExperienceSearchScreen(
             keyboardActions = KeyboardActions(onSearch = { submitSearch(debounce = false) }),
             shape = RoundedCornerShape(18.dp),
         )
-        OutlinedButton(
+        PlayarrButton(
             onClick = { filtersOpen = !filtersOpen },
             modifier = Modifier.padding(top = 10.dp),
-            shape = RoundedCornerShape(14.dp),
+            variant = PlayarrButtonVariant.Secondary,
         ) {
             Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
             Column(modifier = Modifier.padding(start = 7.dp)) {
@@ -2944,7 +2980,7 @@ private fun ExperienceSearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 items(visibleMediaTypes, key = PlayarrSearchMediaType::value) { type ->
-                    OutlinedButton(
+                    PlayarrButton(
                         onClick = {
                             mediaFilter = type
                             if (type == PlayarrSearchMediaType.Playlist) libraryId = null
@@ -2953,6 +2989,7 @@ private fun ExperienceSearchScreen(
                         enabled = mediaFilter != type,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
+                        variant = PlayarrButtonVariant.Secondary,
                     ) { Text(playarrString(type.label), fontSize = 10.sp) }
                 }
             }
@@ -2962,7 +2999,7 @@ private fun ExperienceSearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 item {
-                    OutlinedButton(
+                    PlayarrButton(
                         onClick = {
                             libraryId = null
                             submitSearch(debounce = false)
@@ -2970,10 +3007,11 @@ private fun ExperienceSearchScreen(
                         enabled = libraryId != null,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
+                        variant = PlayarrButtonVariant.Secondary,
                     ) { Text(playarrString(PlayarrString.SearchAll), fontSize = 10.sp) }
                 }
                 items(views, key = ViewSummary::id) { view ->
-                    OutlinedButton(
+                    PlayarrButton(
                         onClick = {
                             libraryId = view.id
                             if (mediaFilter == PlayarrSearchMediaType.Playlist) {
@@ -2984,6 +3022,7 @@ private fun ExperienceSearchScreen(
                         enabled = libraryId != view.id,
                         modifier = Modifier.height(36.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp),
+                        variant = PlayarrButtonVariant.Secondary,
                     ) { Text(view.name, fontSize = 10.sp) }
                 }
             }
@@ -3170,19 +3209,19 @@ private fun MediaContextDialog(
     var addToPlaylist by remember(work.id) { mutableStateOf(false) }
     var resolvingDownload by remember(work.id) { mutableStateOf(false) }
     var downloadCandidates by remember(work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(work.title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+                PlayarrButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
                     Text(playarrString(PlayarrString.ContextOpen))
                 }
-                OutlinedButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth()) {
+                PlayarrButton(onClick = { addToPlaylist = true }, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.ContextAddToPlaylist))
                 }
                 if (canDownload) {
-                    OutlinedButton(
+                    PlayarrButton(
                         onClick = {
                             resolvingDownload = true
                             viewModel.resolveDownloadCandidates(work, language) { candidates ->
@@ -3192,6 +3231,7 @@ private fun MediaContextDialog(
                         },
                         enabled = !resolvingDownload,
                         modifier = Modifier.fillMaxWidth(),
+                        variant = PlayarrButtonVariant.Secondary,
                     ) {
                         Text(
                             playarrString(
@@ -3200,15 +3240,15 @@ private fun MediaContextDialog(
                         )
                     }
                 }
-                OutlinedButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth()) {
+                PlayarrButton(onClick = { onMark(true) }, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.ContextMarkWatched))
                 }
-                OutlinedButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth()) {
+                PlayarrButton(onClick = { onMark(false) }, modifier = Modifier.fillMaxWidth(), variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.ContextMarkUnwatched))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
+        confirmButton = { PlayarrButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) } },
     )
     if (addToPlaylist) {
         AddToPlaylistDialog(
@@ -3523,7 +3563,14 @@ private fun ExperienceDetailScreen(
             var pendingPlaylistTrackId by remember(detail.work.id) { mutableStateOf<String?>(null) }
             var addWorkToPlaylist by remember(detail.work.id) { mutableStateOf(false) }
             var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
-            Box(Modifier.fillMaxSize().background(WebSurface)) {
+            PlayarrPageScaffold(
+                title = detail.work.kind.playarrPluralLabel(),
+                subtitle = detail.work.title,
+                onBack = onBack,
+                isTelevision = isTelevision,
+                padBody = false,
+            ) {
+            Box(Modifier.fillMaxSize()) {
                 val artistChildren = detail.children as? WorkChildren.Artist
                 if (artistChildren != null) {
                     ExperienceMusicDetailContent(
@@ -3535,7 +3582,6 @@ private fun ExperienceDetailScreen(
                         accessToken = accessToken,
                         isTelevision = isTelevision,
                         canDownload = canDownload,
-                        onBack = onBack,
                         onPlay = { mediaFileId, albumId ->
                             val albumItems = playarrAlbumPlaybackQueueItems(orderedItems, albumId)
                             val choices = (sourceChoices as? ExperienceLoad.Ready)?.value
@@ -3572,7 +3618,6 @@ private fun ExperienceDetailScreen(
                         accessToken = accessToken,
                         isTelevision = isTelevision,
                         canDownload = canDownload,
-                        onBack = onBack,
                         onOpenWork = onOpenWork,
                         onPlay = playInContext,
                         onSavePlaybackOptions = viewModel::saveMoviePlaybackOptions,
@@ -3595,19 +3640,6 @@ private fun ExperienceDetailScreen(
                     )
                     Box(Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)))
         }
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.safeDrawing)
-                            .padding(start = if (isTelevision) 104.dp else 16.dp, top = 16.dp)
-                            .glass(CircleShape, WebGlass.Control),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = playarrString(PlayarrString.CommonBack),
-                            tint = WebInk,
-                        )
-                    }
                     if (isTelevision) {
                         Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 24.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(detail.work, true) }
                         Surface(
@@ -3656,6 +3688,7 @@ private fun ExperienceDetailScreen(
                         Text(text, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), fontWeight = FontWeight.SemiBold)
                     }
                 }
+            }
             }
             if (addWorkToPlaylist) {
                 AddToPlaylistDialog(
@@ -3721,7 +3754,7 @@ private fun PlayarrServerChoiceDialog(
     LaunchedEffect(rows) {
         if (rows.isNotEmpty()) runCatching { firstChoiceFocus.requestFocus() }
     }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onCancel,
         title = { Text(playarrString(PlayarrString.ServerChoiceWhere, "title" to title)) },
         text = {
@@ -3736,7 +3769,7 @@ private fun PlayarrServerChoiceDialog(
                     }
                     is ExperienceLoad.Failed -> {
                         Text(playarrText(choices.message), color = MaterialTheme.colorScheme.error)
-                        OutlinedButton(onClick = onRetry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
+                        PlayarrButton(onClick = onRetry, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.CommonTryAgain)) }
                     }
                     is ExperienceLoad.Ready -> {
                         Text(
@@ -3746,12 +3779,13 @@ private fun PlayarrServerChoiceDialog(
                         )
                         Text(playarrString(PlayarrString.ServerChoiceChoose), color = WebInkMuted)
                         choices.value.forEachIndexed { index, choice ->
-                            OutlinedButton(
+                            PlayarrButton(
                                 onClick = { onSelect(choice) },
                                 enabled = selection !is PlayarrSourceSelection.Selecting,
                                 modifier = Modifier.fillMaxWidth().then(
                                     if (index == 0) Modifier.focusRequester(firstChoiceFocus) else Modifier,
                                 ),
+                                variant = PlayarrButtonVariant.Secondary,
                             ) {
                                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                                     Text(choice.label, fontWeight = FontWeight.SemiBold)
@@ -3775,7 +3809,7 @@ private fun PlayarrServerChoiceDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onCancel) { Text(playarrString(PlayarrString.CommonCancel)) } },
+        dismissButton = { PlayarrButton(onClick = onCancel, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) } },
     )
 }
 
@@ -3794,7 +3828,6 @@ private fun ExperienceVideoDetailContent(
     accessToken: String?,
     isTelevision: Boolean,
     canDownload: Boolean,
-    onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
     onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     onSavePlaybackOptions: (String, UpdateMediaPlaybackPreferencesRequest) -> Unit,
@@ -3853,27 +3886,6 @@ private fun ExperienceVideoDetailContent(
         )
         }
         ReportDetailSection(detail.work.kind)
-        if (isTelevision) {
-            PlayarrPageHeader(
-                title = detail.work.kind.playarrPluralLabel(),
-                subtitle = detail.work.title,
-                onBack = onBack,
-            )
-        } else {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(start = 16.dp, top = 16.dp)
-                    .glass(CircleShape, WebGlass.Control),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = playarrString(PlayarrString.CommonBack),
-                    tint = WebInk,
-                )
-            }
-        }
 
         if (isTelevision) {
             Column(
@@ -4179,7 +4191,7 @@ private fun VideoDetailActions(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(
+        PlayarrButton(
             onClick = { onPlay(mediaFileId, null, launchSettings) },
             modifier = Modifier.focusRequester(playFocus),
         ) {
@@ -4204,7 +4216,7 @@ private fun VideoDetailActions(
             HeroOutlinedButton(onClick = openSettings) { Text(playarrString(PlayarrString.DetailPlayback)) }
         }
         if (canDownload) {
-            IconButton(
+            PlayarrIconButton(
                 onClick = {
                     onDownload(
                         listOf(
@@ -4219,12 +4231,12 @@ private fun VideoDetailActions(
                         ),
                     )
                 },
+                contentDescription = playarrString(PlayarrString.DetailDownloadTitle, "title" to title),
             ) {
                 Icon(
                     Icons.Outlined.Download,
-                    contentDescription = playarrString(PlayarrString.DetailDownloadTitle, "title" to title),
-                    tint = WebInk,
-                )
+                    contentDescription = null,
+                    tint = WebInk)
             }
         }
     }
@@ -4239,7 +4251,7 @@ private fun MoviePlaybackOptionsDialog(
     var qualityId by remember(options) { mutableStateOf(options.preferences.qualityId) }
     var audioTrackId by remember(options) { mutableStateOf(options.preferences.audioTrackId) }
     var subtitleTrackId by remember(options) { mutableStateOf(options.preferences.subtitleTrackId) }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.DetailPlaybackSettingsTitle)) },
         text = {
@@ -4268,7 +4280,7 @@ private fun MoviePlaybackOptionsDialog(
             }
         },
         confirmButton = {
-            Button(
+            PlayarrButton(
                 onClick = {
                     onSave(
                         UpdateMediaPlaybackPreferencesRequest(
@@ -4280,7 +4292,7 @@ private fun MoviePlaybackOptionsDialog(
                 },
             ) { Text(playarrString(PlayarrString.DetailSave)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonCancel)) } },
+        dismissButton = { PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonCancel)) } },
     )
 }
 
@@ -4294,10 +4306,11 @@ private fun MoviePlaybackChoiceGroup(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, color = WebInk, fontWeight = FontWeight.SemiBold)
         choices.forEach { (id, label) ->
-            OutlinedButton(
+            PlayarrButton(
                 onClick = { onSelected(id) },
                 enabled = id != selected,
                 modifier = Modifier.fillMaxWidth(),
+                variant = PlayarrButtonVariant.Secondary,
             ) {
                 Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
@@ -4736,7 +4749,6 @@ private fun ExperienceMusicDetailContent(
     accessToken: String?,
     isTelevision: Boolean,
     canDownload: Boolean,
-    onBack: () -> Unit,
     onPlay: (mediaFileId: String, albumId: String) -> Unit,
     onAddToPlaylist: (trackId: String) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
@@ -4793,32 +4805,11 @@ private fun ExperienceMusicDetailContent(
             contentPadding = PaddingValues(
                 start = if (isTelevision) 118.dp else 16.dp,
                 end = if (isTelevision) 64.dp else 16.dp,
-                top = if (isTelevision) 60.dp else 42.dp,
+                top = if (isTelevision) 130.dp else 92.dp,
                 bottom = if (isTelevision) 118.dp else 110.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 16.dp),
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    IconButton(onClick = onBack, modifier = Modifier.glass(CircleShape, WebGlass.Control)) {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = playarrString(PlayarrString.MusicBackToMusic),
-                            tint = WebInk,
-                        )
-                    }
-                    Column {
-                        Text(
-                            playarrString(PlayarrString.MusicTitle).uppercase(language.locale),
-                            color = WebPink,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.2.sp,
-                        )
-                        Text(detail.work.title, color = WebInk, fontSize = if (isTelevision) 32.sp else 24.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth(if (isTelevision) 0.48f else 1f),
@@ -4944,15 +4935,14 @@ private fun ExperienceMusicDetailContent(
                                 }
                             }
                             if (canDownload && albumDownloads.isNotEmpty()) {
-                                IconButton(onClick = { onDownload(albumDownloads) }) {
-                                    Icon(
-                                        Icons.Outlined.Download,
-                                        contentDescription = playarrString(
+                                PlayarrIconButton(onClick = { onDownload(albumDownloads) }, contentDescription = playarrString(
                                             PlayarrString.DetailDownloadTitle,
                                             "title" to album.album.title,
-                                        ),
-                                        tint = WebInk,
-                                    )
+                                        )) {
+                                    Icon(
+                                        Icons.Outlined.Download,
+                                        contentDescription = null,
+                                        tint = WebInk)
                                 }
                             }
                         }
@@ -5067,30 +5057,29 @@ private fun MusicTrackRow(
             if (shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
                 PlayarrUnwatchedDot(Modifier.size(8.dp))
             }
-            IconButton(onClick = onAddToPlaylist) {
-                Icon(
-                    Icons.Outlined.Add,
-                    contentDescription = playarrString(
+            PlayarrIconButton(onClick = onAddToPlaylist, contentDescription = playarrString(
                         PlayarrString.MusicAddTrackToPlaylist,
                         "title" to track.track.title,
-                    ),
-                    tint = WebInkMuted,
-                )
+                    )) {
+                Icon(
+                    Icons.Outlined.Add,
+                    contentDescription = null,
+                    tint = WebInkMuted)
             }
             if (canDownload) {
-                IconButton(
+                PlayarrIconButton(
                     onClick = {
                         onDownload(DownloadCandidate(mediaFileId, artistWorkId, track.track.title, artistTitle, posterUrl, "track"))
                     },
-                ) {
-                    Icon(
-                        Icons.Outlined.Download,
-                        contentDescription = playarrString(
+                    contentDescription = playarrString(
                             PlayarrString.DetailDownloadTitle,
                             "title" to track.track.title,
                         ),
-                        tint = WebInkMuted,
-                    )
+                ) {
+                    Icon(
+                        Icons.Outlined.Download,
+                        contentDescription = null,
+                        tint = WebInkMuted)
                 }
             }
             Icon(
@@ -5266,15 +5255,14 @@ private fun SectionHeaderRow(
             if (subtitle != null) Text(subtitle, color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
         }
         if (candidates.isNotEmpty()) {
-            IconButton(onClick = { onDownloadAll(candidates) }) {
-                Icon(
-                    Icons.Outlined.Download,
-                    contentDescription = playarrString(
+            PlayarrIconButton(onClick = { onDownloadAll(candidates) }, contentDescription = playarrString(
                         PlayarrString.ContextDownloadCount,
                         "count" to candidates.size,
-                    ),
-                    tint = WebInkMuted,
-                )
+                    )) {
+                Icon(
+                    Icons.Outlined.Download,
+                    contentDescription = null,
+                    tint = WebInkMuted)
             }
         }
     }
@@ -5299,21 +5287,19 @@ private fun PlayRow(
         Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(title, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             onAddToPlaylist?.let { add ->
-                IconButton(onClick = add) {
+                PlayarrIconButton(onClick = add, contentDescription = playarrString(PlayarrString.ContextAddToPlaylist)) {
                     Icon(
                         Icons.Outlined.Add,
-                        contentDescription = playarrString(PlayarrString.ContextAddToPlaylist),
-                        tint = WebInkMuted,
-                    )
+                        contentDescription = null,
+                        tint = WebInkMuted)
                 }
             }
             onDownload?.let { download ->
-                IconButton(onClick = download) {
+                PlayarrIconButton(onClick = download, contentDescription = playarrString(PlayarrString.ContextDownload)) {
                     Icon(
                         Icons.Outlined.Download,
-                        contentDescription = playarrString(PlayarrString.ContextDownload),
-                        tint = WebInkMuted,
-                    )
+                        contentDescription = null,
+                        tint = WebInkMuted)
                 }
             }
             Icon(
@@ -6360,8 +6346,9 @@ private fun ExperiencePlayerScreen(
             )
             if (showPlayOnDevice) PlayOnDeviceDialog(onDismiss = { showPlayOnDevice = false })
         } else {
-            IconButton(
+            PlayarrIconButton(
                 onClick = onBack,
+                contentDescription = playarrString(PlayarrString.PlayerBackToDetails),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -6370,9 +6357,8 @@ private fun ExperiencePlayerScreen(
             ) {
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = playarrString(PlayarrString.PlayerBackToDetails),
-                    tint = Color.White,
-                )
+                    contentDescription = null,
+                    tint = Color.White)
             }
         }
         if (state is ExperienceLoad.Ready) {
@@ -6449,10 +6435,10 @@ private fun PlayarrPlayerStatus(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 onRetry?.let {
-                    Button(onClick = it) { Text(playarrString(PlayarrString.CommonTryAgain)) }
+                    PlayarrButton(onClick = it) { Text(playarrString(PlayarrString.CommonTryAgain)) }
                 }
                 onBack?.let {
-                    OutlinedButton(onClick = it) {
+                    PlayarrButton(onClick = it, variant = PlayarrButtonVariant.Secondary) {
                         Text(playarrString(PlayarrString.PlayerBackToDetails), color = Color.White)
                     }
                 }
@@ -6849,7 +6835,7 @@ internal fun ExperienceFailure(message: PlayarrMessage, retry: () -> Unit) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
             Text(playarrText(message), color = MaterialTheme.colorScheme.error)
-            Button(onClick = retry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
+            PlayarrButton(onClick = retry) { Text(playarrString(PlayarrString.CommonTryAgain)) }
         }
     }
 }

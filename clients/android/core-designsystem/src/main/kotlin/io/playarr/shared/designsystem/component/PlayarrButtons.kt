@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.playarr.shared.designsystem.theme.FocusMotion
@@ -63,41 +65,49 @@ fun PlayarrButton(
     size: PlayarrButtonSize = PlayarrButtonSize.Medium,
     enabled: Boolean = true,
     active: Boolean = false,
+    /** Optional colour overrides for buttons over artwork or on auth screens; null keeps the variant colours. */
+    containerColor: Color? = null,
+    contentColor: Color? = null,
+    contentPadding: PaddingValues? = null,
+    interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val source = remember { MutableInteractionSource() }
+    val source = interactionSource ?: remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(50)
     val scale = rememberFocusScale(focused)
     val container: Color
-    val contentColor: Color
+    val resolvedContent: Color
     val border: BorderStroke?
     when {
-        active -> { container = scheme.onSurface; contentColor = scheme.surface; border = null }
-        variant == PlayarrButtonVariant.Primary -> { container = scheme.primary; contentColor = scheme.onPrimary; border = null }
+        active -> { container = scheme.onSurface; resolvedContent = scheme.surface; border = null }
+        variant == PlayarrButtonVariant.Primary -> { container = scheme.primary; resolvedContent = scheme.onPrimary; border = null }
         variant == PlayarrButtonVariant.Secondary ->
-            { container = scheme.surfaceVariant.copy(alpha = 0.7f); contentColor = scheme.onSurface; border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.35f)) }
-        else -> { container = Color.Transparent; contentColor = scheme.primary; border = null }
+            { container = scheme.surfaceVariant.copy(alpha = 0.7f); resolvedContent = scheme.onSurface; border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.35f)) }
+        else -> { container = Color.Transparent; resolvedContent = scheme.primary; border = null }
     }
+    val finalContent = contentColor ?: resolvedContent
     Surface(
         onClick = onClick,
         enabled = enabled,
         interactionSource = source,
         shape = shape,
-        color = container,
-        contentColor = contentColor.copy(alpha = if (enabled) 1f else 0.4f),
+        color = containerColor ?: container,
+        contentColor = finalContent.copy(alpha = if (enabled) 1f else 0.4f),
         border = if (focused) BorderStroke(3.dp, scheme.primary) else border,
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .defaultMinSize(minHeight = size.height),
     ) {
-        Row(
-            Modifier.padding(PaddingValues(horizontal = size.horizontalPadding)).defaultMinSize(minHeight = size.height),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            content = content,
-        )
+        ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)) {
+            Row(
+                Modifier.padding(contentPadding ?: PaddingValues(horizontal = size.horizontalPadding)).defaultMinSize(minHeight = size.height),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                content = content,
+            )
+        }
     }
 }
 
@@ -110,9 +120,10 @@ fun PlayarrIconButton(
     size: PlayarrButtonSize = PlayarrButtonSize.Medium,
     variant: PlayarrButtonVariant = PlayarrButtonVariant.Ghost,
     enabled: Boolean = true,
+    interactionSource: MutableInteractionSource? = null,
     content: @Composable () -> Unit,
 ) {
-    val source = remember { MutableInteractionSource() }
+    val source = interactionSource ?: remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val scheme = MaterialTheme.colorScheme
     val scale = rememberFocusScale(focused)

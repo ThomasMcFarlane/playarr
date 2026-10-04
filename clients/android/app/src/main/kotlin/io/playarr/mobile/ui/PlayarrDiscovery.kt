@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,9 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -270,9 +270,10 @@ internal fun WatchlistToggleButton(
     val snapshot = remember(work.id) { work.toSnapshot() }
     var listed by remember(work.id) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(work.id) { listed = viewModel.isListed(snapshot) ?: false }
-    OutlinedButton(
+    PlayarrButton(
         onClick = { viewModel.toggleWatchlist(snapshot, listed == true) { listed = it } },
         enabled = listed != null,
+        variant = PlayarrButtonVariant.Secondary,
     ) {
         Icon(if (listed == true) Icons.Outlined.Check else Icons.Outlined.Add, contentDescription = null)
         Text(
@@ -372,14 +373,14 @@ private fun DiscoveryTitleRow(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 onOpen?.let { open ->
-                    OutlinedButton(onClick = open) { Text(playarrString(PlayarrString.ContextOpen)) }
+                    PlayarrButton(onClick = open, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.ContextOpen)) }
                 }
                 if (title.isRequestable()) {
-                    Button(onClick = onRequest, enabled = !requested) {
+                    PlayarrButton(onClick = onRequest, enabled = !requested) {
                         Text(playarrString(if (requested) PlayarrString.DiscoveryRequested else PlayarrString.DiscoveryActionRequest))
                     }
                 }
-                OutlinedButton(onClick = { viewModel.toggleWatchlist(snapshot, listed) { listed = it } }) {
+                PlayarrButton(onClick = { viewModel.toggleWatchlist(snapshot, listed) { listed = it } }, variant = PlayarrButtonVariant.Secondary) {
                     Icon(if (listed) Icons.Outlined.Check else Icons.Outlined.Add, contentDescription = null)
                     Text(
                         playarrString(if (listed) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd),
@@ -471,7 +472,7 @@ private fun WatchlistRow(
                 when {
                     primary != null && primary.mediaFileId != null &&
                         (primary.action == DiscoveryWire.ACTION_PLAY || primary.action == DiscoveryWire.ACTION_RESUME) ->
-                        Button(onClick = { onPlay(primary.mediaFileId!!, title.title) }) {
+                        PlayarrButton(onClick = { onPlay(primary.mediaFileId!!, title.title) }) {
                             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                             Text(
                                 playarrString(primary.action.actionLabel() ?: PlayarrString.DiscoveryActionPlay),
@@ -479,14 +480,14 @@ private fun WatchlistRow(
                             )
                         }
                     primary?.action == DiscoveryWire.ACTION_REQUEST ->
-                        Button(onClick = onRequest, enabled = !requested) {
+                        PlayarrButton(onClick = onRequest, enabled = !requested) {
                             Text(playarrString(if (requested) PlayarrString.DiscoveryRequested else PlayarrString.DiscoveryActionRequest))
                         }
                 }
                 onOpen?.let { open ->
-                    OutlinedButton(onClick = open) { Text(playarrString(PlayarrString.ContextOpen)) }
+                    PlayarrButton(onClick = open, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.ContextOpen)) }
                 }
-                OutlinedButton(onClick = onRemove) { Text(playarrString(PlayarrString.WatchlistRemove)) }
+                PlayarrButton(onClick = onRemove, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.WatchlistRemove)) }
             }
         }
     }

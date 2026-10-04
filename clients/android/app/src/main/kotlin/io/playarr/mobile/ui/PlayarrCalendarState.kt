@@ -289,6 +289,6 @@ internal class CalendarViewModel @Inject constructor(
     }
 
     private companion object {
-        const val QUERY_KEY = "calendarQuery"
+        const val QUERY_KEY = "query"
     }
 }

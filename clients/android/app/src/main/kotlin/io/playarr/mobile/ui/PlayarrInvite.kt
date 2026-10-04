@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -14,11 +16,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,7 +93,7 @@ internal fun PlayarrInviteDialog(
                 .format(Instant.parse(invite.expiresAt))
         }.getOrNull()
     }
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = onDismiss,
         title = { Text(playarrString(PlayarrString.SettingsInviteModalTitle)) },
         text = {
@@ -136,7 +135,7 @@ internal fun PlayarrInviteDialog(
             }
         },
         confirmButton = {
-            Button(
+            PlayarrButton(
                 onClick = {
                     context.getSystemService(ClipboardManager::class.java)
                         .setPrimaryClip(ClipData.newPlainText(clipboardLabel, invite.link))
@@ -151,7 +150,7 @@ internal fun PlayarrInviteDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+            PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.CommonClose)) }
         },
     )
 }
@@ -189,7 +188,7 @@ internal fun PlayarrApprovalNotifications() {
         )
         return
     }
-    Button(
+    PlayarrButton(
         onClick = {
             error = null
             enabling = true

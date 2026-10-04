@@ -7,20 +7,18 @@ import org.junit.Test
 
 /**
  * Keeps every routed screen on the shared page frame. A new `Experience*Screen` composable must either
- * render through [PlayarrPageScaffold] / [PlayarrPageHeader] (back, title, actions, bottom-left safe
- * area) or be listed below with a reason, so pages cannot drift from the canonical layout.
+ * render through [PlayarrPageScaffold] (back, title, actions, bottom-left safe area; `padBody = false`
+ * for full-bleed hero pages such as Library and the detail screens) or be listed below with a reason, so
+ * pages cannot drift from the canonical layout. Settings, playlist detail, Library and detail pages are
+ * no longer exempt (TASKS rows 222, 224, 225).
  */
 class PlayarrPageScaffoldRegistryTest {
     /** Screens exempt from the shared frame, with the reason. */
     private val exempt = mapOf(
         "ExperienceProfilesScreen" to "Profile picker with its own chrome",
-        "ExperienceParitySettingsScreen" to "Two-pane settings workspace; header adoption tracked in TASKS row 222",
-        "ExperiencePlaylistDetailScreen" to "Detail view with its own back header",
-        "ExperienceLibraryScreen" to "Uses PlayarrPageHeader plus the library Filters launcher",
         "ExperienceNotFoundScreen" to "404 illustration",
         "ExperienceOfflineScreen" to "Offline gate shown instead of a page",
         "ExperienceHomeScreen" to "Root surface: nothing to go back to; hero replaces the title row",
-        "ExperienceDetailScreen" to "Detail pages render PlayarrPageHeader through their own layout; adoption tracked in TASKS row 222",
         "ExperiencePlayerScreen" to "Full-bleed playback with its own transport chrome",
         "ExperienceLoadingScreen" to "Transient loading state",
     )
@@ -45,12 +43,19 @@ class PlayarrPageScaffoldRegistryTest {
             val text = file.readText()
             screenFunction.findAll(text).forEach { m -> screens[m.groupValues[1]] = bodyOf(text, m.range.first) }
         }
-        assertTrue("expected to discover the screen composables", screens.size >= 6)
+        assertTrue("expected to discover the screen composables", screens.size >= 12)
         val bypassing = screens.filter { (name, body) ->
-            name !in exempt && !body.contains("PlayarrPageScaffold(") && !body.contains("PlayarrPageHeader(")
+            name !in exempt && !body.contains("PlayarrPageScaffold(")
         }.keys
         assertEquals("screens bypassing PlayarrPageScaffold (add it, or exempt with a reason)", emptySet<String>(), bypassing)
         exempt.forEach { (name, reason) -> assertTrue("$name needs a reason", reason.length > 10) }
+    }
+
+    @Test
+    fun `the exempt list only names screens that still exist`() {
+        val found = mutableSetOf<String>()
+        uiSources().forEach { file -> screenFunction.findAll(file.readText()).forEach { found += it.groupValues[1] } }
+        assertEquals("stale exemptions", emptySet<String>(), exempt.keys - found - setOf("ExperienceLoadingScreen"))
     }
 
     @Test

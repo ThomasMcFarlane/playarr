@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.content.Context
 import android.content.Intent
 import android.view.Display
@@ -16,11 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -231,7 +229,7 @@ internal fun PlayarrPlaybackHealthDialog(
         onDismiss()
     }
 
-    AlertDialog(
+    PlayarrPanel(
         onDismissRequest = ::dismiss,
         title = {
             Text(
@@ -261,7 +259,7 @@ internal fun PlayarrPlaybackHealthDialog(
                             }
                         }
                         item {
-                            OutlinedButton(onClick = { reloadKey += 1 }) {
+                            PlayarrButton(onClick = { reloadKey += 1 }, variant = PlayarrButtonVariant.Secondary) {
                                 Text(playarrString(PlayarrString.HealthRetry))
                             }
                         }
@@ -275,7 +273,7 @@ internal fun PlayarrPlaybackHealthDialog(
                             )
                         }
                         item {
-                            TextButton(onClick = { detail = !detail }) {
+                            PlayarrButton(onClick = { detail = !detail }, variant = PlayarrButtonVariant.Ghost) {
                                 Text(
                                     playarrString(
                                         if (detail) PlayarrString.HealthHideDetail else PlayarrString.HealthShowDetail,
@@ -306,11 +304,11 @@ internal fun PlayarrPlaybackHealthDialog(
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (test == TestState.Running) {
-                                    OutlinedButton(onClick = { testJob?.cancel() }) {
+                                    PlayarrButton(onClick = { testJob?.cancel() }, variant = PlayarrButtonVariant.Secondary) {
                                         Text(playarrString(PlayarrString.HealthTestCancel))
                                     }
                                 } else {
-                                    OutlinedButton(
+                                    PlayarrButton(
                                         onClick = {
                                             test = TestState.Running
                                             testJob = scope.launch {
@@ -330,6 +328,7 @@ internal fun PlayarrPlaybackHealthDialog(
                                                 if (test is TestState.Done) reloadKey += 1
                                             }
                                         },
+                                        variant = PlayarrButtonVariant.Secondary,
                                     ) { Text(playarrString(PlayarrString.HealthTestRun)) }
                                 }
                             }
@@ -361,14 +360,15 @@ internal fun PlayarrPlaybackHealthDialog(
                         }
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
+                                PlayarrButton(
                                     onClick = {
                                         clipboard.setText(AnnotatedString(playarrHealthExportText(report.export)))
                                         note = PlayarrString.HealthCopied
                                     },
+                                    variant = PlayarrButtonVariant.Secondary,
                                 ) { Text(playarrString(PlayarrString.HealthExportCopy)) }
                                 if (!isTelevision) {
-                                    OutlinedButton(
+                                    PlayarrButton(
                                         onClick = {
                                             val send = Intent(Intent.ACTION_SEND).apply {
                                                 type = "text/plain"
@@ -378,6 +378,7 @@ internal fun PlayarrPlaybackHealthDialog(
                                                 context.startActivity(Intent.createChooser(send, null))
                                             }
                                         },
+                                        variant = PlayarrButtonVariant.Secondary,
                                     ) { Text(playarrString(PlayarrString.HealthExportShare)) }
                                 }
                             }
@@ -388,7 +389,7 @@ internal fun PlayarrPlaybackHealthDialog(
             }
         },
         confirmButton = {
-            Button(onClick = ::dismiss) { Text(playarrString(PlayarrString.CommonClose)) }
+            PlayarrButton(onClick = ::dismiss) { Text(playarrString(PlayarrString.CommonClose)) }
         },
     )
 }

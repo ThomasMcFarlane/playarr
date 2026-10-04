@@ -1,13 +1,13 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -125,7 +125,7 @@ internal fun HouseholdBlockedScreen(
     ) {
         Text(title, color = WebInk, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(description, color = WebInkSoft, fontSize = 16.sp, textAlign = TextAlign.Center)
-        Button(
+        PlayarrButton(
             onClick = {
                 sending = true
                 scope.launch {
@@ -136,7 +136,7 @@ internal fun HouseholdBlockedScreen(
             enabled = !sending && requestState != true,
             modifier = Modifier.focusRequester(firstAction),
         ) { Text(playarrString(PlayarrString.HouseholdAskGuardian)) }
-        OutlinedButton(onClick = onSwitchProfile) {
+        PlayarrButton(onClick = onSwitchProfile, variant = PlayarrButtonVariant.Secondary) {
             Text(playarrString(PlayarrString.ProfilesSwitchProfile))
         }
         when (requestState) {

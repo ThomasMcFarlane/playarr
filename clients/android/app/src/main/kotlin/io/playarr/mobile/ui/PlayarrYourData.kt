@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -11,10 +13,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -410,7 +410,7 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
         Text(playarrString(PlayarrString.YourDataExportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Text(playarrString(PlayarrString.YourDataExportDescription), color = WebInkMuted, fontSize = 11.sp)
         Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 11.sp)
-        Button(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
+        PlayarrButton(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
             Text(
                 playarrString(
                     if (state.exportRunning) PlayarrString.YourDataExportPreparing
@@ -421,8 +421,9 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
         state.exportJob?.let { job ->
             Text(exportStatusText(job), color = WebInkSoft, fontSize = 12.sp)
             if (job.status == UserDataExportStatus.Ready) {
-                OutlinedButton(
+                PlayarrButton(
                     onClick = { saveExport.launch(userDataExportFileName(job.createdAt.take(10))) },
+                    variant = PlayarrButtonVariant.Secondary,
                 ) { Text(playarrString(PlayarrString.YourDataExportSave)) }
             }
         }
@@ -430,8 +431,9 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
 
         Text(playarrString(PlayarrString.YourDataImportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Text(playarrString(PlayarrString.YourDataImportDescription), color = WebInkMuted, fontSize = 11.sp)
-        OutlinedButton(
+        PlayarrButton(
             onClick = { chooseFile.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
+            variant = PlayarrButtonVariant.Secondary,
         ) {
             Text(
                 state.fileName?.let { playarrString(PlayarrString.YourDataFileChosen, "name" to it) }
@@ -443,14 +445,14 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
             Checkbox(checked = state.includePreferences, onCheckedChange = viewModel::setIncludePreferences)
             Text(playarrString(PlayarrString.YourDataIncludePreferences), color = WebInkSoft, fontSize = 12.sp)
         }
-        OutlinedButton(onClick = viewModel::preview, enabled = state.canPreview) {
+        PlayarrButton(onClick = viewModel::preview, enabled = state.canPreview, variant = PlayarrButtonVariant.Secondary) {
             Text(playarrString(PlayarrString.YourDataPreviewButton))
         }
         state.importError?.let { ErrorLine(playarrText(it)) }
         state.preview?.let { preview ->
             PreviewSummary(preview)
             Text(playarrString(PlayarrString.YourDataConfirmNote), color = WebInkMuted, fontSize = 11.sp)
-            Button(onClick = viewModel::apply, enabled = state.canApply) {
+            PlayarrButton(onClick = viewModel::apply, enabled = state.canApply) {
                 Text(playarrString(PlayarrString.YourDataApplyButton))
             }
         }
@@ -469,7 +471,7 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
                 fontSize = 12.sp,
             )
             if (result.unmatchedTotal > 0) {
-                OutlinedButton(onClick = { saveUnmatched.launch("playarr-unmatched.zip") }) {
+                PlayarrButton(onClick = { saveUnmatched.launch("playarr-unmatched.zip") }, variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.YourDataSaveUnmatched, "count" to result.unmatchedTotal))
                 }
             }
@@ -488,7 +490,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
         Text(playarrString(PlayarrString.YourDataExportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Text(playarrString(PlayarrString.YourDataExportDescription), color = WebInkMuted, fontSize = 11.sp)
         Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 11.sp)
-        Button(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
+        PlayarrButton(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
             Text(
                 playarrString(
                     if (state.exportRunning) PlayarrString.YourDataExportPreparing
@@ -499,7 +501,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
         state.exportJob?.let { job ->
             Text(exportStatusText(job), color = WebInkSoft, fontSize = 12.sp)
             if (job.status == UserDataExportStatus.Ready) {
-                OutlinedButton(onClick = viewModel::showExportLink, enabled = !state.exportLinkBusy) {
+                PlayarrButton(onClick = viewModel::showExportLink, enabled = !state.exportLinkBusy, variant = PlayarrButtonVariant.Secondary) {
                     Text(
                         playarrString(
                             if (state.exportLinkUrl != null) PlayarrString.YourDataTransferNewCode
@@ -527,7 +529,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
         Text(playarrString(PlayarrString.YourDataImportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Text(playarrString(PlayarrString.YourDataImportDescription), color = WebInkMuted, fontSize = 11.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
+            PlayarrButton(
                 onClick = viewModel::startSession,
                 enabled = !state.sessionBusy && state.session?.status != "uploading",
             ) {
@@ -539,7 +541,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
                 )
             }
             if (state.session != null) {
-                OutlinedButton(onClick = viewModel::cancelSession) {
+                PlayarrButton(onClick = viewModel::cancelSession, variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.YourDataTransferCancel))
                 }
             }
@@ -576,14 +578,14 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
             Checkbox(checked = state.includePreferences, onCheckedChange = viewModel::setIncludePreferences)
             Text(playarrString(PlayarrString.YourDataIncludePreferences), color = WebInkSoft, fontSize = 12.sp)
         }
-        OutlinedButton(onClick = viewModel::preview, enabled = state.canPreviewSession) {
+        PlayarrButton(onClick = viewModel::preview, enabled = state.canPreviewSession, variant = PlayarrButtonVariant.Secondary) {
             Text(playarrString(PlayarrString.YourDataPreviewButton))
         }
         state.importError?.let { ErrorLine(playarrText(it)) }
         state.preview?.let { preview ->
             PreviewSummary(preview)
             Text(playarrString(PlayarrString.YourDataConfirmNote), color = WebInkMuted, fontSize = 11.sp)
-            Button(onClick = viewModel::apply, enabled = state.canApply) {
+            PlayarrButton(onClick = viewModel::apply, enabled = state.canApply) {
                 Text(playarrString(PlayarrString.YourDataApplyButton))
             }
         }
@@ -650,7 +652,7 @@ private fun ConflictChoices(
             UserDataProgressConflicts.Newest to PlayarrString.YourDataConflictsNewest,
             UserDataProgressConflicts.KeepExisting to PlayarrString.YourDataConflictsKeep,
         ).forEach { (choice, label) ->
-            OutlinedButton(onClick = { onSelected(choice) }, enabled = choice != selected) {
+            PlayarrButton(onClick = { onSelected(choice) }, enabled = choice != selected, variant = PlayarrButtonVariant.Secondary) {
                 Text(playarrString(label), fontSize = 11.sp)
             }
         }
