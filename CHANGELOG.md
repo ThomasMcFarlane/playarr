@@ -56,6 +56,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lost (the view tree had no focus); a pairing that was never approved no longer leaves the Pair
   buttons disabled (web and Android); an older server answering the stream path with its HTML shell is
   detected and the clients long-poll instead of retrying in a loop.
+- The calendar subscription URL now uses the real public origin when the server is reached over HTTP/2
+  (the host lives in the URI authority, not a `Host` header), instead of `http://localhost`.
 - Removed merge conflict markers left in the changelog, web routes and navigation by the calendar merge,
   and restored a missing closing brace in the web stylesheet's `.remote-pairing-row` rule.
 - Phone remote on Android: the TV approval dialog now takes focus so a TV remote can press Allow, remote

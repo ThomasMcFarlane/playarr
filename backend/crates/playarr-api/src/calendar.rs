@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use axum::extract::{Path, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
@@ -347,6 +347,29 @@ pub struct CalendarFeedCreated {
     pub created_at: DateTime<Utc>,
 }
 
+/// Public origin the caller used. HTTP/2 carries the host in the URI
+/// authority rather than a `Host` header, so both are consulted; a reverse
+/// proxy's `X-Forwarded-*` headers win.
+fn request_base(headers: &HeaderMap, uri: &Uri) -> String {
+    let forwarded = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+    };
+    let scheme = forwarded("x-forwarded-proto")
+        .filter(|v| matches!(*v, "http" | "https"))
+        .or_else(|| uri.scheme_str())
+        .unwrap_or("http");
+    let host = forwarded("x-forwarded-host")
+        .or_else(|| forwarded("host"))
+        .or_else(|| uri.authority().map(|a| a.as_str()))
+        .unwrap_or("localhost");
+    format!("{scheme}://{host}")
+}
+
 fn hash_token(token: &str) -> String {
     Sha256::digest(token.as_bytes())
         .iter()
@@ -401,6 +424,7 @@ pub async fn get_calendar_feed_handler(
 pub async fn create_calendar_feed_handler(
     State(state): State<AppState>,
     viewer: CatalogViewer,
+    uri: Uri,
     headers: HeaderMap,
 ) -> Result<(StatusCode, Json<CalendarFeedCreated>), ApiError> {
     let token = new_token();
@@ -410,10 +434,7 @@ pub async fn create_calendar_feed_handler(
         .rotate(viewer.user_id, &hash_token(&token), now)
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
-    let url = crate::oauth::request_verification_uri(
-        &headers,
-        &format!("/api/v1/calendar/feed/{token}.ics"),
-    );
+    let url = request_base(&headers, &uri) + &format!("/api/v1/calendar/feed/{token}.ics");
     Ok((
         StatusCode::CREATED,
         Json(CalendarFeedCreated {
@@ -804,6 +825,28 @@ mod tests {
             .0,
             StatusCode::NO_CONTENT
         );
+    }
+
+    #[test]
+    fn request_base_uses_the_uri_authority_for_http2_requests() {
+        let h2: Uri = "https://server.example:8484/api/v1/calendar/feed"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            request_base(&HeaderMap::new(), &h2),
+            "https://server.example:8484"
+        );
+        let mut proxied = HeaderMap::new();
+        proxied.insert("x-forwarded-proto", "https".parse().unwrap());
+        proxied.insert("x-forwarded-host", "public.example".parse().unwrap());
+        let origin_form: Uri = "/api/v1/calendar/feed".parse().unwrap();
+        assert_eq!(
+            request_base(&proxied, &origin_form),
+            "https://public.example"
+        );
+        let mut plain = HeaderMap::new();
+        plain.insert("host", "10.0.0.1:8484".parse().unwrap());
+        assert_eq!(request_base(&plain, &origin_form), "http://10.0.0.1:8484");
     }
 
     #[tokio::test]
