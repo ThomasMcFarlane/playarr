@@ -30,6 +30,7 @@ pub mod playback;
 pub mod playlist;
 pub mod policy;
 pub mod publishing;
+pub mod resume;
 pub mod routing;
 pub mod sensitive;
 pub mod series;
@@ -65,6 +66,10 @@ pub use playback::{
 pub use playlist::{Playlist, PlaylistItem, PlaylistMediaType};
 pub use policy::{AccessWindow, Policy, TimeRange, Weekday};
 pub use publishing::{Author, Book};
+pub use resume::{
+    compute_resume_plan, missed_run_episode_ids, ResumeAction, ResumeAskReason, ResumeDismissal,
+    ResumeDismissalKind, ResumeEpisode, ResumeOption, ResumeOptionKind, ResumePlan, ResumeReason,
+};
 pub use routing::{DeliveryMode, RoutingRule};
 pub use sensitive::Sensitive;
 pub use series::{Episode, Season, Series};

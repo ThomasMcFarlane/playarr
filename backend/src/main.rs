@@ -1385,6 +1385,8 @@ async fn boot_api(
             Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone())),
             live_events.clone(),
         ));
+    let resume_dismissals: Arc<dyn playarr_db::repo::ResumeDismissalRepo> =
+        Arc::new(playarr_db::repo::SqlxResumeDismissalRepo::new(pool.clone()));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -1636,6 +1638,7 @@ async fn boot_api(
         library_view_repo,
         playlist_repo,
         watchlist_repo,
+        resume_dismissals,
         discovery_requests_allow_all_users: std::env::var("PLAYARR_REQUESTS_ALLOW_ALL_USERS")
             .is_ok_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes")),
         work_repo,

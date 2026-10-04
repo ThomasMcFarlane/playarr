@@ -2756,6 +2756,117 @@ paths:
           description: Caller has neither Playarr streaming access nor admin access
       security:
       - bearer_auth: []
+  /api/v1/catalog/{id}/resume-plan:
+    get:
+      tags:
+      - playback
+      operationId: get_resume_plan_handler
+      parameters:
+      - name: id
+        in: path
+        description: Series work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: 'What a Start/Resume press should do for this viewer: the episode to play, or the options to offer when the history is ambiguous'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumePlan'
+              example:
+                action: resume
+                ask_reasons:
+                - missed_episode
+                needs_choice: true
+                options: []
+                reason: choice_required
+                series_work_id: 7a9d3e1f-8b4c-4d2a-9b3e-5f6a7b8c9d0e
+                target:
+                  duration_ms: 1800000
+                  episode_id: 11111111-1111-4111-8111-111111111101
+                  episode_number: 1
+                  kind: missed_episode
+                  label: S01E01
+                  media_file_id: 22222222-2222-4222-8222-222222222201
+                  position_ms: 0
+                  progress_percent: 0
+                  season_number: 1
+                  title: Pilot
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No series with this id
+      security:
+      - bearer_auth: []
+  /api/v1/catalog/{id}/resume-plan/choice:
+    post:
+      tags:
+      - playback
+      operationId: record_resume_choice_handler
+      parameters:
+      - name: id
+        in: path
+        description: Series work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeChoiceRequest'
+        required: true
+      responses:
+        '200':
+          description: The answer was recorded; the plan as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumePlan'
+        '400':
+          description: The picked option is not one the current plan offers
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No series with this id
+      security:
+      - bearer_auth: []
+  /api/v1/catalog/{id}/resume-plan/choices:
+    delete:
+      tags:
+      - playback
+      operationId: clear_resume_choices_handler
+      parameters:
+      - name: id
+        in: path
+        description: Series work id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Every recorded answer for this series was forgotten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumeClearResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+        '404':
+          description: No series with this id
+      security:
+      - bearer_auth: []
   /api/v1/catalog/{id}/similar:
     get:
       tags:
@@ -4646,6 +4757,26 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller does not have Playarr streaming access
+      security:
+      - bearer_auth: []
+  /api/v1/playback/resume-plans:
+    get:
+      tags:
+      - playback
+      operationId: list_resume_plans_handler
+      responses:
+        '200':
+          description: Resume plans for the series this viewer has watch history in, newest activity first; series outside the caller's allowed libraries are omitted
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResumePlan'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
       security:
       - bearer_auth: []
   /api/v1/playback/sessions/{session_id}/events:
@@ -12167,6 +12298,169 @@ components:
           type: boolean
         title:
           $ref: '#/components/schemas/DiscoveryTitle'
+    ResumeAction:
+      type: string
+      enum:
+      - start
+      - resume
+      - restart
+    ResumeAskReason:
+      type: string
+      description: What made the chooser necessary.
+      enum:
+      - multiple_unfinished
+      - unfinished_not_latest
+      - unfinished_behind_progress
+      - missed_episode
+      - rewatch_behind_progress
+    ResumeChoiceRequest:
+      type: object
+      required:
+      - kind
+      - episode_id
+      properties:
+        episode_id:
+          type: string
+          format: uuid
+          description: That option's `episode_id`.
+        kind:
+          $ref: '#/components/schemas/ResumeOptionKind'
+          description: The option the viewer picked.
+    ResumeClearResponse:
+      type: object
+      required:
+      - removed
+      properties:
+        removed:
+          type: integer
+          format: int64
+          minimum: 0
+    ResumeOption:
+      type: object
+      required:
+      - kind
+      - episode_id
+      - media_file_id
+      - season_number
+      - episode_number
+      - label
+      - position_ms
+      - duration_ms
+      - progress_percent
+      properties:
+        anchor_episode_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'For `continue_from_last_watched`: the finished episode it follows.'
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        episode_id:
+          type: string
+          format: uuid
+          description: First episode of the unit (the id to navigate to and to report back).
+        episode_number:
+          type: integer
+          format: int32
+        episode_number_end:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Last episode number for a multi-episode file, otherwise absent.
+        kind:
+          $ref: '#/components/schemas/ResumeOptionKind'
+        label:
+          type: string
+          description: '`S01E05`, or `S01E01-E02` for a multi-episode file.'
+        last_watched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the viewer last played it; absent when never.
+        media_file_id:
+          type: string
+          format: uuid
+        position_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        progress_percent:
+          type: integer
+          format: int32
+          description: Whole percent played, 0 when unknown.
+          minimum: 0
+        season_number:
+          type: integer
+          format: int32
+        title:
+          type:
+          - string
+          - 'null'
+    ResumeOptionKind:
+      type: string
+      enum:
+      - unfinished
+      - missed_episode
+      - continue_from_last_watched
+      - next_in_series
+      - start_over
+    ResumePlan:
+      type: object
+      required:
+      - series_work_id
+      - action
+      - reason
+      - needs_choice
+      - ask_reasons
+      - options
+      properties:
+        action:
+          $ref: '#/components/schemas/ResumeAction'
+        ask_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumeAskReason'
+        needs_choice:
+          type: boolean
+          description: True when the client must show the chooser before playing.
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumeOption'
+          description: |-
+            Choices for the chooser; contains `target` first. A single entry
+            unless `needs_choice`.
+        reason:
+          $ref: '#/components/schemas/ResumeReason'
+        series_work_id:
+          type: string
+          format: uuid
+        target:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/ResumeOption'
+            description: |-
+              The episode to play when no choice is needed (the first option
+              otherwise). Absent only when the series has no playable episode.
+    ResumeReason:
+      type: string
+      description: |-
+        Why the plan is what it is. Deterministic and stable for clients to key
+        copy on.
+      enum:
+      - no_playable_episodes
+      - not_started
+      - next_in_order
+      - resume_unfinished
+      - continue_rewatch
+      - rewatch_resolved_continue_series
+      - completed_restart
+      - choice_required
     ReviewUserInviteRequest:
       type: object
       required:

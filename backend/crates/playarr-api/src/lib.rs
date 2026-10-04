@@ -58,6 +58,7 @@ pub mod readiness;
 pub mod refresh;
 pub mod remote;
 pub mod request_timing_middleware;
+pub mod resume;
 pub mod routing;
 mod sidecar_subtitles;
 pub mod source_registry;
@@ -297,6 +298,10 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::catalog_kinds_handler))
         .routes(routes!(catalog::catalog_languages_handler))
         .routes(routes!(catalog::get_work_handler))
+        .routes(routes!(resume::get_resume_plan_handler))
+        .routes(routes!(resume::record_resume_choice_handler))
+        .routes(routes!(resume::clear_resume_choices_handler))
+        .routes(routes!(resume::list_resume_plans_handler))
         .routes(routes!(catalog::search_catalog_handler))
         .routes(routes!(catalog::similar_works_handler))
         .routes(routes!(artwork::work_artwork_handler))
@@ -583,6 +588,8 @@ pub struct AppState {
     pub playlist_repo: Arc<dyn playarr_db::repo::PlaylistRepo>,
     /// Per-profile watchlist storage -- `discovery.rs`.
     pub watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo>,
+    /// Smart Start/Resume answers -- `resume.rs`.
+    pub resume_dismissals: Arc<dyn playarr_db::repo::ResumeDismissalRepo>,
     /// Whether any signed-in user (not just admins) may request titles from
     /// Radarr/Sonarr through discovery. `PLAYARR_REQUESTS_ALLOW_ALL_USERS`.
     pub discovery_requests_allow_all_users: bool,

@@ -507,6 +507,8 @@ pub async fn test_state() -> (Router, TestState) {
             Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone())),
             live_events.clone(),
         ));
+    let resume_dismissals: Arc<dyn playarr_db::repo::ResumeDismissalRepo> =
+        Arc::new(playarr_db::repo::SqlxResumeDismissalRepo::new(pool.clone()));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -691,6 +693,7 @@ pub async fn test_state() -> (Router, TestState) {
         library_view_repo,
         playlist_repo,
         watchlist_repo,
+        resume_dismissals,
         discovery_requests_allow_all_users: false,
         work_repo: work_repo.clone(),
         credit_repo,

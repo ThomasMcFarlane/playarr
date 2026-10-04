@@ -35,6 +35,7 @@ mod push_registration;
 mod refresh_token;
 mod remote;
 mod rendition;
+mod resume_dismissal;
 mod routing_rule;
 mod source_instance;
 mod sync_conflict_log;
@@ -94,6 +95,7 @@ pub use remote::{
     RemoteEvent, RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget, SqlxRemoteRepo,
 };
 pub use rendition::{RenditionRepo, SqlxRenditionRepo};
+pub use resume_dismissal::{ResumeDismissalRepo, SqlxResumeDismissalRepo};
 pub use routing_rule::{RoutingRuleRepo, SqlxRoutingRuleRepo};
 pub use source_instance::{SourceInstanceRepo, SqlxSourceInstanceRepo};
 pub use sync_conflict_log::{SqlxSyncConflictLogRepo, SyncConflictLog, SyncConflictLogRepo};

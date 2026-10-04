@@ -47,6 +47,20 @@ Owner requirement (4 October 2026): items must update automatically when changed
 | 276 | iOS, Apple TV, Roku, Harmony, Xbox: subscribe to `/api/v1/events` | open | Unassigned | Parent: 270. Follows the client behaviour section of the design doc. |
 | 277 | Live events: serialise Postgres sequence ordering if missed invalidations are ever observed | open | Unassigned | Parent: 270. Known caveat documented in the design; not observed. |
 | 278 | Live events: publish `library` events for episode metadata edits made through SQL-only paths (`media_sync` season/episode upserts that do not touch a media file) | open | Unassigned | Parent: 270. New files and work upserts already publish. |
+## Active: Smart Start/Resume for TV series (2026-10-04)
+
+Owner request (4 October 2026): the series detail page leads with a primary Start (nothing watched) or Resume button that decides the next episode itself, and asks only when the history is ambiguous (unfinished episodes, a missed episode before watched ones, a rewatch behind further progress). Home Continue Watching shows a stacked card and asks there too. Spec and rules: [`docs/architecture/smart-resume.md`](docs/architecture/smart-resume.md).
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 280 | Epic: smart Start/Resume (server, web, Android, other clients) | in progress | smart-resume | Parent of 281-287. |
+| 281 | Server: pure rule engine (`playarr_model::resume`), `resume_dismissals` table and migration, plan/choice/clear/list endpoints, OpenAPI | in progress | smart-resume | Parent: 280. 47 engine unit tests (each scenario, specials, multi-episode files, missing library episodes, 5% and 90% thresholds, rewatches) and 8 API tests. |
+| 282 | Web (including the ten-foot TV layout): series detail Start/Resume button, chooser modal with D-pad focus, Continue Watching stack card | pending | smart-resume | Parent: 280. Depends on 281. |
+| 283 | Android (TV and phone): series detail Start/Resume button, chooser dialog, Continue Watching stack card | pending | smart-resume | Parent: 280. Depends on 281. |
+| 284 | Validate on region-b with a dedicated test profile: web and emulator-host Android emulator screenshots for each scenario | pending | smart-resume | Parent: 280. Depends on 281-283. Scenario state is created on a test profile, never on a real viewer's. |
+| 285 | Other clients: iOS, Apple TV, Fire TV Vega, Xbox, Harmony, Roku, VIDAA smart Start/Resume | pending | Unassigned | Parent: 280. Depends on 281; use `GET /api/v1/catalog/{id}/resume-plan`, `POST .../resume-plan/choice` and `GET /api/v1/playback/resume-plans`. |
+| 286 | Other clients: Continue Watching stack card where several resume options apply | pending | Unassigned | Parent: 280. Same endpoints as row 285. |
+| 287 | Admin or settings control to forget a viewer's recorded Resume answers ("ask again") | open | Unassigned | Parent: 280. The endpoint exists (`DELETE .../resume-plan/choices`); no client exposes it yet. |
 
 ## Active: Owner requirements backlog (2026-10-04)
 
