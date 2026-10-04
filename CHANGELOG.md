@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS and tvOS: scope the distribution identity and provisioning profile to the app target so CocoaPods targets do not receive app-only provisioning settings; append the temporary signing keychain to the existing user search list and restore that exact list before cleanup (TASK 284).
 - iOS and tvOS: release dispatch now always requests a signed TestFlight upload for both platforms from an immutable source commit. Missing dispatch/signing credentials fail the workflow; the source release flow no longer offers build-only or unsigned archive modes. Release script archives also require signing credentials and the Apple runner. Marketing version defaults to 1.0.0, matching the existing App Store Connect app (TASKS 279, 284).
 - iOS: remove the obsolete `mode` input from the source workflow's private TestFlight dispatch payload, matching the dispatcher's signed-only interface (TASK 279).
 - iOS: the Apple release pipeline retains immutable source SHA handoff, signing preflight for profile bundle ID/team/expiry/certificate match, and temporary keychain/profile cleanup. XcodeGen 2.45.4 and Google Cast SDK 4.8.6 remain pinned; CocoaPods setup selects Ruby 3+ and uses `--project-directory=<path>` (TASKS 279-283).

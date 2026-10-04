@@ -35,7 +35,9 @@ targets:
         product: PlayarrKit
     settings:
       base:
+        CODE_SIGN_IDENTITY: "$(PLAYARR_CODE_SIGN_IDENTITY)"
         PRODUCT_BUNDLE_IDENTIFIER: app.playarr.ios
+        PROVISIONING_PROFILE_SPECIFIER: "$(PLAYARR_PROVISIONING_PROFILE)"
         PRODUCT_MODULE_NAME: PlayarrTV
         MARKETING_VERSION: 1.0.0
         CURRENT_PROJECT_VERSION: 1

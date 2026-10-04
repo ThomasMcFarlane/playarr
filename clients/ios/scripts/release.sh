@@ -63,7 +63,16 @@ if [[ "$mode" == archive || "$mode" == export || "$mode" == testflight ]]; then
   profile_backup=""
   profile_installed=""
   keychain="$work/playarr-signing.keychain-db"
+  keychain_list_snapshot="$work/user-keychains.json"
   cleanup() {
+    if [[ -f "$keychain_list_snapshot" ]]; then
+      python3 - "$keychain_list_snapshot" <<'PY'
+import json, subprocess, sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    keychains = json.load(source)
+subprocess.run(["security", "list-keychains", "-d", "user", "-s", *keychains], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+PY
+    fi
     security delete-keychain "$keychain" >/dev/null 2>&1 || true
     if [[ -n "$profile_installed" ]]; then rm -f "$profile_installed"; fi
     if [[ -n "$profile_backup" && -n "$profile_installed" ]]; then mv "$profile_backup" "$profile_installed"; fi
@@ -87,6 +96,16 @@ if [[ "$mode" == archive || "$mode" == export || "$mode" == testflight ]]; then
   security create-keychain -p "$keychain_password" "$keychain"
   security set-keychain-settings -lut 21600 "$keychain"
   security unlock-keychain -p "$keychain_password" "$keychain"
+  python3 - "$keychain_list_snapshot" "$keychain" <<'PY'
+import json, shlex, subprocess, sys
+snapshot, temporary_keychain = sys.argv[1:]
+output = subprocess.check_output(["security", "list-keychains", "-d", "user"], text=True)
+keychains = shlex.split(output)
+with open(snapshot, "w", encoding="utf-8") as target:
+    json.dump(keychains, target)
+if temporary_keychain not in keychains:
+    subprocess.run(["security", "list-keychains", "-d", "user", "-s", *keychains, temporary_keychain], check=True)
+PY
   printf '%s' "$APPLE_DISTRIBUTION_P12_BASE64" | base64 -D > "$work/distribution.p12"
   security import "$work/distribution.p12" -k "$keychain" -P "$APPLE_DISTRIBUTION_P12_PASSWORD" -T /usr/bin/codesign >/dev/null
   security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
@@ -141,7 +160,7 @@ PY
   if [[ "$mode" == testflight ]]; then
     printf '%s' "$APP_STORE_CONNECT_API_KEY_BASE64" | base64 -D > "$work/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
   fi
-  signing_args=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$signing_identity" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" CODE_SIGN_KEYCHAIN="$keychain" OTHER_CODE_SIGN_FLAGS="--keychain $keychain")
+  signing_args=(CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$APPLE_TEAM_ID" PLAYARR_CODE_SIGN_IDENTITY="$signing_identity" PLAYARR_PROVISIONING_PROFILE="$profile_uuid" CODE_SIGN_KEYCHAIN="$keychain" OTHER_CODE_SIGN_FLAGS="--keychain $keychain")
   archive_signing_args=("${signing_args[@]}")
 fi
 
