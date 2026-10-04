@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type { RemotePairing } from "@playarr-tv/api-client";
 import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import { Button } from "../ui";
 
 type Scope = "navigate" | "text" | "playback" | "input";
 
@@ -37,18 +38,17 @@ export function RemotePad({ pairing, targetName }: { pairing: RemotePairing; tar
   );
 
   const nav = (key: string, label: string) => (
-    <button type="button" className="btn btn-secondary remote-pad-key" onClick={() => void send("navigate", { key })}>
+    <Button type="button" className="remote-pad-key" onClick={() => void send("navigate", { key })}>
       {label}
-    </button>
+    </Button>
   );
   const play = (action: string, label: string, extra: Record<string, unknown> = {}) => (
-    <button
+    <Button
       type="button"
-      className="btn btn-secondary"
       onClick={() => void send("playback", { action, ...extra })}
     >
       {label}
-    </button>
+    </Button>
   );
 
   return (
@@ -96,9 +96,9 @@ export function RemotePad({ pairing, targetName }: { pairing: RemotePairing; tar
               void send("text", { value: event.target.value, mode: "replace" });
             }}
           />
-          <button type="submit" className="btn">
+          <Button type="submit">
             {t("remote.pad.enter")}
-          </button>
+          </Button>
         </form>
       )}
       {error ? (

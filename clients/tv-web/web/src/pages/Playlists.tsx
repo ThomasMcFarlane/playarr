@@ -53,6 +53,7 @@ import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { MoviesIcon, MusicIcon } from "../components/NavIcons";
 import { SearchablePlaylistSelect } from "../components/SearchablePlaylistSelect";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
+import { Button } from "../components/ui";
 
 interface ResolvedPlaylistItem {
   id: string;
@@ -1420,10 +1421,9 @@ export function PlaylistsPage() {
                 {createState.message}
               </p>
             ) : null}
-            <button
+            <Button
               ref={createSubmitRef}
-              type="submit"
-              className="btn btn-primary"
+              type="submit" variant="primary"
               disabled={
                 !playlistName.trim() || createState.status === "submitting"
               }
@@ -1431,7 +1431,7 @@ export function PlaylistsPage() {
               {createState.status === "submitting"
                 ? t("pages.playlists.creating")
                 : t("pages.playlists.create")}
-            </button>
+            </Button>
           </form>
         </Drawer>
       ) : null}

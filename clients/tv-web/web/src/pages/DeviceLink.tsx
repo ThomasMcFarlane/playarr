@@ -15,6 +15,7 @@ import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
+import { Button } from "../components/ui";
 
 // Matches `ApiClientProvider.tsx`'s own module-scoped instance: stateless
 // (just routes each request through the Local Network Access exemption its
@@ -138,13 +139,12 @@ export function DeviceLinkPage() {
             placeholder={t("pages.deviceLink.codePlaceholder")}
           />
           {error && <p className="error-text auth-error">{error}</p>}
-          <button
-            type="submit"
-            className="btn btn-primary auth-submit"
+          <Button
+            type="submit" variant="primary" className="auth-submit"
             disabled={submitting || !isCompleteDeviceCode(userCode)}
           >
             {submitting ? t("pages.deviceLink.linking") : t("pages.deviceLink.linkButton")}
-          </button>
+          </Button>
         </form>
       )}
     </ProfileAuthLayout>

@@ -4,6 +4,7 @@ import { usePrimaryApiClient } from "../../lib/ApiClientProvider";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { HandoffFailure, handOffPlayback, type HandoffProgress } from "../../lib/remote/handoff";
 import { getRemotePlayer } from "../../lib/remote/playerBridge";
+import { Button } from "../ui";
 
 type Phase =
   | { kind: "choose" }
@@ -149,9 +150,9 @@ export function PlayOnDeviceDialog({ onClose }: { onClose: () => void }) {
             {phase.message}
           </p>
         )}
-        <button type="button" className="btn btn-secondary" onClick={onClose}>
+        <Button type="button" onClick={onClose}>
           {t("remote.playOn.close")}
-        </button>
+        </Button>
       </section>
     </div>
   );

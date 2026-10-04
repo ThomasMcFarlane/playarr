@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JoinedWorkSource } from "../lib/joinedServers";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { Button } from "./ui";
 
 export function ServerChoiceModal({
   sources,
@@ -85,9 +86,9 @@ export function ServerChoiceModal({
             {error}
           </p>
         ) : null}
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        <Button type="button" onClick={onCancel}>
           {t("components.serverChoiceModal.cancel")}
-        </button>
+        </Button>
       </section>
     </div>
   );

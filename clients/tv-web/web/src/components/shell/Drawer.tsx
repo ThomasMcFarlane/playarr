@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, type HTMLAttributes, type KeyboardEventHandler, type ReactNode, type Ref } from "react";
 import { Button } from "../ui";
 
 const FOCUSABLE =
@@ -39,6 +39,7 @@ export function Drawer({
   modal = true,
   initialFocus = "close",
   onKeyDown,
+  containerProps,
 }: {
   id?: string;
   open?: boolean;
@@ -63,6 +64,8 @@ export function Drawer({
    * content owns its keyboard model; the handler must close on Esc/Back itself.
    */
   onKeyDown?: KeyboardEventHandler<HTMLElement>;
+  /** Extra attributes for the dialog element (TV scroll-container data attributes, click guards). */
+  containerProps?: HTMLAttributes<HTMLElement> & { [key: `data-${string}`]: string | undefined };
 }) {
   const localRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -114,6 +117,7 @@ export function Drawer({
 
   return (
     <aside
+      {...containerProps}
       id={id}
       ref={(node) => {
         localRef.current = node;

@@ -10,6 +10,7 @@ import { publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { useToast } from "../lib/toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
+import { Button } from "../components/ui";
 
 const invite = parseSignupInvite(window.location.search);
 const browserFetch = createLocalNetworkFetch();
@@ -251,9 +252,9 @@ export function SignupPage() {
 
             {error && <p className="error-text auth-error">{error}</p>}
 
-            <button type="submit" className="btn btn-primary auth-submit" disabled={submitting}>
+            <Button type="submit" variant="primary" className="auth-submit" disabled={submitting}>
               {submitting ? t("pages.signup.submitting") : t("pages.signup.submit")}
-            </button>
+            </Button>
           </form>
         )}
     </ProfileAuthLayout>

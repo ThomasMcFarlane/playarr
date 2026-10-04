@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { describeApiError } from "@playarr-tv/api-client";
 import { PageHeader } from "../components/shell";
+import { Button } from "../components/ui";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -100,40 +101,37 @@ export function HomeCustomisePage() {
                 {state.rails.map((rail, index) => (
                   <li key={rail.id} className={rail.hidden ? "is-hidden" : undefined}>
                     <span className="tv-home-customise-title">{rail.title}</span>
-                    <button
-                      type="button"
-                      className="tv-button"
+                    <Button
+                      size="sm"
                       onClick={() => save(toggleRail(state.rails, rail.id))}
                       aria-pressed={!rail.hidden}
                     >
                       {rail.hidden
                         ? t("pages.home.customise.show")
                         : t("pages.home.customise.hide")}
-                    </button>
-                    <button
-                      type="button"
-                      className="tv-button"
+                    </Button>
+                    <Button
+                      size="sm"
                       disabled={index === 0}
                       onClick={() => save(moveRail(state.rails, rail.id, -1))}
                       aria-label={t("pages.home.customise.moveUp", { title: rail.title })}
                     >
                       ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="tv-button"
+                    </Button>
+                    <Button
+                      size="sm"
                       disabled={index === state.rails.length - 1}
                       onClick={() => save(moveRail(state.rails, rail.id, 1))}
                       aria-label={t("pages.home.customise.moveDown", { title: rail.title })}
                     >
                       ↓
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
-              <button type="button" className="tv-button" onClick={reset}>
+              <Button onClick={reset}>
                 {t("pages.home.customise.reset")}
-              </button>
+              </Button>
             </>
           )}
           {saveError ? (

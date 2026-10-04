@@ -27,6 +27,7 @@ import {
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 export function SettingsProfileAvatarPage() {
   const { t } = useLanguage();
@@ -250,9 +251,8 @@ export function SettingsProfileAvatarPage() {
               tabIndex={-1}
               onChange={(event) => void handleUpload(event)}
             />
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary"
               disabled={uploading || saving}
               onClick={() => uploadInputRef.current?.click()}
             >
@@ -261,7 +261,7 @@ export function SettingsProfileAvatarPage() {
                 : preference.kind === "custom"
                   ? t("settings.profileAvatar.replacePhoto")
                   : t("settings.profileAvatar.uploadPhoto")}
-            </button>
+            </Button>
             <p className="muted">{t("settings.profileAvatar.deviceNote")}</p>
           </div>
         ) : (
@@ -351,28 +351,25 @@ export function SettingsProfileAvatarPage() {
               </label>
             </div>
             <div className="profile-avatar-editor-actions">
-              <button
+              <Button
                 type="button"
-                className="btn btn-secondary"
                 onClick={() => setCrop({ zoom: 1, offsetX: 0, offsetY: 0 })}
               >
                 {t("settings.profileAvatar.resetCrop")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn btn-secondary"
                 onClick={() => setEditorSource(null)}
               >
                 {t("settings.profileAvatar.cancelCrop")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
+              </Button>
+              <Button
+                type="button" variant="primary"
                 disabled={saving}
                 onClick={() => void saveCrop()}
               >
                 {t("settings.profileAvatar.saveCrop")}
-              </button>
+              </Button>
             </div>
           </section>
         </div>

@@ -99,6 +99,8 @@ export const th: Translations = {
   "components.playlistContextMenu.dialogLabel": "การดำเนินการของเพลย์ลิสต์ {{name}}",
   "components.playlistContextMenu.edit": "แก้ไขชื่อหรือเพลย์ลิสต์หลัก",
   "components.playlistContextMenu.heading": "การดำเนินการของเพลย์ลิสต์",
+  "components.playlistContextMenu.close": "ปิด",
+  "components.mediaContextMenu.close": "ปิด",
   "components.playlistContextMenu.open": "เปิดการดำเนินการสำหรับ {{name}}",
   "components.playlistContextMenu.save": "บันทึกการเปลี่ยนแปลง",
   "components.playlistContextMenu.saving": "กำลังบันทึก…",

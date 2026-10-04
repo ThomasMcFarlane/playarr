@@ -55,6 +55,7 @@ import {
   MaximiseIcon,
   SpinnerIcon,
 } from "../components/player/PlayerIcons";
+import { Button } from "../components/ui";
 
 export interface PlayerLocationState {
   /** Server that owns the selected media file; omitted for the primary server. */
@@ -815,13 +816,13 @@ function PlayerPageInner({
               <p className="player-error-message">{negotiation.message}</p>
               <div className="player-error-actions">
                 {!negotiation.forbidden && (
-                  <button type="button" className="btn btn-primary" onClick={retryNegotiation}>
+                  <Button type="button" variant="primary" onClick={retryNegotiation}>
                     {t("pages.player.tryAgain")}
-                  </button>
+                  </Button>
                 )}
-                <button type="button" className="btn btn-player-secondary" onClick={handleBack}>
+                <Button type="button" className="on-player" onClick={handleBack}>
                   {t("pages.player.backToDetails")}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

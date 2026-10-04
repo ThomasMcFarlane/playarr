@@ -16,6 +16,7 @@ import { usesTenFootChrome } from "../../lib/productSurfaces";
 import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 type TFunction = ReturnType<typeof useLanguage>["t"];
 
@@ -93,30 +94,28 @@ export function YourDataView(props: YourDataViewProps) {
         <p className="muted">{t("settings.yourData.exportDescription")}</p>
         <p className="hint">{t("settings.yourData.scopeNote")}</p>
         <div className="connection-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            type="button" variant="primary"
             disabled={props.exportBusy || running}
             onClick={props.onStartExport}
           >
             {running ? t("settings.yourData.exportPreparing") : t("settings.yourData.exportStart")}
-          </button>
+          </Button>
           {job?.status === "ready" && !transfer ? (
-            <button type="button" className="btn btn-secondary" onClick={props.onDownloadExport}>
+            <Button type="button" onClick={props.onDownloadExport}>
               {t("settings.yourData.exportDownload")} ({formatBytes(job.size_bytes)})
-            </button>
+            </Button>
           ) : null}
           {job?.status === "ready" && transfer ? (
-            <button
+            <Button
               type="button"
-              className="btn btn-secondary"
               disabled={transfer.exportLinkBusy}
               onClick={transfer.onShowExportLink}
             >
               {transfer.exportLinkUrl
                 ? t("settings.yourData.transferNewCode")
                 : t("settings.yourData.transferShowDownloadCode")}
-            </button>
+            </Button>
           ) : null}
         </div>
         {job ? (
@@ -166,20 +165,19 @@ export function YourDataView(props: YourDataViewProps) {
         {transfer ? (
           <div data-testid="import-transfer" aria-live="polite">
             <div className="connection-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
+              <Button
+                type="button" variant="primary"
                 disabled={transfer.sessionBusy || transfer.session?.status === "uploading"}
                 onClick={transfer.onStartSession}
               >
                 {transfer.session
                   ? t("settings.yourData.transferNewCode")
                   : t("settings.yourData.transferStartUpload")}
-              </button>
+              </Button>
               {transfer.session ? (
-                <button type="button" className="btn btn-secondary" onClick={transfer.onCancelSession}>
+                <Button type="button" onClick={transfer.onCancelSession}>
                   {t("settings.yourData.transferCancel")}
-                </button>
+                </Button>
               ) : null}
             </div>
             {transfer.session?.status === "waiting" && transfer.uploadUrl ? (
@@ -240,9 +238,8 @@ export function YourDataView(props: YourDataViewProps) {
           {t("settings.yourData.includePreferences")}
         </label>
         <div className="connection-actions">
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary"
             disabled={
               transfer
                 ? transfer.session?.status !== "uploaded" || props.importBusy
@@ -251,7 +248,7 @@ export function YourDataView(props: YourDataViewProps) {
             onClick={props.onPreview}
           >
             {t("settings.yourData.previewButton")}
-          </button>
+          </Button>
         </div>
         {props.importError ? (
           <p className="error-text" role="alert">
@@ -329,14 +326,13 @@ export function YourDataView(props: YourDataViewProps) {
             ) : null}
             <p className="hint">{t("settings.yourData.confirmNote")}</p>
             <div className="connection-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
+              <Button
+                type="button" variant="primary"
                 disabled={props.importBusy || props.result !== null}
                 onClick={props.onApply}
               >
                 {t("settings.yourData.applyButton")}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -355,11 +351,11 @@ export function YourDataView(props: YourDataViewProps) {
             </p>
             {props.result.unmatched_total > 0 && !transfer ? (
               <div className="connection-actions">
-                <button type="button" className="btn btn-secondary" onClick={props.onDownloadUnmatched}>
+                <Button type="button" onClick={props.onDownloadUnmatched}>
                   {t("settings.yourData.downloadUnmatched", {
                     count: String(props.result.unmatched_total),
                   })}
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>

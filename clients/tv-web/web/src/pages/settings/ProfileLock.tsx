@@ -5,6 +5,7 @@ import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 type ProfilePinState =
   | { status: "loading" }
@@ -123,9 +124,8 @@ export function SettingsProfileLockPage() {
               disabled={profilePinState.status === "loading" || profilePinState.status === "saving"}
               onChange={(event) => setProfilePin(event.target.value.replace(/\D/g, "").slice(0, 4))}
             />
-            <button
-              type="submit"
-              className="btn btn-primary"
+            <Button
+              type="submit" variant="primary"
               disabled={
                 profilePin.length !== 4 ||
                 profilePinState.status === "loading" ||
@@ -137,7 +137,7 @@ export function SettingsProfileLockPage() {
                 : profilePinLocked
                   ? t("settings.profileLock.replace")
                   : t("settings.profileLock.setPin")}
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -154,14 +154,13 @@ export function SettingsProfileLockPage() {
                     : t("settings.profileLock.lockOff")}
           </p>
           {profilePinLocked ? (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              type="button" size="sm"
               disabled={profilePinState.status === "saving"}
               onClick={() => void handleProfilePinRemove()}
             >
               {t("settings.profileLock.removePin")}
-            </button>
+            </Button>
           ) : null}
         </div>
       </section>

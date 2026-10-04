@@ -49,6 +49,17 @@ import {
   toggleLanguage,
 } from "../lib/languageFilters";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import {
+  applyLibraryView,
+  parseLibraryView,
+  rememberLibraryView,
+  storedLibraryView,
+  type ArtworkSize,
+  type LibraryKind,
+  type LibrarySort,
+  type LibraryView,
+  type SortOrder,
+} from "../lib/libraryView";
 import { usePanelParam } from "../lib/usePanelParam";
 import { FiltersDrawer, PageHeader, ViewToggle } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
@@ -106,33 +117,6 @@ function afterTwoFrames(): Promise<void> {
   });
 }
 
-type LibraryKind = Extract<WorkKind, "movie" | "series" | "site" | "artist">;
-type LibraryView = "list" | "screen" | "cover" | "cover-flow";
-type ArtworkSize = "small" | "medium" | "large";
-type LibrarySort = "title" | "date_added";
-type SortOrder = "asc" | "desc";
-
-function storedView(kind: LibraryKind): LibraryView {
-  const value = window.localStorage.getItem(`playarr.libraryView.${kind}`);
-  if (value === "cover-flow") return kind === "artist" ? "cover-flow" : "screen";
-  return value === "list" || value === "cover" ? value : "screen";
-}
-
-function storedArtworkSize(kind: LibraryKind): ArtworkSize {
-  const value = window.localStorage.getItem(`playarr.artworkSize.${kind}`);
-  return value === "small" || value === "large" ? value : "medium";
-}
-
-function storedSort(kind: LibraryKind): LibrarySort {
-  return window.localStorage.getItem(`playarr.librarySort.${kind}`) === "date_added"
-    ? "date_added"
-    : "title";
-}
-
-function storedOrder(kind: LibraryKind): SortOrder {
-  return window.localStorage.getItem(`playarr.libraryOrder.${kind}`) === "desc" ? "desc" : "asc";
-}
-
 /**
  * Remote-first Movies/Series/Sites/Music library. Titles live in a large, vertically
  * scrolling TV rail; focus reveals the selected title on the left and
@@ -180,10 +164,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeLetter, setActiveLetter] = useState("#");
   const [jumpingLetter, setJumpingLetter] = useState<string | null>(null);
-  const [view, setView] = useState<LibraryView>(() => storedView(kind));
-  const [artworkSize, setArtworkSize] = useState<ArtworkSize>(() => storedArtworkSize(kind));
-  const [sort, setSort] = useState<LibrarySort>(() => storedSort(kind));
-  const [order, setOrder] = useState<SortOrder>(() => storedOrder(kind));
   // The open Filters panel lives in the URL (`?panel=filters`) so refresh and deep links restore it.
   const [panel, setPanel] = usePanelParam(["filters"] as const);
   const filtersOpen = panel === "filters";
@@ -193,6 +173,17 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
   // so they survive reloads and can be shared or bookmarked.
   const [searchParams, setSearchParams] = useSearchParams();
+  // View, card size and sort live in the URL too (`?view=list&size=large&sort=date_added&order=desc`);
+  // localStorage only supplies the default for a fresh URL with none of them.
+  const {
+    view,
+    size: artworkSize,
+    sort,
+    order,
+  } = useMemo(
+    () => parseLibraryView(searchParams, kind, storedLibraryView(kind)),
+    [kind, searchParams]
+  );
   const audioKey = searchParams.get("audio") ?? "";
   const subtitleKey = searchParams.get("subs") ?? "";
   const audioLangs = useMemo(() => parseLanguageParam(audioKey), [audioKey]);
@@ -284,10 +275,6 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   }, [client, kind, languageParams, order, sort]);
 
   useEffect(() => {
-    setView(storedView(kind));
-    setArtworkSize(storedArtworkSize(kind));
-    setSort(storedSort(kind));
-    setOrder(storedOrder(kind));
     if (previousKind.current !== kind) {
       previousKind.current = kind;
       setPanel(null);
@@ -414,31 +401,33 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return rows;
   }
 
+  /** Each view/size/sort change is its own history entry, so back/forward step through them. */
+  function updateView(patch: Partial<{ view: LibraryView; size: ArtworkSize; sort: LibrarySort; order: SortOrder }>) {
+    rememberLibraryView(kind, patch);
+    setSearchParams((current) => applyLibraryView(current, patch));
+  }
+
   function changeView(nextView: LibraryView) {
-    window.localStorage.setItem(`playarr.libraryView.${kind}`, nextView);
-    setView(nextView);
+    updateView({ view: nextView });
   }
 
   function changeArtworkSize(nextSize: ArtworkSize) {
-    window.localStorage.setItem(`playarr.artworkSize.${kind}`, nextSize);
-    setArtworkSize(nextSize);
+    updateView({ size: nextSize });
   }
 
   function changeSort(nextSort: LibrarySort) {
-    window.localStorage.setItem(`playarr.librarySort.${kind}`, nextSort);
     const reordered = orderWorks(itemsRef.current, nextSort, order);
     itemsRef.current = reordered;
     setItems(reordered);
-    setSort(nextSort);
+    updateView({ sort: nextSort });
   }
 
   function changeOrder(nextOrder: SortOrder) {
-    window.localStorage.setItem(`playarr.libraryOrder.${kind}`, nextOrder);
     const reordered = orderWorks(itemsRef.current, sort, nextOrder);
     itemsRef.current = reordered;
     setItems(reordered);
     setSelectedId((current) => current ?? reordered[0]?.id ?? null);
-    setOrder(nextOrder);
+    updateView({ order: nextOrder });
   }
 
   const itemCount = items?.length ?? 0;

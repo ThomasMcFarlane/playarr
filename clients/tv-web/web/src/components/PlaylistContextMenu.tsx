@@ -16,6 +16,8 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useToast } from "../lib/toast";
 import { SearchablePlaylistSelect } from "./SearchablePlaylistSelect";
+import { Drawer } from "./shell";
+import { Button } from "./ui";
 
 const LONG_PRESS_MS = 650;
 type PlaylistContextView = "actions" | "edit" | "delete";
@@ -290,13 +292,16 @@ export function usePlaylistContextMenu({
             if (event.target === event.currentTarget) close();
           }}
         >
-          <aside
+          <Drawer
             className="media-context-drawer playlist-context-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("components.playlistContextMenu.dialogLabel", {
+            initialFocus="none"
+            ariaLabel={t("components.playlistContextMenu.dialogLabel", {
               name: activePlaylist.name,
             })}
+            kicker={t("components.playlistContextMenu.heading")}
+            title={activePlaylist.name}
+            closeLabel={t("components.playlistContextMenu.close")}
+            onClose={close}
             onKeyDown={(event) => {
               const back =
                 event.key === "Escape" ||
@@ -331,7 +336,7 @@ export function usePlaylistContextMenu({
               event.stopPropagation();
               const controls = Array.from(
                 event.currentTarget.querySelectorAll<HTMLElement>(
-                  'button:not(:disabled), input:not(:disabled)'
+                  'button:not(:disabled):not(.drawer-close), input:not(:disabled)'
                 )
               );
               const index = controls.indexOf(
@@ -344,10 +349,6 @@ export function usePlaylistContextMenu({
               ]?.focus();
             }}
           >
-            <header>
-              <p>{t("components.playlistContextMenu.heading")}</p>
-              <h2>{activePlaylist.name}</h2>
-            </header>
 
             {view === "actions" ? (
               <div className="media-context-actions">
@@ -396,15 +397,14 @@ export function usePlaylistContextMenu({
                   }}
                   value={parentPlaylistId}
                 />
-                <button
-                  type="submit"
-                  className="btn btn-primary"
+                <Button
+                  type="submit" variant="primary"
                   disabled={busy || !name.trim()}
                 >
                   {busy
                     ? t("components.playlistContextMenu.saving")
                     : t("components.playlistContextMenu.save")}
-                </button>
+                </Button>
               </form>
             ) : (
               <div className="playlist-context-confirm">
@@ -450,7 +450,7 @@ export function usePlaylistContextMenu({
                 {error}
               </p>
             ) : null}
-          </aside>
+          </Drawer>
         </div>,
         document.body
       )

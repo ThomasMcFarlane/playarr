@@ -56,7 +56,7 @@
   background: linear-gradient(90deg, transparent 0 48%, rgba(7, 5, 8, 0.76) 100%);
 }
 
-.media-context-drawer {
+.tv-filter-drawer.media-context-drawer {
   position: relative;
   flex: 0 0 auto;
   align-self: stretch;
@@ -72,11 +72,27 @@
   animation: media-context-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.media-context-drawer header {
-  margin-bottom: clamp(34px, calc(6 * var(--viewport-unit)), 64px);
+.tv-filter-drawer.media-context-drawer {
+  align-content: start;
+  gap: clamp(26px, calc(4 * var(--viewport-unit)), 44px);
 }
 
-.media-context-drawer header p {
+.tv-filter-drawer.media-context-drawer > header {
+  margin-bottom: 0;
+}
+
+.tv-filter-drawer.media-context-drawer .drawer-close {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.tv-filter-drawer.media-context-drawer .drawer-close:hover:not(:disabled),
+.tv-filter-drawer.media-context-drawer .drawer-close:focus-visible {
+  background: #fff;
+  color: #120e11;
+}
+
+.tv-filter-drawer.media-context-drawer > header p {
   margin: 0 0 10px;
   color: rgba(255, 255, 255, 0.56);
   font-size: 0.76rem;
@@ -85,7 +101,7 @@
   text-transform: uppercase;
 }
 
-.media-context-drawer header h2 {
+.tv-filter-drawer.media-context-drawer > header h2 {
   margin: 0;
   font-size: clamp(1.7rem, 2.8vw, 2.8rem);
   line-height: 1.05;
@@ -156,7 +172,7 @@
   display: none;
 }
 
-.media-context-back {
+.media-context-drawer .media-context-back {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -168,8 +184,8 @@
   cursor: pointer;
 }
 
-.media-context-back:hover,
-.media-context-back:focus-visible {
+.media-context-drawer .media-context-back:hover:not(:disabled),
+.media-context-drawer .media-context-back:focus-visible {
   outline: 0;
   color: #fff;
   transform: scale(1.04);
@@ -283,7 +299,7 @@
 }
 
 @media (max-width: 760px) {
-  .media-context-drawer {
+  .tv-filter-drawer.media-context-drawer {
     width: min(88vw, 420px);
     min-width: 0;
   }
@@ -3819,7 +3835,7 @@ body[data-input-mode="remote"]
   margin-top: 0.8rem;
 }
 
-.btn-player-secondary {
+.ui-btn.on-player {
   border-color: rgba(255, 255, 255, 0.24);
   color: #ffffff;
 }
@@ -11021,7 +11037,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     background: rgba(7, 5, 8, 0.64);
   }
 
-  .media-context-drawer {
+  .tv-filter-drawer.media-context-drawer {
     width: 100%;
     max-width: 430px;
     min-width: 0;
@@ -11767,19 +11783,32 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
 .playback-health-panel h2 { margin: 0; font-size: 1.35em; }
 .playback-health-panel h3 { margin: 0; font-size: 1em; color: rgba(246, 241, 243, 0.72); }
 .playback-health-panel header p { margin: 0 0 0.2rem; opacity: 0.7; font-size: 0.85em; }
-.playback-health-panel button {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0.5rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 12px;
+.playback-health-panel .drawer-body {
+  display: grid;
+  align-content: start;
+  gap: 1.1rem;
+}
+.playback-health-panel .ui-btn {
+  border-color: rgba(255, 255, 255, 0.28);
   color: inherit;
   background: rgba(255, 255, 255, 0.08);
-  font: inherit;
-  cursor: pointer;
 }
-.playback-health-panel button:hover { background: rgba(255, 255, 255, 0.16); }
-.playback-health-panel button:focus-visible,
+.playback-health-panel .ui-btn--primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.playback-health-panel .ui-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+}
+.playback-health-panel .ui-btn--primary:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.playback-health-panel .ui-btn:focus-visible,
 .playback-health-export:focus-visible {
   outline: 3px solid #ffd27a;
   outline-offset: 2px;
@@ -12506,17 +12535,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   top: clamp(16px, 2vw, 32px);
   right: clamp(16px, 3vw, 48px);
   z-index: 3;
-  padding: 0.5em 1em;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg, #121212) 70%, transparent);
-  color: inherit;
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-
-.tv-home-customise:focus-visible,
-.tv-home-customise:hover {
-  outline: 2px solid currentColor;
 }
 
 .tv-home-customise-list {

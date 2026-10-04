@@ -23,6 +23,7 @@ import {
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
 import { QrCode } from "./QrCode";
+import { Button } from "./ui";
 
 const PLAYARR_ICON_URL = `${import.meta.env.BASE_URL}playarr-icon.svg`;
 const MAX_DEVICE_CODE_LIFETIME_SECONDS = 5 * 60;
@@ -350,13 +351,12 @@ export function DeviceLogin({
       {error && (
         <div className="device-login-error">
           <p className="error-text">{error}</p>
-          <button
-            type="button"
-            className="btn btn-primary"
+          <Button
+            type="button" variant="primary"
             onClick={() => setAttempt((value) => value + 1)}
           >
             {t("components.deviceLogin.tryAgain")}
-          </button>
+          </Button>
         </div>
       )}
     </>
@@ -367,13 +367,12 @@ export function DeviceLogin({
       <div className="device-login-embedded">
         {loginState}
         {onBack && (
-          <button
-            type="button"
-            className="btn btn-secondary device-login-manual"
+          <Button
+            type="button" className="device-login-manual"
             onClick={onBack}
           >
             {t("components.deviceLogin.signInManually")}
-          </button>
+          </Button>
         )}
       </div>
     );

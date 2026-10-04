@@ -8,6 +8,7 @@ import { IS_TV, PLAYARR_CLIENT_PLATFORM } from "../../lib/clientPlatform";
 import { useRemoteHost } from "../../lib/remote/RemoteProvider";
 import { RemotePad } from "../../components/remote/RemotePad";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 export function SettingsRemotePage() {
   const { t } = useLanguage();
@@ -199,12 +200,12 @@ export function SettingsRemotePage() {
                     autoFocus
                     onChange={(event) => setRenaming({ id: p.id, name: event.target.value })}
                   />
-                  <button type="submit" className="btn btn-primary">
+                  <Button type="submit" variant="primary">
                     {t("remote.pairings.save")}
-                  </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setRenaming(null)}>
+                  </Button>
+                  <Button type="button" onClick={() => setRenaming(null)}>
                     {t("remote.pairings.cancel")}
-                  </button>
+                  </Button>
                 </form>
               ) : (
                 <>
@@ -225,16 +226,15 @@ export function SettingsRemotePage() {
                     </span>
                   </span>
                   <span className="remote-pairing-actions">
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-secondary"
                       onClick={() => setRenaming({ id: p.id, name: p.controller_name })}
                     >
                       {t("remote.pairings.rename")}
-                    </button>
-                    <button type="button" className="btn btn-secondary" onClick={() => void revoke(p.id)}>
+                    </Button>
+                    <Button type="button" onClick={() => void revoke(p.id)}>
                       {t("remote.pairings.revoke")}
-                    </button>
+                    </Button>
                   </span>
                 </>
               )}

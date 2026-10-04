@@ -7,6 +7,8 @@ import {
   type PlaybackHealthReport,
 } from "@playarr-tv/api-client";
 import type { PlaybackCapabilities } from "@playarr-tv/api-client/react";
+import { Button } from "../ui";
+import { Drawer } from "../shell";
 import { useApiClient } from "../../lib/ApiClientProvider";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import {
@@ -94,7 +96,6 @@ export function PlaybackHealthPanel({
 }: PlaybackHealthPanelProps) {
   const { t } = useLanguage();
   const client = useApiClient();
-  const closeRef = useRef<HTMLButtonElement>(null);
   const testRef = useRef<ConnectionTestHandle | null>(null);
   const throughputRef = useRef<number | undefined>(undefined);
   const [state, setState] = useState<ReportState>({ status: "loading" });
@@ -131,27 +132,7 @@ export function PlaybackHealthPanel({
 
   useEffect(() => load(), [load]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
-    const handleBack = (event: KeyboardEvent) => {
-      const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
-      if (!isBack) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", handleBack, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", handleBack, true);
-      testRef.current?.cancel();
-    };
-  }, [onClose]);
+  useEffect(() => () => testRef.current?.cancel(), []);
 
   const runTest = useCallback(() => {
     testRef.current?.cancel();
@@ -213,31 +194,20 @@ export function PlaybackHealthPanel({
   const facts = report ? (detail ? report.facts : summaryFacts(report.facts)) : [];
 
   return (
-    <aside
+    <Drawer
       className="playback-health-panel"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("components.playbackHealth.title")}
-      data-tv-scroll-container
-      data-tv-scroll-axis="y"
-      data-navigation-scroll-key="player:playback-health"
-      onClick={(event) => event.stopPropagation()}
+      kicker={t("components.playbackHealth.kicker")}
+      title={report?.headline ?? t("components.playbackHealth.title")}
+      ariaLabel={t("components.playbackHealth.title")}
+      closeLabel={t("components.playbackHealth.close")}
+      onClose={onClose}
+      containerProps={{
+        "data-tv-scroll-container": "",
+        "data-tv-scroll-axis": "y",
+        "data-navigation-scroll-key": "player:playback-health",
+        onClick: (event) => event.stopPropagation(),
+      }}
     >
-      <header>
-        <div>
-          <p>{t("components.playbackHealth.kicker")}</p>
-          <h2>{report?.headline ?? t("components.playbackHealth.title")}</h2>
-        </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label={t("components.playbackHealth.close")}
-        >
-          ×
-        </button>
-      </header>
-
       {state.status === "loading" ? (
         <p role="status" className="playback-health-status">
           {t("components.playbackHealth.loading")}
@@ -246,9 +216,9 @@ export function PlaybackHealthPanel({
       {state.status === "error" ? (
         <div role="alert" className="playback-health-status is-error">
           <p>{state.message}</p>
-          <button type="button" onClick={load}>
+          <Button size="sm" onClick={load}>
             {t("components.playbackHealth.retry")}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -259,8 +229,8 @@ export function PlaybackHealthPanel({
           </section>
 
           <section>
-            <button
-              type="button"
+            <Button
+              size="sm"
               className="playback-health-toggle"
               aria-expanded={detail}
               onClick={() => setDetail((value) => !value)}
@@ -268,7 +238,7 @@ export function PlaybackHealthPanel({
               {detail
                 ? t("components.playbackHealth.hideDetail")
                 : t("components.playbackHealth.showDetail")}
-            </button>
+            </Button>
             <HealthFactsList facts={facts} />
             {detail ? (
               <p className="playback-health-note">{report.qualification.note}</p>
@@ -280,13 +250,13 @@ export function PlaybackHealthPanel({
             <p className="playback-health-note">{t("components.playbackHealth.testHint")}</p>
             <div className="playback-health-actions">
               {test.status === "running" ? (
-                <button type="button" onClick={cancelTest}>
+                <Button size="sm" onClick={cancelTest}>
                   {t("components.playbackHealth.testCancel")}
-                </button>
+                </Button>
               ) : (
-                <button type="button" onClick={runTest}>
+                <Button size="sm" variant="primary" onClick={runTest}>
                   {t("components.playbackHealth.testRun")}
-                </button>
+                </Button>
               )}
             </div>
             <p role="status" className="playback-health-note">
@@ -306,12 +276,12 @@ export function PlaybackHealthPanel({
             <h3>{t("components.playbackHealth.exportHeading")}</h3>
             <p className="playback-health-note">{t("components.playbackHealth.exportHint")}</p>
             <div className="playback-health-actions">
-              <button type="button" onClick={() => void copyExport(report)}>
+              <Button size="sm" onClick={() => void copyExport(report)}>
                 {t("components.playbackHealth.exportCopy")}
-              </button>
-              <button type="button" onClick={() => saveExport(report)}>
+              </Button>
+              <Button size="sm" onClick={() => saveExport(report)}>
                 {t("components.playbackHealth.exportSave")}
-              </button>
+              </Button>
             </div>
             {exportNote ? (
               <p role="status" className="playback-health-note">
@@ -326,6 +296,6 @@ export function PlaybackHealthPanel({
           </section>
         </>
       ) : null}
-    </aside>
+    </Drawer>
   );
 }

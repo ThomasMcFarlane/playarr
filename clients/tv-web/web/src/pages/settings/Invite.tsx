@@ -11,6 +11,7 @@ import { QrCode } from "../../components/QrCode";
 import { enableApprovalPushNotifications } from "../../lib/pushNotifications";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 type FriendInviteState =
   | { status: "loading" }
@@ -218,9 +219,8 @@ export function SettingsInvitePage() {
                 />
               </label>
             ) : null}
-            <button
-              type="button"
-              className="btn btn-primary"
+            <Button
+              type="button" variant="primary"
               disabled={friendInviteState.status === "saving" || friendInviteState.request?.status === "pending"}
               onClick={() =>
                 friendInviteState.request?.status === "approved"
@@ -235,11 +235,10 @@ export function SettingsInvitePage() {
                   : friendInviteState.request?.status === "pending"
                     ? t("settings.invite.requestPending")
                     : t("settings.invite.requestQr")}
-            </button>
+            </Button>
             <div>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
+              <Button
+                type="button" size="sm"
                 disabled={pushState === "enabling" || pushState === "enabled"}
                 onClick={() => void handleEnablePush()}
               >
@@ -248,7 +247,7 @@ export function SettingsInvitePage() {
                   : pushState === "enabling"
                     ? t("settings.invite.pushEnabling")
                     : t("settings.invite.enablePush")}
-              </button>
+              </Button>
               {pushError ? <p className="error-text" role="alert">{pushError}</p> : null}
             </div>
           </>
@@ -295,12 +294,12 @@ export function SettingsInvitePage() {
               </p>
             ) : null}
             <div className="connection-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setFriendInviteLink(null)}>
+              <Button type="button" onClick={() => setFriendInviteLink(null)}>
                 {t("settings.invite.close")}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void handleCopyFriendInvite()}>
+              </Button>
+              <Button type="button" variant="primary" onClick={() => void handleCopyFriendInvite()}>
                 {friendInviteCopied ? t("settings.invite.copied") : t("settings.invite.copyLink")}
-              </button>
+              </Button>
             </div>
           </section>
         </div>

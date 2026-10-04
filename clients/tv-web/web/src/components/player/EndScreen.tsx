@@ -7,6 +7,7 @@ import {
   detailRouteForWork,
   type EndScreenKind,
 } from "../../lib/endScreen";
+import { Button } from "../ui";
 
 export interface EndScreenNextItem {
   title: string;
@@ -192,43 +193,41 @@ export function EndScreen({
         )}
         <div className="end-screen-actions">
           {kind === "up-next" && (
-            <button
-              type="button"
-              className="btn btn-primary"
+            <Button
+              type="button" variant="primary"
               data-end-screen-action
               {...(primaryAction === "play-now" ? { "data-end-screen-primary": true } : {})}
               onClick={onPlayNow}
             >
               {t("components.player.endScreen.playNow")}
-            </button>
+            </Button>
           )}
           {counting && (
-            <button
-              type="button"
-              className="btn btn-player-secondary"
+            <Button
+              type="button" className="on-player"
               data-end-screen-action
               onClick={cancel}
             >
               {t("components.player.endScreen.cancel")}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
-            className={`btn ${primaryAction === "replay" ? "btn-primary" : "btn-player-secondary"}`}
+            variant={primaryAction === "replay" ? "primary" : "secondary"}
+            className={primaryAction === "replay" ? undefined : "on-player"}
             data-end-screen-action
             {...(primaryAction === "replay" ? { "data-end-screen-primary": true } : {})}
             onClick={onReplay}
           >
             {t("components.player.endScreen.replay")}
-          </button>
-          <button
-            type="button"
-            className="btn btn-player-secondary"
+          </Button>
+          <Button
+            type="button" className="on-player"
             data-end-screen-action
             onClick={onExit}
           >
             {t("pages.player.backToDetails")}
-          </button>
+          </Button>
         </div>
         {suggestions.length > 0 && (
           <section

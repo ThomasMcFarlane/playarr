@@ -37,12 +37,19 @@ await context.addInitScript(({ base, userId }) => {
 }, { base, userId: USER_ID });
 const page = await context.newPage();
 const boxes = {};
+const panelBoxes = {};
 for (const [name, path] of [["movies", "/movies"], ["series", "/series"], ["playlists", "/playlists"], ["calendar", "/calendar"]]) {
   await page.goto(`${base}${path}`);
   await page.waitForSelector("[data-filters-button]", { timeout: 20000 });
   boxes[name] = await page.evaluate(() => {
     const r = document.querySelector("[data-filters-button]").getBoundingClientRect();
     return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), cls: document.querySelector("[data-filters-button]").className };
+  });
+  panelBoxes[name] = await page.evaluate(() => {
+    const el = document.querySelector(".page-header-stack > :not([data-filters-button])");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { right: Math.round(r.right), y: Math.round(r.y), h: Math.round(r.height), cls: el.className };
   });
 }
 // Wrapped header detail: the horizontal rule must be no wider than the title/detail block.
@@ -80,6 +87,15 @@ for (const name of ["series", "playlists", "calendar"]) {
   const b = boxes[name];
   const ok = a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && a.cls === b.cls;
   console.log(`${ok ? "PASS" : "FAIL"}  Filters button on ${name} matches movies`, ok ? "" : JSON.stringify({ movies: a, [name]: b }));
+  failed ||= !ok;
+}
+// The second header button (Playlists "Create" vs the Calendar's subscription link) must be the same
+// component, height, vertical position and right edge: the owner flagged this twice.
+{
+  const a = panelBoxes.playlists;
+  const b = panelBoxes.calendar;
+  const ok = Boolean(a && b) && a.right === b.right && a.y === b.y && a.h === b.h && a.cls === b.cls;
+  console.log(`${ok ? "PASS" : "FAIL"}  Calendar panel button matches Playlists Create`, ok ? "" : JSON.stringify({ playlists: a, calendar: b }));
   failed ||= !ok;
 }
 process.exit(failed || process.exitCode ? 1 : 0);

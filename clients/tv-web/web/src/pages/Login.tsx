@@ -14,6 +14,7 @@ import type { TranslationKey } from "../lib/i18n/translations";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "../lib/loginServerUrl";
 import { isPublicHttpUrl } from "../lib/localNetworkFetch";
 import { ProfileAuthLayout } from "../components/ProfileAuthLayout";
+import { Button } from "../components/ui";
 
 interface LocationState {
   /** Set by `App.tsx`'s app-shell redirect so a successful login returns to wherever the user was headed. */
@@ -156,24 +157,22 @@ export function LoginPage() {
           </p>
         )}
 
-        <button
-          type="submit"
-          className="btn btn-primary auth-submit"
+        <Button
+          type="submit" variant="primary" className="auth-submit"
           disabled={submitting}
         >
           {submitting
             ? t("pages.login.submitting")
             : t("pages.login.submit")}
-        </button>
+        </Button>
       </form>
-      <button
-        type="button"
-        className="btn btn-secondary auth-qr-submit"
+      <Button
+        type="button" className="auth-qr-submit"
         disabled={submitting}
         onClick={showQrLogin}
       >
         {t("pages.login.qrSubmit")}
-      </button>
+      </Button>
     </LoginShell>
   );
 }

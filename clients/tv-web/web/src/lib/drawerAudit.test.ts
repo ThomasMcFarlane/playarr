@@ -13,18 +13,6 @@ function sources(dir = src): string[] {
   });
 }
 
-/**
- * Bespoke side panels that predate the shared Drawer (dark player overlay panel
- * and the context action sheets). This list may only shrink; new pop-outs use
- * `Drawer` from `components/shell` (title + round icon close, body, footer
- * actions, focus trap, Esc/Back, `?panel=` URL state).
- */
-const LEGACY_PANELS = new Set([
-  "components/MediaContextMenu.tsx",
-  "components/PlaylistContextMenu.tsx",
-  "components/player/PlaybackHealthPanel.tsx",
-]);
-
 const DRAWER = "components/shell/Drawer.tsx";
 
 describe("drawer audit", () => {
@@ -35,15 +23,13 @@ describe("drawer audit", () => {
     expect(offenders, "render pop-outs with <Drawer> from components/shell").toEqual([]);
   });
 
-  it("allows hand-written dialog <aside> panels only in the shrinking legacy list", () => {
-    const hasPanel = (file: string) => {
+  it("permits no hand-written dialog <aside> panels outside the shared Drawer", () => {
+    const offenders = sources().filter((file) => {
+      if (file === DRAWER) return false;
       const text = readFileSync(join(src, file), "utf8");
       return /<aside/.test(text) && /role="dialog"/.test(text);
-    };
-    const offenders = sources().filter((file) => file !== DRAWER && hasPanel(file) && !LEGACY_PANELS.has(file));
+    });
     expect(offenders, "use <Drawer> instead of a hand-written <aside role=dialog>").toEqual([]);
-    const stale = [...LEGACY_PANELS].filter((file) => !hasPanel(file));
-    expect(stale, "remove migrated files from LEGACY_PANELS").toEqual([]);
   });
 
   it("gives every Drawer the shared icon-button close", () => {

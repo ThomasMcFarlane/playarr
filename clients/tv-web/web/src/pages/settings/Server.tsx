@@ -6,6 +6,7 @@ import { useDocumentTitle } from "../../lib/useDocumentTitle";
 import { useToast } from "../../lib/toast";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { SettingsSectionLayout } from "./SettingsSectionLayout";
+import { Button } from "../../components/ui";
 
 type ConnectionTestState =
   | { status: "idle" }
@@ -90,9 +91,8 @@ export function SettingsServerPage() {
                 <div className="connected-server-primary">
                   <span className="connected-server-badge">{t("settings.server.primaryBadge")}</span>
                   {hasKnownServerGroup && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
+                    <Button
+                      type="button" size="sm"
                       onClick={() => {
                         forgetKnownServerGroup();
                         setHasKnownServerGroup(false);
@@ -100,20 +100,19 @@ export function SettingsServerPage() {
                       }}
                     >
                       {t("settings.server.forgetServer")}
-                    </button>
+                    </Button>
                   )}
                 </div>
               ) : (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
+                <Button
+                  type="button" size="sm"
                   onClick={() => {
                     disconnectServer(server.url);
                     showToast(t("settings.server.serverDisconnectedToast"));
                   }}
                 >
                   {t("settings.server.disconnect")}
-                </button>
+                </Button>
               )}
             </div>
           ))}
@@ -155,15 +154,14 @@ export function SettingsServerPage() {
               placeholder={t("settings.server.passwordPlaceholder")}
               aria-label={t("settings.server.passwordAriaLabel")}
             />
-            <button
-              type="submit"
-              className="btn btn-primary"
+            <Button
+              type="submit" variant="primary"
               disabled={addServerState.status === "adding"}
             >
               {addServerState.status === "adding"
                 ? t("settings.server.connecting")
                 : t("settings.server.connect")}
-            </button>
+            </Button>
           </div>
           <p className={addServerState.status === "error" ? "error-text" : "hint"} aria-live="polite">
             {addServerState.status === "error"
@@ -175,14 +173,13 @@ export function SettingsServerPage() {
         </form>
 
         <div className="connection-actions">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
+          <Button
+            type="button" size="sm"
             onClick={() => void handleTestConnection()}
             disabled={testState.status === "testing"}
           >
             {testState.status === "testing" ? t("settings.server.testing") : t("settings.server.testConnection")}
-          </button>
+          </Button>
 
           {testState.status === "success" && (
             <p className="success-text">
@@ -204,13 +201,12 @@ export function SettingsServerPage() {
 
         {window.PlayarrAndroidMobile && (
           <div className="connection-actions">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              type="button" size="sm"
               onClick={() => window.PlayarrAndroidMobile?.openServerEditor()}
             >
               {t("settings.server.changeAppHost")}
-            </button>
+            </Button>
             <p className="hint">{t("settings.server.changeAppHostHint")}</p>
           </div>
         )}

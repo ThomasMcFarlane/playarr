@@ -84,6 +84,8 @@ export const en = {
   "components.playlistContextMenu.dialogLabel": "{{name}} playlist actions",
   "components.playlistContextMenu.edit": "Edit name or parent",
   "components.playlistContextMenu.heading": "Playlist actions",
+  "components.playlistContextMenu.close": "Close",
+  "components.mediaContextMenu.close": "Close",
   "components.playlistContextMenu.open": "Open actions for {{name}}",
   "components.playlistContextMenu.save": "Save changes",
   "components.playlistContextMenu.saving": "Saving…",

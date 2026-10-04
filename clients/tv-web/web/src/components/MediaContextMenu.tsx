@@ -26,6 +26,8 @@ import {
   DownloadQualityDrawer,
   type DownloadQualitySelection,
 } from "./DownloadQualityDrawer";
+import { Drawer } from "./shell";
+import { Button } from "./ui";
 import { TvEmptyState } from "./tv/TvEmptyState";
 
 const LONG_PRESS_MS = 650;
@@ -978,11 +980,10 @@ export function useMediaContextMenu({
           }
         />
       ) : (
-      <aside
+      <Drawer
         className="media-context-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label={
+        initialFocus="none"
+        ariaLabel={
           contextView === "actions"
             ? t("components.mediaContextMenu.dialogAriaLabelActions", {
                 title:
@@ -997,25 +998,41 @@ export function useMediaContextMenu({
                   t("components.mediaContextMenu.genericTitle"),
               })
         }
-        onClickCapture={(event) => {
-          if (!suppressNextKeyboardClickRef.current || event.detail !== 0) return;
-          event.preventDefault();
-          event.stopPropagation();
-          suppressNextKeyboardClickRef.current = false;
-        }}
-        onKeyUpCapture={(event) => {
-          if (
-            event.key !== "Enter" &&
-            event.key !== "Accept" &&
-            event.keyCode !== 13
-          ) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          confirmHeldRef.current = false;
-          suppressReleaseClick();
-          window.requestAnimationFrame(() => firstActionRef.current?.focus());
+        kicker={
+          contextView === "actions"
+            ? t("components.mediaContextMenu.titleActionsHeading")
+            : isPlaylistItem
+              ? t("components.mediaContextMenu.moveInPlaylist")
+              : t("components.mediaContextMenu.addToPlaylistHeading")
+        }
+        title={
+          activeItem.title ??
+          activeItem.work?.title ??
+          t("components.mediaContextMenu.genericTitle")
+        }
+        closeLabel={t("components.mediaContextMenu.close")}
+        onClose={close}
+        containerProps={{
+          onClickCapture: (event) => {
+            if (!suppressNextKeyboardClickRef.current || event.detail !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            suppressNextKeyboardClickRef.current = false;
+          },
+          onKeyUpCapture: (event) => {
+            if (
+              event.key !== "Enter" &&
+              event.key !== "Accept" &&
+              event.keyCode !== 13
+            ) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            confirmHeldRef.current = false;
+            suppressReleaseClick();
+            window.requestAnimationFrame(() => firstActionRef.current?.focus());
+          },
         }}
         onKeyDown={(event) => {
           const isBack =
@@ -1046,7 +1063,7 @@ export function useMediaContextMenu({
           event.preventDefault();
           event.stopPropagation();
           const actions = Array.from(
-            event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")
+            event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled):not(.drawer-close)")
           );
           const currentIndex = actions.indexOf(document.activeElement as HTMLButtonElement);
           const delta = event.key === "ArrowDown" ? 1 : -1;
@@ -1055,14 +1072,6 @@ export function useMediaContextMenu({
       >
         {contextView === "actions" ? (
           <>
-            <header>
-              <p>{t("components.mediaContextMenu.titleActionsHeading")}</p>
-              <h2>
-                {activeItem.title ??
-                  activeItem.work?.title ??
-                  t("components.mediaContextMenu.genericTitle")}
-              </h2>
-            </header>
             <div className="media-context-actions">
               <button ref={firstActionRef} type="button" disabled={Boolean(busyAction)} onClick={play}>
                 <span aria-hidden="true">▶</span>
@@ -1151,8 +1160,9 @@ export function useMediaContextMenu({
           </>
         ) : contextView === "playlists" ? (
           <>
-            <header className="media-context-playlist-header">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 ref={playlistBackRef}
                 type="button"
                 className="media-context-back"
@@ -1160,18 +1170,7 @@ export function useMediaContextMenu({
               >
                 <span aria-hidden="true">←</span>
                 {t("components.mediaContextMenu.back")}
-              </button>
-              <p>
-                {isPlaylistItem
-                  ? t("components.mediaContextMenu.moveInPlaylist")
-                  : t("components.mediaContextMenu.addToPlaylistHeading")}
-              </p>
-              <h2>
-                {activeItem.title ??
-                  activeItem.work?.title ??
-                  t("components.mediaContextMenu.genericTitle")}
-              </h2>
-            </header>
+              </Button>
             <div className="media-context-actions media-context-playlist-actions">
               {playlistPicker.status === "loading" ? (
                 <div className="media-context-state" role="status">
@@ -1230,8 +1229,9 @@ export function useMediaContextMenu({
           </>
         ) : (
           <>
-            <header className="media-context-playlist-header">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 ref={playlistBackRef}
                 type="button"
                 className="media-context-back"
@@ -1241,18 +1241,7 @@ export function useMediaContextMenu({
               >
                 <span aria-hidden="true">←</span>
                 {t("components.mediaContextMenu.back")}
-              </button>
-              <p>
-                {isPlaylistItem
-                  ? t("components.mediaContextMenu.moveInPlaylist")
-                  : t("components.mediaContextMenu.addToPlaylistHeading")}
-              </p>
-              <h2>
-                {activeItem.title ??
-                  activeItem.work?.title ??
-                  t("components.mediaContextMenu.genericTitle")}
-              </h2>
-            </header>
+              </Button>
             <div className="media-context-actions media-context-playlist-actions">
               {playlistPicker.status === "loading" ? (
                 <div className="media-context-state" role="status">
@@ -1326,7 +1315,7 @@ export function useMediaContextMenu({
           </>
         )}
         {error ? <p className="media-context-error" role="alert">{error}</p> : null}
-      </aside>
+      </Drawer>
       )}
     </div>
   ) : null;

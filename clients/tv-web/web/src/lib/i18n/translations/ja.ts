@@ -99,6 +99,8 @@ export const ja: Translations = {
   "components.playlistContextMenu.dialogLabel": "{{name}}のプレイリスト操作",
   "components.playlistContextMenu.edit": "名前または親を編集",
   "components.playlistContextMenu.heading": "プレイリスト操作",
+  "components.playlistContextMenu.close": "閉じる",
+  "components.mediaContextMenu.close": "閉じる",
   "components.playlistContextMenu.open": "{{name}}の操作を開く",
   "components.playlistContextMenu.save": "変更を保存",
   "components.playlistContextMenu.saving": "保存しています…",

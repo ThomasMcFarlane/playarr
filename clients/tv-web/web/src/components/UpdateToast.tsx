@@ -1,5 +1,6 @@
 import type { AppUpdateState } from "../lib/appUpdate";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import { Button } from "./ui";
 
 export interface UpdateToastProps {
   state: AppUpdateState;
@@ -28,9 +29,9 @@ export function UpdateToast({ state }: UpdateToastProps) {
   return (
     <div role="status" className="update-toast">
       <span>{t("components.updateToast.updateAvailable")}</span>
-      <button type="button" className="btn btn-primary btn-sm" onClick={state.reloadNow}>
+      <Button type="button" variant="primary" size="sm" onClick={state.reloadNow}>
         {t("components.updateToast.reload")}
-      </button>
+      </Button>
       <button
         type="button"
         className="update-toast-dismiss"

@@ -32,6 +32,7 @@ import {
   MinimiseIcon,
   SpinnerIcon,
 } from "./PlayerIcons";
+import { Button } from "../ui";
 
 const SEEK_STEP_SECONDS = 5;
 const AUTO_HIDE_MS = 3000;
@@ -1078,9 +1079,9 @@ export function PlayerSurface({
                 ? t("components.player.surface.errorCode", { code: engineState.error.code })
                 : t("components.player.surface.genericPlayerError")}
             </p>
-            <button type="button" className="btn btn-primary player-retry-btn" onClick={retryNegotiation}>
+            <Button type="button" variant="primary" className="player-retry-btn" onClick={retryNegotiation}>
               {t("components.player.surface.restartPlaybackButton")}
-            </button>
+            </Button>
           </div>
         </div>
       )}
