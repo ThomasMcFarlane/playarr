@@ -62,9 +62,20 @@ data class UserDataPlaylistSummary(
 )
 
 @Serializable
+data class UserDataWatchlistSummary(
+    val total: Int = 0,
+    @SerialName("will_add") val willAdd: Int = 0,
+    @SerialName("already_present") val alreadyPresent: Int = 0,
+    /** Records that are invalid or of a kind this server does not know. */
+    val unmatched: Int = 0,
+)
+
+@Serializable
 data class UserDataImportSummary(
     @SerialName("watch_progress") val watchProgress: UserDataSectionSummary = UserDataSectionSummary(),
     val playlists: UserDataPlaylistSummary = UserDataPlaylistSummary(),
+    /** Null when the server predates the watchlist section. */
+    val watchlist: UserDataWatchlistSummary? = null,
     @SerialName("preferred_audio_language_change") val preferredAudioLanguageChange: String? = null,
     @SerialName("playback_preferences_not_applied") val playbackPreferencesNotApplied: Int = 0,
     @SerialName("unmatched_total") val unmatchedTotal: Int = 0,

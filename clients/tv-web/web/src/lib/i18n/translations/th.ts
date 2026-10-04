@@ -1368,6 +1368,7 @@ export const th: Translations = {
   "settings.yourData.previewTitle": "สิ่งที่การนำเข้านี้จะทำ",
   "settings.yourData.previewProgress": "ความคืบหน้า: ใหม่ {{add}} อัปเดต {{update}} มีอยู่แล้ว {{same}} ขัดแย้งแต่คงไว้ {{kept}}",
   "settings.yourData.previewPlaylists": "เพลย์ลิสต์: ใหม่ {{created}} เพิ่มรายการ {{items}} มีอยู่แล้ว {{present}}",
+  "settings.yourData.previewWatchlist": "รายการที่อยากดู: ใหม่ {{add}} มีอยู่แล้ว {{same}} ไม่สามารถจับคู่ได้ {{unmatched}}",
   "settings.yourData.previewUnmatched": "{{unmatched}} รายการไม่พบในคลังนี้ ({{ambiguous}} รายการคลุมเครือ) ดาวน์โหลดได้ภายหลัง",
   "settings.yourData.previewLanguage": "ภาษาเสียงจะเปลี่ยนเป็น {{language}}",
   "settings.yourData.previewPlaybackChoices": "การตั้งค่าการเล่นรายเรื่อง {{count}} รายการเป็นของเซิร์ฟเวอร์นั้น จึงไม่ถูกนำมาใช้",

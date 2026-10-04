@@ -112,6 +112,16 @@ describe("YourDataView", () => {
     expect(markup).not.toContain("<b>Evil</b>");
   });
 
+  it("shows the watchlist section of the preview and omits it for older servers", () => {
+    const withWatchlist = {
+      ...PREVIEW,
+      summary: { ...PREVIEW.summary, watchlist: { total: 6, will_add: 3, already_present: 2, unmatched: 1 } },
+    };
+    const markup = render({ preview: withWatchlist });
+    expect(markup).toContain("Watchlist: 3 new, 2 already here, 1 could not be placed.");
+    expect(render({ preview: PREVIEW })).not.toContain("Watchlist:");
+  });
+
   it("offers the unmatched download after an import", () => {
     const markup = render({
       preview: PREVIEW,

@@ -61,6 +61,23 @@ class PlayarrYourDataTest {
     }
 
     @Test
+    fun `preview decodes the watchlist section and tolerates its absence`() {
+        val with = json.decodeFromString<UserDataImportPreview>(
+            """{"package_sha256":"f00","summary":{"watchlist":{"total":6,"will_add":3,"already_present":2,"unmatched":1}}}""",
+        )
+        assertEquals(3, with.summary.watchlist?.willAdd)
+        assertEquals(2, with.summary.watchlist?.alreadyPresent)
+        assertEquals(1, with.summary.watchlist?.unmatched)
+        val without = json.decodeFromString<UserDataImportPreview>("""{"package_sha256":"f00"}""")
+        assertNull(without.summary.watchlist)
+        val text = PlayarrLanguageState("en", PlayarrResolvedLanguage.English).text(
+            PlayarrString.YourDataPreviewWatchlist,
+            mapOf("add" to 3, "same" to 2, "unmatched" to 1),
+        )
+        assertEquals("Watchlist: 3 new, 2 already here, 1 could not be placed.", text)
+    }
+
+    @Test
     fun `an export that is queued or running counts as running`() {
         fun job(status: UserDataExportStatus) = UserDataExportJob("x", status, "2026-10-03T12:00:00Z")
         assertTrue(YourDataState(exportJob = job(UserDataExportStatus.Queued)).exportRunning)

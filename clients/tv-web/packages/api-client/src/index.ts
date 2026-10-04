@@ -106,6 +106,13 @@ export interface UserDataImportPreview {
       items_already_present: number;
       items_unmatched: number;
     };
+    /** Absent when talking to a server that predates the watchlist section. */
+    watchlist?: {
+      total: number;
+      will_add: number;
+      already_present: number;
+      unmatched: number;
+    };
     preferred_audio_language_change: string | null;
     playback_preferences_not_applied: number;
     unmatched_total: number;

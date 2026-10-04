@@ -1364,6 +1364,7 @@ export const ja: Translations = {
   "settings.yourData.previewTitle": "この取り込みで行われる変更",
   "settings.yourData.previewProgress": "進捗：新規{{add}}件、更新{{update}}件、既存{{same}}件、競合のため維持{{kept}}件。",
   "settings.yourData.previewPlaylists": "プレイリスト：新規{{created}}件、追加項目{{items}}件、既存項目{{present}}件。",
+  "settings.yourData.previewWatchlist": "ウォッチリスト：新規{{add}}件、既存{{same}}件、対応づけ不可{{unmatched}}件。",
   "settings.yourData.previewUnmatched": "{{unmatched}}件はこのライブラリに対応づけられませんでした（うち{{ambiguous}}件は候補が複数）。後でダウンロードできます。",
   "settings.yourData.previewLanguage": "音声言語は{{language}}に変更されます。",
   "settings.yourData.previewPlaybackChoices": "作品ごとの再生設定{{count}}件はサーバー固有のため適用されません。",

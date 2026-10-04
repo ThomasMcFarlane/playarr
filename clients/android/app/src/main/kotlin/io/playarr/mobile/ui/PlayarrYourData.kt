@@ -422,6 +422,18 @@ private fun ColumnScope.PreviewSummary(preview: UserDataImportPreview) {
         color = WebInkSoft,
         fontSize = 12.sp,
     )
+    summary.watchlist?.let { watchlist ->
+        Text(
+            playarrString(
+                PlayarrString.YourDataPreviewWatchlist,
+                "add" to watchlist.willAdd,
+                "same" to watchlist.alreadyPresent,
+                "unmatched" to watchlist.unmatched,
+            ),
+            color = WebInkSoft,
+            fontSize = 12.sp,
+        )
+    }
     Text(
         playarrString(
             PlayarrString.YourDataPreviewUnmatched,

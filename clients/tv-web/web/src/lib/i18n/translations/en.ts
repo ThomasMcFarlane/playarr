@@ -1377,6 +1377,7 @@ export const en = {
   "settings.yourData.previewTitle": "What this import would do",
   "settings.yourData.previewProgress": "Progress: {{add}} new, {{update}} updated, {{same}} already here, {{kept}} conflicts kept as they are.",
   "settings.yourData.previewPlaylists": "Playlists: {{created}} new, {{items}} items added, {{present}} items already present.",
+  "settings.yourData.previewWatchlist": "Watchlist: {{add}} new, {{same}} already here, {{unmatched}} could not be placed.",
   "settings.yourData.previewUnmatched": "{{unmatched}} records could not be placed in this library ({{ambiguous}} were ambiguous). You can download them afterwards.",
   "settings.yourData.previewLanguage": "Audio language would change to {{language}}.",
   "settings.yourData.previewPlaybackChoices": "{{count}} per-title playback choices are server specific and will not be applied.",

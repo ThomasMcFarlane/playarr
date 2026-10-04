@@ -183,6 +183,15 @@ export function YourDataView(props: YourDataViewProps) {
                   present: String(summary.playlists.items_already_present),
                 })}
               </li>
+              {summary.watchlist ? (
+                <li data-testid="preview-watchlist">
+                  {t("settings.yourData.previewWatchlist", {
+                    add: String(summary.watchlist.will_add),
+                    same: String(summary.watchlist.already_present),
+                    unmatched: String(summary.watchlist.unmatched),
+                  })}
+                </li>
+              ) : null}
               <li>
                 {t("settings.yourData.previewUnmatched", {
                   unmatched: String(summary.unmatched_total),

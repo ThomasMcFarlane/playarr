@@ -948,6 +948,11 @@ internal enum class PlayarrString(
         "เพลย์ลิสต์: ใหม่ {{created}} เพิ่มรายการ {{items}} มีอยู่แล้ว {{present}}",
         "プレイリスト：新規{{created}}件、追加項目{{items}}件、既存項目{{present}}件。",
     ),
+    YourDataPreviewWatchlist(
+        "Watchlist: {{add}} new, {{same}} already here, {{unmatched}} could not be placed.",
+        "รายการที่อยากดู: ใหม่ {{add}} มีอยู่แล้ว {{same}} ไม่สามารถจับคู่ได้ {{unmatched}}",
+        "ウォッチリスト：新規{{add}}件、既存{{same}}件、対応づけ不可{{unmatched}}件。",
+    ),
     YourDataPreviewUnmatched(
         "{{unmatched}} records could not be placed in this library ({{ambiguous}} were ambiguous). You can save them afterwards.",
         "{{unmatched}} รายการไม่พบในคลังนี้ ({{ambiguous}} รายการคลุมเครือ) บันทึกไว้ได้ภายหลัง",
