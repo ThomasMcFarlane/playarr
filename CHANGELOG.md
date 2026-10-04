@@ -26,6 +26,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Regional servers region-a and region-b now run image `<image>`, which adds the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185).
 - Regional servers region-a and region-b now run image `<image>`, which carries the release calendar, iCal
   subscription and availability-lag endpoints (tasks 75-77).
 - Rolled the region-a and region-b regional servers to image `<image>`, which adds self-service portable user data export and import (tasks 67-71) on top of encrypted server backups, discovery/watchlist and the phone remote.
