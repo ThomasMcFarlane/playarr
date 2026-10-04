@@ -59,6 +59,9 @@ It overrides weaker or older wording elsewhere in the tree.
 - Update each active row's status, owner, notes, and concrete evidence as work starts, progresses,
   becomes blocked, or completes. Keep the board current during the work rather than reconciling it
   only at the end.
+- Every new owner requirement or bug must get a `TASKS.md` row in the same PR that starts the work.
+  The coordinator logs requirements passed verbally (chat, calls, hand-offs) as rows straight away,
+  so nothing exists only in conversation.
 - Any agent working in this repository must read and maintain `TASKS.md`; when delegating work,
   include the relevant task number and require status/evidence to be returned for the board.
 
