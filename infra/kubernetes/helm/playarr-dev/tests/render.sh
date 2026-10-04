@@ -33,8 +33,8 @@ if grep -v '^ *#' "$rendered" | grep -q 'streamarr-runtime\|/opt/streamarr\|imag
 test "$(grep -c '^            - name: PLAYARR_SOURCE_INSTANCE_URLS$' "$rendered")" -eq 2
 grep -q 'radarr=http://radarr.media.svc.cluster.local:7878,' "$rendered"
 grep -q 'dubarr=http://dubarr.dubarr.svc.cluster.local:8686' "$rendered"
-test "$(grep -c '^            - name: PLAYARR_DUBARR_API_KEY$' "$rendered")" -eq 1
-test "$(grep -c '^                  optional: true$' "$rendered")" -eq 1
+test "$(grep -c '^            - name: PLAYARR_DUBARR_API_KEY$' "$rendered")" -eq 2
+test "$(grep -c '^                  optional: true$' "$rendered")" -eq 2
 test "$(grep -c '^            - name: PLAYARR_WEB_ASSETS_DIR$' "$rendered")" -eq 2
 # TLS instances: Emissary originates TLS to the pod on the https Service port.
 grep -q 'service: "https://playarr-region-a.playarr:443"' "$rendered"
