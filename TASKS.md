@@ -12,6 +12,7 @@ is the current-work board. Newest and most active work goes first.
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
 | 294 | Fix REGION-A/REGION-B playback and streaming reliability across Android, web and iOS | in progress | playback_repair | Proven REGION-A cause: its pod lacks a supplemental group, required to traverse/read the read-only media tree's permissions; REGION-B has the group and can read/probe the same file. Chart fix adds the group only to REGION-A and preserves deployed image on both nodes. REGION-B login 200/400 sequence remains unattributed; no auth changes made. Awaiting PR and durable deployment rollout, then verify playback manifest and segment delivery in both regions. Keep peer database retry work (tasks 292-293) separate. |
+| 296 | CI: publish regional server images through the image registry | in progress: review and workflow acceptance pending | peer_recovery | Preserve public image/tag naming for verification and Helm pulls; tag the built image to the matching `playarr-regional:<sha>` repository on the internal registry Service for push. ARC dind already allows the internal HTTP registry. Focused YAML validation and diff checks pass. Pending workflow acceptance and PR review. |
 
 | # | Task | Status | Picked up by | Notes |
 |---|---|---|---|---|

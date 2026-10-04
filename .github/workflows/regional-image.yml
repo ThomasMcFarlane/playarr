@@ -25,6 +25,7 @@ permissions:
 
 env:
   IMAGE: registry.example.com/playarr-regional
+  INTERNAL_REGISTRY: registry.example.com
 
 jobs:
   image:
@@ -51,4 +52,6 @@ jobs:
           docker run --rm --entrypoint /app/playarr-server "$IMAGE:$TAG" --version
 
       - name: Push
-        run: docker push "$IMAGE:$TAG"
+        run: |
+          docker tag "$IMAGE:$TAG" "$INTERNAL_REGISTRY/playarr-regional:$TAG"
+          docker push "$INTERNAL_REGISTRY/playarr-regional:$TAG"

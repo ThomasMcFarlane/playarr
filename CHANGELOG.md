@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- CI: push regional server image builds through the image registry while keeping public image names and tags unchanged (TASK 296).
 - Operations: grant the REGION-A regional server the host media access group, matching REGION-B, so its read-only library mount can be traversed and read; preserve the currently deployed regional image on both nodes (TASK 294).
 - Server: retry unreachable known peers after restart, and route configured server-to-server peer traffic through in-cluster Services while validating the existing public certificate identity; public client relay addresses remain unchanged (TASK 292).
 - iOS: track native QR login parity with Android, including signed iPhone and iPad acceptance (TASK 291).
