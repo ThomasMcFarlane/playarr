@@ -1328,10 +1328,10 @@ enum LocalRouteOutcome {
 }
 
 /// §5.2's routing step for a request that already resolved a *local*
-/// `MediaFile` (`playback_info_handler`'s own entry point). This node is
-/// trivially `self_available` by construction here -- `media_file` only
-/// exists at all because `state.media_files.get(media_file_id)` already
-/// found it locally. A single, ungrouped node (no `node_identity` row, or
+/// `MediaFile` (`playback_info_handler`'s own entry point). The row is local,
+/// but its path may not be present or readable on this node, so availability
+/// is checked against the node's physical source path before routing. A
+/// single, ungrouped node (no `node_identity` row, or
 /// one with `group_id: None`) short-circuits to
 /// [`LocalRouteOutcome::ServeLocally`] before touching
 /// `routing_rule_repo`/`peer_node_repo`/`peer_leaf_availability_repo` at
@@ -1389,7 +1389,14 @@ async fn resolve_route_for_local_media_file(
         .list_by_local_work_ids(&[media_file.work_id])
         .await?;
     Ok(
-        match routing::resolve_route(&ctx, &rules, identity.peer_id, true, &peers, &availability) {
+        match resolve_local_media_route(
+            &ctx,
+            &rules,
+            identity.peer_id,
+            local_media_file_is_readable(state, media_file, identity.peer_id).await,
+            &peers,
+            &availability,
+        ) {
             routing::RoutingDecision::ServeLocally => LocalRouteOutcome::ServeLocally,
             routing::RoutingDecision::Unavailable => LocalRouteOutcome::Unavailable,
             routing::RoutingDecision::Delegate {
@@ -1405,6 +1412,44 @@ async fn resolve_route_for_local_media_file(
                 },
             },
         },
+    )
+}
+
+async fn local_media_file_is_readable(
+    state: &AppState,
+    media_file: &MediaFile,
+    peer_id: Uuid,
+) -> bool {
+    let Some(source) = state.source_instances.get(media_file.source_instance_id) else {
+        return false;
+    };
+    let Some((physical_path, _)) = crate::physical_path::existing_physical_file(
+        &source,
+        peer_id,
+        &media_file.path.to_string_lossy(),
+    )
+    .await
+    else {
+        return false;
+    };
+    tokio::fs::File::open(physical_path).await.is_ok()
+}
+
+fn resolve_local_media_route(
+    context: &routing::RoutingContext,
+    rules: &[playarr_model::RoutingRule],
+    self_peer_id: Uuid,
+    self_available: bool,
+    peers: &[playarr_model::PeerNode],
+    availability: &[playarr_model::PeerLeafAvailability],
+) -> routing::RoutingDecision {
+    routing::resolve_route(
+        context,
+        rules,
+        self_peer_id,
+        self_available,
+        peers,
+        availability,
     )
 }
 
@@ -1967,7 +2012,14 @@ mod tests {
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use chrono::Utc;
     use playarr_model::media::LeafRef;
+    use playarr_model::{
+        Availability, DeliveryMode, ExternalProvider, LeafSelector, PeerAddress,
+        PeerLeafAvailability, PeerNode, PeerNodeStatus, RoutingRule, Sensitive, SourceInstance,
+        SourceKind, WorkKind,
+    };
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
     use tower::ServiceExt;
 
@@ -2020,6 +2072,137 @@ mod tests {
             source_instance_id: Uuid::new_v4(),
             source_file_id: Some("1".to_string()),
         }
+    }
+
+    #[tokio::test]
+    async fn local_db_media_row_is_available_only_when_its_mapped_file_is_readable() {
+        let (_, state) = test_state().await;
+        let temp = tempfile::tempdir().unwrap();
+        let peer_id = Uuid::new_v4();
+        let source_id = Uuid::new_v4();
+        let source = SourceInstance {
+            id: source_id,
+            kind: SourceKind::Radarr,
+            name: "test source".to_string(),
+            base_url: "https://example.invalid".to_string(),
+            api_key_encrypted: Sensitive::new("test".to_string()),
+            priority: 0,
+            default_root_folder_id: Some("/source".to_string()),
+            folder_mappings: BTreeMap::from([(
+                peer_id,
+                temp.path().to_string_lossy().into_owned(),
+            )]),
+            default_quality_profile_id: None,
+            best_effort: false,
+            group_library_id: None,
+        };
+        state.source_instances.upsert(source);
+        let mut row = media_file();
+        row.source_instance_id = source_id;
+        row.path = PathBuf::from("/source/movie.mkv");
+
+        let context = routing::RoutingContext {
+            group_library_id: None,
+            user_id: Uuid::new_v4(),
+            provider: ExternalProvider::Tmdb,
+            external_id: "603".to_string(),
+            leaf_selector: LeafSelector::Movie,
+        };
+        let now = Utc::now();
+        let rule = RoutingRule {
+            id: Uuid::new_v4(),
+            group_id: Uuid::new_v4(),
+            group_library_id: None,
+            user_id: None,
+            priority: 0,
+            preferred_nodes: vec![Uuid::new_v4()],
+            delivery_mode: DeliveryMode::Auto,
+            created_at: now,
+            updated_at: now,
+        };
+        let remote_id = Uuid::new_v4();
+        let remote = PeerNode {
+            id: remote_id,
+            group_id: rule.group_id,
+            name: "remote".to_string(),
+            addresses: vec![PeerAddress {
+                url: "https://peer.invalid".to_string(),
+                priority: 0,
+                label: "wan".to_string(),
+                client_reachable: true,
+            }],
+            public_key: "test".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: Some(now),
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        };
+        let remote_file = PeerLeafAvailability {
+            peer_node_id: remote_id,
+            media_file_id: Uuid::new_v4(),
+            source_instance_id: source_id,
+            path: "/peer/movie.mkv".to_string(),
+            provider: context.provider.clone(),
+            external_id: context.external_id.clone(),
+            leaf_selector: context.leaf_selector.clone(),
+            group_library_id: None,
+            availability: Availability::Available,
+            container: Some("mkv".to_string()),
+            codec: Some("h264".to_string()),
+            bitrate: Some(1_000_000),
+            size_bytes: Some(10),
+            duration_ms: Some(1000),
+            local_work_id: None,
+            title: "Sample".to_string(),
+            kind: WorkKind::Movie,
+            release_date: None,
+            updated_at: now,
+        };
+
+        let local_available = local_media_file_is_readable(&state.app, &row, peer_id).await;
+        assert!(!local_available);
+        assert_eq!(
+            resolve_local_media_route(
+                &context,
+                std::slice::from_ref(&rule),
+                peer_id,
+                local_available,
+                std::slice::from_ref(&remote),
+                std::slice::from_ref(&remote_file),
+            ),
+            routing::RoutingDecision::Delegate {
+                peer_node_id: remote_id,
+                delivery: DeliveryMode::Redirect,
+            }
+        );
+        assert_eq!(
+            resolve_local_media_route(
+                &context,
+                std::slice::from_ref(&rule),
+                peer_id,
+                local_available,
+                std::slice::from_ref(&remote),
+                &[],
+            ),
+            routing::RoutingDecision::Unavailable
+        );
+        let physical_file = temp.path().join("movie.mkv");
+        std::fs::write(&physical_file, b"readable media").unwrap();
+        let local_available = local_media_file_is_readable(&state.app, &row, peer_id).await;
+        assert!(local_available);
+        assert_eq!(
+            resolve_local_media_route(
+                &context,
+                &[rule],
+                peer_id,
+                local_available,
+                &[remote],
+                &[remote_file],
+            ),
+            routing::RoutingDecision::ServeLocally
+        );
     }
 
     #[test]
