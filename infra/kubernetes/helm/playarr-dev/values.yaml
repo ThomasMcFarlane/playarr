@@ -195,7 +195,7 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-region-b:
-    image: registry.example.com/playarr-regional:96e5aac0
+    image: registry.example.com/playarr-regional:c14c6ae8
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-b
