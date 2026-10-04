@@ -1392,6 +1392,8 @@ async fn boot_api(
     // gate at boot here.
     let embedding_repo: Arc<dyn playarr_db::EmbeddingRepo> =
         Arc::new(playarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
+    let media_language_repo: Arc<dyn playarr_db::MediaLanguageRepo> =
+        Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone()));
     let catalog = Arc::new(
         playarr_catalog::CatalogService::new(
             work_repo.clone(),
@@ -1401,6 +1403,7 @@ async fn boot_api(
             watch_progress.clone(),
         )
         .with_embedding_repo(embedding_repo)
+        .with_media_language_repo(media_language_repo.clone())
         .with_peer_leaf_availability(peer_leaf_availability_repo, peer_node_repo.clone()),
     );
 
@@ -1570,6 +1573,16 @@ async fn boot_api(
         500,
     );
     tokio::spawn(analytics_flusher.run());
+
+    // Audio/subtitle language index backfill (task 180): ffprobe for files
+    // the *arr app could not describe, plus periodic sidecar subtitle scans.
+    // Runs where the media is readable (the API role); idempotent, so
+    // replicas may overlap. `PLAYARR_LANGUAGE_INDEXER=off` disables it.
+    if !std::env::var("PLAYARR_LANGUAGE_INDEXER").is_ok_and(|v| v.eq_ignore_ascii_case("off")) {
+        tokio::spawn(playarr_api::language_index::run_language_indexer(
+            media_language_repo.clone(),
+        ));
+    }
 
     // Push complements the worker's normal pull pollers. Running it in the
     // API role gives a node with outbound-only connectivity a signed path to
@@ -2219,6 +2232,8 @@ fn spawn_poller_for(
     // wiring lands.
     let (refetch_tx, refetch_rx) = tokio::sync::mpsc::channel(64);
     source_instances.register_trigger(instance.id, refetch_tx);
+    let language_repo: Arc<dyn playarr_db::MediaLanguageRepo> =
+        Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone()));
     let poller = ReconciliationPoller::new(
         instance.id,
         instance.kind,
@@ -2241,7 +2256,8 @@ fn spawn_poller_for(
     // rather than only for `SourceKind::Radarr` instances, since threading
     // it through unconditionally here is simpler than a kind-gated branch
     // and costs nothing extra for non-Radarr instances.
-    .with_credit_repo(credit_repo);
+    .with_credit_repo(credit_repo)
+    .with_language_repo(language_repo);
     let poller = if let Some(prewarm) = artwork_prewarm {
         poller.with_artwork_prewarm(prewarm.with_source_instance(instance.clone()))
     } else {

@@ -190,6 +190,99 @@ pub struct BrowseQuery {
     /// Household/child content restriction (rating, tags, guardian grants).
     /// `None` = none. See [`WorkGate`].
     pub gate: Option<SharedGate>,
+    /// Audio/subtitle language filter; empty by default (no restriction).
+    pub language: LanguageFilter,
+}
+
+/// Audio/subtitle language filter (task 180). Codes are canonical (see
+/// `playarr_model::language`). Semantics:
+///
+/// * Within one list, a work matches when it has **any** listed language
+///   (`match_all == false`, the default) or **every** listed language
+///   (`match_all == true`).
+/// * The audio and subtitle lists combine with **AND**.
+/// * A movie is judged on its file(s); a series on the union of all of its
+///   episode files, unless `every_file` requires each wanted language to be
+///   present on **every** file of the work (so "all episodes have English
+///   subtitles").
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LanguageFilter {
+    pub audio: Vec<String>,
+    pub subtitle: Vec<String>,
+    pub match_all: bool,
+    pub every_file: bool,
+}
+
+impl LanguageFilter {
+    pub fn is_empty(&self) -> bool {
+        self.audio.is_empty() && self.subtitle.is_empty()
+    }
+
+    fn without_audio(&self) -> Self {
+        Self {
+            audio: Vec::new(),
+            ..self.clone()
+        }
+    }
+
+    fn without_subtitle(&self) -> Self {
+        Self {
+            subtitle: Vec::new(),
+            ..self.clone()
+        }
+    }
+}
+
+/// One language with the number of works that carry it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageFacet {
+    pub code: String,
+    pub count: i64,
+}
+
+/// Available audio and subtitle languages for a browse scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageFacets {
+    pub audio: Vec<LanguageFacet>,
+    pub subtitle: Vec<LanguageFacet>,
+}
+
+/// Per-work language data for one kind (`audio` or `subtitle`).
+#[derive(Default)]
+struct WorkLanguageIndex {
+    langs: HashMap<Uuid, HashSet<String>>,
+    /// Only populated when `every_file` is needed.
+    file_totals: HashMap<Uuid, i64>,
+    with_lang: HashMap<(Uuid, String), i64>,
+}
+
+impl WorkLanguageIndex {
+    fn matches(&self, work_id: Uuid, wanted: &[String], match_all: bool, every_file: bool) -> bool {
+        if wanted.is_empty() {
+            return true;
+        }
+        let has = |lang: &String| {
+            if every_file {
+                let total = self.file_totals.get(&work_id).copied().unwrap_or(0);
+                total > 0
+                    && self
+                        .with_lang
+                        .get(&(work_id, lang.clone()))
+                        .copied()
+                        .unwrap_or(0)
+                        >= total
+            } else {
+                self.langs
+                    .get(&work_id)
+                    .is_some_and(|set| set.contains(lang))
+            }
+        };
+        if match_all {
+            wanted.iter().all(has)
+        } else {
+            wanted.iter().any(has)
+        }
+    }
 }
 
 impl Default for BrowseQuery {
@@ -210,6 +303,7 @@ impl Default for BrowseQuery {
             allowed_source_instance_ids: None,
             group_library_ids: Vec::new(),
             gate: None,
+            language: LanguageFilter::default(),
         }
     }
 }
@@ -395,7 +489,7 @@ const ALL_KINDS: [WorkKind; 5] = [
 /// never share a cached page.
 fn browse_cache_key(query: &BrowseQuery) -> String {
     format!(
-        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}:{}",
+        "catalog:browse:{:?}:{}:{:?}:{:?}:{:?}:{:?}:{:?}:{}:{}:{:?}:{:?}:{}:{:?}",
         query.kind,
         query.available_only,
         query.source_instance_id,
@@ -412,6 +506,7 @@ fn browse_cache_key(query: &BrowseQuery) -> String {
             .as_ref()
             .map(|g| g.0.cache_key())
             .unwrap_or_default(),
+        query.language,
     )
 }
 
@@ -533,6 +628,10 @@ pub struct CatalogService {
     /// simply has `similar` report `CatalogError::NotFound` rather than
     /// every other constructor call site needing a repo it doesn't have.
     embedding_repo: Option<Arc<dyn playarr_db::EmbeddingRepo>>,
+    /// Audio/subtitle language index behind [`BrowseQuery::language`] and
+    /// [`Self::language_facets`]. `None` (the default) means no language
+    /// data: a non-empty filter then matches nothing and facets are empty.
+    language_repo: Option<Arc<dyn playarr_db::MediaLanguageRepo>>,
     /// Backs [`Self::browse`]/[`Self::get_by_id`]'s [`AvailabilityBadge`]
     /// hydration and [`Self::browse`]/[`Self::search_remote_only`]'s
     /// [`RemoteOnlyWork`] union (§4.3). `None` by default (builder opt-in
@@ -574,8 +673,18 @@ impl CatalogService {
             pool,
             watch_progress_repo,
             embedding_repo: None,
+            language_repo: None,
             peer_availability: None,
         }
+    }
+
+    /// Opts this service into the audio/subtitle language index.
+    pub fn with_media_language_repo(
+        mut self,
+        language_repo: Arc<dyn playarr_db::MediaLanguageRepo>,
+    ) -> Self {
+        self.language_repo = Some(language_repo);
+        self
     }
 
     /// Opts this service's [`Self::similar`] into real results -- see
@@ -803,46 +912,8 @@ impl CatalogService {
         Ok(scored.into_iter().map(|(work, _, _)| work).collect())
     }
 
-    /// Filtered, sorted, paginated listing — the query backing library
-    /// browse/grid views.
-    ///
-    /// `WorkRepo::list_by_kind` only supports a kind filter and a fixed
-    /// `sort_title` order, so availability/genre/tag filtering, the
-    /// `RecentlyAdded` sort, and the total count are all done here in memory over up to
-    /// [`SCAN_LIMIT`] rows per matching kind. That's the right trade-off for
-    /// the catalog sizes this targets (a personal/family media server —
-    /// thousands, not millions, of works); if `WorkRepo` grows a
-    /// filter/sort-aware query (or this crate grows its own indexed read
-    /// model) later, this is the method to swap over.
-    ///
-    /// `source_instance_id` filtering is a further step past that: since
-    /// `Work` doesn't carry which source instance(s) contributed it (see
-    /// [`BrowseQuery::source_instance_id`]'s doc comment), each remaining
-    /// candidate (after the kind/genre/tag filters above have already
-    /// shrunk the set) is checked with one `MediaFileRepo::list_by_work_id`
-    /// call. That's an extra query per candidate rather than a single bulk
-    /// one, but only paid when a caller actually asks for this filter, and
-    /// the same "personal media server" scale trade-off as the rest of this
-    /// method applies.
-    ///
-    /// [`BrowseQuery::allowed_source_instance_ids`] (the enforced per-user
-    /// library access control ceiling, as opposed to `source_instance_id`'s
-    /// single caller-chosen filter) is folded into that exact same per-
-    /// candidate `list_by_work_id` pass rather than a second one -- a
-    /// candidate survives only if it clears *both* checks, and each
-    /// candidate's files are only ever fetched once regardless of how many
-    /// of the two filters are actually active.
-    pub async fn browse(&self, query: BrowseQuery) -> Result<CatalogPage, CatalogError> {
-        let cache_key = browse_cache_key(&query);
-        if let Some(cached) = self.cache.get(&cache_key).await? {
-            if let Ok(page) = serde_json::from_slice::<CatalogPage>(&cached) {
-                return Ok(page);
-            }
-            // Corrupt/incompatible cache entry (e.g. a stale format from a
-            // prior version) — fall through to a fresh query rather than
-            // failing the request over it.
-        }
-
+    /// Every [`BrowseQuery`] filter except the language filter, unsorted.
+    async fn filtered_candidates(&self, query: &BrowseQuery) -> Result<Vec<Work>, CatalogError> {
         let kinds: &[WorkKind] = match &query.kind {
             Some(kind) => std::slice::from_ref(kind),
             None => &ALL_KINDS,
@@ -892,6 +963,150 @@ impl CatalogService {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
             candidates.retain(|w| w.release_date.is_some_and(|rd| rd >= cutoff));
         }
+        Ok(candidates)
+    }
+
+    /// Loads the per-work language index for `kind`; `every_file` also loads
+    /// per-file counts.
+    async fn work_language_index(
+        &self,
+        kind: &str,
+        every_file: bool,
+    ) -> Result<WorkLanguageIndex, CatalogError> {
+        let mut index = WorkLanguageIndex::default();
+        let Some(repo) = &self.language_repo else {
+            return Ok(index);
+        };
+        for (work_id, lang) in repo.list_work_languages(kind).await? {
+            index.langs.entry(work_id).or_default().insert(lang);
+        }
+        if every_file {
+            let (totals, with_lang) = repo.list_work_language_file_counts(kind).await?;
+            index.file_totals = totals;
+            index.with_lang = with_lang;
+        }
+        Ok(index)
+    }
+
+    /// Retains only works matching `filter` (see [`LanguageFilter`]).
+    async fn apply_language_filter(
+        &self,
+        candidates: &mut Vec<Work>,
+        filter: &LanguageFilter,
+    ) -> Result<(), CatalogError> {
+        if filter.is_empty() {
+            return Ok(());
+        }
+        let audio = if filter.audio.is_empty() {
+            WorkLanguageIndex::default()
+        } else {
+            self.work_language_index(playarr_db::repo::KIND_AUDIO, filter.every_file)
+                .await?
+        };
+        let subtitle = if filter.subtitle.is_empty() {
+            WorkLanguageIndex::default()
+        } else {
+            self.work_language_index(playarr_db::repo::KIND_SUBTITLE, filter.every_file)
+                .await?
+        };
+        candidates.retain(|work| {
+            audio.matches(work.id, &filter.audio, filter.match_all, filter.every_file)
+                && subtitle.matches(
+                    work.id,
+                    &filter.subtitle,
+                    filter.match_all,
+                    filter.every_file,
+                )
+        });
+        Ok(())
+    }
+
+    /// Available audio and subtitle languages (with work counts) within the
+    /// scope of `query`. Each list honours every filter, including the
+    /// *other* language list, but not its own, so selecting an audio
+    /// language narrows the subtitle options and still lists every audio
+    /// option.
+    pub async fn language_facets(
+        &self,
+        query: BrowseQuery,
+    ) -> Result<LanguageFacets, CatalogError> {
+        let candidates = self.filtered_candidates(&query).await?;
+        let mut facets = LanguageFacets::default();
+        for (kind, own_filter) in [
+            (playarr_db::repo::KIND_AUDIO, query.language.without_audio()),
+            (
+                playarr_db::repo::KIND_SUBTITLE,
+                query.language.without_subtitle(),
+            ),
+        ] {
+            let mut scoped = candidates.clone();
+            self.apply_language_filter(&mut scoped, &own_filter).await?;
+            let scoped_ids: HashSet<Uuid> = scoped.iter().map(|work| work.id).collect();
+            let mut counts: HashMap<String, i64> = HashMap::new();
+            if let Some(repo) = &self.language_repo {
+                for (work_id, lang) in repo.list_work_languages(kind).await? {
+                    if scoped_ids.contains(&work_id) {
+                        *counts.entry(lang).or_default() += 1;
+                    }
+                }
+            }
+            let mut list: Vec<LanguageFacet> = counts
+                .into_iter()
+                .map(|(code, count)| LanguageFacet { code, count })
+                .collect();
+            list.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.code.cmp(&b.code)));
+            if kind == playarr_db::repo::KIND_AUDIO {
+                facets.audio = list;
+            } else {
+                facets.subtitle = list;
+            }
+        }
+        Ok(facets)
+    }
+
+    /// Filtered, sorted, paginated listing — the query backing library
+    /// browse/grid views.
+    ///
+    /// `WorkRepo::list_by_kind` only supports a kind filter and a fixed
+    /// `sort_title` order, so availability/genre/tag filtering, the
+    /// `RecentlyAdded` sort, and the total count are all done here in memory over up to
+    /// [`SCAN_LIMIT`] rows per matching kind. That's the right trade-off for
+    /// the catalog sizes this targets (a personal/family media server —
+    /// thousands, not millions, of works); if `WorkRepo` grows a
+    /// filter/sort-aware query (or this crate grows its own indexed read
+    /// model) later, this is the method to swap over.
+    ///
+    /// `source_instance_id` filtering is a further step past that: since
+    /// `Work` doesn't carry which source instance(s) contributed it (see
+    /// [`BrowseQuery::source_instance_id`]'s doc comment), each remaining
+    /// candidate (after the kind/genre/tag filters above have already
+    /// shrunk the set) is checked with one `MediaFileRepo::list_by_work_id`
+    /// call. That's an extra query per candidate rather than a single bulk
+    /// one, but only paid when a caller actually asks for this filter, and
+    /// the same "personal media server" scale trade-off as the rest of this
+    /// method applies.
+    ///
+    /// [`BrowseQuery::allowed_source_instance_ids`] (the enforced per-user
+    /// library access control ceiling, as opposed to `source_instance_id`'s
+    /// single caller-chosen filter) is folded into that exact same per-
+    /// candidate `list_by_work_id` pass rather than a second one -- a
+    /// candidate survives only if it clears *both* checks, and each
+    /// candidate's files are only ever fetched once regardless of how many
+    /// of the two filters are actually active.
+    pub async fn browse(&self, query: BrowseQuery) -> Result<CatalogPage, CatalogError> {
+        let cache_key = browse_cache_key(&query);
+        if let Some(cached) = self.cache.get(&cache_key).await? {
+            if let Ok(page) = serde_json::from_slice::<CatalogPage>(&cached) {
+                return Ok(page);
+            }
+            // Corrupt/incompatible cache entry (e.g. a stale format from a
+            // prior version) — fall through to a fresh query rather than
+            // failing the request over it.
+        }
+
+        let mut candidates = self.filtered_candidates(&query).await?;
+        self.apply_language_filter(&mut candidates, &query.language)
+            .await?;
 
         match query.sort {
             BrowseSort::TitleAscending => {
@@ -1020,6 +1235,7 @@ impl CatalogService {
                 // union in.
                 group_library_ids: Vec::new(),
                 gate,
+                language: LanguageFilter::default(),
             })
             .await?;
 
@@ -1165,7 +1381,21 @@ impl CatalogService {
         limit: i64,
         access: Access<'_>,
     ) -> Result<Vec<Work>, CatalogError> {
+        self.search_with_languages(query, limit, access, &LanguageFilter::default())
+            .await
+    }
+
+    /// [`Self::search_with`] restricted to works matching `languages` (see
+    /// [`LanguageFilter`]); applied after ranking, before truncating.
+    pub async fn search_with_languages(
+        &self,
+        query: &str,
+        limit: i64,
+        access: Access<'_>,
+        languages: &LanguageFilter,
+    ) -> Result<Vec<Work>, CatalogError> {
         let allowed_source_instance_ids = access.allowed;
+
         let raw_needle = query.trim();
         let limit = limit.max(0) as usize;
 
@@ -1174,12 +1404,15 @@ impl CatalogService {
         }
         let needle = fold_locale(raw_needle);
 
-        let cache_key = search_cache_key(
+        let mut cache_key = search_cache_key(
             &needle,
             limit as i64,
             allowed_source_instance_ids,
             &access.gate_key(),
         );
+        if !languages.is_empty() {
+            cache_key.push_str(&format!(":lang={languages:?}"));
+        }
         if let Some(cached) = self.cache.get(&cache_key).await? {
             if let Ok(items) = serde_json::from_slice::<Vec<Work>>(&cached) {
                 return Ok(items);
@@ -1211,8 +1444,11 @@ impl CatalogService {
                 .then_with(|| work_a.sort_title.cmp(&work_b.sort_title))
         });
 
-        let mut matches: Vec<Work> = Vec::with_capacity(scored.len().min(limit.max(1)));
-        for (work, _, _) in scored {
+        let mut ranked: Vec<Work> = scored.into_iter().map(|(work, _, _)| work).collect();
+        self.apply_language_filter(&mut ranked, languages).await?;
+
+        let mut matches: Vec<Work> = Vec::with_capacity(ranked.len().min(limit.max(1)));
+        for work in ranked {
             if matches.len() >= limit {
                 break;
             }

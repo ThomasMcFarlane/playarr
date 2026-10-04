@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use chrono::{DateTime, Utc};
-use playarr_catalog::{BrowseQuery, BrowseSort, WorkDetail};
+use playarr_catalog::{BrowseQuery, BrowseSort, LanguageFilter, WorkDetail};
 use playarr_model::{
     Album, Availability, Book, Episode, ExternalProvider, Season, Track, Work, WorkKind,
 };
@@ -55,6 +55,53 @@ pub struct BrowseQueryParams {
     pub order: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Comma-separated audio languages (ISO 639 codes or English names,
+    /// e.g. `en,ja`). A work matches when any of its audio tracks has any
+    /// listed language (`lang_match=all` requires every listed language).
+    /// Combined with `subtitle_lang` using AND.
+    pub audio_lang: Option<String>,
+    /// Comma-separated subtitle languages, embedded or sidecar (same
+    /// format and semantics as `audio_lang`).
+    pub subtitle_lang: Option<String>,
+    /// `any` (default): a work needs at least one listed language per
+    /// filter. `all`: it needs every listed language.
+    pub lang_match: Option<String>,
+    /// `any_file` (default): a series counts a language if any episode
+    /// has it. `every_file`: every file of the work must have it.
+    pub lang_scope: Option<String>,
+}
+
+/// Parses `audio_lang` / `subtitle_lang` style values: comma-separated,
+/// normalised to canonical codes; unrecognised tokens are kept lower-cased
+/// (they simply match nothing) so a typo is not silently ignored.
+pub(crate) fn parse_language_list(raw: Option<&str>) -> Vec<String> {
+    let mut out: Vec<String> = raw
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(|token| {
+            playarr_model::language::normalize_language(token)
+                .unwrap_or_else(|| token.to_lowercase())
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+pub(crate) fn language_filter(
+    audio: Option<&str>,
+    subtitle: Option<&str>,
+    lang_match: Option<&str>,
+    lang_scope: Option<&str>,
+) -> LanguageFilter {
+    LanguageFilter {
+        audio: parse_language_list(audio),
+        subtitle: parse_language_list(subtitle),
+        match_all: lang_match.is_some_and(|value| value.eq_ignore_ascii_case("all")),
+        every_file: lang_scope.is_some_and(|value| value.eq_ignore_ascii_case("every_file")),
+    }
 }
 
 impl From<BrowseQueryParams> for BrowseQuery {
@@ -70,7 +117,14 @@ impl From<BrowseQueryParams> for BrowseQuery {
             _ => BrowseSort::TitleAscending,
         };
         let defaults = BrowseQuery::default();
+        let language = language_filter(
+            params.audio_lang.as_deref(),
+            params.subtitle_lang.as_deref(),
+            params.lang_match.as_deref(),
+            params.lang_scope.as_deref(),
+        );
         BrowseQuery {
+            language,
             kind: params.kind,
             available_only: params.available_only.unwrap_or(defaults.available_only),
             source_instance_id: params.source_instance_id,
@@ -105,6 +159,42 @@ impl From<BrowseQueryParams> for BrowseQuery {
 pub struct SearchQueryParams {
     pub q: String,
     pub limit: Option<i64>,
+    /// See `BrowseQueryParams::audio_lang`.
+    pub audio_lang: Option<String>,
+    /// See `BrowseQueryParams::subtitle_lang`.
+    pub subtitle_lang: Option<String>,
+    /// See `BrowseQueryParams::lang_match`.
+    pub lang_match: Option<String>,
+    /// See `BrowseQueryParams::lang_scope`.
+    pub lang_scope: Option<String>,
+}
+
+/// One available language with the number of works that carry it.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct LanguageFacetEntry {
+    /// Canonical code: ISO 639-1 where one exists, otherwise ISO 639-2/T.
+    pub code: String,
+    /// English name when known (clients localise the code themselves).
+    pub name: Option<String>,
+    /// Number of works (in the requested scope) with this language.
+    pub count: i64,
+}
+
+/// Facet counts for the language filters.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct LanguageFacetsResponse {
+    pub audio: Vec<LanguageFacetEntry>,
+    pub subtitle: Vec<LanguageFacetEntry>,
+}
+
+fn facet_entries(list: Vec<playarr_catalog::LanguageFacet>) -> Vec<LanguageFacetEntry> {
+    list.into_iter()
+        .map(|facet| LanguageFacetEntry {
+            name: playarr_model::language::language_english_name(&facet.code).map(str::to_string),
+            code: facet.code,
+            count: facet.count,
+        })
+        .collect()
 }
 
 /// One peer's reported availability for a `Work`, per
@@ -336,6 +426,40 @@ pub async fn browse_catalog_handler(
 
 #[utoipa::path(
     get,
+    path = "/api/v1/catalog/languages",
+    tag = "catalog",
+    params(BrowseQueryParams),
+    responses(
+        (status = 200, description = "Available audio and subtitle languages with work counts. Accepts the same filters as the catalog browse endpoint; each list honours every filter except its own language parameter, so choosing an audio language narrows the subtitle options but keeps every audio option listed.", body = LanguageFacetsResponse, example = json!({
+            "audio": [{"code": "en", "name": "English", "count": 120}, {"code": "ja", "name": "Japanese", "count": 14}],
+            "subtitle": [{"code": "en", "name": "English", "count": 98}]
+        })),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 403, description = "Caller has neither Playarr streaming access nor admin access")
+    )
+)]
+pub async fn catalog_languages_handler(
+    State(state): State<AppState>,
+    viewer: CatalogViewer,
+    Query(params): Query<BrowseQueryParams>,
+) -> Result<Json<LanguageFacetsResponse>, ApiError> {
+    let mut query: BrowseQuery = params.into();
+    query.allowed_source_instance_ids = viewer.allowed_libraries();
+    // Household content rules shape the facets exactly as they shape browse.
+    query.gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await
+        .map(|g| playarr_catalog::SharedGate(g));
+    let facets = state.catalog.language_facets(query).await?;
+    Ok(Json(LanguageFacetsResponse {
+        audio: facet_entries(facets.audio),
+        subtitle: facet_entries(facets.subtitle),
+    }))
+}
+
+#[utoipa::path(
+    get,
     path = "/api/v1/catalog/kinds",
     tag = "catalog",
     responses(
@@ -480,12 +604,19 @@ pub async fn search_catalog_handler(
         .household
         .gate_for(&viewer.policy, viewer.user_id)
         .await;
+    let languages = language_filter(
+        params.audio_lang.as_deref(),
+        params.subtitle_lang.as_deref(),
+        params.lang_match.as_deref(),
+        params.lang_scope.as_deref(),
+    );
     let items = state
         .catalog
-        .search_with(
+        .search_with_languages(
             &params.q,
             limit,
             crate::household::access(allowed.as_deref(), gate.as_deref()),
+            &languages,
         )
         .await?;
     // Peer-only titles cannot be rated locally: hidden under content rules.
@@ -625,6 +756,166 @@ mod tests {
         let page: playarr_catalog::CatalogPage = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(page.items.len(), 1);
         assert_eq!(page.items[0].title, "Seeded Movie");
+    }
+
+    async fn get_json(router: axum::Router, uri: &str, token: &str) -> serde_json::Value {
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header("Authorization", bearer_header(token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    fn titles(page: &serde_json::Value) -> Vec<String> {
+        let mut titles: Vec<String> = page["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["title"].as_str().unwrap().to_string())
+            .collect();
+        titles.sort();
+        titles
+    }
+
+    #[tokio::test]
+    async fn browse_and_facets_filter_by_audio_and_subtitle_language() {
+        use playarr_db::repo::{
+            MediaLanguageRepo, SqlxMediaLanguageRepo, SOURCE_ARR, SOURCE_SIDECAR,
+        };
+        let (router, state) = test_state().await;
+        let sources: Vec<Uuid> = (0..4).map(|_| Uuid::new_v4()).collect();
+        let languages = SqlxMediaLanguageRepo::new(state.pool.clone());
+        let strings = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        // Anime: Japanese audio, English + French subtitles (one embedded, one sidecar).
+        let anime = seed_movie(&state, "Anime").await;
+        let anime_file = seed_media_file(&state, anime, LeafRef::Work, sources[0]).await;
+        languages
+            .replace(
+                anime_file,
+                SOURCE_ARR,
+                Some(&strings(&["ja"])),
+                Some(&strings(&["en"])),
+                1,
+            )
+            .await
+            .unwrap();
+        languages
+            .replace(anime_file, SOURCE_SIDECAR, None, Some(&strings(&["fr"])), 1)
+            .await
+            .unwrap();
+        // Western: English audio only.
+        let western = seed_movie(&state, "Western").await;
+        let western_file = seed_media_file(&state, western, LeafRef::Work, sources[1]).await;
+        languages
+            .replace(
+                western_file,
+                SOURCE_ARR,
+                Some(&strings(&["en"])),
+                Some(&[]),
+                1,
+            )
+            .await
+            .unwrap();
+        // Unindexed: no language data at all.
+        let unindexed = seed_movie(&state, "Unindexed").await;
+        seed_media_file(&state, unindexed, LeafRef::Work, sources[2]).await;
+
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, sources.clone()).await;
+        let token = mint_access_token(&state, user_id);
+        let get = |uri: &str| {
+            let (router, token, uri) = (router.clone(), token.clone(), uri.to_string());
+            async move { get_json(router, &uri, &token).await }
+        };
+
+        let all = get("/api/v1/catalog?kind=movie&available_only=true").await;
+        assert_eq!(titles(&all), vec!["Anime", "Unindexed", "Western"]);
+
+        let japanese = get("/api/v1/catalog?kind=movie&audio_lang=ja").await;
+        assert_eq!(titles(&japanese), vec!["Anime"]);
+        // Names, 3-letter codes and lists normalise; multiple values are OR by default.
+        let either = get("/api/v1/catalog?kind=movie&audio_lang=Japanese,eng").await;
+        assert_eq!(titles(&either), vec!["Anime", "Western"]);
+        let both = get("/api/v1/catalog?kind=movie&audio_lang=ja,en&lang_match=all").await;
+        assert!(titles(&both).is_empty());
+        let french_subs = get("/api/v1/catalog?kind=movie&subtitle_lang=fr").await;
+        assert_eq!(titles(&french_subs), vec!["Anime"]);
+        let combined = get("/api/v1/catalog?kind=movie&audio_lang=en&subtitle_lang=fr").await;
+        assert!(titles(&combined).is_empty());
+
+        let search = get("/api/v1/catalog/search?q=a&subtitle_lang=en").await;
+        assert_eq!(titles(&search), vec!["Anime"]);
+
+        let facets = get("/api/v1/catalog/languages?kind=movie").await;
+        assert_eq!(
+            facets["audio"],
+            serde_json::json!([
+                {"code": "en", "name": "English", "count": 1},
+                {"code": "ja", "name": "Japanese", "count": 1}
+            ])
+        );
+        assert_eq!(
+            facets["subtitle"],
+            serde_json::json!([
+                {"code": "en", "name": "English", "count": 1},
+                {"code": "fr", "name": "French", "count": 1}
+            ])
+        );
+        // Choosing an audio language narrows subtitle options but keeps every audio option.
+        let narrowed = get("/api/v1/catalog/languages?kind=movie&audio_lang=en").await;
+        assert_eq!(narrowed["audio"].as_array().unwrap().len(), 2);
+        assert!(narrowed["subtitle"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn every_file_scope_requires_the_language_on_each_episode_file() {
+        use playarr_db::repo::{MediaLanguageRepo, SqlxMediaLanguageRepo, SOURCE_ARR};
+        let (router, state) = test_state().await;
+        let sources: Vec<Uuid> = (0..2).map(|_| Uuid::new_v4()).collect();
+        let languages = SqlxMediaLanguageRepo::new(state.pool.clone());
+        let series = seed_movie(&state, "Series").await;
+        let first = seed_media_file(&state, series, LeafRef::Work, sources[0]).await;
+        let second = seed_media_file(&state, series, LeafRef::Work, sources[1]).await;
+        let english = vec!["en".to_string()];
+        languages
+            .replace(first, SOURCE_ARR, Some(&english), Some(&english), 1)
+            .await
+            .unwrap();
+        languages
+            .replace(second, SOURCE_ARR, Some(&english), Some(&[]), 1)
+            .await
+            .unwrap();
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, sources.clone()).await;
+        let token = mint_access_token(&state, user_id);
+
+        let any = get_json(router.clone(), "/api/v1/catalog?subtitle_lang=en", &token).await;
+        assert_eq!(titles(&any), vec!["Series"]);
+        let every = get_json(
+            router.clone(),
+            "/api/v1/catalog?subtitle_lang=en&lang_scope=every_file",
+            &token,
+        )
+        .await;
+        assert!(titles(&every).is_empty());
+        let audio_every = get_json(
+            router,
+            "/api/v1/catalog?audio_lang=en&lang_scope=every_file",
+            &token,
+        )
+        .await;
+        assert_eq!(titles(&audio_every), vec!["Series"]);
     }
 
     #[tokio::test]

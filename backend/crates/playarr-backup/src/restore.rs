@@ -587,7 +587,14 @@ async fn apply_policy_conn(
 ) -> Result<()> {
     // Sessions and derived state never survive a restore: everyone signs in
     // again, open download tickets are void and renditions are regenerated.
-    for table in ["refresh_token_families", "download_tickets", "renditions"] {
+    for table in [
+        "refresh_token_families",
+        "download_tickets",
+        "renditions",
+        // Re-derived from the restored library by the language indexer.
+        "media_file_languages",
+        "media_file_language_state",
+    ] {
         clear_table(conn, engine, table, report).await?;
     }
 

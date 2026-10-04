@@ -2273,6 +2273,48 @@ paths:
           - integer
           - 'null'
           format: int64
+      - name: audio_lang
+        in: query
+        description: |-
+          Comma-separated audio languages (ISO 639 codes or English names,
+          e.g. `en,ja`). A work matches when any of its audio tracks has any
+          listed language (`lang_match=all` requires every listed language).
+          Combined with `subtitle_lang` using AND.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: subtitle_lang
+        in: query
+        description: |-
+          Comma-separated subtitle languages, embedded or sidecar (same
+          format and semantics as `audio_lang`).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_match
+        in: query
+        description: |-
+          `any` (default): a work needs at least one listed language per
+          filter. `all`: it needs every listed language.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_scope
+        in: query
+        description: |-
+          `any_file` (default): a series counts a language if any episode
+          has it. `every_file`: every file of the work must have it.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: A page of catalog works
@@ -2334,6 +2376,159 @@ paths:
           description: Caller has neither Playarr streaming access nor admin access
       security:
       - bearer_auth: []
+  /api/v1/catalog/languages:
+    get:
+      tags:
+      - catalog
+      operationId: catalog_languages_handler
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+      - name: available_only
+        in: query
+        description: |-
+          Return only works that own at least one synced media file. Playarr
+          enables this; Playarr Server Admin leaves it unset so records without
+          playable leaves remain visible for library reconciliation.
+        required: false
+        schema:
+          type:
+          - boolean
+          - 'null'
+      - name: source_instance_id
+        in: query
+        description: |-
+          Restricts results to works with at least one synced file from this
+          source instance -- the "library" filter (two source instances of the
+          same kind, e.g. two Radarr instances, browse as separate libraries).
+          See `playarr_catalog::BrowseQuery::source_instance_id`'s doc
+          comment for how this is resolved.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      - name: genre
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: tag
+        in: query
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: sort
+        in: query
+        description: |-
+          `"title"` (default) or `"date_added"` (`"recent"` remains a
+          backwards-compatible alias for date-added descending).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: order
+        in: query
+        description: '`"asc"` (default for title) or `"desc"` (default for date added).'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      - name: audio_lang
+        in: query
+        description: |-
+          Comma-separated audio languages (ISO 639 codes or English names,
+          e.g. `en,ja`). A work matches when any of its audio tracks has any
+          listed language (`lang_match=all` requires every listed language).
+          Combined with `subtitle_lang` using AND.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: subtitle_lang
+        in: query
+        description: |-
+          Comma-separated subtitle languages, embedded or sidecar (same
+          format and semantics as `audio_lang`).
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_match
+        in: query
+        description: |-
+          `any` (default): a work needs at least one listed language per
+          filter. `all`: it needs every listed language.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_scope
+        in: query
+        description: |-
+          `any_file` (default): a series counts a language if any episode
+          has it. `every_file`: every file of the work must have it.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      responses:
+        '200':
+          description: Available audio and subtitle languages with work counts. Accepts the same filters as the catalog browse endpoint; each list honours every filter except its own language parameter, so choosing an audio language narrows the subtitle options but keeps every audio option listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguageFacetsResponse'
+              example:
+                audio:
+                - code: en
+                  count: 120
+                  name: English
+                - code: ja
+                  count: 14
+                  name: Japanese
+                subtitle:
+                - code: en
+                  count: 98
+                  name: English
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
   /api/v1/catalog/search:
     get:
       tags:
@@ -2358,6 +2553,38 @@ paths:
           - integer
           - 'null'
           format: int64
+      - name: audio_lang
+        in: query
+        description: See `BrowseQueryParams::audio_lang`.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: subtitle_lang
+        in: query
+        description: See `BrowseQueryParams::subtitle_lang`.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_match
+        in: query
+        description: See `BrowseQueryParams::lang_match`.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: lang_scope
+        in: query
+        description: See `BrowseQueryParams::lang_scope`.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Matching works, plus any partial-cache-node remote-only titles
@@ -9071,6 +9298,40 @@ components:
           description: |-
             Base URL of a node already in the target group, e.g.
             `"https://home.example.com"` -- the doc's "bootstrap address".
+    LanguageFacetEntry:
+      type: object
+      description: One available language with the number of works that carry it.
+      required:
+      - code
+      - count
+      properties:
+        code:
+          type: string
+          description: 'Canonical code: ISO 639-1 where one exists, otherwise ISO 639-2/T.'
+        count:
+          type: integer
+          format: int64
+          description: Number of works (in the requested scope) with this language.
+        name:
+          type:
+          - string
+          - 'null'
+          description: English name when known (clients localise the code themselves).
+    LanguageFacetsResponse:
+      type: object
+      description: Facet counts for the language filters.
+      required:
+      - audio
+      - subtitle
+      properties:
+        audio:
+          type: array
+          items:
+            $ref: '#/components/schemas/LanguageFacetEntry'
+        subtitle:
+          type: array
+          items:
+            $ref: '#/components/schemas/LanguageFacetEntry'
     LeafSelector:
       oneOf:
       - type: string

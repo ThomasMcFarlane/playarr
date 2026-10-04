@@ -534,7 +534,10 @@ pub async fn test_state() -> (Router, TestState) {
             pool.clone(),
             watch_progress.clone(),
         )
-        .with_embedding_repo(embedding_repo.clone()),
+        .with_embedding_repo(embedding_repo.clone())
+        .with_media_language_repo(Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(
+            pool.clone(),
+        ))),
     );
 
     let source_instances = Arc::new(SourceInstanceRegistry::new());

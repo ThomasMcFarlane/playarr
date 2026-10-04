@@ -182,6 +182,17 @@ impl ReconciliationPoller {
         self
     }
 
+    /// Opts this poller's [`MediaSync`] into indexing audio/subtitle
+    /// languages from *arr `mediaInfo` (see
+    /// [`crate::media_sync::MediaSync::with_language_repo`]).
+    pub fn with_language_repo(
+        mut self,
+        language_repo: Arc<dyn playarr_db::MediaLanguageRepo>,
+    ) -> Self {
+        self.media_sync = self.media_sync.with_language_repo(language_repo);
+        self
+    }
+
     /// Runs until the trigger channel closes (i.e. every clone of the
     /// corresponding `WebhookReceiver`'s sender has been dropped, which is
     /// this poller's shutdown signal — there's no separate cancellation

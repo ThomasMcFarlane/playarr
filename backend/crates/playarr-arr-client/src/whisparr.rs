@@ -164,6 +164,12 @@ pub struct WhisparrMediaInfo {
     pub resolution: Option<String>,
     #[serde(rename = "runTime")]
     pub run_time: Option<String>,
+    /// Slash-separated audio languages, e.g. `"English/Japanese"`. Older
+    /// releases and unanalysed files omit it.
+    #[serde(rename = "audioLanguages")]
+    pub audio_languages: Option<String>,
+    /// Slash-separated embedded subtitle languages, e.g. `"English/French"`.
+    pub subtitles: Option<String>,
 }
 
 /// An episode (scene) file as Whisparr V3's `/api/v3/episodefile` endpoint

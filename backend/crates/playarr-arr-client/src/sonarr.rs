@@ -144,6 +144,12 @@ pub struct SonarrMediaInfo {
     pub resolution: Option<String>,
     #[serde(rename = "runTime")]
     pub run_time: Option<String>,
+    /// Slash-separated audio languages, e.g. `"English/Japanese"`. Older
+    /// releases and unanalysed files omit it.
+    #[serde(rename = "audioLanguages")]
+    pub audio_languages: Option<String>,
+    /// Slash-separated embedded subtitle languages, e.g. `"English/French"`.
+    pub subtitles: Option<String>,
 }
 
 /// An episode file as Sonarr's `/api/v3/episodefile` endpoint returns it —
@@ -680,7 +686,9 @@ mod tests {
                         "videoCodec": "x264",
                         "videoBitrate": 4_000_000,
                         "resolution": "1920x1080",
-                        "runTime": "42:00"
+                        "runTime": "42:00",
+                        "audioLanguages": "English/Japanese",
+                        "subtitles": "English / French"
                     }
                 }
             ])))
@@ -708,6 +716,11 @@ mod tests {
         assert_eq!(media_info.audio_codec.as_deref(), Some("AC3"));
         assert_eq!(media_info.video_codec.as_deref(), Some("x264"));
         assert_eq!(media_info.video_bitrate, Some(4_000_000));
+        assert_eq!(
+            media_info.audio_languages.as_deref(),
+            Some("English/Japanese")
+        );
+        assert_eq!(media_info.subtitles.as_deref(), Some("English / French"));
     }
 
     #[tokio::test]

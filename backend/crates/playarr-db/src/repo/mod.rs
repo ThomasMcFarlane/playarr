@@ -18,6 +18,7 @@ mod group_library;
 mod household;
 mod library_view;
 mod media_file;
+mod media_language;
 mod node_identity;
 mod peer_group;
 mod peer_join_token;
@@ -61,6 +62,10 @@ pub use library_view::{
     NEWLY_RELEASED_VIEW_ID,
 };
 pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
+pub use media_language::{
+    FileLanguages, MediaLanguageRepo, SqlxMediaLanguageRepo, KIND_AUDIO, KIND_SUBTITLE, SOURCE_ARR,
+    SOURCE_PROBE, SOURCE_SIDECAR,
+};
 pub use node_identity::{NodeIdentityRepo, SqlxNodeIdentityRepo};
 pub use peer_group::{PeerGroupRepo, SqlxPeerGroupRepo};
 pub use peer_join_token::{PeerJoinToken, PeerJoinTokenRepo, SqlxPeerJoinTokenRepo};

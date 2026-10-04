@@ -40,6 +40,7 @@ pub mod error;
 pub mod health;
 pub mod household;
 pub mod ics;
+pub mod language_index;
 pub mod login;
 pub mod media;
 pub mod notifications;
@@ -287,6 +288,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(calendar::availability_lag_handler))
         .routes(routes!(catalog::browse_catalog_handler))
         .routes(routes!(catalog::catalog_kinds_handler))
+        .routes(routes!(catalog::catalog_languages_handler))
         .routes(routes!(catalog::get_work_handler))
         .routes(routes!(catalog::search_catalog_handler))
         .routes(routes!(catalog::similar_works_handler))

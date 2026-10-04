@@ -18,6 +18,7 @@ pub mod download;
 pub mod embedding;
 pub mod group_library;
 pub mod household;
+pub mod language;
 pub mod library_view;
 pub mod media;
 pub mod media_path;

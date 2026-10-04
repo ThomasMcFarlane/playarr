@@ -55,7 +55,7 @@ use playarr_arr_client::{
     ReadarrBook, ReadarrClient, SonarrClient, SonarrEpisodeFile, WhisparrClient,
     WhisparrEpisodeFile,
 };
-use playarr_db::{CreditRepo, DbPool, MediaFileRepo};
+use playarr_db::{CreditRepo, DbPool, MediaFileRepo, MediaLanguageRepo};
 use playarr_model::media::LeafRef;
 use playarr_model::{Credit, CreditRole, ImageAsset, MediaFile, Person};
 use uuid::Uuid;
@@ -203,6 +203,9 @@ pub struct MediaSync {
     /// Only ever consulted from `sync_radarr` -- see that method's doc
     /// comment for why credits are Radarr-only.
     credit_repo: Option<std::sync::Arc<dyn CreditRepo>>,
+    /// Audio/subtitle language index (task 180). `None` by default, same
+    /// opt-in builder shape as `credit_repo`.
+    language_repo: Option<std::sync::Arc<dyn MediaLanguageRepo>>,
 }
 
 impl MediaSync {
@@ -213,6 +216,48 @@ impl MediaSync {
             backend,
             media_file_repo,
             credit_repo: None,
+            language_repo: None,
+        }
+    }
+
+    /// Opts this `MediaSync` into recording the audio and embedded subtitle
+    /// languages Sonarr/Radarr/Whisparr report in `mediaInfo`.
+    pub fn with_language_repo(
+        mut self,
+        language_repo: std::sync::Arc<dyn MediaLanguageRepo>,
+    ) -> Self {
+        self.language_repo = Some(language_repo);
+        self
+    }
+
+    /// Persists the languages from an *arr `mediaInfo` for `media_file_id`.
+    /// Always records that the `arr` source ran (even with no `mediaInfo`) so
+    /// the reconciliation backfill does not refetch the same file forever;
+    /// ffprobe fills the gap for files the *arr app could not describe.
+    /// Best-effort: an index failure never fails the file sync.
+    async fn record_arr_languages(
+        &self,
+        media_file_id: Uuid,
+        audio: Option<&str>,
+        subtitles: Option<&str>,
+    ) {
+        let Some(repo) = &self.language_repo else {
+            return;
+        };
+        let audio = playarr_model::language::parse_arr_languages(audio);
+        let subtitles = playarr_model::language::parse_arr_languages(subtitles);
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        if let Err(error) = repo
+            .replace(
+                media_file_id,
+                playarr_db::repo::SOURCE_ARR,
+                Some(&audio),
+                Some(&subtitles),
+                now_ms,
+            )
+            .await
+        {
+            tracing::warn!(%media_file_id, %error, "could not index media file languages");
         }
     }
 
@@ -241,7 +286,22 @@ impl MediaSync {
     /// libraries instead of requiring tens of thousands of eager probes.
     pub async fn has_missing_duration(&self, work_id: Uuid) -> Result<bool, MediaSyncError> {
         let files = self.media_file_repo.list_by_work_id(work_id).await?;
-        Ok(files.iter().any(|file| file.duration_ms.is_none()))
+        if files.iter().any(|file| file.duration_ms.is_none()) {
+            return Ok(true);
+        }
+        // Language index backfill (task 180): a file synced before the index
+        // existed has no `arr` state yet; one refresh records it.
+        if let Some(repo) = &self.language_repo {
+            for file in &files {
+                if !repo
+                    .has_state(file.id, playarr_db::repo::SOURCE_ARR)
+                    .await?
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// Entry point [`crate::poller::ReconciliationPoller`] calls after
@@ -329,7 +389,13 @@ impl MediaSync {
             source_instance_id,
             source_file_id: Some(file.id.to_string()),
         };
-        self.media_file_repo.upsert_by_source(&media_file).await?;
+        let persisted = self.media_file_repo.upsert_by_source(&media_file).await?;
+        self.record_arr_languages(
+            persisted.id,
+            media_info.and_then(|m| m.audio_languages.as_deref()),
+            media_info.and_then(|m| m.subtitles.as_deref()),
+        )
+        .await;
 
         if let Some(credit_repo) = &self.credit_repo {
             self.sync_radarr_credits(credit_repo.as_ref(), client, work_id, movie_id)
@@ -477,7 +543,13 @@ impl MediaSync {
                 source_instance_id,
                 source_file_id: Some(file.id.to_string()),
             };
-            self.media_file_repo.upsert_by_source(&media_file).await?;
+            let persisted = self.media_file_repo.upsert_by_source(&media_file).await?;
+            self.record_arr_languages(
+                persisted.id,
+                media_info.and_then(|m| m.audio_languages.as_deref()),
+                media_info.and_then(|m| m.subtitles.as_deref()),
+            )
+            .await;
         }
         Ok(())
     }
@@ -559,7 +631,13 @@ impl MediaSync {
                 source_instance_id,
                 source_file_id: Some(file.id.to_string()),
             };
-            self.media_file_repo.upsert_by_source(&media_file).await?;
+            let persisted = self.media_file_repo.upsert_by_source(&media_file).await?;
+            self.record_arr_languages(
+                persisted.id,
+                media_info.and_then(|m| m.audio_languages.as_deref()),
+                media_info.and_then(|m| m.subtitles.as_deref()),
+            )
+            .await;
         }
         Ok(())
     }
