@@ -1304,10 +1304,19 @@ async fn boot_api(
 
     let cache = build_cache(config).await?;
 
-    let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
+    // Every write to these repositories also publishes a live event
+    // (`GET /api/v1/events`, docs/architecture/live-events.md).
+    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+    let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
+        Arc::new(SqlxWorkRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
-    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
+        Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
@@ -1343,9 +1352,15 @@ async fn boot_api(
     ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
-        Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingWatchProgressRepo::new(
+            Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let download_tickets: Arc<dyn DownloadTicketRepo> =
-        Arc::new(SqlxDownloadTicketRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingDownloadTicketRepo::new(
+            Arc::new(SqlxDownloadTicketRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let library_view_repo: Arc<dyn LibraryViewRepo> =
         Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
     // Idempotent -- inserts "Newly Added"/"Newly Released" only if their
@@ -1359,9 +1374,15 @@ async fn boot_api(
              its default 'Newly Added'/'Newly Released' shelves until this is investigated"
         );
     }
-    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
+    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(playarr_db::EventingPlaylistRepo::new(
+        Arc::new(SqlxPlaylistRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo> =
-        Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingWatchlistRepo::new(
+            Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -1658,6 +1679,7 @@ async fn boot_api(
         peer_http,
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
+        live_events,
         calendar_cache: Arc::new(playarr_api::calendar::CalendarCache::new()),
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
         calendar_feed_token_repo,
@@ -2349,6 +2371,7 @@ fn spawn_poller_for(
     source_instances.register_trigger(instance.id, refetch_tx);
     let language_repo: Arc<dyn playarr_db::MediaLanguageRepo> =
         Arc::new(playarr_db::repo::SqlxMediaLanguageRepo::new(pool.clone()));
+    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
     let poller = ReconciliationPoller::new(
         instance.id,
         instance.kind,
@@ -2372,7 +2395,8 @@ fn spawn_poller_for(
     // it through unconditionally here is simpler than a kind-gated branch
     // and costs nothing extra for non-Radarr instances.
     .with_credit_repo(credit_repo)
-    .with_language_repo(language_repo);
+    .with_language_repo(language_repo)
+    .with_live_events(live_events);
     let poller = if let Some(prewarm) = artwork_prewarm {
         poller.with_artwork_prewarm(prewarm.with_source_instance(instance.clone()))
     } else {
@@ -2513,8 +2537,18 @@ async fn boot_worker(
 
     let mut handles = Vec::new();
 
-    let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
-    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    // The worker role writes catalogue rows too (arr sync, peer sync); the
+    // events land in the shared database and reach API-role streams through
+    // their poll fallback even when the roles run as separate processes.
+    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+    let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
+        Arc::new(SqlxWorkRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
+        Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+        live_events,
+    ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     // §9.1/§3.6 (`docs/architecture/peer-groups.md`): this function's own
     // 10s supervisor loop below is the sole spawn point for both

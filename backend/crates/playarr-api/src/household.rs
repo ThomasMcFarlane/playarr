@@ -696,6 +696,18 @@ pub async fn create_approval_handler(
         bonus_seconds: 0,
     };
     state.household.approvals().insert(&approval).await?;
+    // The requesting profile and its guardians see the pending request live.
+    let recipients = std::iter::once(streaming.user_id)
+        .chain(streaming.policy.household.guardian_user_ids.iter().copied());
+    crate::events::publish_to_users(
+        &state,
+        recipients,
+        playarr_db::live_event_kind::HOUSEHOLD,
+        "profile",
+        streaming.user_id,
+        &["approval"],
+    )
+    .await;
     Ok(Json(approval))
 }
 
@@ -878,6 +890,15 @@ pub async fn decide_approval_handler(
     if !changed {
         return Err(ApiError::conflict("approval already decided or expired"));
     }
+    crate::events::publish_to_users(
+        &state,
+        [approval.profile_user_id, guardian.user_id],
+        playarr_db::live_event_kind::HOUSEHOLD,
+        "profile",
+        approval.profile_user_id,
+        &["approval", "status"],
+    )
+    .await;
     load(&state, id).await
 }
 
@@ -921,6 +942,15 @@ pub async fn consume_approval_handler(
     if !consumed {
         return Err(forbidden("approval is not usable"));
     }
+    crate::events::publish_to_users(
+        &state,
+        [streaming.user_id],
+        playarr_db::live_event_kind::HOUSEHOLD,
+        "profile",
+        streaming.user_id,
+        &["approval", "status"],
+    )
+    .await;
     Ok(Json(ConsumeApprovalResponse { consumed: true }))
 }
 
@@ -1092,5 +1122,17 @@ pub async fn put_user_household_handler(
     policy.access_schedule = settings.access_schedule.clone();
     policy.household = settings.household.clone();
     state.policy_repo.upsert(&policy).await?;
+    // The profile itself and its guardians re-read status, schedule and gates.
+    let recipients =
+        std::iter::once(id).chain(settings.household.guardian_user_ids.iter().copied());
+    crate::events::publish_to_users(
+        &state,
+        recipients,
+        playarr_db::live_event_kind::HOUSEHOLD,
+        "profile",
+        id,
+        &["policy", "status"],
+    )
+    .await;
     Ok(Json(HouseholdSettings::from_policy(&policy)))
 }

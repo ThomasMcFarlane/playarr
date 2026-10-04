@@ -32,6 +32,21 @@ Owner feedback (4 October 2026): the Release Calendar ignored the page layout de
 | 212 | Roku: shared page header + filters panel, Release Calendar parity | pending | Unassigned | Parent: 200. |
 | 213 | Xbox: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
 | 214 | Harmony: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
+## Active: Live updates over server-sent events (2026-10-04)
+
+Owner requirement (4 October 2026): items must update automatically when changed (watch status, Home rails, new episodes in seasons, library additions and removals, playlists, watchlist, calendar, downloads, household state). A per-user event stream `GET /api/v1/events` generalises the remote-control stream; polling remains only as a fallback. Design and contract: `docs/architecture/live-events.md`.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 270 | Epic: live updates (server, web incl. TV, Android, other clients) | in progress | live-events | Parent of 271-278. |
+| 271 | Server: `GET /api/v1/events` (session/device-token auth, library- and household-scoped, `Last-Event-ID` resume with bounded retention, heartbeats, `resync`), `live_events` table, event-publishing repository decorators for watch progress, playlists, watchlist, downloads, works and media files, household/account/source-instance publishers, arr sync status | in progress | live-events | Parent: 270. Evidence: `cargo test -p playarr-api events::` (8 tests: scoping, throttle, replay, stale cursor, admin audience), `cargo test -p playarr-db live_event`. |
+| 272 | Docs: multi-node and peer considerations (region-a/region-b are separate event domains; shared Postgres replicas and split API/worker roles via the table) | in progress | live-events | Parent: 270. In `docs/architecture/live-events.md`. |
+| 273 | Web (incl. TV layouts): subscribe on foreground, precise query invalidation, backoff, fallback polling, unsupported-server detection, pause in background | open | live-events | Parent: 270. Depends on 241. |
+| 274 | Android (phone, tablet, TV): foreground subscription, precise state invalidation, backoff, fallback polling, unsupported-server detection | open | live-events | Parent: 270. Depends on 241. |
+| 275 | Live verification on region-b: mark watched on one client, another client (web headless and emulator-host emulator) updates within about one second; a new episode import appears without refresh | open | live-events | Parent: 270. Depends on 241, 243, 244 and a deployment rollout. |
+| 276 | iOS, Apple TV, Roku, Harmony, Xbox: subscribe to `/api/v1/events` | open | Unassigned | Parent: 270. Follows the client behaviour section of the design doc. |
+| 277 | Live events: serialise Postgres sequence ordering if missed invalidations are ever observed | open | Unassigned | Parent: 270. Known caveat documented in the design; not observed. |
+| 278 | Live events: publish `library` events for episode metadata edits made through SQL-only paths (`media_sync` season/episode upserts that do not touch a media file) | open | Unassigned | Parent: 270. New files and work upserts already publish. |
 
 ## Active: Owner requirements backlog (2026-10-04)
 

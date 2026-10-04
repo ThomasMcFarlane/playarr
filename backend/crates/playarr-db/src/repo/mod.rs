@@ -14,9 +14,11 @@ mod credit;
 mod device;
 mod download_ticket;
 mod embedding;
+mod eventing;
 mod group_library;
 mod household;
 mod library_view;
+mod live_event;
 mod media_file;
 mod media_language;
 mod node_identity;
@@ -53,6 +55,10 @@ pub use credit::{CreditRepo, SqlxCreditRepo};
 pub use device::{DeviceRepo, SqlxDeviceRepo};
 pub use download_ticket::{DownloadTicketRepo, SqlxDownloadTicketRepo};
 pub use embedding::{EmbeddingRepo, SqlxEmbeddingRepo};
+pub use eventing::{
+    EventingDownloadTicketRepo, EventingMediaFileRepo, EventingPlaylistRepo,
+    EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
+};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
 pub use household::{
     ApprovalRepo, HouseholdUsageRepo, PinAttemptRepo, PinAttemptState, SqlxHouseholdRepo,
@@ -60,6 +66,11 @@ pub use household::{
 pub use library_view::{
     seed_default_views, LibraryViewRepo, SqlxLibraryViewRepo, NEWLY_ADDED_VIEW_ID,
     NEWLY_RELEASED_VIEW_ID,
+};
+pub use live_event::{
+    kind as live_event_kind, subscribe_wake as subscribe_live_events, LiveEvent,
+    LiveEventPublisher, LiveEventRepo, NewLiveEvent, SqlxLiveEventRepo,
+    MAX_ROWS as LIVE_EVENT_MAX_ROWS, RETENTION_MS as LIVE_EVENT_RETENTION_MS,
 };
 pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use media_language::{

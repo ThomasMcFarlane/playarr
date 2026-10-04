@@ -414,6 +414,7 @@ pub async fn create_source_instance_handler(
     }
 
     state.source_instances.upsert(instance.clone());
+    publish_source_instance_change(&state, instance.id, "created").await;
 
     tracing::info!(
         instance_id = %instance.id,
@@ -495,6 +496,7 @@ pub async fn delete_source_instance_handler(
     }
 
     state.source_instances.remove(id);
+    publish_source_instance_change(&state, id, "removed").await;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
@@ -737,6 +739,34 @@ pub async fn http_latency_handler(
     _admin: AdminUser,
 ) -> Json<Vec<playarr_telemetry::request_timing::RouteLatencyStats>> {
     Json(state.request_timing.snapshot())
+}
+
+/// A source instance appearing or disappearing changes which titles every user
+/// can see and what the admin screens list, so tell both audiences.
+async fn publish_source_instance_change(state: &AppState, id: Uuid, change: &'static str) {
+    use playarr_db::{live_event_kind as kind, NewLiveEvent};
+    state
+        .live_events
+        .publish_all([
+            NewLiveEvent {
+                user_id: None,
+                kind: kind::ADMIN,
+                entity: "source_instance",
+                entity_id: Some(id.to_string()),
+                changed: vec![change],
+                source_instance_id: None,
+            },
+            // `*` (bulk) tells every client to refetch catalogue-derived views.
+            NewLiveEvent {
+                user_id: None,
+                kind: kind::LIBRARY,
+                entity: "*",
+                entity_id: None,
+                changed: vec!["bulk"],
+                source_instance_id: None,
+            },
+        ])
+        .await;
 }
 
 #[cfg(test)]

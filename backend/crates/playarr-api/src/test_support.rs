@@ -452,10 +452,17 @@ async fn test_pool() -> DbPool {
 pub async fn test_state() -> (Router, TestState) {
     let pool = test_pool().await;
 
-    let work_repo: Arc<dyn WorkRepo> = Arc::new(SqlxWorkRepo::new(pool.clone()));
+    let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+    let work_repo: Arc<dyn WorkRepo> = Arc::new(playarr_db::EventingWorkRepo::new(
+        Arc::new(SqlxWorkRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let device_repo: Arc<dyn DeviceRepo> = Arc::new(SqlxDeviceRepo::new(pool.clone()));
     let rendition_repo: Arc<dyn RenditionRepo> = Arc::new(SqlxRenditionRepo::new(pool.clone()));
-    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(SqlxMediaFileRepo::new(pool.clone()));
+    let media_file_repo: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
+        Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let source_instance_repo: Arc<dyn SourceInstanceRepo> =
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
@@ -475,14 +482,26 @@ pub async fn test_state() -> (Router, TestState) {
     ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
-        Arc::new(SqlxWatchProgressRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingWatchProgressRepo::new(
+            Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let download_tickets: Arc<dyn DownloadTicketRepo> =
-        Arc::new(SqlxDownloadTicketRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingDownloadTicketRepo::new(
+            Arc::new(SqlxDownloadTicketRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let library_view_repo: Arc<dyn LibraryViewRepo> =
         Arc::new(SqlxLibraryViewRepo::new(pool.clone()));
-    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(SqlxPlaylistRepo::new(pool.clone()));
+    let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(playarr_db::EventingPlaylistRepo::new(
+        Arc::new(SqlxPlaylistRepo::new(pool.clone())),
+        live_events.clone(),
+    ));
     let watchlist_repo: Arc<dyn playarr_db::repo::WatchlistRepo> =
-        Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone()));
+        Arc::new(playarr_db::EventingWatchlistRepo::new(
+            Arc::new(playarr_db::repo::SqlxWatchlistRepo::new(pool.clone())),
+            live_events.clone(),
+        ));
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -710,6 +729,7 @@ pub async fn test_state() -> (Router, TestState) {
         peer_http: reqwest::Client::new(),
         request_timing: Arc::new(playarr_telemetry::request_timing::RequestTimingRegistry::new()),
         remote_repo: Arc::new(playarr_db::repo::SqlxRemoteRepo::new(pool.clone())),
+        live_events,
         calendar_cache: Arc::new(crate::calendar::CalendarCache::new()),
         portability: Arc::new(crate::portability::ExportRegistry::new()),
         availability_event_repo: Arc::new(playarr_db::SqlxAvailabilityEventRepo::new(pool.clone())),

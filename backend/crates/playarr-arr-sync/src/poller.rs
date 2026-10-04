@@ -118,6 +118,8 @@ pub struct ReconciliationPoller {
     artwork_prewarm: Option<crate::ArtworkPrewarm>,
     /// `None` by default -- see [`Self::with_embedding_sync`].
     embedding_sync: Option<crate::EmbeddingSync>,
+    /// `None` by default -- see [`Self::with_live_events`].
+    live_events: Option<playarr_db::LiveEventPublisher>,
 }
 
 impl ReconciliationPoller {
@@ -145,6 +147,31 @@ impl ReconciliationPoller {
             status_reporter: None,
             artwork_prewarm: None,
             embedding_sync: None,
+            live_events: None,
+        }
+    }
+
+    /// Opts this poller into telling admin live-event streams when a sync
+    /// pass starts and finishes (`docs/architecture/live-events.md`). Catalogue
+    /// and file changes themselves are published by the event-decorated
+    /// repositories the poller writes through, not here.
+    pub fn with_live_events(mut self, events: playarr_db::LiveEventPublisher) -> Self {
+        self.live_events = Some(events);
+        self
+    }
+
+    async fn announce_sync(&self, change: &'static str) {
+        if let Some(events) = &self.live_events {
+            events
+                .publish(playarr_db::NewLiveEvent {
+                    user_id: None,
+                    kind: playarr_db::live_event_kind::ADMIN,
+                    entity: "source_instance",
+                    entity_id: Some(self.source_instance_id.to_string()),
+                    changed: vec![change],
+                    source_instance_id: None,
+                })
+                .await;
         }
     }
 
@@ -252,6 +279,7 @@ impl ReconciliationPoller {
             );
         }
 
+        self.announce_sync("sync_started").await;
         let outcome = match trigger {
             ReconcileTrigger::Scheduled => self.reconcile_all().await,
             ReconcileTrigger::Refetch(entity_id) => self.reconcile_one(entity_id).await,
@@ -269,6 +297,7 @@ impl ReconciliationPoller {
             };
             reporter.report(self.source_instance_id, status);
         }
+        self.announce_sync("sync_finished").await;
 
         outcome
     }

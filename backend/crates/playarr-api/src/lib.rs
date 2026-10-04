@@ -37,6 +37,7 @@ pub mod discovery;
 pub mod downloads;
 pub mod dubarr_audio;
 pub mod error;
+pub mod events;
 pub mod health;
 pub mod household;
 pub mod ics;
@@ -243,6 +244,7 @@ impl Modify for SecurityAddon {
         (name = "portability", description = "Self-service export and import of the signed-in user's own library data (watch progress, playlists, preferences)"),
         (name = "credits", description = "Cast/crew for a work, and every work a given person is credited on"),
         (name = "downloads", description = "Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to"),
+        (name = "events", description = "Per-user live change stream (server-sent events; see docs/architecture/live-events.md)"),
         (name = "remote", description = "Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)"),
         (name = "household", description = "Household and child controls: profile status, schedules, guardian approvals"),
         (name = "peer-groups", description = "Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)")
@@ -489,6 +491,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(remote::command_status_handler))
         .routes(routes!(remote::inbox_handler))
         .routes(routes!(remote::stream_handler))
+        .routes(routes!(events::events_stream_handler))
         .routes(routes!(remote::ack_event_handler))
         .routes(routes!(remote::create_handoff_handler))
         .routes(routes!(remote::get_handoff_handler))
@@ -791,6 +794,9 @@ pub struct AppState {
     /// Remote-control targets, pairings, per-target event queue and
     /// handoffs (`docs/architecture/remote-control.md`).
     pub remote_repo: Arc<dyn playarr_db::RemoteRepo>,
+    /// Writes to the per-user live event stream (`GET /api/v1/events`,
+    /// `docs/architecture/live-events.md`) and is the stream's read source.
+    pub live_events: playarr_db::LiveEventPublisher,
     /// Short-lived cache of per-instance calendar answers, see `calendar`.
     pub calendar_cache: Arc<calendar::CalendarCache>,
     /// Node-local staging area for self-service user-data export jobs.

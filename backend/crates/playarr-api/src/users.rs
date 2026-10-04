@@ -1778,6 +1778,15 @@ pub async fn update_user_handler(
         .map_err(|err| ApiError::internal(format!("failed to persist updated user {id}: {err}")))?;
 
     tracing::info!(user_id = %user.id, "updated user account");
+    crate::events::publish_to_users(
+        &state,
+        [user.id],
+        playarr_db::live_event_kind::ACCOUNT,
+        "profile",
+        user.id,
+        &["policy", "profile"],
+    )
+    .await;
 
     Ok(Json(UserResponse::from_user(
         user,
@@ -1916,6 +1925,15 @@ pub async fn delete_user_handler(
     }
 
     tracing::info!(user_id = %id, "deleted user account");
+    crate::events::publish_to_users(
+        &state,
+        [id],
+        playarr_db::live_event_kind::ACCOUNT,
+        "profile",
+        id,
+        &["removed"],
+    )
+    .await;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

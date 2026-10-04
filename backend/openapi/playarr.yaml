@@ -3079,6 +3079,32 @@ paths:
           description: The ticket expired or was canceled
       security:
       - bearer_auth: []
+  /api/v1/events:
+    get:
+      tags:
+      - events
+      operationId: events_stream_handler
+      parameters:
+      - name: after
+        in: query
+        description: Last event seq already processed (or send Last-Event-ID)
+        required: false
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Server-sent events. `ready` (id = newest seq, body `ReadyEvent`), then `change` frames (id = seq, body `ChangeEvent`) for this account's data, plus `resync` (body `ResyncEvent`) when the resume cursor is too old. `:` comment lines are heartbeats. The stream ends after five minutes; reconnect with `Last-Event-ID`. A server without this route answers non-event-stream content (for example HTML), which clients treat as unsupported and fall back to polling.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller lacks Playarr access
+      security:
+      - bearer_auth: []
   /api/v1/household/approvals:
     get:
       tags:
@@ -13992,6 +14018,8 @@ tags:
   description: Cast/crew for a work, and every work a given person is credited on
 - name: downloads
   description: Server-staged, quality-selectable, resumable downloads of media the caller already has playback access to
+- name: events
+  description: Per-user live change stream (server-sent events; see docs/architecture/live-events.md)
 - name: remote
   description: Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)
 - name: household
