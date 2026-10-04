@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS: verify Apple dispatch credential provisioning and successful source dispatch, with the signed iOS/tvOS child run accepted and queued (TASK 279).
 - iOS: run source-side Apple release dispatch on GitHub-hosted `ubuntu-latest`, avoiding an unavailable repository runner group (TASK 279).
 - Apple platforms: declare that iOS and tvOS use no non-exempt encryption and omit the unsupported 2x Top Shelf image slots so App Store Connect uses the supplied 1x images (TASK 284).
 - iOS and tvOS: scope the distribution identity and provisioning profile to the app target so CocoaPods targets do not receive app-only provisioning settings; append the temporary signing keychain to the existing user search list and restore that exact list before cleanup (TASK 284).
