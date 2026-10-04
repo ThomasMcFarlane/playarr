@@ -1026,9 +1026,10 @@ impl TranscodeOrchestrator {
             // The process may have already exited on its own (transcode
             // finished, or crashed) — `kill` erroring in that case is
             // expected, not a failure of expiry itself.
-            if active.slot.take().is_some() {
+            if let Some(slot) = active.slot.take() {
                 let _ = active.child.kill().await;
                 self.active_sessions.decrement();
+                drop(slot);
             }
         }
 
@@ -1738,10 +1739,18 @@ mod tests {
 
             let expected: Vec<String> = [
                 "-y",
+                "-threads:v",
+                "2",
+                "-filter_threads",
+                "2",
+                "-filter_complex_threads",
+                "2",
                 "-i",
                 "/media/in.mkv",
                 "-c:v",
                 "libx264",
+                "-threads:v",
+                "2",
                 "-pix_fmt",
                 "yuv420p",
                 "-map",
@@ -2106,7 +2115,8 @@ mod tests {
             let orchestrator =
                 TranscodeOrchestrator::new(repo, Arc::new(InMemory::new()), counter.clone())
                     .with_ffmpeg_binary("/usr/bin/true")
-                    .with_output_root(unique_tmp_dir());
+                    .with_output_root(unique_tmp_dir())
+                    .with_max_concurrent_sessions(2);
             let media_file = sample_media_file();
             let first = orchestrator
                 .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
@@ -2219,7 +2229,7 @@ mod tests {
                 Arc::new(InMemory::new()),
                 ActiveSessionCounter::new(),
             )
-            .with_ffmpeg_binary(sleeper)
+            .with_ffmpeg_binary(sleeper.to_string_lossy().into_owned())
             .with_output_root(root.join("output"))
             .with_max_concurrent_sessions(1);
 
@@ -2255,6 +2265,44 @@ mod tests {
             assert!(orchestrator.reserve_capacity().await.is_ok());
         }
 
+        #[tokio::test]
+        async fn concurrent_admission_grants_exactly_one_permit() {
+            let orchestrator = Arc::new(
+                TranscodeOrchestrator::new(
+                    Arc::new(FakeRenditionRepo::default()),
+                    Arc::new(InMemory::new()),
+                    ActiveSessionCounter::new(),
+                )
+                .with_max_concurrent_sessions(1),
+            );
+            let barrier = Arc::new(tokio::sync::Barrier::new(3));
+            let attempts = (0..2)
+                .map(|_| {
+                    let orchestrator = orchestrator.clone();
+                    let barrier = barrier.clone();
+                    tokio::spawn(async move {
+                        barrier.wait().await;
+                        orchestrator.reserve_capacity().await
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            barrier.wait().await;
+            let [first, second] = attempts.try_into().expect("two admission attempts");
+            let (first, second) = tokio::join!(first, second);
+            let permits = [first.unwrap(), second.unwrap()];
+            assert_eq!(permits.iter().filter(|result| result.is_ok()).count(), 1);
+            assert_eq!(
+                permits
+                    .iter()
+                    .filter(|result| matches!(result, Err(TranscodeError::NoCapacity)))
+                    .count(),
+                1
+            );
+            drop(permits);
+            assert!(orchestrator.reserve_capacity().await.is_ok());
+        }
+
         #[cfg(unix)]
         #[tokio::test]
         async fn admission_permit_tracks_child_and_is_released_by_expiry() {
@@ -2267,7 +2315,7 @@ mod tests {
                 Arc::new(InMemory::new()),
                 counter.clone(),
             )
-            .with_ffmpeg_binary(sleeper)
+            .with_ffmpeg_binary(sleeper.to_string_lossy().into_owned())
             .with_output_root(root.join("output"))
             .with_max_concurrent_sessions(1);
             let media_file = sample_media_file();
