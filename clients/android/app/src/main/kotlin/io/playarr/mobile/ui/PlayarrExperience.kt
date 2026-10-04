@@ -187,6 +187,8 @@ import io.playarr.shared.data.model.PlaybackStopReason
 import io.playarr.shared.data.model.ProfileAvatarPreference
 import io.playarr.shared.data.model.SeasonDetail
 import io.playarr.shared.data.model.TrackDetail
+import io.playarr.shared.data.model.LanguageFacetEntry
+import io.playarr.shared.data.model.LanguageFacets
 import io.playarr.shared.data.model.Work
 import io.playarr.shared.data.model.WorkChildren
 import io.playarr.shared.data.model.WorkDetail
@@ -437,9 +439,66 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
 
     private val libraryJobs = mutableMapOf<WorkKind, Job>()
+    private var languageJob: Job? = null
+    private var facetsJob: Job? = null
 
     private val _libraries = MutableStateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>>(emptyMap())
     val libraries: StateFlow<Map<WorkKind, ExperienceLoad<List<Work>>>> = _libraries.asStateFlow()
+
+    // Audio/subtitle language filters per library (task 183). The matching work
+    // ids come from the server (`audio_lang`/`subtitle_lang`); the full library
+    // list stays cached and is narrowed to these ids on screen.
+    private val _languageSelections = MutableStateFlow<Map<WorkKind, LanguageSelection>>(emptyMap())
+    val languageSelections: StateFlow<Map<WorkKind, LanguageSelection>> = _languageSelections.asStateFlow()
+    private val _languageMatches = MutableStateFlow<Map<WorkKind, Set<String>>>(emptyMap())
+    val languageMatches: StateFlow<Map<WorkKind, Set<String>>> = _languageMatches.asStateFlow()
+    private val _languageFacets = MutableStateFlow<LanguageFacets?>(null)
+    val languageFacets: StateFlow<LanguageFacets?> = _languageFacets.asStateFlow()
+
+    fun setLanguageSelection(kind: WorkKind, selection: LanguageSelection) {
+        _languageSelections.value = _languageSelections.value + (kind to selection)
+        languageJob?.cancel()
+        if (selection.isEmpty) {
+            _languageMatches.value = _languageMatches.value - kind
+        } else {
+            languageJob = viewModelScope.launch {
+                runCatching {
+                    val ids = mutableSetOf<String>()
+                    var offset = 0L
+                    while (true) {
+                        val page = api.browseCatalog(
+                            kind = kind.wireName(),
+                            availableOnly = true,
+                            limit = LIBRARY_PAGE_SIZE.toLong(),
+                            offset = offset,
+                            audioLang = selection.audioParam,
+                            subtitleLang = selection.subtitleParam,
+                        )
+                        ids += page.items.map { it.id }
+                        offset += page.items.size
+                        if (page.items.size < LIBRARY_PAGE_SIZE) break
+                    }
+                    ids
+                }.onSuccess { _languageMatches.value = _languageMatches.value + (kind to it) }
+            }
+        }
+        loadLanguageFacets(kind, selection)
+    }
+
+    /** Available languages for [kind] given the other active filters. */
+    fun loadLanguageFacets(kind: WorkKind, selection: LanguageSelection) {
+        facetsJob?.cancel()
+        facetsJob = viewModelScope.launch {
+            _languageFacets.value = runCatching {
+                api.catalogLanguages(
+                    kind = kind.wireName(),
+                    availableOnly = true,
+                    audioLang = selection.audioParam,
+                    subtitleLang = selection.subtitleParam,
+                )
+            }.getOrNull()
+        }
+    }
 
     private val _search = MutableStateFlow<ExperienceLoad<PlayarrSearchResults>>(
         ExperienceLoad.Ready(PlayarrSearchResults()),
@@ -584,6 +643,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _availableKinds.value = null
         _canDownload.value = null
         _libraries.value = emptyMap()
+        _languageSelections.value = emptyMap()
+        _languageMatches.value = emptyMap()
+        _languageFacets.value = null
         searchJob?.cancel()
         availableSearchWorkIds = null
         _search.value = ExperienceLoad.Ready(PlayarrSearchResults())
@@ -2422,6 +2484,9 @@ private fun LibraryFiltersDialog(
     artworkSize: LibraryArtworkSize,
     sortMode: String,
     descending: Boolean,
+    languageSelection: LanguageSelection,
+    languageFacets: LanguageFacets?,
+    onLanguageSelection: (LanguageSelection) -> Unit,
     onViewMode: (LibraryViewMode) -> Unit,
     onArtworkSize: (LibraryArtworkSize) -> Unit,
     onSortMode: (String) -> Unit,
@@ -2490,10 +2555,58 @@ private fun LibraryFiltersDialog(
                         },
                     )
                 }
+                LibraryLanguageChoices(
+                    playarrString(PlayarrString.LibraryAudioLanguage),
+                    languageFacets?.audio.orEmpty(),
+                    languageSelection.audio,
+                ) { onLanguageSelection(languageSelection.toggleAudio(it)) }
+                LibraryLanguageChoices(
+                    playarrString(PlayarrString.LibrarySubtitleLanguage),
+                    languageFacets?.subtitle.orEmpty(),
+                    languageSelection.subtitle,
+                ) { onLanguageSelection(languageSelection.toggleSubtitle(it)) }
+                if (!languageSelection.isEmpty) {
+                    TextButton(onClick = { onLanguageSelection(LanguageSelection()) }) {
+                        Text(playarrString(PlayarrString.LibraryClearLanguages))
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(playarrString(PlayarrString.LibraryCloseFilters)) } },
     )
+}
+
+/** Multi-select language chips: toggle any number, counts come from the server facets. */
+@Composable
+private fun LibraryLanguageChoices(
+    title: String,
+    facets: List<LanguageFacetEntry>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    val language = LocalPlayarrLanguage.current
+    // A selected language whose count dropped to zero must stay visible so it can be unticked.
+    val entries = facets + selected.filter { code -> facets.none { it.code == code } }
+        .map { LanguageFacetEntry(code = it, count = -1) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        if (entries.isEmpty()) {
+            Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(entries, key = { it.code }) { entry ->
+                    val name = languageDisplayName(entry.code, language.locale, entry.name)
+                    val active = entry.code in selected
+                    val label = if (entry.count >= 0) "$name · ${entry.count}" else name
+                    if (active) {
+                        Button(onClick = { onToggle(entry.code) }) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onToggle(entry.code) }) { Text(label) }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2524,6 +2637,11 @@ private fun ExperienceLibraryScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val states by viewModel.libraries.collectAsState()
+    val languageSelections by viewModel.languageSelections.collectAsState()
+    val languageMatches by viewModel.languageMatches.collectAsState()
+    val languageFacets by viewModel.languageFacets.collectAsState()
+    val languageSelection = languageSelections[kind] ?: LanguageSelection()
+    val matchingIds = if (languageSelection.isEmpty) null else languageMatches[kind]
     val progress by viewModel.progress.collectAsState()
     val progressLoaded by viewModel.progressLoaded.collectAsState()
     val progressByWork = remember(progress) { indexPlayarrProgressByWork(progress) }
@@ -2553,8 +2671,11 @@ private fun ExperienceLibraryScreen(
             var artworkSize by remember { mutableStateOf(LibraryArtworkSize.Medium) }
             var sortMode by remember { mutableStateOf("title") }
             var descending by remember { mutableStateOf(false) }
-            val filteredWorks = remember(state.value, activeLetter, sortMode, descending) {
-                val matching = state.value.filter { work -> activeLetter == "#" || work.sortTitle.startsWith(activeLetter, ignoreCase = true) }
+            val filteredWorks = remember(state.value, activeLetter, sortMode, descending, matchingIds) {
+                val matching = state.value.filter { work ->
+                    (matchingIds == null || work.id in matchingIds) &&
+                        (activeLetter == "#" || work.sortTitle.startsWith(activeLetter, ignoreCase = true))
+                }
                 val sorted = if (sortMode == "recent") matching.sortedBy(Work::addedAt) else matching.sortedBy(Work::sortTitle)
                 if (descending) sorted.reversed() else sorted
             }
@@ -2593,6 +2714,14 @@ private fun ExperienceLibraryScreen(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                     }
+if (filteredWorks.isEmpty() && matchingIds != null) {
+                        Text(
+                            playarrString(PlayarrString.LibraryNoMatches),
+                            color = WebInkMuted,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(24.dp),
+                        )
+                    } else {
                     LibraryResults(
                         works = filteredWorks,
                         viewMode = viewMode,
@@ -2607,6 +2736,7 @@ private fun ExperienceLibraryScreen(
                         onOpen = { navController.navigate("experience-detail/${it.id}") },
                         onContext = { contextWork = it },
                     )
+                    }
                 }
                 if (isTelevision) {
                     PlayarrPageHeader(
@@ -2659,6 +2789,9 @@ private fun ExperienceLibraryScreen(
                     artworkSize = artworkSize,
                     sortMode = sortMode,
                     descending = descending,
+                    languageSelection = languageSelection,
+                    languageFacets = languageFacets,
+                    onLanguageSelection = { viewModel.setLanguageSelection(kind, it) },
                     onViewMode = { viewMode = it },
                     onArtworkSize = { artworkSize = it },
                     onSortMode = { sortMode = it; if (it != "title") activeLetter = "#" },

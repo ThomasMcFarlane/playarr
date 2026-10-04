@@ -1,5 +1,7 @@
 package io.playarr.mobile.connected
 
+import io.playarr.shared.data.model.LanguageFacetEntry
+import io.playarr.shared.data.model.LanguageFacets
 import io.playarr.shared.data.model.CatalogPage
 import io.playarr.shared.data.model.CreateDownloadTicketRequest
 import io.playarr.shared.data.model.DownloadOptionsResponse
@@ -149,22 +151,53 @@ internal class JoinedPlayarrApi(
         sort: String?,
         limit: Long?,
         offset: Long?,
+        audioLang: String?,
+        subtitleLang: String?,
+        langMatch: String?,
+        langScope: String?,
     ): CatalogPage {
         val clients = clients()
         if (clients.size == 1) {
-            return primary.browseCatalog(kind, availableOnly, genre, tag, sort, limit, offset)
+            return primary.browseCatalog(
+                kind, availableOnly, genre, tag, sort, limit, offset,
+                audioLang, subtitleLang, langMatch, langScope,
+            )
         }
         val requestedOffset = offset ?: 0L
         val requestedLimit = limit ?: 50L
         val fetchLimit = (requestedOffset + requestedLimit).coerceAtLeast(0L)
         val pages = successfulAcross(clients) { server ->
-            server.api.browseCatalog(kind, availableOnly, genre, tag, sort, fetchLimit, 0)
+            server.api.browseCatalog(
+                kind, availableOnly, genre, tag, sort, fetchLimit, 0,
+                audioLang, subtitleLang, langMatch, langScope,
+            )
         }
         val joined = joinWorks(pages.map { (server, page) -> server to page.items })
             .sortedWith(playarrWorkComparator(sort))
         return CatalogPage(
             items = joined.drop(requestedOffset.safeIndex()).take(requestedLimit.safeIndex()),
             total = pages.sumOf { (_, page) -> page.total ?: page.items.size.toLong() },
+        )
+    }
+
+    override suspend fun catalogLanguages(
+        kind: String?,
+        availableOnly: Boolean?,
+        audioLang: String?,
+        subtitleLang: String?,
+        langMatch: String?,
+        langScope: String?,
+    ): LanguageFacets {
+        val clients = clients()
+        if (clients.size == 1) {
+            return primary.catalogLanguages(kind, availableOnly, audioLang, subtitleLang, langMatch, langScope)
+        }
+        val results = successfulAcross(clients) {
+            it.api.catalogLanguages(kind, availableOnly, audioLang, subtitleLang, langMatch, langScope)
+        }.map { it.second }
+        return LanguageFacets(
+            audio = mergeLanguageFacets(results.map { it.audio }),
+            subtitle = mergeLanguageFacets(results.map { it.subtitle }),
         )
     }
 
@@ -404,3 +437,12 @@ private fun playarrWorkComparator(sort: String?): Comparator<Work> = when (sort)
 }
 
 private fun Long.safeIndex(): Int = coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+/** Sums counts per language code across servers, most common first. */
+internal fun mergeLanguageFacets(lists: List<List<LanguageFacetEntry>>): List<LanguageFacetEntry> =
+    lists.flatten()
+        .groupBy { it.code }
+        .map { (code, entries) ->
+            LanguageFacetEntry(code, entries.firstNotNullOfOrNull { it.name }, entries.sumOf { it.count })
+        }
+        .sortedWith(compareByDescending<LanguageFacetEntry> { it.count }.thenBy { it.code })

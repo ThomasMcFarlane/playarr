@@ -34,6 +34,23 @@ data class SearchResponse(
     val items: List<Work>,
 )
 
+/** One available language with the number of works that carry it (`LanguageFacetEntry`). */
+@Serializable
+data class LanguageFacetEntry(
+    /** Canonical code: ISO 639-1 where one exists, otherwise ISO 639-2/T. */
+    val code: String,
+    /** English name when the server knows it; clients localise the code themselves. */
+    val name: String? = null,
+    val count: Long = 0,
+)
+
+/** `GET /api/v1/catalog/languages` response body (`LanguageFacetsResponse`). */
+@Serializable
+data class LanguageFacets(
+    val audio: List<LanguageFacetEntry> = emptyList(),
+    val subtitle: List<LanguageFacetEntry> = emptyList(),
+)
+
 /** Minimal Playarr-facing projection returned by `GET /api/v1/views`. */
 @Serializable
 data class ViewSummary(

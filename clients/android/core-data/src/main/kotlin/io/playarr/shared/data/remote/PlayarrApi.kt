@@ -5,6 +5,7 @@ import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarResponse
 import io.playarr.shared.data.model.CatalogPage
+import io.playarr.shared.data.model.LanguageFacets
 import io.playarr.shared.data.model.ClientPlaybackReport
 import io.playarr.shared.data.model.PlaybackHealthReport
 import io.playarr.shared.data.model.AddPlaylistItemRequest
@@ -146,7 +147,29 @@ interface PlayarrApi {
         @Query("sort") sort: String? = null,
         @Query("limit") limit: Long? = null,
         @Query("offset") offset: Long? = null,
+        /** Comma-separated audio languages; any listed language matches (see [langMatch]). */
+        @Query("audio_lang") audioLang: String? = null,
+        /** Comma-separated subtitle languages, embedded or sidecar. */
+        @Query("subtitle_lang") subtitleLang: String? = null,
+        /** `"any"` (default) or `"all"` listed languages per filter. */
+        @Query("lang_match") langMatch: String? = null,
+        /** `"any_file"` (default) or `"every_file"` for series. */
+        @Query("lang_scope") langScope: String? = null,
     ): CatalogPage
+
+    /**
+     * `GET /api/v1/catalog/languages` -- available audio and subtitle languages
+     * with work counts, honouring the same filters as [browseCatalog].
+     */
+    @GET("api/v1/catalog/languages")
+    suspend fun catalogLanguages(
+        @Query("kind") kind: String? = null,
+        @Query("available_only") availableOnly: Boolean? = null,
+        @Query("audio_lang") audioLang: String? = null,
+        @Query("subtitle_lang") subtitleLang: String? = null,
+        @Query("lang_match") langMatch: String? = null,
+        @Query("lang_scope") langScope: String? = null,
+    ): LanguageFacets
 
     @GET("api/v1/catalog/kinds")
     suspend fun listCatalogKinds(): List<WorkKind>
