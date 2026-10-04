@@ -13,6 +13,7 @@ import { BackupsPage } from "./pages/Backups";
 import { ServerCapabilitiesPage } from "./pages/ServerCapabilities";
 import { PeerGroupsPage } from "./pages/PeerGroups";
 import { ViewsPage } from "./pages/ViewsPage";
+import { HomeRailsPage } from "./pages/HomeRailsPage";
 import { ViewEditPage } from "./pages/ViewEditPage";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
 import { PlaylistEditPage } from "./pages/PlaylistEditPage";
@@ -69,6 +70,7 @@ const SYSTEM_NAV_LINKS = [
 const LIBRARY_NAV_LINKS = [
   { to: "/library", label: "Browse", end: false },
   { to: "/views", label: "Views", end: false },
+  { to: "/home-rails", label: "Home rails", end: false },
   { to: "/playlists", label: "Playlists", end: false },
 ] as const;
 
@@ -256,6 +258,7 @@ export function App() {
                           </Suspense>
                         }
                       />
+                      <Route path="/home-rails" element={<HomeRailsPage />} />
                       <Route path="/views" element={<ViewsPage />} />
                       <Route path="/views/new" element={<ViewEditPage />} />
                       <Route path="/views/:id" element={<ViewEditPage />} />

@@ -9,6 +9,10 @@ import {
   type WorkKind,
 } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
+import {
+  SearchableMultiSelect,
+  type SearchableMultiSelectOption,
+} from "../components/SearchableMultiSelect";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 
 const EMPTY_FORM: LibraryViewRequest = {
@@ -20,6 +24,11 @@ const EMPTY_FORM: LibraryViewRequest = {
     tag: undefined,
     available_only: false,
     release_window_days: undefined,
+    audio_languages: [],
+    subtitle_languages: [],
+    language_match_all: false,
+    language_every_file: false,
+    unwatched_only: false,
   },
   sort: ["title"],
 };
@@ -69,6 +78,26 @@ export function ViewEditPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
+  const [languageOptions, setLanguageOptions] = useState<{
+    audio: SearchableMultiSelectOption[];
+    subtitle: SearchableMultiSelectOption[];
+  }>({ audio: [], subtitle: [] });
+
+  useEffect(() => {
+    client
+      .catalogLanguages({})
+      .then((facets) => {
+        const toOptions = (list: { code: string; name?: string | null; count: number }[]) =>
+          list.map((l) => ({
+            value: l.code,
+            label: l.name ?? l.code,
+            description: `${l.count} title${l.count === 1 ? "" : "s"}`,
+          }));
+        setLanguageOptions({ audio: toOptions(facets.audio), subtitle: toOptions(facets.subtitle) });
+      })
+      .catch(() => undefined);
+  }, [client]);
+
   useEffect(() => {
     client.listSourceInstances().then(setSourceInstances).catch(() => setSourceInstances([]));
   }, [client]);
@@ -85,7 +114,11 @@ export function ViewEditPage() {
           return;
         }
         setExisting(found);
-        setForm({ name: found.name, criteria: found.criteria, sort: found.sort });
+        setForm({
+          name: found.name,
+          criteria: { ...EMPTY_FORM.criteria, ...found.criteria },
+          sort: found.sort,
+        });
       })
       .catch((err: unknown) => setError(describeApiError(err)))
       .finally(() => setLoading(false));
@@ -111,6 +144,10 @@ export function ViewEditPage() {
           // "released" sort, so a release-date-sorted view previews with
           // "recent" instead -- see the note rendered below the preview list.
           sort: formSort === "released" ? "recent" : formSort,
+          audio_lang: form.criteria.audio_languages?.join(",") || undefined,
+          subtitle_lang: form.criteria.subtitle_languages?.join(",") || undefined,
+          lang_match: form.criteria.language_match_all ? "all" : undefined,
+          lang_scope: form.criteria.language_every_file ? "every_file" : undefined,
           limit: 5,
           offset: 0,
         })
@@ -130,6 +167,10 @@ export function ViewEditPage() {
     form.criteria.source_instance_id,
     form.criteria.genre,
     form.criteria.available_only,
+    form.criteria.audio_languages?.join(','),
+    form.criteria.subtitle_languages?.join(','),
+    form.criteria.language_match_all,
+    form.criteria.language_every_file,
     form.sort?.[0],
   ]);
 
@@ -271,6 +312,65 @@ export function ViewEditPage() {
             }
           />
           Available only
+        </label>
+
+        <SearchableMultiSelect
+          id="view-audio-languages"
+          label="Audio languages"
+          options={languageOptions.audio}
+          values={form.criteria.audio_languages ?? []}
+          onChange={(values) =>
+            setForm((f) => ({ ...f, criteria: { ...f.criteria, audio_languages: values } }))
+          }
+          placeholder="Any audio language"
+          searchPlaceholder="Search languages"
+          allowCustomValue
+        />
+
+        <SearchableMultiSelect
+          id="view-subtitle-languages"
+          label="Subtitle languages"
+          options={languageOptions.subtitle}
+          values={form.criteria.subtitle_languages ?? []}
+          onChange={(values) =>
+            setForm((f) => ({ ...f, criteria: { ...f.criteria, subtitle_languages: values } }))
+          }
+          placeholder="Any subtitle language"
+          searchPlaceholder="Search languages"
+          allowCustomValue
+        />
+
+        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={form.criteria.language_match_all ?? false}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, criteria: { ...f.criteria, language_match_all: e.target.checked } }))
+            }
+          />
+          Require every listed language (instead of any)
+        </label>
+
+        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={form.criteria.language_every_file ?? false}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, criteria: { ...f.criteria, language_every_file: e.target.checked } }))
+            }
+          />
+          Language must be on every file (all episodes)
+        </label>
+
+        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={form.criteria.unwatched_only ?? false}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, criteria: { ...f.criteria, unwatched_only: e.target.checked } }))
+            }
+          />
+          Unwatched only (per viewer)
         </label>
 
         <div className="modal-field">

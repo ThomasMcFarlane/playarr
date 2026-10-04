@@ -19,6 +19,13 @@ function summarizeCriteria(view: LibraryViewResponse): string {
   if (view.criteria.genre) parts.push(view.criteria.genre);
   if (view.criteria.tag) parts.push(`tag:${view.criteria.tag}`);
   if (view.criteria.available_only) parts.push("Available only");
+  if (view.criteria.audio_languages?.length) {
+    parts.push(`audio:${view.criteria.audio_languages.join("/")}`);
+  }
+  if (view.criteria.subtitle_languages?.length) {
+    parts.push(`subs:${view.criteria.subtitle_languages.join("/")}`);
+  }
+  if (view.criteria.unwatched_only) parts.push("Unwatched only");
   if (view.criteria.release_window_days) {
     parts.push(`last ${view.criteria.release_window_days}d`);
   }
