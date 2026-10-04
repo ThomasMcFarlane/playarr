@@ -46,6 +46,9 @@ import io.playarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
 import io.playarr.shared.data.model.UpdatePlaylistRequest
 import io.playarr.shared.data.model.UpdateProfileAvatarRequest
 import io.playarr.shared.data.model.UpdateProfilePinRequest
+import io.playarr.shared.data.model.ResumeChoiceRequest
+import io.playarr.shared.data.model.ResumeClearResponse
+import io.playarr.shared.data.model.ResumePlan
 import io.playarr.shared.data.model.UpdateWatchProgressRequest
 import io.playarr.shared.data.model.UserDataExportJob
 import io.playarr.shared.data.model.UserDataImportPreview
@@ -294,6 +297,25 @@ interface PlayarrApi {
 
     @GET("api/v1/playback/progress")
     suspend fun listWatchProgress(): List<WatchProgress>
+
+    /** `GET /api/v1/catalog/{id}/resume-plan` -- what Start/Resume should play for a series. */
+    @GET("api/v1/catalog/{id}/resume-plan")
+    suspend fun getResumePlan(@Path("id") seriesWorkId: String): ResumePlan
+
+    /** `POST /api/v1/catalog/{id}/resume-plan/choice` -- reports the option the viewer picked. */
+    @POST("api/v1/catalog/{id}/resume-plan/choice")
+    suspend fun recordResumeChoice(
+        @Path("id") seriesWorkId: String,
+        @Body request: ResumeChoiceRequest,
+    ): ResumePlan
+
+    /** `DELETE /api/v1/catalog/{id}/resume-plan/choices` -- forget every recorded answer ("ask again"). */
+    @DELETE("api/v1/catalog/{id}/resume-plan/choices")
+    suspend fun clearResumeChoices(@Path("id") seriesWorkId: String): ResumeClearResponse
+
+    /** `GET /api/v1/playback/resume-plans` -- plans for series with history, newest first (Home). */
+    @GET("api/v1/playback/resume-plans")
+    suspend fun listResumePlans(): List<ResumePlan>
 
     @GET("api/v1/playback/{media_file_id}/progress")
     suspend fun getWatchProgress(@Path("media_file_id") mediaFileId: String): WatchProgress

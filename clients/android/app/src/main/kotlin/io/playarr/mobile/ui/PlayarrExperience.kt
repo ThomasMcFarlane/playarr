@@ -90,6 +90,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -98,6 +99,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -193,6 +195,7 @@ import io.playarr.shared.data.model.WorkChildren
 import io.playarr.shared.data.model.WorkDetail
 import io.playarr.shared.data.model.WorkKind
 import io.playarr.shared.data.model.WorkCreditsResponse
+import io.playarr.shared.data.model.ResumePlan
 import io.playarr.shared.data.model.WatchProgress
 import io.playarr.shared.data.model.WatchState
 import io.playarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
@@ -594,6 +597,10 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         viewModelScope.launch {
             _home.value = ExperienceLoad.Loading
             val progressRequest = async { runCatching { api.listWatchProgress() }.getOrNull() }
+            // Series with several ways to continue are shown as a stacked card (ask on Home).
+            val plansRequest = async {
+                runCatching { api.listResumePlans() }.getOrDefault(emptyList()).filter { it.isStacked }
+            }
             val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site)
             val results = kinds.map { kind ->
                 async { kind to browseLibrary(kind = kind, availableOnly = true, sort = "recent", limit = 36) }
@@ -612,22 +619,34 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             }
             val progressRows = progressRequest.await()
             val progress = progressRows ?: emptyList()
-            val onDeck = progress
+            val stackedPlans = plansRequest.await().associateBy(ResumePlan::seriesWorkId)
+            val resumableRows = progress
                 .asSequence()
                 .filter { it.state == WatchState.PartWatched }
                 .sortedByDescending { it.updatedAt.orEmpty() }
                 .distinctBy(WatchProgress::workId)
                 .take(10)
-                .map { row ->
+                .toList()
+            val fromRows = resumableRows.map { row ->
+                async {
+                    runCatching { api.getWork(row.workId) }
+                        .getOrNull()
+                        ?.let { resolvePlayarrOnDeckEntry(it, row, stackedPlans[row.workId]) }
+                }
+            }
+            // Series that need a choice but have no part-watched episode still belong here.
+            val rowWorkIds = resumableRows.mapTo(mutableSetOf(), WatchProgress::workId)
+            val fromPlans = stackedPlans.values
+                .filter { it.seriesWorkId !in rowWorkIds }
+                .take((10 - resumableRows.size).coerceAtLeast(0))
+                .map { plan ->
                     async {
-                        runCatching { api.getWork(row.workId) }
+                        runCatching { api.getWork(plan.seriesWorkId) }
                             .getOrNull()
-                            ?.let { resolvePlayarrOnDeckEntry(it, row) }
+                            ?.let { resolvePlayarrOnDeckEntry(it, null, plan) }
                     }
                 }
-                .toList()
-                .awaitAll()
-                .filterNotNull()
+            val onDeck = (fromRows + fromPlans).awaitAll().filterNotNull()
             _progress.value = progress
             if (progressRows != null) _progressLoaded.value = true
             _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, onDeck))
@@ -857,6 +876,24 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             }
             loadHome()
         }
+    }
+
+    /**
+     * Home's stacked Continue Watching card: reports the pick (so declined
+     * gaps and rewatch answers are remembered) and returns the series' watch
+     * order, or null when the series cannot be loaded.
+     */
+    suspend fun resumeQueueFor(
+        seriesWorkId: String,
+        option: io.playarr.shared.data.model.ResumeOption,
+    ): List<PlayarrPlaybackQueueItem>? {
+        runCatching {
+            api.recordResumeChoice(
+                seriesWorkId,
+                io.playarr.shared.data.model.ResumeChoiceRequest(option.kind, option.episodeId),
+            )
+        }
+        return runCatching { api.getWork(seriesWorkId).playarrPlaybackQueueItems() }.getOrNull()
     }
 
     fun startPlayback(
@@ -2036,7 +2073,31 @@ private fun ExperienceHomeScreen(
             val allWorks = current.value.flatMap(HomeRail::works)
             var selectedId by remember(allWorks) { mutableStateOf(allWorks.first().id) }
             var contextWork by remember { mutableStateOf<Work?>(null) }
+            var resumeChooser by remember { mutableStateOf<PlayarrOnDeckEntry?>(null) }
+            val homeScope = rememberCoroutineScope()
             val selected = allWorks.firstOrNull { it.id == selectedId } ?: allWorks.first()
+            resumeChooser?.let { entry ->
+                val plan = entry.resumePlan
+                if (plan != null) {
+                    PlayarrResumeChooserDialog(
+                        plan = plan,
+                        seriesTitle = entry.work.title,
+                        onDismiss = { resumeChooser = null },
+                        onSelect = { option ->
+                            resumeChooser = null
+                            homeScope.launch {
+                                val queue = viewModel.resumeQueueFor(entry.work.id, option)
+                                if (queue == null) {
+                                    navController.navigate("experience-detail/${Uri.encode(entry.work.id)}")
+                                } else {
+                                    viewModel.startPlayback(option.mediaFileId, queue)
+                                    navController.navigate("experience-player/${Uri.encode(option.mediaFileId)}")
+                                }
+                            }
+                        },
+                    )
+                }
+            }
             ExperienceStage(
                 selected = selected,
                 serverUrl = serverUrl,
@@ -2076,6 +2137,11 @@ private fun ExperienceHomeScreen(
                                 progressByWork = progressByWork,
                                 onSelected = { selectedId = it.id },
                                 onClick = { work, onDeck ->
+                                    if (onDeck?.resumePlan?.isStacked == true) {
+                                        // Several ways to continue: ask here instead of opening the series.
+                                        resumeChooser = onDeck
+                                        return@ExperienceMediaRail
+                                    }
                                     val mediaFileId = onDeck?.episode?.mediaFileId
                                         ?: onDeck?.progress?.mediaFileId
                                     val route = "experience-detail/${Uri.encode(work.id)}"
@@ -2289,6 +2355,7 @@ private fun ExperienceMediaRail(
                     onClick = { onClick(work, onDeck) },
                     onContext = { onContext(work) },
                     mediaFileId = episode?.mediaFileId ?: onDeck?.progress?.mediaFileId,
+                    stackCount = onDeck?.resumePlan?.takeIf { it.isStacked }?.options?.size ?: 0,
                     displayTitle = episode?.title?.takeIf(String::isNotBlank)
                         ?: episode?.let {
                             playarrString(PlayarrString.HomeEpisodeLabel, "number" to it.episodeNumber)
@@ -2325,6 +2392,8 @@ private fun ExperienceLandscapeCard(
     displayTitle: String = work.title,
     displaySubtitle: String? = null,
     showUnwatched: Boolean = false,
+    /** More than 1 draws the card as a stack with a "N ways to continue" badge. */
+    stackCount: Int = 0,
 ) {
     val resolvedSubtitle = displaySubtitle ?: work.kind.playarrSingularLabel()
     var focused by remember { mutableStateOf(false) }
@@ -2333,6 +2402,8 @@ private fun ExperienceLandscapeCard(
         focusedScale = FocusMotion.cardFocusScale,
         label = "playarrCardFocus",
     )
+    val stackNear = WebInk.copy(alpha = 0.26f)
+    val stackFar = WebInk.copy(alpha = 0.14f)
     Column(
         modifier = modifier
             .width(width)
@@ -2347,6 +2418,25 @@ private fun ExperienceLandscapeCard(
         Box(
             Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
+                .then(
+                    if (stackCount > 1) {
+                        // Two sheets peeking out above the card, inside the rail's top padding.
+                        Modifier.drawBehind {
+                            val radius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx())
+                            listOf(3.dp to stackNear, 6.dp to stackFar).forEachIndexed { index, (rise, layer) ->
+                                val inset = (index + 1) * 8.dp.toPx()
+                                drawRoundRect(
+                                    color = layer,
+                                    topLeft = androidx.compose.ui.geometry.Offset(inset, -rise.toPx()),
+                                    size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height),
+                                    cornerRadius = radius,
+                                )
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
                 .clip(RoundedCornerShape(10.dp)).background(WebSurfaceSoft)
                 .then(if (focused || selected) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
         ) {
@@ -2376,8 +2466,21 @@ private fun ExperienceLandscapeCard(
                     Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
                 }
             }
-            if (showUnwatched && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
+            if (showUnwatched && stackCount <= 1 && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
                 PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
+            }
+            if (stackCount > 1) {
+                Text(
+                    playarrString(PlayarrString.HomeResumeOptions, "count" to stackCount),
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
             }
         }
         Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
@@ -3360,6 +3463,10 @@ internal class ExperienceDetailViewModel @Inject constructor(
                             val lag = runCatching { api.getAvailabilityLag(detail.work.id) }.getOrNull()
                             updateSnapshot(detail.work.id) { copy(availabilityLag = lag) }
                         }
+                        launch {
+                            val plan = runCatching { api.getResumePlan(detail.work.id) }.getOrNull()
+                            updateSnapshot(detail.work.id) { copy(resumePlan = plan) }
+                        }
                     }
                     launch {
                         val credits = runCatching { api.getWorkCredits(detail.work.id) }
@@ -3401,6 +3508,19 @@ internal class ExperienceDetailViewModel @Inject constructor(
     }
 
     private suspend fun loadPlayarrSimilarWorks(work: Work): List<Work> = loadPlayarrSimilarWorks(api, work)
+
+    /** Reports the option the viewer picked so declined gaps and rewatch answers are remembered. */
+    fun recordResumeChoice(seriesWorkId: String, option: io.playarr.shared.data.model.ResumeOption) {
+        viewModelScope.launch {
+            val plan = runCatching {
+                api.recordResumeChoice(
+                    seriesWorkId,
+                    io.playarr.shared.data.model.ResumeChoiceRequest(option.kind, option.episodeId),
+                )
+            }.getOrNull() ?: return@launch
+            updateSnapshot(seriesWorkId) { copy(resumePlan = plan) }
+        }
+    }
 
     fun saveMoviePlaybackOptions(mediaFileId: String, request: UpdateMediaPlaybackPreferencesRequest) {
         viewModelScope.launch {
@@ -3502,6 +3622,8 @@ internal data class ExperienceDetailSnapshot(
     val moviePlaybackOptions: MediaPlaybackOptionsResponse? = null,
     /** Series only; null while loading or when the server cannot supply it. */
     val availabilityLag: io.playarr.shared.data.model.AvailabilityLag? = null,
+    /** Series only; what Start/Resume should do. Null while loading or on an older server. */
+    val resumePlan: io.playarr.shared.data.model.ResumePlan? = null,
 )
 
 internal sealed interface PlayarrSourceSelection {
@@ -3613,6 +3735,8 @@ private fun ExperienceDetailScreen(
                         movieMetadata = current.value.movieMetadata,
                         moviePlaybackOptions = current.value.moviePlaybackOptions,
                         availabilityLag = current.value.availabilityLag,
+                        resumePlan = current.value.resumePlan,
+                        onResumeChoice = { option -> viewModel.recordResumeChoice(detail.work.id, option) },
                         initialMediaFileId = initialMediaFileId,
                         serverUrl = serverUrl,
                         accessToken = accessToken,
@@ -3823,6 +3947,8 @@ private fun ExperienceVideoDetailContent(
     movieMetadata: MediaMetadata?,
     moviePlaybackOptions: MediaPlaybackOptionsResponse?,
     availabilityLag: io.playarr.shared.data.model.AvailabilityLag?,
+    resumePlan: io.playarr.shared.data.model.ResumePlan?,
+    onResumeChoice: (io.playarr.shared.data.model.ResumeOption) -> Unit,
     initialMediaFileId: String?,
     serverUrl: String,
     accessToken: String?,
@@ -3916,6 +4042,8 @@ private fun ExperienceVideoDetailContent(
                     onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
                     onAddToPlaylist = onAddToPlaylist,
                     onDownload = onDownload,
+                    resumePlan = resumePlan,
+                    onResumeChoice = onResumeChoice,
                     autoFocusPlay = true,
                 )
             }
@@ -3989,6 +4117,8 @@ private fun ExperienceVideoDetailContent(
                         onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
                         onAddToPlaylist = onAddToPlaylist,
                         onDownload = onDownload,
+                        resumePlan = resumePlan,
+                        onResumeChoice = onResumeChoice,
                     )
                 }
                 if (series != null) {
@@ -4170,6 +4300,8 @@ private fun VideoDetailActions(
     onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     onAddToPlaylist: (String?) -> Unit,
     onDownload: (List<DownloadCandidate>) -> Unit,
+    resumePlan: io.playarr.shared.data.model.ResumePlan? = null,
+    onResumeChoice: (io.playarr.shared.data.model.ResumeOption) -> Unit = {},
     autoFocusPlay: Boolean = false,
 ) {
     if (mediaFileId == null) {
@@ -4187,17 +4319,48 @@ private fun VideoDetailActions(
             playarrString(PlayarrString.DetailEpisodeNumber, "number" to it.episode.episodeNumber)
         }
         ?: work.title
+    // Series: the primary button is the server's smart Start/Resume.
+    val smartPlan = resumePlan?.takeIf { work.kind == WorkKind.Series && it.target != null }
+    var chooserOpen by remember(work.id) { mutableStateOf(false) }
+    val smartDescription = smartPlan?.let { playarrString(it.buttonTitle(), "title" to work.title) }
+    if (smartPlan != null && chooserOpen) {
+        PlayarrResumeChooserDialog(
+            plan = smartPlan,
+            seriesTitle = work.title,
+            onDismiss = { chooserOpen = false },
+            onSelect = { option ->
+                chooserOpen = false
+                onResumeChoice(option)
+                onPlay(option.mediaFileId, null, null)
+            },
+        )
+    }
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PlayarrButton(
-            onClick = { onPlay(mediaFileId, null, launchSettings) },
-            modifier = Modifier.focusRequester(playFocus),
+            onClick = {
+                val target = smartPlan?.target
+                when {
+                    smartPlan != null && smartPlan.isStacked -> chooserOpen = true
+                    target != null -> onPlay(target.mediaFileId, null, null)
+                    else -> onPlay(mediaFileId, null, launchSettings)
+                }
+            },
+            modifier = Modifier.focusRequester(playFocus).then(
+                if (smartDescription != null) {
+                    Modifier.semantics { contentDescription = smartDescription }
+                } else {
+                    Modifier
+                },
+            ),
         ) {
             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
             Text(
-                if (progress?.state == WatchState.PartWatched) {
+                if (smartPlan != null) {
+                    playarrString(smartPlan.buttonLabel())
+                } else if (progress?.state == WatchState.PartWatched) {
                     playarrString(
                         PlayarrString.DetailResumeFrom,
                         "position" to formatPlayarrPlayerTime(progress.positionMs),

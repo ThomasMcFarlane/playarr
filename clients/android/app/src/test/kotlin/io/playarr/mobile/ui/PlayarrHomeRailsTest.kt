@@ -4,6 +4,10 @@ import io.playarr.shared.data.model.Availability
 import io.playarr.shared.data.model.Episode
 import io.playarr.shared.data.model.EpisodeDetail
 import io.playarr.shared.data.model.Season
+import io.playarr.shared.data.model.ResumeAction
+import io.playarr.shared.data.model.ResumeOption
+import io.playarr.shared.data.model.ResumeOptionKind
+import io.playarr.shared.data.model.ResumePlan
 import io.playarr.shared.data.model.SeasonDetail
 import io.playarr.shared.data.model.WatchProgress
 import io.playarr.shared.data.model.WatchState
@@ -102,6 +106,69 @@ class PlayarrHomeRailsTest {
                 progress(series.id, "2026-07-22T01:00:00Z").copy(mediaFileId = "stale-media"),
             ),
         )
+    }
+
+    @Test
+    fun `stacked plan leads with its target episode and plan-only series need no progress`() {
+        val series = work("series", WorkKind.Series, "2026-07-21T00:00:00Z")
+        fun ep(id: String, number: Int, file: String) = EpisodeDetail(
+            episode = Episode(
+                id = id,
+                seasonId = "season-1",
+                episodeNumber = number,
+                title = "Episode $number",
+                monitored = true,
+                availability = Availability.Available,
+            ),
+            mediaFileId = file,
+        )
+        val detail = WorkDetail(
+            work = series,
+            children = WorkChildren.Series(
+                listOf(
+                    SeasonDetail(
+                        season = Season(
+                            id = "season-1",
+                            seriesWorkId = series.id,
+                            seasonNumber = 1,
+                            monitored = true,
+                            availability = Availability.Available,
+                        ),
+                        episodes = listOf(ep("e1", 1, "m1"), ep("e2", 2, "media-series")),
+                    ),
+                ),
+            ),
+        )
+        fun opt(kind: ResumeOptionKind, id: String, file: String, number: Int) = ResumeOption(
+            kind = kind,
+            episodeId = id,
+            mediaFileId = file,
+            seasonNumber = 1,
+            episodeNumber = number,
+            label = "S01E0$number",
+        )
+        val plan = ResumePlan(
+            seriesWorkId = series.id,
+            action = ResumeAction.Resume,
+            needsChoice = true,
+            options = listOf(
+                opt(ResumeOptionKind.MissedEpisode, "e1", "m1", 1),
+                opt(ResumeOptionKind.NextInSeries, "e2", "media-series", 2),
+            ),
+        ).let { it.copy(target = it.options.first()) }
+
+        val withProgress = resolvePlayarrOnDeckEntry(detail, progress(series.id, "2026-07-22T01:00:00Z"), plan)
+        assertEquals(1, withProgress?.episode?.episodeNumber)
+        assertEquals(plan, withProgress?.resumePlan)
+
+        val planOnly = resolvePlayarrOnDeckEntry(detail, null, plan)
+        assertEquals(null, planOnly?.progress)
+        assertEquals("m1", planOnly?.episode?.mediaFileId)
+
+        // A non-stacked plan is ignored; without progress there is nothing to show.
+        val single = plan.copy(needsChoice = false)
+        assertEquals(null, resolvePlayarrOnDeckEntry(detail, null, single))
+        assertEquals(null, resolvePlayarrOnDeckEntry(detail, progress(series.id, "x"), single)?.resumePlan)
     }
 
     private fun work(id: String, kind: WorkKind, addedAt: String) = Work(

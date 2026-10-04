@@ -14,6 +14,9 @@ import io.playarr.shared.data.model.PlaybackEventRequest
 import io.playarr.shared.data.model.PlaybackInfoResponse
 import io.playarr.shared.data.model.SearchResponse
 import io.playarr.shared.data.model.UpdateMediaPlaybackPreferencesRequest
+import io.playarr.shared.data.model.ResumeChoiceRequest
+import io.playarr.shared.data.model.ResumeClearResponse
+import io.playarr.shared.data.model.ResumePlan
 import io.playarr.shared.data.model.UpdateWatchProgressRequest
 import io.playarr.shared.data.model.WatchProgress
 import io.playarr.shared.data.model.Work
@@ -293,6 +296,28 @@ internal class JoinedPlayarrApi(
         val clients = clients()
         if (clients.size == 1) return primary.listWatchProgress()
         return successfulAcross(clients) { it.api.listWatchProgress() }.flatMap { it.second }
+    }
+
+    /** Plans are per server: route to the server that owns this series. */
+    override suspend fun getResumePlan(seriesWorkId: String): ResumePlan {
+        val source = registry.workSources(seriesWorkId).firstOrNull()
+        val server = source?.server ?: clients().first()
+        return server.api.getResumePlan(source?.work?.id ?: seriesWorkId)
+    }
+
+    override suspend fun recordResumeChoice(
+        seriesWorkId: String,
+        request: ResumeChoiceRequest,
+    ): ResumePlan {
+        val source = registry.workSources(seriesWorkId).firstOrNull()
+        val server = source?.server ?: clients().first()
+        return server.api.recordResumeChoice(source?.work?.id ?: seriesWorkId, request)
+    }
+
+    override suspend fun clearResumeChoices(seriesWorkId: String): ResumeClearResponse {
+        val source = registry.workSources(seriesWorkId).firstOrNull()
+        val server = source?.server ?: clients().first()
+        return server.api.clearResumeChoices(source?.work?.id ?: seriesWorkId)
     }
 
     override suspend fun getWatchProgress(mediaFileId: String): WatchProgress =

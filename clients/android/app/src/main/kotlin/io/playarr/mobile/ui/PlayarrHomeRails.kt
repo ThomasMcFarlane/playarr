@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.data.model.ResumePlan
 import io.playarr.shared.data.model.WatchProgress
 import io.playarr.shared.data.model.Work
 import io.playarr.shared.data.model.WorkChildren
@@ -16,8 +17,11 @@ internal data class PlayarrOnDeckEpisode(
 
 internal data class PlayarrOnDeckEntry(
     val work: Work,
-    val progress: WatchProgress,
+    /** Null for a series that is on deck only because it needs a Resume choice. */
+    val progress: WatchProgress?,
     val episode: PlayarrOnDeckEpisode? = null,
+    /** Set when several ways to continue apply: Home shows a stacked card and asks. */
+    val resumePlan: ResumePlan? = null,
 )
 
 internal data class HomeRail(
@@ -28,22 +32,27 @@ internal data class HomeRail(
 
 internal fun resolvePlayarrOnDeckEntry(
     detail: WorkDetail,
-    progress: WatchProgress,
+    progress: WatchProgress?,
+    resumePlan: ResumePlan? = null,
 ): PlayarrOnDeckEntry? {
+    val stacked = resumePlan?.takeIf { it.isStacked }
     val series = detail.children as? WorkChildren.Series
-        ?: return PlayarrOnDeckEntry(detail.work, progress)
+        ?: return progress?.let { PlayarrOnDeckEntry(detail.work, it) }
+    // A stacked series shows the plan's lead episode, not just the last one played.
+    val leadMediaFileId = stacked?.target?.mediaFileId ?: progress?.mediaFileId ?: return null
     for (season in series.seasons) {
-        val episode = season.episodes.firstOrNull { it.mediaFileId == progress.mediaFileId } ?: continue
+        val episode = season.episodes.firstOrNull { it.mediaFileId == leadMediaFileId } ?: continue
         return PlayarrOnDeckEntry(
             work = detail.work,
             progress = progress,
             episode = PlayarrOnDeckEpisode(
                 id = episode.episode.id,
-                mediaFileId = progress.mediaFileId,
+                mediaFileId = leadMediaFileId,
                 title = episode.episode.title,
                 seasonNumber = season.season.seasonNumber,
                 episodeNumber = episode.episode.episodeNumber,
             ),
+            resumePlan = stacked,
         )
     }
     return null
