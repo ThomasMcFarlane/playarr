@@ -31,6 +31,7 @@ pub mod playback;
 pub mod playlist;
 pub mod policy;
 pub mod publishing;
+pub mod requests;
 pub mod resume;
 pub mod routing;
 pub mod seasonal;

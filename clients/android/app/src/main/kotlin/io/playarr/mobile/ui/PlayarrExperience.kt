@@ -68,6 +68,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
@@ -961,6 +962,7 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
     ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
     ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.Bookmark),
+    ExperienceDestination("requests", PlayarrString.NavRequests, Icons.Outlined.Inbox),
 )
 
 internal fun visibleExperienceDestinations(
@@ -980,7 +982,7 @@ internal fun televisionDestinationGroups(
 ): List<List<ExperienceDestination>> = listOf(
     destinations.filter { it.route in setOf("downloads", "search") },
     destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "calendar") },
-    destinations.filter { it.route == "playlists" || it.route == "watchlist" },
+    destinations.filter { it.route == "playlists" || it.route == "watchlist" || it.route == "requests" },
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
@@ -1847,6 +1849,14 @@ private fun ExperienceNavHost(
                 )
             }
         }
+        composable("requests") {
+            ExperienceOnlineGate(isOnline, isTelevision, "requests") {
+                ExperienceRequestsScreen(
+                    isTelevision = isTelevision,
+                    onBack = { navController.openExperienceTopLevel("home") },
+                )
+            }
+        }
         composable("playlists") {
             ExperienceOnlineGate(isOnline, isTelevision, "playlists") {
                 ExperiencePlaylistsScreen(serverUrl, accessToken, isTelevision, navController)
@@ -1918,7 +1928,7 @@ internal fun restorableExperienceRoute(
     val base = route?.substringBefore('?')
     return when {
         base in libraryRoutes -> libraryRouteFor(base!!, library)
-        base in setOf("home", "search", "calendar", "playlists", "watchlist", "settings", "downloads") -> base
+        base in setOf("home", "search", "calendar", "playlists", "watchlist", "requests", "settings", "downloads") -> base
         route == "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
             buildString {
                 append("experience-detail/")

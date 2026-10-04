@@ -472,6 +472,12 @@ pub async fn test_state() -> (Router, TestState) {
         Arc::new(SqlxSourceInstanceRepo::new(pool.clone()));
     let user_repo: Arc<dyn UserRepo> = Arc::new(SqlxUserRepo::new(pool.clone()));
     let user_invite_repo: Arc<dyn UserInviteRepo> = Arc::new(SqlxUserInviteRepo::new(pool.clone()));
+    let request_sync = Arc::new(crate::request_sync::RequestSync::new(
+        Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
+        Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+        user_repo.clone(),
+        work_repo.clone(),
+    ));
     let user_invite_request_repo: Arc<dyn UserInviteRequestRepo> =
         Arc::new(SqlxUserInviteRequestRepo::new(pool.clone()));
     let push_registration_repo: Arc<dyn PushRegistrationRepo> =
@@ -706,6 +712,7 @@ pub async fn test_state() -> (Router, TestState) {
         watchlist_repo,
         resume_dismissals,
         discovery_requests_allow_all_users: false,
+        request_sync: request_sync.clone(),
         work_repo: work_repo.clone(),
         credit_repo,
         tdarr_connection_repo,

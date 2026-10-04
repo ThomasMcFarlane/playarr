@@ -26,6 +26,7 @@ import io.playarr.shared.data.model.PlayerPreferences
 import io.playarr.shared.data.model.RequestResult
 import io.playarr.shared.data.model.ResolvedTitle
 import io.playarr.shared.data.model.TitleSnapshot
+import io.playarr.shared.data.model.RequestView
 import io.playarr.shared.data.model.WatchlistResponse
 import io.playarr.shared.data.model.OptionalUserInviteRequest
 import io.playarr.shared.data.model.Playlist
@@ -522,6 +523,9 @@ interface PlayarrApi {
 
     @POST("api/v1/discover/request")
     suspend fun requestTitle(@Body snapshot: TitleSnapshot): RequestResult
+
+    @GET("api/v1/requests")
+    suspend fun listRequests(): List<RequestView>
 
     @GET("api/v1/watchlist")
     suspend fun listWatchlist(): WatchlistResponse

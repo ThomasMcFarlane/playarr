@@ -13,11 +13,11 @@ class PlayarrNavigationParityTest {
     fun `mobile destinations wait for catalogue access and hide downloads until granted`() {
         assertTrue(visibleExperienceDestinations(availableKinds = null, canDownload = true).isEmpty())
         assertEquals(
-            listOf("search", "home", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist"),
+            listOf("search", "home", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist", "requests"),
             visibleExperienceDestinations(allKinds, canDownload = null).map(ExperienceDestination::route),
         )
         assertEquals(
-            listOf("downloads", "search", "home", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist"),
+            listOf("downloads", "search", "home", "series", "movies", "sites", "music", "calendar", "playlists", "watchlist", "requests"),
             visibleExperienceDestinations(allKinds, canDownload = true).map(ExperienceDestination::route),
         )
         assertFalse(visibleExperienceDestinations(allKinds, canDownload = false).any { it.route == "downloads" })
@@ -31,7 +31,7 @@ class PlayarrNavigationParityTest {
         assertEquals(listOf("downloads", "search"), groups.first().map(ExperienceDestination::route))
         assertEquals(visible.map(ExperienceDestination::route).toSet(), groups.flatten().map(ExperienceDestination::route).toSet())
         assertEquals(visible.size, groups.sumOf(List<ExperienceDestination>::size))
-        assertEquals(listOf("playlists", "watchlist"), groups.last().map { it.route })
+        assertEquals(listOf("playlists", "watchlist", "requests"), groups.last().map { it.route })
     }
 
     @Test

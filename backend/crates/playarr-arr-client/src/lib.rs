@@ -22,9 +22,12 @@ mod dubarr;
 mod http;
 mod lidarr;
 mod lookup;
+mod ombi;
 mod prowlarr;
 mod radarr;
 mod readarr;
+mod request_manager;
+mod seerr;
 mod sonarr;
 mod whisparr;
 
@@ -40,6 +43,7 @@ pub use lidarr::{
     LidarrQuality, LidarrQualityInfo, LidarrRevision, LidarrTrack, LidarrTrackFile,
 };
 pub use lookup::LookupTitle;
+pub use ombi::OmbiClient;
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
 pub use radarr::{
     RadarrClient, RadarrCollection, RadarrCredit, RadarrImage, RadarrMediaInfo, RadarrMovie,
@@ -50,6 +54,8 @@ pub use readarr::{
     ReadarrAuthor, ReadarrBook, ReadarrBookFile, ReadarrClient, ReadarrQuality, ReadarrQualityInfo,
     ReadarrRevision,
 };
+pub use request_manager::{NewRemoteRequest, RemoteRequest, RequestManagerClient, TitleInfo};
+pub use seerr::SeerrClient;
 pub use sonarr::{
     SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrImage, SonarrMediaInfo, SonarrQuality,
     SonarrQualityInfo, SonarrRatings, SonarrRevision, SonarrSeries,

@@ -15,6 +15,8 @@ import { PeerGroupsPage } from "./pages/PeerGroups";
 import { ViewsPage } from "./pages/ViewsPage";
 import { HomeRailsPage } from "./pages/HomeRailsPage";
 import { ViewEditPage } from "./pages/ViewEditPage";
+import { RequestIntegrationsPage } from "./pages/RequestIntegrations";
+import { RequestsPage } from "./pages/Requests";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
 import { PlaylistEditPage } from "./pages/PlaylistEditPage";
 import { LoginPage } from "./pages/Login";
@@ -38,6 +40,8 @@ const ApiExplorerPage = lazy(() =>
 const NAV_LINKS = [
   { to: "/", label: "Source instances", end: true },
   { to: "/users", label: "Users", end: false },
+  { to: "/requests", label: "Requests", end: false },
+  { to: "/request-integrations", label: "Request integrations", end: false },
 ] as const;
 
 /**
@@ -240,6 +244,8 @@ export function App() {
                       <Route path="/" element={<SourceInstancesPage />} />
                       <Route path="/library" element={<LibraryPage />} />
                       <Route path="/library/:id" element={<WorkDetailPage />} />
+                      <Route path="/requests" element={<RequestsPage />} />
+                      <Route path="/request-integrations" element={<RequestIntegrationsPage />} />
                       <Route path="/users" element={<UsersPage />} />
                       <Route path="/users/:id" element={<UserSettingsPage />} />
                       <Route path="/tasks" element={<TasksPage />} />

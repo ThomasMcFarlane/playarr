@@ -142,6 +142,35 @@ spec:
                   key: {{ .key | quote }}
                   optional: true
             {{- end }}
+            {{- with $instance.ombiApiKeySecret }}
+            # Ombi API key (created out of band, never in Git). With
+            # `requestIntegrations.ombiUrl` the server registers one Ombi
+            # request integration that reads this key. Optional Secret.
+            - name: PLAYARR_OMBI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ .key | quote }}
+                  optional: true
+            {{- end }}
+            {{- with $instance.requestIntegrations }}
+            {{- if .ombiUrl }}
+            - name: PLAYARR_OMBI_URL
+              value: {{ .ombiUrl | quote }}
+            {{- end }}
+            {{- if .seerrUrl }}
+            - name: PLAYARR_SEERR_URL
+              value: {{ .seerrUrl | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with $instance.seerrApiKeySecret }}
+            - name: PLAYARR_SEERR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name | quote }}
+                  key: {{ .key | quote }}
+                  optional: true
+            {{- end }}
             # The image bakes in the Admin UI; overrides the legacy hostPath
             # value (/opt/streamarr/web) that the runtime Secret still carries.
             - name: PLAYARR_WEB_ASSETS_DIR

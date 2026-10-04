@@ -77,6 +77,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "/music",
       "/playlists",
       "/watchlist",
+      "/requests",
       "/calendar",
     ]);
   });

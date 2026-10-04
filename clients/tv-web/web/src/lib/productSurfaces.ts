@@ -68,6 +68,7 @@ export const COMPLETE_CLIENT_SHELL_ROUTES: readonly ProductRoute[] = [
   { path: "/music", id: "music", label: "Music library", shelled: true },
   { path: "/music/:workId", id: "music-detail", label: "Music detail", shelled: true },
   { path: "/watchlist", id: "watchlist", label: "Watchlist", shelled: true },
+  { path: "/requests", id: "requests", label: "Requests", shelled: true },
   { path: "/playlists", id: "playlists", label: "Playlists", shelled: true },
   { path: "/playlists/:workId", id: "playlists-detail", label: "Playlist detail", shelled: true },
   { path: "/calendar", id: "calendar", label: "Release calendar", shelled: true },
@@ -164,6 +165,11 @@ export const PRODUCT_NAV_GROUPS: readonly {
       {
         to: "/watchlist",
         labelKey: "shell.nav.watchlist",
+        end: false,
+      },
+      {
+        to: "/requests",
+        labelKey: "shell.nav.requests",
         end: false,
       },
       {

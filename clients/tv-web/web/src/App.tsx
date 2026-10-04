@@ -42,6 +42,7 @@ import { DeviceLinkPage } from "./pages/DeviceLink";
 import { SearchPage } from "./pages/Search";
 import { PlaylistsPage } from "./pages/Playlists";
 import { WatchlistPage } from "./pages/Watchlist";
+import { RequestsPage } from "./pages/Requests";
 import { CalendarPage } from "./pages/Calendar";
 import { ProfilesPage } from "./pages/Profiles";
 import { HouseholdPage } from "./pages/Household";
@@ -149,6 +150,7 @@ const NAV_ICONS: Record<string, ComponentType> = {
   "/music": MusicIcon,
   "/playlists": PlaylistsIcon,
   "/watchlist": WatchlistIcon,
+  "/requests": WatchlistIcon,
   "/calendar": CalendarIcon,
 };
 
@@ -652,6 +654,7 @@ export function App() {
         <Route path="/music" element={<LibraryPage kind="artist" />} />
         <Route path="/music/:workId" element={<MusicDetailPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
+        <Route path="/requests" element={<RequestsPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />

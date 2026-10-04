@@ -157,6 +157,15 @@ regionalInstances:
     dubarrApiKeySecret:
       name: playarr-dubarr
       key: DUBARR_API_KEY
+    # Ombi request integration (TASKS 280-287): in-cluster URL plus the API key
+    # Secret (created out of band, see README, Ombi and Seerr). Seerr is not
+    # deployed in this cluster yet; set requestIntegrations.seerrUrl and
+    # seerrApiKeySecret when it is.
+    requestIntegrations:
+      ombiUrl: http://ombi.media.svc.cluster.local:3579
+    ombiApiKeySecret:
+      name: playarr-ombi
+      key: OMBI_API_KEY
     resources:
       requests:
         cpu: 100m
@@ -263,6 +272,15 @@ regionalInstances:
     dubarrApiKeySecret:
       name: playarr-dubarr
       key: DUBARR_API_KEY
+    # Ombi request integration (TASKS 280-287): in-cluster URL plus the API key
+    # Secret (created out of band, see README, Ombi and Seerr). Seerr is not
+    # deployed in this cluster yet; set requestIntegrations.seerrUrl and
+    # seerrApiKeySecret when it is.
+    requestIntegrations:
+      ombiUrl: http://ombi.media.svc.cluster.local:3579
+    ombiApiKeySecret:
+      name: playarr-ombi
+      key: OMBI_API_KEY
     resources:
       requests:
         cpu: 100m

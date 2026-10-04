@@ -420,6 +420,16 @@ export type TitleSnapshot = components["schemas"]["TitleSnapshot"];
 export type ProviderStatus = components["schemas"]["ProviderStatus"];
 export type ResolvedTitle = components["schemas"]["ResolvedTitle"];
 export type RequestResult = components["schemas"]["RequestResult"];
+export type RequestView = components["schemas"]["RequestView"];
+export type RequestStatus = components["schemas"]["RequestStatus"];
+export type RequestBackend = components["schemas"]["RequestBackend"];
+export type RequestSettings = components["schemas"]["RequestSettings"];
+export type RequestIntegrationView = components["schemas"]["IntegrationView"];
+export type RequestIntegrationInput = components["schemas"]["IntegrationInput"];
+export type RequestIntegrationTestResult = components["schemas"]["IntegrationTestResult"];
+export type RequestExternalUser = components["schemas"]["ExternalUser"];
+export type RequestPullReport = components["schemas"]["PullReport"];
+export type RequestOverlay = components["schemas"]["RequestOverlay"];
 export type WatchlistEntry = components["schemas"]["WatchlistEntry"];
 export type WatchlistResponse = components["schemas"]["WatchlistResponse"];
 export type CreatePlaylistRequest = components["schemas"]["CreatePlaylistRequest"];
@@ -884,6 +894,19 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/discover", method: "GET" },
   { schemaPath: "/api/v1/discover/resolve", method: "POST" },
   { schemaPath: "/api/v1/discover/request", method: "POST" },
+  { schemaPath: "/api/v1/requests", method: "GET" },
+  { schemaPath: "/api/v1/requests/webhook/{integration_id}", method: "POST" },
+  { schemaPath: "/api/v1/admin/requests/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/requests/{id}/decision", method: "POST" },
+  { schemaPath: "/api/v1/admin/request-integrations", method: "GET" },
+  { schemaPath: "/api/v1/admin/request-integrations", method: "POST" },
+  { schemaPath: "/api/v1/admin/request-integrations/{id}", method: "PUT" },
+  { schemaPath: "/api/v1/admin/request-integrations/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/request-integrations/{id}/test", method: "POST" },
+  { schemaPath: "/api/v1/admin/request-integrations/{id}/users", method: "GET" },
+  { schemaPath: "/api/v1/admin/request-integrations/{id}/sync", method: "POST" },
+  { schemaPath: "/api/v1/admin/request-settings", method: "GET" },
+  { schemaPath: "/api/v1/admin/request-settings", method: "PUT" },
   { schemaPath: "/api/v1/watchlist", method: "GET" },
   { schemaPath: "/api/v1/watchlist", method: "POST" },
   { schemaPath: "/api/v1/watchlist/{title_key}", method: "DELETE" },
@@ -2086,6 +2109,94 @@ export class ApiClient {
   }
 
   /** Ask the configured request provider (Radarr/Sonarr) to add and search for a title. */
+  /** `GET /api/v1/requests`: own requests; administrators get all unless `mine`. */
+  async listRequests(mine?: boolean): Promise<RequestView[]> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/requests", { params: { query: { mine } } })
+    );
+  }
+
+  async decideRequest(
+    id: string,
+    decision: "approve" | "decline",
+    reason?: string
+  ): Promise<RequestView> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/requests/{id}/decision", {
+        params: { path: { id } },
+        body: { decision, reason },
+      })
+    );
+  }
+
+  async removeRequest(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/requests/{id}", { params: { path: { id } } })
+    );
+  }
+
+  async listRequestIntegrations(): Promise<RequestIntegrationView[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/request-integrations", {}));
+  }
+
+  async createRequestIntegration(
+    body: RequestIntegrationInput
+  ): Promise<RequestIntegrationView> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/request-integrations", { body }));
+  }
+
+  async updateRequestIntegration(
+    id: string,
+    body: RequestIntegrationInput
+  ): Promise<RequestIntegrationView> {
+    return this.unwrap(
+      await this.raw.PUT("/api/v1/admin/request-integrations/{id}", {
+        params: { path: { id } },
+        body,
+      })
+    );
+  }
+
+  async deleteRequestIntegration(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/request-integrations/{id}", {
+        params: { path: { id } },
+      })
+    );
+  }
+
+  async testRequestIntegration(id: string): Promise<RequestIntegrationTestResult> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/request-integrations/{id}/test", {
+        params: { path: { id } },
+      })
+    );
+  }
+
+  async requestIntegrationUsers(id: string): Promise<RequestExternalUser[]> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/admin/request-integrations/{id}/users", {
+        params: { path: { id } },
+      })
+    );
+  }
+
+  async syncRequestIntegration(id: string): Promise<RequestPullReport> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/request-integrations/{id}/sync", {
+        params: { path: { id } },
+      })
+    );
+  }
+
+  async getRequestSettings(): Promise<RequestSettings> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/request-settings", {}));
+  }
+
+  async putRequestSettings(body: RequestSettings): Promise<RequestSettings> {
+    return this.unwrap(await this.raw.PUT("/api/v1/admin/request-settings", { body }));
+  }
+
   async requestTitle(body: TitleSnapshot): Promise<RequestResult> {
     return this.unwrap(await this.raw.POST("/api/v1/discover/request", { body }));
   }

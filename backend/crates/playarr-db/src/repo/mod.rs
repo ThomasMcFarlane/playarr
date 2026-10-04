@@ -22,6 +22,7 @@ mod library_view;
 mod live_event;
 mod media_file;
 mod media_language;
+mod media_request;
 mod node_identity;
 mod peer_group;
 mod peer_join_token;
@@ -79,6 +80,9 @@ pub use media_file::{MediaFileRepo, SqlxMediaFileRepo};
 pub use media_language::{
     FileLanguages, MediaLanguageRepo, SqlxMediaLanguageRepo, KIND_AUDIO, KIND_SUBTITLE, SOURCE_ARR,
     SOURCE_PROBE, SOURCE_SIDECAR,
+};
+pub use media_request::{
+    MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo, SqlxRequestIntegrationRepo,
 };
 pub use node_identity::{NodeIdentityRepo, SqlxNodeIdentityRepo};
 pub use peer_group::{PeerGroupRepo, SqlxPeerGroupRepo};

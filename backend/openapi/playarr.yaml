@@ -921,6 +921,259 @@ paths:
           description: Caller is authenticated but not an admin
       security:
       - bearer_auth: []
+  /api/v1/admin/request-integrations:
+    get:
+      tags:
+      - requests
+      operationId: list_integrations_handler
+      responses:
+        '200':
+          description: Configured Ombi/Seerr integrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationView'
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - requests
+      operationId: create_integration_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationInput'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationView'
+        '400':
+          description: Invalid input
+      security:
+      - bearer_auth: []
+  /api/v1/admin/request-integrations/{id}:
+    put:
+      tags:
+      - requests
+      operationId: update_integration_handler
+      parameters:
+      - name: id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationInput'
+        required: true
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationView'
+        '404':
+          description: Unknown integration
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - requests
+      operationId: delete_integration_handler
+      parameters:
+      - name: id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted; imported requests are kept
+        '404':
+          description: Unknown integration
+      security:
+      - bearer_auth: []
+  /api/v1/admin/request-integrations/{id}/sync:
+    post:
+      tags:
+      - requests
+      operationId: sync_integration_handler
+      parameters:
+      - name: id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Pull finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullReport'
+        '404':
+          description: Unknown integration
+        '502':
+          description: The external system failed
+      security:
+      - bearer_auth: []
+  /api/v1/admin/request-integrations/{id}/test:
+    post:
+      tags:
+      - requests
+      operationId: test_integration_handler
+      parameters:
+      - name: id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationTestResult'
+        '404':
+          description: Unknown integration
+      security:
+      - bearer_auth: []
+  /api/v1/admin/request-integrations/{id}/users:
+    get:
+      tags:
+      - requests
+      operationId: integration_users_handler
+      parameters:
+      - name: id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Users of the external system, for the mapping editor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExternalUser'
+        '404':
+          description: Unknown integration
+        '502':
+          description: The external system is unreachable
+      security:
+      - bearer_auth: []
+  /api/v1/admin/request-settings:
+    get:
+      tags:
+      - requests
+      operationId: get_request_settings_handler
+      responses:
+        '200':
+          description: Where Playarr sends user requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestSettings'
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - requests
+      operationId: put_request_settings_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestSettings'
+        required: true
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestSettings'
+        '422':
+          description: The chosen backend has no enabled integration
+      security:
+      - bearer_auth: []
+  /api/v1/admin/requests/{id}:
+    delete:
+      tags:
+      - requests
+      operationId: remove_request_handler
+      parameters:
+      - name: id
+        in: path
+        description: Request id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed here and in Ombi/Seerr
+        '404':
+          description: Unknown request
+        '502':
+          description: Ombi or Seerr could not remove it
+      security:
+      - bearer_auth: []
+  /api/v1/admin/requests/{id}/decision:
+    post:
+      tags:
+      - requests
+      operationId: decide_request_handler
+      parameters:
+      - name: id
+        in: path
+        description: Request id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionBody'
+        required: true
+      responses:
+        '200':
+          description: Decision applied here and in Ombi/Seerr
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '404':
+          description: Unknown request
+        '502':
+          description: Ombi or Seerr rejected the change
+      security:
+      - bearer_auth: []
   /api/v1/admin/source-instances:
     get:
       tags:
@@ -6409,6 +6662,60 @@ paths:
           description: Caller lacks Playarr streaming access
       security:
       - bearer_auth: []
+  /api/v1/requests:
+    get:
+      tags:
+      - requests
+      operationId: list_requests_handler
+      parameters:
+      - name: mine
+        in: query
+        description: 'Administrators only: `false` lists every request, default lists their own.'
+        required: false
+        schema:
+          type:
+          - boolean
+          - 'null'
+      responses:
+        '200':
+          description: Requests, newest first. Administrators get every request unless mine=true.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequestView'
+      security:
+      - bearer_auth: []
+  /api/v1/requests/webhook/{integration_id}:
+    post:
+      tags:
+      - requests
+      operationId: requests_webhook_handler
+      parameters:
+      - name: integration_id
+        in: path
+        description: Integration id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '202':
+          description: Signal accepted; a pull runs in the background (the body is never trusted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAck'
+        '401':
+          description: Missing or wrong webhook secret
+        '404':
+          description: Unknown integration
   /api/v1/transfer/export/{token}:
     get:
       tags:
@@ -8940,6 +9247,22 @@ components:
           - string
           - 'null'
           description: The guardian's own profile PIN (required to approve).
+    Decision:
+      type: string
+      enum:
+      - approve
+      - decline
+    DecisionBody:
+      type: object
+      required:
+      - decision
+      properties:
+        decision:
+          $ref: '#/components/schemas/Decision'
+        reason:
+          type:
+          - string
+          - 'null'
     DeliveryMode:
       type: string
       description: |-
@@ -9530,6 +9853,26 @@ components:
           type: string
         provider:
           $ref: '#/components/schemas/ExternalProvider'
+    ExternalUser:
+      type: object
+      description: A user of an external system, as returned by its user listing.
+      required:
+      - id
+      properties:
+        display_name:
+          type:
+          - string
+          - 'null'
+        email:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+        username:
+          type:
+          - string
+          - 'null'
     FirebaseWebConfig:
       type: object
       required:
@@ -10372,6 +10715,135 @@ components:
           type: integer
           format: int64
           description: Highest `seq` returned (or the caller's `after` when empty).
+    IntegrationInput:
+      type: object
+      required:
+      - kind
+      - name
+      - base_url
+      properties:
+        api_key:
+          type:
+          - string
+          - 'null'
+          description: Omit on update to keep the stored key.
+        api_key_env:
+          type:
+          - string
+          - 'null'
+          description: Environment variable (mounted from a Kubernetes Secret) holding the key.
+        base_url:
+          type: string
+        enabled:
+          type: boolean
+        kind:
+          $ref: '#/components/schemas/IntegrationKind'
+        mapping:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/UserMappingStrategy'
+        name:
+          type: string
+        poll_interval_secs:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        rotate_webhook_secret:
+          type: boolean
+          description: Replace the webhook secret with a fresh one.
+        user_map:
+          type: object
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+    IntegrationKind:
+      type: string
+      description: External request manager an integration talks to.
+      enum:
+      - ombi
+      - seerr
+    IntegrationTestResult:
+      type: object
+      required:
+      - ok
+      - external_users
+      properties:
+        error:
+          type:
+          - string
+          - 'null'
+        external_users:
+          type: integer
+          minimum: 0
+        ok:
+          type: boolean
+        version:
+          type:
+          - string
+          - 'null'
+    IntegrationView:
+      type: object
+      required:
+      - id
+      - kind
+      - name
+      - base_url
+      - api_key_set
+      - enabled
+      - poll_interval_secs
+      - mapping
+      - user_map
+      - webhook_path
+      - webhook_secret
+      properties:
+        api_key_env:
+          type:
+          - string
+          - 'null'
+        api_key_set:
+          type: boolean
+        base_url:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/IntegrationKind'
+        last_error:
+          type:
+          - string
+          - 'null'
+        last_sync_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        mapping:
+          $ref: '#/components/schemas/UserMappingStrategy'
+        name:
+          type: string
+        poll_interval_secs:
+          type: integer
+          format: int32
+          minimum: 0
+        user_map:
+          type: object
+          description: Playarr user id -> external user id.
+          additionalProperties:
+            type: string
+          propertyNames:
+            type: string
+        webhook_path:
+          type: string
+          description: Path to configure as the webhook in Ombi or Seerr.
+        webhook_secret:
+          type: string
+          description: 'Shared secret the webhook must send (`Authorization: Bearer ...`).'
     InvitesResponse:
       type: object
       description: |-
@@ -12662,6 +13134,34 @@ components:
           - 'null'
         state:
           $ref: '#/components/schemas/ProviderState'
+    PullReport:
+      type: object
+      required:
+      - fetched
+      - created
+      - updated
+      - linked
+      - removed
+      - unmapped
+      properties:
+        created:
+          type: integer
+          minimum: 0
+        fetched:
+          type: integer
+          minimum: 0
+        linked:
+          type: integer
+          minimum: 0
+        removed:
+          type: integer
+          minimum: 0
+        unmapped:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
     RailPreferenceEntry:
       type: object
       required:
@@ -12922,6 +13422,42 @@ components:
           type: array
           items:
             type: string
+    RequestBackend:
+      type: string
+      description: Where a Playarr request is sent (admin setting).
+      enum:
+      - direct
+      - ombi
+      - seerr
+      - direct_mirror
+    RequestOrigin:
+      type: string
+      description: Which system created the request.
+      enum:
+      - playarr
+      - ombi
+      - seerr
+    RequestOverlay:
+      type: object
+      required:
+      - request_id
+      - status
+      - origin
+      - mine
+      properties:
+        mine:
+          type: boolean
+        origin:
+          $ref: '#/components/schemas/RequestOrigin'
+        request_id:
+          type: string
+          format: uuid
+        requested_by:
+          type:
+          - string
+          - 'null'
+        status:
+          $ref: '#/components/schemas/RequestStatus'
     RequestResult:
       type: object
       required:
@@ -12931,8 +13467,111 @@ components:
         provider_instance_id:
           type: string
           format: uuid
+          description: The Radarr/Sonarr instance, or the Ombi/Seerr integration, that took the request.
+        request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The unified request row, so clients can show its status.
+        request_status:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/RequestStatus'
+            description: Where the request stands upstream (an Ombi/Seerr request may be pending approval).
         status:
           type: string
+    RequestSettings:
+      type: object
+      required:
+      - backend
+      properties:
+        backend:
+          $ref: '#/components/schemas/RequestBackend'
+    RequestStatus:
+      type: string
+      description: Lifecycle of a request, identical across systems.
+      enum:
+      - pending
+      - approved
+      - declined
+      - available
+      - failed
+    RequestView:
+      type: object
+      description: |-
+        A request as shown to a signed-in user. Household rule: only the
+        requester's own entries name them; other people's requests are listed (to
+        administrators) or summarised without a name.
+      required:
+      - id
+      - title
+      - kind
+      - seasons
+      - status
+      - origin
+      - mine
+      - systems
+      - created_at
+      - updated_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/DiscoveryKind'
+        mine:
+          type: boolean
+        origin:
+          $ref: '#/components/schemas/RequestOrigin'
+        poster_url:
+          type:
+          - string
+          - 'null'
+        requested_by:
+          type:
+          - string
+          - 'null'
+          description: The requester's name; visible to administrators and to the requester.
+        seasons:
+          type: array
+          items:
+            type: integer
+            format: int32
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        status_note:
+          type:
+          - string
+          - 'null'
+        systems:
+          type: array
+          items:
+            type: string
+          description: Systems tracking the request (`playarr`, `radarr/sonarr`, `ombi`, `seerr`); administrators only.
+        title:
+          type: string
+        tmdb_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        tvdb_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+        year:
+          type:
+          - integer
+          - 'null'
+          format: int32
     ResolvedTitle:
       type: object
       required:
@@ -12946,6 +13585,14 @@ components:
             $ref: '#/components/schemas/TitleAction'
         in_watchlist:
           type: boolean
+        request:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/RequestOverlay'
+            description: |-
+              An existing request for this title ("Requested by X - status"), from
+              Playarr, Ombi or Seerr. The requester's name is only included for
+              administrators and the requester themself.
         title:
           $ref: '#/components/schemas/DiscoveryTitle'
     ResumeAction:
@@ -14600,6 +15247,13 @@ components:
           format: date-time
         invite_token:
           type: string
+    UserMappingStrategy:
+      type: string
+      description: How a Playarr user is matched to a user of the external system.
+      enum:
+      - email
+      - username
+      - map
     UserResponse:
       type: object
       description: |-
@@ -14861,6 +15515,13 @@ components:
         will_add:
           type: integer
           minimum: 0
+    WebhookAck:
+      type: object
+      required:
+      - accepted
+      properties:
+        accepted:
+          type: boolean
     Weekday:
       type: string
       enum:
@@ -15093,6 +15754,8 @@ tags:
   description: Server-computed Home rails (recently added/released, top unwatched, rediscover, seasonal, custom) with admin management and per-user preferences
 - name: views
   description: Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves
+- name: requests
+  description: Unified media requests and the Ombi/Seerr integrations
 - name: discovery
   description: Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions
 - name: playlists

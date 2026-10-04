@@ -58,7 +58,9 @@ pub mod portability;
 pub mod readiness;
 pub mod refresh;
 pub mod remote;
+pub mod request_sync;
 pub mod request_timing_middleware;
+pub mod requests;
 pub mod resume;
 pub mod routing;
 mod sidecar_subtitles;
@@ -140,6 +142,8 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
     "/api/v1/transfer/import/{token}",
     "/api/v1/oauth/token",
     "/webhooks/{instance_id}",
+    // Authenticated by the per-integration webhook secret (Ombi/Seerr).
+    "/api/v1/requests/webhook/{integration_id}",
     // Bearer-authed by the one-shot join token carried in the request
     // body itself (`peer::EnrollRequest::join_token`), not a JWT -- see
     // `peer.rs`'s module doc comment.
@@ -242,6 +246,7 @@ impl Modify for SecurityAddon {
         (name = "users", description = "User account management and signed-in player preferences"),
         (name = "home", description = "Server-computed Home rails (recently added/released, top unwatched, rediscover, seasonal, custom) with admin management and per-user preferences"),
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
+        (name = "requests", description = "Unified media requests and the Ombi/Seerr integrations"),
         (name = "discovery", description = "Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
         (name = "portability", description = "Self-service export and import of the signed-in user's own library data (watch progress, playlists, preferences)"),
@@ -451,6 +456,25 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(discovery::discover_handler))
         .routes(routes!(discovery::resolve_title_handler))
         .routes(routes!(discovery::request_title_handler))
+        .routes(routes!(requests::list_requests_handler))
+        .routes(routes!(requests::requests_webhook_handler))
+        .routes(routes!(requests::decide_request_handler))
+        .routes(routes!(requests::remove_request_handler))
+        .routes(routes!(
+            requests::list_integrations_handler,
+            requests::create_integration_handler
+        ))
+        .routes(routes!(
+            requests::update_integration_handler,
+            requests::delete_integration_handler
+        ))
+        .routes(routes!(requests::test_integration_handler))
+        .routes(routes!(requests::integration_users_handler))
+        .routes(routes!(requests::sync_integration_handler))
+        .routes(routes!(
+            requests::get_request_settings_handler,
+            requests::put_request_settings_handler
+        ))
         .routes(routes!(
             discovery::list_watchlist_handler,
             discovery::add_watchlist_handler
@@ -619,6 +643,8 @@ pub struct AppState {
     /// Whether any signed-in user (not just admins) may request titles from
     /// Radarr/Sonarr through discovery. `PLAYARR_REQUESTS_ALLOW_ALL_USERS`.
     pub discovery_requests_allow_all_users: bool,
+    /// Unified requests plus the Ombi/Seerr sync engine (TASKS 280-287).
+    pub request_sync: Arc<request_sync::RequestSync>,
     /// The real, durable persistence layer for `playarr_model::Work` --
     /// `credits.rs`'s `person_works_handler` uses this for a cheap
     /// `Work`-only fetch per credited work id, rather than going through

@@ -313,6 +313,17 @@ kubectl -n dubarr get secret dubarr-secrets -o jsonpath='{.data.DUBARR_API_KEY}'
 kubectl -n playarr rollout restart deploy/playarr-region-a deploy/playarr-region-b
 ```
 
+## Ombi and Seerr request integrations
+
+`requestIntegrations.ombiUrl` (and `seerrUrl`) plus `ombiApiKeySecret` (and
+`seerrApiKeySecret`) make each regional server register an Ombi (or Seerr)
+request integration at boot, enabled, with user mapping by email and the key read
+from the environment (never stored in Git or the database). The integration is
+only created when none of that kind exists, so admin edits are kept. Choose where
+requests go (direct, Ombi, Seerr or direct+mirror) in the admin UI under
+"Request integrations". Create the Secret from Ombi's own settings without echoing
+the key.
+
 ## Server backups
 
 Each regional instance has an optional `backup` block that turns on encrypted

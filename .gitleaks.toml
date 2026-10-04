@@ -1,0 +1,10 @@
+# Extends the default ruleset; only silences one known false positive.
+[extend]
+useDefault = true
+
+# The generated OpenAPI TypeScript schema embeds request examples such as
+# `"api_key": "..."` (placeholder text, not a credential).
+[[allowlists]]
+description = "Generated OpenAPI schema example payloads"
+targetRules = ["generic-api-key"]
+paths = ['''clients/tv-web/packages/api-client/src/generated/schema\.ts''']

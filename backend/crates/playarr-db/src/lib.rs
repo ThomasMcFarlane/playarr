@@ -36,6 +36,10 @@ pub use repo::{
 };
 
 pub use repo::{
+    MediaRequestRepo, RequestIntegrationRepo, SqlxMediaRequestRepo, SqlxRequestIntegrationRepo,
+};
+
+pub use repo::{
     AvailabilityEventRepo, CalendarFeedTokenInfo, CalendarFeedTokenRepo, SqlxAvailabilityEventRepo,
     SqlxCalendarFeedTokenRepo,
 };

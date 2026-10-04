@@ -548,6 +548,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/request-integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_integrations_handler"];
+        put?: never;
+        post: operations["create_integration_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/request-integrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_integration_handler"];
+        post?: never;
+        delete: operations["delete_integration_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/request-integrations/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sync_integration_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/request-integrations/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["test_integration_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/request-integrations/{id}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["integration_users_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/request-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_request_settings_handler"];
+        put: operations["put_request_settings_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["remove_request_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/requests/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decide_request_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/source-instances": {
         parameters: {
             query?: never;
@@ -2620,6 +2748,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_requests_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/webhook/{integration_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["requests_webhook_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transfer/export/{token}": {
         parameters: {
             query?: never;
@@ -3842,6 +4002,12 @@ export interface components {
             /** @description The guardian's own profile PIN (required to approve). */
             pin?: string | null;
         };
+        /** @enum {string} */
+        Decision: "approve" | "decline";
+        DecisionBody: {
+            decision: components["schemas"]["Decision"];
+            reason?: string | null;
+        };
         /**
          * @description How a stream resolved to a remote peer should actually reach the
          *     client -- see §5.3 for the redirect-vs-proxy tradeoff this encodes.
@@ -4115,6 +4281,13 @@ export interface components {
         ExternalRef: {
             external_id: string;
             provider: components["schemas"]["ExternalProvider"];
+        };
+        /** @description A user of an external system, as returned by its user listing. */
+        ExternalUser: {
+            display_name?: string | null;
+            email?: string | null;
+            id: string;
+            username?: string | null;
         };
         FirebaseWebConfig: {
             api_key: string;
@@ -4520,6 +4693,59 @@ export interface components {
              * @description Highest `seq` returned (or the caller's `after` when empty).
              */
             next: number;
+        };
+        IntegrationInput: {
+            /** @description Omit on update to keep the stored key. */
+            api_key?: string | null;
+            /** @description Environment variable (mounted from a Kubernetes Secret) holding the key. */
+            api_key_env?: string | null;
+            base_url: string;
+            enabled?: boolean;
+            kind: components["schemas"]["IntegrationKind"];
+            mapping?: null | components["schemas"]["UserMappingStrategy"];
+            name: string;
+            /** Format: int32 */
+            poll_interval_secs?: number | null;
+            /** @description Replace the webhook secret with a fresh one. */
+            rotate_webhook_secret?: boolean;
+            user_map?: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * @description External request manager an integration talks to.
+         * @enum {string}
+         */
+        IntegrationKind: "ombi" | "seerr";
+        IntegrationTestResult: {
+            error?: string | null;
+            external_users: number;
+            ok: boolean;
+            version?: string | null;
+        };
+        IntegrationView: {
+            api_key_env?: string | null;
+            api_key_set: boolean;
+            base_url: string;
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["IntegrationKind"];
+            last_error?: string | null;
+            /** Format: date-time */
+            last_sync_at?: string | null;
+            mapping: components["schemas"]["UserMappingStrategy"];
+            name: string;
+            /** Format: int32 */
+            poll_interval_secs: number;
+            /** @description Playarr user id -> external user id. */
+            user_map: {
+                [key: string]: string;
+            };
+            /** @description Path to configure as the webhook in Ombi or Seerr. */
+            webhook_path: string;
+            /** @description Shared secret the webhook must send (`Authorization: Bearer ...`). */
+            webhook_secret: string;
         };
         /**
          * @description Response body for [`invites_handler`] -- `docs/architecture/
@@ -5740,6 +5966,14 @@ export interface components {
             /** @description Every rail the admin has enabled, in this user's effective order. */
             rails: components["schemas"]["RailPreferenceEntry"][];
         };
+        PullReport: {
+            created: number;
+            fetched: number;
+            linked: number;
+            removed: number;
+            unmapped: number;
+            updated: number;
+        };
         RefreshRequest: {
             /**
              * Format: uuid
@@ -5842,14 +6076,81 @@ export interface components {
             max_height?: number | null;
             video_codecs?: string[];
         };
-        RequestResult: {
+        /**
+         * @description Where a Playarr request is sent (admin setting).
+         * @enum {string}
+         */
+        RequestBackend: "direct" | "ombi" | "seerr" | "direct_mirror";
+        /**
+         * @description Which system created the request.
+         * @enum {string}
+         */
+        RequestOrigin: "playarr" | "ombi" | "seerr";
+        RequestOverlay: {
+            mine: boolean;
+            origin: components["schemas"]["RequestOrigin"];
             /** Format: uuid */
+            request_id: string;
+            requested_by?: string | null;
+            status: components["schemas"]["RequestStatus"];
+        };
+        RequestResult: {
+            /**
+             * Format: uuid
+             * @description The Radarr/Sonarr instance, or the Ombi/Seerr integration, that took the request.
+             */
             provider_instance_id: string;
+            /**
+             * Format: uuid
+             * @description The unified request row, so clients can show its status.
+             */
+            request_id?: string | null;
+            request_status?: null | components["schemas"]["RequestStatus"];
             status: string;
+        };
+        RequestSettings: {
+            backend: components["schemas"]["RequestBackend"];
+        };
+        /**
+         * @description Lifecycle of a request, identical across systems.
+         * @enum {string}
+         */
+        RequestStatus: "pending" | "approved" | "declined" | "available" | "failed";
+        /**
+         * @description A request as shown to a signed-in user. Household rule: only the
+         *     requester's own entries name them; other people's requests are listed (to
+         *     administrators) or summarised without a name.
+         */
+        RequestView: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["DiscoveryKind"];
+            mine: boolean;
+            origin: components["schemas"]["RequestOrigin"];
+            poster_url?: string | null;
+            /** @description The requester's name; visible to administrators and to the requester. */
+            requested_by?: string | null;
+            seasons: number[];
+            status: components["schemas"]["RequestStatus"];
+            status_note?: string | null;
+            /** @description Systems tracking the request (`playarr`, `radarr/sonarr`, `ombi`, `seerr`); administrators only. */
+            systems: string[];
+            title: string;
+            /** Format: int64 */
+            tmdb_id?: number | null;
+            /** Format: int64 */
+            tvdb_id?: number | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: int32 */
+            year?: number | null;
         };
         ResolvedTitle: {
             actions: components["schemas"]["TitleAction"][];
             in_watchlist: boolean;
+            request?: null | components["schemas"]["RequestOverlay"];
             title: components["schemas"]["DiscoveryTitle"];
         };
         /** @enum {string} */
@@ -6646,6 +6947,11 @@ export interface components {
             invite_token: string;
         };
         /**
+         * @description How a Playarr user is matched to a user of the external system.
+         * @enum {string}
+         */
+        UserMappingStrategy: "email" | "username" | "map";
+        /**
          * @description The redacted, admin-facing projection of [`playarr_model::User`] --
          *     same rationale as `admin.rs`'s `SourceInstanceResponse`: `User` itself
          *     is deliberately not `ToSchema` (it carries `password_hash`), so
@@ -6778,6 +7084,9 @@ export interface components {
             /** @description Records that are invalid or of a kind this server does not know. */
             unmatched: number;
             will_add: number;
+        };
+        WebhookAck: {
+            accepted: boolean;
         };
         /** @enum {string} */
         Weekday: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -8241,6 +8550,350 @@ export interface operations {
             };
             /** @description Caller is authenticated but not an admin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_integrations_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured Ombi/Seerr integrations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationView"][];
+                };
+            };
+        };
+    };
+    create_integration_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationView"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_integration_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationView"];
+                };
+            };
+            /** @description Unknown integration */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_integration_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted; imported requests are kept */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown integration */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_integration_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pull finished */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullReport"];
+                };
+            };
+            /** @description Unknown integration */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The external system failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_integration_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection test result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationTestResult"];
+                };
+            };
+            /** @description Unknown integration */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    integration_users_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Users of the external system, for the mapping editor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalUser"][];
+                };
+            };
+            /** @description Unknown integration */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The external system is unreachable */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_request_settings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where Playarr sends user requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestSettings"];
+                };
+            };
+        };
+    };
+    put_request_settings_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestSettings"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestSettings"];
+                };
+            };
+            /** @description The chosen backend has no enabled integration */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_request_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Request id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed here and in Ombi/Seerr */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ombi or Seerr could not remove it */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decide_request_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Request id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Decision applied here and in Ombi/Seerr */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestView"];
+                };
+            };
+            /** @description Unknown request */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ombi or Seerr rejected the change */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15507,6 +16160,70 @@ export interface operations {
             };
             /** @description Caller lacks Playarr streaming access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_requests_handler: {
+        parameters: {
+            query?: {
+                /** @description Administrators only: `false` lists every request, default lists their own. */
+                mine?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Requests, newest first. Administrators get every request unless mine=true. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestView"][];
+                };
+            };
+        };
+    };
+    requests_webhook_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Integration id */
+                integration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Signal accepted; a pull runs in the background (the body is never trusted) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookAck"];
+                };
+            };
+            /** @description Missing or wrong webhook secret */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown integration */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

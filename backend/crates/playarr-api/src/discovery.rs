@@ -29,6 +29,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use playarr_model::requests::{IntegrationKind, RequestBackend};
+
 use crate::auth_extractor::CatalogViewer;
 use crate::error::ApiError;
 use crate::AppState;
@@ -76,6 +78,20 @@ pub struct ResolvedTitle {
     pub title: DiscoveryTitle,
     pub in_watchlist: bool,
     pub actions: Vec<TitleAction>,
+    /// An existing request for this title ("Requested by X - status"), from
+    /// Playarr, Ombi or Seerr. The requester's name is only included for
+    /// administrators and the requester themself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<RequestOverlay>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RequestOverlay {
+    pub request_id: uuid::Uuid,
+    pub status: playarr_model::requests::RequestStatus,
+    pub origin: playarr_model::requests::RequestOrigin,
+    pub requested_by: Option<String>,
+    pub mine: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -543,6 +559,67 @@ async fn find_library_work(
     Ok(None)
 }
 
+fn ref_id(snap: &TitleSnapshot, p: ExternalProvider) -> Option<String> {
+    snap.external_refs
+        .iter()
+        .find(|r| r.provider == p)
+        .map(|r| r.external_id.clone())
+}
+
+async fn request_overlay(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    snap: &TitleSnapshot,
+) -> Option<RequestOverlay> {
+    let num = |p| ref_id(snap, p).and_then(|v| v.parse::<i64>().ok());
+    let row = state
+        .request_sync
+        .requests
+        .find_match(
+            snap.kind,
+            num(ExternalProvider::Tmdb),
+            num(ExternalProvider::Tvdb),
+            ref_id(snap, ExternalProvider::Imdb).as_deref(),
+        )
+        .await
+        .ok()
+        .flatten()?;
+    let mine = row.requester_user_id == Some(viewer.user_id);
+    Some(RequestOverlay {
+        request_id: row.id,
+        status: row.status,
+        origin: row.origin,
+        requested_by: if viewer.policy.is_admin || mine {
+            row.requester_label
+        } else {
+            None
+        },
+        mine,
+    })
+}
+
+/// The request provider a viewer's request goes to: the Ombi/Seerr
+/// integration when the backend mode selects one, else the first Radarr/Sonarr.
+async fn request_provider(state: &AppState, kind: DiscoveryKind) -> Option<(Uuid, String)> {
+    use playarr_model::requests::{IntegrationKind, RequestBackend};
+    let wanted = match state.request_sync.backend().await {
+        RequestBackend::Ombi => Some(IntegrationKind::Ombi),
+        RequestBackend::Seerr => Some(IntegrationKind::Seerr),
+        _ => None,
+    };
+    if let Some(k) = wanted {
+        return state
+            .request_sync
+            .enabled_integration(k)
+            .await
+            .map(|i| (i.id, i.name));
+    }
+    request_instances(state, kind)
+        .into_iter()
+        .find(|i| i.default_root_folder_id.is_some() && i.default_quality_profile_id.is_some())
+        .map(|i| (i.id, i.name))
+}
+
 async fn build_action_context(
     state: &AppState,
     viewer: &CatalogViewer,
@@ -552,14 +629,14 @@ async fn build_action_context(
     let mut ctx = ActionContext {
         kind: Some(snap.kind),
         can_request: can_request(state, viewer),
-        request_instance_id: request_instances(state, snap.kind)
-            .into_iter()
-            .find(|i| i.default_root_folder_id.is_some() && i.default_quality_profile_id.is_some())
-            .map(|i| i.id),
+        request_instance_id: request_provider(state, snap.kind).await.map(|(id, _)| id),
         request_unavailable_reason: Some(NO_REQUEST_PROVIDER.into()),
         ..Default::default()
     };
-    if ctx.request_instance_id.is_none() && !request_instances(state, snap.kind).is_empty() {
+    if ctx.request_instance_id.is_none()
+        && !request_instances(state, snap.kind).is_empty()
+        && state.request_sync.backend().await == playarr_model::requests::RequestBackend::Direct
+    {
         ctx.request_unavailable_reason =
             Some("The request provider has no default root folder or quality profile".into());
     }
@@ -619,7 +696,7 @@ async fn resolve_snapshot(
     let mut candidates = Vec::new();
     // The snapshot itself is the carrier of identity when nothing else is
     // known, so a title that is not in any library still resolves.
-    let request_instance = request_instances(state, snap.kind).into_iter().next();
+    let request_instance = request_provider(state, snap.kind).await;
     candidates.push(DiscoveryCandidate {
         kind: snap.kind,
         title: snap.title.clone(),
@@ -631,7 +708,7 @@ async fn resolve_snapshot(
             source: SourceKindTag::Request,
             label: request_instance
                 .as_ref()
-                .map(|i| i.name.clone())
+                .map(|i| i.1.clone())
                 .unwrap_or_else(|| "Not in your library".into()),
             availability: if request_instance.is_some() {
                 SourceAvailability::Requestable
@@ -643,7 +720,7 @@ async fn resolve_snapshot(
                 .then(|| NO_REQUEST_PROVIDER.to_string()),
             edition: None,
             work_id: None,
-            provider_instance_id: request_instance.map(|i| i.id),
+            provider_instance_id: request_instance.map(|i| i.0),
         },
     });
     if let Some(w) = &work {
@@ -663,7 +740,7 @@ async fn resolve_snapshot(
     let mut merged = merge_candidates(candidates);
     let title = merged.remove(0);
     let ctx = build_action_context(state, viewer, snap, work.as_ref()).await?;
-    let actions = compute_actions(&ctx);
+    let mut actions = compute_actions(&ctx);
     let in_watchlist = {
         let mut keys = vec![
             title.title_key.clone(),
@@ -684,10 +761,29 @@ async fn resolve_snapshot(
         }
         found
     };
+    let request = request_overlay(state, viewer, snap).await;
+    if let Some(r) = &request {
+        if r.status != playarr_model::requests::RequestStatus::Declined
+            && r.status != playarr_model::requests::RequestStatus::Failed
+        {
+            for a in actions
+                .iter_mut()
+                .filter(|a| a.action == playarr_model::discovery::ActionKind::Request)
+            {
+                a.enabled = false;
+                a.reason = Some(match (&r.requested_by, r.mine) {
+                    (_, true) => format!("You requested this - {}", r.status.as_str()),
+                    (Some(by), _) => format!("Requested by {by} - {}", r.status.as_str()),
+                    _ => format!("Already requested - {}", r.status.as_str()),
+                });
+            }
+        }
+    }
     Ok(ResolvedTitle {
         title,
         in_watchlist,
         actions,
+        request,
     })
 }
 
@@ -821,7 +917,14 @@ pub async fn remove_watchlist_handler(
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RequestResult {
     pub status: String,
+    /// The Radarr/Sonarr instance, or the Ombi/Seerr integration, that took the request.
     pub provider_instance_id: Uuid,
+    /// The unified request row, so clients can show its status.
+    #[serde(default)]
+    pub request_id: Option<Uuid>,
+    /// Where the request stands upstream (an Ombi/Seerr request may be pending approval).
+    #[serde(default)]
+    pub request_status: Option<playarr_model::requests::RequestStatus>,
 }
 
 /// Picks the lookup hit that is the snapshot's title: by external id first,
@@ -891,6 +994,26 @@ pub async fn request_title_handler(
     }
     let unprocessable =
         |code: &str, message: &str| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, code, message);
+    let new_title = new_title_from_snapshot(&state, &viewer, &snap).await?;
+    let backend = state.request_sync.backend().await;
+    if let Some(kind) = match backend {
+        RequestBackend::Ombi => Some(IntegrationKind::Ombi),
+        RequestBackend::Seerr => Some(IntegrationKind::Seerr),
+        _ => None,
+    } {
+        let integration = state
+            .request_sync
+            .enabled_integration(kind)
+            .await
+            .ok_or_else(|| unprocessable("no_request_provider", NO_REQUEST_PROVIDER))?;
+        let row = state.request_sync.push(&new_title, &integration).await?;
+        return Ok(Json(RequestResult {
+            status: "requested".into(),
+            provider_instance_id: integration.id,
+            request_id: Some(row.id),
+            request_status: Some(row.status),
+        }));
+    }
     let instances = request_instances(&state, snap.kind);
     if instances.is_empty() {
         return Err(unprocessable("no_request_provider", NO_REQUEST_PROVIDER));
@@ -939,10 +1062,64 @@ pub async fn request_title_handler(
         tracing::warn!(%err, "discovery: request add failed");
         ApiError::bad_gateway("the request provider did not accept the request")
     })?;
+    let row = state
+        .request_sync
+        .record_direct(&new_title, instance.id)
+        .await?;
+    if backend == RequestBackend::DirectMirror {
+        for integration in state
+            .request_sync
+            .integrations
+            .list()
+            .await?
+            .into_iter()
+            .filter(|i| i.enabled)
+        {
+            // Best effort: a failed mirror is recorded on the row and retried.
+            if let Err(err) = state.request_sync.mirror(row.id, &integration).await {
+                tracing::warn!(%err, integration = %integration.name, "requests: mirror failed");
+            }
+        }
+    }
     Ok(Json(RequestResult {
         status: "requested".into(),
         provider_instance_id: instance.id,
+        request_id: Some(row.id),
+        request_status: Some(row.status),
     }))
+}
+
+async fn new_title_from_snapshot(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    snap: &TitleSnapshot,
+) -> Result<crate::request_sync::NewTitle, ApiError> {
+    use playarr_model::requests::LocalUserRef;
+    let num = |p| ref_id(snap, p).and_then(|v| v.parse::<i64>().ok());
+    let user = state.user_repo.find_by_id(viewer.user_id).await?;
+    let label = user.as_ref().map(|u| {
+        if u.display_name.is_empty() {
+            u.username.clone()
+        } else {
+            u.display_name.clone()
+        }
+    });
+    Ok(crate::request_sync::NewTitle {
+        kind: snap.kind,
+        title: snap.title.clone(),
+        year: snap.year,
+        tmdb_id: num(ExternalProvider::Tmdb),
+        tvdb_id: num(ExternalProvider::Tvdb),
+        imdb_id: ref_id(snap, ExternalProvider::Imdb),
+        poster_url: snap.poster_url.clone(),
+        seasons: Vec::new(),
+        user: user.map(|u| LocalUserRef {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+        }),
+        requester_label: label,
+    })
 }
 
 #[cfg(test)]

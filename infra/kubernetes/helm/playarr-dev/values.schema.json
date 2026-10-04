@@ -237,6 +237,32 @@
               "key": { "type": "string", "minLength": 1 }
             }
           },
+          "ombiApiKeySecret": {
+            "type": "object",
+            "required": ["name", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "key": { "type": "string", "minLength": 1 }
+            }
+          },
+          "seerrApiKeySecret": {
+            "type": "object",
+            "required": ["name", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "key": { "type": "string", "minLength": 1 }
+            }
+          },
+          "requestIntegrations": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ombiUrl": { "type": "string" },
+              "seerrUrl": { "type": "string" }
+            }
+          },
           "resources": {
             "type": "object"
           },

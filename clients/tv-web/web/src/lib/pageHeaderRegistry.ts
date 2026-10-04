@@ -19,6 +19,7 @@ export const PAGE_HEADER_COVERAGE: readonly PageHeaderCoverage[] = [
   { file: "Library.tsx", mode: "header", routes: ["series", "movies", "sites", "music"] },
   { file: "MusicDetail.tsx", mode: "header", routes: ["music-detail"] },
   { file: "Playlists.tsx", mode: "header", routes: ["playlists"] },
+  { file: "Requests.tsx", mode: "header", routes: ["requests"] },
   { file: "Search.tsx", mode: "header", routes: ["search"] },
   { file: "settings/Index.tsx", mode: "header", routes: ["settings"] },
   { file: "Watchlist.tsx", mode: "header", routes: ["watchlist"] },

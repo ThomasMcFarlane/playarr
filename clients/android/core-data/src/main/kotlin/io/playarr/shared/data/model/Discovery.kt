@@ -91,6 +91,17 @@ data class ResolvedTitle(
     val title: DiscoveryTitle,
     @SerialName("in_watchlist") val inWatchlist: Boolean,
     val actions: List<TitleAction> = emptyList(),
+    val request: ResolvedRequest? = null,
+)
+
+/** The viewer-visible request already filed for a resolved title. */
+@Serializable
+data class ResolvedRequest(
+    @SerialName("request_id") val requestId: String,
+    val status: String,
+    val origin: String = "playarr",
+    @SerialName("requested_by") val requestedBy: String? = null,
+    val mine: Boolean = false,
 )
 
 /** `ResolvedTitle` flattened with the time it was added. */
@@ -109,4 +120,6 @@ data class WatchlistResponse(val items: List<WatchlistEntry> = emptyList())
 data class RequestResult(
     val status: String,
     @SerialName("provider_instance_id") val providerInstanceId: String,
+    @SerialName("request_id") val requestId: String? = null,
+    @SerialName("request_status") val requestStatus: String? = null,
 )

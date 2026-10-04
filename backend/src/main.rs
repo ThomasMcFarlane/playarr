@@ -1432,6 +1432,32 @@ async fn boot_api(
         ));
     let resume_dismissals: Arc<dyn playarr_db::repo::ResumeDismissalRepo> =
         Arc::new(playarr_db::repo::SqlxResumeDismissalRepo::new(pool.clone()));
+    let request_sync = Arc::new(playarr_api::request_sync::RequestSync::new(
+        Arc::new(playarr_db::SqlxMediaRequestRepo::new(pool.clone())),
+        Arc::new(playarr_db::SqlxRequestIntegrationRepo::new(pool.clone())),
+        user_repo.clone(),
+        work_repo.clone(),
+    ));
+    for (kind, url_env, key_env) in [
+        (
+            playarr_model::requests::IntegrationKind::Ombi,
+            "PLAYARR_OMBI_URL",
+            "PLAYARR_OMBI_API_KEY",
+        ),
+        (
+            playarr_model::requests::IntegrationKind::Seerr,
+            "PLAYARR_SEERR_URL",
+            "PLAYARR_SEERR_API_KEY",
+        ),
+    ] {
+        if let Some(url) = std::env::var(url_env).ok().filter(|u| !u.trim().is_empty()) {
+            match request_sync.ensure_declared(kind, &url, key_env).await {
+                Ok(true) => tracing::info!(kind = kind.as_str(), "registered request integration"),
+                Ok(false) => {}
+                Err(err) => tracing::warn!(%err, "could not register request integration"),
+            }
+        }
+    }
     let credit_repo: Arc<dyn CreditRepo> = Arc::new(SqlxCreditRepo::new(pool.clone()));
     let tdarr_connection_repo: Arc<dyn TdarrConnectionRepo> =
         Arc::new(SqlxTdarrConnectionRepo::new(pool.clone()));
@@ -1691,6 +1717,7 @@ async fn boot_api(
         resume_dismissals,
         discovery_requests_allow_all_users: std::env::var("PLAYARR_REQUESTS_ALLOW_ALL_USERS")
             .is_ok_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes")),
+        request_sync: request_sync.clone(),
         work_repo,
         credit_repo,
         tdarr_connection_repo,
@@ -1798,6 +1825,9 @@ async fn boot_api(
     );
 
     // Keep Dubarr dub-track lookups fresh by watching each instance's change feed.
+    tokio::spawn(playarr_api::request_sync::run_scheduler(
+        request_sync.clone(),
+    ));
     tokio::spawn(playarr_api::dubarr_audio::run_change_poller(
         state.source_instances.clone(),
     ));
