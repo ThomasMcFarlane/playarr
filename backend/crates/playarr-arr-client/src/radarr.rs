@@ -71,6 +71,39 @@ pub struct RadarrMovie {
     /// unrated titles. Mapped to a `rating:` tag for household controls.
     #[serde(default)]
     pub certification: Option<String>,
+    /// The TMDb collection (franchise) the movie belongs to, when any.
+    #[serde(default)]
+    pub collection: Option<RadarrCollection>,
+    /// Audience scores per source.
+    #[serde(default)]
+    pub ratings: Option<RadarrRatings>,
+}
+
+/// Radarr's `collection` object on a movie.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrCollection {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default, rename = "tmdbId")]
+    pub tmdb_id: Option<i64>,
+}
+
+/// One source's score (`0-10`) and vote count.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadarrRatingSource {
+    #[serde(default)]
+    pub value: f64,
+    #[serde(default)]
+    pub votes: u32,
+}
+
+/// Radarr's per-source `ratings` object.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RadarrRatings {
+    #[serde(default)]
+    pub tmdb: Option<RadarrRatingSource>,
+    #[serde(default)]
+    pub imdb: Option<RadarrRatingSource>,
 }
 
 /// An entry in a movie's `images` array (poster, fanart, banner, ...).

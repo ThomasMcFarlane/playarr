@@ -17,6 +17,7 @@ pub mod discovery;
 pub mod download;
 pub mod embedding;
 pub mod group_library;
+pub mod home_rail;
 pub mod household;
 pub mod language;
 pub mod library_view;
@@ -32,6 +33,7 @@ pub mod policy;
 pub mod publishing;
 pub mod resume;
 pub mod routing;
+pub mod seasonal;
 pub mod sensitive;
 pub mod series;
 pub mod source;
@@ -51,6 +53,7 @@ pub use calendar::{
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
 pub use group_library::{GroupLibrary, LeafSelector, PeerLeafAvailability};
+pub use home_rail::{HomeRail, HomeRailConfig, HomeRailKind, UserRailPref};
 pub use household::{Approval, ApprovalKind, ApprovalStatus, HouseholdControls, UnratedContent};
 pub use library_view::{LibraryView, ViewCriteria, ViewSort};
 pub use media::{MediaFile, ProducedBy, Rendition, RenditionStatus};
@@ -71,6 +74,7 @@ pub use resume::{
     ResumeDismissalKind, ResumeEpisode, ResumeOption, ResumeOptionKind, ResumePlan, ResumeReason,
 };
 pub use routing::{DeliveryMode, RoutingRule};
+pub use seasonal::{Hemisphere, SeasonalRule};
 pub use sensitive::Sensitive;
 pub use series::{Episode, Season, Series};
 pub use source::{SourceInstance, SourceInstanceIdentity, SourceInstanceSyncRow, SourceKind};

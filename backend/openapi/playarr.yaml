@@ -169,6 +169,140 @@ paths:
           description: No backup with this id
       security:
       - bearer_auth: []
+  /api/v1/admin/home-rails:
+    get:
+      tags:
+      - home
+      operationId: list_admin_rails_handler
+      responses:
+        '200':
+          description: Every rail definition in display order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HomeRailDefinitionResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - home
+      operationId: create_admin_rail_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHomeRailRequest'
+        required: true
+      responses:
+        '200':
+          description: The created custom rail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeRailDefinitionResponse'
+        '400':
+          description: Invalid name or config
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No view with this id
+      security:
+      - bearer_auth: []
+  /api/v1/admin/home-rails/order:
+    put:
+      tags:
+      - home
+      operationId: reorder_admin_rails_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderHomeRailsRequest'
+        required: true
+      responses:
+        '200':
+          description: Every rail definition in the new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HomeRailDefinitionResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+      security:
+      - bearer_auth: []
+  /api/v1/admin/home-rails/{id}:
+    put:
+      tags:
+      - home
+      operationId: update_admin_rail_handler
+      parameters:
+      - name: id
+        in: path
+        description: Rail id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateHomeRailRequest'
+        required: true
+      responses:
+        '200':
+          description: The updated rail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeRailDefinitionResponse'
+        '400':
+          description: Invalid config
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No rail or view with this id
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - home
+      operationId: delete_admin_rail_handler
+      parameters:
+      - name: id
+        in: path
+        description: Rail id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: No rail with this id
+        '409':
+          description: This is a default rail; disable it instead
+      security:
+      - bearer_auth: []
   /api/v1/admin/library/source-matrix:
     get:
       tags:
@@ -3214,6 +3348,128 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller lacks Playarr access
+      security:
+      - bearer_auth: []
+  /api/v1/home/rails:
+    get:
+      tags:
+      - home
+      operationId: home_rails_handler
+      parameters:
+      - name: lang
+        in: query
+        description: '`en` | `th` | `ja`; falls back to `Accept-Language`, then `en`.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: library
+        in: query
+        description: Only rails of this library (`movie` | `series` | `artist`).
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+      - name: on
+        in: query
+        description: |-
+          Evaluate seasonal windows on this date (`YYYY-MM-DD`) instead of
+          today. Bypasses the cache.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date
+      responses:
+        '200':
+          description: The caller's ordered, non-empty Home rails with localised titles; household and library restrictions are applied before ranking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeRailsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller has neither Playarr streaming access nor admin access
+      security:
+      - bearer_auth: []
+  /api/v1/home/rails/preferences:
+    get:
+      tags:
+      - home
+      operationId: get_rail_preferences_handler
+      parameters:
+      - name: lang
+        in: query
+        description: '`en` | `th` | `ja`; falls back to `Accept-Language`, then `en`.'
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: library
+        in: query
+        description: Only rails of this library (`movie` | `series` | `artist`).
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+      - name: on
+        in: query
+        description: |-
+          Evaluate seasonal windows on this date (`YYYY-MM-DD`) instead of
+          today. Bypasses the cache.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+          format: date
+      responses:
+        '200':
+          description: Rails the admin enabled, in the caller's order, with the caller's hidden flags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailPreferencesResponse'
+        '401':
+          description: Missing or invalid access token
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - home
+      operationId: put_rail_preferences_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailPreferencesRequest'
+        required: true
+      responses:
+        '200':
+          description: Saved; the resulting preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailPreferencesResponse'
+        '401':
+          description: Missing or invalid access token
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - home
+      operationId: reset_rail_preferences_handler
+      responses:
+        '204':
+          description: The caller's overrides were cleared
+        '401':
+          description: Missing or invalid access token
       security:
       - bearer_auth: []
   /api/v1/household/approvals:
@@ -8473,6 +8729,28 @@ components:
         source_device_id:
           type: string
           format: uuid
+    CreateHomeRailRequest:
+      type: object
+      required:
+      - name
+      - view_id
+      properties:
+        config:
+          $ref: '#/components/schemas/HomeRailConfig'
+        enabled:
+          type: boolean
+        library:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+            description: Library the rail belongs to; omit for a cross-library view.
+        name:
+          type: string
+          description: Title shown on Home.
+        view_id:
+          type: string
+          format: uuid
+          description: Saved view (from `/api/v1/admin/views`) supplying the filter.
     CreatePairingRequest:
       type: object
       required:
@@ -9473,6 +9751,174 @@ components:
       enum:
       - server
       - client
+    Hemisphere:
+      type: string
+      enum:
+      - north
+      - south
+    HomeRailConfig:
+      type: object
+      description: |-
+        Per-rail tunables. Every field is optional; the server applies the
+        default for anything unset, so older rows keep working.
+      properties:
+        hemisphere:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Hemisphere'
+            description: 'Seasonal: which hemisphere''s seasons apply (default north).'
+        limit:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Maximum items on the rail (default 24, capped at 100).
+          minimum: 0
+        min_collection_size:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            Rediscover (movies): a collection needs at least this many titles
+            in the library to count as a confirmed franchise (default 2).
+          minimum: 0
+        seasonal_rules:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/SeasonalRule'
+          description: 'Seasonal: replaces the built-in rules when present.'
+        stale_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            Rediscover: a started-but-unfinished title counts once it has not
+            been watched for this many days (default 60).
+          minimum: 0
+    HomeRailDefinitionResponse:
+      type: object
+      required:
+      - id
+      - kind
+      - default_title
+      - enabled
+      - position
+      - is_default
+      - config
+      properties:
+        config:
+          $ref: '#/components/schemas/HomeRailConfig'
+        default_title:
+          type: string
+          description: English default title.
+        effective_seasonal_rules:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/SeasonalRule'
+          description: |-
+            Seasonal rails: the rules in force (the built-ins unless the admin
+            replaced them in `config.seasonal_rules`).
+        enabled:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        is_default:
+          type: boolean
+        kind:
+          $ref: '#/components/schemas/HomeRailKind'
+        library:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+        name:
+          type:
+          - string
+          - 'null'
+          description: Admin title override (custom rails default to the view's name).
+        position:
+          type: integer
+          format: int32
+        view_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+    HomeRailKind:
+      type: string
+      enum:
+      - recently_added
+      - recently_released
+      - top_unwatched
+      - rediscover
+      - seasonal
+      - custom
+    HomeRailResponse:
+      type: object
+      required:
+      - id
+      - kind
+      - title
+      - title_key
+      - items
+      - total
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Rail definition id (seasonal rails keep their definition id).
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Work'
+          description: Items on the rail (never empty -- empty rails are omitted).
+        kind:
+          $ref: '#/components/schemas/HomeRailKind'
+        library:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+            description: Library the rail draws from (`movie` | `series` | `artist`).
+        title:
+          type: string
+          description: Localised, display-ready title.
+        title_key:
+          type: string
+          description: |-
+            Stable key for clients that localise themselves: the kind, or
+            `seasonal.<rule key>` / `custom`.
+        total:
+          type: integer
+          format: int64
+          description: Matching titles before the rail's item limit.
+        view_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Saved view behind a custom rail.
+    HomeRailsResponse:
+      type: object
+      required:
+      - rails
+      - lang
+      - generated_at
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        lang:
+          type: string
+        rails:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeRailResponse'
     HouseholdControls:
       type: object
       properties:
@@ -12216,6 +12662,53 @@ components:
           - 'null'
         state:
           $ref: '#/components/schemas/ProviderState'
+    RailPreferenceEntry:
+      type: object
+      required:
+      - id
+      - kind
+      - title
+      - hidden
+      properties:
+        hidden:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/HomeRailKind'
+        library:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+        title:
+          type: string
+          description: Localised default or admin title (seasonal rails read "Seasonal …").
+    RailPreferencesRequest:
+      type: object
+      properties:
+        hidden:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Rails to hide for this user.
+        order:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Desired order of rails (ids); rails not listed follow in admin order.
+    RailPreferencesResponse:
+      type: object
+      required:
+      - rails
+      properties:
+        rails:
+          type: array
+          items:
+            $ref: '#/components/schemas/RailPreferenceEntry'
+          description: Every rail the admin has enabled, in this user's effective order.
     RefreshRequest:
       type: object
       required:
@@ -12361,6 +12854,17 @@ components:
         name:
           type: string
           description: New label for the paired remote (1 to 60 visible characters).
+    ReorderHomeRailsRequest:
+      type: object
+      required:
+      - ids
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Every rail id in the desired display order.
     ReorderPlaylistItemsRequest:
       type: object
       required:
@@ -12796,6 +13300,68 @@ components:
             $ref: '#/components/schemas/EpisodeDetailSchema'
         season:
           $ref: '#/components/schemas/Season'
+    SeasonalRule:
+      type: object
+      description: |-
+        One seasonal rule. A rule is active when `date` falls in its window and
+        (if set) its `hemisphere` matches the configured one.
+      required:
+      - key
+      properties:
+        easter_after_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'Easter-relative window: days after Easter Sunday the rule ends.'
+          minimum: 0
+        easter_before_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'Easter-relative window: days before Easter Sunday the rule starts.'
+          minimum: 0
+        end:
+          type:
+          - string
+          - 'null'
+          description: '`MM-DD` end of a fixed window (inclusive).'
+        genres:
+          type: array
+          items:
+            type: string
+          description: Exact (case-insensitive) genre names.
+        hemisphere:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Hemisphere'
+            description: Only active for this hemisphere; `None` = both.
+        key:
+          type: string
+          description: Stable key, also the localisation key for built-ins (`christmas`).
+        keywords:
+          type: array
+          items:
+            type: string
+          description: Whole words/phrases matched against title and overview.
+        name:
+          type:
+          - string
+          - 'null'
+          description: Display name override; `None` uses the localised built-in name.
+        start:
+          type:
+          - string
+          - 'null'
+          description: |-
+            `MM-DD` start of a fixed window (inclusive). The window wraps the new
+            year when `end` is earlier than `start`.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Exact (case-insensitive) tags, e.g. an admin's `christmas` tag.
     SectionSummary:
       type: object
       required:
@@ -13789,6 +14355,30 @@ components:
       enum:
       - block
       - allow
+    UpdateHomeRailRequest:
+      type: object
+      properties:
+        config:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HomeRailConfig'
+        enabled:
+          type:
+          - boolean
+          - 'null'
+        name:
+          type:
+          - string
+          - 'null'
+          description: |-
+            `null`/absent keeps the current title; an empty string clears the
+            override.
+        view_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Custom rails only.
     UpdateMediaPlaybackPreferencesRequest:
       type: object
       required:
@@ -14121,6 +14711,11 @@ components:
     ViewCriteriaDto:
       type: object
       properties:
+        audio_languages:
+          type: array
+          items:
+            type: string
+          description: Canonical audio language codes (e.g. `"ja"`); empty = any.
         available_only:
           type: boolean
         genre:
@@ -14131,6 +14726,12 @@ components:
           oneOf:
           - type: 'null'
           - $ref: '#/components/schemas/WorkKind'
+        language_every_file:
+          type: boolean
+          description: Require each wanted language on every file of the work.
+        language_match_all:
+          type: boolean
+          description: Require every listed language instead of any of them.
         release_window_days:
           type:
           - integer
@@ -14144,10 +14745,18 @@ components:
           - string
           - 'null'
           format: uuid
+        subtitle_languages:
+          type: array
+          items:
+            type: string
+          description: Canonical subtitle language codes; empty = any.
         tag:
           type:
           - string
           - 'null'
+        unwatched_only:
+          type: boolean
+          description: Hide works the viewer has already watched (per-user).
     ViewSummary:
       type: object
       description: |-
@@ -14480,6 +15089,8 @@ tags:
   description: 'Admin-only configuration: registering *arr source instances'
 - name: users
   description: User account management and signed-in player preferences
+- name: home
+  description: Server-computed Home rails (recently added/released, top unwatched, rediscover, seasonal, custom) with admin management and per-user preferences
 - name: views
   description: Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves
 - name: discovery

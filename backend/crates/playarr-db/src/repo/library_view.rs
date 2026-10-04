@@ -266,6 +266,7 @@ mod tests {
                 tag: Some("4k".to_string()),
                 available_only: true,
                 release_window_days: Some(30),
+                ..Default::default()
             },
             sort: vec![ViewSort::LastPlayedByUser, ViewSort::RecentlyReleased],
             is_default: false,

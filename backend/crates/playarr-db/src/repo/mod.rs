@@ -16,6 +16,7 @@ mod download_ticket;
 mod embedding;
 mod eventing;
 mod group_library;
+mod home_rail;
 mod household;
 mod library_view;
 mod live_event;
@@ -61,6 +62,7 @@ pub use eventing::{
     EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
 };
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
+pub use home_rail::{seed_default_rails, HomeRailRepo, SqlxHomeRailRepo};
 pub use household::{
     ApprovalRepo, HouseholdUsageRepo, PinAttemptRepo, PinAttemptState, SqlxHouseholdRepo,
 };

@@ -39,6 +39,7 @@ pub mod dubarr_audio;
 pub mod error;
 pub mod events;
 pub mod health;
+pub mod home_rails;
 pub mod household;
 pub mod ics;
 pub mod language_index;
@@ -239,6 +240,7 @@ impl Modify for SecurityAddon {
         (name = "playback", description = "Playback negotiation: direct-play vs. transcode decision"),
         (name = "admin", description = "Admin-only configuration: registering *arr source instances"),
         (name = "users", description = "User account management and signed-in player preferences"),
+        (name = "home", description = "Server-computed Home rails (recently added/released, top unwatched, rediscover, seasonal, custom) with admin management and per-user preferences"),
         (name = "views", description = "Saved catalog filter presets ('Views') -- admin-managed, surfaced to Playarr as browsable shelves"),
         (name = "discovery", description = "Unified discovery search across library, peers and request catalogues, plus the per-profile watchlist and source-aware title actions"),
         (name = "playlists", description = "User + System playlists -- named, ordered, optionally-nested lists of video works or audio tracks"),
@@ -425,6 +427,21 @@ fn api_router() -> OpenApiRouter<AppState> {
             views::update_view_handler,
             views::delete_view_handler
         ))
+        .routes(routes!(
+            home_rails::list_admin_rails_handler,
+            home_rails::create_admin_rail_handler
+        ))
+        .routes(routes!(home_rails::reorder_admin_rails_handler))
+        .routes(routes!(
+            home_rails::update_admin_rail_handler,
+            home_rails::delete_admin_rail_handler
+        ))
+        .routes(routes!(home_rails::home_rails_handler))
+        .routes(routes!(
+            home_rails::get_rail_preferences_handler,
+            home_rails::put_rail_preferences_handler,
+            home_rails::reset_rail_preferences_handler
+        ))
         .routes(routes!(views::list_views_handler))
         .routes(routes!(views::resolve_view_handler))
         .routes(routes!(
@@ -586,6 +603,11 @@ pub struct AppState {
     /// screen, and Playarr's Home shelf list on load) than the catalog
     /// itself, so a direct repo read per request is fine.
     pub library_view_repo: Arc<dyn playarr_db::LibraryViewRepo>,
+    /// Admin-managed Home rail definitions and per-user overrides --
+    /// `home_rails.rs`.
+    pub home_rail_repo: Arc<dyn playarr_db::HomeRailRepo>,
+    /// Per-user computed-rails cache (see `home_rails.rs`).
+    pub home_rails_cache: Arc<home_rails::HomeRailsCache>,
     /// The real, durable persistence layer for `playarr_model::Playlist`/
     /// `PlaylistItem` -- backs `playlists.rs`'s user + System playlist CRUD
     /// and item-membership endpoints.

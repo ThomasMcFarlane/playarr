@@ -15,7 +15,14 @@
  * in hand) are identical everywhere rather than reimplemented per surface.
  */
 import { useEffect, useRef, useState } from "react";
-import type { ApiClient, BrowseCatalogParams, CatalogPage, PlaybackInfo, WorkDetail } from "./index";
+import type {
+  ApiClient,
+  BrowseCatalogParams,
+  CatalogPage,
+  HomeRailsResponse,
+  PlaybackInfo,
+  WorkDetail,
+} from "./index";
 
 export type AsyncState<T> =
   | { status: "idle" }
@@ -123,6 +130,17 @@ export function useCatalogBrowse(
   return useAsyncData(() => client.browseCatalog(params), [client, key], {
     isEmpty: (data) => data.items.length === 0,
     subscribe: options.subscribe,
+  });
+}
+
+/** The caller's server-computed Home rails; `{status: "empty"}` when none have items. */
+export function useHomeRails(
+  client: ApiClient,
+  params: { lang?: string; library?: "movie" | "series" | "artist" } = {}
+): AsyncState<HomeRailsResponse> {
+  const key = JSON.stringify(params);
+  return useAsyncData(() => client.getHomeRails(params), [client, key], {
+    isEmpty: (data) => data.rails.length === 0,
   });
 }
 

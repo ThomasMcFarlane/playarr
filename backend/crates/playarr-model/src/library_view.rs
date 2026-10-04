@@ -9,12 +9,9 @@
 //! `playarr_catalog::CatalogService::resolve_view` is the single place
 //! that translates a `LibraryView` into a real `BrowseQuery`.
 //!
-//! Known, deliberate limitation: a global View can't statically encode a
-//! per-caller "unwatched" predicate without becoming per-user (watch state
-//! lives in `WatchProgressRepo`, keyed by `user_id`), and `BrowseQuery` has
-//! no watch-state filter today either. A possible future direction is the
-//! `resolve` endpoint gaining an optional caller-side `exclude_watched=true`
-//! query param layered on top of a view's static criteria -- not built here.
+//! Watch state is per-user, so [`ViewCriteria::unwatched_only`] is applied
+//! at resolve time against the resolving caller's own progress rather than
+//! being encoded in the (global) view itself.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -75,6 +72,23 @@ pub struct ViewCriteria {
     /// Released" view sorts by release date but doesn't restrict a
     /// window, symmetric with "Newly Added" not restricting `added_at`).
     pub release_window_days: Option<i64>,
+    /// Audio languages (canonical codes, see [`crate::language`]); empty =
+    /// no restriction. Same semantics as `BrowseQuery::language`.
+    #[serde(default)]
+    pub audio_languages: Vec<String>,
+    /// Subtitle languages; empty = no restriction.
+    #[serde(default)]
+    pub subtitle_languages: Vec<String>,
+    /// Require every listed language rather than any of them.
+    #[serde(default)]
+    pub language_match_all: bool,
+    /// Require each wanted language on every file of the work.
+    #[serde(default)]
+    pub language_every_file: bool,
+    /// Per-viewer: drop works the resolving user has already watched (a
+    /// series counts as watched once every available episode is).
+    #[serde(default)]
+    pub unwatched_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

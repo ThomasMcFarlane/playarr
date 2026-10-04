@@ -116,6 +116,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/home-rails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_admin_rails_handler"];
+        put?: never;
+        post: operations["create_admin_rail_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/home-rails/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorder_admin_rails_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/home-rails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_admin_rail_handler"];
+        post?: never;
+        delete: operations["delete_admin_rail_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/library/source-matrix": {
         parameters: {
             query?: never;
@@ -1343,6 +1391,38 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/home/rails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["home_rails_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/home/rails/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_rail_preferences_handler"];
+        put: operations["put_rail_preferences_handler"];
+        post?: never;
+        delete: operations["reset_rail_preferences_handler"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3631,6 +3711,18 @@ export interface components {
             /** Format: uuid */
             source_device_id: string;
         };
+        CreateHomeRailRequest: {
+            config?: components["schemas"]["HomeRailConfig"];
+            enabled?: boolean;
+            library?: null | components["schemas"]["WorkKind"];
+            /** @description Title shown on Home. */
+            name: string;
+            /**
+             * Format: uuid
+             * @description Saved view (from `/api/v1/admin/views`) supplying the filter.
+             */
+            view_id: string;
+        };
         CreatePairingRequest: {
             /** @description Name shown on the target's approval prompt (e.g. "Alex's phone"). */
             controller_name?: string | null;
@@ -4123,6 +4215,92 @@ export interface components {
         HealthSeverity: "ok" | "info" | "warning" | "problem";
         /** @enum {string} */
         HealthSource: "server" | "client";
+        /** @enum {string} */
+        Hemisphere: "north" | "south";
+        /**
+         * @description Per-rail tunables. Every field is optional; the server applies the
+         *     default for anything unset, so older rows keep working.
+         */
+        HomeRailConfig: {
+            hemisphere?: null | components["schemas"]["Hemisphere"];
+            /**
+             * Format: int32
+             * @description Maximum items on the rail (default 24, capped at 100).
+             */
+            limit?: number | null;
+            /**
+             * Format: int32
+             * @description Rediscover (movies): a collection needs at least this many titles
+             *     in the library to count as a confirmed franchise (default 2).
+             */
+            min_collection_size?: number | null;
+            /** @description Seasonal: replaces the built-in rules when present. */
+            seasonal_rules?: components["schemas"]["SeasonalRule"][] | null;
+            /**
+             * Format: int32
+             * @description Rediscover: a started-but-unfinished title counts once it has not
+             *     been watched for this many days (default 60).
+             */
+            stale_days?: number | null;
+        };
+        HomeRailDefinitionResponse: {
+            config: components["schemas"]["HomeRailConfig"];
+            /** @description English default title. */
+            default_title: string;
+            /**
+             * @description Seasonal rails: the rules in force (the built-ins unless the admin
+             *     replaced them in `config.seasonal_rules`).
+             */
+            effective_seasonal_rules?: components["schemas"]["SeasonalRule"][] | null;
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            is_default: boolean;
+            kind: components["schemas"]["HomeRailKind"];
+            library?: null | components["schemas"]["WorkKind"];
+            /** @description Admin title override (custom rails default to the view's name). */
+            name?: string | null;
+            /** Format: int32 */
+            position: number;
+            /** Format: uuid */
+            view_id?: string | null;
+        };
+        /** @enum {string} */
+        HomeRailKind: "recently_added" | "recently_released" | "top_unwatched" | "rediscover" | "seasonal" | "custom";
+        HomeRailResponse: {
+            /**
+             * Format: uuid
+             * @description Rail definition id (seasonal rails keep their definition id).
+             */
+            id: string;
+            /** @description Items on the rail (never empty -- empty rails are omitted). */
+            items: components["schemas"]["Work"][];
+            kind: components["schemas"]["HomeRailKind"];
+            library?: null | components["schemas"]["WorkKind"];
+            /** @description Localised, display-ready title. */
+            title: string;
+            /**
+             * @description Stable key for clients that localise themselves: the kind, or
+             *     `seasonal.<rule key>` / `custom`.
+             */
+            title_key: string;
+            /**
+             * Format: int64
+             * @description Matching titles before the rail's item limit.
+             */
+            total: number;
+            /**
+             * Format: uuid
+             * @description Saved view behind a custom rail.
+             */
+            view_id?: string | null;
+        };
+        HomeRailsResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            lang: string;
+            rails: components["schemas"]["HomeRailResponse"][];
+        };
         HouseholdControls: {
             app_allow?: string[] | null;
             /** @description Approval kinds that must be granted by a guardian. */
@@ -5543,6 +5721,25 @@ export interface components {
             reason?: string | null;
             state: components["schemas"]["ProviderState"];
         };
+        RailPreferenceEntry: {
+            hidden: boolean;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["HomeRailKind"];
+            library?: null | components["schemas"]["WorkKind"];
+            /** @description Localised default or admin title (seasonal rails read "Seasonal …"). */
+            title: string;
+        };
+        RailPreferencesRequest: {
+            /** @description Rails to hide for this user. */
+            hidden?: string[];
+            /** @description Desired order of rails (ids); rails not listed follow in admin order. */
+            order?: string[];
+        };
+        RailPreferencesResponse: {
+            /** @description Every rail the admin has enabled, in this user's effective order. */
+            rails: components["schemas"]["RailPreferenceEntry"][];
+        };
         RefreshRequest: {
             /**
              * Format: uuid
@@ -5610,6 +5807,10 @@ export interface components {
         RenamePairingRequest: {
             /** @description New label for the paired remote (1 to 60 visible characters). */
             name: string;
+        };
+        ReorderHomeRailsRequest: {
+            /** @description Every rail id in the desired display order. */
+            ids: string[];
         };
         ReorderPlaylistItemsRequest: {
             /**
@@ -5830,6 +6031,40 @@ export interface components {
         SeasonDetailSchema: {
             episodes: components["schemas"]["EpisodeDetailSchema"][];
             season: components["schemas"]["Season"];
+        };
+        /**
+         * @description One seasonal rule. A rule is active when `date` falls in its window and
+         *     (if set) its `hemisphere` matches the configured one.
+         */
+        SeasonalRule: {
+            /**
+             * Format: int32
+             * @description Easter-relative window: days after Easter Sunday the rule ends.
+             */
+            easter_after_days?: number | null;
+            /**
+             * Format: int32
+             * @description Easter-relative window: days before Easter Sunday the rule starts.
+             */
+            easter_before_days?: number | null;
+            /** @description `MM-DD` end of a fixed window (inclusive). */
+            end?: string | null;
+            /** @description Exact (case-insensitive) genre names. */
+            genres?: string[];
+            hemisphere?: null | components["schemas"]["Hemisphere"];
+            /** @description Stable key, also the localisation key for built-ins (`christmas`). */
+            key: string;
+            /** @description Whole words/phrases matched against title and overview. */
+            keywords?: string[];
+            /** @description Display name override; `None` uses the localised built-in name. */
+            name?: string | null;
+            /**
+             * @description `MM-DD` start of a fixed window (inclusive). The window wraps the new
+             *     year when `end` is earlier than `start`.
+             */
+            start?: string | null;
+            /** @description Exact (case-insensitive) tags, e.g. an admin's `christmas` tag. */
+            tags?: string[];
         };
         SectionSummary: {
             already_present: number;
@@ -6287,6 +6522,20 @@ export interface components {
          * @enum {string}
          */
         UnratedContent: "block" | "allow";
+        UpdateHomeRailRequest: {
+            config?: null | components["schemas"]["HomeRailConfig"];
+            enabled?: boolean | null;
+            /**
+             * @description `null`/absent keeps the current title; an empty string clears the
+             *     override.
+             */
+            name?: string | null;
+            /**
+             * Format: uuid
+             * @description Custom rails only.
+             */
+            view_id?: string | null;
+        };
         UpdateMediaPlaybackPreferencesRequest: {
             audio_track_id?: string | null;
             quality_id: string;
@@ -6457,9 +6706,15 @@ export interface components {
             server_version: string;
         };
         ViewCriteriaDto: {
+            /** @description Canonical audio language codes (e.g. `"ja"`); empty = any. */
+            audio_languages?: string[];
             available_only?: boolean;
             genre?: string | null;
             kind?: null | components["schemas"]["WorkKind"];
+            /** @description Require each wanted language on every file of the work. */
+            language_every_file?: boolean;
+            /** @description Require every listed language instead of any of them. */
+            language_match_all?: boolean;
             /**
              * Format: int64
              * @description Only include works whose `release_date` falls within the last N
@@ -6468,7 +6723,11 @@ export interface components {
             release_window_days?: number | null;
             /** Format: uuid */
             source_instance_id?: string | null;
+            /** @description Canonical subtitle language codes; empty = any. */
+            subtitle_languages?: string[];
             tag?: string | null;
+            /** @description Hide works the viewer has already watched (per-user). */
+            unwatched_only?: boolean;
         };
         /**
          * @description Public/Playarr-facing list projection -- deliberately doesn't expose
@@ -6921,6 +7180,234 @@ export interface operations {
             };
             /** @description No backup with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_admin_rails_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every rail definition in display order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRailDefinitionResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_admin_rail_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHomeRailRequest"];
+            };
+        };
+        responses: {
+            /** @description The created custom rail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRailDefinitionResponse"];
+                };
+            };
+            /** @description Invalid name or config */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No view with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_admin_rails_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderHomeRailsRequest"];
+            };
+        };
+        responses: {
+            /** @description Every rail definition in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRailDefinitionResponse"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_admin_rail_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Rail id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHomeRailRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated rail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRailDefinitionResponse"];
+                };
+            };
+            /** @description Invalid config */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No rail or view with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_admin_rail_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Rail id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No rail with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This is a default rail; disable it instead */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11049,6 +11536,143 @@ export interface operations {
             };
             /** @description Caller lacks Playarr access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    home_rails_handler: {
+        parameters: {
+            query?: {
+                /** @description `en` | `th` | `ja`; falls back to `Accept-Language`, then `en`. */
+                lang?: string | null;
+                /** @description Only rails of this library (`movie` | `series` | `artist`). */
+                library?: null | components["schemas"]["WorkKind"];
+                /**
+                 * @description Evaluate seasonal windows on this date (`YYYY-MM-DD`) instead of
+                 *     today. Bypasses the cache.
+                 */
+                on?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's ordered, non-empty Home rails with localised titles; household and library restrictions are applied before ranking. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRailsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_rail_preferences_handler: {
+        parameters: {
+            query?: {
+                /** @description `en` | `th` | `ja`; falls back to `Accept-Language`, then `en`. */
+                lang?: string | null;
+                /** @description Only rails of this library (`movie` | `series` | `artist`). */
+                library?: null | components["schemas"]["WorkKind"];
+                /**
+                 * @description Evaluate seasonal windows on this date (`YYYY-MM-DD`) instead of
+                 *     today. Bypasses the cache.
+                 */
+                on?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rails the admin enabled, in the caller's order, with the caller's hidden flags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RailPreferencesResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_rail_preferences_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RailPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved; the resulting preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RailPreferencesResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_rail_preferences_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's overrides were cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

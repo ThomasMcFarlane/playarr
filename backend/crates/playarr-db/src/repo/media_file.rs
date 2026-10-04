@@ -49,6 +49,10 @@ pub trait MediaFileRepo: Send + Sync {
     /// this work actually playable?" without issuing one query per work.
     async fn list_work_ids(&self) -> Result<HashSet<Uuid>, DbError>;
 
+    /// Number of media files per work (works without files are absent).
+    /// One grouped query, for per-user progress maths on Home rails.
+    async fn count_by_work(&self) -> Result<std::collections::HashMap<Uuid, u32>, DbError>;
+
     /// Every distinct `(work_id, source_instance_id)` pair across all media
     /// files, in one query. Lets catalogue browse apply source-instance and
     /// library-allow filters without one `list_by_work_id` round trip per
@@ -235,6 +239,19 @@ impl MediaFileRepo for SqlxMediaFileRepo {
         .fetch_all(&self.pool)
         .await?;
         rows.iter().map(Self::from_row).collect()
+    }
+
+    async fn count_by_work(&self) -> Result<std::collections::HashMap<Uuid, u32>, DbError> {
+        let rows = sqlx::query("SELECT work_id, COUNT(*) AS n FROM media_files GROUP BY work_id")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                let raw: String = row.try_get("work_id")?;
+                let n: i64 = row.try_get("n")?;
+                Ok((parse_uuid(&raw)?, n.max(0) as u32))
+            })
+            .collect()
     }
 
     async fn list_work_ids(&self) -> Result<HashSet<Uuid>, DbError> {

@@ -19,13 +19,13 @@ use playarr_cache::{CacheAndPubSub, InMemory};
 use playarr_catalog::CatalogService;
 use playarr_db::analytics::{AnalyticsStore, SqlxAnalyticsStore};
 use playarr_db::repo::{
-    seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-    SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
-    SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-    SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo, SqlxPushRegistrationRepo,
-    SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSystemSettingsRepo,
-    SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
-    SqlxWatchProgressRepo, SqlxWorkRepo,
+    seed_default_rails, seed_default_views, PlaylistRepo, SqlxCreditRepo, SqlxDeviceRepo,
+    SqlxDownloadTicketRepo, SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
+    SqlxNodeIdentityRepo, SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo,
+    SqlxPeerNodeRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
+    SqlxPushRegistrationRepo, SqlxRenditionRepo, SqlxRoutingRuleRepo, SqlxSourceInstanceRepo,
+    SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo,
+    SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
 };
 use playarr_db::{
     CreditRepo, DbPool, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
@@ -486,11 +486,21 @@ pub async fn test_state() -> (Router, TestState) {
         household_clock.clone(),
     ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
+    let cache: Arc<dyn CacheAndPubSub> = Arc::new(InMemory::new());
+    let home_rails_cache = Arc::new(crate::home_rails::HomeRailsCache::new(cache.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(playarr_db::EventingWatchProgressRepo::new(
-            Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+            Arc::new(crate::home_rails::InvalidatingWatchProgressRepo::new(
+                Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+                home_rails_cache.clone(),
+            )),
             live_events.clone(),
         ));
+    let home_rail_repo: Arc<dyn playarr_db::HomeRailRepo> =
+        Arc::new(playarr_db::SqlxHomeRailRepo::new(pool.clone()));
+    seed_default_rails(home_rail_repo.as_ref())
+        .await
+        .expect("seed default rails");
     let download_tickets: Arc<dyn DownloadTicketRepo> =
         Arc::new(playarr_db::EventingDownloadTicketRepo::new(
             Arc::new(SqlxDownloadTicketRepo::new(pool.clone())),
@@ -548,7 +558,6 @@ pub async fn test_state() -> (Router, TestState) {
         analytics_store.clone(),
         analytics_event_tx,
     ));
-    let cache: Arc<dyn CacheAndPubSub> = Arc::new(InMemory::new());
 
     let embedding_repo: Arc<dyn playarr_db::EmbeddingRepo> =
         Arc::new(playarr_db::repo::SqlxEmbeddingRepo::new(pool.clone()));
@@ -691,6 +700,8 @@ pub async fn test_state() -> (Router, TestState) {
         source_instances: source_instances.clone(),
         source_instance_repo,
         library_view_repo,
+        home_rail_repo,
+        home_rails_cache,
         playlist_repo,
         watchlist_repo,
         resume_dismissals,

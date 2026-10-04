@@ -397,6 +397,17 @@ export type LibraryViewRequest = components["schemas"]["LibraryViewRequest"];
 export type LibraryViewResponse = components["schemas"]["LibraryViewResponse"];
 export type ViewSummary = components["schemas"]["ViewSummary"];
 
+export type HomeRail = components["schemas"]["HomeRailResponse"];
+export type HomeRailsResponse = components["schemas"]["HomeRailsResponse"];
+export type HomeRailKind = components["schemas"]["HomeRailKind"];
+export type HomeRailConfig = components["schemas"]["HomeRailConfig"];
+export type HomeRailDefinition = components["schemas"]["HomeRailDefinitionResponse"];
+export type CreateHomeRailRequest = components["schemas"]["CreateHomeRailRequest"];
+export type UpdateHomeRailRequest = components["schemas"]["UpdateHomeRailRequest"];
+export type SeasonalRule = components["schemas"]["SeasonalRule"];
+export type RailPreferences = components["schemas"]["RailPreferencesResponse"];
+export type RailPreferencesRequest = components["schemas"]["RailPreferencesRequest"];
+
 export type PlaylistResponse = components["schemas"]["PlaylistResponse"];
 export type DiscoverResponse = components["schemas"]["DiscoverResponse"];
 export type DiscoverTitle = components["schemas"]["DiscoverTitle"];
@@ -861,6 +872,15 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/views/{id}", method: "DELETE" },
   { schemaPath: "/api/v1/views", method: "GET" },
   { schemaPath: "/api/v1/views/{id}/resolve", method: "GET" },
+  { schemaPath: "/api/v1/home/rails", method: "GET" },
+  { schemaPath: "/api/v1/home/rails/preferences", method: "GET" },
+  { schemaPath: "/api/v1/home/rails/preferences", method: "PUT" },
+  { schemaPath: "/api/v1/home/rails/preferences", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/home-rails", method: "GET" },
+  { schemaPath: "/api/v1/admin/home-rails", method: "POST" },
+  { schemaPath: "/api/v1/admin/home-rails/{id}", method: "PUT" },
+  { schemaPath: "/api/v1/admin/home-rails/{id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/home-rails/order", method: "PUT" },
   { schemaPath: "/api/v1/discover", method: "GET" },
   { schemaPath: "/api/v1/discover/resolve", method: "POST" },
   { schemaPath: "/api/v1/discover/request", method: "POST" },
@@ -1963,6 +1983,63 @@ export class ApiClient {
     this.assertOk(
       await this.raw.DELETE("/api/v1/admin/views/{id}", { params: { path: { id } } })
     );
+  }
+
+  // ---------------------------------------------------------------------
+  // home rails -- server-computed, per-user Home shelves (recently added/
+  // released, top unwatched, rediscover, seasonal, custom). Empty rails are
+  // omitted by the server; titles are localised to `lang` (en | th | ja).
+  // ---------------------------------------------------------------------
+
+  async getHomeRails(
+    params: { lang?: string; library?: "movie" | "series" | "artist"; on?: string } = {}
+  ): Promise<HomeRailsResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/home/rails", {
+        params: { query: { lang: params.lang, library: params.library, on: params.on } },
+      })
+    );
+  }
+
+  /** The rails the admin enabled, in the caller's order, with the caller's hidden flags. */
+  async getRailPreferences(lang?: string): Promise<RailPreferences> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/home/rails/preferences", { params: { query: { lang } } })
+    );
+  }
+
+  async saveRailPreferences(body: RailPreferencesRequest): Promise<RailPreferences> {
+    return this.unwrap(await this.raw.PUT("/api/v1/home/rails/preferences", { body }));
+  }
+
+  async resetRailPreferences(): Promise<void> {
+    this.assertOk(await this.raw.DELETE("/api/v1/home/rails/preferences", {}));
+  }
+
+  /** Admin: every rail definition in display order. */
+  async listAdminHomeRails(): Promise<HomeRailDefinition[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/home-rails", {}));
+  }
+
+  async createHomeRail(body: CreateHomeRailRequest): Promise<HomeRailDefinition> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/home-rails", { body }));
+  }
+
+  async updateHomeRail(id: string, body: UpdateHomeRailRequest): Promise<HomeRailDefinition> {
+    return this.unwrap(
+      await this.raw.PUT("/api/v1/admin/home-rails/{id}", { params: { path: { id } }, body })
+    );
+  }
+
+  /** 409s for a default rail -- disable it instead. */
+  async deleteHomeRail(id: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/home-rails/{id}", { params: { path: { id } } })
+    );
+  }
+
+  async reorderHomeRails(ids: string[]): Promise<HomeRailDefinition[]> {
+    return this.unwrap(await this.raw.PUT("/api/v1/admin/home-rails/order", { body: { ids } }));
   }
 
   // ---------------------------------------------------------------------

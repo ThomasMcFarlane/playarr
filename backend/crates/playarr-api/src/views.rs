@@ -79,6 +79,21 @@ pub struct ViewCriteriaDto {
     /// Only include works whose `release_date` falls within the last N
     /// days. `None` = no window restriction.
     pub release_window_days: Option<i64>,
+    /// Canonical audio language codes (e.g. `"ja"`); empty = any.
+    #[serde(default)]
+    pub audio_languages: Vec<String>,
+    /// Canonical subtitle language codes; empty = any.
+    #[serde(default)]
+    pub subtitle_languages: Vec<String>,
+    /// Require every listed language instead of any of them.
+    #[serde(default)]
+    pub language_match_all: bool,
+    /// Require each wanted language on every file of the work.
+    #[serde(default)]
+    pub language_every_file: bool,
+    /// Hide works the viewer has already watched (per-user).
+    #[serde(default)]
+    pub unwatched_only: bool,
 }
 
 impl From<ViewCriteriaDto> for ViewCriteria {
@@ -90,6 +105,11 @@ impl From<ViewCriteriaDto> for ViewCriteria {
             tag: dto.tag,
             available_only: dto.available_only,
             release_window_days: dto.release_window_days,
+            audio_languages: dto.audio_languages,
+            subtitle_languages: dto.subtitle_languages,
+            language_match_all: dto.language_match_all,
+            language_every_file: dto.language_every_file,
+            unwatched_only: dto.unwatched_only,
         }
     }
 }
@@ -103,6 +123,11 @@ impl From<ViewCriteria> for ViewCriteriaDto {
             tag: criteria.tag,
             available_only: criteria.available_only,
             release_window_days: criteria.release_window_days,
+            audio_languages: criteria.audio_languages,
+            subtitle_languages: criteria.subtitle_languages,
+            language_match_all: criteria.language_match_all,
+            language_every_file: criteria.language_every_file,
+            unwatched_only: criteria.unwatched_only,
         }
     }
 }
@@ -403,6 +428,7 @@ pub async fn update_view_handler(
         updated_at: Utc::now(),
     };
     state.library_view_repo.upsert(&updated).await?;
+    state.home_rails_cache.invalidate_all().await;
     Ok(Json(updated.into()))
 }
 
@@ -433,6 +459,9 @@ pub async fn delete_view_handler(
         return Err(ApiError::conflict("default views cannot be deleted"));
     }
     state.library_view_repo.delete(id).await?;
+    // Custom Home rails built on this view go with it.
+    state.home_rail_repo.delete_for_view(id).await?;
+    state.home_rails_cache.invalidate_all().await;
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -152,6 +152,10 @@ pub struct RemoteWork {
     /// `None` = unrated. Stored on the `Work` as an arr-owned
     /// `rating:<value>` tag (see `playarr_auth::household`).
     pub certification: Option<String>,
+    /// Other arr-owned tags derived from the source app (`collection:` and
+    /// `score:`, see `playarr_model::home_rail`), replaced wholesale on every
+    /// sync pass. Empty for sources that report none.
+    pub arr_tags: Vec<String>,
 }
 
 /// Trims/uppercases a certification and drops the "not rated" spellings so
@@ -162,6 +166,44 @@ pub fn normalise_certification(raw: Option<&str>) -> Option<String> {
         "" | "NR" | "UR" | "UNRATED" | "NOT RATED" | "N/A" | "NA" => None,
         _ => Some(value),
     }
+}
+
+/// `score:` tag from Sonarr's series rating.
+fn sonarr_arr_tags(series: &SonarrSeries) -> Vec<String> {
+    series
+        .ratings
+        .as_ref()
+        .and_then(|r| playarr_model::home_rail::score_tag(r.value, r.votes))
+        .into_iter()
+        .collect()
+}
+
+/// `collection:` and `score:` tags from Radarr's collection and ratings
+/// (the best-voted of TMDb/IMDb, so a barely-rated title does not outrank a
+/// well-rated one on one source's few votes).
+fn radarr_arr_tags(movie: &RadarrMovie) -> Vec<String> {
+    use playarr_model::home_rail::{collection_tag, score_tag};
+    let mut tags = Vec::new();
+    if let Some(collection) = movie
+        .collection
+        .as_ref()
+        .filter(|c| c.tmdb_id.unwrap_or(0) > 0 && !c.title.trim().is_empty())
+    {
+        tags.push(collection_tag(
+            collection.tmdb_id.unwrap_or(0),
+            &collection.title,
+        ));
+    }
+    if let Some(best) = movie.ratings.as_ref().and_then(|r| {
+        [r.tmdb.as_ref(), r.imdb.as_ref()]
+            .into_iter()
+            .flatten()
+            .filter(|s| s.value > 0.0)
+            .max_by_key(|s| s.votes)
+    }) {
+        tags.extend(score_tag(best.value, best.votes));
+    }
+    tags
 }
 
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
@@ -181,6 +223,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
         images: sonarr_images(&series.images),
         release_date: series.first_aired,
         certification: normalise_certification(series.certification.as_deref()),
+        arr_tags: sonarr_arr_tags(series),
     }
 }
 
@@ -203,6 +246,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         images: radarr_images(&movie.images),
         release_date: radarr_release_date(movie),
         certification: normalise_certification(movie.certification.as_deref()),
+        arr_tags: radarr_arr_tags(movie),
     }
 }
 
@@ -231,6 +275,7 @@ fn radarr_release_date(movie: &RadarrMovie) -> Option<DateTime<Utc>> {
 fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
     RemoteWork {
         certification: None,
+        arr_tags: Vec::new(),
         external_id: artist.foreign_artist_id.clone(),
         source_id: artist.id,
         title: artist.artist_name.clone(),
@@ -282,6 +327,7 @@ fn map_lidarr_with_album_fallback(
 fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
     RemoteWork {
         certification: None,
+        arr_tags: Vec::new(),
         external_id: author.foreign_author_id.clone(),
         source_id: author.id,
         title: author.author_name.clone(),
@@ -303,6 +349,7 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
 fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
     RemoteWork {
         certification: None,
+        arr_tags: Vec::new(),
         external_id: series.tpdb_id.to_string(),
         source_id: series.id,
         title: series.title.clone(),
@@ -479,6 +526,43 @@ mod tests {
         assert_eq!(normalise_certification(None), None);
     }
 
+    #[test]
+    fn radarr_collection_and_best_voted_score_become_arr_tags() {
+        use playarr_arr_client::{RadarrCollection, RadarrRatingSource, RadarrRatings};
+        let mut movie = radarr_movie(1, "Sample Hero", 1726, true, true);
+        movie.collection = Some(RadarrCollection {
+            title: "Sample Hero Collection".into(),
+            tmdb_id: Some(131292),
+        });
+        movie.ratings = Some(RadarrRatings {
+            tmdb: Some(RadarrRatingSource {
+                value: 7.6,
+                votes: 25000,
+            }),
+            imdb: Some(RadarrRatingSource {
+                value: 7.9,
+                votes: 1000,
+            }),
+        });
+        assert_eq!(
+            map_radarr(&movie).arr_tags,
+            vec!["collection:131292:Sample Hero Collection", "score:7.6:25000"]
+        );
+        assert!(map_radarr(&radarr_movie(2, "Solo", 2, true, true))
+            .arr_tags
+            .is_empty());
+    }
+
+    #[test]
+    fn sonarr_rating_becomes_a_score_tag() {
+        let mut series = sonarr_series(1, "Show", 10, true);
+        series.ratings = Some(playarr_arr_client::SonarrRatings {
+            value: 8.44,
+            votes: 900,
+        });
+        assert_eq!(map_sonarr(&series).arr_tags, vec!["score:8.4:900"]);
+    }
+
     fn sonarr_series(id: i64, title: &str, tvdb_id: i64, monitored: bool) -> SonarrSeries {
         SonarrSeries {
             id,
@@ -493,6 +577,7 @@ mod tests {
             images: Vec::new(),
             first_aired: None,
             certification: None,
+            ratings: None,
         }
     }
 
@@ -537,6 +622,8 @@ mod tests {
             in_cinemas: None,
             year: None,
             certification: None,
+            collection: None,
+            ratings: None,
         }
     }
 

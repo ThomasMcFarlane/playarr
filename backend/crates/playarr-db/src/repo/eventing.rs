@@ -427,6 +427,9 @@ impl MediaFileRepo for EventingMediaFileRepo {
     async fn list_work_source_instances(&self) -> Result<Vec<(Uuid, Uuid)>, DbError> {
         self.inner.list_work_source_instances().await
     }
+    async fn count_by_work(&self) -> Result<std::collections::HashMap<Uuid, u32>, DbError> {
+        self.inner.count_by_work().await
+    }
     async fn find_by_leaf(
         &self,
         work_id: Uuid,

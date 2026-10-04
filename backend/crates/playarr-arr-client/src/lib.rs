@@ -42,8 +42,9 @@ pub use lidarr::{
 pub use lookup::LookupTitle;
 pub use prowlarr::{ProwlarrClient, ProwlarrIndexer};
 pub use radarr::{
-    RadarrClient, RadarrCredit, RadarrImage, RadarrMediaInfo, RadarrMovie, RadarrMovieFile,
-    RadarrQuality, RadarrQualityInfo, RadarrRevision,
+    RadarrClient, RadarrCollection, RadarrCredit, RadarrImage, RadarrMediaInfo, RadarrMovie,
+    RadarrMovieFile, RadarrQuality, RadarrQualityInfo, RadarrRatingSource, RadarrRatings,
+    RadarrRevision,
 };
 pub use readarr::{
     ReadarrAuthor, ReadarrBook, ReadarrBookFile, ReadarrClient, ReadarrQuality, ReadarrQualityInfo,
@@ -51,7 +52,7 @@ pub use readarr::{
 };
 pub use sonarr::{
     SonarrClient, SonarrEpisode, SonarrEpisodeFile, SonarrImage, SonarrMediaInfo, SonarrQuality,
-    SonarrQualityInfo, SonarrRevision, SonarrSeries,
+    SonarrQualityInfo, SonarrRatings, SonarrRevision, SonarrSeries,
 };
 pub use whisparr::{
     WhisparrClient, WhisparrEpisode, WhisparrEpisodeFile, WhisparrImage, WhisparrMediaInfo,

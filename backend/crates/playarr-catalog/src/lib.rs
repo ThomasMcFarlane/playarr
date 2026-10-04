@@ -373,6 +373,26 @@ pub struct CatalogPage {
     pub remote_only: Vec<RemoteOnlyWork>,
 }
 
+/// One user's watch state for one work, folded from per-file progress.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkWatch {
+    /// Files (movie file / episodes) the user finished.
+    pub watched_files: u32,
+    /// Files the work has on disk (0 when unknown).
+    pub total_files: u32,
+    /// The user has watched or part-watched at least one file.
+    pub started: bool,
+    /// Most recent progress touch across the work's files.
+    pub last_activity: Option<DateTime<Utc>>,
+}
+
+impl WorkWatch {
+    /// Every file the work has is watched.
+    pub fn is_complete(&self) -> bool {
+        self.total_files > 0 && self.watched_files >= self.total_files
+    }
+}
+
 /// An [`Episode`] plus the resolved id of the [`playarr_model::MediaFile`]
 /// that plays it (via [`playarr_db::MediaFileRepo::find_by_leaf`],
 /// `LeafRef::Episode(episode.id)`), or `None` when no file has synced for
@@ -966,6 +986,17 @@ impl CatalogService {
         Ok(candidates)
     }
 
+    /// Every work matching `query`'s filters (library ceiling, household
+    /// gate, language, availability), unsorted and unpaginated, without the
+    /// per-page hydration [`Self::browse`] does -- the cheap candidate set
+    /// Home rails slice per user.
+    pub async fn visible_works(&self, query: &BrowseQuery) -> Result<Vec<Work>, CatalogError> {
+        let mut candidates = self.filtered_candidates(query).await?;
+        self.apply_language_filter(&mut candidates, &query.language)
+            .await?;
+        Ok(candidates)
+    }
+
     /// Loads the per-work language index for `kind`; `every_file` also loads
     /// per-file counts.
     async fn work_language_index(
@@ -1162,6 +1193,39 @@ impl CatalogService {
         Ok(page)
     }
 
+    /// The user's watch state per work, from one progress query plus one
+    /// grouped file count. Works the user never touched are absent.
+    pub async fn watch_summaries(
+        &self,
+        user_id: Uuid,
+    ) -> Result<HashMap<Uuid, WorkWatch>, CatalogError> {
+        let progress = self.watch_progress_repo.list_for_user(user_id).await?;
+        if progress.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let totals = self.media_file_repo.count_by_work().await?;
+        let mut out: HashMap<Uuid, WorkWatch> = HashMap::new();
+        for row in progress {
+            let entry = out.entry(row.work_id).or_default();
+            match row.state {
+                playarr_model::WatchState::Watched => {
+                    entry.watched_files += 1;
+                    entry.started = true;
+                }
+                playarr_model::WatchState::PartWatched => entry.started = true,
+                playarr_model::WatchState::Unseen => continue,
+            }
+            if let Some(at) = row.updated_at {
+                entry.last_activity = Some(entry.last_activity.map_or(at, |old| old.max(at)));
+            }
+        }
+        out.retain(|_, w| w.started);
+        for (work_id, watch) in out.iter_mut() {
+            watch.total_files = totals.get(work_id).copied().unwrap_or(0);
+        }
+        Ok(out)
+    }
+
     /// Runs a saved [`playarr_model::LibraryView`]'s criteria+sort through
     /// [`Self::browse`], with caller-supplied pagination layered on top the
     /// same way `BrowseQueryParams`/`browse_catalog_handler` already does.
@@ -1235,9 +1299,24 @@ impl CatalogService {
                 // union in.
                 group_library_ids: Vec::new(),
                 gate,
-                language: LanguageFilter::default(),
+                language: LanguageFilter {
+                    audio: c.audio_languages.clone(),
+                    subtitle: c.subtitle_languages.clone(),
+                    match_all: c.language_match_all,
+                    every_file: c.language_every_file,
+                },
             })
             .await?;
+
+        // `unwatched_only` is per viewer, so it can't be part of the shared
+        // browse query (and its cache key); it filters this caller's copy.
+        if c.unwatched_only {
+            if let Some(uid) = user_id {
+                let watch = self.watch_summaries(uid).await?;
+                page.items
+                    .retain(|work| !watch.get(&work.id).is_some_and(|w| w.started));
+            }
+        }
 
         let sort_keys = if view.sort.is_empty() {
             &[playarr_model::ViewSort::TitleAscending][..]

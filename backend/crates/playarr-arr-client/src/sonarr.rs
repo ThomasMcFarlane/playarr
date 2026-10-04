@@ -42,6 +42,18 @@ pub struct SonarrSeries {
     /// controls.
     #[serde(default)]
     pub certification: Option<String>,
+    /// Audience score (`0-10`) and vote count.
+    #[serde(default)]
+    pub ratings: Option<SonarrRatings>,
+}
+
+/// Sonarr's `ratings` object on a series.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SonarrRatings {
+    #[serde(default)]
+    pub value: f64,
+    #[serde(default)]
+    pub votes: u32,
 }
 
 /// A single entry from a Sonarr resource's `images` array (poster, fanart,

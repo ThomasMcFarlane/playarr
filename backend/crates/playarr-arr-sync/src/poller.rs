@@ -780,7 +780,7 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
         overview: remote.overview.clone(),
         images: remote.images.clone(),
         genres: remote.genres.clone(),
-        tags: rating_tags(&[], remote.certification.as_deref()),
+        tags: arr_owned_tags(&[], remote),
         added_at: Utc::now(),
         // Arr-owned, like `overview`/`images`/`genres` above -- see
         // `RemoteWork::release_date`'s doc comment.
@@ -809,7 +809,7 @@ fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
     merged.images = remote.images.clone();
     merged.genres = remote.genres.clone();
     merged.release_date = remote.release_date;
-    merged.tags = rating_tags(&existing.tags, remote.certification.as_deref());
+    merged.tags = arr_owned_tags(&existing.tags, remote);
     merged
 }
 
@@ -817,7 +817,31 @@ fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
 /// `certification` (or removed when the source reports none). Every other
 /// tag, including an admin's `rating-override:`, is preserved untouched.
 fn rating_tags(existing: &[String], certification: Option<&str>) -> Vec<String> {
-    let prefix = playarr_model::household::RATING_TAG_PREFIX;
+    replace_prefixed_tags(
+        existing,
+        playarr_model::household::RATING_TAG_PREFIX,
+        certification
+            .map(|rating| format!("{}{rating}", playarr_model::household::RATING_TAG_PREFIX)),
+    )
+}
+
+/// Every arr-owned tag (`rating:`, `collection:`, `score:`) refreshed from
+/// `remote`; all other tags are preserved untouched.
+fn arr_owned_tags(existing: &[String], remote: &RemoteWork) -> Vec<String> {
+    use playarr_model::home_rail::{COLLECTION_TAG_PREFIX, SCORE_TAG_PREFIX};
+    let mut tags = rating_tags(existing, remote.certification.as_deref());
+    for prefix in [COLLECTION_TAG_PREFIX, SCORE_TAG_PREFIX] {
+        let fresh = remote
+            .arr_tags
+            .iter()
+            .find(|tag| tag.starts_with(prefix))
+            .cloned();
+        tags = replace_prefixed_tags(&tags, prefix, fresh);
+    }
+    tags
+}
+
+fn replace_prefixed_tags(existing: &[String], prefix: &str, fresh: Option<String>) -> Vec<String> {
     let mut tags: Vec<String> = existing
         .iter()
         .filter(|tag| {
@@ -826,9 +850,7 @@ fn rating_tags(existing: &[String], certification: Option<&str>) -> Vec<String> 
         })
         .cloned()
         .collect();
-    if let Some(rating) = certification {
-        tags.push(format!("{prefix}{rating}"));
-    }
+    tags.extend(fresh);
     tags
 }
 
@@ -969,6 +991,7 @@ mod tests {
     fn remote(external_id: &str, title: &str, monitored: bool) -> RemoteWork {
         RemoteWork {
             certification: None,
+            arr_tags: Vec::new(),
             external_id: external_id.to_string(),
             // Not exercised by `diff_works`/`merge_work` (only
             // `crate::media_sync::MediaSync` reads it) -- a fixed
@@ -1448,6 +1471,23 @@ mod tests {
         assert!(remaining.iter().any(|w| w.title == "New Name"));
         assert!(remaining.iter().any(|w| w.title == "Brand New"));
         assert!(!remaining.iter().any(|w| w.id == to_delete_id));
+    }
+
+    #[test]
+    fn collection_and_score_tags_are_refreshed_and_other_tags_kept() {
+        let mut remote_work = remote("603", "Sample Movie Kilo", true);
+        remote_work.arr_tags = vec![
+            "collection:2344:Sample Movie Kilo Collection".into(),
+            "score:8.1:100".into(),
+        ];
+        let mut existing = new_work(WorkKind::Movie, ExternalProvider::Tmdb, &remote_work);
+        existing.tags.push("my-tag".into());
+        remote_work.arr_tags = vec!["score:8.2:150".into()];
+        let merged = merge_work(&existing, WorkKind::Movie, &remote_work);
+        assert!(merged.tags.contains(&"my-tag".to_string()));
+        assert!(merged.tags.contains(&"score:8.2:150".to_string()));
+        assert!(!merged.tags.iter().any(|t| t.starts_with("collection:")));
+        assert!(!merged.tags.contains(&"score:8.1:100".to_string()));
     }
 
     #[test]

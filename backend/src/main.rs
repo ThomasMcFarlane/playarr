@@ -1300,14 +1300,15 @@ async fn boot_api(
         UserDirectory,
     };
     use playarr_db::repo::{
-        seed_default_views, SqlxCreditRepo, SqlxDeviceRepo, SqlxDownloadTicketRepo,
-        SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo, SqlxNodeIdentityRepo,
-        SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo, SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo,
-        SqlxPeerSourceInstanceRepo, SqlxPeerSyncStateRepo, SqlxPlaylistRepo, SqlxPolicyRepo,
-        SqlxProfilePinRepo, SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo,
-        SqlxRoutingRuleRepo, SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo,
-        SqlxSystemSettingsRepo, SqlxTdarrConnectionRepo, SqlxUserInviteRepo,
-        SqlxUserInviteRequestRepo, SqlxUserRepo, SqlxWatchProgressRepo, SqlxWorkRepo,
+        seed_default_rails, seed_default_views, SqlxCreditRepo, SqlxDeviceRepo,
+        SqlxDownloadTicketRepo, SqlxGroupLibraryRepo, SqlxLibraryViewRepo, SqlxMediaFileRepo,
+        SqlxNodeIdentityRepo, SqlxPeerGroupRepo, SqlxPeerJoinTokenRepo,
+        SqlxPeerLeafAvailabilityRepo, SqlxPeerNodeRepo, SqlxPeerSourceInstanceRepo,
+        SqlxPeerSyncStateRepo, SqlxPlaylistRepo, SqlxPolicyRepo, SqlxProfilePinRepo,
+        SqlxPushRegistrationRepo, SqlxRefreshTokenRepo, SqlxRenditionRepo, SqlxRoutingRuleRepo,
+        SqlxSourceInstanceRepo, SqlxSyncConflictLogRepo, SqlxSystemSettingsRepo,
+        SqlxTdarrConnectionRepo, SqlxUserInviteRepo, SqlxUserInviteRequestRepo, SqlxUserRepo,
+        SqlxWatchProgressRepo, SqlxWorkRepo,
     };
     use playarr_db::{
         CreditRepo, DeviceRepo, DownloadTicketRepo, GroupLibraryRepo, LibraryViewRepo,
@@ -1386,9 +1387,13 @@ async fn boot_api(
         Arc::new(playarr_api::household::SystemClock),
     ));
     let policy_repo: Arc<dyn PolicyRepo> = Arc::new(SqlxPolicyRepo::new(pool.clone()));
+    let home_rails_cache = Arc::new(playarr_api::home_rails::HomeRailsCache::new(cache.clone()));
     let watch_progress: Arc<dyn WatchProgressRepo> =
         Arc::new(playarr_db::EventingWatchProgressRepo::new(
-            Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+            Arc::new(playarr_api::home_rails::InvalidatingWatchProgressRepo::new(
+                Arc::new(SqlxWatchProgressRepo::new(pool.clone())),
+                home_rails_cache.clone(),
+            )),
             live_events.clone(),
         ));
     let download_tickets: Arc<dyn DownloadTicketRepo> =
@@ -1408,6 +1413,13 @@ async fn boot_api(
             "failed to seed default library views; Playarr's Home screen may be missing \
              its default 'Newly Added'/'Newly Released' shelves until this is investigated"
         );
+    }
+    let home_rail_repo: Arc<dyn playarr_db::HomeRailRepo> =
+        Arc::new(playarr_db::SqlxHomeRailRepo::new(pool.clone()));
+    // Idempotent: one default rail per (kind, library) where it makes sense,
+    // never overwriting an admin's edits or ordering.
+    if let Err(err) = seed_default_rails(home_rail_repo.as_ref()).await {
+        tracing::error!(%err, "failed to seed default home rails; Home will show no server rails until this is investigated");
     }
     let playlist_repo: Arc<dyn PlaylistRepo> = Arc::new(playarr_db::EventingPlaylistRepo::new(
         Arc::new(SqlxPlaylistRepo::new(pool.clone())),
@@ -1672,6 +1684,8 @@ async fn boot_api(
         source_instances,
         source_instance_repo,
         library_view_repo,
+        home_rail_repo,
+        home_rails_cache,
         playlist_repo,
         watchlist_repo,
         resume_dismissals,
