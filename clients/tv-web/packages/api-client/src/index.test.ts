@@ -3,6 +3,8 @@ import {
   ApiClient,
   ApiError,
   buildCalendarQuery,
+  PushUnsupportedError,
+  SseParser,
   DEVICE_CODE_GRANT_TYPE,
   describeApiError,
   parsePinLockSeconds,
@@ -1601,5 +1603,56 @@ describe("household errors", () => {
     expect(parsePinLockSeconds(err)).toBe(90);
     expect(describeApiError(err)).toBe("Too many incorrect PIN attempts. Try again in 2 minutes.");
     expect(parsePinLockSeconds(new ApiError(429, "x", { error: "other" }))).toBeNull();
+  });
+});
+
+describe("remote push stream", () => {
+  it("parses frames split across chunks and ignores keep-alive comments", () => {
+    const parser = new SseParser();
+    expect(parser.push("event: ready\ndata: {}\n\n: keep")).toEqual([{ event: "ready", data: "{}" }]);
+    expect(parser.push("-alive\n\nevent: inbox\nid: 3\ndata: {\"seq\":3}\r\n\r\n")).toEqual([
+      { event: "inbox", data: '{"seq":3}' },
+    ]);
+  });
+
+  it("streams inbox events with Last-Event-ID and bearer auth", async () => {
+    let seen: Request | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const enc = new TextEncoder();
+        controller.enqueue(enc.encode("event: ready\ndata: {}\n\n"));
+        controller.enqueue(
+          enc.encode('event: inbox\nid: 5\ndata: {"id":"e","seq":5,"kind":"command","created_ms":0,"expires_ms":0}\n\n')
+        );
+        controller.close();
+      },
+    });
+    const client = new ApiClient({
+      baseUrl: "https://example.test",
+      getAccessToken: async () => "tok",
+      fetchImpl: mockFetch((request) => {
+        seen = request;
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }),
+    });
+    const events: number[] = [];
+    let opened = false;
+    await client.streamRemoteInbox(4, { onOpen: () => (opened = true), onEvent: (e) => void events.push(e.seq) });
+    expect(opened).toBe(true);
+    expect(events).toEqual([5]);
+    expect(seen?.headers.get("Last-Event-ID")).toBe("4");
+    expect(seen?.headers.get("Authorization")).toBe("Bearer tok");
+  });
+
+  it("reports an unstreamable runtime so callers can long poll", async () => {
+    const client = new ApiClient({
+      baseUrl: "https://example.test",
+      fetchImpl: mockFetch(
+        () => new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
+      ),
+    });
+    await expect(client.streamRemoteInbox(0, { onEvent: () => undefined })).rejects.toBeInstanceOf(
+      PushUnsupportedError
+    );
   });
 });

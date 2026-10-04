@@ -56,14 +56,39 @@ distinct, non-leaking error:
 
 ## Command channel
 
-The server has no push transport today, so commands use a durable per-target
-event queue (`remote_events`, monotonically increasing `seq` per target) and
-a long poll: `GET /api/v1/remote/inbox?after=<seq>&wait=25`. Long polling
-works through every proxy and every client toolkit already in the repo and
-survives server restarts and multi-replica deployments because the queue is in
-the database. Commands expire after 30 seconds if not delivered. The target
-acknowledges each event (`POST /api/v1/remote/events/{id}/ack`); the
-controller reads the outcome (`GET /api/v1/remote/commands/{id}`).
+Commands use a durable per-target event queue (`remote_events`, monotonically
+increasing `seq` per target) with two delivery transports over the same HTTPS
+listener. Both read the same queue, so they behave identically and survive
+server restarts and multi-replica deployments.
+
+- **Push (preferred): SSE.** `GET /api/v1/remote/stream` is a
+  `text/event-stream` authenticated by the target device's own access token
+  (the same registered-target and per-event pairing checks as the poll: a
+  command whose pairing was revoked or expired after queueing is acknowledged
+  `revoked` and never sent). Each frame is `event: inbox`, `id: <seq>`,
+  `data: <InboxEvent JSON>`; `: ` comments are keep-alives every 15 s and an
+  `event: ready` frame opens the stream. Clients resume with `Last-Event-ID`
+  (or `?after=`), so nothing queued during a reconnect is lost. The server ends
+  the stream after five minutes so it never outlives the token that opened
+  it; clients reconnect immediately with a fresh token. `EventSource` cannot
+  send an `Authorization` header, so clients use fetch streaming (web) or an
+  OkHttp streaming call (Android).
+- **Fallback: long poll.** `GET /api/v1/remote/inbox?after=<seq>&wait=25`
+  works through every proxy and toolkit. Clients use it when the stream cannot
+  open (unsupported runtime, a proxy that buffers or blocks it): after three
+  failed attempts they long-poll for two minutes and then try push again.
+
+Inside one server process an enqueue wakes the waiting stream or poll at once
+(an in-memory watch per target); waiters also re-check the database every
+1.5 s, so another replica's enqueue is seen at worst that much later. The
+handoff outcome can be awaited the same way:
+`GET /api/v1/remote/handoffs/{id}?wait=20` returns as soon as the handoff leaves
+`pending`.
+
+Commands expire after 30 seconds if not delivered. The target acknowledges each
+event (`POST /api/v1/remote/events/{id}/ack`); the controller reads the outcome
+(`GET /api/v1/remote/commands/{id}`). Paired remotes can be renamed from any
+device of the account (`PATCH /api/v1/remote/pairings/{id}`).
 
 ### Sensitive input
 

@@ -78,6 +78,7 @@ pub use policy::{PolicyRepo, SqlxPolicyRepo};
 pub use profile_pin::{ProfilePinRepo, SqlxProfilePinRepo};
 pub use push_registration::{PushRegistrationRepo, SqlxPushRegistrationRepo};
 pub use refresh_token::{InMemoryRefreshTokenStore, RefreshTokenRepo, SqlxRefreshTokenRepo};
+pub use remote::remote_wake;
 pub use remote::{
     RemoteEvent, RemoteHandoff, RemotePairing, RemoteRepo, RemoteTarget, SqlxRemoteRepo,
 };

@@ -1,6 +1,8 @@
 /**
- * Long-poll loop that makes this device a remote-control target
- * (docs/architecture/remote-control.md). Pure TypeScript over an injected
+ * Loop that makes this device a remote-control target
+ * (docs/architecture/remote-control.md). It prefers the server-sent-events
+ * push stream (commands arrive in milliseconds) and falls back to long
+ * polling, which works through every proxy. Pure TypeScript over an injected
  * client so the protocol handling is testable without a browser or server.
  */
 import type { RemoteInboxEvent } from "@playarr-tv/api-client";
@@ -17,6 +19,12 @@ export interface RemoteTargetClient {
     wait: number,
     signal?: AbortSignal
   ): Promise<{ events: RemoteInboxEvent[]; next: number }>;
+  /** Optional push transport; absent or unsupported means long polling only. */
+  streamRemoteInbox?(
+    after: number,
+    handlers: { onOpen?: () => void; onEvent: (event: RemoteInboxEvent) => Promise<void> | void },
+    signal?: AbortSignal
+  ): Promise<void>;
   ackRemoteEvent(
     eventId: string,
     status: "ok" | "failed" | "unsupported",
@@ -67,6 +75,8 @@ export interface TargetHostOptions {
   capabilities: string[];
   pollSeconds?: number;
   stateIntervalMs?: number;
+  /** How long to long-poll after the push stream keeps failing before trying it again. */
+  pushRetryMs?: number;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -100,6 +110,11 @@ export class RemoteTargetHost {
   private lastStateJson = "";
   private lastStateSentAt = 0;
   private after = 0;
+  /** Consecutive push attempts that failed before the stream opened. */
+  private pushFailures = 0;
+  private pushDisabledUntil = 0;
+  /** Transport the loop is using right now (for diagnostics and tests). */
+  transport: "push" | "poll" = "poll";
 
   constructor(
     private readonly client: RemoteTargetClient,
@@ -158,6 +173,12 @@ export class RemoteTargetHost {
           });
           registered = true;
         }
+        if (this.shouldPush()) {
+          await this.runPush(signal);
+          backoff = 1_000;
+          continue;
+        }
+        this.transport = "poll";
         const inbox = await this.client.pollRemoteInbox(
           this.after,
           this.options.pollSeconds ?? 25,
@@ -175,6 +196,64 @@ export class RemoteTargetHost {
         await sleep(backoff);
         backoff = Math.min(backoff * 2, 15_000);
       }
+    }
+  }
+
+  private shouldPush(): boolean {
+    return (
+      typeof this.client.streamRemoteInbox === "function" && Date.now() >= this.pushDisabledUntil
+    );
+  }
+
+  /** One push-stream session; resolves when the server ends it normally. */
+  private async runPush(signal: AbortSignal): Promise<void> {
+    let opened = false;
+    const startedAt = Date.now();
+    let delivered = false;
+    try {
+      await this.client.streamRemoteInbox!(
+        this.after,
+        {
+          onOpen: () => {
+            opened = true;
+            this.pushFailures = 0;
+            this.transport = "push";
+          },
+          onEvent: async (event) => {
+            delivered = true;
+            await this.handle(event);
+            this.after = Math.max(this.after, event.seq);
+          },
+        },
+        signal
+      );
+    } catch (error) {
+      if (signal.aborted || !this.running) return;
+      // 404 can mean "not registered" (the loop re-registers) or an older server
+      // without the stream route; counting it lets the host settle on long polling.
+      if (!opened) {
+        this.pushFailures += 1;
+        // Streaming is blocked or unsupported here: long-poll for a while, then retry push.
+        const unsupported = record(error).name === "PushUnsupportedError";
+        if (unsupported || this.pushFailures >= 3) {
+          this.pushFailures = 0;
+          this.pushDisabledUntil = Date.now() + (this.options.pushRetryMs ?? 120_000);
+          this.transport = "poll";
+          return;
+        }
+      }
+      throw error;
+    }
+    // A stream that ended without ever opening, or at once, would otherwise spin.
+    if (!opened || (!delivered && Date.now() - startedAt < 2_000)) {
+      this.pushFailures += 1;
+      if (this.pushFailures >= 3) {
+        this.pushFailures = 0;
+        this.pushDisabledUntil = Date.now() + (this.options.pushRetryMs ?? 120_000);
+        this.transport = "poll";
+        return;
+      }
+      throw new Error("push stream closed immediately");
     }
   }
 

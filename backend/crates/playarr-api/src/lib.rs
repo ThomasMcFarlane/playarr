@@ -480,13 +480,15 @@ fn api_router() -> OpenApiRouter<AppState> {
         ))
         .routes(routes!(
             remote::get_pairing_handler,
-            remote::revoke_pairing_handler
+            remote::revoke_pairing_handler,
+            remote::rename_pairing_handler
         ))
         .routes(routes!(remote::approve_pairing_handler))
         .routes(routes!(remote::deny_pairing_handler))
         .routes(routes!(remote::send_command_handler))
         .routes(routes!(remote::command_status_handler))
         .routes(routes!(remote::inbox_handler))
+        .routes(routes!(remote::stream_handler))
         .routes(routes!(remote::ack_event_handler))
         .routes(routes!(remote::create_handoff_handler))
         .routes(routes!(remote::get_handoff_handler))

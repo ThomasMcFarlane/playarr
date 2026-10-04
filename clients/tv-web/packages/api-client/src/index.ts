@@ -928,6 +928,42 @@ export function describeApiError(err: unknown): string {
  * grouping loose query params into an object, so the shapes here always
  * match `backend/openapi/playarr.yaml` exactly.
  */
+/** The runtime cannot stream a response body; use long polling instead. */
+export class PushUnsupportedError extends Error {
+  constructor() {
+    super("response streaming is not supported here");
+    this.name = "PushUnsupportedError";
+  }
+}
+
+/** Minimal server-sent-events frame parser (`event`, `data`; ids and comments are ignored). */
+export class SseParser {
+  private buffer = "";
+
+  push(chunk: string): Array<{ event: string; data: string }> {
+    this.buffer += chunk.replace(/\r\n?/g, "\n");
+    const frames: Array<{ event: string; data: string }> = [];
+    for (;;) {
+      const end = this.buffer.indexOf("\n\n");
+      if (end < 0) break;
+      const raw = this.buffer.slice(0, end);
+      this.buffer = this.buffer.slice(end + 2);
+      let event = "message";
+      const data: string[] = [];
+      for (const line of raw.split("\n")) {
+        if (line.startsWith(":")) continue;
+        const colon = line.indexOf(":");
+        const field = colon < 0 ? line : line.slice(0, colon);
+        const value = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
+        if (field === "event") event = value;
+        else if (field === "data") data.push(value);
+      }
+      if (data.length > 0 || event !== "message") frames.push({ event, data: data.join("\n") });
+    }
+    return frames;
+  }
+}
+
 export class ApiClient {
   /** The underlying `openapi-fetch` client, for operations without a convenience method above. */
   readonly raw: Client<paths>;
@@ -2223,6 +2259,11 @@ export class ApiClient {
     return this.requestJson("POST", `/api/v1/remote/pairings/${encodeURIComponent(id)}/deny`);
   }
 
+  /** Renames a live pairing's controller label (any device of the account may). */
+  async renameRemotePairing(id: string, name: string): Promise<RemotePairing> {
+    return this.requestJson("PATCH", `/api/v1/remote/pairings/${encodeURIComponent(id)}`, { name });
+  }
+
   async revokeRemotePairing(id: string): Promise<void> {
     await this.requestJson("DELETE", `/api/v1/remote/pairings/${encodeURIComponent(id)}`);
   }
@@ -2252,6 +2293,68 @@ export class ApiClient {
     );
   }
 
+  /**
+   * Opens the server-sent-events push stream for this target's inbox and
+   * resolves when the server closes it (it does every few minutes so the
+   * access token is renewed). `Authorization` is a header, so this uses
+   * `fetch` streaming rather than `EventSource`. Throws `ApiError` for HTTP
+   * failures and `PushUnsupportedError` when the runtime cannot stream a
+   * response body, so callers can fall back to {@link pollRemoteInbox}.
+   */
+  async streamRemoteInbox(
+    after: number,
+    handlers: { onOpen?: () => void; onEvent: (event: RemoteInboxEvent) => Promise<void> | void },
+    signal?: AbortSignal
+  ): Promise<void> {
+    const token = await this.getAccessToken();
+    const headers: Record<string, string> = { Accept: "text/event-stream" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (after > 0) headers["Last-Event-ID"] = String(Math.trunc(after));
+    const response = await this.rawFetch(
+      new Request(this.resolveUrl("/api/v1/remote/stream"), { method: "GET", headers, signal })
+    );
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = undefined;
+      }
+      throw new ApiError(response.status, response.statusText, errorBody);
+    }
+    // An older server (or a proxy) answers unknown paths with its HTML app shell.
+    const contentType = response.headers.get("content-type") ?? "";
+    if (
+      !contentType.includes("text/event-stream") ||
+      !response.body ||
+      typeof response.body.getReader !== "function"
+    ) {
+      throw new PushUnsupportedError();
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const parser = new SseParser();
+    handlers.onOpen?.();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        for (const frame of parser.push(decoder.decode(value, { stream: true }))) {
+          if (frame.event !== "inbox") continue;
+          let event: RemoteInboxEvent;
+          try {
+            event = JSON.parse(frame.data) as RemoteInboxEvent;
+          } catch {
+            continue;
+          }
+          await handlers.onEvent(event);
+        }
+      }
+    } finally {
+      reader.cancel().catch(() => undefined);
+    }
+  }
+
   async ackRemoteEvent(
     eventId: string,
     status: "ok" | "failed" | "unsupported",
@@ -2267,8 +2370,15 @@ export class ApiClient {
     return this.requestJson("POST", "/api/v1/remote/handoffs", body);
   }
 
-  async getRemoteHandoff(id: string): Promise<RemoteHandoff> {
-    return this.requestJson("GET", `/api/v1/remote/handoffs/${encodeURIComponent(id)}`);
+  /** `waitSeconds` long-polls while the handoff is still pending (server caps at 25). */
+  async getRemoteHandoff(id: string, waitSeconds = 0, signal?: AbortSignal): Promise<RemoteHandoff> {
+    const wait = waitSeconds > 0 ? `?wait=${Math.trunc(waitSeconds)}` : "";
+    return this.requestJson(
+      "GET",
+      `/api/v1/remote/handoffs/${encodeURIComponent(id)}${wait}`,
+      undefined,
+      signal
+    );
   }
 
   async ackRemoteHandoff(

@@ -47,7 +47,7 @@ class RemoteHandoffFlowTest {
             createRequests += request
             return create.removeAt(0)()
         }
-        override suspend fun getHandoff(id: String) = gets.removeAt(0)
+        override suspend fun getHandoff(id: String, waitSeconds: Int) = gets.removeAt(0)
         override suspend fun createPairing(request: CreateRemotePairingRequest): RemotePairing {
             pairingRequests += 1
             assertEquals(listOf("handoff"), request.scopes)

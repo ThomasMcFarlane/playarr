@@ -13,6 +13,7 @@ mod codec;
 pub mod error;
 pub mod pool;
 pub mod repo;
+pub use repo::remote_wake;
 
 pub use error::DbError;
 pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};

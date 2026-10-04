@@ -148,3 +148,39 @@ internal fun JsonObject.string(name: String): String? = (this[name] as? JsonPrim
 internal fun JsonObject.long(name: String): Long? = (this[name] as? JsonPrimitive)?.longOrNull
 internal fun JsonObject.double(name: String): Double? = (this[name] as? JsonPrimitive)?.doubleOrNull
 internal fun JsonElement?.asObject(): JsonObject = this as? JsonObject ?: JsonObject(emptyMap())
+
+/**
+ * Reads server-sent-events frames from [reader] until it ends, calling
+ * [onFrame] with each frame's event name and joined data. Comments (keep-alives)
+ * and unknown fields are ignored.
+ */
+internal suspend fun readSseFrames(reader: java.io.BufferedReader, onFrame: suspend (event: String, data: String) -> Unit) {
+    var event = "message"
+    val data = StringBuilder()
+    var hasData = false
+    while (true) {
+        val line = reader.readLine() ?: return
+        if (line.isEmpty()) {
+            if (hasData || event != "message") onFrame(event, data.toString())
+            event = "message"
+            data.setLength(0)
+            hasData = false
+            continue
+        }
+        if (line.startsWith(":")) continue
+        val colon = line.indexOf(':')
+        val field = if (colon < 0) line else line.substring(0, colon)
+        val value = if (colon < 0) "" else line.substring(colon + 1).removePrefix(" ")
+        when (field) {
+            "event" -> event = value
+            "data" -> {
+                if (hasData) data.append('\n')
+                data.append(value)
+                hasData = true
+            }
+        }
+    }
+}
+
+/** The runtime or network path cannot carry the push stream; long poll instead. */
+class PushUnsupportedException(message: String) : Exception(message)

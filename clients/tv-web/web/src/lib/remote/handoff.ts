@@ -13,7 +13,7 @@ import type {
 
 export interface HandoffClient {
   createRemoteHandoff(body: RemoteCreateHandoffRequest): Promise<RemoteHandoff>;
-  getRemoteHandoff(id: string): Promise<RemoteHandoff>;
+  getRemoteHandoff(id: string, waitSeconds?: number): Promise<RemoteHandoff>;
   requestRemotePairing(body: {
     targetDeviceId: string;
     scopes?: string[];
@@ -118,8 +118,12 @@ export async function handOffPlayback(
   const deadline = now() + (params.handoffTimeoutMs ?? 70_000);
   while (handoff.status === "pending") {
     if (now() > deadline) throw new HandoffFailure("expired", "destination did not respond");
-    await sleep(1_000);
-    handoff = await client.getRemoteHandoff(handoff.id);
+    // The server holds the request open while the handoff is pending, so the
+    // outcome arrives the moment the destination acknowledges. A server that
+    // ignores `wait` answers at once; then fall back to a one second poll.
+    const asked = now();
+    handoff = await client.getRemoteHandoff(handoff.id, 20);
+    if (handoff.status === "pending" && now() - asked < 500) await sleep(1_000);
   }
   if (handoff.status === "committed") return handoff;
   if (handoff.status === "expired") throw new HandoffFailure("expired", "destination did not respond");

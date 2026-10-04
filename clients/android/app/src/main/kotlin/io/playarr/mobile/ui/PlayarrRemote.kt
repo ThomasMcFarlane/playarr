@@ -3,6 +3,9 @@ package io.playarr.mobile.ui
 import android.app.Activity
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -27,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +59,7 @@ import io.playarr.shared.data.model.RemoteHandoff
 import io.playarr.shared.data.model.RemotePairing
 import io.playarr.shared.data.model.RemotePlaybackSnapshot
 import io.playarr.shared.data.model.RemoteTarget
+import io.playarr.shared.data.model.RenameRemotePairingRequest
 import io.playarr.shared.data.remote.PlayarrRemoteApi
 import java.util.UUID
 import javax.inject.Inject
@@ -126,13 +131,27 @@ internal class RemoteViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Waits for the target to approve [pairing]. Transient network errors keep
+     * waiting, but the wait always ends (denied, expired or timed out) and
+     * always clears [pending], so the Pair buttons never stay disabled.
+     */
     private suspend fun awaitApproval(pairing: RemotePairing, deviceId: String) {
         var current = pairing
-        while (current.status == "pending") {
-            delay(2_000L)
-            current = api.getPairing(current.id)
+        try {
+            while (current.status == "pending" && System.currentTimeMillis() < current.expiresMs) {
+                delay(2_000L)
+                current = try {
+                    api.getPairing(current.id)
+                } catch (cancel: kotlinx.coroutines.CancellationException) {
+                    throw cancel
+                } catch (_: Exception) {
+                    current
+                }
+            }
+        } finally {
+            _pending.value = null
         }
-        _pending.value = null
         if (current.status == "active") _controlling.value = deviceId
         else _error.value = PlayarrString.RemotePairingNotApproved
     }
@@ -150,6 +169,21 @@ internal class RemoteViewModel @Inject constructor(
                 throw cancel
             } catch (_: Exception) {
                 _error.value = PlayarrString.RemoteRevokeFailed
+            }
+            refresh()
+        }
+    }
+
+    fun rename(pairing: RemotePairing, name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                api.renamePairing(pairing.id, RenameRemotePairingRequest(clean))
+            } catch (cancel: kotlinx.coroutines.CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                _error.value = PlayarrString.RemoteRenameFailed
             }
             refresh()
         }
@@ -178,6 +212,47 @@ internal class RemoteViewModel @Inject constructor(
         }
     }
 
+    private val _moving = MutableStateFlow(false)
+    val moving: StateFlow<Boolean> = _moving.asStateFlow()
+
+    private fun handoffApi() = object : RemoteHandoffApi {
+        override suspend fun createHandoff(request: CreateRemoteHandoffRequest) = api.createHandoff(request)
+        override suspend fun getHandoff(id: String, waitSeconds: Int) = api.getHandoff(id, waitSeconds)
+        override suspend fun createPairing(request: CreateRemotePairingRequest) = api.createPairing(request)
+        override suspend fun getPairing(id: String) = api.getPairing(id)
+    }
+
+    /**
+     * Controller-initiated handoff: moves what [source] is playing to [destination]. The server
+     * snapshots the source's last reported state and stops it only after the destination
+     * confirms playback; on any failure the source keeps playing.
+     */
+    fun movePlayback(source: RemoteTarget, destination: RemoteTarget) {
+        if (_moving.value) return
+        viewModelScope.launch {
+            _error.value = null
+            _moving.value = true
+            try {
+                handOffPlayback(
+                    api = handoffApi(),
+                    sourceDeviceId = source.deviceId,
+                    destinationDeviceId = destination.deviceId,
+                    mediaFileId = null,
+                    snapshot = null,
+                    controllerName = controller.deviceName(),
+                    requestKey = UUID.randomUUID().toString(),
+                )
+            } catch (cancel: kotlinx.coroutines.CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                _error.value = PlayarrString.RemoteMoveFailed
+            } finally {
+                _moving.value = false
+            }
+            refresh()
+        }
+    }
+
     suspend fun listCandidates(): Pair<String?, List<RemoteTarget>> {
         repeat(5) { attempt ->
             val list = runCatching { api.listTargets() }.getOrNull()
@@ -194,12 +269,7 @@ internal class RemoteViewModel @Inject constructor(
         player: RemotePlayerControls,
         onProgress: (HandoffProgress) -> Unit,
     ): RemoteHandoff = handOffPlayback(
-        api = object : RemoteHandoffApi {
-            override suspend fun createHandoff(request: CreateRemoteHandoffRequest) = api.createHandoff(request)
-            override suspend fun getHandoff(id: String) = api.getHandoff(id)
-            override suspend fun createPairing(request: CreateRemotePairingRequest) = api.createPairing(request)
-            override suspend fun getPairing(id: String) = api.getPairing(id)
-        },
+        api = handoffApi(),
         sourceDeviceId = sourceDeviceId,
         destinationDeviceId = target.deviceId,
         mediaFileId = player.mediaFileId,
@@ -232,6 +302,37 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     fun nameOf(deviceId: String) =
         targets.firstOrNull { it.deviceId == deviceId }?.name
     val unknown = playarrString(PlayarrString.RemoteUnknownDevice)
+
+    // The controller comes first so it is on screen without scrolling past the device lists.
+    val moving by viewModel.moving.collectAsState()
+    val controlPairing = controlling?.let(viewModel::activePairingFor)
+    if (controlPairing != null) {
+        RemotePad(
+            pairing = controlPairing,
+            targetName = nameOf(controlPairing.targetDeviceId) ?: unknown,
+            onSend = { kind, payload -> viewModel.send(controlPairing, kind, payload) },
+        )
+        val source = targets.firstOrNull { it.deviceId == controlPairing.targetDeviceId }
+        val playing = source?.state?.let { (it as? JsonObject)?.get("media_file_id") } != null
+        if (source != null && playing && RemoteCapability.Handoff in controlPairing.scopes) {
+            Text(playarrString(PlayarrString.RemoteMoveTitle, "name" to source.name), color = WebInk, fontWeight = FontWeight.SemiBold)
+            val me = targets.firstOrNull { it.isSelf }
+            if (me == null) {
+                Text(playarrString(PlayarrString.RemoteMoveNeedsHost), color = WebInkMuted, fontSize = 12.sp)
+            } else {
+                Button(onClick = { viewModel.movePlayback(source, me) }, enabled = !moving, modifier = Modifier.fillMaxWidth()) {
+                    Text(playarrString(PlayarrString.RemoteMoveHere))
+                }
+            }
+            targets.filter { !it.isSelf && it.deviceId != source.deviceId && it.online && RemoteCapability.Handoff in it.capabilities }
+                .forEach { other ->
+                    OutlinedButton(onClick = { viewModel.movePlayback(source, other) }, enabled = !moving, modifier = Modifier.fillMaxWidth()) {
+                        Text(playarrString(PlayarrString.RemoteMoveTo, "name" to other.name))
+                    }
+                }
+            if (moving) Text(playarrString(PlayarrString.RemoteMoving), color = WebPink)
+        }
+    }
 
     Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -272,67 +373,106 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     }
     error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }
 
-    val controlPairing = controlling?.let(viewModel::activePairingFor)
-    if (controlPairing != null) {
-        RemotePad(
-            pairing = controlPairing,
-            targetName = nameOf(controlPairing.targetDeviceId) ?: unknown,
-            onSend = { kind, payload -> viewModel.send(controlPairing, kind, payload) },
-        )
-    }
-
     Text(playarrString(PlayarrString.RemotePairingsTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
     val live = pairings.filter { it.status == "active" || it.status == "pending" }
     if (live.isEmpty()) Text(playarrString(PlayarrString.RemotePairingsEmpty), color = WebInkMuted)
+    var renaming by remember { mutableStateOf<Pair<String, String>?>(null) }
     live.forEach { pairing ->
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                (if (pairing.isTarget) pairing.controllerName else nameOf(pairing.targetDeviceId) ?: unknown) +
-                    "  " + pairing.scopes.joinToString(", "),
-                color = WebInk,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { viewModel.revoke(pairing) }) { Text(playarrString(PlayarrString.RemoteRevoke)) }
+        val editing = renaming?.takeIf { it.first == pairing.id }
+        if (editing != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = editing.second,
+                    onValueChange = { renaming = pairing.id to it.take(60) },
+                    label = { Text(playarrString(PlayarrString.RemoteRenameLabel)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            viewModel.rename(pairing, editing.second)
+                            renaming = null
+                        },
+                        enabled = editing.second.isNotBlank(),
+                    ) { Text(playarrString(PlayarrString.RemoteSave)) }
+                    TextButton(onClick = { renaming = null }) { Text(playarrString(PlayarrString.RemoteCancel)) }
+                }
+            }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (pairing.isTarget) pairing.controllerName else nameOf(pairing.targetDeviceId) ?: unknown,
+                        color = WebInk,
+                    )
+                    Text(
+                        (if (pairing.isTarget) "" else pairing.controllerName + "  ·  ") +
+                            pairing.scopes.joinToString(", ") + "  ·  " + if (pairing.status == "pending") {
+                            playarrString(PlayarrString.RemotePairingPending)
+                        } else {
+                            val fmt = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+                            playarrString(
+                                PlayarrString.RemotePairedOn,
+                                "date" to fmt.format(java.util.Date(pairing.createdMs)),
+                                "expires" to fmt.format(java.util.Date(pairing.expiresMs)),
+                            )
+                        },
+                        color = WebInkMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+                TextButton(onClick = { renaming = pairing.id to pairing.controllerName }) {
+                    Text(playarrString(PlayarrString.RemoteRename))
+                }
+                TextButton(onClick = { viewModel.revoke(pairing) }) { Text(playarrString(PlayarrString.RemoteRevoke)) }
+            }
         }
     }
 }
 
 private fun navPayload(key: String): JsonObject = buildJsonObject { put("key", key) }
-/** D-pad, text entry and transport controls for one paired target. */
+/** D-pad, text entry and transport controls for one paired target, laid out for one-handed use. */
 @Composable
 private fun RemotePad(pairing: RemotePairing, targetName: String, onSend: (String, JsonObject) -> Unit) {
     var text by remember(pairing.id) { mutableStateOf("") }
     Text(playarrString(PlayarrString.RemotePadTitle, "name" to targetName), color = WebInk, fontWeight = FontWeight.SemiBold)
     if (RemoteCapability.Navigate in pairing.scopes) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PadButton(PlayarrString.RemoteUp) { onSend("navigate", navPayload("up")) }
-            }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            PadButton(PlayarrString.RemoteUp) { onSend("navigate", navPayload("up")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PadButton(PlayarrString.RemoteLeft) { onSend("navigate", navPayload("left")) }
                 PadButton(PlayarrString.RemoteSelect) { onSend("navigate", navPayload("select")) }
                 PadButton(PlayarrString.RemoteRight) { onSend("navigate", navPayload("right")) }
             }
+            PadButton(PlayarrString.RemoteDown) { onSend("navigate", navPayload("down")) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PadButton(PlayarrString.RemoteBack) { onSend("navigate", navPayload("back")) }
-                PadButton(PlayarrString.RemoteDown) { onSend("navigate", navPayload("down")) }
-                PadButton(PlayarrString.RemoteHome) { onSend("navigate", navPayload("home")) }
+                PadButton(PlayarrString.RemoteBack, subdued = true) { onSend("navigate", navPayload("back")) }
+                PadButton(PlayarrString.RemoteHome, subdued = true) { onSend("navigate", navPayload("home")) }
             }
         }
     }
     if (RemoteCapability.Playback in pairing.scopes) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PadButton(PlayarrString.RemoteRewind) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            PadButton(PlayarrString.RemoteRewind, modifier = Modifier.weight(1f), subdued = true) {
                 onSend("playback", buildJsonObject { put("action", "seek_by"); put("delta_ms", -10_000L) })
             }
-            PadButton(PlayarrString.RemotePlayPause) { onSend("playback", buildJsonObject { put("action", "toggle") }) }
-            PadButton(PlayarrString.RemoteForward) {
+            PadButton(PlayarrString.RemotePlayPause, modifier = Modifier.weight(1.6f)) {
+                onSend("playback", buildJsonObject { put("action", "toggle") })
+            }
+            PadButton(PlayarrString.RemoteForward, modifier = Modifier.weight(1f), subdued = true) {
                 onSend("playback", buildJsonObject { put("action", "seek_by"); put("delta_ms", 10_000L) })
             }
-            PadButton(PlayarrString.RemoteStop) { onSend("playback", buildJsonObject { put("action", "stop") }) }
+            PadButton(PlayarrString.RemoteStop, modifier = Modifier.weight(1f), subdued = true) {
+                onSend("playback", buildJsonObject { put("action", "stop") })
+            }
         }
     }
     if (RemoteCapability.Text in pairing.scopes) {
@@ -356,8 +496,22 @@ private fun RemotePad(pairing: RemotePairing, targetName: String, onSend: (Strin
 }
 
 @Composable
-private fun PadButton(label: PlayarrString, onClick: () -> Unit) {
-    Button(onClick = onClick) { Text(playarrString(label)) }
+private fun PadButton(
+    label: PlayarrString,
+    modifier: Modifier = Modifier.width(96.dp),
+    subdued: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val sized = modifier.defaultMinSize(minHeight = 52.dp)
+    if (subdued) {
+        OutlinedButton(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text(playarrString(label), maxLines = 1, fontSize = 13.sp)
+        }
+    } else {
+        Button(onClick = onClick, modifier = sized, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text(playarrString(label), maxLines = 1, fontSize = 15.sp)
+        }
+    }
 }
 
 /** On-device approval of a phone-remote pairing request; pairing alone grants nothing. */

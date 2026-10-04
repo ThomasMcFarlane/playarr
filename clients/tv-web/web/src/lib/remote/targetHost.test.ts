@@ -174,6 +174,67 @@ describe("RemoteTargetHost loop", () => {
   });
 });
 
+/** A poll that idles until aborted, like a real long poll, so the loop yields. */
+function idlePoll(client: RemoteTargetClient) {
+  client.pollRemoteInbox = vi.fn(
+    (_after, _wait, signal) =>
+      new Promise<{ events: RemoteInboxEvent[]; next: number }>((resolve) =>
+        signal?.addEventListener("abort", () => resolve({ events: [], next: 0 }))
+      )
+  );
+}
+
+describe("RemoteTargetHost push transport", () => {
+  it("handles pushed events, resumes from the last seq and acks them", async () => {
+    const { host, client, acks } = setup();
+    const afters: number[] = [];
+    let sessions = 0;
+    client.streamRemoteInbox = vi.fn(async (after, handlers, signal) => {
+      afters.push(after);
+      sessions += 1;
+      handlers.onOpen?.();
+      if (sessions === 1) {
+        await handlers.onEvent({ ...event("command", { kind: "navigate", args: { key: "up" } }, "c1"), seq: 7 });
+        return; // server ends the stream; the host reconnects
+      }
+      await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve()));
+    });
+    host.start();
+    await vi.waitFor(() => expect(afters).toEqual([0, 7]));
+    expect(acks).toEqual([["c1", "ok", undefined]]);
+    expect(host.transport).toBe("push");
+    expect(client.pollRemoteInbox).not.toHaveBeenCalled();
+    host.stop();
+  });
+
+  it("falls back to long polling when the runtime cannot stream", async () => {
+    const { host, client } = setup();
+    idlePoll(client);
+    const unsupported = Object.assign(new Error("no streams"), { name: "PushUnsupportedError" });
+    client.streamRemoteInbox = vi.fn(async () => {
+      throw unsupported;
+    });
+    host.start();
+    await vi.waitFor(() => expect(client.pollRemoteInbox).toHaveBeenCalled());
+    expect(client.streamRemoteInbox).toHaveBeenCalledTimes(1);
+    expect(host.transport).toBe("poll");
+    host.stop();
+  });
+
+  it("long-polls after repeated stream failures before it ever opens", async () => {
+    const { host, client } = setup();
+    idlePoll(client);
+    client.streamRemoteInbox = vi.fn(async () => {
+      // 404 is what a server without the stream route answers.
+      throw Object.assign(new Error("blocked"), { status: 404 });
+    });
+    host.start();
+    await vi.waitFor(() => expect(client.pollRemoteInbox).toHaveBeenCalled());
+    expect(client.streamRemoteInbox).toHaveBeenCalledTimes(3);
+    host.stop();
+  });
+});
+
 describe("parseHandoffOffer", () => {
   it("reads the snapshot and tolerates missing optional fields", () => {
     expect(

@@ -64,6 +64,9 @@ data class RemotePairing(
 )
 
 @Serializable
+data class RenameRemotePairingRequest(val name: String)
+
+@Serializable
 data class RemoteCommandRequest(
     /** `navigate`, `text`, `playback` or `input`. */
     val kind: String,

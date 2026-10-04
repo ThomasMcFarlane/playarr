@@ -12,7 +12,9 @@ import io.playarr.shared.data.model.AckRemoteEventRequest
 import io.playarr.shared.data.model.AckRemoteHandoffRequest
 import io.playarr.shared.data.model.RegisterRemoteTargetRequest
 import io.playarr.shared.data.model.RemoteInbox
+import io.playarr.shared.data.model.RemoteInboxEvent
 import io.playarr.shared.data.model.ReportRemoteStateRequest
+import io.playarr.shared.data.remote.PlayarrHttpClient
 import io.playarr.shared.data.remote.PlayarrRemoteApi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +116,37 @@ class RemoteController @Inject constructor(
         }
 
         override suspend fun inbox(after: Long, wait: Int): RemoteInbox = api.inbox(after, wait)
+
+        override suspend fun stream(after: Long, onOpen: () -> Unit, onEvent: suspend (RemoteInboxEvent) -> Unit) {
+            val body = api.stream(after)
+            // An older server (or a proxy) answers unknown paths with its HTML app shell.
+            if (body.contentType()?.subtype != "event-stream") {
+                body.close()
+                throw PushUnsupportedException("not an event stream")
+            }
+            withContext(Dispatchers.IO) {
+                // Blocking reads are not cancellable; closing the body unblocks them.
+                val closer = coroutineContext[kotlinx.coroutines.Job]!!.invokeOnCompletion { body.close() }
+                try {
+                    onOpen()
+                    body.charStream().buffered().use { reader ->
+                        readSseFrames(reader) { name, data ->
+                            if (name != "inbox") return@readSseFrames
+                            val event = runCatching {
+                                PlayarrHttpClient.json.decodeFromString(RemoteInboxEvent.serializer(), data)
+                            }.getOrNull() ?: return@readSseFrames
+                            onEvent(event)
+                        }
+                    }
+                } catch (error: java.io.IOException) {
+                    // Closed by cancellation: not an error to report.
+                    if (!isActive) throw kotlinx.coroutines.CancellationException() else throw error
+                } finally {
+                    closer.dispose()
+                    body.close()
+                }
+            }
+        }
 
         override suspend fun ackEvent(eventId: String, request: AckRemoteEventRequest) {
             api.ackEvent(eventId, request)
@@ -223,6 +257,11 @@ class RemoteController @Inject constructor(
         // mark the events as coming from a D-pad: Compose focus traversal ignores
         // events with no source.
         val decor = activity.window?.decorView ?: return RemoteOutcome.Failed("app is not ready")
+        // Events handed straight to the decor view skip the framework's focus bootstrap: with
+        // no view focused (a TV app nobody has pressed a key in yet) Compose never sees them and
+        // the first remote presses are silently lost. Give the view tree focus first, as the
+        // first physical key press would.
+        if (decor.findFocus() == null) decor.requestFocus(android.view.View.FOCUS_DOWN)
         val downTime = SystemClock.uptimeMillis()
         fun key(action: Int) = KeyEvent(
             downTime,

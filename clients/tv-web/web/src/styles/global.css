@@ -11742,6 +11742,28 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-qualit
   min-width: 0;
 }
 
+.remote-pairing-meta {
+  display: block;
+  font-size: 0.85em;
+}
+
+.remote-pairing-actions,
+.remote-pairing-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.remote-pairing-rename {
+  flex: 1 1 auto;
+}
+
+.remote-pairing-rename .input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .remote-pairing-row {
   display: flex;
   align-items: center;

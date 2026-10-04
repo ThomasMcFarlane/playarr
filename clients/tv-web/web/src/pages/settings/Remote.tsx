@@ -19,6 +19,7 @@ export function SettingsRemotePage() {
   const [controlling, setControlling] = useState<string | null>(null);
   const [pending, setPending] = useState<RemotePairing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -43,13 +44,22 @@ export function SettingsRemotePage() {
   useEffect(() => {
     if (!pending) return;
     const timer = window.setInterval(() => {
-      void client.getRemotePairing(pending.id).then((next) => {
-        if (next.status === "pending") return;
+      if (Date.now() >= pending.expires_ms) {
         setPending(null);
-        if (next.status === "active") setControlling(next.target_device_id);
-        else setError(t("remote.settings.pairingNotApproved"));
-        void refresh();
-      });
+        setError(t("remote.settings.pairingNotApproved"));
+        return;
+      }
+      client
+        .getRemotePairing(pending.id)
+        .then((next) => {
+          if (next.status === "pending") return;
+          setPending(null);
+          if (next.status === "active") setControlling(next.target_device_id);
+          else setError(t("remote.settings.pairingNotApproved"));
+          void refresh();
+        })
+        // A transient network error keeps waiting until the pairing expires.
+        .catch(() => undefined);
     }, 2_000);
     return () => window.clearInterval(timer);
   }, [client, pending, refresh, t]);
@@ -83,9 +93,23 @@ export function SettingsRemotePage() {
     }
   };
 
+  const saveRename = async () => {
+    if (!renaming || !renaming.name.trim()) return;
+    try {
+      await client.renameRemotePairing(renaming.id, renaming.name.trim());
+      setRenaming(null);
+      await refresh();
+    } catch {
+      setError(t("remote.settings.renameFailed"));
+    }
+  };
+
   const others = targets.filter((target) => !target.is_self);
   const nameOf = (deviceId: string) =>
     targets.find((target) => target.device_id === deviceId)?.name ?? t("remote.settings.unknownDevice");
+  // The label that identifies the other end of a pairing from this device's point of view.
+  const pairingLabel = (p: RemotePairing) =>
+    p.is_target ? p.controller_name : nameOf(p.target_device_id);
   const controlPairing = controlling ? activeFor(controlling) : undefined;
   const live = pairings.filter((p) => p.status === "active" || p.status === "pending");
 
@@ -159,13 +183,61 @@ export function SettingsRemotePage() {
         <div className="server-choice-options">
           {live.map((p) => (
             <div key={p.id} className="remote-pairing-row">
-              <span>
-                <strong>{p.is_target ? p.controller_name : nameOf(p.target_device_id)}</strong>
-                <span className="muted"> {p.scopes.join(", ")}</span>
-              </span>
-              <button type="button" className="btn btn-secondary" onClick={() => void revoke(p.id)}>
-                {t("remote.pairings.revoke")}
-              </button>
+              {renaming?.id === p.id ? (
+                <form
+                  className="remote-pairing-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveRename();
+                  }}
+                >
+                  <input
+                    className="input"
+                    aria-label={t("remote.pairings.renameLabel")}
+                    value={renaming.name}
+                    maxLength={60}
+                    autoFocus
+                    onChange={(event) => setRenaming({ id: p.id, name: event.target.value })}
+                  />
+                  <button type="submit" className="btn btn-primary">
+                    {t("remote.pairings.save")}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setRenaming(null)}>
+                    {t("remote.pairings.cancel")}
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <span>
+                    <strong>{pairingLabel(p)}</strong>
+                    <span className="muted">
+                      {" "}
+                      {p.is_target ? "" : `${p.controller_name} · `}
+                      {p.scopes.join(", ")}
+                    </span>
+                    <span className="muted remote-pairing-meta">
+                      {p.status === "pending"
+                        ? t("remote.pairings.pending")
+                        : t("remote.pairings.pairedOn", {
+                            date: new Date(p.created_ms).toLocaleDateString(),
+                            expires: new Date(p.expires_ms).toLocaleDateString(),
+                          })}
+                    </span>
+                  </span>
+                  <span className="remote-pairing-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setRenaming({ id: p.id, name: p.controller_name })}
+                    >
+                      {t("remote.pairings.rename")}
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => void revoke(p.id)}>
+                      {t("remote.pairings.revoke")}
+                    </button>
+                  </span>
+                </>
+              )}
             </div>
           ))}
         </div>

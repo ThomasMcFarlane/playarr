@@ -11,6 +11,9 @@
 //! Event `payload` can hold keyboard input; it is never logged here and is
 //! cleared on acknowledgement and purge.
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
+
 use async_trait::async_trait;
 use serde_json::Value;
 use sqlx::any::AnyRow;
@@ -20,6 +23,39 @@ use uuid::Uuid;
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
 use crate::pool::{Backend, DbPool};
+
+/// In-process wake-ups for the push transports (SSE and long poll). The
+/// database queue stays the source of truth; a wake only cuts the latency of
+/// noticing a new row. Keys are a target device id (new inbox event) or a
+/// handoff id (state change). Waiters also re-check on a timer, so a row
+/// written by another server replica is still seen, just slightly later.
+pub mod remote_wake {
+    use super::*;
+    use tokio::sync::watch;
+
+    static WAKERS: LazyLock<Mutex<HashMap<Uuid, watch::Sender<u64>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    /// Subscribes to wake-ups for `key`.
+    pub fn subscribe(key: Uuid) -> watch::Receiver<u64> {
+        let mut map = WAKERS.lock().unwrap_or_else(|e| e.into_inner());
+        // Drop entries nobody listens to any more so the map stays small.
+        if map.len() > 256 {
+            map.retain(|_, tx| tx.receiver_count() > 0);
+        }
+        map.entry(key)
+            .or_insert_with(|| watch::channel(0).0)
+            .subscribe()
+    }
+
+    /// Wakes every current subscriber of `key`.
+    pub fn wake(key: Uuid) {
+        let map = WAKERS.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(tx) = map.get(&key) {
+            tx.send_modify(|v| *v = v.wrapping_add(1));
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoteTarget {
@@ -123,6 +159,8 @@ pub trait RemoteRepo: Send + Sync {
 
     /// Narrows the scopes of a still-pending pairing.
     async fn set_pairing_scopes(&self, id: Uuid, scopes: &[String]) -> Result<bool, DbError>;
+    /// Renames the controller label of a `pending` or `active` pairing.
+    async fn rename_pairing(&self, id: Uuid, name: &str) -> Result<bool, DbError>;
 
     async fn enqueue_event(&self, event: RemoteEvent) -> Result<RemoteEvent, DbError>;
     async fn get_event(&self, id: Uuid) -> Result<Option<RemoteEvent>, DbError>;
@@ -481,6 +519,19 @@ impl RemoteRepo for SqlxRemoteRepo {
         Ok(query.execute(&self.pool).await?.rows_affected() == 1)
     }
 
+    async fn rename_pairing(&self, id: Uuid, name: &str) -> Result<bool, DbError> {
+        let sql = self.sql(
+            "UPDATE remote_pairings SET controller_name = ? \
+             WHERE id = ? AND status IN ('pending', 'active')",
+        );
+        let done = sqlx::query(&sql)
+            .bind(name.to_string())
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected() == 1)
+    }
+
     async fn set_pairing_scopes(&self, id: Uuid, scopes: &[String]) -> Result<bool, DbError> {
         let sql =
             self.sql("UPDATE remote_pairings SET scopes = ? WHERE id = ? AND status = 'pending'");
@@ -519,6 +570,7 @@ impl RemoteRepo for SqlxRemoteRepo {
                 Ok(_) => {
                     let fetched = self.get_event(event.id).await?.ok_or(DbError::NotFound)?;
                     event.seq = fetched.seq;
+                    remote_wake::wake(event.target_device_id);
                     return Ok(event);
                 }
                 Err(err) => last_err = Some(err),
@@ -677,6 +729,7 @@ impl RemoteRepo for SqlxRemoteRepo {
             .bind(now_ms)
             .execute(&self.pool)
             .await?;
+        remote_wake::wake(id);
         Ok(done.rows_affected() == 1)
     }
 
@@ -698,6 +751,7 @@ impl RemoteRepo for SqlxRemoteRepo {
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
+        remote_wake::wake(id);
         Ok(done.rows_affected() == 1)
     }
 }

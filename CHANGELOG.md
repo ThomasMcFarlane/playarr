@@ -26,6 +26,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - PostgreSQL migration 53 adds `source_root_folders` and `folder_media_entries` (parity with SQLite migration 42), so library-root checks and remapping work on PostgreSQL restores (task 141).
 - Public Playarr Server releases (tag `backend-v*`): Linux x86-64 and ARM64 tarballs with SHA-256 checksums served from `playarr.app/downloads/server/`, and a multi-arch image at `ghcr.io/thomasmcfarlane/playarr-server`. The Clients hub server page now has per-architecture Download buttons, checksums and Docker pull/run/compose snippets. See `docs/deployment/server-releases.md`.
 - Server: ten-foot transfer for user data export and import. A signed-in television can mint a one-time, 15-minute download link for its own ready export, or open an import session whose one-time upload link (served as a minimal hardened page) lets a phone or computer upload a package. Uploads are validated like any import, staged privately, and only previewed and applied by the owning signed-in account (`/api/v1/transfer/...`, `/api/v1/users/me/data-import-sessions`). Tests cover single use, expiry, owner scoping and cleanup.
+- Remote control push transport (task 175): `GET /api/v1/remote/stream` delivers a target's remote
+  commands and handoff offers as server-sent events (id = queue seq, resume with `Last-Event-ID`, auth
+  is the device token, revoked pairings still never reach the target, the stream re-authenticates every
+  five minutes). The long poll stays as the fallback and now wakes immediately instead of polling the
+  database every 400 ms; `GET /api/v1/remote/handoffs/{id}?wait=` long-polls the handoff outcome.
+- `PATCH /api/v1/remote/pairings/{id}` renames a paired remote (task 173). Web and Android Settings now
+  list paired remotes with pairing and expiry dates and offer Rename and Revoke.
+- Phone as controller on Android: the on-screen remote is now a proper cross D-pad with equal transport
+  buttons, sits above the device lists, and offers "Play on this phone" and "Move to <TV>" for whatever a
+  controlled TV is playing (controller-initiated handoff).
+- `scripts/remote-control-smoke.sh` (commands over push and long poll, handoff offer, commit and stop
+  timings, revocation) and `docs/validation/remote-physical-devices.md` (hardware checklist, row 174).
 
 ### Changed
 
@@ -39,6 +51,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Remote control: the first D-pad presses sent to a TV app nobody had pressed a key in were silently
+  lost (the view tree had no focus); a pairing that was never approved no longer leaves the Pair
+  buttons disabled (web and Android); an older server answering the stream path with its HTML shell is
+  detected and the clients long-poll instead of retrying in a loop.
 - Removed merge conflict markers left in the changelog, web routes and navigation by the calendar merge,
   and restored a missing closing brace in the web stylesheet's `.remote-pairing-row` rule.
 - Phone remote on Android: the TV approval dialog now takes focus so a TV remote can press Allow, remote

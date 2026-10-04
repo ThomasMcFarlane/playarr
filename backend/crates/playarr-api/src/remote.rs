@@ -12,14 +12,19 @@
 //! Text-entry payloads can contain secrets: they are never logged, never
 //! returned to the controller and are cleared when acknowledged or expired.
 
+use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
+use futures::Stream;
+use playarr_db::remote_wake::subscribe;
 use playarr_db::{RemoteEvent, RemoteHandoff, RemotePairing, RemoteTarget};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::sync::watch;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -56,6 +61,17 @@ const MAX_PENDING_PER_TARGET: usize = 5;
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// Re-check interval when no wake-up arrives (covers multi-replica servers).
+const FALLBACK_POLL: Duration = Duration::from_millis(1_500);
+/// A push stream ends after this long so it never outlives the access token
+/// that opened it; clients reconnect with `Last-Event-ID`.
+const STREAM_MAX_AGE: Duration = Duration::from_secs(5 * 60);
+
+/// Waits for a wake-up on `rx` or the fallback interval, whichever is first.
+async fn wait_for_wake(rx: &mut watch::Receiver<u64>, max: Duration) {
+    let _ = tokio::time::timeout(max.min(FALLBACK_POLL), rx.changed()).await;
 }
 
 fn caller_device(user: &StreamingUser) -> Uuid {
@@ -774,6 +790,43 @@ pub async fn deny_pairing_handler(
     Ok(Json(pairing_response(&p, now, caller_device(&user))))
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RenamePairingRequest {
+    /// New label for the paired remote (1 to 60 visible characters).
+    pub name: String,
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/remote/pairings/{id}",
+    tag = "remote",
+    params(("id" = Uuid, Path, description = "Pairing id")),
+    request_body = RenamePairingRequest,
+    responses(
+        (status = 200, description = "Renamed", body = PairingResponse),
+        (status = 400, description = "Empty or over-long name"),
+        (status = 404, description = "Unknown pairing, or it belongs to another account"),
+        (status = 409, description = "Pairing is no longer live")
+    )
+)]
+pub async fn rename_pairing_handler(
+    State(state): State<AppState>,
+    user: StreamingUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RenamePairingRequest>,
+) -> Result<Json<PairingResponse>, ApiError> {
+    load_pairing(&state, &user, id).await?;
+    let name = clean_text(body.name.trim(), 60);
+    if name.is_empty() {
+        return Err(ApiError::bad_request("name must not be empty"));
+    }
+    if !state.remote_repo.rename_pairing(id, &name).await? {
+        return Err(ApiError::conflict("pairing is no longer live"));
+    }
+    let p = load_pairing(&state, &user, id).await?;
+    Ok(Json(pairing_response(&p, now_ms(), caller_device(&user))))
+}
+
 #[utoipa::path(
     delete,
     path = "/api/v1/remote/pairings/{id}",
@@ -1063,53 +1116,168 @@ pub async fn inbox_handler(
     user: StreamingUser,
     Query(query): Query<InboxQuery>,
 ) -> Result<Json<InboxResponse>, ApiError> {
-    let device_id = caller_device(&user);
-    match state.remote_repo.get_target(device_id).await? {
-        Some(t) if t.user_id == user.user_id => {}
-        _ => {
-            return Err(ApiError::not_found(
-                "this device is not a registered target",
-            ))
-        }
-    }
+    let device_id = require_target(&state, &user).await?;
+    let mut wake = subscribe(device_id);
     let deadline = tokio::time::Instant::now() + Duration::from_secs(query.wait.min(25));
     loop {
-        let now = now_ms();
-        state.remote_repo.touch_target(device_id, now).await?;
-        let raw = state
-            .remote_repo
-            .deliver_events(device_id, query.after, now, 50)
-            .await?;
-        let mut events = Vec::with_capacity(raw.len());
-        let mut next = query.after;
-        for e in raw {
-            next = next.max(e.seq);
-            if e.kind == "command" && !pairing_authorises(&state, &e, now).await {
-                // Revoked or expired after queueing: never reaches the target.
-                let _ = state
-                    .remote_repo
-                    .ack_event(e.id, device_id, "revoked", None)
-                    .await;
-                continue;
-            }
-            events.push(InboxEvent {
-                id: e.id,
-                seq: e.seq,
-                kind: e.kind,
-                pairing_id: e.pairing_id,
-                payload: e.payload,
-                created_ms: e.created_ms,
-                expires_ms: e.expires_ms,
-            });
-        }
-        if !events.is_empty() || tokio::time::Instant::now() >= deadline {
+        let (events, next) = fetch_inbox(&state, device_id, query.after).await?;
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if !events.is_empty() || remaining.is_zero() {
             if next == query.after && events.is_empty() {
-                let _ = state.remote_repo.purge_events(now).await;
+                let _ = state.remote_repo.purge_events(now_ms()).await;
             }
             return Ok(Json(InboxResponse { events, next }));
         }
-        tokio::time::sleep(Duration::from_millis(400)).await;
+        wait_for_wake(&mut wake, remaining).await;
     }
+}
+
+async fn require_target(state: &AppState, user: &StreamingUser) -> Result<Uuid, ApiError> {
+    let device_id = caller_device(user);
+    match state.remote_repo.get_target(device_id).await? {
+        Some(t) if t.user_id == user.user_id => Ok(device_id),
+        _ => Err(ApiError::not_found(
+            "this device is not a registered target",
+        )),
+    }
+}
+
+/// Marks the target as seen and returns the deliverable events after `after`
+/// plus the new cursor. Shared by the long poll and the SSE stream so both
+/// apply exactly the same revocation check.
+async fn fetch_inbox(
+    state: &AppState,
+    device_id: Uuid,
+    after: i64,
+) -> Result<(Vec<InboxEvent>, i64), ApiError> {
+    let now = now_ms();
+    state.remote_repo.touch_target(device_id, now).await?;
+    let raw = state
+        .remote_repo
+        .deliver_events(device_id, after, now, 50)
+        .await?;
+    let mut events = Vec::with_capacity(raw.len());
+    let mut next = after;
+    for e in raw {
+        next = next.max(e.seq);
+        if e.kind == "command" && !pairing_authorises(state, &e, now).await {
+            // Revoked or expired after queueing: never reaches the target.
+            let _ = state
+                .remote_repo
+                .ack_event(e.id, device_id, "revoked", None)
+                .await;
+            continue;
+        }
+        events.push(InboxEvent {
+            id: e.id,
+            seq: e.seq,
+            kind: e.kind,
+            pairing_id: e.pairing_id,
+            payload: e.payload,
+            created_ms: e.created_ms,
+            expires_ms: e.expires_ms,
+        });
+    }
+    Ok((events, next))
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct StreamQuery {
+    /// Last seq already processed; `Last-Event-ID` (set by reconnecting
+    /// clients) wins when it is larger.
+    #[serde(default)]
+    pub after: i64,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/remote/stream",
+    tag = "remote",
+    params(("after" = Option<i64>, Query, description = "Last seq already processed (or send Last-Event-ID)")),
+    responses(
+        (status = 200, description = "Server-sent events. Each `inbox` event has `id` = the queue seq and a JSON `InboxEvent` as data; comments are keep-alives. The stream ends after five minutes so clients reconnect with a fresh token and `Last-Event-ID`.", content_type = "text/event-stream", body = String),
+        (status = 401, description = "Missing or invalid access token"),
+        (status = 404, description = "This device is not registered as a target")
+    )
+)]
+pub async fn stream_handler(
+    State(state): State<AppState>,
+    user: StreamingUser,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let device_id = require_target(&state, &user).await?;
+    let last_event_id = headers
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    let cursor = query.after.max(last_event_id).max(0);
+    let wake = subscribe(device_id);
+    let started = tokio::time::Instant::now();
+    struct Loop {
+        state: AppState,
+        user_id: Uuid,
+        device_id: Uuid,
+        cursor: i64,
+        wake: tokio::sync::watch::Receiver<u64>,
+        queued: std::collections::VecDeque<InboxEvent>,
+        sent_ready: bool,
+        ticks: u32,
+    }
+    let init = Loop {
+        state,
+        user_id: user.user_id,
+        device_id,
+        cursor,
+        wake,
+        queued: Default::default(),
+        sent_ready: false,
+        ticks: 0,
+    };
+    let stream = futures::stream::unfold(init, move |mut l| async move {
+        if !l.sent_ready {
+            l.sent_ready = true;
+            // An immediate frame lets clients (and proxies) see the stream is live.
+            return Some((Ok(Event::default().event("ready").data("{}")), l));
+        }
+        loop {
+            if let Some(event) = l.queued.pop_front() {
+                let frame = Event::default()
+                    .event("inbox")
+                    .id(event.seq.to_string())
+                    .json_data(&event)
+                    .unwrap_or_else(|_| Event::default().comment("encode error"));
+                return Some((Ok(frame), l));
+            }
+            if started.elapsed() >= STREAM_MAX_AGE {
+                return None;
+            }
+            let still_target = matches!(
+                l.state.remote_repo.get_target(l.device_id).await,
+                Ok(Some(t)) if t.user_id == l.user_id
+            );
+            if !still_target {
+                return None;
+            }
+            match fetch_inbox(&l.state, l.device_id, l.cursor).await {
+                Ok((events, next)) => {
+                    l.cursor = l.cursor.max(next);
+                    l.queued.extend(events);
+                    if !l.queued.is_empty() {
+                        continue;
+                    }
+                }
+                Err(_) => return None,
+            }
+            l.ticks = l.ticks.wrapping_add(1);
+            if l.ticks % 40 == 0 {
+                let _ = l.state.remote_repo.purge_events(now_ms()).await;
+            }
+            wait_for_wake(&mut l.wake, FALLBACK_POLL).await;
+        }
+    });
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
 async fn pairing_authorises(state: &AppState, event: &RemoteEvent, now: i64) -> bool {
@@ -1400,11 +1568,21 @@ async fn load_handoff(
     Ok(h)
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct HandoffWaitQuery {
+    /// Seconds to wait while the handoff is still `pending` (capped at 25).
+    #[serde(default)]
+    pub wait: u64,
+}
+
 #[utoipa::path(
     get,
     path = "/api/v1/remote/handoffs/{id}",
     tag = "remote",
-    params(("id" = Uuid, Path, description = "Handoff id")),
+    params(
+        ("id" = Uuid, Path, description = "Handoff id"),
+        ("wait" = Option<u64>, Query, description = "Seconds to wait while the handoff is still pending (max 25)")
+    ),
     responses(
         (status = 200, description = "Current handoff state", body = HandoffResponse),
         (status = 404, description = "Unknown handoff, or it belongs to another account")
@@ -1414,10 +1592,18 @@ pub async fn get_handoff_handler(
     State(state): State<AppState>,
     user: StreamingUser,
     Path(id): Path<Uuid>,
+    Query(query): Query<HandoffWaitQuery>,
 ) -> Result<Json<HandoffResponse>, ApiError> {
-    Ok(Json(handoff_response(
-        &load_handoff(&state, &user, id).await?,
-    )))
+    let mut wake = subscribe(id);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(query.wait.min(25));
+    loop {
+        let h = load_handoff(&state, &user, id).await?;
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if h.status != "pending" || remaining.is_zero() {
+            return Ok(Json(handoff_response(&h)));
+        }
+        wait_for_wake(&mut wake, remaining).await;
+    }
 }
 
 #[utoipa::path(
@@ -2463,5 +2649,288 @@ mod tests {
         assert_eq!(s, StatusCode::BAD_REQUEST);
         let (s, _) = call(&router, "GET", "/api/v1/remote/targets", "garbage", None).await;
         assert_eq!(s, StatusCode::UNAUTHORIZED);
+    }
+
+    // ------------------------------------------------------------ push
+
+    /// Opens the SSE stream and returns the response body to read frames from.
+    async fn open_stream(
+        router: &Router,
+        d: &Dev,
+        last_event_id: Option<i64>,
+    ) -> (StatusCode, Option<axum::body::BodyDataStream>) {
+        let mut req = Request::builder()
+            .method("GET")
+            .uri("/api/v1/remote/stream")
+            .header("Authorization", format!("Bearer {}", d.token));
+        if let Some(id) = last_event_id {
+            req = req.header("Last-Event-ID", id.to_string());
+        }
+        let res = router
+            .clone()
+            .oneshot(req.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = res.status();
+        if status != StatusCode::OK {
+            return (status, None);
+        }
+        (status, Some(res.into_body().into_data_stream()))
+    }
+
+    /// Reads frames until one contains `needle` or `within` elapses.
+    async fn read_until(
+        stream: &mut axum::body::BodyDataStream,
+        needle: &str,
+        within: Duration,
+    ) -> Option<String> {
+        use futures::StreamExt;
+        let deadline = tokio::time::Instant::now() + within;
+        let mut seen = String::new();
+        loop {
+            let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+            match tokio::time::timeout(left, stream.next()).await {
+                Ok(Some(Ok(chunk))) => {
+                    seen.push_str(&String::from_utf8_lossy(&chunk));
+                    if seen.contains(needle) {
+                        return Some(seen);
+                    }
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    async fn send(router: &Router, phone: &Dev, pairing: &str, key: &str) -> (StatusCode, Value) {
+        call(
+            router,
+            "POST",
+            &format!("/api/v1/remote/pairings/{pairing}/commands"),
+            &phone.token,
+            Some(json!({"kind": "navigate", "payload": {"key": key}})),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn sse_stream_pushes_commands_immediately_and_resumes_after_last_event_id() {
+        let (router, _state, _user, phone, tv) = setup().await;
+        let pairing = pair(&router, &phone, &tv, None).await;
+        // The pairing_request notice is already queued; resume past it.
+        let backlog = inbox(&router, &tv, 0).await;
+        let cursor = backlog.last().unwrap()["seq"].as_i64().unwrap();
+
+        let (s, stream) = open_stream(&router, &tv, Some(cursor)).await;
+        assert_eq!(s, StatusCode::OK);
+        let mut stream = stream.unwrap();
+        assert!(
+            read_until(&mut stream, "event: ready", Duration::from_secs(2))
+                .await
+                .is_some()
+        );
+
+        let started = std::time::Instant::now();
+        let (s, accepted) = send(&router, &phone, &pairing, "down").await;
+        assert_eq!(s, StatusCode::ACCEPTED);
+        let seq = accepted["seq"].as_i64().unwrap();
+        let frame = read_until(&mut stream, "event: inbox", Duration::from_secs(2))
+            .await
+            .expect("command pushed");
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "push took {:?}",
+            started.elapsed()
+        );
+        assert!(frame.contains(&format!("id: {seq}")), "{frame}");
+        assert!(frame.contains("\"kind\":\"command\""), "{frame}");
+
+        // A reconnect with Last-Event-ID does not replay what was delivered...
+        let (_, again) = open_stream(&router, &tv, Some(seq)).await;
+        let mut again = again.unwrap();
+        assert!(
+            read_until(&mut again, "event: inbox", Duration::from_millis(600))
+                .await
+                .is_none()
+        );
+        // ...but still receives the next command.
+        let (s, next) = send(&router, &phone, &pairing, "up").await;
+        assert_eq!(s, StatusCode::ACCEPTED);
+        let frame = read_until(&mut again, "event: inbox", Duration::from_secs(2))
+            .await
+            .expect("resumed stream delivers new command");
+        assert!(frame.contains(&format!("id: {}", next["seq"])), "{frame}");
+
+        // An undelivered command is replayed from the durable queue.
+        let (_, replay) = open_stream(&router, &tv, Some(seq - 1)).await;
+        let mut replay = replay.unwrap();
+        assert!(
+            read_until(&mut replay, &format!("id: {seq}"), Duration::from_secs(2))
+                .await
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn sse_stream_never_delivers_commands_of_a_revoked_pairing() {
+        let (router, _state, _user, phone, tv) = setup().await;
+        let pairing = pair(&router, &phone, &tv, None).await;
+        let cursor = inbox(&router, &tv, 0).await.last().unwrap()["seq"]
+            .as_i64()
+            .unwrap();
+        let (s, _) = send(&router, &phone, &pairing, "left").await;
+        assert_eq!(s, StatusCode::ACCEPTED);
+        let (s, _) = call(
+            &router,
+            "DELETE",
+            &format!("/api/v1/remote/pairings/{pairing}"),
+            &phone.token,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::NO_CONTENT);
+
+        let (_, stream) = open_stream(&router, &tv, Some(cursor)).await;
+        let mut stream = stream.unwrap();
+        let seen = read_until(&mut stream, "pairing_revoked", Duration::from_secs(2))
+            .await
+            .expect("revocation notice is pushed");
+        assert!(!seen.contains("\"kind\":\"command\""), "{seen}");
+    }
+
+    #[tokio::test]
+    async fn sse_stream_requires_auth_and_a_registered_target() {
+        let (router, state, user, _phone, _tv) = setup().await;
+        let (s, _) = open_stream(
+            &router,
+            &Dev {
+                id: Uuid::new_v4(),
+                token: "garbage".into(),
+            },
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED);
+        let stranger = dev(&state, user);
+        let (s, _) = open_stream(&router, &stranger, None).await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn long_poll_wakes_when_a_command_arrives() {
+        let (router, _state, _user, phone, tv) = setup().await;
+        let pairing = pair(&router, &phone, &tv, None).await;
+        let cursor = inbox(&router, &tv, 0).await.last().unwrap()["seq"]
+            .as_i64()
+            .unwrap();
+        let poll = {
+            let router = router.clone();
+            let token = tv.token.clone();
+            tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                let (s, v) = call(
+                    &router,
+                    "GET",
+                    &format!("/api/v1/remote/inbox?after={cursor}&wait=20"),
+                    &token,
+                    None,
+                )
+                .await;
+                (s, v, started.elapsed())
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let (s, _) = send(&router, &phone, &pairing, "select").await;
+        assert_eq!(s, StatusCode::ACCEPTED);
+        let (s, v, elapsed) = poll.await.unwrap();
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["events"].as_array().unwrap().len(), 1);
+        assert!(elapsed < Duration::from_secs(1), "woke after {elapsed:?}");
+    }
+
+    #[tokio::test]
+    async fn handoff_status_wait_returns_when_the_destination_acknowledges() {
+        let f = handoff_fixture().await;
+        let (s, v) = call(
+            &f.router,
+            "POST",
+            "/api/v1/remote/handoffs",
+            &f.phone.token,
+            Some(handoff_body(&f, "wait1")),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CREATED, "{v}");
+        let id = v["id"].as_str().unwrap().to_string();
+        let waiter = {
+            let router = f.router.clone();
+            let token = f.phone.token.clone();
+            let uri = format!("/api/v1/remote/handoffs/{id}?wait=20");
+            tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                let (_, v) = call(&router, "GET", &uri, &token, None).await;
+                (v, started.elapsed())
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let (s, _) = call(
+            &f.router,
+            "POST",
+            &format!("/api/v1/remote/handoffs/{id}/ack"),
+            &f.tv.token,
+            Some(json!({"status": "playing", "position_ms": 600_500})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        let (v, elapsed) = waiter.await.unwrap();
+        assert_eq!(v["status"], "committed");
+        assert!(elapsed < Duration::from_secs(1), "woke after {elapsed:?}");
+    }
+
+    #[tokio::test]
+    async fn pairings_can_be_renamed_by_the_account_only() {
+        let (router, state, _user, phone, tv) = setup().await;
+        let pairing = pair(&router, &phone, &tv, None).await;
+        let uri = format!("/api/v1/remote/pairings/{pairing}");
+        let (s, v) = call(
+            &router,
+            "PATCH",
+            &uri,
+            &tv.token,
+            Some(json!({"name": "  Dad's phone  "})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "{v}");
+        assert_eq!(v["controller_name"], "Dad's phone");
+        let (s, _) = call(
+            &router,
+            "PATCH",
+            &uri,
+            &tv.token,
+            Some(json!({"name": " "})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        let stranger = Uuid::new_v4();
+        seed_streaming_user(&state, stranger).await;
+        let other = dev(&state, stranger);
+        let (s, _) = call(
+            &router,
+            "PATCH",
+            &uri,
+            &other.token,
+            Some(json!({"name": "x"})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+        let (s, _) = call(&router, "DELETE", &uri, &phone.token, None).await;
+        assert_eq!(s, StatusCode::NO_CONTENT);
+        let (s, _) = call(
+            &router,
+            "PATCH",
+            &uri,
+            &tv.token,
+            Some(json!({"name": "late"})),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CONFLICT);
     }
 }

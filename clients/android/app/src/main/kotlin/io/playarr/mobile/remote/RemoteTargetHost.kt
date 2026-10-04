@@ -23,6 +23,15 @@ interface RemoteTargetApi {
     suspend fun ackEvent(eventId: String, request: AckRemoteEventRequest)
     suspend fun ackHandoff(handoffId: String, request: AckRemoteHandoffRequest)
     suspend fun reportState(request: ReportRemoteStateRequest)
+
+    /**
+     * Push transport: calls [onOpen] once the stream is up, then [onEvent] for each
+     * event, and returns when the server ends the stream. Throws
+     * [PushUnsupportedException] when push cannot work here.
+     */
+    suspend fun stream(after: Long, onOpen: () -> Unit, onEvent: suspend (RemoteInboxEvent) -> Unit) {
+        throw PushUnsupportedException("push is not available")
+    }
 }
 
 data class RemotePairingRequest(
@@ -58,10 +67,11 @@ interface RemoteTargetHandlers {
 }
 
 /**
- * Long-poll loop that makes this device a remote-control target. Mirrors the
- * web client's `RemoteTargetHost`: register, poll the inbox from the last
- * cursor, execute and acknowledge each event, back off on errors and
- * re-register when the server forgets the target.
+ * Loop that makes this device a remote-control target. Mirrors the web
+ * client's `RemoteTargetHost`: register, then prefer the server-sent-events push
+ * stream and fall back to long polling the inbox from the last cursor, execute
+ * and acknowledge each event, back off on errors and re-register when the
+ * server forgets the target.
  */
 class RemoteTargetHost(
     private val api: RemoteTargetApi,
@@ -71,7 +81,17 @@ class RemoteTargetHost(
     private val capabilities: List<String>,
     private val pollSeconds: Int = 20,
     private val stateIntervalMs: Long = 5_000L,
+    private val pushRetryMs: Long = 120_000L,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    private var pushFailures = 0
+    private var pushDisabledUntil = 0L
+
+    /** Transport in use right now: `push` or `poll` (diagnostics and tests). */
+    @Volatile
+    var transport: String = "poll"
+        private set
+
     private var job: Job? = null
     private var stateJob: Job? = null
     private var after = 0L
@@ -121,6 +141,12 @@ class RemoteTargetHost(
                     api.register(RegisterRemoteTargetRequest(name, platform, capabilities))
                     registered = true
                 }
+                if (clock() >= pushDisabledUntil) {
+                    runPush(scope)
+                    backoffMs = 1_000L
+                    continue
+                }
+                transport = "poll"
                 val inbox = api.inbox(after, pollSeconds)
                 backoffMs = 1_000L
                 for (event in inbox.events) handle(event, scope)
@@ -132,6 +158,56 @@ class RemoteTargetHost(
                 delay(backoffMs)
                 backoffMs = minOf(backoffMs * 2, 15_000L)
             }
+        }
+    }
+
+    /** One push session; returns when the server ends it normally. */
+    private suspend fun runPush(scope: CoroutineScope) {
+        var opened = false
+        val startedAt = clock()
+        var delivered = false
+        try {
+            api.stream(
+                after,
+                onOpen = {
+                    opened = true
+                    pushFailures = 0
+                    transport = "push"
+                },
+                onEvent = { event ->
+                    delivered = true
+                    handle(event, scope)
+                    after = maxOf(after, event.seq)
+                },
+            )
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (error: Exception) {
+            if (!scope.isActive) throw CancellationException()
+            // 404 can mean "not registered" (the loop re-registers) or an older server
+            // without the stream route; counting it lets the host settle on long polling.
+            if (!opened) {
+                pushFailures += 1
+                // Streaming is blocked or unsupported on this path: long-poll for a while, then retry push.
+                if (error is PushUnsupportedException || pushFailures >= 3) {
+                    pushFailures = 0
+                    pushDisabledUntil = clock() + pushRetryMs
+                    transport = "poll"
+                    return
+                }
+            }
+            throw error
+        }
+        // A stream that closed without ever opening, or at once, would otherwise spin.
+        if (!opened || (!delivered && clock() - startedAt < 2_000L)) {
+            pushFailures += 1
+            if (pushFailures >= 3) {
+                pushFailures = 0
+                pushDisabledUntil = clock() + pushRetryMs
+                transport = "poll"
+                return
+            }
+            throw java.io.IOException("push stream closed immediately")
         }
     }
 

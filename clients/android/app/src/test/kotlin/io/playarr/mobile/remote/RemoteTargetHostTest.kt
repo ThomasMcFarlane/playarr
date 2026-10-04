@@ -33,6 +33,19 @@ class RemoteTargetHostTest {
         val states = CopyOnWriteArrayList<ReportRemoteStateRequest>()
         var inboxes: ArrayDeque<RemoteInbox> = ArrayDeque()
         val inboxCursors = CopyOnWriteArrayList<Long>()
+        val streamCursors = CopyOnWriteArrayList<Long>()
+        var streamSessions: ArrayDeque<List<RemoteInboxEvent>> = ArrayDeque()
+        var streamFailure: Exception? = null
+        override suspend fun stream(after: Long, onOpen: () -> Unit, onEvent: suspend (RemoteInboxEvent) -> Unit) {
+            streamCursors += after
+            streamFailure?.let { throw it }
+            val session = streamSessions.removeFirstOrNull() ?: run {
+                onOpen()
+                kotlinx.coroutines.awaitCancellation()
+            }
+            onOpen()
+            session.forEach { onEvent(it) }
+        }
         override suspend fun register(request: RegisterRemoteTargetRequest) { registered += request }
         override suspend fun inbox(after: Long, wait: Int): RemoteInbox {
             inboxCursors += after
@@ -177,6 +190,7 @@ class RemoteTargetHostTest {
     @Test
     fun `the loop registers once and polls from the last cursor`() = runBlocking {
         val api = FakeApi(); val handlers = FakeHandlers()
+        api.streamFailure = PushUnsupportedException("no push")
         api.inboxes = ArrayDeque(
             listOf(RemoteInbox(listOf(event("handoff_stop", buildJsonObject { put("handoff_id", "h") })), next = 7L)),
         )
@@ -204,5 +218,38 @@ class RemoteTargetHostTest {
         assertNotNull(parseHandoffOffer(buildJsonObject { put("handoff_id", "h"); put("media_file_id", "m") }))
         assertNull(parseHandoffOffer(buildJsonObject { put("handoff_id", "h") }))
         assertTrue(true)
+    }
+
+    @Test
+    fun `pushed events are handled and the stream resumes from the last seq`() = runBlocking {
+        val api = FakeApi(); val handlers = FakeHandlers()
+        api.streamSessions = ArrayDeque(
+            listOf(listOf(event("handoff_stop", buildJsonObject { put("handoff_id", "h") }, "p1", seq = 9L))),
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val host = host(api, handlers)
+        host.start(scope)
+        withTimeout(3_000) { while (api.streamCursors.size < 2) kotlinx.coroutines.delay(10) }
+        host.stop()
+        scope.cancel()
+        assertEquals(listOf(0L, 9L), api.streamCursors.take(2))
+        assertEquals(listOf("h"), handlers.stopped)
+        assertEquals(listOf(Triple("p1", "ok", null)), api.acks.toList())
+        assertTrue(api.inboxCursors.isEmpty())
+        assertEquals("push", host.transport)
+    }
+
+    @Test
+    fun `repeated stream failures fall back to long polling`() = runBlocking {
+        val api = FakeApi(); val handlers = FakeHandlers()
+        api.streamFailure = java.io.IOException("blocked")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val host = host(api, handlers)
+        host.start(scope)
+        withTimeout(20_000) { while (api.inboxCursors.isEmpty()) kotlinx.coroutines.delay(10) }
+        host.stop()
+        scope.cancel()
+        assertEquals(3, api.streamCursors.size)
+        assertEquals("poll", host.transport)
     }
 }

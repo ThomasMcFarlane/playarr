@@ -5393,6 +5393,14 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: wait
+        in: query
+        description: Seconds to wait while the handoff is still pending (max 25)
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
       responses:
         '200':
           description: Current handoff state
@@ -5598,6 +5606,39 @@ paths:
           description: Unknown pairing, or it belongs to another account
       security:
       - bearer_auth: []
+    patch:
+      tags:
+      - remote
+      operationId: rename_pairing_handler
+      parameters:
+      - name: id
+        in: path
+        description: Pairing id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenamePairingRequest'
+        required: true
+      responses:
+        '200':
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingResponse'
+        '400':
+          description: Empty or over-long name
+        '404':
+          description: Unknown pairing, or it belongs to another account
+        '409':
+          description: Pairing is no longer live
+      security:
+      - bearer_auth: []
   /api/v1/remote/pairings/{id}/approve:
     post:
       tags:
@@ -5700,6 +5741,32 @@ paths:
           description: Unknown pairing, or it belongs to another account
         '409':
           description: Pairing is no longer pending
+      security:
+      - bearer_auth: []
+  /api/v1/remote/stream:
+    get:
+      tags:
+      - remote
+      operationId: stream_handler
+      parameters:
+      - name: after
+        in: query
+        description: Last seq already processed (or send Last-Event-ID)
+        required: false
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Server-sent events. Each `inbox` event has `id` = the queue seq and a JSON `InboxEvent` as data; comments are keep-alives. The stream ends after five minutes so clients reconnect with a fresh token and `Last-Event-ID`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: This device is not registered as a target
       security:
       - bearer_auth: []
   /api/v1/remote/target:
@@ -11969,6 +12036,14 @@ components:
           type: string
         state:
           description: Last reported playback state, when fresh.
+    RenamePairingRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          description: New label for the paired remote (1 to 60 visible characters).
     ReorderPlaylistItemsRequest:
       type: object
       required:

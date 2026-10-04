@@ -129,4 +129,12 @@ class RemoteProtocolTest {
         assertEquals(5L, obj.long("n"))
         assertNull(obj.string("missing"))
     }
+
+    @Test
+    fun `sse frames are split across lines and keep-alives are ignored`() = kotlinx.coroutines.runBlocking {
+        val frames = mutableListOf<Pair<String, String>>()
+        val text = "event: ready\ndata: {}\n\n: keep-alive\n\nevent: inbox\nid: 3\ndata: {\"seq\":3}\n\n"
+        readSseFrames(java.io.BufferedReader(java.io.StringReader(text))) { e, d -> frames += e to d }
+        assertEquals(listOf("ready" to "{}", "inbox" to "{\"seq\":3}"), frames)
+    }
 }

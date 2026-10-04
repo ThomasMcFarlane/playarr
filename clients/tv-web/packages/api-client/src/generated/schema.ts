@@ -2345,7 +2345,7 @@ export interface paths {
         delete: operations["revoke_pairing_handler"];
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["rename_pairing_handler"];
         trace?: never;
     };
     "/api/v1/remote/pairings/{id}/approve": {
@@ -2396,6 +2396,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remote/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stream_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remote/target": {
         parameters: {
             query?: never;
@@ -2438,6 +2454,38 @@ export interface paths {
         get: operations["list_targets_handler"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transfer/export/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["transfer_export_download_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transfer/import/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["transfer_import_page_handler"];
+        put?: never;
+        post: operations["transfer_import_upload_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2502,6 +2550,86 @@ export interface paths {
         get: operations["download_export_handler"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-exports/{export_id}/transfer-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["create_transfer_link_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-import-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["create_import_session_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-import-sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_import_session_handler"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_import_session_handler"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-import-sessions/{session_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply_import_session_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/data-import-sessions/{session_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_import_session_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4070,6 +4198,26 @@ export interface components {
             section: string;
             title: string;
         };
+        ImportSessionResponse: {
+            /**
+             * Format: date-time
+             * @description When the upload link (waiting) or the staged package (uploaded) expires.
+             */
+            expires_at: string;
+            /** @description Opaque id used by the signed-in client to poll, preview and apply. */
+            id: string;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            /** @description `waiting` (no upload yet), `uploading` or `uploaded` (ready to preview). */
+            status: string;
+            /**
+             * @description Origin-relative path of the one-time upload page; present only while
+             *     `waiting`, and only in the response that created the session.
+             */
+            upload_path?: string | null;
+            /** @description `upload_path` as an absolute URL (see `TransferLinkResponse::url`). */
+            upload_url?: string | null;
+        };
         ImportSummary: {
             /**
              * @description Per-file playback choices are specific to one server's files and are
@@ -5366,6 +5514,10 @@ export interface components {
             /** @description Last reported playback state, when fresh. */
             state?: unknown;
         };
+        RenamePairingRequest: {
+            /** @description New label for the paired remote (1 to 60 visible characters). */
+            name: string;
+        };
         ReorderPlaylistItemsRequest: {
             /**
              * @description Every item id currently on this playlist, in the desired new order.
@@ -5915,6 +6067,24 @@ export interface components {
          */
         TranscodeReason: "container_not_supported" | "video_codec_not_supported" | "audio_codec_not_supported" | "video_bitrate_exceeds_limit" | "resolution_exceeds_limit" | "subtitle_burn_in_required" | "server_policy" | {
             other: string;
+        };
+        TransferLinkResponse: {
+            /**
+             * Format: date-time
+             * @description The link stops working at this time (at most 15 minutes) or after its
+             *     first use, whichever is first.
+             */
+            expires_at: string;
+            /**
+             * @description Origin-relative path of the one-time link; resolve it against the
+             *     server address the client already uses and show it as a QR code.
+             */
+            path: string;
+            /**
+             * @description The same link as an absolute URL built from the address the request
+             *     arrived on (proxy headers honoured), ready for a QR code.
+             */
+            url: string;
         };
         /**
          * @description A peer that could not contribute to a group-wide activity response.
@@ -13548,7 +13718,10 @@ export interface operations {
     };
     get_handoff_handler: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Seconds to wait while the handoff is still pending (max 25) */
+                wait?: number;
+            };
             header?: never;
             path: {
                 /** @description Handoff id */
@@ -13879,6 +14052,54 @@ export interface operations {
             };
         };
     };
+    rename_pairing_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenamePairingRequest"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingResponse"];
+                };
+            };
+            /** @description Empty or over-long name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown pairing, or it belongs to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pairing is no longer live */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     approve_pairing_handler: {
         parameters: {
             query?: never;
@@ -14047,6 +14268,43 @@ export interface operations {
             };
         };
     };
+    stream_handler: {
+        parameters: {
+            query?: {
+                /** @description Last seq already processed (or send Last-Event-ID) */
+                after?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-sent events. Each `inbox` event has `id` = the queue seq and a JSON `InboxEvent` as data; comments are keep-alives. The stream ends after five minutes so clients reconnect with a fresh token and `Last-Event-ID`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This device is not registered as a target */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     register_target_handler: {
         parameters: {
             query?: never;
@@ -14194,6 +14452,134 @@ export interface operations {
             };
             /** @description Caller lacks Playarr streaming access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transfer_export_download_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One-time link token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user-data package (ZIP); the link works once */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Unknown link */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link expired or was already used */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transfer_import_page_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One-time upload link token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A minimal HTML page with a file chooser */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Unknown link */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link expired or was already used */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transfer_import_upload_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description One-time upload link token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** @description A package produced by an export */
+        requestBody: {
+            content: {
+                "application/octet-stream": number[];
+            };
+        };
+        responses: {
+            /** @description The package was validated and staged for the television to review */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown link */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link expired or was already used */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload or its expanded content is too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a valid package, or an unsupported schema version */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14417,6 +14803,260 @@ export interface operations {
             };
             /** @description The export expired; start a new one */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_transfer_link_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export id */
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A one-time link to download this export on another device */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferLinkResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown export, or one belonging to another account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The export is not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The export expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_import_session_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An import session with a one-time upload link for another device; replaces any earlier session of the caller */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSessionResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account may not use the catalogue */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_import_session_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Import session id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether a package has arrived */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSessionResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown, expired, or another account's session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_import_session_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Import session id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session closed and any staged package deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown, expired, or another account's session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_import_session_handler: {
+        parameters: {
+            query: {
+                /** @description Digest returned by the preview of this exact upload. */
+                package_sha256: string;
+                include_preferences?: boolean;
+                progress_conflicts?: components["schemas"]["ProgressConflicts"];
+            };
+            header?: never;
+            path: {
+                /** @description Import session id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was written; the staged package is deleted once everything applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown, expired, or another account's session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nothing uploaded yet, or the digest differs from the previewed one */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_import_session_handler: {
+        parameters: {
+            query?: {
+                /** @description Include the audio-language preference in the preview. Default false. */
+                include_preferences?: boolean;
+                progress_conflicts?: components["schemas"]["ProgressConflicts"];
+            };
+            header?: never;
+            path: {
+                /** @description Import session id */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What importing the uploaded package would do; nothing is written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown, expired, or another account's session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nothing has been uploaded yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

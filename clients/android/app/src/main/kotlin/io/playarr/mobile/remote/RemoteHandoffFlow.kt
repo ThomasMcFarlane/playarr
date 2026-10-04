@@ -15,7 +15,8 @@ import retrofit2.HttpException
 /** The slice of `PlayarrRemoteApi` the source-side handoff needs (a seam for tests). */
 interface RemoteHandoffApi {
     suspend fun createHandoff(request: CreateRemoteHandoffRequest): RemoteHandoff
-    suspend fun getHandoff(id: String): RemoteHandoff
+    /** [waitSeconds] asks the server to hold the call while the handoff is pending. */
+    suspend fun getHandoff(id: String, waitSeconds: Int = 0): RemoteHandoff
     suspend fun createPairing(request: CreateRemotePairingRequest): RemotePairing
     suspend fun getPairing(id: String): RemotePairing
 }
@@ -47,8 +48,9 @@ suspend fun handOffPlayback(
     api: RemoteHandoffApi,
     sourceDeviceId: String,
     destinationDeviceId: String,
-    mediaFileId: String,
-    snapshot: RemotePlaybackSnapshot,
+    /** Null when the initiating device is not the source: the server then uses the source's reported state. */
+    mediaFileId: String?,
+    snapshot: RemotePlaybackSnapshot?,
     controllerName: String,
     requestKey: String,
     onProgress: (HandoffProgress) -> Unit = {},
@@ -115,8 +117,11 @@ suspend fun handOffPlayback(
     val deadline = clock() + handoffTimeoutMs
     while (handoff.status == "pending") {
         if (clock() > deadline) throw HandoffFailure(HandoffFailure.Reason.Expired, "destination did not respond")
-        delay(pollMs)
-        handoff = api.getHandoff(handoff.id)
+        // The server holds the request while pending, so the outcome arrives as soon as the
+        // destination acknowledges. A server that ignores `wait` answers at once: poll then.
+        val asked = clock()
+        handoff = api.getHandoff(handoff.id, 20)
+        if (handoff.status == "pending" && clock() - asked < 500L) delay(pollMs)
     }
     return when (handoff.status) {
         "committed" -> handoff

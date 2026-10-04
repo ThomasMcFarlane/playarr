@@ -13,6 +13,7 @@ import io.playarr.shared.data.model.RemoteHandoff
 import io.playarr.shared.data.model.RemoteInbox
 import io.playarr.shared.data.model.RemotePairing
 import io.playarr.shared.data.model.RemoteTarget
+import io.playarr.shared.data.model.RenameRemotePairingRequest
 import io.playarr.shared.data.model.ReportRemoteStateRequest
 import okhttp3.ResponseBody
 import retrofit2.Response
@@ -20,9 +21,11 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 /**
  * Retrofit surface for the phone remote and playback handoff endpoints
@@ -60,6 +63,12 @@ interface PlayarrRemoteApi {
     @POST("api/v1/remote/pairings/{id}/deny")
     suspend fun denyPairing(@Path("id") id: String): RemotePairing
 
+    @PATCH("api/v1/remote/pairings/{id}")
+    suspend fun renamePairing(
+        @Path("id") id: String,
+        @Body request: RenameRemotePairingRequest,
+    ): RemotePairing
+
     @DELETE("api/v1/remote/pairings/{id}")
     suspend fun revokePairing(@Path("id") id: String): Response<ResponseBody>
 
@@ -76,6 +85,15 @@ interface PlayarrRemoteApi {
     @GET("api/v1/remote/inbox")
     suspend fun inbox(@Query("after") after: Long, @Query("wait") wait: Int): RemoteInbox
 
+    /**
+     * Server-sent-events push stream of this target's inbox (`event: inbox`,
+     * `id` = queue seq); [after] resumes from the durable queue. The server
+     * ends it every few minutes so the access token is renewed.
+     */
+    @Streaming
+    @GET("api/v1/remote/stream")
+    suspend fun stream(@Query("after") after: Long): ResponseBody
+
     @POST("api/v1/remote/events/{id}/ack")
     suspend fun ackEvent(
         @Path("id") eventId: String,
@@ -85,8 +103,9 @@ interface PlayarrRemoteApi {
     @POST("api/v1/remote/handoffs")
     suspend fun createHandoff(@Body request: CreateRemoteHandoffRequest): RemoteHandoff
 
+    /** [wait] long-polls (server caps it at 25 s) while the handoff is still pending. */
     @GET("api/v1/remote/handoffs/{id}")
-    suspend fun getHandoff(@Path("id") id: String): RemoteHandoff
+    suspend fun getHandoff(@Path("id") id: String, @Query("wait") wait: Int = 0): RemoteHandoff
 
     @POST("api/v1/remote/handoffs/{id}/ack")
     suspend fun ackHandoff(
