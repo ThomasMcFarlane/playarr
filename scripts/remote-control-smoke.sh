@@ -42,7 +42,7 @@ export SERVER
 
 exec python3 - <<'PY'
 import json, os, queue, statistics, sys, threading, time, uuid
-import urllib.error, urllib.request
+import http.client, urllib.error, urllib.parse, urllib.request
 
 SERVER = os.environ["SERVER"].rstrip("/")
 N = int(os.environ.get("SMOKE_COMMANDS", "10"))
@@ -55,22 +55,43 @@ def ms():
     return time.perf_counter() * 1000.0
 
 
+_tls = threading.local()
+
+
+def _conn(timeout):
+    """One keep-alive connection per thread, so timings are not dominated by TLS handshakes."""
+    url = urllib.parse.urlparse(SERVER)
+    conn = getattr(_tls, "conn", None)
+    if conn is None:
+        cls = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
+        conn = cls(url.hostname, url.port, timeout=timeout)
+        _tls.conn = conn
+    return conn
+
+
 def call(method, path, token=None, body=None, timeout=40):
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(SERVER + path, data=data, method=method)
-    req.add_header("Content-Type", "application/json")
+    headers = {"Content-Type": "application/json"}
     if token:
-        req.add_header("Authorization", "Bearer " + token)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
-            return resp.status, (json.loads(raw) if raw else None)
-    except urllib.error.HTTPError as err:
-        raw = err.read()
+        headers["Authorization"] = "Bearer " + token
+    for attempt in (0, 1):
+        conn = _conn(timeout)
         try:
-            return err.code, json.loads(raw)
-        except Exception:
-            return err.code, None
+            conn.timeout = timeout
+            if conn.sock is not None:
+                conn.sock.settimeout(timeout)
+            conn.request(method, path, body=data, headers=headers)
+            resp = conn.getresponse()
+            raw = resp.read()
+            try:
+                return resp.status, (json.loads(raw) if raw else None)
+            except ValueError:
+                return resp.status, None
+        except (http.client.HTTPException, OSError):
+            conn.close()
+            _tls.conn = None
+            if attempt:
+                raise
 
 
 def need(cond, what):
@@ -202,20 +223,24 @@ for mode in ("push", "poll"):
     tv.listen(mode)
     tv.next_event("never", timeout=1.0)  # let the connection establish
     samples = []
+    after_post = []
     for i in range(N):
         t0 = ms()
         status, acc = call("POST", f"/api/v1/remote/pairings/{pid}/commands", phone.token,
                            {"kind": "navigate", "payload": {"key": "down" if i % 2 else "up"}})
+        posted = ms()
         if not need(status == 202, f"send command via {mode} (HTTP {status})"):
             continue
         ev, at = tv.next_event("command")
         if need(ev is not None, f"{mode}: command {i} delivered"):
             samples.append(at - t0)
+            after_post.append(at - posted)
             call("POST", f"/api/v1/remote/events/{ev['id']}/ack", tv.token, {"status": "ok"})
         time.sleep(0.2)
     tv.stop()
     time.sleep(1.0)
-    results[mode] = summarise(f"command latency ({mode})", samples)
+    results[mode] = summarise(f"command latency ({mode}, POST start to TV receipt)", samples)
+    summarise(f"  of which after the server accepted it ({mode})", after_post)
 if results.get("push") is not None:
     need(results["push"] < P95_BUDGET, f"push p95 {results['push']:.0f} ms under {P95_BUDGET:.0f} ms")
 
