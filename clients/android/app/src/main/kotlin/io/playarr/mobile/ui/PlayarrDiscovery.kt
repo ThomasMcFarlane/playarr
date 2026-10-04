@@ -35,6 +35,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.playarr.shared.data.events.LiveArea
+import io.playarr.shared.data.events.LiveFetchStamp
+import io.playarr.shared.data.events.LiveInvalidationBus
+import io.playarr.shared.data.events.LiveTarget
 import io.playarr.shared.data.model.DiscoveryTitle
 import io.playarr.shared.data.model.DiscoveryWire
 import io.playarr.shared.data.model.DiscoverResponse
@@ -152,7 +156,11 @@ internal sealed interface DiscoveryLoad {
 @HiltViewModel
 internal class DiscoveryViewModel @Inject constructor(
     private val api: PlayarrApi,
+    val liveBus: LiveInvalidationBus,
 ) : ViewModel() {
+    private val watchlistStamp = LiveFetchStamp()
+    val watchlistFetchStartedMs: Long get() = watchlistStamp.startedMs
+
     private val _discover = MutableStateFlow<DiscoveryLoad>(DiscoveryLoad.Loading)
     val discover: StateFlow<DiscoveryLoad> = _discover.asStateFlow()
 
@@ -189,14 +197,21 @@ internal class DiscoveryViewModel @Inject constructor(
         }
     }
 
-    fun loadWatchlist() {
+    fun loadWatchlist() = fetchWatchlist(silent = false)
+
+    /** Live-event / fallback refresh: keeps the shown list until the new one arrives. */
+    fun refreshWatchlist() = fetchWatchlist(silent = true)
+
+    private fun fetchWatchlist(silent: Boolean) {
         viewModelScope.launch {
-            _watchlist.value = ParityLoad.Loading
+            watchlistStamp.begin()
+            if (!silent) _watchlist.value = ParityLoad.Loading
             _watchlist.value = try {
                 ParityLoad.Ready(api.listWatchlist().items)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
+                if (silent) return@launch
                 ParityLoad.Failed(failureMessage(error))
             }
         }
@@ -403,6 +418,12 @@ internal fun ExperienceWatchlistScreen(
     val state by viewModel.watchlist.collectAsState()
     val requested by viewModel.requested.collectAsState()
     LaunchedEffect(Unit) { viewModel.loadWatchlist() }
+    LiveRefreshEffect(
+        viewModel.liveBus,
+        setOf(LiveTarget(LiveArea.Watchlist)),
+        { viewModel.watchlistFetchStartedMs },
+        viewModel::refreshWatchlist,
+    )
     PlayarrPageScaffold(
         title = playarrString(PlayarrString.WatchlistTitle),
         onBack = onBack,

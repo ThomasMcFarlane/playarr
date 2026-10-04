@@ -3,6 +3,8 @@ package io.playarr.mobile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.playarr.shared.data.events.LiveFetchStamp
+import io.playarr.shared.data.events.LiveInvalidationBus
 import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarMediaKind
@@ -90,12 +92,33 @@ internal class CalendarStateHolder(
     )
     val state: StateFlow<CalendarUiState> = _state.asStateFlow()
     private var loadJob: Job? = null
+    private val fetchStamp = LiveFetchStamp()
+
+    /** Start of the latest window fetch (`0` before the first). */
+    val fetchStartedMs: Long get() = fetchStamp.startedMs
+
+    /**
+     * Live-event / fallback refresh: refetches the visible window and swaps it
+     * in place; the shown entries stay until the new arrive and a failure keeps them.
+     */
+    fun refresh() {
+        if (_state.value.load !is CalendarLoad.Ready) return
+        val window = _state.value.window
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            fetchStamp.begin()
+            val result = runCatchingPlayarr { repository.calendar(window.start, window.end) }
+            if (_state.value.window != window) return@launch
+            if (result is PlayarrResult.Success) _state.update { it.copy(load = CalendarLoad.Ready(result.value)) }
+        }
+    }
 
     fun load() {
         val window = _state.value.window
         loadJob?.cancel()
         _state.update { it.copy(load = CalendarLoad.Loading) }
         loadJob = scope.launch {
+            fetchStamp.begin()
             val result = runCatchingPlayarr { repository.calendar(window.start, window.end) }
             // A newer navigation replaced this window while the request was in flight.
             if (_state.value.window != window) return@launch
@@ -270,6 +293,7 @@ internal class CalendarSubscriptionHolder(
 internal class CalendarViewModel @Inject constructor(
     repository: CalendarRepository,
     private val savedState: androidx.lifecycle.SavedStateHandle,
+    val liveBus: LiveInvalidationBus,
 ) : ViewModel() {
     val calendar = CalendarStateHolder(
         scope = viewModelScope,

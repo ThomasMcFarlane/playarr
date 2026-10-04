@@ -19,6 +19,7 @@ import dagger.hilt.android.HiltAndroidApp
 import io.playarr.mobile.download.KeepUntilSweepWorker
 import io.playarr.mobile.ui.newPlayarrImageLoader
 import io.playarr.shared.auth.TokenStore
+import io.playarr.shared.data.events.LiveEventsManager
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 @HiltAndroidApp
 class PlayarrMobileApp : Application(), Configuration.Provider, SingletonImageLoader.Factory {
     @Inject lateinit var tokenStore: TokenStore
+    @Inject lateinit var liveEvents: LiveEventsManager
 
     /**
      * Lets `KeepUntilSweepWorker` (a `@HiltWorker`) get its dependencies
@@ -51,6 +53,7 @@ class PlayarrMobileApp : Application(), Configuration.Provider, SingletonImageLo
 
     override fun onCreate() {
         super.onCreate()
+        bindLiveEvents(scope, liveEvents, tokenStore)
         // Downloads' own notification channel is created lazily by
         // PlayarrDownloadService's DownloadService constructor (which is
         // given the channel name/description string resources directly),

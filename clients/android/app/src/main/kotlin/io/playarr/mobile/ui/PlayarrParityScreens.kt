@@ -114,6 +114,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.playarr.shared.data.events.LiveArea
+import io.playarr.shared.data.events.LiveFetchStamp
+import io.playarr.shared.data.events.LiveInvalidationBus
+import io.playarr.shared.data.events.LiveTarget
 import io.playarr.mobile.BuildConfig
 import io.playarr.mobile.connected.PlayarrServerClientProvider
 import io.playarr.mobile.di.PrimaryPlayarrApi
@@ -198,20 +202,31 @@ internal enum class PlaylistVisibility { All, Personal, Shared }
 
 internal enum class PlaylistOrder { Ascending, Descending }
 
+private val PLAYLISTS_LIVE_INTEREST = setOf(LiveTarget(LiveArea.Playlist), LiveTarget(LiveArea.Work))
+
 internal class PlaylistMediaTypeMismatchException : IllegalStateException()
 
 @HiltViewModel
 internal class PlaylistsViewModel @Inject constructor(
     private val api: PlayarrApi,
+    val liveBus: LiveInvalidationBus,
 ) : ViewModel() {
     private val _playlists = MutableStateFlow<ParityLoad<ResolvedPlaylistDirectory>>(ParityLoad.Loading)
     val playlists = _playlists.asStateFlow()
+    private val fetchStamp = LiveFetchStamp()
+    val fetchStartedMs: Long get() = fetchStamp.startedMs
 
     init { load() }
 
-    fun load() = viewModelScope.launch {
-        _playlists.value = ParityLoad.Loading
-        _playlists.value = runCatching {
+    fun load() = fetchDirectory(silent = false)
+
+    /** Live-event / fallback refresh: keeps the shown directory until the new one arrives. */
+    fun refresh() = fetchDirectory(silent = true)
+
+    private fun fetchDirectory(silent: Boolean) = viewModelScope.launch {
+        fetchStamp.begin()
+        if (!silent) _playlists.value = ParityLoad.Loading
+        val result = runCatching {
             coroutineScope {
                 val playlists = api.listPlaylists()
                 val itemGroups = playlists.map { playlist ->
@@ -223,6 +238,8 @@ internal class PlaylistsViewModel @Inject constructor(
                 ResolvedPlaylistDirectory(playlists, itemGroups, details)
             }
         }
+        if (silent && result.isFailure) return@launch
+        _playlists.value = result
             .fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlists)) })
     }
 
@@ -382,6 +399,7 @@ internal fun ExperiencePlaylistsScreen(
     viewModel: PlaylistsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.playlists.collectAsState()
+    LiveRefreshEffect(viewModel.liveBus, PLAYLISTS_LIVE_INTEREST, { viewModel.fetchStartedMs }, viewModel::refresh)
     var creating by remember { mutableStateOf(false) }
     var filtering by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf(PlaylistVisibility.All) }
@@ -720,10 +738,21 @@ internal data class ResolvedPlaylist(
 )
 
 @HiltViewModel
-internal class PlaylistDetailViewModel @Inject constructor(private val api: PlayarrApi) : ViewModel() {
+internal class PlaylistDetailViewModel @Inject constructor(
+    private val api: PlayarrApi,
+    val liveBus: LiveInvalidationBus,
+) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<ResolvedPlaylist>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
     private var loadedId: String? = null
+    private val fetchStamp = LiveFetchStamp()
+    val fetchStartedMs: Long get() = fetchStamp.startedMs
+
+    /** Live-event / fallback refresh of the open playlist, in place. */
+    fun refreshInPlace() {
+        val id = loadedId ?: return
+        if (_state.value is ParityLoad.Ready) refresh(id, silent = true)
+    }
 
     fun load(id: String) {
         if (loadedId == id && _state.value is ParityLoad.Ready) return
@@ -731,9 +760,10 @@ internal class PlaylistDetailViewModel @Inject constructor(private val api: Play
         refresh(id)
     }
 
-    private fun refresh(id: String) = viewModelScope.launch {
-        _state.value = ParityLoad.Loading
-        _state.value = runCatching {
+    private fun refresh(id: String, silent: Boolean = false) = viewModelScope.launch {
+        fetchStamp.begin()
+        if (!silent) _state.value = ParityLoad.Loading
+        val result = runCatching {
             coroutineScope {
                 val listed = api.listPlaylists()
                 val requested = listed.firstOrNull { it.id == id } ?: api.getPlaylist(id)
@@ -754,7 +784,9 @@ internal class PlaylistDetailViewModel @Inject constructor(private val api: Play
                 }.awaitAll().filterNotNull().toMap()
                 ResolvedPlaylist(root, itemGroups, details, playlists)
             }
-        }.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlist)) })
+        }
+        if (silent && result.isFailure) return@launch
+        _state.value = result.fold({ ParityLoad.Ready(it) }, { ParityLoad.Failed(it.playarrMessage(PlayarrFailureSubject.Playlist)) })
     }
 
     fun remove(playlistId: String, itemId: String) = mutate { current ->
@@ -891,6 +923,8 @@ internal fun ExperiencePlaylistDetailScreen(
     var editing by remember { mutableStateOf<Playlist?>(null) }
     var deleting by remember { mutableStateOf<Playlist?>(null) }
     LaunchedEffect(playlistId) { viewModel.load(playlistId) }
+    val liveInterest = remember(playlistId) { setOf(LiveTarget(LiveArea.Playlist, playlistId), LiveTarget(LiveArea.Work)) }
+    LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refreshInPlace)
     when (val current = state) {
         ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.PlaylistsLoading))
         is ParityLoad.Failed -> ParityFailure(current.message) { viewModel.load(playlistId) }

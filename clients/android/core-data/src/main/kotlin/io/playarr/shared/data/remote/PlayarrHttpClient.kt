@@ -1,5 +1,6 @@
 package io.playarr.shared.data.remote
 
+import io.playarr.shared.data.events.LiveEventsApi
 import io.playarr.shared.data.model.ClientPlatform
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
@@ -92,6 +93,28 @@ object PlayarrHttpClient {
         enableHttpLogging,
     ).create(PlayarrRemoteApi::class.java)
 
+    /**
+     * Same transport, auth and token refresh as [create], for `GET /api/v1/events`.
+     * The 45 s read timeout tolerates the server's 15 s heartbeat (three missed
+     * beats) so a silently dead connection is detected and reconnected.
+     */
+    fun createEvents(
+        baseUrlProvider: () -> String,
+        clientPlatform: ClientPlatform,
+        clientVersion: String,
+        accessTokenProvider: () -> String? = { null },
+        refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
+        enableHttpLogging: Boolean = false,
+    ): LiveEventsApi = buildRetrofit(
+        baseUrlProvider,
+        clientPlatform,
+        clientVersion,
+        accessTokenProvider,
+        refreshAccessToken,
+        enableHttpLogging,
+        readTimeoutSeconds = EVENTS_READ_TIMEOUT_SECONDS,
+    ).create(LiveEventsApi::class.java)
+
     private fun buildRetrofit(
         baseUrlProvider: () -> String,
         clientPlatform: ClientPlatform,
@@ -99,6 +122,7 @@ object PlayarrHttpClient {
         accessTokenProvider: () -> String? = { null },
         refreshAccessToken: (rejectedAccessToken: String?) -> String? = { null },
         enableHttpLogging: Boolean = false,
+        readTimeoutSeconds: Long = API_READ_TIMEOUT_SECONDS,
     ): Retrofit {
         val okHttpClient = OkHttpClient.Builder()
             // OkHttp's 10 s defaults are too tight for a cold TLS connection over a
@@ -106,7 +130,7 @@ object PlayarrHttpClient {
             // negotiation probes the source file; catalogue pages take seconds on a busy
             // node). A timeout here surfaces as "Can't reach the Playarr Server".
             .connectTimeout(API_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(API_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
             .addInterceptor(dynamicBaseUrlInterceptor(baseUrlProvider))
             .addInterceptor(platformHeaderInterceptor(clientPlatform, clientVersion))
             .addInterceptor { chain ->
@@ -157,6 +181,7 @@ object PlayarrHttpClient {
 
     internal const val API_CONNECT_TIMEOUT_SECONDS = 20L
     internal const val API_READ_TIMEOUT_SECONDS = 45L
+    internal const val EVENTS_READ_TIMEOUT_SECONDS = 45L
 
     /** Never actually dialled -- see [create]'s KDoc. Must be a syntactically valid absolute URL for [Retrofit.Builder.baseUrl]. */
     private const val PLACEHOLDER_BASE_URL = "http://playarr.invalid/"

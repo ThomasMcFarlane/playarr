@@ -94,6 +94,8 @@ import java.util.Locale
 
 // ---- Calendar screen -------------------------------------------------------
 
+private val CALENDAR_LIVE_INTEREST = setOf(io.playarr.shared.data.events.LiveTarget(io.playarr.shared.data.events.LiveArea.Calendar))
+
 @Composable
 internal fun ExperienceCalendarScreen(
     isTelevision: Boolean,
@@ -102,6 +104,12 @@ internal fun ExperienceCalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val state by viewModel.calendar.state.collectAsState()
+    LiveRefreshEffect(
+        viewModel.liveBus,
+        CALENDAR_LIVE_INTEREST,
+        { viewModel.calendar.fetchStartedMs },
+        viewModel.calendar::refresh,
+    )
     val language = LocalPlayarrLanguage.current
     val holder = viewModel.calendar
     val today = remember { LocalDate.now() }

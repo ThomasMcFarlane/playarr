@@ -175,6 +175,10 @@ import io.playarr.mobile.cast.shouldOfferPlayarrCast
 import io.playarr.mobile.connected.PlayarrWorkSourceChoice
 import io.playarr.mobile.connected.PlayarrWorkSourceSelector
 import io.playarr.shared.auth.TokenStore
+import io.playarr.shared.data.events.LiveArea
+import io.playarr.shared.data.events.LiveFetchStamp
+import io.playarr.shared.data.events.LiveInvalidationBus
+import io.playarr.shared.data.events.LiveTarget
 import io.playarr.shared.data.model.AlbumDetail
 import io.playarr.shared.data.model.CreditResponse
 import io.playarr.shared.data.model.EpisodeDetail
@@ -438,7 +442,24 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val api: PlayarrApi,
     val serverAccessResolver: PlayarrServerAccessResolver,
     val remoteController: io.playarr.mobile.remote.RemoteController,
+    val liveBus: LiveInvalidationBus,
 ) : ViewModel() {
+    private val homeStamp = LiveFetchStamp()
+    private val libraryStamps = mutableMapOf<WorkKind, LiveFetchStamp>()
+    private val progressStamp = LiveFetchStamp()
+    private val searchStamp = LiveFetchStamp()
+    private var homeRefreshJob: Job? = null
+    private var searchRefreshJob: Job? = null
+    private var lastSearch: SearchArgs? = null
+
+    private data class SearchArgs(val query: String, val mediaType: PlayarrSearchMediaType, val libraryId: String?)
+
+    /** Start of the latest Home fetch (`0` before the first); lets live events skip data already fetched. */
+    val homeFetchStartedMs: Long get() = homeStamp.startedMs
+    val progressFetchStartedMs: Long get() = progressStamp.startedMs
+    val searchFetchStartedMs: Long get() = searchStamp.startedMs
+    fun libraryFetchStartedMs(kind: WorkKind): Long = libraryStamps[kind]?.startedMs ?: 0L
+
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
     private var homeByKind: Map<WorkKind, List<Work>> = emptyMap()
@@ -619,7 +640,13 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     /** Fetches watch progress once so library cards can show the unwatched dot without visiting Home first. */
     fun ensureProgressLoaded() {
         if (_progressLoaded.value) return
+        refreshProgress()
+    }
+
+    /** Re-reads watch progress in place; a failed read keeps the rows already shown. */
+    fun refreshProgress() {
         viewModelScope.launch {
+            progressStamp.begin()
             runCatching { api.listWatchProgress() }.getOrNull()?.let {
                 _progress.value = it
                 _progressLoaded.value = true
@@ -647,6 +674,19 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                 delay(CAPABILITIES_POLL_MS)
             }
         }
+        // Cheap, account-wide state refreshes in place whenever the server says it moved
+        // (watched state from another device, household and capability edits).
+        viewModelScope.launch {
+            liveBus.refetchTriggers(setOf(LiveTarget(LiveArea.Progress))) { progressStamp.startedMs }
+                .collect { if (_progressLoaded.value) refreshProgress() }
+        }
+        viewModelScope.launch {
+            liveBus.refetchTriggers(setOf(LiveTarget(LiveArea.Household), LiveTarget(LiveArea.Account))) { 0L }
+                .collect {
+                    if (_household.value != null) refreshHousehold()
+                    refreshCapabilities()
+                }
+        }
     }
 
     private fun loadAvailableKinds() {
@@ -659,8 +699,19 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 
     fun loadHome() {
-        viewModelScope.launch {
-            _home.value = ExperienceLoad.Loading
+        launchHome(silent = false)
+    }
+
+    /** Live-event / fallback refresh: rebuilds the rails in place, keeping the current ones until the new arrive. */
+    fun refreshHome() {
+        homeRefreshJob?.cancel()
+        homeRefreshJob = launchHome(silent = true)
+    }
+
+    private fun launchHome(silent: Boolean): Job {
+        return viewModelScope.launch {
+            homeStamp.begin()
+            if (!silent) _home.value = ExperienceLoad.Loading
             val progressRequest = async { runCatching { api.listWatchProgress() }.getOrNull() }
             // Series with several ways to continue are shown as a stacked card (ask on Home).
             val plansRequest = async {
@@ -673,6 +724,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             }.awaitAll()
             val failure = results.firstNotNullOfOrNull { (_, result) ->
                 (result as? PlayarrResult.Failure)?.error
+            }
+            if (silent && (results.any { it.second is PlayarrResult.Failure } || progressRequest.await() == null)) {
+                return@launch
             }
             if (failure != null && results.all { it.second is PlayarrResult.Failure }) {
                 _home.value = ExperienceLoad.Failed(
@@ -756,9 +810,38 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         _canDownload.value = runCatching { api.getSelfCapabilities().canDownload }.getOrDefault(false)
     }
 
+    /**
+     * Re-pages [kind] in place and swaps the list in one step, so the visible
+     * list (and its scroll position and focus) is untouched until the new data is complete.
+     */
+    fun refreshLibrary(kind: WorkKind) {
+        if (_libraries.value[kind] !is ExperienceLoad.Ready) return loadLibrary(kind)
+        libraryJobs.remove(kind)?.cancel()
+        libraryJobs[kind] = viewModelScope.launch {
+            libraryStamps.getOrPut(kind) { LiveFetchStamp() }.begin()
+            var offset = 0L
+            var loaded = emptyList<Work>()
+            while (true) {
+                val result = browseLibrary(
+                    kind = kind,
+                    availableOnly = true,
+                    sort = "title",
+                    limit = LIBRARY_PAGE_SIZE,
+                    offset = offset,
+                )
+                if (result !is PlayarrResult.Success) return@launch
+                loaded = mergeLibraryPage(loaded, result.value)
+                offset += result.value.size
+                if (result.value.size < LIBRARY_PAGE_SIZE) break
+            }
+            _libraries.value = _libraries.value + (kind to ExperienceLoad.Ready(loaded))
+        }
+    }
+
     fun loadLibrary(kind: WorkKind) {
         if (_libraries.value[kind] is ExperienceLoad.Ready) return
         libraryJobs.remove(kind)?.cancel()
+        libraryStamps.getOrPut(kind) { LiveFetchStamp() }.begin()
         libraryJobs[kind] = viewModelScope.launch {
             _libraries.value = _libraries.value + (kind to ExperienceLoad.Loading)
             // Page through the whole catalogue as Playarr Web does (200 per
@@ -822,67 +905,19 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         debounce: Boolean = true,
     ) {
         searchJob?.cancel()
+        searchRefreshJob?.cancel()
         val normalised = query.trim()
+        lastSearch = SearchArgs(normalised, mediaType, libraryId).takeIf { normalised.isNotEmpty() }
         if (normalised.isEmpty()) {
             _search.value = ExperienceLoad.Ready(PlayarrSearchResults())
             return
         }
         searchJob = viewModelScope.launch {
             if (debounce) delay(SEARCH_DEBOUNCE_MS)
+            searchStamp.begin()
             _search.value = ExperienceLoad.Loading
             try {
-                val includesWorks = mediaType != PlayarrSearchMediaType.Playlist &&
-                    mediaType != PlayarrSearchMediaType.Game
-                val worksRequest = async {
-                    if (!includesWorks) return@async emptyList()
-                    when (val result = searchCatalog(normalised, limit = SEARCH_LIMIT)) {
-                        is PlayarrResult.Success -> result.value
-                        is PlayarrResult.Failure -> throw PlayarrMessageException(
-                            result.error.userMessageForExperience(PlayarrString.ErrorSubjectSearch),
-                        )
-                    }
-                }
-                val availableIdsRequest = async {
-                    if (includesWorks) loadAvailableSearchWorkIds() else emptySet()
-                }
-                val libraryIdsRequest = async {
-                    if (includesWorks && libraryId != null) {
-                        api.resolveView(libraryId, limit = SEARCH_LIBRARY_LIMIT).items.mapTo(mutableSetOf(), Work::id)
-                    } else {
-                        null
-                    }
-                }
-                val playlistsRequest = async {
-                    if (libraryId == null && mediaType in setOf(
-                            PlayarrSearchMediaType.All,
-                            PlayarrSearchMediaType.Playlist,
-                        )
-                    ) {
-                        try {
-                            api.listPlaylists()
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (error: Throwable) {
-                            if (mediaType == PlayarrSearchMediaType.Playlist) throw error
-                            emptyList()
-                        }
-                    } else {
-                        emptyList()
-                    }
-                }
-                val works = filterPlayarrSearchWorks(
-                    works = worksRequest.await(),
-                    availableWorkIds = availableIdsRequest.await(),
-                    mediaType = mediaType,
-                    libraryWorkIds = libraryIdsRequest.await(),
-                )
-                val playlists = filterPlayarrSearchPlaylists(
-                    playlists = playlistsRequest.await(),
-                    query = normalised,
-                    mediaType = mediaType,
-                    libraryId = libraryId,
-                )
-                _search.value = ExperienceLoad.Ready(PlayarrSearchResults(works, playlists))
+                _search.value = ExperienceLoad.Ready(computeSearch(normalised, mediaType, libraryId))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
@@ -892,6 +927,85 @@ internal class PlayarrExperienceViewModel @Inject constructor(
                         ?: PlayarrMessage.Localized(PlayarrString.ErrorUnableSearch),
                 )
             }
+        }
+    }
+
+    /** Runs one search (catalogue, availability index, library view, playlists); throws on failure. */
+    private suspend fun computeSearch(
+        normalised: String,
+        mediaType: PlayarrSearchMediaType,
+        libraryId: String?,
+    ): PlayarrSearchResults = kotlinx.coroutines.coroutineScope {
+        val includesWorks = mediaType != PlayarrSearchMediaType.Playlist &&
+            mediaType != PlayarrSearchMediaType.Game
+        val worksRequest = async {
+            if (!includesWorks) return@async emptyList()
+            when (val result = searchCatalog(normalised, limit = SEARCH_LIMIT)) {
+                is PlayarrResult.Success -> result.value
+                is PlayarrResult.Failure -> throw PlayarrMessageException(
+                    result.error.userMessageForExperience(PlayarrString.ErrorSubjectSearch),
+                )
+            }
+        }
+        val availableIdsRequest = async {
+            if (includesWorks) loadAvailableSearchWorkIds() else emptySet()
+        }
+        val libraryIdsRequest = async {
+            if (includesWorks && libraryId != null) {
+                api.resolveView(libraryId, limit = SEARCH_LIBRARY_LIMIT).items.mapTo(mutableSetOf(), Work::id)
+            } else {
+                null
+            }
+        }
+        val playlistsRequest = async {
+            if (libraryId == null && mediaType in setOf(
+                    PlayarrSearchMediaType.All,
+                    PlayarrSearchMediaType.Playlist,
+                )
+            ) {
+                try {
+                    api.listPlaylists()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    if (mediaType == PlayarrSearchMediaType.Playlist) throw error
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+        }
+        val works = filterPlayarrSearchWorks(
+            works = worksRequest.await(),
+            availableWorkIds = availableIdsRequest.await(),
+            mediaType = mediaType,
+            libraryWorkIds = libraryIdsRequest.await(),
+        )
+        val playlists = filterPlayarrSearchPlaylists(
+            playlists = playlistsRequest.await(),
+            query = normalised,
+            mediaType = mediaType,
+            libraryId = libraryId,
+        )
+        PlayarrSearchResults(works, playlists)
+    }
+
+    /** Live-event / fallback refresh: re-runs the last query in place, keeping the shown results until the new arrive. */
+    fun refreshSearch() {
+        val last = lastSearch ?: return
+        searchRefreshJob?.cancel()
+        searchRefreshJob = viewModelScope.launch {
+            searchStamp.begin()
+            // Library events change which works are available; rebuild the index on the next query.
+            searchAvailabilityMutex.withLock { availableSearchWorkIds = null }
+            val results = try {
+                computeSearch(last.query, last.mediaType, last.libraryId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                return@launch
+            }
+            if (lastSearch == last) _search.value = ExperienceLoad.Ready(results)
         }
     }
 
@@ -1055,6 +1169,9 @@ internal fun televisionDestinationGroups(
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
 private const val CAPABILITIES_POLL_MS = 60_000L
+private val HOME_LIVE_INTEREST = setOf(LiveTarget(LiveArea.Home), LiveTarget(LiveArea.Progress))
+private val LIBRARY_LIVE_INTEREST = setOf(LiveTarget(LiveArea.Library))
+private val SEARCH_LIVE_INTEREST = setOf(LiveTarget(LiveArea.Search))
 private const val SEARCH_DEBOUNCE_MS = 320L
 internal const val LIBRARY_PAGE_SIZE = 200L
 
@@ -2140,6 +2257,7 @@ private fun ExperienceHomeScreen(
     val state by viewModel.home.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
+    LiveRefreshEffect(viewModel.liveBus, HOME_LIVE_INTEREST, { viewModel.homeFetchStartedMs }, viewModel::refreshHome)
     when (val current = state) {
         ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.HomePreparing))
         is ExperienceLoad.Failed -> ExperienceFailure(current.message, viewModel::loadHome)
@@ -2967,6 +3085,11 @@ private fun ExperienceLibraryScreen(
     val collection = kind.playarrCollectionNoun()
     LaunchedEffect(kind) { viewModel.loadLibrary(kind) }
     LaunchedEffect(Unit) { viewModel.ensureProgressLoaded() }
+    LiveRefreshEffect(
+        viewModel.liveBus,
+        LIBRARY_LIVE_INTEREST,
+        { viewModel.libraryFetchStartedMs(kind) },
+    ) { viewModel.refreshLibrary(kind) }
     when (val state = states[kind] ?: ExperienceLoad.Loading) {
         ExperienceLoad.Loading -> ExperienceLoading(
             playarrString(PlayarrString.LibraryLoading, "label" to plural),
@@ -3155,6 +3278,7 @@ private fun ExperienceSearchScreen(
         viewModel.search(query, mediaFilter, libraryId, debounce)
     }
     LaunchedEffect(Unit) { viewModel.prepareSearch() }
+    LiveRefreshEffect(viewModel.liveBus, SEARCH_LIVE_INTEREST, { viewModel.searchFetchStartedMs }, viewModel::refreshSearch)
     LaunchedEffect(searchResults) {
         searchResults?.let { selectedResultKey = playarrSearchSelection(it, selectedResultKey) }
     }
@@ -3565,7 +3689,15 @@ internal class ExperienceDetailViewModel @Inject constructor(
     private val getWorkDetails: GetWorkDetailsUseCase,
     private val api: PlayarrApi,
     private val workSourceSelector: PlayarrWorkSourceSelector,
+    val liveBus: LiveInvalidationBus,
 ) : ViewModel() {
+    private val fetchStamp = LiveFetchStamp()
+    private var currentWorkId: String? = null
+    private var refreshJob: Job? = null
+
+    /** Start of the latest fetch of the open title (`0` before the first). */
+    val fetchStartedMs: Long get() = fetchStamp.startedMs
+
     private val _state = MutableStateFlow<ExperienceLoad<ExperienceDetailSnapshot>>(ExperienceLoad.Loading)
     val state = _state.asStateFlow()
     private val _message = MutableStateFlow<ExperienceDetailMessage?>(null)
@@ -3576,9 +3708,38 @@ internal class ExperienceDetailViewModel @Inject constructor(
     val sourceSelection = _sourceSelection.asStateFlow()
     private var loadJob: Job? = null
 
+    /**
+     * Live-event / fallback refresh of the open title: detail (seasons, episodes, files),
+     * watch progress and, for series, availability lag are swapped in place; the
+     * current content stays on screen until the new arrives.
+     */
+    fun refresh() {
+        val id = currentWorkId ?: return
+        if (_state.value !is ExperienceLoad.Ready) return
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            fetchStamp.begin()
+            val detail = (getWorkDetails(id) as? PlayarrResult.Success)?.value ?: return@launch
+            val progress = runCatching { api.listWatchProgress() }.getOrNull()
+            updateSnapshot(id) {
+                copy(
+                    detail = detail,
+                    progressByMedia = progress?.associateBy(WatchProgress::mediaFileId) ?: progressByMedia,
+                )
+            }
+            if (detail.children is WorkChildren.Series) {
+                val lag = runCatching { api.getAvailabilityLag(id) }.getOrNull()
+                if (lag != null) updateSnapshot(id) { copy(availabilityLag = lag) }
+            }
+        }
+    }
+
     fun load(id: String) {
         loadJob?.cancel()
+        refreshJob?.cancel()
+        currentWorkId = id
         loadJob = viewModelScope.launch {
+            fetchStamp.begin()
             _state.value = ExperienceLoad.Loading
             _sourceChoices.value = ExperienceLoad.Loading
             _sourceSelection.value = PlayarrSourceSelection.Idle
@@ -3810,6 +3971,8 @@ private fun ExperienceDetailScreen(
     val sourceSelection by viewModel.sourceSelection.collectAsState()
     var pendingSourcePlayback by remember(workId) { mutableStateOf<PendingSourcePlayback?>(null) }
     LaunchedEffect(workId) { viewModel.load(workId) }
+    val liveInterest = remember(workId) { setOf(LiveTarget(LiveArea.Work, workId)) }
+    LiveRefreshEffect(viewModel.liveBus, liveInterest, { viewModel.fetchStartedMs }, viewModel::refresh)
     when (val current = state) {
         ExperienceLoad.Loading -> ExperienceLoading(playarrString(PlayarrString.DetailLoadingDetails))
         is ExperienceLoad.Failed -> ExperienceFailure(current.message) { viewModel.load(workId) }
