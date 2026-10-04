@@ -132,27 +132,43 @@ class Device:
         return []
 
     def listen(self, mode):
-        self._stop.clear()
-        t = threading.Thread(target=self._push if mode == "push" else self._poll, daemon=True)
+        # A fresh queue and stop flag per session, so a lingering thread from an earlier
+        # session can never feed this one.
+        self.events = queue.Queue()
+        self._stop = threading.Event()
+        self._resp = None
+        t = threading.Thread(
+            target=self._push if mode == "push" else self._poll,
+            args=(self.events, self._stop), daemon=True)
         t.start()
         return t
 
     def stop(self):
         self._stop.set()
+        resp = getattr(self, "_resp", None)
+        if resp is not None:
+            try:
+                resp.close()
+            except Exception:  # noqa: BLE001
+                pass
 
-    def _push(self):
+    def _push(self, events, stop):
         req = urllib.request.Request(SERVER + "/api/v1/remote/stream?after=%d" % self.cursor)
         req.add_header("Authorization", "Bearer " + self.token)
         req.add_header("Accept", "text/event-stream")
         try:
             resp = urllib.request.urlopen(req, timeout=60)
+            self._resp = resp
         except Exception as err:  # noqa: BLE001
-            self.events.put(("error", repr(err), ms()))
+            events.put(("error", repr(err), ms()))
             return
-        self.events.put(("open", None, ms()))
+        events.put(("open", None, ms()))
         event, data = "message", []
-        while not self._stop.is_set():
-            line = resp.readline()
+        while not stop.is_set():
+            try:
+                line = resp.readline()
+            except Exception:  # noqa: BLE001 - closed by stop()
+                return
             if not line:
                 return
             line = line.decode().rstrip("\r\n")
@@ -160,16 +176,16 @@ class Device:
                 if event == "inbox" and data:
                     ev = json.loads("\n".join(data))
                     self.cursor = max(self.cursor, ev["seq"])
-                    self.events.put(("event", ev, ms()))
+                    events.put(("event", ev, ms()))
                 event, data = "message", []
             elif line.startswith("event:"):
                 event = line[6:].strip()
             elif line.startswith("data:"):
                 data.append(line[5:].lstrip())
 
-    def _poll(self):
-        self.events.put(("open", None, ms()))
-        while not self._stop.is_set():
+    def _poll(self, events, stop):
+        events.put(("open", None, ms()))
+        while not stop.is_set():
             status, inbox = call("GET", f"/api/v1/remote/inbox?after={self.cursor}&wait=20",
                                  self.token, timeout=40)
             if status != 200:
@@ -177,7 +193,7 @@ class Device:
                 continue
             self.cursor = max(self.cursor, inbox["next"])
             for ev in inbox["events"]:
-                self.events.put(("event", ev, ms()))
+                events.put(("event", ev, ms()))
 
     def next_event(self, kind, timeout=15):
         deadline = time.time() + timeout
@@ -220,6 +236,7 @@ tv.backlog()  # drop the pairing_request notice
 # --- command latency per transport ---
 results = {}
 for mode in ("push", "poll"):
+    tv.cursor = max([tv.cursor] + [e["seq"] for e in tv.backlog()])
     tv.listen(mode)
     tv.next_event("never", timeout=1.0)  # let the connection establish
     samples = []
@@ -254,6 +271,7 @@ if not media:
             media = detail["media_file_id"]
             break
 if media:
+    tv.backlog(); phone.backlog()
     tv.listen("push")
     phone.listen("push")
     time.sleep(1.0)
