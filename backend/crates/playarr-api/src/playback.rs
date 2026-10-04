@@ -1708,7 +1708,14 @@ fn rewrite_for_delivery(
         }
         DeliveryMode::Proxy => {
             if let Some(rest) = response.url.strip_prefix("/api/v1/media/") {
-                response.url = format!("/api/v1/media/proxy/{}/{}", peer.id, rest);
+                let mut proxied = format!("/api/v1/media/proxy/{}/{}", peer.id, rest);
+                if !proxied.contains("playback_session_id=") {
+                    let separator = if proxied.contains('?') { '&' } else { '?' };
+                    proxied.push(separator);
+                    proxied.push_str("playback_session_id=");
+                    proxied.push_str(&response.session_id.to_string());
+                }
+                response.url = proxied;
             } else {
                 tracing::warn!(
                     peer_id = %peer.id,

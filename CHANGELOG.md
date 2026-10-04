@@ -12,6 +12,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Operations: pin both regional servers to verified image `<image>` (TASK 292); deployment rollout and authenticated peer sync remain pending.
 - CI: push regional server image builds through the image registry while keeping public image names and tags unchanged (TASK 296).
 - Server: cap node-local on-demand FFmpeg jobs with an atomic child-lifetime permit and positive-value configuration; default to one job and two decoder, encoder and filter threads per job (TASK 295).
+- Server: proxy delegated HLS rendition/session playlists and segments through the entry peer, preserving playback capabilities, owner-side policy checks, HEAD/range responses and rewritten playlist child URLs (TASK 297).
 - Operations: grant the REGION-A regional server the host media access group, matching REGION-B, so its read-only library mount can be traversed and read; preserve the currently deployed regional image on both nodes (TASK 294).
 - Server: retry unreachable known peers after restart, and route configured server-to-server peer traffic through in-cluster Services while validating the existing public certificate identity; public client relay addresses remain unchanged (TASK 292).
 - iOS: track native QR login parity with Android, including signed iPhone and iPad acceptance (TASK 291).

@@ -1460,16 +1460,10 @@ pub async fn stream_media_handler(
 // before serving a single byte -- see that handler's own doc comment for
 // the full "defense in depth" reasoning.
 //
-// Scope note, stated plainly rather than left implicit: this pass only
-// proxies the direct-play stream endpoint (this module's own
-// `stream_media_handler`), not `serve_rendition_file_handler`/
-// `serve_session_file_handler`'s HLS playlist/segment files. A delegated
-// negotiation that resolves to an HLS URL under `Proxy` delivery is a known
-// gap this leaves for a later pass, not silently mishandled --
-// `playback::rewrite_for_delivery` still rewrites *any* `/api/v1/media/...`
-// response `url` onto this node's own `/api/v1/media/proxy/{peer_node_id}/
-// ...` prefix, but only the `.../stream` shape has a matching handler
-// registered on the OWNING peer's side (`peer_stream_media_handler`) today.
+// HLS session and rendition files follow the same signed-peer boundary as
+// direct streams. The owning peer looks up the caller's playback session in
+// its own registry and re-checks that user's current library grant before
+// serving either a manifest or segment.
 // ---------------------------------------------------------------------
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1635,6 +1629,371 @@ pub async fn proxy_stream_media_handler(
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ProxyHlsQuery {
+    playback_session_id: Uuid,
+}
+
+async fn proxy_peer_hls_file(
+    state: AppState,
+    peer_node_id: Uuid,
+    owner_path: String,
+    playback_session_id: Uuid,
+    method: axum::http::Method,
+    headers: axum::http::HeaderMap,
+    file_name: &str,
+) -> Result<Response, ApiError> {
+    let peer = state
+        .peer_node_repo
+        .get(peer_node_id)
+        .await?
+        .filter(|peer| peer.status == playarr_model::PeerNodeStatus::Active)
+        .ok_or_else(|| {
+            ApiError::no_peer_available(format!(
+                "peer {peer_node_id} is not currently a known, active peer"
+            ))
+        })?;
+    let identity = crate::admin_peer::own_peer_identity(&state).await?;
+    let addresses = state
+        .peer_transport_routes
+        .outbound_url(peer.id)
+        .map(|url| vec![url])
+        .unwrap_or_else(|| {
+            playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses)
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        });
+    if addresses.is_empty() {
+        return Err(ApiError::no_peer_available(format!(
+            "peer {peer_node_id} has no known address"
+        )));
+    }
+
+    let path = format!("/api/v1/peer/hls/{owner_path}?playback_session_id={playback_session_id}");
+    let range = headers.get(axum::http::header::RANGE).cloned();
+    let mut last_error = None;
+    for base_url in addresses {
+        // Each address attempt is a separate authenticated request. Reusing
+        // a nonce after a failed connection can be rejected as a replay by
+        // an owner that received the first attempt before the connection
+        // failed locally.
+        let signed = identity.sign_request(method.as_str(), &path, &[]);
+        let mut request = state
+            .peer_http
+            .request(
+                method.clone(),
+                format!("{}{path}", base_url.trim_end_matches('/')),
+            )
+            .header(
+                playarr_peer_sync::peer_client::PEER_ID_HEADER,
+                signed.peer_id.to_string(),
+            )
+            .header(
+                playarr_peer_sync::peer_client::SIGNATURE_HEADER,
+                signed.signature_b64.clone(),
+            )
+            .header(
+                playarr_peer_sync::peer_client::TIMESTAMP_HEADER,
+                signed.timestamp.to_string(),
+            )
+            .header(
+                playarr_peer_sync::peer_client::NONCE_HEADER,
+                signed.nonce.clone(),
+            );
+        if let Some(range) = &range {
+            request = request.header(axum::http::header::RANGE, range.clone());
+        }
+        match request.send().await {
+            Ok(upstream) if upstream.status().is_success() => {
+                let owner_resource_path = owner_path
+                    .strip_suffix(&format!("/{file_name}"))
+                    .unwrap_or(&owner_path);
+                return proxy_hls_response_from(
+                    upstream,
+                    peer_node_id,
+                    owner_resource_path,
+                    playback_session_id,
+                    file_name,
+                    method == axum::http::Method::GET && range.is_none(),
+                )
+                .await;
+            }
+            Ok(upstream) => {
+                let status = upstream.status();
+                tracing::warn!(peer_node_id = %peer_node_id, %status,
+                    "owning peer refused a proxied HLS request");
+                last_error = Some(status.to_string());
+            }
+            Err(err) => {
+                let reason = if err.is_timeout() {
+                    "upstream timeout"
+                } else if err.is_connect() {
+                    "upstream connection failure"
+                } else {
+                    "upstream transport failure"
+                };
+                tracing::warn!(peer_node_id = %peer_node_id, reason,
+                    "could not fetch a proxied HLS resource from the owning peer");
+                last_error = Some(reason.to_owned());
+            }
+        }
+    }
+    Err(ApiError::bad_gateway(format!(
+        "could not reach peer {peer_node_id} to proxy HLS: {}",
+        last_error.unwrap_or_default()
+    )))
+}
+
+async fn proxy_hls_response_from(
+    upstream: reqwest::Response,
+    peer_node_id: Uuid,
+    owner_path: &str,
+    playback_session_id: Uuid,
+    file_name: &str,
+    rewrite_manifest: bool,
+) -> Result<Response, ApiError> {
+    if !rewrite_manifest
+        || !file_name.to_ascii_lowercase().ends_with(".m3u8")
+        || upstream.status() != axum::http::StatusCode::OK
+    {
+        return Ok(proxy_response_from(upstream));
+    }
+
+    const MAX_PLAYLIST_BYTES: usize = 1024 * 1024;
+    if upstream
+        .content_length()
+        .is_some_and(|length| length > MAX_PLAYLIST_BYTES as u64)
+    {
+        return Err(ApiError::bad_gateway(
+            "proxied HLS playlist exceeds size limit",
+        ));
+    }
+    let status = upstream.status();
+    let content_type = upstream
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .cloned();
+    let mut bytes = Vec::new();
+    let mut stream = upstream.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk =
+            chunk.map_err(|_| ApiError::bad_gateway("failed reading proxied HLS playlist"))?;
+        if bytes.len().saturating_add(chunk.len()) > MAX_PLAYLIST_BYTES {
+            return Err(ApiError::bad_gateway(
+                "proxied HLS playlist exceeds size limit",
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let manifest = std::str::from_utf8(&bytes)
+        .map_err(|_| ApiError::bad_gateway("proxied HLS playlist is not UTF-8"))?;
+    let body =
+        rewrite_hls_playlist_capability(manifest, peer_node_id, owner_path, playback_session_id)?;
+    let content_length = body.len();
+    let mut builder = Response::builder().status(status);
+    if let Some(content_type) = content_type {
+        builder = builder.header(axum::http::header::CONTENT_TYPE, content_type);
+    }
+    builder
+        .header(axum::http::header::CONTENT_LENGTH, content_length)
+        .header(axum::http::header::CACHE_CONTROL, "no-store")
+        .body(axum::body::Body::from(body))
+        .map_err(|err| ApiError::internal(format!("failed to build proxied HLS playlist: {err}")))
+}
+
+fn rewrite_hls_playlist_capability(
+    manifest: &str,
+    peer_node_id: Uuid,
+    owner_path: &str,
+    playback_session_id: Uuid,
+) -> Result<String, ApiError> {
+    fn with_capability(
+        uri: &str,
+        peer_node_id: Uuid,
+        owner_path: &str,
+        playback_session_id: Uuid,
+    ) -> Result<String, ApiError> {
+        let uri = uri.trim();
+        if uri.is_empty() || uri.starts_with('#') || uri.starts_with("data:") {
+            return Ok(uri.to_owned());
+        }
+
+        let (without_fragment, fragment) = uri
+            .split_once('#')
+            .map_or((uri, ""), |(before, after)| (before, after));
+        let (uri_path, query) = without_fragment
+            .split_once('?')
+            .map_or((without_fragment, ""), |(path, query)| (path, query));
+
+        // Absolute and root-relative references are reduced to a file name
+        // inside an owner resource. A canonical session/rendition route can
+        // select another HLS output only because the owner handler performs
+        // the same-session media and current-policy checks on every request.
+        let path = if let Some(rest) = uri_path.strip_prefix("//") {
+            rest.split_once('/').map(|(_, path)| path).unwrap_or("")
+        } else if let Some((_, rest)) = uri_path.split_once("://") {
+            rest.split_once('/').map(|(_, path)| path).unwrap_or("")
+        } else {
+            uri_path
+        };
+        let path = path.trim_start_matches('/');
+        let mut target_owner_path = owner_path.to_owned();
+        let relative = if let Some(media_path) = path.strip_prefix("api/v1/media/") {
+            let parts = media_path.split('/').collect::<Vec<_>>();
+            match parts.as_slice() {
+                [kind @ ("sessions" | "renditions"), id, file_name]
+                    if Uuid::parse_str(id).is_ok() =>
+                {
+                    target_owner_path = format!("{kind}/{id}");
+                    *file_name
+                }
+                _ => {
+                    return Err(ApiError::bad_request(
+                        "HLS playlist references an unsupported media route",
+                    ));
+                }
+            }
+        } else {
+            let relative = path
+                .strip_prefix(&format!("{owner_path}/"))
+                .unwrap_or(path)
+                .strip_prefix("./")
+                .unwrap_or_else(|| path.strip_prefix(&format!("{owner_path}/")).unwrap_or(path));
+            if relative.contains('/') {
+                let absolute_reference = uri_path.starts_with('/')
+                    || uri_path.starts_with("//")
+                    || uri_path.contains("://");
+                if !absolute_reference
+                    || relative.split('/').any(|part| part == ".." || part == ".")
+                {
+                    return Err(ApiError::bad_request(
+                        "HLS playlist contains an unsafe or unsupported child path",
+                    ));
+                }
+                relative.rsplit('/').next().unwrap_or("")
+            } else {
+                relative
+            }
+        };
+        if relative.contains('%') {
+            return Err(ApiError::bad_request(
+                "HLS playlist contains an unsafe or unsupported child path",
+            ));
+        }
+        validate_segment_file_name(relative)?;
+
+        let mut rewritten =
+            format!("/api/v1/media/proxy/{peer_node_id}/{target_owner_path}/{relative}");
+        let retained_query = query
+            .split('&')
+            .filter(|pair| !pair.is_empty() && !pair.starts_with("playback_session_id="))
+            .collect::<Vec<_>>();
+        if !retained_query.is_empty() {
+            rewritten.push('?');
+            rewritten.push_str(&retained_query.join("&"));
+            rewritten.push('&');
+        } else {
+            rewritten.push('?');
+        }
+        rewritten.push_str("playback_session_id=");
+        rewritten.push_str(&playback_session_id.to_string());
+        if !fragment.is_empty() {
+            rewritten.push('#');
+            rewritten.push_str(fragment);
+        }
+        Ok(rewritten)
+    }
+
+    let mut output = String::with_capacity(manifest.len() + 64);
+    for line in manifest.split_inclusive('\n') {
+        let (content, ending) = line
+            .strip_suffix('\n')
+            .map(|content| (content.strip_suffix('\r').unwrap_or(content), "\n"))
+            .unwrap_or((line, ""));
+        if content.starts_with('#') {
+            let mut rewritten = content.to_owned();
+            let mut offset = 0;
+            while let Some(found) = rewritten[offset..].find("URI=\"") {
+                let start = offset + found + 5;
+                let Some(relative_end) = rewritten[start..].find('\"') else {
+                    break;
+                };
+                let end = start + relative_end;
+                let uri = &rewritten[start..end];
+                let replacement =
+                    with_capability(uri, peer_node_id, owner_path, playback_session_id)?;
+                rewritten.replace_range(start..end, &replacement);
+                offset = start + replacement.len() + 1;
+            }
+            output.push_str(&rewritten);
+        } else if !content.trim().is_empty() {
+            output.push_str(&with_capability(
+                content,
+                peer_node_id,
+                owner_path,
+                playback_session_id,
+            )?);
+        } else {
+            output.push_str(content);
+        }
+        output.push_str(ending);
+    }
+    Ok(output)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/media/proxy/{peer_node_id}/sessions/{session_id}/{file_name}",
+    tag = "playback",
+    params(("peer_node_id" = Uuid, Path), ("session_id" = Uuid, Path), ("file_name" = String, Path), ("playback_session_id" = Uuid, Query)),
+    responses((status = 200, description = "Proxied HLS playlist or segment"), (status = 206, description = "Proxied HLS byte range"))
+)]
+pub async fn proxy_session_hls_file_handler(
+    State(state): State<AppState>,
+    Path((peer_node_id, session_id, file_name)): Path<(Uuid, Uuid, String)>,
+    Query(query): Query<ProxyHlsQuery>,
+    request: Request,
+) -> Result<Response, ApiError> {
+    validate_segment_file_name(&file_name)?;
+    proxy_peer_hls_file(
+        state,
+        peer_node_id,
+        format!("sessions/{session_id}/{file_name}"),
+        query.playback_session_id,
+        request.method().clone(),
+        request.headers().clone(),
+        &file_name,
+    )
+    .await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/media/proxy/{peer_node_id}/renditions/{rendition_id}/{file_name}",
+    tag = "playback",
+    params(("peer_node_id" = Uuid, Path), ("rendition_id" = Uuid, Path), ("file_name" = String, Path), ("playback_session_id" = Uuid, Query)),
+    responses((status = 200, description = "Proxied HLS playlist or segment"), (status = 206, description = "Proxied HLS byte range"))
+)]
+pub async fn proxy_rendition_hls_file_handler(
+    State(state): State<AppState>,
+    Path((peer_node_id, rendition_id, file_name)): Path<(Uuid, Uuid, String)>,
+    Query(query): Query<ProxyHlsQuery>,
+    request: Request,
+) -> Result<Response, ApiError> {
+    validate_segment_file_name(&file_name)?;
+    proxy_peer_hls_file(
+        state,
+        peer_node_id,
+        format!("renditions/{rendition_id}/{file_name}"),
+        query.playback_session_id,
+        request.method().clone(),
+        request.headers().clone(),
+        &file_name,
+    )
+    .await
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct PeerStreamQuery {
     playback_session_id: Uuid,
 }
@@ -1734,6 +2093,164 @@ pub async fn peer_stream_media_handler(
         state.session_registry.clone(),
         session.id,
     ))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PeerHlsQuery {
+    playback_session_id: Uuid,
+}
+
+async fn peer_hls_file(
+    state: AppState,
+    resource: PeerHlsResource,
+    resource_id: Uuid,
+    file_name: String,
+    playback_session_id: Uuid,
+    method: axum::http::Method,
+    range: Option<axum::http::HeaderValue>,
+) -> Result<Response, ApiError> {
+    validate_segment_file_name(&file_name)?;
+    let playback_session = state
+        .session_registry
+        .get(playback_session_id)
+        .ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "unknown or expired playback session",
+            )
+        })?;
+
+    let (media_file_id, path) = match resource {
+        PeerHlsResource::Rendition => {
+            let rendition = state.transcode.get_rendition(resource_id).await?;
+            (
+                rendition.media_file_id,
+                rendition.output_path.join(&file_name),
+            )
+        }
+        PeerHlsResource::Session => {
+            let session = state
+                .transcode
+                .lookup_session(resource_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::not_found(format!("unknown or expired session {resource_id}"))
+                })?;
+            if session.owning_node_id != state.node_id {
+                return Err(ApiError::not_found(format!(
+                    "session {resource_id} is not owned by this peer"
+                )));
+            }
+            let path = state
+                .transcode
+                .session_output_dir(resource_id)
+                .join(&file_name);
+            (session.media_file_id, path)
+        }
+    };
+    if playback_session.media_file_id != media_file_id {
+        return Err(ApiError::new(
+            axum::http::StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "playback session does not authorise this media file",
+        ));
+    }
+    let media_file = state
+        .media_files
+        .get(media_file_id)
+        .await
+        .ok_or_else(|| ApiError::not_found(format!("unknown media file {media_file_id}")))?;
+    let policy = crate::auth_extractor::ensure_session_media_access(
+        &state,
+        playback_session.user_id,
+        &media_file,
+    )
+    .await?;
+    state
+        .household
+        .record_served(&policy, playback_session.user_id)
+        .await;
+
+    // Refresh the owner's playback capability before waiting for ffmpeg to
+    // write a live output and on every durable rendition/segment request.
+    state.session_registry.update(playback_session.id, &|_| {});
+    if matches!(resource, PeerHlsResource::Session) {
+        wait_for_live_hls_file(&path).await;
+    }
+    let mut request = Request::builder().method(method).uri("/proxied-hls-file");
+    if let Some(range) = range {
+        request = request.header(axum::http::header::RANGE, range);
+    }
+    let request = request
+        .body(axum::body::Body::empty())
+        .map_err(|err| ApiError::internal(format!("failed to build proxied HLS request: {err}")))?;
+    let response = serve_file(&path, request).await?;
+    Ok(track_streamed_bytes(
+        response,
+        state.session_registry.clone(),
+        playback_session.id,
+    ))
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PeerHlsResource {
+    Session,
+    Rendition,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/hls/sessions/{session_id}/{file_name}",
+    tag = "peer-groups",
+    params(("session_id" = Uuid, Path), ("file_name" = String, Path), ("playback_session_id" = Uuid, Query)),
+    responses((status = 200, description = "HLS playlist or segment"), (status = 206, description = "HLS byte range"), (status = 401, description = "Unknown playback session or session does not authorise the media"), (status = 403, description = "Current policy does not grant access"))
+)]
+pub async fn peer_session_hls_file_handler(
+    State(state): State<AppState>,
+    Path((session_id, file_name)): Path<(Uuid, String)>,
+    Query(query): Query<PeerHlsQuery>,
+    method: axum::http::Method,
+    headers: axum::http::HeaderMap,
+    _peer: PeerSignedRequest,
+) -> Result<Response, ApiError> {
+    peer_hls_file(
+        state,
+        PeerHlsResource::Session,
+        session_id,
+        file_name,
+        query.playback_session_id,
+        method,
+        headers.get(axum::http::header::RANGE).cloned(),
+    )
+    .await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/peer/hls/renditions/{rendition_id}/{file_name}",
+    tag = "peer-groups",
+    params(("rendition_id" = Uuid, Path), ("file_name" = String, Path), ("playback_session_id" = Uuid, Query)),
+    responses((status = 200, description = "HLS playlist or segment"), (status = 206, description = "HLS byte range"), (status = 401, description = "Unknown playback session or session does not authorise the media"), (status = 403, description = "Current policy does not grant access"))
+)]
+pub async fn peer_rendition_hls_file_handler(
+    State(state): State<AppState>,
+    Path((rendition_id, file_name)): Path<(Uuid, String)>,
+    Query(query): Query<PeerHlsQuery>,
+    method: axum::http::Method,
+    headers: axum::http::HeaderMap,
+    _peer: PeerSignedRequest,
+) -> Result<Response, ApiError> {
+    peer_hls_file(
+        state,
+        PeerHlsResource::Rendition,
+        rendition_id,
+        file_name,
+        query.playback_session_id,
+        method,
+        headers.get(axum::http::header::RANGE).cloned(),
+    )
+    .await
 }
 
 #[utoipa::path(

@@ -332,6 +332,10 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin_playback::stop_session_handler))
         .routes(routes!(media::stream_media_handler))
         .routes(routes!(media::proxy_stream_media_handler))
+        .routes(routes!(media::proxy_session_hls_file_handler))
+        .routes(routes!(media::proxy_rendition_hls_file_handler))
+        .routes(routes!(media::peer_session_hls_file_handler))
+        .routes(routes!(media::peer_rendition_hls_file_handler))
         .routes(routes!(media::peer_stream_media_handler))
         .routes(routes!(media::media_metadata_handler))
         .routes(routes!(

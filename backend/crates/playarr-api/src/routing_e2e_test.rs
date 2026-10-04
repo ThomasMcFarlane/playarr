@@ -33,8 +33,9 @@ use std::net::SocketAddr;
 
 use playarr_model::media::LeafRef;
 use playarr_model::{
-    Availability, DeliveryMode, ExternalProvider, ExternalRef, LeafSelector, MediaFile,
-    PeerLeafAvailability, RoutingRule, SourceInstance, WorkKind,
+    Availability, ClientPlatform, DeliveryMode, ExternalProvider, ExternalRef, LeafSelector,
+    MediaFile, PeerLeafAvailability, PlayMethod, PlaybackSession, ProducedBy, Rendition,
+    RenditionStatus, RoutingRule, SourceInstance, WorkKind,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -645,6 +646,201 @@ async fn proxy_passthrough_returns_full_content_without_a_range_header() {
     assert_eq!(bytes.as_ref(), content.as_slice());
 
     let _ = std::fs::remove_file(&file_path);
+}
+
+/// HLS delegated delivery uses the entry node for every child request while
+/// the owner independently validates the signed peer and its own playback
+/// capability on each manifest and segment request.
+#[tokio::test]
+async fn proxy_hls_rewrites_children_and_preserves_owner_authorization_and_file_semantics() {
+    let (router_a, state_a) = test_state().await;
+    let base_url_a = serve_on_real_tcp(router_a).await;
+    let (router_b, state_b) = test_state().await;
+    let base_url_b = serve_on_real_tcp(router_b).await;
+    let (_group_id, _node_a_peer_id, node_b_peer_id) =
+        found_and_join(&state_a, &base_url_a, &state_b, &base_url_b).await;
+
+    let source_instance_b = Uuid::new_v4();
+    state_b
+        .source_instances
+        .upsert(sample_source_instance(source_instance_b, Uuid::new_v4()));
+    let work_b = sample_work("604");
+    state_b.work_repo.upsert(&work_b).await.unwrap();
+    let media_file_b = MediaFile {
+        id: Uuid::new_v4(),
+        work_id: work_b.id,
+        leaf_ref: LeafRef::Work,
+        path: std::env::temp_dir().join(format!("playarr-hls-source-{}.mp4", Uuid::new_v4())),
+        container: "mp4".to_string(),
+        codec: "h264".to_string(),
+        bitrate: Some(1_000_000),
+        duration_ms: Some(1_000),
+        size_bytes: 1_000,
+        source_instance_id: source_instance_b,
+        source_file_id: Some("1".to_string()),
+    };
+    state_b.media_file_repo.create(&media_file_b).await.unwrap();
+    state_b.media_files.insert(media_file_b.clone());
+
+    let user_id = Uuid::new_v4();
+    seed_streaming_user_with_library_allow(&state_b, user_id, vec![source_instance_b]).await;
+    let session_id = Uuid::new_v4();
+    state_b.app.session_registry.insert(PlaybackSession {
+        id: session_id,
+        user_id,
+        device_id: Uuid::new_v4(),
+        media_file_id: media_file_b.id,
+        rendition_id: None,
+        started_at: chrono::Utc::now(),
+        ended_at: None,
+        play_method: PlayMethod::Transcode,
+        transcode_reason: None,
+        source_codec: "h264".to_string(),
+        source_container: "mp4".to_string(),
+        source_bitrate: Some(1_000_000),
+        target_codec: "h264".to_string(),
+        target_container: "hls".to_string(),
+        target_bitrate: Some(1_000_000),
+        client_platform: ClientPlatform::Web,
+        client_version: "test".to_string(),
+        ip_address: None,
+        bytes_streamed: 0,
+        buffering_events: 0,
+        buffering_ms_total: 0,
+        stop_reason: None,
+    });
+
+    let output_dir = std::env::temp_dir().join(format!("playarr-hls-rendition-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&output_dir).unwrap();
+    std::fs::write(
+        output_dir.join("master-index.m3u8"),
+        "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"https://cdn.invalid/keys/key.bin?key=1\"\n#EXTINF:4,\n/root/segment.ts?part=1\n#EXTINF:4,\nvariant.m3u8\n",
+    )
+    .unwrap();
+    std::fs::write(output_dir.join("key.bin"), b"key-data").unwrap();
+    std::fs::write(output_dir.join("segment.ts"), b"0123456789").unwrap();
+    std::fs::write(
+        output_dir.join("variant.m3u8"),
+        "#EXTM3U\n#EXTINF:4,\nsegment.ts\n",
+    )
+    .unwrap();
+    let rendition = Rendition {
+        id: Uuid::new_v4(),
+        media_file_id: media_file_b.id,
+        profile: "h264-720p".to_string(),
+        container: "hls".to_string(),
+        codec: "h264".to_string(),
+        bitrate: Some(1_000_000),
+        output_path: output_dir.clone(),
+        produced_by: ProducedBy::Tdarr,
+        produced_at: chrono::Utc::now(),
+        status: RenditionStatus::Ready,
+    };
+    state_b.rendition_repo.upsert(&rendition).await.unwrap();
+
+    let http = reqwest::Client::new();
+    let playlist_url = format!(
+        "{base_url_a}/api/v1/media/proxy/{node_b_peer_id}/renditions/{}/master-index.m3u8?playback_session_id={session_id}",
+        rendition.id
+    );
+    let playlist = http.get(&playlist_url).send().await.unwrap();
+    assert_eq!(playlist.status(), reqwest::StatusCode::OK);
+    assert_eq!(
+        playlist.headers()[reqwest::header::CONTENT_TYPE],
+        "audio/x-mpegurl"
+    );
+    let playlist = playlist.text().await.unwrap();
+    for child in ["key.bin", "segment.ts", "variant.m3u8"] {
+        assert!(
+            playlist.contains(&format!(
+                "/api/v1/media/proxy/{node_b_peer_id}/renditions/{}/{child}",
+                rendition.id
+            )),
+            "playlist did not rewrite {child}: {playlist}"
+        );
+        assert!(playlist.contains(&format!("playback_session_id={session_id}")));
+    }
+    assert!(playlist.contains("key=1&playback_session_id="));
+    assert!(playlist.contains("segment.ts?part=1&playback_session_id="));
+
+    let segment_url = format!(
+        "{base_url_a}/api/v1/media/proxy/{node_b_peer_id}/renditions/{}/segment.ts?playback_session_id={session_id}",
+        rendition.id
+    );
+    let segment = http
+        .get(&segment_url)
+        .header(reqwest::header::RANGE, "bytes=2-5")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(segment.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        segment.headers()[reqwest::header::CONTENT_RANGE],
+        "bytes 2-5/10"
+    );
+    assert_eq!(segment.bytes().await.unwrap().as_ref(), b"2345");
+
+    let head = http.head(&segment_url).send().await.unwrap();
+    assert_eq!(head.status(), reqwest::StatusCode::OK);
+    assert_eq!(head.headers()[reqwest::header::CONTENT_LENGTH], "10");
+    assert!(head.bytes().await.unwrap().is_empty());
+
+    // The owner endpoint rejects an unsigned caller even with a guessed
+    // playback-session capability, and the proxy rejects an unknown owner
+    // capability after it signs its delegated request.
+    let owner_url = format!(
+        "{base_url_b}/api/v1/peer/hls/renditions/{}/master-index.m3u8?playback_session_id={session_id}",
+        rendition.id
+    );
+    assert_eq!(
+        http.get(owner_url).send().await.unwrap().status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+    let missing_capability_url = format!(
+        "{base_url_a}/api/v1/media/proxy/{node_b_peer_id}/renditions/{}/segment.ts",
+        rendition.id
+    );
+    assert!(!http
+        .get(missing_capability_url)
+        .send()
+        .await
+        .unwrap()
+        .status()
+        .is_success());
+    let invalid_capability_url = format!(
+        "{base_url_a}/api/v1/media/proxy/{node_b_peer_id}/renditions/{}/segment.ts?playback_session_id={}",
+        rendition.id,
+        Uuid::new_v4()
+    );
+    assert_ne!(
+        http.get(invalid_capability_url)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::OK
+    );
+
+    let user = state_b
+        .user_repo
+        .find_by_id(user_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut policy = state_b
+        .policy_repo
+        .find_by_id(user.policy_id)
+        .await
+        .unwrap()
+        .unwrap();
+    policy.library_allow.clear();
+    state_b.policy_repo.upsert(&policy).await.unwrap();
+    assert_ne!(
+        http.get(segment_url).send().await.unwrap().status(),
+        reqwest::StatusCode::OK
+    );
+
+    let _ = std::fs::remove_dir_all(&output_dir);
 }
 
 /// §5.3's defense in depth: the owning peer independently checks the

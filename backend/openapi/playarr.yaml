@@ -3345,6 +3345,78 @@ paths:
           description: Caller does not have Playarr streaming access
       security:
       - bearer_auth: []
+  /api/v1/media/proxy/{peer_node_id}/renditions/{rendition_id}/{file_name}:
+    get:
+      tags:
+      - playback
+      operationId: proxy_rendition_hls_file_handler
+      parameters:
+      - name: peer_node_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: rendition_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playback_session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Proxied HLS playlist or segment
+        '206':
+          description: Proxied HLS byte range
+      security:
+      - bearer_auth: []
+  /api/v1/media/proxy/{peer_node_id}/sessions/{session_id}/{file_name}:
+    get:
+      tags:
+      - playback
+      operationId: proxy_session_hls_file_handler
+      parameters:
+      - name: peer_node_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playback_session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Proxied HLS playlist or segment
+        '206':
+          description: Proxied HLS byte range
+      security:
+      - bearer_auth: []
   /api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream:
     get:
       tags:
@@ -4115,6 +4187,80 @@ paths:
           description: A peer with this name already exists in the group
         '410':
           description: Join token is invalid, expired, or already used
+  /api/v1/peer/hls/renditions/{rendition_id}/{file_name}:
+    get:
+      tags:
+      - peer-groups
+      operationId: peer_rendition_hls_file_handler
+      parameters:
+      - name: rendition_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playback_session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: HLS playlist or segment
+        '206':
+          description: HLS byte range
+        '401':
+          description: Unknown playback session or session does not authorise the media
+        '403':
+          description: Current policy does not grant access
+      security:
+      - peer_id_header: []
+        peer_nonce_header: []
+        peer_signature_header: []
+        peer_timestamp_header: []
+  /api/v1/peer/hls/sessions/{session_id}/{file_name}:
+    get:
+      tags:
+      - peer-groups
+      operationId: peer_session_hls_file_handler
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file_name
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playback_session_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: HLS playlist or segment
+        '206':
+          description: HLS byte range
+        '401':
+          description: Unknown playback session or session does not authorise the media
+        '403':
+          description: Current policy does not grant access
+      security:
+      - peer_id_header: []
+        peer_nonce_header: []
+        peer_signature_header: []
+        peer_timestamp_header: []
   /api/v1/peer/invites:
     get:
       tags:
