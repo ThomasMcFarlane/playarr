@@ -197,8 +197,8 @@ spec:
             {{- $s3 := $backup.s3 | default dict }}
             {{- if $s3.enabled }}
             {{- $creds := $s3.credentialsSecret | default dict }}
-            # Off-node replica in an S3-compatible bucket (Cloudflare R2,
-            # MinIO, AWS). The access key pair is read from a Kubernetes
+            # Off-node replica in an S3-compatible bucket the operator
+            # provides (optional). The access key pair is read from a Kubernetes
             # Secret that is created out of band; it is never rendered here.
             - name: PLAYARR_BACKUP_S3_ENDPOINT
               value: {{ $s3.endpoint | quote }}

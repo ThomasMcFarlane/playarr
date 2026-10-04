@@ -34,14 +34,21 @@ if helm template playarr-dev "$chart_dir" \
   echo "schema accepted a malformed recovery key" >&2
   exit 1
 fi
-# Off-node replica: off by default (the Secret is created out of band), and
+# Off-node replica: optional and off by default; the operator supplies any S3-compatible
+# endpoint (the Secret is created out of band), and
 # when enabled the keys come from a Secret reference, never from values.
 test "$(grep -c 'PLAYARR_BACKUP_S3_' "$rendered")" -eq 0
 s3="$(mktemp)"
 trap 'rm -f "$rendered" "$no_backup" "$s3"' EXIT
 helm template playarr-dev "$chart_dir" --namespace playarr \
   --set regionalInstances.playarr-region-a.backup.s3.enabled=true \
-  --set regionalInstances.playarr-region-b.backup.s3.enabled=true >"$s3"
+  --set regionalInstances.playarr-region-a.backup.s3.endpoint=https://s3.example.com \
+  --set regionalInstances.playarr-region-a.backup.s3.bucket=playarr-backups \
+  --set regionalInstances.playarr-region-a.backup.s3.prefix=playarr-region-a/ \
+  --set regionalInstances.playarr-region-b.backup.s3.enabled=true \
+  --set regionalInstances.playarr-region-b.backup.s3.endpoint=https://s3.example.com \
+  --set regionalInstances.playarr-region-b.backup.s3.bucket=playarr-backups \
+  --set regionalInstances.playarr-region-b.backup.s3.prefix=playarr-region-b/ >"$s3"
 test "$(grep -c '^            - name: PLAYARR_BACKUP_S3_BUCKET$' "$s3")" -eq 2
 test "$(grep -c 'value: "playarr-backups"$' "$s3")" -eq 2
 grep -q 'value: "playarr-region-a/"$' "$s3"

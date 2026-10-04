@@ -1,7 +1,7 @@
 //! Off-node replication tests. An in-process fake S3 server (multipart,
 //! per-part checksum verification, composite checksums, pagination) runs in
 //! every test run. The same scenario also runs against a real S3-compatible
-//! server (MinIO, R2) when `PLAYARR_TEST_S3_ENDPOINT`, `_ACCESS_KEY_ID` and
+//! server (MinIO or similar) when `PLAYARR_TEST_S3_ENDPOINT`, `_ACCESS_KEY_ID` and
 //! `_SECRET_ACCESS_KEY` are set; it uses a unique prefix and removes it.
 
 use std::collections::BTreeMap;
@@ -447,7 +447,7 @@ async fn remote_retention_clears_orphans_but_keeps_the_last_good_backup() {
     assert_eq!(keys.len(), 4);
 }
 
-/// Real S3-compatible server (MinIO, R2). Skipped unless configured.
+/// Real S3-compatible server (MinIO or similar). Skipped unless configured.
 #[tokio::test]
 async fn real_object_storage_round_trip() {
     let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());

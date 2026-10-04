@@ -155,10 +155,17 @@ info endpoint pointing at a test library directory.
   servers it is `/data/backups` on the state volume, which is the same disk as
   the database: it protects against corruption and mistakes, not against losing
   the node. Set `PLAYARR_BACKUP_S3_*` to also replicate every completed backup to
-  an S3-compatible bucket (Cloudflare R2, MinIO, AWS), or copy archives off the
-  node (Admin, Backups, Download).
+  an S3-compatible bucket the self-hoster provides (any endpoint: MinIO, a NAS,
+  a hosted provider), or copy archives off the node (Admin, Backups, Download).
+  The default is the local encrypted path only; a remote destination is optional
+  and configured by the administrator, and nothing in the product defaults to a
+  particular provider.
+- **No server data on Cloudflare.** Cloudflare hosts only the playarr.app client
+  (the web UI and relay DNS registration). It never receives or stores server data:
+  backups, media, databases and logs stay on the self-hoster's own infrastructure
+  and are never sent to or routed through Cloudflare or R2.
 - **Off-node replica.** `PLAYARR_BACKUP_S3_BUCKET` turns it on, with
-  `_ENDPOINT`, `_REGION` (`auto` for R2), `_PREFIX`, `_ACCESS_KEY_ID`,
+  `_ENDPOINT`, `_REGION` (whatever the endpoint expects), `_PREFIX`, `_ACCESS_KEY_ID`,
   `_SECRET_ACCESS_KEY` (from a Secret), `_PATH_STYLE`, `_PART_MIB` (16, minimum
   5) and optional `_KEEP_LAST` / `_KEEP_DAYS` (default: the local values). After
   the local publish and retention, each complete local backup the bucket lacks is

@@ -1,5 +1,5 @@
 //! Off-node replication of completed backups to an S3-compatible bucket
-//! (Cloudflare R2, MinIO, AWS S3).
+//! (MinIO, a NAS, any hosted provider).
 //!
 //! The local destination stays authoritative and unchanged. After a run has
 //! published locally, every complete local backup the bucket lacks is uploaded
@@ -40,10 +40,10 @@ const STALE_AFTER_HOURS: i64 = 24;
 
 #[derive(Clone)]
 pub struct S3Config {
-    /// Base URL, for example `https://<account>.r2.cloudflarestorage.com`.
+    /// Base URL, for example `https://s3.example.com`.
     pub endpoint: String,
     pub bucket: String,
-    /// `auto` for Cloudflare R2.
+    /// Whatever the endpoint expects (some providers accept `auto`).
     pub region: String,
     /// Key prefix (a "folder"), normalised to end in `/` unless empty. Use one
     /// prefix per server when several share a bucket.
@@ -1024,10 +1024,7 @@ mod unit_tests {
         assert!(S3Config::from_lookup(&map(&[("PLAYARR_BACKUP_S3_BUCKET", "b")])).is_err());
         let config = S3Config::from_lookup(&map(&[
             ("PLAYARR_BACKUP_S3_BUCKET", "b"),
-            (
-                "PLAYARR_BACKUP_S3_ENDPOINT",
-                "https://x.r2.cloudflarestorage.com/",
-            ),
+            ("PLAYARR_BACKUP_S3_ENDPOINT", "https://s3.example.com/"),
             ("PLAYARR_BACKUP_S3_ACCESS_KEY_ID", "AKID-VISIBLE?"),
             ("PLAYARR_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET-VALUE"),
             ("PLAYARR_BACKUP_S3_PREFIX", "/region-a"),
@@ -1035,7 +1032,7 @@ mod unit_tests {
         .unwrap()
         .unwrap();
         assert_eq!(config.prefix, "region-a/");
-        assert_eq!(config.endpoint, "https://x.r2.cloudflarestorage.com");
+        assert_eq!(config.endpoint, "https://s3.example.com");
         assert_eq!(config.region, "auto");
         assert!(config.path_style);
         let debug = format!("{config:?}");

@@ -5,6 +5,10 @@ Static Assets at <https://playarr.app>. Cloudflare serves the Vite build from
 `clients/tv-web/web/dist`; unmatched paths return `index.html` so direct
 navigation to React Router routes works.
 
+Cloudflare hosts only the client app (the web UI, release downloads and relay DNS registration). It never receives or
+stores Playarr server data: backups, media, databases and logs stay on the self-hoster's own infrastructure and are
+never sent to or routed through Cloudflare or R2.
+
 The public Clients hub is served at `/clients`; `/download` and `/install`
 redirect there, and `/vidaa-store/` publishes the fixed Playarr-only VIDAA custom
 store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choose
