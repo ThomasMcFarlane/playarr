@@ -25,6 +25,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Server backups can replicate off-node to an S3-compatible bucket (Cloudflare R2, MinIO, AWS): multipart upload with per-part checksums, read-back verification, remote retention and a Secret-sourced access key (task 140). Chart values `backup.s3`.
 - PostgreSQL migration 53 adds `source_root_folders` and `folder_media_entries` (parity with SQLite migration 42), so library-root checks and remapping work on PostgreSQL restores (task 141).
 - Public Playarr Server releases (tag `backend-v*`): Linux x86-64 and ARM64 tarballs with SHA-256 checksums served from `playarr.app/downloads/server/`, and a multi-arch image at `ghcr.io/thomasmcfarlane/playarr-server`. The Clients hub server page now has per-architecture Download buttons, checksums and Docker pull/run/compose snippets. See `docs/deployment/server-releases.md`.
+- Server: ten-foot transfer for user data export and import. A signed-in television can mint a one-time, 15-minute download link for its own ready export, or open an import session whose one-time upload link (served as a minimal hardened page) lets a phone or computer upload a package. Uploads are validated like any import, staged privately, and only previewed and applied by the owning signed-in account (`/api/v1/transfer/...`, `/api/v1/users/me/data-import-sessions`). Tests cover single use, expiry, owner scoping and cleanup.
 
 ### Changed
 

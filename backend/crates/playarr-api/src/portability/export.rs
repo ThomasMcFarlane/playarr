@@ -80,6 +80,8 @@ pub struct ExportRegistry {
     jobs: Mutex<HashMap<String, ExportJob>>,
     permits: Arc<Semaphore>,
     dir: PathBuf,
+    /// One-time download links and phone-upload import sessions.
+    pub(super) transfers: Mutex<super::transfer::Transfers>,
 }
 
 impl Default for ExportRegistry {
@@ -121,7 +123,13 @@ impl ExportRegistry {
             jobs: Mutex::new(HashMap::new()),
             permits: Arc::new(Semaphore::new(MAX_CONCURRENT_JOBS)),
             dir,
+            transfers: Mutex::new(Default::default()),
         }
+    }
+
+    /// Private staging directory (mode 0700) shared with transfer uploads.
+    pub(super) fn dir(&self) -> &std::path::Path {
+        &self.dir
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ExportJob>> {
@@ -131,6 +139,7 @@ impl ExportRegistry {
     /// Expires finished jobs past their time to live (deleting the file) and
     /// forgets old tombstones. Cheap; called on every request.
     pub fn sweep(&self) {
+        self.sweep_transfers();
         let now = Utc::now();
         let mut jobs = self.lock();
         for job in jobs.values_mut() {

@@ -12,6 +12,7 @@ mod import;
 mod resolve;
 #[cfg(test)]
 mod tests;
+mod transfer;
 
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
@@ -32,6 +33,7 @@ pub use export::ExportRegistry;
 use export::{ExportCounts, ExportJob, ExportProgress, ExportStatus};
 pub(crate) use import::ProgressConflicts;
 use import::{ImportOptions, ImportResult, ImportSample, ImportSummary};
+pub use transfer::*;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ExportJobResponse {
@@ -188,7 +190,7 @@ pub async fn download_export_handler(
     Path(export_id): Path<String>,
 ) -> Result<Response, ApiError> {
     let job = gone_or_missing(&state, viewer.user_id, &export_id)?;
-    let path = match (job.status, job.file) {
+    let path = match (job.status, job.file.clone()) {
         (ExportStatus::Ready, Some(path)) => path,
         (ExportStatus::Expired, _) => {
             return Err(ApiError::new(
@@ -209,6 +211,12 @@ pub async fn download_export_handler(
             "this export is no longer available",
         )
     })?;
+    Ok(zip_response(file, &job))
+}
+
+/// Streams an export file as a download. Shared by the authenticated route
+/// and the one-time transfer link.
+fn zip_response(file: tokio::fs::File, job: &ExportJob) -> Response {
     let stream = futures::stream::unfold(file, |mut file| async move {
         use tokio::io::AsyncReadExt;
         let mut buffer = vec![0u8; 64 * 1024];
@@ -241,7 +249,7 @@ pub async fn download_export_handler(
     if let Some(size) = job.size_bytes {
         headers.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
     }
-    Ok(response)
+    response
 }
 
 // ---- import -------------------------------------------------------------
@@ -299,21 +307,28 @@ async fn read_upload(body: Body) -> Result<(Vec<u8>, UserDataPackage, String), A
                 "the upload is larger than the permitted size",
             )
         })?;
-    let digest = hex::encode(Sha256::digest(&bytes));
-    let parsed = {
-        let bytes = bytes.to_vec();
-        tokio::task::spawn_blocking(move || {
-            if bytes.first() == Some(&b'{') {
-                playarr_portability::parse_json(&bytes, &limits)
-            } else {
-                playarr_portability::read_package(&bytes, &limits)
-            }
-        })
-        .await
-        .map_err(|_| ApiError::internal("package validation failed"))?
-        .map_err(package_error)?
-    };
-    Ok((bytes.to_vec(), parsed, digest))
+    let bytes = bytes.to_vec();
+    let (package, digest) = parse_upload(&bytes).await?;
+    Ok((bytes, package, digest))
+}
+
+/// Validates package bytes (ZIP or the JSON form) and returns the parsed
+/// package with the SHA-256 of exactly these bytes.
+async fn parse_upload(bytes: &[u8]) -> Result<(UserDataPackage, String), ApiError> {
+    let limits = Limits::default();
+    let digest = hex::encode(Sha256::digest(bytes));
+    let bytes = bytes.to_vec();
+    let parsed = tokio::task::spawn_blocking(move || {
+        if bytes.first() == Some(&b'{') {
+            playarr_portability::parse_json(&bytes, &limits)
+        } else {
+            playarr_portability::read_package(&bytes, &limits)
+        }
+    })
+    .await
+    .map_err(|_| ApiError::internal("package validation failed"))?
+    .map_err(package_error)?;
+    Ok((parsed, digest))
 }
 
 #[utoipa::path(
@@ -336,6 +351,18 @@ pub async fn preview_import_handler(
     body: Body,
 ) -> Result<Json<ImportPreviewResponse>, ApiError> {
     let (_, package, digest) = read_upload(body).await?;
+    Ok(Json(
+        preview_package(&state, &viewer, &query, package, digest).await?,
+    ))
+}
+
+async fn preview_package(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    query: &PreviewQuery,
+    package: UserDataPackage,
+    digest: String,
+) -> Result<ImportPreviewResponse, ApiError> {
     let mut warnings = Vec::new();
     if !package.owner.display_name.is_empty() {
         warnings.push(format!(
@@ -347,7 +374,7 @@ pub async fn preview_import_handler(
     let generated_at = package.generated_at;
     let source_instance_name = package.source.instance_name.clone();
     let plan = import::plan_import(
-        &state,
+        state,
         viewer.user_id,
         viewer.allowed_libraries(),
         package,
@@ -357,7 +384,7 @@ pub async fn preview_import_handler(
         },
     )
     .await?;
-    Ok(Json(ImportPreviewResponse {
+    Ok(ImportPreviewResponse {
         package_sha256: digest,
         schema_version,
         generated_at,
@@ -365,7 +392,7 @@ pub async fn preview_import_handler(
         summary: plan.summary,
         samples: plan.samples,
         warnings,
-    }))
+    })
 }
 
 #[utoipa::path(
@@ -389,13 +416,25 @@ pub async fn apply_import_handler(
     body: Body,
 ) -> Result<Json<ImportResult>, ApiError> {
     let (_, package, digest) = read_upload(body).await?;
+    Ok(Json(
+        apply_package(&state, &viewer, &query, package, digest).await?,
+    ))
+}
+
+async fn apply_package(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    query: &ApplyQuery,
+    package: UserDataPackage,
+    digest: String,
+) -> Result<ImportResult, ApiError> {
     if !digest.eq_ignore_ascii_case(query.package_sha256.trim()) {
         return Err(ApiError::conflict(
             "the upload differs from the previewed package; preview it again",
         ));
     }
     let plan = import::plan_import(
-        &state,
+        state,
         viewer.user_id,
         viewer.allowed_libraries(),
         package,
@@ -405,7 +444,7 @@ pub async fn apply_import_handler(
         },
     )
     .await?;
-    let result = import::apply_plan(&state, viewer.user_id, &plan).await;
+    let result = import::apply_plan(state, viewer.user_id, &plan).await;
     tracing::info!(
         user_id = %viewer.user_id,
         completed = result.completed,
@@ -416,7 +455,7 @@ pub async fn apply_import_handler(
         unmatched = result.unmatched_total,
         "user data import applied"
     );
-    Ok(Json(result))
+    Ok(result)
 }
 
 #[utoipa::path(

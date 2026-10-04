@@ -5783,6 +5783,83 @@ paths:
           description: Caller lacks Playarr streaming access
       security:
       - bearer_auth: []
+  /api/v1/transfer/export/{token}:
+    get:
+      tags:
+      - portability
+      operationId: transfer_export_download_handler
+      parameters:
+      - name: token
+        in: path
+        description: One-time link token
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The user-data package (ZIP); the link works once
+          content:
+            application/zip: {}
+        '404':
+          description: Unknown link
+        '410':
+          description: The link expired or was already used
+  /api/v1/transfer/import/{token}:
+    get:
+      tags:
+      - portability
+      operationId: transfer_import_page_handler
+      parameters:
+      - name: token
+        in: path
+        description: One-time upload link token
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: A minimal HTML page with a file chooser
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Unknown link
+        '410':
+          description: The link expired or was already used
+    post:
+      tags:
+      - portability
+      operationId: transfer_import_upload_handler
+      parameters:
+      - name: token
+        in: path
+        description: One-time upload link token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: A package produced by an export
+        content:
+          application/octet-stream:
+            schema:
+              type: array
+              items:
+                type: integer
+                format: int32
+                minimum: 0
+        required: true
+      responses:
+        '204':
+          description: The package was validated and staged for the television to review
+        '404':
+          description: Unknown link
+        '410':
+          description: The link expired or was already used
+        '413':
+          description: Upload or its expanded content is too large
+        '422':
+          description: Not a valid package, or an unsupported schema version
   /api/v1/users/me/capabilities:
     get:
       tags:
@@ -5906,6 +5983,179 @@ paths:
           description: The export is not ready yet
         '410':
           description: The export expired; start a new one
+      security:
+      - bearer_auth: []
+  /api/v1/users/me/data-exports/{export_id}/transfer-link:
+    post:
+      tags:
+      - portability
+      operationId: create_transfer_link_handler
+      parameters:
+      - name: export_id
+        in: path
+        description: Export id
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: A one-time link to download this export on another device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferLinkResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown export, or one belonging to another account
+        '409':
+          description: The export is not ready
+        '410':
+          description: The export expired
+      security:
+      - bearer_auth: []
+  /api/v1/users/me/data-import-sessions:
+    post:
+      tags:
+      - portability
+      operationId: create_import_session_handler
+      responses:
+        '201':
+          description: An import session with a one-time upload link for another device; replaces any earlier session of the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportSessionResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Account may not use the catalogue
+      security:
+      - bearer_auth: []
+  /api/v1/users/me/data-import-sessions/{session_id}:
+    get:
+      tags:
+      - portability
+      operationId: get_import_session_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Import session id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Whether a package has arrived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportSessionResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown, expired, or another account's session
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - portability
+      operationId: delete_import_session_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Import session id
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Session closed and any staged package deleted
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown, expired, or another account's session
+      security:
+      - bearer_auth: []
+  /api/v1/users/me/data-import-sessions/{session_id}/apply:
+    post:
+      tags:
+      - portability
+      operationId: apply_import_session_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Import session id
+        required: true
+        schema:
+          type: string
+      - name: package_sha256
+        in: query
+        description: Digest returned by the preview of this exact upload.
+        required: true
+        schema:
+          type: string
+      - name: include_preferences
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: progress_conflicts
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ProgressConflicts'
+      responses:
+        '200':
+          description: What was written; the staged package is deleted once everything applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown, expired, or another account's session
+        '409':
+          description: Nothing uploaded yet, or the digest differs from the previewed one
+      security:
+      - bearer_auth: []
+  /api/v1/users/me/data-import-sessions/{session_id}/preview:
+    post:
+      tags:
+      - portability
+      operationId: preview_import_session_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Import session id
+        required: true
+        schema:
+          type: string
+      - name: include_preferences
+        in: query
+        description: Include the audio-language preference in the preview. Default false.
+        required: false
+        schema:
+          type: boolean
+      - name: progress_conflicts
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ProgressConflicts'
+      responses:
+        '200':
+          description: What importing the uploaded package would do; nothing is written
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPreviewResponse'
+        '401':
+          description: Missing or invalid access token
+        '404':
+          description: Unknown, expired, or another account's session
+        '409':
+          description: Nothing has been uploaded yet
       security:
       - bearer_auth: []
   /api/v1/users/me/data-imports:
@@ -9189,6 +9439,41 @@ components:
           description: '`watch_progress` or `playlist_item`.'
         title:
           type: string
+    ImportSessionResponse:
+      type: object
+      required:
+      - id
+      - status
+      - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+          description: When the upload link (waiting) or the staged package (uploaded) expires.
+        id:
+          type: string
+          description: Opaque id used by the signed-in client to poll, preview and apply.
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        status:
+          type: string
+          description: '`waiting` (no upload yet), `uploading` or `uploaded` (ready to preview).'
+        upload_path:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Origin-relative path of the one-time upload page; present only while
+            `waiting`, and only in the response that created the session.
+        upload_url:
+          type:
+          - string
+          - 'null'
+          description: '`upload_path` as an absolute URL (see `TransferLinkResponse::url`).'
     ImportSummary:
       type: object
       required:
@@ -12892,6 +13177,29 @@ components:
       description: |-
         Why a session couldn't direct-play/direct-stream and had to fall back to
         a transcode. Populated only when `play_method == Transcode`.
+    TransferLinkResponse:
+      type: object
+      required:
+      - path
+      - url
+      - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+          description: |-
+            The link stops working at this time (at most 15 minutes) or after its
+            first use, whichever is first.
+        path:
+          type: string
+          description: |-
+            Origin-relative path of the one-time link; resolve it against the
+            server address the client already uses and show it as a QR code.
+        url:
+          type: string
+          description: |-
+            The same link as an absolute URL built from the address the request
+            arrived on (proxy headers honoured), ready for a QR code.
     UnavailableNodeView:
       type: object
       description: |-

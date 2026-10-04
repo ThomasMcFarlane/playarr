@@ -1324,3 +1324,320 @@ async fn watchlist_round_trips_including_titles_that_are_not_in_any_library() {
     let (_, result) = api.apply(&token_c, doc.to_string().as_bytes(), "").await;
     assert_eq!(result["unmatched_total"], 1);
 }
+
+// ---- ten-foot transfer (links and phone upload) -------------------------------
+
+fn token_of(path: &str) -> String {
+    path.rsplit('/').next().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn export_transfer_link_is_one_time_expiring_and_owner_scoped() {
+    let (router, state) = test_state().await;
+    let (_a, token_a) = user(&state, Uuid::new_v4()).await;
+    let (_b, token_b) = user(&state, Uuid::new_v4()).await;
+    let api = Api { router };
+    let (id, bytes) = api.export(&token_a).await;
+    let uri = format!("/api/v1/users/me/data-exports/{id}/transfer-link");
+
+    // Another account cannot mint a link for it; anonymous cannot either.
+    let (status, _) = api.call("POST", &uri, Some(&token_b), vec![]).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = api.call("POST", &uri, None, vec![]).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, link) = api.json("POST", &uri, &token_a).await;
+    assert_eq!(status, StatusCode::CREATED, "{link}");
+    let path = link["path"].as_str().unwrap().to_owned();
+    assert!(path.starts_with("/api/v1/transfer/export/"));
+    assert_eq!(
+        link["url"].as_str().unwrap(),
+        format!("http://localhost{path}"),
+        "absolute URL is built from the request address"
+    );
+    let expires: chrono::DateTime<Utc> = link["expires_at"].as_str().unwrap().parse().unwrap();
+    assert!(expires <= Utc::now() + Duration::minutes(15) + Duration::seconds(5));
+    assert!(expires > Utc::now() + Duration::minutes(14));
+
+    // The link works without a bearer token, exactly once, and yields the package.
+    let (status, got) = api.call("GET", &path, None, vec![]).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(got, bytes);
+    let (status, _) = api.call("GET", &path, None, vec![]).await;
+    assert_eq!(status, StatusCode::GONE);
+
+    // Malformed and unknown tokens are 404; nothing about other exports leaks.
+    for bad in ["short", &"0".repeat(64), &"g".repeat(64)] {
+        let (status, _) = api
+            .call(
+                "GET",
+                &format!("/api/v1/transfer/export/{bad}"),
+                None,
+                vec![],
+            )
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{bad}");
+    }
+
+    // Expiry ends a fresh link.
+    let (_, link) = api.json("POST", &uri, &token_a).await;
+    state.app.portability.expire_links_now();
+    let (status, _) = api
+        .call("GET", link["path"].as_str().unwrap(), None, vec![])
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "expired links are swept");
+
+    // A link cannot outlive the export it points at.
+    let (_, link) = api.json("POST", &uri, &token_a).await;
+    state.app.portability.expire_now(&id);
+    let (status, _) = api
+        .call("GET", link["path"].as_str().unwrap(), None, vec![])
+        .await;
+    assert_eq!(status, StatusCode::GONE);
+    let (status, _) = api.call("POST", &uri, Some(&token_a), vec![]).await;
+    assert_eq!(status, StatusCode::GONE);
+}
+
+#[tokio::test]
+async fn phone_upload_stages_a_package_that_only_its_owner_can_preview_and_apply() {
+    let (router, state) = test_state().await;
+    let lib = seed_library(&state).await;
+    let (a, token_a) = user(&state, lib.source).await;
+    let (_b, token_b) = user(&state, lib.source).await;
+    let api = Api { router };
+    let package = hand_package(serde_json::json!([watch(
+        serde_json::json!({"kind":"movie","title":"Sample Movie Alpha","external_ids":{"tmdb":"27205"}}),
+        "part_watched",
+        120_000,
+        Some("2026-09-01T20:00:00Z"),
+    )]));
+
+    let (status, session) = api
+        .json("POST", "/api/v1/users/me/data-import-sessions", &token_a)
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let id = session["id"].as_str().unwrap().to_owned();
+    let upload = session["upload_path"].as_str().unwrap().to_owned();
+    assert!(upload.starts_with("/api/v1/transfer/import/"));
+    assert_eq!(
+        session["upload_url"].as_str().unwrap(),
+        format!("http://localhost{upload}")
+    );
+    assert_ne!(
+        token_of(&upload),
+        id,
+        "the upload token is not the session id"
+    );
+    let base = format!("/api/v1/users/me/data-import-sessions/{id}");
+
+    // Before an upload there is nothing to preview; other accounts see nothing.
+    let (status, _) = api
+        .call("POST", &format!("{base}/preview"), Some(&token_a), vec![])
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = api.call("GET", &base, Some(&token_b), vec![]).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = api.call("GET", &base, None, vec![]).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // The upload page needs no sign-in and is hardened.
+    let (status, page) = api.call("GET", &upload, None, vec![]).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(String::from_utf8_lossy(&page).contains("type=\"file\""));
+
+    // A hostile body is rejected and does not consume the link.
+    let (status, _) = api.call("POST", &upload, None, b"not a zip".to_vec()).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (_, state_json) = api.json("GET", &base, &token_a).await;
+    assert_eq!(state_json["status"], "waiting");
+
+    let (status, _) = api.call("POST", &upload, None, package.clone()).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    // One upload only: the token is spent, and the page says so.
+    let (status, _) = api.call("POST", &upload, None, package.clone()).await;
+    assert_eq!(status, StatusCode::GONE);
+    let (status, _) = api.call("GET", &upload, None, vec![]).await;
+    assert_eq!(status, StatusCode::GONE);
+
+    let (_, state_json) = api.json("GET", &base, &token_a).await;
+    assert_eq!(state_json["status"], "uploaded");
+    assert_eq!(state_json["size_bytes"], package.len());
+    assert!(
+        state_json["upload_path"].is_null(),
+        "the link is shown once, at creation"
+    );
+
+    // The other account cannot preview or apply it; nothing was written yet.
+    for suffix in ["preview", "apply?package_sha256=x"] {
+        let (status, _) = api
+            .call("POST", &format!("{base}/{suffix}"), Some(&token_b), vec![])
+            .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{suffix}");
+    }
+    assert!(state
+        .app
+        .watch_progress
+        .list_for_user(a)
+        .await
+        .unwrap()
+        .is_empty());
+
+    let (status, bytes) = api
+        .call("POST", &format!("{base}/preview"), Some(&token_a), vec![])
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let preview: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        preview["summary"]["watch_progress"]["will_add"], 1,
+        "{preview}"
+    );
+    let digest = preview["package_sha256"].as_str().unwrap().to_owned();
+
+    let (status, _) = api
+        .call(
+            "POST",
+            &format!("{base}/apply?package_sha256=deadbeef"),
+            Some(&token_a),
+            vec![],
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "apply needs the previewed digest"
+    );
+    let (status, bytes) = api
+        .call(
+            "POST",
+            &format!("{base}/apply?package_sha256={digest}"),
+            Some(&token_a),
+            vec![],
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let result: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(result["completed"], true, "{result}");
+    assert_eq!(result["progress_added"], 1);
+    assert_eq!(
+        state
+            .app
+            .watch_progress
+            .list_for_user(a)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // A completed import closes the session and deletes the staged file.
+    let (status, _) = api.call("GET", &base, Some(&token_a), vec![]).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn import_sessions_expire_are_replaced_and_clean_up_their_files() {
+    let (router, state) = test_state().await;
+    let (a, token_a) = user(&state, Uuid::new_v4()).await;
+    let api = Api { router };
+    let package = hand_package(serde_json::json!([]));
+
+    let (_, first) = api
+        .json("POST", "/api/v1/users/me/data-import-sessions", &token_a)
+        .await;
+    let first_upload = first["upload_path"].as_str().unwrap().to_owned();
+    let (_, second) = api
+        .json("POST", "/api/v1/users/me/data-import-sessions", &token_a)
+        .await;
+    // A new session replaces the old one, whose link stops working.
+    let (status, _) = api.call("POST", &first_upload, None, package.clone()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = api
+        .call(
+            "GET",
+            &format!(
+                "/api/v1/users/me/data-import-sessions/{}",
+                first["id"].as_str().unwrap()
+            ),
+            Some(&token_a),
+            vec![],
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let id = second["id"].as_str().unwrap().to_owned();
+    let upload = second["upload_path"].as_str().unwrap().to_owned();
+    let (status, _) = api.call("POST", &upload, None, package.clone()).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let staged = state.app.portability.dir().join(format!("import-{id}.zip"));
+    assert!(staged.exists());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&staged).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    state.app.portability.expire_session_now(&id);
+    let (status, _) = api
+        .call(
+            "GET",
+            &format!("/api/v1/users/me/data-import-sessions/{id}"),
+            Some(&token_a),
+            vec![],
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(!staged.exists(), "staged package removed on expiry");
+
+    // An expired upload link is refused before any body is read.
+    let (_, third) = api
+        .json("POST", "/api/v1/users/me/data-import-sessions", &token_a)
+        .await;
+    state
+        .app
+        .portability
+        .expire_session_now(third["id"].as_str().unwrap());
+    let (status, _) = api
+        .call(
+            "POST",
+            third["upload_path"].as_str().unwrap(),
+            None,
+            package.clone(),
+        )
+        .await;
+    assert!(status == StatusCode::GONE || status == StatusCode::NOT_FOUND);
+
+    // Closing a session deletes what was staged.
+    let (_, fourth) = api
+        .json("POST", "/api/v1/users/me/data-import-sessions", &token_a)
+        .await;
+    let (status, _) = api
+        .call(
+            "POST",
+            fourth["upload_path"].as_str().unwrap(),
+            None,
+            package,
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let fid = fourth["id"].as_str().unwrap();
+    let staged = state
+        .app
+        .portability
+        .dir()
+        .join(format!("import-{fid}.zip"));
+    assert!(staged.exists());
+    let (status, _) = api
+        .call(
+            "DELETE",
+            &format!("/api/v1/users/me/data-import-sessions/{fid}"),
+            Some(&token_a),
+            vec![],
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!staged.exists());
+    let _ = a;
+}

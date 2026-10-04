@@ -31,7 +31,7 @@ section, and a watchlist record is kept even when nothing matches locally.
 | Export job registry, import preview and apply, routes, isolation. | `backend/crates/playarr-api/src/portability.rs` |
 | Shared serialisation with server backups. | None yet. The server-backup epic (TASKS 62 to 66) serialises whole tables for administrators with different goals (all users, secrets, media). If a shared row-serialisation layer merges to `main` first it will be reused for reading rows; the user package deliberately keeps its own portable, identifier-based shape because backups carry local ids and the user package must not. |
 | Web UI | Settings, "Your data" panel. |
-| Android | Settings entry, native Compose, Storage Access Framework for the file. |
+| Android | Settings entry, native Compose, Storage Access Framework for the file. On television: QR transfer (see below). |
 
 ## Export
 
@@ -144,6 +144,44 @@ the first failing record and the sections not attempted.
 * Matched works go through the same library-visibility check as the catalogue.
 * Cross-user export ids, download links and preview digests are covered by
   tests (TASKS 71).
+
+## Ten-foot transfer (televisions)
+
+Televisions have no file picker and no way to save a file, so the signed-in
+television moves the package through a phone or computer instead. Both flows
+use unauthenticated links on the same server (`/api/v1/transfer/...`) because
+the second device is not signed in; the link itself is the credential, and it
+is deliberately narrow.
+
+* **Link token**: 256 random bits, shown only as a QR code. The response
+  carries both the origin-relative `path` and an absolute `url` built from
+  the address the request arrived on (proxy headers honoured). The server keeps only its SHA-256 digest, in memory, on one
+  node. A link is bound to the account that created it, expires after 15
+  minutes and works once. Malformed tokens are `404`; used or expired links
+  are `410`. Responses carry `Cache-Control: no-store`, `Referrer-Policy:
+  no-referrer` and `X-Robots-Tag: noindex`. As with exports, a multi-node
+  deployment must send the television and the phone to the same node (the
+  QR code is built from the address the television itself uses).
+* **Export**: `POST /users/me/data-exports/{id}/transfer-link` (signed in, own
+  ready export only) returns `{path, expires_at}`; `GET
+  /transfer/export/{token}` streams the ZIP once. A link never outlives the
+  export (30 minutes after it was ready). At most five live links per account.
+* **Import**: `POST /users/me/data-import-sessions` (signed in) opens a
+  session and returns the id and the one-time upload path; a new session
+  replaces the account's previous one. `GET /transfer/import/{token}` serves a
+  small self-contained page (strict CSP, no external resources, no token in
+  the markup) and `POST` to the same path uploads the package. The upload is
+  validated exactly like any import (size cap, ZIP rules, schema) before it is
+  kept; an invalid file does not spend the link. The file is staged in the
+  private mode-0700 directory with mode 0600 and kept for at most 15 minutes
+  after the upload.
+* **Nothing is applied by the upload.** The television polls `GET
+  /users/me/data-import-sessions/{id}`, then previews and applies through
+  `.../{id}/preview` and `.../{id}/apply` with its own bearer token. Those
+  routes only see the caller's own session (another account's id is `404`),
+  re-validate the staged bytes, and still require the previewed digest. A
+  completed apply deletes the staged file; so does closing or expiring the
+  session.
 
 ## Operations and limits
 

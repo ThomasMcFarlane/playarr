@@ -130,6 +130,11 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
     // calendar apps cannot send an Authorization header.
     "/api/v1/calendar/feed/{file}",
     "/api/v1/oauth/device/code",
+    // Authenticated by the one-time, user-bound, 15-minute token in the
+    // path, because the phone or computer that opens a QR code shown on a
+    // television is not signed in. See `portability/transfer.rs`.
+    "/api/v1/transfer/export/{token}",
+    "/api/v1/transfer/import/{token}",
     "/api/v1/oauth/token",
     "/webhooks/{instance_id}",
     // Bearer-authed by the one-shot join token carried in the request
@@ -444,6 +449,19 @@ fn api_router() -> OpenApiRouter<AppState> {
             portability::delete_export_handler
         ))
         .routes(routes!(portability::download_export_handler))
+        .routes(routes!(portability::create_transfer_link_handler))
+        .routes(routes!(portability::transfer_export_download_handler))
+        .routes(routes!(portability::create_import_session_handler))
+        .routes(routes!(
+            portability::get_import_session_handler,
+            portability::delete_import_session_handler
+        ))
+        .routes(routes!(portability::preview_import_session_handler))
+        .routes(routes!(portability::apply_import_session_handler))
+        .routes(routes!(
+            portability::transfer_import_page_handler,
+            portability::transfer_import_upload_handler
+        ))
         .routes(routes!(portability::preview_import_handler))
         .routes(routes!(portability::apply_import_handler))
         .routes(routes!(portability::unmatched_import_handler))
