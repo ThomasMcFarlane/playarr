@@ -582,9 +582,10 @@ pub async fn leave_peer_group_handler(
         .map_err(|err| ApiError::internal(format!("failed to load self peer node: {err}")))?
         .ok_or_else(|| ApiError::internal("grouped node has no self peer row"))?;
 
-    let peer_client = playarr_peer_sync::PeerClient::new(
+    let peer_client = playarr_peer_sync::PeerClient::new_with_routes(
         state.peer_http.clone(),
         own_peer_identity(&state).await?,
+        state.peer_transport_routes.clone(),
     );
     let path = format!("/api/v1/peer/nodes/{}", identity.peer_id);
     let peers = state
@@ -596,10 +597,10 @@ pub async fn leave_peer_group_handler(
     let mut unreachable_peers = 0;
     for peer in peers {
         let mut notified = false;
-        for address in playarr_peer_sync::peer_client::addresses_by_priority(&peer.addresses) {
+        for address in peer_client.addresses_for_peer(peer.id, &peer.addresses) {
             let attempt = tokio::time::timeout(
                 std::time::Duration::from_secs(3),
-                peer_client.signed_delete(address, &path),
+                peer_client.signed_delete(&address, &path),
             )
             .await;
             if matches!(attempt, Ok(Ok(()))) {

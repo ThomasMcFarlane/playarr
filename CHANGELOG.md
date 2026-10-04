@@ -10,6 +10,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Operations: grant the REGION-A regional server the host media access group, matching REGION-B, so its read-only library mount can be traversed and read; preserve the currently deployed regional image on both nodes (TASK 294).
+- Server: retry unreachable known peers after restart, and route configured server-to-server peer traffic through in-cluster Services while validating the existing public certificate identity; public client relay addresses remain unchanged (TASK 292).
 - iOS: track native QR login parity with Android, including signed iPhone and iPad acceptance (TASK 291).
 - iOS: verify Apple dispatch credential provisioning and successful source dispatch, with the signed iOS/tvOS child run accepted and queued (TASK 279).
 - iOS: run source-side Apple release dispatch on GitHub-hosted `ubuntu-latest`, avoiding an unavailable repository runner group (TASK 279).

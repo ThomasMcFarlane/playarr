@@ -116,6 +116,10 @@ spec:
               value: all
             - name: PLAYARR_THUMBNAIL_CONCURRENCY
               value: {{ $instance.thumbnailConcurrency | quote }}
+            {{- with $instance.peerInternalRoutes }}
+            - name: PLAYARR_PEER_INTERNAL_ROUTES
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with $instance.sourceInstanceUrls }}
             # Declarative *arr base URLs, applied to source_instances at boot
             # (kind or kind/name -> URL; API keys are never touched).

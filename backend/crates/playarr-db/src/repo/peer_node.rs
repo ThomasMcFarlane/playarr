@@ -80,8 +80,8 @@ pub trait PeerNodeRepo: Send + Sync {
     /// Every known member, including the self row.
     async fn list_all(&self) -> Result<Vec<PeerNode>, DbError>;
 
-    /// Every OTHER, active member (`is_self = false`, `status = Active`) --
-    /// the sync/fan-out target list every later phase reads (§2.1).
+    /// Every known non-self member that may be retried (`status` is active or
+    /// unreachable). Left members have revoked membership and are excluded.
     async fn list_others(&self) -> Result<Vec<PeerNode>, DbError>;
 }
 
@@ -163,10 +163,12 @@ impl PeerNodeRepo for SqlxPeerNodeRepo {
     }
 
     async fn list_others(&self) -> Result<Vec<PeerNode>, DbError> {
-        // Literal `0`/`'active'` rather than bound params: not user input,
-        // same convention as user_invite_request.rs's `status = 'pending'`.
+        // Literal values are fixed protocol statuses, not user input. Keeping
+        // unreachable rows here lets the worker reconstruct pollers after a
+        // restart and retry peers that failed before shutdown.
         let sql = format!(
-            "SELECT {COLUMNS} FROM peer_nodes WHERE is_self = 0 AND status = 'active' \
+            "SELECT {COLUMNS} FROM peer_nodes WHERE is_self = 0 \
+             AND status IN ('active', 'unreachable') \
              ORDER BY name"
         );
         let rows = sqlx::query(&sql).fetch_all(&self.pool).await?;
@@ -284,7 +286,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_others_excludes_self_and_inactive_peers() {
+    async fn list_others_includes_active_and_unreachable_but_excludes_self_and_left() {
         let pool = test_sqlite_pool().await;
         let group_id = seed_group(&pool).await;
         let repo = SqlxPeerNodeRepo::new(pool);
@@ -299,8 +301,37 @@ mod tests {
         repo.upsert(&left_peer).await.unwrap();
 
         let others = repo.list_others().await.unwrap();
-        assert_eq!(others.len(), 1);
-        assert_eq!(others[0], active_peer);
+        assert_eq!(others.len(), 2);
+        assert_eq!(others, vec![active_peer, unreachable_peer]);
+        assert!(!others.iter().any(|peer| peer.id == self_node.id));
+        assert!(!others.iter().any(|peer| peer.id == left_peer.id));
+    }
+
+    #[tokio::test]
+    async fn list_others_retries_unreachable_peer_after_restart_and_never_resurrects_left_peer() {
+        let pool = test_sqlite_pool().await;
+        let group_id = seed_group(&pool).await;
+        let repo = SqlxPeerNodeRepo::new(pool);
+        let self_node = sample_node(group_id, "home", true, PeerNodeStatus::Active);
+        let unreachable_peer = sample_node(group_id, "east", false, PeerNodeStatus::Unreachable);
+        let left_peer = sample_node(group_id, "west", false, PeerNodeStatus::Left);
+
+        repo.upsert(&self_node).await.unwrap();
+        repo.upsert(&unreachable_peer).await.unwrap();
+        repo.upsert(&left_peer).await.unwrap();
+
+        // A new repository instance models worker startup after the previous
+        // process marked a peer unreachable.
+        let restarted_repo = SqlxPeerNodeRepo::new(repo.pool.clone());
+        let retry_targets = restarted_repo.list_others().await.unwrap();
+        assert_eq!(retry_targets, vec![unreachable_peer.clone()]);
+
+        // A membership revocation transitions a retryable member to Left;
+        // the durable row remains, but it must no longer be a retry target.
+        let mut revoked_peer = unreachable_peer.clone();
+        revoked_peer.status = PeerNodeStatus::Left;
+        restarted_repo.upsert(&revoked_peer).await.unwrap();
+        assert!(restarted_repo.list_others().await.unwrap().is_empty());
     }
 
     #[tokio::test]

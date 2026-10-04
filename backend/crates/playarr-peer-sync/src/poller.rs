@@ -65,7 +65,7 @@ use playarr_db::{
 use playarr_model::PeerNodeStatus;
 use uuid::Uuid;
 
-use crate::peer_client::{addresses_by_priority, PeerClient, PeerClientError};
+use crate::peer_client::{PeerClient, PeerClientError};
 use crate::{account_sync, availability_sync, membership_sync, routing_sync};
 
 /// Default poll interval in seconds -- `PLAYARR_PEER_SYNC_INTERVAL_SECS`.
@@ -269,7 +269,9 @@ impl PeerSyncPoller {
             .get(self.peer_node_id)
             .await?
             .ok_or(PollError::UnknownPeer(self.peer_node_id))?;
-        let addresses = addresses_by_priority(&peer.addresses);
+        let addresses = self
+            .peer_client
+            .addresses_for_peer(peer.id, &peer.addresses);
         if addresses.is_empty() {
             self.mark_failure(&peer, &PollError::NoAddresses).await?;
             return Err(PollError::NoAddresses);
