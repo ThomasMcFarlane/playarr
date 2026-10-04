@@ -165,10 +165,10 @@ info endpoint pointing at a test library directory.
   truncated and cross-engine refusals. The Rust suites cover both engines
   (PostgreSQL tests run when `PLAYARR_TEST_POSTGRES_URL` points at a scratch
   server and are skipped otherwise).
-- **PostgreSQL schema gap.** The PostgreSQL migration set has no
-  `source_root_folders` / `folder_media_entries` tables (SQLite migration 42), so
-  folder-scanned library roots are only inventoried and remapped on SQLite.
-  Backup and restore pick the tables up automatically once the migration exists.
+- **PostgreSQL parity.** PostgreSQL migration 53 mirrors SQLite migration 42
+  (`source_root_folders`, `folder_media_entries`), so library-root checks and
+  `--remap-path` work on PostgreSQL restores too; the PostgreSQL suite seeds a
+  root and a folder entry and covers the missing-root refusal and the remap.
 - **Not provable yet.** Recording schedules and server-owned recordings do not
   exist, so there is nothing to retain; and playback of restored media depends on
   the library mounts of the replacement, which restore checks but cannot create.

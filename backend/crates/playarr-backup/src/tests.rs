@@ -336,8 +336,13 @@ pub async fn seed_representative_data(pool: &DbPool, library_root: &str) {
     let root_sql = format!(
         "INSERT INTO source_root_folders (id, source_instance_id, source_root_id, reported_path, local_path_override, display_name, work_kind, accessible, active, scan_status, updated_at) VALUES ('rf-1', 'src-2', '1', '{library_root}', NULL, 'Movies', 'movie', 1, 1, 'complete', '2026-01-01T00:00:00Z')"
     );
-    // PostgreSQL has no `source_root_folders` migration yet, so tolerate its absence.
-    let _ = sqlx::query(&root_sql).execute(pool).await;
+    sqlx::query(&root_sql).execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO folder_media_entries (id, root_folder_id, media_file_id, relative_path, directory_path, file_name, work_kind, title, modified_at, metadata, scanned_at) VALUES ('fme-1', 'rf-1', 'mf-1', 'first.mkv', '', 'first.mkv', 'movie', 'First', NULL, '{}', '2026-01-01T00:00:00Z')",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 /// Text rendering of the durable state that restore must reproduce exactly.
@@ -349,6 +354,8 @@ pub async fn durable_state(pool: &DbPool) -> Vec<String> {
         "SELECT id || '|' || kind || '|' || name || '|' || base_url || '|' || api_key_encrypted FROM source_instances ORDER BY id",
         "SELECT id || '|' || title FROM works ORDER BY id",
         "SELECT id || '|' || work_id || '|' || path || '|' || codec FROM media_files ORDER BY id",
+        "SELECT id || '|' || source_instance_id || '|' || reported_path || '|' || COALESCE(local_path_override, '-') || '|' || CAST(accessible AS TEXT) || '|' || scan_status FROM source_root_folders ORDER BY id",
+        "SELECT id || '|' || root_folder_id || '|' || media_file_id || '|' || relative_path || '|' || metadata FROM folder_media_entries ORDER BY id",
         "SELECT user_id || '|' || media_file_id || '|' || CAST(position_ms AS TEXT) || '|' || state FROM watch_progress ORDER BY user_id",
         "SELECT id || '|' || name || '|' || COALESCE(parent_playlist_id, '-') FROM playlists ORDER BY id",
         "SELECT playlist_id || '|' || CAST(position AS TEXT) || '|' || work_id FROM playlist_items ORDER BY playlist_id, position",

@@ -174,6 +174,64 @@ async fn postgres_replacement_restore_reproduces_all_durable_state() {
 }
 
 #[tokio::test]
+async fn postgres_restore_checks_and_remaps_library_roots() {
+    let Some(base) = base_url() else { return };
+    let (src, before) = source(&base, "/media/pg-movies-missing").await;
+    let sidecar = src.service.run_now("test").await.unwrap();
+    assert!(sidecar
+        .manifest
+        .tables
+        .iter()
+        .any(|t| t.name == "source_root_folders" && t.rows == 1));
+    assert!(sidecar
+        .manifest
+        .tables
+        .iter()
+        .any(|t| t.name == "folder_media_entries" && t.rows == 1));
+    assert_eq!(
+        sidecar.manifest.external_dependencies.library_roots,
+        vec!["/media/pg-movies-missing"]
+    );
+
+    // A missing library root blocks cut-over and leaves the target untouched.
+    let target = ScratchDb::create(&base).await;
+    let work = tempfile::tempdir().unwrap();
+    let error = restore(opts(&src, &sidecar.archive_name, &target.url, work.path()))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, BackupError::Refused(_)), "{error}");
+
+    // Remapping to a directory that exists rewrites media paths and roots.
+    let library = tempfile::tempdir().unwrap();
+    let new_root = library.path().display().to_string();
+    let mut remap = opts(&src, &sidecar.archive_name, &target.url, work.path());
+    remap.remap = vec![("/media/pg-movies-missing".to_string(), new_root.clone())];
+    let report = restore(remap).await.unwrap();
+    assert_eq!(report.remapped_paths, 1);
+    assert!(report.missing_library_roots.is_empty());
+
+    let restored = target.pool().await;
+    let root: String =
+        sqlx::query_scalar("SELECT reported_path FROM source_root_folders WHERE id = 'rf-1'")
+            .fetch_one(&restored)
+            .await
+            .unwrap();
+    assert_eq!(root, new_root);
+    let entries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM folder_media_entries")
+        .fetch_one(&restored)
+        .await
+        .unwrap();
+    assert_eq!(entries, 1);
+    // Everything else is unchanged by the remap.
+    let after = durable_state(&restored).await;
+    assert_eq!(after.len(), before.len());
+    restored.close().await;
+    target.drop_db().await;
+    src.pool.close().await;
+    src.db.drop_db().await;
+}
+
+#[tokio::test]
 async fn postgres_restore_over_a_live_database_keeps_the_old_schema_aside() {
     let Some(base) = base_url() else { return };
     let library = tempfile::tempdir().unwrap();
