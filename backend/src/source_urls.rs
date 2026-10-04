@@ -30,6 +30,12 @@ pub const ENV_VAR: &str = "PLAYARR_SOURCE_INSTANCE_URLS";
 /// API key for the declaratively managed Dubarr instance (see [`ensure_dubarr`]).
 pub const DUBARR_KEY_ENV_VAR: &str = "PLAYARR_DUBARR_API_KEY";
 const DUBARR_DEFAULT_NAME: &str = "Dubarr";
+/// Fixed id of the declaratively created Dubarr instance. Source instances
+/// replicate between peers by id, so two nodes that each created their own
+/// random-id row on first boot ended up listing Dubarr twice on both. With one
+/// well-known id they converge on a single row instead.
+pub const DUBARR_INSTANCE_ID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x6475_6261_7272_4000_8000_706c_6179_6172);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UrlOverride {
@@ -153,6 +159,7 @@ pub async fn ensure_dubarr(
     if api_key.is_empty() {
         return Ok(false);
     }
+    dedupe_dubarr(repo).await?;
     let existing = repo
         .list_all()
         .await?
@@ -162,7 +169,7 @@ pub async fn ensure_dubarr(
         Some(i) if i.api_key_encrypted.expose_secret() == api_key => return Ok(false),
         Some(i) => i,
         None => SourceInstance {
-            id: uuid::Uuid::new_v4(),
+            id: DUBARR_INSTANCE_ID,
             kind: SourceKind::Dubarr,
             name: DUBARR_DEFAULT_NAME.into(),
             base_url: o.base_url.clone(),
@@ -183,6 +190,43 @@ pub async fn ensure_dubarr(
     );
     repo.upsert(&row).await?;
     Ok(true)
+}
+
+/// Collapses Dubarr instances that point at the same base URL (typically one
+/// created locally plus one replicated from a peer that did the same before ids
+/// were fixed) to a single row: [`DUBARR_INSTANCE_ID`] if present, otherwise the
+/// lowest id, so every node picks the same survivor. The others are soft-deleted,
+/// which replicates as a tombstone. Dubarr instances with different URLs are
+/// never touched. Returns how many rows were removed.
+pub async fn dedupe_dubarr(
+    repo: &Arc<dyn SourceInstanceRepo>,
+) -> Result<usize, playarr_db::DbError> {
+    let norm = |u: &str| u.trim().trim_end_matches('/').to_ascii_lowercase();
+    let all: Vec<SourceInstance> = repo
+        .list_all()
+        .await?
+        .into_iter()
+        .filter(|i| i.kind == SourceKind::Dubarr)
+        .collect();
+    let mut removed = 0;
+    for i in &all {
+        let url = norm(&i.base_url);
+        let keeper = all
+            .iter()
+            .filter(|o| norm(&o.base_url) == url)
+            .min_by_key(|o| (o.id != DUBARR_INSTANCE_ID, o.id))
+            .map(|o| o.id);
+        if keeper != Some(i.id) {
+            tracing::info!(
+                source_instance_id = %i.id,
+                host = host_of(&i.base_url),
+                "removing duplicate Dubarr source instance"
+            );
+            repo.delete(i.id).await?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 /// Reads [`ENV_VAR`] and reconciles; failures are logged, never fatal.
@@ -344,5 +388,68 @@ mod tests {
             repo.list_all().await.unwrap()[0].base_url,
             "http://elsewhere:1"
         );
+    }
+
+    #[tokio::test]
+    async fn dubarr_created_with_the_fixed_id() {
+        let repo = repo().await;
+        let o = parse("dubarr=http://dubarr.dubarr:8686").unwrap();
+        assert!(ensure_dubarr(&repo, &o, "k1").await.unwrap());
+        assert_eq!(repo.list_all().await.unwrap()[0].id, DUBARR_INSTANCE_ID);
+    }
+
+    #[tokio::test]
+    async fn duplicate_dubarr_rows_collapse_to_one_deterministically() {
+        let repo = repo().await;
+        let mut a = inst(SourceKind::Dubarr, "Dubarr", "http://dubarr.dubarr:8686");
+        let mut b = inst(SourceKind::Dubarr, "Dubarr", "http://dubarr.dubarr:8686/");
+        let other = inst(SourceKind::Dubarr, "Other", "http://elsewhere:1");
+        let radarr = inst(SourceKind::Radarr, "Radarr", "http://dubarr.dubarr:8686");
+        a.id = uuid::Uuid::from_u128(5);
+        b.id = uuid::Uuid::from_u128(2);
+        for i in [&a, &b, &other, &radarr] {
+            repo.upsert(i).await.unwrap();
+        }
+        assert_eq!(dedupe_dubarr(&repo).await.unwrap(), 1);
+        assert_eq!(dedupe_dubarr(&repo).await.unwrap(), 0);
+        let ids: Vec<_> = repo
+            .list_all()
+            .await
+            .unwrap()
+            .iter()
+            .map(|i| i.id)
+            .collect();
+        assert!(ids.contains(&b.id) && !ids.contains(&a.id));
+        assert!(ids.contains(&other.id) && ids.contains(&radarr.id));
+
+        // The fixed id wins over a lower id.
+        let mut fixed = inst(SourceKind::Dubarr, "Dubarr", "http://dubarr.dubarr:8686");
+        fixed.id = DUBARR_INSTANCE_ID;
+        repo.upsert(&fixed).await.unwrap();
+        assert_eq!(dedupe_dubarr(&repo).await.unwrap(), 1);
+        let ids: Vec<_> = repo
+            .list_all()
+            .await
+            .unwrap()
+            .iter()
+            .map(|i| i.id)
+            .collect();
+        assert!(ids.contains(&DUBARR_INSTANCE_ID) && !ids.contains(&b.id));
+    }
+
+    #[tokio::test]
+    async fn ensure_dubarr_removes_a_replicated_duplicate_at_boot() {
+        let repo = repo().await;
+        let o = parse("dubarr=http://dubarr.dubarr:8686").unwrap();
+        for n in [7u128, 3] {
+            let mut d = inst(SourceKind::Dubarr, "Dubarr", "http://dubarr.dubarr:8686");
+            d.id = uuid::Uuid::from_u128(n);
+            d.api_key_encrypted = playarr_model::Sensitive::new("k1".to_string());
+            repo.upsert(&d).await.unwrap();
+        }
+        ensure_dubarr(&repo, &o, "k1").await.unwrap();
+        let all = repo.list_all().await.unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, uuid::Uuid::from_u128(3));
     }
 }
