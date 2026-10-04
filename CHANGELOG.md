@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple platforms: declare that iOS and tvOS use no non-exempt encryption and omit the unsupported 2x Top Shelf image slots so App Store Connect uses the supplied 1x images (TASK 284).
 - iOS and tvOS: scope the distribution identity and provisioning profile to the app target so CocoaPods targets do not receive app-only provisioning settings; append the temporary signing keychain to the existing user search list and restore that exact list before cleanup (TASK 284).
 - iOS and tvOS: release dispatch now always requests a signed TestFlight upload for both platforms from an immutable source commit. Missing dispatch/signing credentials fail the workflow; the source release flow no longer offers build-only or unsigned archive modes. Release script archives also require signing credentials and the Apple runner. Marketing version defaults to 1.0.0, matching the existing App Store Connect app (TASKS 279, 284).
 - iOS: remove the obsolete `mode` input from the source workflow's private TestFlight dispatch payload, matching the dispatcher's signed-only interface (TASK 279).
