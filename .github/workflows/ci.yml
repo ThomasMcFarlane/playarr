@@ -126,6 +126,13 @@ jobs:
           # Persist the partial target dir even when clippy/test fails so the
           # re-run after a fix does not start cold.
           cache-on-failure: true
+          # ort-sys downloads the ONNX Runtime static library into this
+          # directory at build-script time. The cached target dir records its
+          # path, so a restored cache without it fails to link ("could not find
+          # native static library `onnxruntime`"). Cache them together; the new
+          # prefix discards earlier target caches that lack it.
+          cache-directories: ~/.cache/ort.pyke.io
+          prefix-key: v1-rust
 
       - name: cargo fmt -- --check
         run: cargo fmt --all -- --check

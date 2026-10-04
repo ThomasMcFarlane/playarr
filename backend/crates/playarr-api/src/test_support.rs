@@ -597,12 +597,18 @@ pub async fn test_state() -> (Router, TestState) {
         Duration::minutes(15),
     ));
     let refresh_store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-    let refresh = Arc::new(RefreshTokenService::new(
-        refresh_store,
-        device_repo,
-        jwt.clone(),
-        Duration::days(30),
-    ));
+    let refresh = Arc::new(
+        RefreshTokenService::new(
+            refresh_store,
+            device_repo,
+            jwt.clone(),
+            Duration::days(30),
+            // Strict single-use: the route-level reuse test expects an immediate
+            // replay to be rejected; the grace window itself is covered in
+            // playarr-auth.
+        )
+        .with_reuse_grace(Duration::zero()),
+    );
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),
         refresh.clone(),

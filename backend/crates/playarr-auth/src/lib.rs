@@ -42,5 +42,5 @@ pub use policy::{
 };
 pub use refresh::{
     InMemoryRefreshTokenStore, RefreshError, RefreshTokenRecord, RefreshTokenService,
-    RefreshTokenStore,
+    RefreshTokenStore, DEFAULT_REUSE_GRACE_SECS,
 };

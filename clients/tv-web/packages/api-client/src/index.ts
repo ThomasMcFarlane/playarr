@@ -727,6 +727,11 @@ export interface SessionHistoryParams {
 export interface AccessTokenRequest {
   /** Bypass the normal expiry check after the server rejects the current token. */
   forceRefresh?: boolean;
+  /**
+   * With `forceRefresh`: the access token the server rejected, so the session
+   * manager can skip the rotation when that token has already been replaced.
+   */
+  rejectedAccessToken?: string;
 }
 
 export interface ApiClientConfig {
@@ -924,6 +929,11 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/admin/users/{user_id}/impersonate", method: "POST" },
 ];
 
+function bearerOf(request: Request): string | undefined {
+  const header = request.headers.get("Authorization");
+  return header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
+}
+
 function isProtectedOperation(schemaPath: string, method: string): boolean {
   return PROTECTED_OPERATIONS.some((op) => op.schemaPath === schemaPath && op.method === method);
 }
@@ -1079,6 +1089,7 @@ export class ApiClient {
   private readonly baseUrl: string;
   private readonly accessTokenProvider: ApiClientConfig["getAccessToken"];
   private readonly rawFetch: (input: Request) => Promise<Response>;
+  private readonly retryBodies = new WeakMap<Request, Request>();
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl;
@@ -1096,8 +1107,22 @@ export class ApiClient {
         const token = await this.getAccessToken();
         if (token) {
           request.headers.set("Authorization", `Bearer ${token}`);
+          // A body can only be sent once; keep a copy so a 401 can be retried.
+          if (request.body !== null) this.retryBodies.set(request, request.clone());
         }
         return request;
+      },
+      onResponse: async ({ request, response }) => {
+        if (response.status !== 401) return undefined;
+        const sent = bearerOf(request);
+        if (!sent) return undefined;
+        const replay = this.retryBodies.get(request) ?? request;
+        this.retryBodies.delete(request);
+        const fresh = await this.renewRejectedToken(sent);
+        if (!fresh) return undefined;
+        const headers = new Headers(replay.headers);
+        headers.set("Authorization", `Bearer ${fresh}`);
+        return this.rawFetch(new Request(replay, { headers }));
       },
     };
     this.raw.use(authMiddleware);
@@ -1110,6 +1135,35 @@ export class ApiClient {
    */
   async getAccessToken(request?: AccessTokenRequest): Promise<string | undefined> {
     return this.accessTokenProvider?.(request);
+  }
+
+  /**
+   * The server answered 401 to `rejected`: ask the session manager for a
+   * replacement once. Resolves to a *different* token or `undefined` (nothing
+   * better available, including when renewal fails transiently -- the 401 is
+   * then surfaced as-is and the stored session is left alone).
+   */
+  private async renewRejectedToken(rejected: string): Promise<string | undefined> {
+    try {
+      const fresh = await this.getAccessToken({ forceRefresh: true, rejectedAccessToken: rejected });
+      return fresh && fresh !== rejected ? fresh : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Sends `build(token)` and, when the server rejects the bearer token with
+   * 401, renews it once (single-flight in the session manager) and resends.
+   */
+  private async sendWithReauth(build: (token: string | undefined) => Request): Promise<Response> {
+    const token = await this.getAccessToken();
+    const response = await this.rawFetch(build(token));
+    if (response.status !== 401 || !token) return response;
+    const fresh = await this.renewRejectedToken(token);
+    if (!fresh) return response;
+    void response.body?.cancel().catch(() => undefined);
+    return this.rawFetch(build(fresh));
   }
 
   /** Resolves a (possibly origin-relative) URL the server returned against this client's baseUrl. */
@@ -1141,17 +1195,17 @@ export class ApiClient {
     body?: unknown,
     signal?: AbortSignal
   ): Promise<T> {
-    const token = await this.getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const request = new Request(this.resolveUrl(path), {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal,
+    const response = await this.sendWithReauth((token) => {
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      return new Request(this.resolveUrl(path), {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal,
+      });
     });
-    const response = await this.rawFetch(request);
     if (!response.ok) {
       let errorBody: unknown;
       try {
@@ -1174,13 +1228,14 @@ export class ApiClient {
    * whether that means "unsupported" (older server) or "retry".
    */
   async openEventStream(options: { lastEventId?: string; signal?: AbortSignal } = {}): Promise<Response> {
-    const token = await this.getAccessToken();
-    const headers: Record<string, string> = { Accept: "text/event-stream" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (options.lastEventId) headers["Last-Event-ID"] = options.lastEventId;
-    return this.rawFetch(
-      new Request(this.resolveUrl("/api/v1/events"), { method: "GET", headers, signal: options.signal })
-    );
+    // An expired or server-rejected access token is renewed (once, silently)
+    // before the stream is reported as failed.
+    return this.sendWithReauth((token) => {
+      const headers: Record<string, string> = { Accept: "text/event-stream" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (options.lastEventId) headers["Last-Event-ID"] = options.lastEventId;
+      return new Request(this.resolveUrl("/api/v1/events"), { method: "GET", headers, signal: options.signal });
+    });
   }
 
   /** Request with a raw (binary) body or response; same bearer auth as `requestJson`. */
@@ -1189,13 +1244,12 @@ export class ApiClient {
     path: string,
     body?: Blob | ArrayBuffer
   ): Promise<Response> {
-    const token = await this.getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/zip";
-    const response = await this.rawFetch(
-      new Request(this.resolveUrl(path), { method, headers, body })
-    );
+    const response = await this.sendWithReauth((token) => {
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (body !== undefined) headers["Content-Type"] = "application/zip";
+      return new Request(this.resolveUrl(path), { method, headers, body });
+    });
     if (!response.ok) {
       let errorBody: unknown;
       try {

@@ -692,6 +692,39 @@ describe("ApiClient", () => {
     expect(getAccessToken).toHaveBeenCalledWith({ forceRefresh: true });
   });
 
+  it("renews a server-rejected token once and replays the request, body included", async () => {
+    const bodies: string[] = [];
+    const tokens = ["stale-token", "fresh-token"];
+    const getAccessToken = vi.fn(async (request?: { forceRefresh?: boolean; rejectedAccessToken?: string }) =>
+      request?.forceRefresh ? "fresh-token" : "stale-token"
+    );
+    const fetchImpl = mockFetch(async (request) => {
+      bodies.push(await request.text());
+      return request.headers.get("Authorization") === `Bearer ${tokens[1]}`
+        ? jsonResponse(200, { instance_name: "REGION-A" })
+        : new Response(null, { status: 401 });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
+
+    await expect(client.updateSystemSettings({ instance_name: "REGION-A" })).resolves.toEqual({
+      instance_name: "REGION-A",
+    });
+    expect(bodies).toEqual([JSON.stringify({ instance_name: "REGION-A" }), JSON.stringify({ instance_name: "REGION-A" })]);
+    expect(getAccessToken).toHaveBeenCalledWith({ forceRefresh: true, rejectedAccessToken: "stale-token" });
+  });
+
+  it("surfaces the 401 without looping when no better token can be obtained", async () => {
+    const fetchImpl = mockFetch(() => new Response(null, { status: 401 }));
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl,
+      getAccessToken: async () => "same-token",
+    });
+
+    await expect(client.getSystemSettings()).rejects.toMatchObject({ status: 401 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("reads and updates authenticated Playarr Server system settings", async () => {
     const fetchImpl = mockFetch(async (request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/admin/system-settings");

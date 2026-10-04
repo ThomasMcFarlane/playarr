@@ -19,6 +19,7 @@ import {
   decodeAccessTokenDeviceId,
   decodeAccessTokenUserId,
   ensureAccessToken,
+  isTransientAuthFailure,
   getOrCreateDeviceId,
   toStoredSession,
   TokenStore,
@@ -191,7 +192,30 @@ function readStoredProfileSessions(fallbackApiBaseUrl: string): StoredProfileSes
 }
 
 function writeStoredProfileSessions(profiles: StoredProfileSession[]): void {
-  window.localStorage.setItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY, JSON.stringify(profiles));
+  try {
+    window.localStorage.setItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY, JSON.stringify(profiles));
+  } catch {
+    // Storage full or blocked: the in-memory copy still works for this tab.
+  }
+}
+
+/**
+ * The saved-profile list as every tab last wrote it. Local storage, not a
+ * tab's React state, is the source of truth: a tab that rotated a refresh
+ * token must never be overwritten by another tab's older copy, and a
+ * rotation must never be lost to a stale snapshot -- the server only honours
+ * the latest refresh token (plus a short grace window).
+ */
+function freshStoredProfileSessions(
+  fallback: StoredProfileSession[],
+  fallbackApiBaseUrl: string
+): StoredProfileSession[] {
+  try {
+    if (window.localStorage.getItem(SAVED_PROFILE_SESSIONS_STORAGE_KEY) === null) return fallback;
+  } catch {
+    return fallback;
+  }
+  return readStoredProfileSessions(fallbackApiBaseUrl);
 }
 
 function readActiveProfileMarker(): ActiveProfileMarker | undefined {
@@ -255,12 +279,18 @@ function storedSessionsEqual(left: StoredSession, right: StoredSession): boolean
 class ScopedTokenStore extends TokenStore {
   constructor(
     private session: StoredSession | undefined,
-    private readonly onChange: (session: StoredSession | undefined) => void
+    private readonly onChange: (session: StoredSession | undefined) => void,
+    /** Latest persisted session for this profile (shared by every tab and rebuilt client). */
+    private readonly readLatest?: () => StoredSession | undefined
   ) {
     super();
   }
 
   override get(): StoredSession | undefined {
+    // Clients are rebuilt whenever the saved list changes, but callers still
+    // holding an older one must not redeem an already-rotated refresh token.
+    const latest = this.readLatest?.();
+    if (latest) this.session = latest;
     return this.session;
   }
 
@@ -275,7 +305,8 @@ class ScopedTokenStore extends TokenStore {
   }
 
   override hasValidAccessToken(nowMs: number = Date.now()): boolean {
-    return this.session !== undefined && this.session.expiresAt > nowMs;
+    const session = this.get();
+    return session !== undefined && session.expiresAt > nowMs;
   }
 }
 
@@ -732,6 +763,17 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
   );
   const [authFailed, setAuthFailed] = useState(false);
 
+  // Another tab saved, rotated or removed a profile session: adopt it so
+  // this tab never redeems (or re-saves) a refresh token that is already old.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== SAVED_PROFILE_SESSIONS_STORAGE_KEY) return;
+      setStoredProfileSessions(readStoredProfileSessions(apiBaseUrl));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [apiBaseUrl]);
+
   const setApiBaseUrl = useCallback(
     (value: string) => {
       if (value === apiBaseUrl) return;
@@ -757,7 +799,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       deviceId: string,
       session: StoredSession
     ) => {
-      setStoredProfileSessions((existing) => {
+      setStoredProfileSessions((stale) => {
+        const existing = freshStoredProfileSessions(stale, sessionApiBaseUrl);
         const currentIndex = existing.findIndex(
           (profile) =>
             profile.profileKey === profileKey &&
@@ -863,7 +906,11 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
           // the app shell redirects to `/profiles` on this flag. Still
           // rethrown so any caller doing its own try/catch (`describeApiError`
           // call sites) keeps working exactly as before.
-          setAuthFailed(true);
+          // Only a definitive refusal means "signed out". A network failure,
+          // a restarting server (5xx/429/408) or a hung request says nothing
+          // about the session: keep the stored credentials, stay on the
+          // page and let the next request retry.
+          if (!isTransientAuthFailure(err)) setAuthFailed(true);
           throw err;
         }
       },
@@ -886,17 +933,27 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     const secondary = activeSessions
       .filter((profile) => profile.apiBaseUrl !== apiBaseUrl)
       .map((profile): ConnectedServerClient => {
-        const store = new ScopedTokenStore(profile.session, (session) => {
-          if (!session) return;
-          persistProfileSession(
-            profile.apiBaseUrl,
-            profile.profileKey,
-            profile.userId,
-            profile.name,
-            profile.deviceId,
-            session
-          );
-        });
+        const store = new ScopedTokenStore(
+          profile.session,
+          (session) => {
+            if (!session) return;
+            persistProfileSession(
+              profile.apiBaseUrl,
+              profile.profileKey,
+              profile.userId,
+              profile.name,
+              profile.deviceId,
+              session
+            );
+          },
+          () =>
+            readStoredProfileSessions(profile.apiBaseUrl).find(
+              (saved) =>
+                saved.profileKey === profile.profileKey &&
+                saved.apiBaseUrl === profile.apiBaseUrl &&
+                saved.userId === profile.userId
+            )?.session
+        );
         let instance: ApiClient;
         instance = createManagedApiClient({
           baseUrl: profile.apiBaseUrl,
@@ -1055,7 +1112,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     (serverUrl: string) => {
       const activeProfile = activeProfileRef.current;
       if (!activeProfile || serverUrl === apiBaseUrl) return;
-      setStoredProfileSessions((existing) => {
+      setStoredProfileSessions((stale) => {
+        const existing = freshStoredProfileSessions(stale, apiBaseUrl);
         const next = existing.filter(
           (profile) =>
             profile.profileKey !== activeProfile.profileKey ||
@@ -1264,7 +1322,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     activeProfileRef.current = undefined;
     clearJoinedServerRegistry();
     if (activeProfile) {
-      setStoredProfileSessions((existing) => {
+      setStoredProfileSessions((stale) => {
+        const existing = freshStoredProfileSessions(stale, activeProfile.apiBaseUrl);
         const next = existing.filter(
           (profile) => profile.profileKey !== activeProfile.profileKey
         );
@@ -1294,7 +1353,8 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         setCurrentUserName(undefined);
       }
 
-      setStoredProfileSessions((existing) => {
+      setStoredProfileSessions((stale) => {
+        const existing = freshStoredProfileSessions(stale, apiBaseUrl);
         const next = existing.filter(
           (profile) => profile.apiBaseUrl !== apiBaseUrl || profile.userId !== userId
         );

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError } from "@playarr-tv/api-client";
-import { ensureAccessToken } from "./session";
+import { ensureAccessToken, isTransientAuthFailure, TransientAuthError } from "./session";
 import { TokenStore } from "./tokenStore";
 
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
@@ -761,5 +761,202 @@ describe("ensureAccessToken with serverGroup/clientForUrl", () => {
     // Exactly one refresh attempt (the direct one) -- no unattributed
     // address is ever retried for refresh.
     expect(refreshAttempts).toBe(1);
+  });
+});
+
+describe("session persistence under races and outages", () => {
+  const USER = "00000000-0000-0000-0000-000000000009";
+  const expiredSession = (suffix: string) => ({
+    accessToken: `old-access-${suffix}`,
+    refreshToken: `refresh-${suffix}`,
+    tokenType: "Bearer",
+    expiresAt: Date.now() - 1,
+  });
+  const pair = (n: number) =>
+    jsonResponse(200, {
+      access_token: `access-${n}`,
+      refresh_token: `refresh-${n}`,
+      token_type: "Bearer",
+      expires_in: 900,
+      user_id: USER,
+    });
+
+  /** Client wired the way the web app wires it: every protected call and every 401 goes through `ensureAccessToken`. */
+  function wiredClient(store: TokenStore, fetchImpl: (request: Request) => Response | Promise<Response>) {
+    const holder: { client?: ApiClient } = {};
+    holder.client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(fetchImpl),
+      getAccessToken: (request) =>
+        ensureAccessToken(holder.client as ApiClient, store, IDENTITY, request),
+    });
+    return holder.client;
+  }
+
+  it("turns a burst of concurrent 401s into exactly one refresh and never signs the user out", async () => {
+    let refreshCalls = 0;
+    let loginCalls = 0;
+    const store = new TokenStore();
+    // Unexpired on the client's clock, but the server no longer accepts it (e.g. signing key rotated).
+    store.set({ ...expiredSession("burst"), expiresAt: Date.now() + 10 * 60_000 });
+    const client = wiredClient(store, async (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/api/v1/auth/refresh") {
+        refreshCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return pair(1);
+      }
+      if (path === "/api/v1/auth/login") {
+        loginCalls += 1;
+        return new Response(null, { status: 400 });
+      }
+      const bearer = request.headers.get("Authorization");
+      return bearer === "Bearer access-1"
+        ? jsonResponse(200, { instance_name: "REGION-A" })
+        : new Response(null, { status: 401 });
+    });
+
+    const results = await Promise.all(Array.from({ length: 8 }, () => client.getSystemSettings()));
+
+    expect(results.every((r) => r.instance_name === "REGION-A")).toBe(true);
+    expect(refreshCalls).toBe(1);
+    expect(loginCalls).toBe(0);
+    expect(store.get()?.refreshToken).toBe("refresh-1");
+  });
+
+  it("opens the live event stream with a server-rejected access token by renewing it silently", async () => {
+    let refreshCalls = 0;
+    const store = new TokenStore();
+    store.set({ ...expiredSession("sse"), expiresAt: Date.now() + 10 * 60_000 });
+    const client = wiredClient(store, (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/api/v1/auth/refresh") {
+        refreshCalls += 1;
+        return pair(7);
+      }
+      return request.headers.get("Authorization") === "Bearer access-7"
+        ? new Response("event: ready\ndata: {}\n\n", {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          })
+        : new Response(null, { status: 401 });
+    });
+
+    const response = await client.openEventStream({});
+
+    expect(response.status).toBe(200);
+    expect(refreshCalls).toBe(1);
+    expect(store.get()?.refreshToken).toBe("refresh-7");
+  });
+
+  it("keeps the stored session when the refresh fails for network or server reasons", async () => {
+    for (const outage of [
+      () => {
+        throw new TypeError("Failed to fetch");
+      },
+      () => new Response(null, { status: 503 }),
+      () => new Response(null, { status: 429 }),
+    ]) {
+      const store = new TokenStore();
+      const stored = expiredSession("outage");
+      store.set(stored);
+      const client = new ApiClient({
+        baseUrl: BASE_URL,
+        fetchImpl: mockFetch(() => outage()),
+      });
+
+      const attempt = ensureAccessToken(client, store, IDENTITY);
+
+      await expect(attempt).rejects.toBeInstanceOf(TransientAuthError);
+      await expect(attempt).rejects.toSatisfy((error: unknown) => isTransientAuthFailure(error));
+      expect(store.get()).toEqual(stored);
+    }
+  });
+
+  it("recovers on the next call once the server is back, with the original refresh token", async () => {
+    let up = false;
+    const store = new TokenStore();
+    store.set(expiredSession("recover"));
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        const body = (await request.json()) as { refresh_token?: string };
+        expect(body.refresh_token).toBe("refresh-recover");
+        return up ? pair(3) : new Response(null, { status: 502 });
+      }),
+    });
+
+    await expect(ensureAccessToken(client, store, IDENTITY)).rejects.toBeInstanceOf(TransientAuthError);
+    up = true;
+    await expect(ensureAccessToken(client, store, IDENTITY)).resolves.toBe("access-3");
+  });
+
+  it("does not treat a definitive rejection as transient", async () => {
+    const store = new TokenStore();
+    store.set(expiredSession("dead"));
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => new Response(null, { status: 401 })),
+    });
+    const failure = await ensureAccessToken(client, store, IDENTITY).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ApiError);
+    expect(isTransientAuthFailure(failure)).toBe(false);
+  });
+
+  it("shares one refresh between two tabs through the cross-tab lock", async () => {
+    // A minimal Web Locks stand-in: exclusive, FIFO, shared by both "tabs".
+    let tail: Promise<unknown> = Promise.resolve();
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: <T>(_name: string, callback: () => Promise<T>): Promise<T> => {
+          const run = tail.then(callback, callback);
+          tail = run.catch(() => undefined);
+          return run;
+        },
+      },
+    });
+    let refreshCalls = 0;
+    const seenRefreshTokens: string[] = [];
+    const fetchImpl = async (request: Request) => {
+      refreshCalls += 1;
+      const body = (await request.json()) as { refresh_token: string };
+      seenRefreshTokens.push(body.refresh_token);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return pair(refreshCalls);
+    };
+    const first = new ApiClient({ baseUrl: BASE_URL, fetchImpl: mockFetch(fetchImpl) });
+    const second = new ApiClient({ baseUrl: BASE_URL, fetchImpl: mockFetch(fetchImpl) });
+    // Two independent TokenStore instances (one per tab) over the same storage.
+    const tabA = new TokenStore();
+    const tabB = new TokenStore();
+    tabA.set(expiredSession("tabs"));
+
+    const [a, b] = await Promise.all([
+      ensureAccessToken(first, tabA, IDENTITY),
+      ensureAccessToken(second, tabB, IDENTITY),
+    ]);
+
+    expect(refreshCalls).toBe(1);
+    expect(seenRefreshTokens).toEqual(["refresh-tabs"]);
+    expect(a).toBe("access-1");
+    expect(b).toBe("access-1");
+  });
+
+  it("stops hammering refresh and login once the server has definitively refused both", async () => {
+    let calls = 0;
+    const store = new TokenStore();
+    store.set(expiredSession("cooldown"));
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(() => {
+        calls += 1;
+        return new Response(null, { status: 401 });
+      }),
+    });
+
+    await expect(ensureAccessToken(client, store, IDENTITY)).rejects.toBeInstanceOf(ApiError);
+    const afterFirst = calls;
+    await expect(ensureAccessToken(client, store, IDENTITY)).rejects.toBeInstanceOf(ApiError);
+    expect(calls).toBe(afterFirst);
   });
 });

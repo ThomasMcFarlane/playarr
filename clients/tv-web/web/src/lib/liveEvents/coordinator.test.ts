@@ -177,6 +177,24 @@ describe("live coordinator", () => {
     other.dispose();
   });
 
+  it("keeps retrying after a 401 or a thrown error instead of giving up on the stream", async () => {
+    const coordinator = setup();
+    queue.push(async () => new Response(null, { status: 401 }));
+    queue.push(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    coordinator.setActive(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(coordinator.status()).toBe("down");
+    await vi.advanceTimersByTimeAsync(1_300);
+    expect(opens).toHaveLength(2);
+    expect(coordinator.status()).toBe("down");
+    await vi.advanceTimersByTimeAsync(2_600);
+    expect(opens).toHaveLength(3);
+    expect(coordinator.status()).not.toBe("unsupported");
+    coordinator.dispose();
+  });
+
   it("reconnects with growing backoff after failures, and resets after a stable minute", async () => {
     const coordinator = setup();
     for (let i = 0; i < 4; i += 1) queue.push(async () => Promise.reject(new Error("offline")));

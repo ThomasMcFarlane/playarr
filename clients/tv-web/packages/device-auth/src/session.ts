@@ -50,7 +50,7 @@ import type {
   RefreshResponse,
 } from "@playarr-tv/api-client";
 import { getOrCreateDeviceId } from "./deviceId";
-import { decodeAccessTokenIssuer } from "./jwt";
+import { decodeAccessTokenDeviceId, decodeAccessTokenIssuer } from "./jwt";
 import type { StoredSession, TokenStore } from "./tokenStore";
 
 export interface EnsureAccessTokenIdentity {
@@ -92,6 +92,13 @@ export interface KnownServerGroupLike {
 export interface EnsureAccessTokenOptions {
   /** Refresh even when the stored access token has not reached its renewal window. */
   forceRefresh?: boolean;
+  /**
+   * With `forceRefresh`: the access token the server just rejected. When the
+   * store already holds a different, still-usable one (another caller or tab
+   * renewed it meanwhile) that token is returned without another rotation,
+   * so a burst of 401s costs one refresh, not one per request.
+   */
+  rejectedAccessToken?: string;
   /**
    * Every remembered address for this account's peer group (§7.1/§7.2).
    * Supplied together with `clientForUrl`; when both are present:
@@ -259,6 +266,77 @@ async function loginAcrossServerGroup(
   return undefined;
 }
 
+
+/**
+ * Raised when the session could not be renewed for a reason that says
+ * nothing about whether it is still valid: the network is down, the server
+ * is restarting or overloaded (5xx, 408, 429), or the refresh request hung.
+ * Callers must keep the stored credentials and retry later -- never treat
+ * this as "signed out".
+ */
+export class TransientAuthError extends Error {
+  override readonly name = "TransientAuthError";
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+/** HTTP statuses on which the server has definitively refused the credential. */
+const DEFINITIVE_REJECTION_STATUSES = new Set([400, 401, 403, 404, 410, 422]);
+
+/** The server answered and said "this credential is not valid". */
+function isDefinitiveRejection(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" && DEFINITIVE_REJECTION_STATUSES.has(status);
+}
+
+/**
+ * True for any failure that must not sign the user out: a `TransientAuthError`,
+ * a network failure (no HTTP status at all) or a 408/425/429/5xx answer.
+ */
+export function isTransientAuthFailure(err: unknown): boolean {
+  if (err instanceof TransientAuthError) return true;
+  return !isDefinitiveRejection(err);
+}
+
+// Refresh tokens the server definitively refused, remembered briefly so a
+// polling caller (live events, downloads, retries) does not hammer
+// `/auth/refresh` and `/auth/login` every few seconds with a dead token.
+const REJECTION_COOLDOWN_MS = 30_000;
+const deadRefreshTokens = new Map<string, { until: number; error: unknown }>();
+const loginCooldowns = new WeakMap<TokenStore, { until: number; error: unknown }>();
+
+// Upper bound on one refresh round trip while holding the cross-tab lock, so
+// a hung request cannot wedge every other tab behind it.
+const REFRESH_LOCK_TIMEOUT_MS = 30_000;
+
+interface WebLocks {
+  request<T>(name: string, callback: () => Promise<T>): Promise<T>;
+}
+
+/**
+ * Runs `task` while holding a browser-wide (all tabs, one origin) exclusive
+ * lock named `name` (Web Locks API). Where the API is unavailable the task
+ * just runs, which keeps the in-tab single flight as the only protection.
+ */
+async function withCrossTabLock<T>(name: string, task: () => Promise<T>): Promise<T> {
+  const locks = (globalThis as { navigator?: { locks?: WebLocks } }).navigator?.locks;
+  if (!locks || typeof locks.request !== "function") return task();
+  return locks.request(name, () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new TransientAuthError("session refresh timed out")),
+        REFRESH_LOCK_TIMEOUT_MS
+      );
+    });
+    return Promise.race([task(), timeout]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
+    });
+  });
+}
+
 /**
  * Returns a currently-valid access token. Three cases, in order:
  *
@@ -303,6 +381,17 @@ export async function ensureAccessToken(
 
   const existing = store.get();
   if (
+    options.forceRefresh &&
+    options.rejectedAccessToken !== undefined &&
+    existing &&
+    existing.accessToken !== options.rejectedAccessToken &&
+    existing.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
+  ) {
+    // Somebody (another request, another tab) already replaced the token the
+    // server rejected -- use theirs instead of rotating the family again.
+    return existing.accessToken;
+  }
+  if (
     !options.forceRefresh &&
     existing &&
     existing.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
@@ -312,46 +401,25 @@ export async function ensureAccessToken(
 
   const acquirePromise = (async () => {
     try {
+      let transient: TransientAuthError | undefined;
       if (existing) {
-        const refreshBody: RefreshRequest = {
-          device_id: identity.deviceId ?? getOrCreateDeviceId(),
-          refresh_token: existing.refreshToken,
-        };
         try {
-          const refreshed = await client.refresh(refreshBody);
-          store.set(toStoredSession(refreshed));
-          return refreshed.access_token;
-        } catch {
-          if (options.serverGroup && options.clientForUrl) {
-            const candidates = nodeScopedServerGroupCandidates(
-              options.serverGroup,
-              decodeAccessTokenIssuer(existing.accessToken)
-            );
-            if (candidates.length > 0) {
-              const refreshed = await refreshAcrossServerGroup(
-                refreshBody,
-                candidates,
-                options.clientForUrl
-              );
-              if (refreshed) {
-                store.set(toStoredSession(refreshed));
-                return refreshed.access_token;
-              }
-            }
-          }
+          const renewed = await refreshExistingSession(client, store, existing, identity, options);
+          if (renewed !== undefined) return renewed;
           // Refresh token itself is dead everywhere it could plausibly
-          // still be recognized (or there was no same-node alternate worth
-          // trying at all) -- fall through to a fresh transparent login
-          // attempt below, same as having nothing stored at all.
+          // still be recognized (the server answered and refused it) -- fall
+          // through to a fresh transparent login attempt below, same as
+          // having nothing stored at all.
+        } catch (err) {
+          if (!(err instanceof TransientAuthError)) throw err;
+          transient = err;
         }
       }
 
-      const body: LoginRequest = {
-        device_id: identity.deviceId ?? getOrCreateDeviceId(),
-        device_name: identity.deviceName,
-        client_platform: identity.clientPlatform,
-        client_version: identity.clientVersion,
-      };
+      const cooldown = loginCooldowns.get(store);
+      if (cooldown && cooldown.until > Date.now()) throw transient ?? cooldown.error;
+
+      const body = buildLoginBody(identity);
       try {
         const response = await client.login(body);
         store.set(toStoredSession(response));
@@ -364,9 +432,16 @@ export async function ensureAccessToken(
             return response.access_token;
           }
         }
+        // The session could not be renewed for an unknown reason and a
+        // fresh login did not work either: that is still "try again later",
+        // never "signed out" -- the stored credentials stay untouched.
+        if (transient) throw transient;
         // Nothing left to try anywhere in the group (or there was no group
         // at all) -- the original failure from `client` itself is the
         // right one to surface, not a generic "everything failed."
+        if (isDefinitiveRejection(err)) {
+          loginCooldowns.set(store, { until: Date.now() + REJECTION_COOLDOWN_MS, error: err });
+        }
         throw err;
       }
     } finally {
@@ -376,4 +451,115 @@ export async function ensureAccessToken(
 
   inFlightLogins.set(store, acquirePromise);
   return acquirePromise;
+}
+
+function buildLoginBody(identity: EnsureAccessTokenIdentity): LoginRequest {
+  return {
+    device_id: identity.deviceId ?? getOrCreateDeviceId(),
+    device_name: identity.deviceName,
+    client_platform: identity.clientPlatform,
+    client_version: identity.clientVersion,
+  };
+}
+
+/**
+ * Redeems the stored refresh token. Resolves to the new access token;
+ * resolves to `undefined` only when the server definitively refused the
+ * refresh token (the caller may then try a credential-less login); throws a
+ * `TransientAuthError` when the outcome is unknown (network, 5xx, timeout)
+ * and nothing usable is stored -- the stored session is never touched then.
+ *
+ * Runs under a browser-wide lock keyed by the device, and re-reads the store
+ * once the lock is held: a second tab that lost the race finds the winner's
+ * rotated session there and uses it instead of replaying the old refresh
+ * token (which the server would otherwise read as theft).
+ */
+async function refreshExistingSession(
+  client: ApiClient,
+  store: TokenStore,
+  existing: StoredSession,
+  identity: EnsureAccessTokenIdentity,
+  options: EnsureAccessTokenOptions
+): Promise<string | undefined> {
+  // The device the refresh token belongs to is whichever one the access
+  // token was minted for; fall back to the caller's identity for opaque tokens.
+  const deviceId =
+    decodeAccessTokenDeviceId(existing.accessToken) ?? identity.deviceId ?? getOrCreateDeviceId();
+
+  return withCrossTabLock(`playarr-refresh:${deviceId}`, async () => {
+    const latest = store.get() ?? existing;
+    if (
+      latest.refreshToken !== existing.refreshToken &&
+      latest.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
+    ) {
+      // Another tab renewed the session while this one waited for the lock.
+      return latest.accessToken;
+    }
+    if (
+      options.forceRefresh &&
+      options.rejectedAccessToken !== undefined &&
+      latest.accessToken !== options.rejectedAccessToken &&
+      latest.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
+    ) {
+      return latest.accessToken;
+    }
+
+    const dead = deadRefreshTokens.get(latest.refreshToken);
+    if (dead && dead.until > Date.now()) return undefined;
+
+    const refreshBody: RefreshRequest = {
+      device_id: deviceId,
+      refresh_token: latest.refreshToken,
+    };
+    try {
+      const refreshed = await client.refresh(refreshBody);
+      store.set(toStoredSession(refreshed));
+      return refreshed.access_token;
+    } catch (err) {
+      if (options.serverGroup && options.clientForUrl) {
+        const candidates = nodeScopedServerGroupCandidates(
+          options.serverGroup,
+          decodeAccessTokenIssuer(latest.accessToken)
+        );
+        if (candidates.length > 0) {
+          const refreshed = await refreshAcrossServerGroup(
+            refreshBody,
+            candidates,
+            options.clientForUrl
+          );
+          if (refreshed) {
+            store.set(toStoredSession(refreshed));
+            return refreshed.access_token;
+          }
+        }
+      }
+
+      if (isDefinitiveRejection(err)) {
+        // A concurrent holder of the same session may have rotated it while
+        // this request was failing -- prefer its result over giving up.
+        const after = store.get();
+        if (
+          after &&
+          after.refreshToken !== latest.refreshToken &&
+          after.expiresAt > Date.now() + ACCESS_TOKEN_MINIMUM_VALIDITY_MS
+        ) {
+          return after.accessToken;
+        }
+        deadRefreshTokens.set(latest.refreshToken, {
+          until: Date.now() + REJECTION_COOLDOWN_MS,
+          error: err,
+        });
+        return undefined;
+      }
+
+      // Unknown outcome (offline, server restarting, 5xx, timeout): keep the
+      // session. A still-usable access token keeps working meanwhile; with
+      // nothing usable the caller gets a TransientAuthError (and may still
+      // try a credential-less login, which never overrides that verdict).
+      if (!options.forceRefresh && latest.expiresAt > Date.now() + 5_000) {
+        return latest.accessToken;
+      }
+      throw new TransientAuthError("could not renew the session right now", err);
+    }
+  });
 }

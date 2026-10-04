@@ -7,6 +7,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Sessions: the owner was repeatedly signed out although the account was remembered. Refresh is now silent and race-safe: the web client renews a server-rejected token once and replays the request (REST, uploads and the live-events stream), shares one refresh across tabs with a Web Lock and re-reads the latest saved session under it, keeps stored credentials on any network, 5xx, 408 or 429 failure (only a definitive 400/401/403 from the server can show the profile switcher), saves profile sessions from local storage rather than per-tab state (and adopts other tabs' changes), and stops polling `/auth/refresh` and `/auth/login` with a dead token. The server accepts a just-retired refresh token for 120 s (`PLAYARR_REFRESH_REUSE_GRACE_SECS`, `0` for strict single use) instead of revoking the family, serialises rotation per device, and derives its fallback JWT secret from the persisted node identity instead of a per-boot random value. Tests: concurrent 401s cause one refresh, SSE open with a rejected token, outage keeps the session, cross-tab lock, restart persistence, concurrent server rotations (TASKS 303).
+
 ### Added
 
 - Server: an episode imported into a series Playarr already knows is now synced (and so announced as live `library`/`files` and `calendar`/`imported` frames) on the next pass or webhook refetch; previously only a brand-new series or a Sonarr-reported change picked it up, because Sonarr series rows carry no availability. Sonarr's `statistics.episodeFileCount` is compared with the synced file count. Regression tests cover the sync, the event stream and the web live-event mapping (TASKS 275).

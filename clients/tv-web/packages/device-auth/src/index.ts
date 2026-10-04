@@ -31,6 +31,8 @@ export { getOrCreateDeviceId } from "./deviceId";
 export { TokenStore, type StoredSession } from "./tokenStore";
 export {
   ensureAccessToken,
+  isTransientAuthFailure,
+  TransientAuthError,
   toStoredSession,
   type EnsureAccessTokenIdentity,
   type EnsureAccessTokenOptions,

@@ -48,6 +48,9 @@ use crate::device_flow::TokenResponse;
 use crate::jwt::{JwtError, JwtIssuer};
 use crate::secret::{hash_token, opaque_token};
 
+/// Default for [`RefreshTokenService::with_reuse_grace`], in seconds.
+pub const DEFAULT_REUSE_GRACE_SECS: i64 = 120;
+
 #[derive(Debug, thiserror::Error)]
 pub enum RefreshError {
     #[error("unknown device or refresh token")]
@@ -116,6 +119,9 @@ pub struct RefreshTokenService {
     devices: Arc<dyn DeviceRepo>,
     jwt: Arc<JwtIssuer>,
     refresh_ttl: Duration,
+    /// How long after a rotation a just-retired token is still honoured
+    /// (see [`Self::with_reuse_grace`]).
+    reuse_grace: Duration,
     /// Coalesces genuinely-concurrent [`Self::rotate`] calls that present
     /// the exact same still-current token for the same device -- see that
     /// method's doc comment for why this exists and why it's narrow enough
@@ -124,6 +130,12 @@ pub struct RefreshTokenService {
     /// this never outlives the handful of requests that were truly in
     /// flight together.
     in_flight: DashMap<(Uuid, String), Arc<OnceCell<RotationOutcome>>>,
+    /// Serialises every read-modify-write of one device's token family.
+    /// Rotations of *different* tokens (the current one and one still inside
+    /// the reuse grace window) are not coalesced, and without this they could
+    /// both read the same record and the later write would drop the other's
+    /// freshly minted token.
+    device_locks: DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>,
 }
 
 impl RefreshTokenService {
@@ -138,8 +150,23 @@ impl RefreshTokenService {
             devices,
             jwt,
             refresh_ttl,
+            reuse_grace: Duration::seconds(DEFAULT_REUSE_GRACE_SECS),
             in_flight: DashMap::new(),
+            device_locks: DashMap::new(),
         }
+    }
+
+    /// Sets the reuse grace window: a token that was retired no more than
+    /// `grace` before the family's latest rotation is treated as a late
+    /// duplicate of a legitimate request (a response lost on a flaky
+    /// network and retried, a second tab or client racing the first, a
+    /// request that was in flight across a rollout) instead of theft. The
+    /// caller gets a fresh rotation rather than a revoked family. A token
+    /// replayed after the window still revokes the whole family. A zero
+    /// grace restores strict single-use behaviour.
+    pub fn with_reuse_grace(mut self, grace: Duration) -> Self {
+        self.reuse_grace = grace;
+        self
     }
 
     /// First issuance of a token family for `device`: upserts the device
@@ -172,7 +199,15 @@ impl RefreshTokenService {
             rotated_at: None,
             revoked: false,
         };
-        self.store.put(record.clone()).await?;
+        {
+            let device_lock = self
+                .device_locks
+                .entry(device.id)
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone();
+            let _guard = device_lock.lock().await;
+            self.store.put(record.clone()).await?;
+        }
 
         let access_token = self
             .jwt
@@ -218,12 +253,12 @@ impl RefreshTokenService {
     /// that shows up even slightly later -- including a real replay of a
     /// stolen, already-retired token -- still goes through
     /// [`Self::rotate_uncoalesced`] on its own and is rejected exactly as
-    /// before. (A *forgiving* grace period -- accepting the immediately-
-    /// prior hash again after the fact -- was considered and rejected: it
-    /// cannot tell "my own concurrent request" apart from "an attacker who
-    /// redeemed the stolen token a moment before me," and would silently
-    /// hand the second presenter the attacker's own rotated token instead
-    /// of raising the alarm.)
+    /// before. (Later duplicates of an already-retired token are handled
+    /// by the separate, time-boxed [`Self::with_reuse_grace`] window in
+    /// [`Self::rotate_uncoalesced`]: inside it a late duplicate is rotated
+    /// again rather than revoked, because a lost response or a second tab
+    /// is far more likely than theft and a signed-out owner is the worse
+    /// failure; beyond it reuse still revokes the family.)
     pub async fn rotate(
         &self,
         device_id: Uuid,
@@ -272,6 +307,12 @@ impl RefreshTokenService {
         device_id: Uuid,
         raw_token: &str,
     ) -> Result<(Session, TokenResponse), RefreshError> {
+        let device_lock = self
+            .device_locks
+            .entry(device_id)
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        let _guard = device_lock.lock().await;
         match self.devices.get(device_id).await {
             Ok(_) => {}
             Err(DbError::NotFound) => return Err(RefreshError::UnknownToken),
@@ -296,12 +337,30 @@ impl RefreshTokenService {
         let presented_hash = hash_token(raw_token);
 
         if presented_hash != record.current_hash {
-            if record.used_hashes.contains(&presented_hash) {
+            if !record.used_hashes.contains(&presented_hash) {
+                tracing::info!(%device_id, "refresh rejected: token not recognised for this device");
+                return Err(RefreshError::UnknownToken);
+            }
+            let within_grace = self.reuse_grace > Duration::zero()
+                && record
+                    .rotated_at
+                    .is_some_and(|rotated_at| now - rotated_at <= self.reuse_grace);
+            if !within_grace {
+                tracing::warn!(
+                    %device_id,
+                    family_id = %record.family_id,
+                    generation = record.generation,
+                    "refresh token reuse outside the grace window; revoking token family"
+                );
                 record.revoked = true;
                 self.store.put(record).await?;
                 return Err(RefreshError::ReuseDetected);
             }
-            return Err(RefreshError::UnknownToken);
+            tracing::info!(
+                %device_id,
+                family_id = %record.family_id,
+                "refresh token reuse within the grace window; rotating again without revoking"
+            );
         }
 
         let raw_new = opaque_token();
@@ -357,6 +416,7 @@ mod tests {
         let devices: Arc<dyn DeviceRepo> = Arc::new(FakeDeviceRepo::default());
         let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
         RefreshTokenService::new(store, devices, jwt, Duration::days(30))
+            .with_reuse_grace(Duration::zero())
     }
 
     fn device(user_id: Uuid) -> Device {
@@ -502,12 +562,10 @@ mod tests {
             release: Notify::new(),
         });
         let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
-        let service = Arc::new(RefreshTokenService::new(
-            store,
-            devices.clone(),
-            jwt,
-            Duration::days(30),
-        ));
+        let service = Arc::new(
+            RefreshTokenService::new(store, devices.clone(), jwt, Duration::days(30))
+                .with_reuse_grace(Duration::zero()),
+        );
 
         let (_, issued) = service.issue(d, Duration::days(30)).await.unwrap();
         let token = issued.refresh_token;
@@ -551,6 +609,176 @@ mod tests {
         // non-concurrent replay of it is rejected exactly as before.
         let reuse = service.rotate(device_id, &token).await;
         assert!(matches!(reuse, Err(RefreshError::ReuseDetected)));
+    }
+
+    fn service_with(
+        store: Arc<dyn RefreshTokenStore>,
+        devices: Arc<dyn DeviceRepo>,
+        grace: Duration,
+    ) -> RefreshTokenService {
+        let jwt = Arc::new(JwtIssuer::new(
+            b"test-secret-key-at-least-32-bytes!!",
+            "playarr",
+            Duration::minutes(15),
+        ));
+        RefreshTokenService::new(store, devices, jwt, Duration::days(30)).with_reuse_grace(grace)
+    }
+
+    #[tokio::test]
+    async fn late_duplicate_inside_the_grace_window_is_rotated_not_revoked() {
+        let service = service_with(
+            Arc::new(InMemoryRefreshTokenStore::new()),
+            Arc::new(FakeDeviceRepo::default()),
+            Duration::seconds(120),
+        );
+        let (session, first) = service
+            .issue(device(Uuid::new_v4()), Duration::days(30))
+            .await
+            .unwrap();
+        // Tab A redeems the token; tab B (stale, or a retry after a lost
+        // response) presents the same, now retired, token afterwards.
+        let (_, a) = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await
+            .unwrap();
+        let (_, b) = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await
+            .expect("duplicate inside the grace window must not sign the user out");
+        assert_ne!(a.refresh_token, b.refresh_token);
+        // Both holders keep working: each one's token is accepted once
+        // within the window, and the family is never revoked.
+        service
+            .rotate(session.device_id, &a.refresh_token)
+            .await
+            .expect("tab A continues");
+        let latest = service.rotate(session.device_id, &b.refresh_token).await;
+        assert!(latest.is_ok(), "tab B continues: {latest:?}");
+    }
+
+    #[tokio::test]
+    async fn reuse_after_the_grace_window_still_revokes_the_family() {
+        let store: Arc<dyn RefreshTokenStore> = Arc::new(InMemoryRefreshTokenStore::new());
+        let service = service_with(
+            store.clone(),
+            Arc::new(FakeDeviceRepo::default()),
+            Duration::seconds(120),
+        );
+        let (session, first) = service
+            .issue(device(Uuid::new_v4()), Duration::days(30))
+            .await
+            .unwrap();
+        service
+            .rotate(session.device_id, &first.refresh_token)
+            .await
+            .unwrap();
+        // Age the rotation beyond the window.
+        let mut record = store.get(session.device_id).await.unwrap().unwrap();
+        record.rotated_at = Some(Utc::now() - Duration::seconds(600));
+        store.put(record).await.unwrap();
+        let replay = service
+            .rotate(session.device_id, &first.refresh_token)
+            .await;
+        assert!(matches!(replay, Err(RefreshError::ReuseDetected)));
+    }
+
+    /// The server restarts (new process, new pool, new `JwtIssuer` built
+    /// from the same configured secret): the refresh family and every
+    /// access token issued earlier must keep working.
+    #[tokio::test]
+    async fn session_survives_a_server_restart() {
+        use playarr_db::{connect, run_migrations};
+        let path = std::env::temp_dir().join(format!("playarr-restart-{}.db", Uuid::new_v4()));
+        let url = format!("sqlite://{}", path.display());
+        let secret = b"restart-secret-key-at-least-32-bytes!!";
+        let devices: Arc<dyn DeviceRepo> = Arc::new(FakeDeviceRepo::default());
+        let user_id = Uuid::new_v4();
+        let d = device(user_id);
+        devices.upsert(&d).await.unwrap();
+
+        let pool = connect(&url).await.unwrap();
+        run_migrations(&pool, false).await.unwrap();
+        let jwt_before = Arc::new(JwtIssuer::new(secret, "playarr", Duration::minutes(15)));
+        let before = RefreshTokenService::new(
+            Arc::new(SqlxRefreshTokenRepo::new(pool.clone())),
+            devices.clone(),
+            jwt_before,
+            Duration::days(30),
+        );
+        let (session, issued) = before.issue(d.clone(), Duration::days(30)).await.unwrap();
+        let (_, rotated) = before
+            .rotate(session.device_id, &issued.refresh_token)
+            .await
+            .unwrap();
+        drop(before);
+        pool.close().await;
+
+        // "Restart".
+        let pool = connect(&url).await.unwrap();
+        run_migrations(&pool, false).await.unwrap();
+        let jwt_after = Arc::new(JwtIssuer::new(secret, "playarr", Duration::minutes(15)));
+        jwt_after
+            .verify_access_token(&rotated.access_token)
+            .await
+            .expect("an access token issued before the restart still verifies");
+        let after = RefreshTokenService::new(
+            Arc::new(SqlxRefreshTokenRepo::new(pool.clone())),
+            devices,
+            jwt_after.clone(),
+            Duration::days(30),
+        );
+        let (restored, next) = after
+            .rotate(session.device_id, &rotated.refresh_token)
+            .await
+            .expect("refresh token issued before the restart still rotates");
+        assert_eq!(restored.id, session.id);
+        jwt_after
+            .verify_access_token(&next.access_token)
+            .await
+            .unwrap();
+        pool.close().await;
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Many clients (tabs, native authenticators, the live-events stream)
+    /// redeem the same token at once, repeatedly: nobody is rejected and
+    /// the family survives.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn many_concurrent_refreshes_never_sign_the_user_out() {
+        let service = Arc::new(service_with(
+            Arc::new(InMemoryRefreshTokenStore::new()),
+            Arc::new(FakeDeviceRepo::default()),
+            Duration::seconds(120),
+        ));
+        let (session, issued) = service
+            .issue(device(Uuid::new_v4()), Duration::days(30))
+            .await
+            .unwrap();
+        let mut tokens = vec![issued.refresh_token];
+        for _round in 0..5 {
+            let mut handles = Vec::new();
+            for token in tokens.iter() {
+                for _ in 0..8 {
+                    let service = service.clone();
+                    let token = token.clone();
+                    let device_id = session.device_id;
+                    handles.push(tokio::spawn(async move {
+                        service.rotate(device_id, &token).await
+                    }));
+                }
+            }
+            let mut next = Vec::new();
+            for handle in handles {
+                let (_, response) = handle
+                    .await
+                    .unwrap()
+                    .expect("no concurrent refresh may fail");
+                if !next.contains(&response.refresh_token) {
+                    next.push(response.refresh_token);
+                }
+            }
+            tokens = next;
+        }
     }
 
     #[tokio::test]

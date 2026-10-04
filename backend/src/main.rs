@@ -753,30 +753,54 @@ async fn build_coordinator(
 }
 
 /// Resolves the HS256 secret [`playarr_auth::JwtIssuer`] signs access
-/// tokens with, from `PLAYARR_JWT_SECRET`. Falls back to a secret
-/// generated fresh at boot (logged loudly) rather than a hardcoded default
-/// -- fine for local/dev use (single-process lifetime), but tokens won't
-/// validate across a restart or between nodes in a real deployment without
-/// a real, stable, operator-provided secret.
-fn jwt_secret_from_env() -> String {
+/// tokens with, from `PLAYARR_JWT_SECRET`. When it is missing or too short
+/// the secret is *derived from this node's persisted identity seed*
+/// (`node_identity`, stored in the database) rather than generated fresh at
+/// boot, so a deployment that forgot to set the variable still keeps every
+/// issued access token valid across restarts and rollouts. Setting
+/// `PLAYARR_JWT_SECRET` explicitly stays the recommended configuration
+/// (and is required for tokens to be honoured by several nodes).
+fn jwt_secret_from_env(identity_seed: &str) -> String {
     match std::env::var("PLAYARR_JWT_SECRET") {
         Ok(secret) if secret.len() >= 32 => secret,
         Ok(_) => {
             tracing::warn!(
                 "PLAYARR_JWT_SECRET is shorter than the required 32 bytes; ignoring it and \
-                 generating a boot-lifetime secret instead"
+                 deriving a stable secret from the persisted node identity instead"
             );
-            generated_dev_jwt_secret()
+            derived_jwt_secret(identity_seed)
         }
         Err(_) => {
             tracing::warn!(
-                "PLAYARR_JWT_SECRET not set; generating a boot-lifetime secret. Fine for local \
-                 development; set PLAYARR_JWT_SECRET explicitly for any deployment where tokens \
-                 must survive a restart or be honored across multiple nodes."
+                "PLAYARR_JWT_SECRET not set; deriving a stable secret from the persisted node \
+                 identity so sessions survive restarts. Set PLAYARR_JWT_SECRET explicitly for \
+                 any deployment that must honour tokens across multiple nodes."
             );
-            generated_dev_jwt_secret()
+            derived_jwt_secret(identity_seed)
         }
     }
+}
+
+/// Stable (restart-proof) HS256 secret derived from a persisted seed.
+fn derived_jwt_secret(identity_seed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"playarr/jwt-hs256-fallback/v1\0");
+    hasher.update(identity_seed.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+/// `PLAYARR_REFRESH_REUSE_GRACE_SECS`: how long a just-retired refresh
+/// token is still honoured (a lost response retried, a second tab racing
+/// the first). Defaults to [`playarr_auth::DEFAULT_REUSE_GRACE_SECS`];
+/// `0` restores strict single-use rotation.
+fn refresh_reuse_grace_from_env() -> chrono::Duration {
+    let secs = std::env::var("PLAYARR_REFRESH_REUSE_GRACE_SECS")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<i64>().ok())
+        .filter(|secs| *secs >= 0)
+        .unwrap_or(playarr_auth::DEFAULT_REUSE_GRACE_SECS);
+    chrono::Duration::seconds(secs)
 }
 
 /// How long an on-demand [`playarr_transcode::TranscodeSession`] survives
@@ -889,14 +913,6 @@ fn peer_sync_unreachable_threshold_from_env() -> u32 {
         },
         Err(_) => default_threshold,
     }
-}
-
-fn generated_dev_jwt_secret() -> String {
-    format!(
-        "{}{}",
-        uuid::Uuid::new_v4().simple(),
-        uuid::Uuid::new_v4().simple()
-    )
 }
 
 /// Resolves the id of the account `AuthMode::TrustedNetwork`'s
@@ -1263,7 +1279,7 @@ async fn bootstrap_admin_with(
 
 /// A real, randomly generated bootstrap admin password: two concatenated
 /// v4 UUIDs' hex digits (64 characters, the same generation idiom
-/// [`generated_dev_jwt_secret`] above already uses for the same
+/// this file already uses for the same
 /// "boot-lifetime, never hardcoded" reasoning) -- comfortably above any
 /// reasonable minimum length, and never the same value twice, unlike a
 /// fixed in-code default would be.
@@ -1618,7 +1634,7 @@ async fn boot_api(
             .with_tdarr_notify(tdarr_notify_tx),
     );
 
-    let jwt_secret = jwt_secret_from_env();
+    let jwt_secret = jwt_secret_from_env(node_identity.private_key.expose_secret());
     // `with_group_identity` (`docs/architecture/peer-groups.md` §5.4):
     // switches this node's own access-token issuance to EdDSA (signed with
     // its `node_identity` Ed25519 keypair, `iss` = its own `peer_id`) once
@@ -1636,12 +1652,15 @@ async fn boot_api(
         )
         .with_group_identity(&node_identity, peer_node_repo.clone()),
     );
-    let refresh = Arc::new(RefreshTokenService::new(
-        refresh_store,
-        device_repo,
-        jwt.clone(),
-        chrono::Duration::days(30),
-    ));
+    let refresh = Arc::new(
+        RefreshTokenService::new(
+            refresh_store,
+            device_repo,
+            jwt.clone(),
+            chrono::Duration::days(30),
+        )
+        .with_reuse_grace(refresh_reuse_grace_from_env()),
+    );
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),
         refresh.clone(),
