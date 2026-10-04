@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Decides whether this run may deploy playarr.app. Writes deploy=true|false to
 # $GITHUB_OUTPUT and always exits 0 so a stale deploy is a logged skip, never a
-# red run. A run skips when (1) its commit is an ancestor of the commit already
-# live (read from https://playarr.app/build-info.json), or (2) its commit is no
-# longer origin/main HEAD (a newer commit will deploy itself after its CI).
+# red run. A run skips only when its commit is an ancestor of the commit already
+# live (read from https://playarr.app/build-info.json), so an older run can
+# never overwrite a newer build. It does NOT skip merely because origin/main has
+# moved on: CI takes longer than the gap between merges, so skipping on "not
+# HEAD" starved the deploy and left playarr.app stale. Runs are serialised by
+# the deploy-web-prod concurrency group, so each deploys in turn.
 set -uo pipefail
 
 sha="${DEPLOY_SHA:?DEPLOY_SHA is required}"
@@ -27,8 +30,5 @@ if [ -n "$live_sha" ] && [ "$live_sha" != "$sha" ]; then
   if git cat-file -e "${live_sha}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$sha" "$live_sha"; then
     skip "it is an ancestor of the live build ${live_sha}"
   fi
-fi
-if [ "$sha" != "$head_sha" ]; then
-  skip "origin/main has moved on to ${head_sha}, which deploys itself"
 fi
 echo "deploy=true" >>"$out"

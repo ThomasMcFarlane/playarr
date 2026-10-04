@@ -124,7 +124,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Server: the declaratively managed Dubarr source instance now has a fixed id and duplicate Dubarr rows (same base URL) are collapsed at boot, so peer replication of source instances no longer lists Dubarr twice (TASKS 303).
-- CI/deploy: main CI runs are never cancelled (per-SHA concurrency group; the shared per-ref group cancelled older pending runs), and the web deploy uses group `deploy-web-prod` with a guard that skips stale commits via `build-info.json` in the bundle.
+- CI/deploy: main CI runs are never cancelled (per-SHA concurrency group; the shared per-ref group cancelled older pending runs), and the web deploy uses group `deploy-web-prod` with a guard that skips commits older than the live build via `build-info.json` in the bundle (it no longer skips merely because main has moved on, which starved the deploy).
 
 - Web: the wrapped page-header separator spans only the title/subtitle block instead of the whole header row; `scripts/header-parity.mjs` asserts it.
 
