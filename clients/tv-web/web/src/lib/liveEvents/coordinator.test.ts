@@ -112,6 +112,34 @@ describe("live coordinator", () => {
     coordinator.dispose();
   });
 
+  it("an import frame pair refetches the open work page, library and calendar in place", async () => {
+    const coordinator = setup();
+    const workPage = vi.fn();
+    const otherWorkPage = vi.fn();
+    const library = vi.fn();
+    const calendar = vi.fn();
+    registry.register({ areas: ["catalog", "progress"], keys: ["series-1", "ep-1"] }, workPage);
+    registry.register({ areas: ["catalog", "progress"], keys: ["other"] }, otherWorkPage);
+    registry.register({ areas: ["catalog"] }, library);
+    registry.register({ areas: ["calendar"] }, calendar);
+    const stream = sse();
+    queue.push(async () => stream.response);
+    coordinator.setActive(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await stream.push(ready(20));
+    // The two frames the server publishes for one new media_files row
+    // (EventingMediaFileRepo): library/files and calendar/imported.
+    await stream.push(change(21, "library", "work", "series-1", ["files"]));
+    await stream.push(change(22, "calendar", "work", "series-1", ["imported"]));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(workPage).toHaveBeenCalledTimes(1);
+    expect(library).toHaveBeenCalledTimes(1);
+    expect(calendar).toHaveBeenCalledTimes(1);
+    expect(otherWorkPage).not.toHaveBeenCalled();
+    expect(opens).toHaveLength(1); // no reconnect or reload involved
+    coordinator.dispose();
+  });
+
   it("treats a non-SSE response as unsupported: polls, never retries until foreground", async () => {
     const coordinator = setup(30_000);
     const consumer = vi.fn();

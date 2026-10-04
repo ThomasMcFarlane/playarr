@@ -93,7 +93,10 @@ source_instance_id?, created_ms)`.
   peer sync, portability import and other devices of the same account.
 - A *new* `media_files` row (an import) emits `library`/`files` plus
   `calendar`/`imported` scoped to its source instance. Updates of an existing
-  file on each poll are deliberately silent.
+  file on each poll are deliberately silent. A Sonarr series row never changes
+  when an episode arrives (Sonarr gives no series availability), so the poller
+  compares `statistics.episodeFileCount` with the synced files and re-syncs the
+  series when the source holds more.
 - Household, account and source-instance handlers publish their own rows;
   the arr sync poller announces `sync_started` and `sync_finished`.
 - The stream tails the table (`seq > cursor`, oldest first, 500 per read),

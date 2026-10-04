@@ -135,6 +135,11 @@ pub struct RemoteWork {
     /// `Work::availability` untouched rather than downgrading it to
     /// `Unknown` on every sync pass.
     pub availability: Option<Availability>,
+    /// How many files the source says it holds for this entity, when its
+    /// list payload says (Sonarr `statistics.episodeFileCount`). Series carry
+    /// no availability, so this is the only list-level signal that an episode
+    /// was imported into a series Playarr already knows.
+    pub file_count: Option<u32>,
     /// Metadata *arr apps themselves carry (they're TMDb/TVDB/MusicBrainz-
     /// backed) — arr-sync owns these `Work` fields outright now (see
     /// `poller::new_work`/`merge_work`), unlike `tags`, which stays
@@ -208,6 +213,7 @@ fn radarr_arr_tags(movie: &RadarrMovie) -> Vec<String> {
 
 fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
     RemoteWork {
+        file_count: series.statistics.as_ref().map(|s| s.episode_file_count),
         external_id: series.tvdb_id.to_string(),
         source_id: series.id,
         title: series.title.clone(),
@@ -229,6 +235,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
 
 fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
     RemoteWork {
+        file_count: None,
         external_id: movie.tmdb_id.to_string(),
         source_id: movie.id,
         title: movie.title.clone(),
@@ -274,6 +281,7 @@ fn radarr_release_date(movie: &RadarrMovie) -> Option<DateTime<Utc>> {
 
 fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
     RemoteWork {
+        file_count: None,
         certification: None,
         arr_tags: Vec::new(),
         external_id: artist.foreign_artist_id.clone(),
@@ -326,6 +334,7 @@ fn map_lidarr_with_album_fallback(
 
 fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
     RemoteWork {
+        file_count: None,
         certification: None,
         arr_tags: Vec::new(),
         external_id: author.foreign_author_id.clone(),
@@ -348,6 +357,7 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
 
 fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
     RemoteWork {
+        file_count: None,
         certification: None,
         arr_tags: Vec::new(),
         external_id: series.tpdb_id.to_string(),
@@ -578,6 +588,7 @@ mod tests {
             first_aired: None,
             certification: None,
             ratings: None,
+            statistics: None,
         }
     }
 

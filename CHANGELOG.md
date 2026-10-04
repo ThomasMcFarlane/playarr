@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Server: an episode imported into a series Playarr already knows is now synced (and so announced as live `library`/`files` and `calendar`/`imported` frames) on the next pass or webhook refetch; previously only a brand-new series or a Sonarr-reported change picked it up, because Sonarr series rows carry no availability. Sonarr's `statistics.episodeFileCount` is compared with the synced file count. Regression tests cover the sync, the event stream and the web live-event mapping (TASKS 275).
 - Web: Home On Deck and Continue Watching now always apply resume-plan, progress and detail results that arrive after the first-paint wait, so the stacked "N ways to continue" card appears on high-latency links; keyboard focus is kept when the rail fills in late (TASKS 302).
 - Home rails: verified on region-b (API, web, emulator-host Android emulator); Android server rails merged in PR 177 (task 244, 246).
 - Operations: pin REGION-A and REGION-B to regional image `<image>` (TASKS 295, 298), built from main commit and verified at digest `sha256:19297805e9d0f13f2017bb9826cecacc630d7b226e34c4b8c0e9aa297b83228d`; explicitly configure one concurrent transcode and two FFmpeg threads per regional node.

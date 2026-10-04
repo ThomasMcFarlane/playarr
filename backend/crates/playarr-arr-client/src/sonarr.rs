@@ -45,6 +45,17 @@ pub struct SonarrSeries {
     /// Audience score (`0-10`) and vote count.
     #[serde(default)]
     pub ratings: Option<SonarrRatings>,
+    /// File counters Sonarr keeps per series. Absent on older builds.
+    #[serde(default)]
+    pub statistics: Option<SonarrSeriesStatistics>,
+}
+
+/// Sonarr's `statistics` object on a series; only the part sync needs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SonarrSeriesStatistics {
+    /// Episode files currently on disk. A rise means an import happened.
+    #[serde(default, rename = "episodeFileCount")]
+    pub episode_file_count: u32,
 }
 
 /// Sonarr's `ratings` object on a series.

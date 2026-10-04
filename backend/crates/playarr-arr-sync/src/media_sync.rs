@@ -280,6 +280,11 @@ impl MediaSync {
         Ok(!files.is_empty())
     }
 
+    /// How many synced `MediaFile` rows `work_id` has.
+    pub async fn media_file_count(&self, work_id: Uuid) -> Result<usize, MediaSyncError> {
+        Ok(self.media_file_repo.list_by_work_id(work_id).await?.len())
+    }
+
     /// Returns whether a work needs a file-level refresh because at least
     /// one existing file predates persisted runtimes. This makes the
     /// scheduled reconciliation pass a bounded backfill for established

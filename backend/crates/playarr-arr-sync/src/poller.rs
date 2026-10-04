@@ -346,6 +346,12 @@ impl ReconciliationPoller {
             .map(|r| (r.external_id.clone(), r.source_id))
             .collect();
 
+        // Same reason as `source_ids`: gone once `diff_works` consumes `remote`.
+        let remote_file_counts: HashMap<i64, u32> = remote
+            .iter()
+            .filter_map(|r| r.file_count.map(|n| (r.source_id, n)))
+            .collect();
+
         let mut local = self.list_all_local(work_kind).await?;
         let mut ops = Vec::new();
         if self.source_kind == SourceKind::Whisparr {
@@ -374,8 +380,14 @@ impl ReconciliationPoller {
         self.sync_media_files(&ops, &provider, &source_ids).await;
         self.prewarm_artwork(&ops).await;
         self.sync_embeddings(&ops).await;
-        self.backfill_missing_media_files(&local_snapshot, &ops, &provider, &source_ids)
-            .await;
+        self.backfill_missing_media_files(
+            &local_snapshot,
+            &ops,
+            &provider,
+            &source_ids,
+            &remote_file_counts,
+        )
+        .await;
         Ok(())
     }
 
@@ -435,11 +447,21 @@ impl ReconciliationPoller {
             Some(existing) => {
                 let merged = merge_work(&existing, work_kind, &remote);
                 if merged == existing {
-                    if self
-                        .media_sync
-                        .has_missing_duration(existing.id)
-                        .await
-                        .unwrap_or(false)
+                    let new_files = match remote.file_count {
+                        Some(remote_files) => self
+                            .media_sync
+                            .media_file_count(existing.id)
+                            .await
+                            .map(|local| local < remote_files as usize)
+                            .unwrap_or(false),
+                        None => false,
+                    };
+                    if new_files
+                        || self
+                            .media_sync
+                            .has_missing_duration(existing.id)
+                            .await
+                            .unwrap_or(false)
                     {
                         self.sync_media_file(existing.id, id).await;
                     }
@@ -631,6 +653,7 @@ impl ReconciliationPoller {
         ops: &[SyncOp],
         provider: &ExternalProvider,
         source_ids: &HashMap<String, i64>,
+        remote_file_counts: &HashMap<i64, u32>,
     ) {
         use futures::stream::{self, StreamExt};
 
@@ -642,7 +665,7 @@ impl ReconciliationPoller {
             })
             .collect();
 
-        let candidates: Vec<(Uuid, i64, Availability)> = local_snapshot
+        let candidates: Vec<(Uuid, i64, Availability, Option<u32>)> = local_snapshot
             .iter()
             .filter(|work| !already_handled.contains(&work.id))
             .filter_map(|work| {
@@ -652,7 +675,12 @@ impl ReconciliationPoller {
                     .find(|r| &r.provider == provider)
                     .map(|r| r.external_id.as_str())?;
                 let arr_source_id = *source_ids.get(external_id)?;
-                Some((work.id, arr_source_id, work.availability))
+                Some((
+                    work.id,
+                    arr_source_id,
+                    work.availability,
+                    remote_file_counts.get(&arr_source_id).copied(),
+                ))
             })
             .collect();
 
@@ -667,8 +695,8 @@ impl ReconciliationPoller {
         );
 
         let mut in_flight = stream::iter(candidates.into_iter().map(
-            |(work_id, arr_source_id, availability)| {
-                self.backfill_one(work_id, arr_source_id, availability)
+            |(work_id, arr_source_id, availability, remote_files)| {
+                self.backfill_one(work_id, arr_source_id, availability, remote_files)
             },
         ))
         .buffer_unordered(BACKFILL_CONCURRENCY);
@@ -699,7 +727,39 @@ impl ReconciliationPoller {
     /// real *arr API request). Split out from [`Self::
     /// backfill_missing_media_files`] so that method can drive many of
     /// these concurrently via `buffer_unordered`.
-    async fn backfill_one(&self, work_id: Uuid, arr_source_id: i64, availability: Availability) {
+    async fn backfill_one(
+        &self,
+        work_id: Uuid,
+        arr_source_id: i64,
+        availability: Availability,
+        remote_files: Option<u32>,
+    ) {
+        // A source that counts its files (Sonarr) tells us an import happened
+        // even though the series row itself did not change.
+        if let Some(remote) = remote_files {
+            match self.media_sync.media_file_count(work_id).await {
+                Ok(local) if local < remote as usize => {
+                    tracing::info!(
+                        source_instance_id = %self.source_instance_id,
+                        work_id = %work_id,
+                        local,
+                        remote,
+                        "source holds more files than are synced; importing the new ones"
+                    );
+                    self.sync_media_file(work_id, arr_source_id).await;
+                    return;
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    tracing::warn!(
+                        source_instance_id = %self.source_instance_id,
+                        work_id = %work_id,
+                        error = %err,
+                        "failed to count media files; skipping new-file check for this work"
+                    );
+                }
+            }
+        }
         let has_files = match self.media_sync.has_any_media_file(work_id).await {
             Ok(has_files) => has_files,
             Err(err) => {
@@ -990,6 +1050,7 @@ mod tests {
 
     fn remote(external_id: &str, title: &str, monitored: bool) -> RemoteWork {
         RemoteWork {
+            file_count: None,
             certification: None,
             arr_tags: Vec::new(),
             external_id: external_id.to_string(),
@@ -1874,6 +1935,182 @@ mod tests {
             1,
             "expected the backfill to sync the missing media file, found: {files:?}"
         );
+    }
+
+    /// Mocks a Sonarr that knows one series (id 1, tvdb 111). The first
+    /// `/episode` + `/episodefile` answer holds episode 1 only; every later
+    /// answer also holds the freshly imported episode 2.
+    async fn mount_series_gaining_an_episode(server: &MockServer) {
+        let episode = |id: i64, number: i64, file_id: i64| {
+            serde_json::json!({
+                "id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
+                "title": format!("Episode {number}"), "airDate": "2024-01-0".to_string() + &number.to_string(),
+                "runtime": 43, "monitored": true, "episodeFileId": file_id, "images": []
+            })
+        };
+        let file = |id: i64| {
+            serde_json::json!({
+                "id": id, "seriesId": 1, "seasonNumber": 1,
+                "relativePath": format!("S01E0{id}.mkv"),
+                "path": format!("/tv/Show/S01E0{id}.mkv"), "size": 1_000_000i64,
+                "quality": {
+                    "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                    "revision": { "version": 1, "real": 0, "isRepack": false }
+                },
+                "mediaInfo": { "videoCodec": "x264", "runTime": "00:42:00.500" }
+            })
+        };
+        let series = |files: u32| {
+            serde_json::json!({
+                "id": 1, "title": "Live Show", "sortTitle": "live show", "tvdbId": 111,
+                "monitored": true, "status": "continuing", "path": "/tv/Show",
+                "statistics": { "episodeFileCount": files }
+            })
+        };
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([series(1)])))
+            .up_to_n_times(1)
+            .mount(server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([series(2)])))
+            .mount(server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(series(2)))
+            .mount(server)
+            .await;
+        // First answer (episode 1 only), served once.
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([episode(10, 1, 1), episode(11, 2, 0)])),
+            )
+            .up_to_n_times(1)
+            .mount(server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episodefile"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([file(1)])))
+            .up_to_n_times(1)
+            .mount(server)
+            .await;
+        // Afterwards: episode 2 has been imported.
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([episode(10, 1, 1), episode(11, 2, 2)])),
+            )
+            .mount(server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episodefile"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([file(1), file(2)])),
+            )
+            .mount(server)
+            .await;
+    }
+
+    async fn series_import_poller(
+        server: &MockServer,
+    ) -> (
+        ReconciliationPoller,
+        Arc<dyn MediaFileRepo>,
+        playarr_db::LiveEventPublisher,
+        Uuid,
+    ) {
+        let pool = test_pool().await;
+        let events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
+        // Same decoration as the server wires: every media file write
+        // publishes its live events.
+        let media_files: Arc<dyn MediaFileRepo> = Arc::new(playarr_db::EventingMediaFileRepo::new(
+            Arc::new(SqlxMediaFileRepo::new(pool.clone())),
+            events.clone(),
+        ));
+        let works: Arc<dyn WorkRepo> = Arc::new(playarr_db::repo::SqlxWorkRepo::new(pool.clone()));
+        let instance = Uuid::new_v4();
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let poller = ReconciliationPoller::new(
+            instance,
+            SourceKind::Sonarr,
+            ArrClient::Sonarr(SonarrClient::new(server.uri(), "test-api-key")),
+            Duration::from_secs(3600),
+            works,
+            media_files.clone(),
+            pool,
+            Arc::new(SingleNodeCoordinator::new()) as Arc<dyn ClusterCoordinator>,
+            rx,
+        );
+        (poller, media_files, events, instance)
+    }
+
+    async fn import_frames(events: &playarr_db::LiveEventPublisher) -> (usize, usize) {
+        let all = events.repo().list_after(0, 1000).await.unwrap();
+        let count = |kind: &str, change: &str| {
+            all.iter()
+                .filter(|e| e.kind == kind && e.changed.iter().any(|c| c == change))
+                .count()
+        };
+        (count("library", "files"), count("calendar", "imported"))
+    }
+
+    /// An episode imported into a series Playarr already knows must reach
+    /// the catalogue (and so the live `library`/`files` and
+    /// `calendar`/`imported` frames) on the next full pass. Sonarr gives no
+    /// series-level availability, so the series row itself never changes.
+    #[tokio::test]
+    async fn reconcile_all_imports_a_new_episode_of_an_already_synced_series() {
+        let server = MockServer::start().await;
+        mount_series_gaining_an_episode(&server).await;
+        let (poller, files, events, _) = series_import_poller(&server).await;
+
+        poller.reconcile_all().await.unwrap(); // first sight of the series
+        let work = poller
+            .work_repo
+            .find_by_external_ref(&ExternalProvider::Tvdb, "111")
+            .await
+            .unwrap()
+            .expect("series synced");
+        assert_eq!(files.list_by_work_id(work.id).await.unwrap().len(), 1);
+        assert_eq!(import_frames(&events).await, (1, 1));
+
+        poller.reconcile_all().await.unwrap(); // episode 2 now imported
+        assert_eq!(
+            files.list_by_work_id(work.id).await.unwrap().len(),
+            2,
+            "new episode file was not synced for an unchanged series"
+        );
+        assert_eq!(import_frames(&events).await, (2, 2));
+    }
+
+    /// Same, for the webhook-triggered targeted refetch (Sonarr `Download`).
+    #[tokio::test]
+    async fn reconcile_one_imports_a_new_episode_of_an_already_synced_series() {
+        let server = MockServer::start().await;
+        mount_series_gaining_an_episode(&server).await;
+        let (poller, files, events, _) = series_import_poller(&server).await;
+
+        poller.reconcile_all().await.unwrap();
+        let work = poller
+            .work_repo
+            .find_by_external_ref(&ExternalProvider::Tvdb, "111")
+            .await
+            .unwrap()
+            .unwrap();
+
+        poller.reconcile_one(Some(1)).await.unwrap();
+        assert_eq!(
+            files.list_by_work_id(work.id).await.unwrap().len(),
+            2,
+            "webhook refetch did not sync the new episode file"
+        );
+        assert_eq!(import_frames(&events).await, (2, 2));
     }
 
     #[tokio::test]

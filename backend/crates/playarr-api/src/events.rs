@@ -721,6 +721,136 @@ mod tests {
         assert!(seen.contains("cursor_expired"), "{seen}");
     }
 
+    /// End to end through the real sync path: a stub Sonarr reports a new
+    /// series, then (on a webhook-style refetch) a new episode of that same
+    /// series. Each import must reach an open admin stream as
+    /// `library`/`files` and `calendar`/`imported` frames without any
+    /// request from the viewer. Guards the "import appears without refresh"
+    /// behaviour of TASKS row 275.
+    #[tokio::test]
+    async fn a_synced_import_reaches_an_open_stream_for_new_and_existing_series() {
+        use playarr_arr_client::SonarrClient;
+        use playarr_arr_sync::{ArrClient, ReconciliationPoller, RefetchRequest};
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let (router, state, _user, _t) = setup().await;
+        let admin = Uuid::new_v4();
+        crate::test_support::seed_policy_user(&state, admin, |p| {
+            p.is_admin = true;
+            p.can_stream = true;
+        })
+        .await;
+        let (_, s) = open(&router, &mint_access_token(&state, admin), None).await;
+        let mut stream = s.unwrap();
+        read_until(&mut stream, "event: ready", WAIT).await;
+
+        let server = MockServer::start().await;
+        let episode = |id: i64, number: i64, file: i64| {
+            serde_json::json!({
+                "id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
+                "title": format!("Episode {number}"), "runtime": 43, "monitored": true,
+                "episodeFileId": file, "images": []
+            })
+        };
+        let file = |id: i64| {
+            serde_json::json!({
+                "id": id, "seriesId": 1, "seasonNumber": 1,
+                "relativePath": format!("S01E0{id}.mkv"),
+                "path": format!("/tv/Show/S01E0{id}.mkv"), "size": 1_000_000i64,
+                "quality": {
+                    "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                    "revision": { "version": 1, "real": 0, "isRepack": false }
+                },
+                "mediaInfo": { "videoCodec": "x264", "runTime": "00:42:00.500" }
+            })
+        };
+        let series = |files: u32| {
+            serde_json::json!({
+                "id": 1, "title": "Live Show", "sortTitle": "live show", "tvdbId": 111,
+                "monitored": true, "status": "continuing", "path": "/tv/Show",
+                "statistics": { "episodeFileCount": files }
+            })
+        };
+        let mount = |p: &'static str, body: serde_json::Value, once: bool| {
+            let mut m = Mock::given(method("GET"))
+                .and(path(p))
+                .respond_with(ResponseTemplate::new(200).set_body_json(body));
+            if once {
+                m = m.up_to_n_times(1);
+            }
+            m
+        };
+        mount("/api/v3/series", serde_json::json!([series(1)]), false)
+            .mount(&server)
+            .await;
+        mount("/api/v3/series/1", series(2), false)
+            .mount(&server)
+            .await;
+        mount(
+            "/api/v3/episode",
+            serde_json::json!([episode(10, 1, 1), episode(11, 2, 0)]),
+            true,
+        )
+        .mount(&server)
+        .await;
+        mount("/api/v3/episodefile", serde_json::json!([file(1)]), true)
+            .mount(&server)
+            .await;
+        mount(
+            "/api/v3/episode",
+            serde_json::json!([episode(10, 1, 1), episode(11, 2, 2)]),
+            false,
+        )
+        .mount(&server)
+        .await;
+        mount(
+            "/api/v3/episodefile",
+            serde_json::json!([file(1), file(2)]),
+            false,
+        )
+        .mount(&server)
+        .await;
+
+        let instance = Uuid::new_v4();
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        let poller = ReconciliationPoller::new(
+            instance,
+            playarr_model::SourceKind::Sonarr,
+            ArrClient::Sonarr(SonarrClient::new(server.uri(), "key")),
+            Duration::from_secs(3600),
+            state.work_repo.clone(),
+            state.media_file_repo.clone(),
+            state_pool(&state),
+            std::sync::Arc::new(playarr_coordination::SingleNodeCoordinator::new()),
+            rx,
+        );
+        let task = tokio::spawn(poller.run());
+
+        // First sight of the series: its first episode file is an import.
+        let seen = read_until(&mut stream, "\"changed\":[\"imported\"]", WAIT).await;
+        assert!(seen.contains("\"type\":\"library\""), "{seen}");
+        assert!(seen.contains("\"changed\":[\"files\"]"), "{seen}");
+        let _ = drain(&mut stream, QUIET).await;
+
+        // Sonarr then imports episode 2 into the series Playarr already has.
+        tx.send(RefetchRequest {
+            source_instance_id: instance,
+            source_kind: playarr_model::SourceKind::Sonarr,
+            entity_id: Some(1),
+            event_type: "Download".into(),
+        })
+        .await
+        .unwrap();
+        let seen = read_until(&mut stream, "\"changed\":[\"imported\"]", WAIT).await;
+        assert!(
+            seen.contains("\"changed\":[\"files\"]"),
+            "no import frame for the new episode of an existing series: {seen}"
+        );
+        drop(tx);
+        let _ = task.await;
+    }
+
     fn state_pool(state: &TestState) -> sqlx::AnyPool {
         state.pool.clone()
     }
