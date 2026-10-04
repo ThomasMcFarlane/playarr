@@ -62,6 +62,7 @@ use playarr_tdarr_client::{AlterWorkerLimitRequest, ScanIndividualFileRequest, T
 use serde::{Deserialize, Serialize};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -317,6 +318,7 @@ impl TranscodeTargetProfile {
 
 /// Fixed HLS segment duration, in seconds, for on-demand output.
 pub const HLS_SEGMENT_SECONDS: u32 = 4;
+const DEFAULT_FFMPEG_THREADS: usize = 2;
 
 /// Builds the ffmpeg argv for transcoding `input_path` into an HLS
 /// rendition under `output_dir`, per `profile`. Pure (no I/O, no process
@@ -369,6 +371,7 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
         start_position_ms,
         audio_stream_index,
         None,
+        DEFAULT_FFMPEG_THREADS,
     )
 }
 
@@ -401,6 +404,7 @@ pub fn build_ffmpeg_hls_args_at_with_external_audio(
         start_position_ms,
         None,
         Some(external),
+        DEFAULT_FFMPEG_THREADS,
     )
 }
 
@@ -411,12 +415,21 @@ fn build_hls_args(
     start_position_ms: u64,
     audio_stream_index: Option<u32>,
     external: Option<&ExternalAudio>,
+    ffmpeg_threads: usize,
 ) -> Vec<String> {
     let mut args = vec![
         // Overwrite without prompting — the per-session output directory
         // is freshly created, but ffmpeg still probes for an existing
         // playlist file otherwise and this keeps it non-interactive.
         "-y".to_string(),
+        // Bound decoder and filter workers before opening the input. Encoder
+        // threads are set separately with the output video options below.
+        "-threads:v".to_string(),
+        ffmpeg_threads.to_string(),
+        "-filter_threads".to_string(),
+        ffmpeg_threads.to_string(),
+        "-filter_complex_threads".to_string(),
+        ffmpeg_threads.to_string(),
     ];
 
     if start_position_ms > 0 {
@@ -438,6 +451,8 @@ fn build_hls_args(
     args.extend([
         "-c:v".to_string(),
         profile.video_codec.clone(),
+        "-threads:v".to_string(),
+        ffmpeg_threads.to_string(),
         // Browser MSE implementations generally accept 8-bit H.264 but
         // reject High 10 output. Without an explicit pixel format, libx264
         // preserves a 10-bit source as yuv420p10le, which produces valid TS
@@ -569,9 +584,10 @@ pub struct TranscodeOrchestrator {
     /// `output_root/<session-id>/` subdirectory.
     output_root: PathBuf,
     session_ttl: Duration,
-    /// `None` means unlimited (no admission control) on-demand sessions
-    /// for this node.
-    max_concurrent_sessions: Option<usize>,
+    /// Node-local atomic admission for on-demand FFmpeg jobs; independent
+    /// from a user's `Policy::max_concurrent_sessions`.
+    transcode_slots: Arc<Semaphore>,
+    ffmpeg_threads: usize,
     /// Process handles for sessions this exact node spawned, so
     /// `expire_session` can actually terminate the ffmpeg process instead
     /// of only forgetting about it. Only ever contains sessions this
@@ -587,7 +603,7 @@ pub struct TranscodeOrchestrator {
     /// per-node control channel) once multi-node on-demand transcode is
     /// actually exercised — deferred, since today every node only ever
     /// expires sessions it owns.
-    active_children: Mutex<HashMap<Uuid, Child>>,
+    active_children: Mutex<HashMap<Uuid, ActiveChild>>,
     /// Links the durable/user-facing playback session id returned by the
     /// API to the ephemeral on-demand transcode process serving it. The
     /// ids are deliberately different domains: `PlaybackSession` is an
@@ -607,6 +623,14 @@ pub struct TranscodeOrchestrator {
     tdarr_notify: Option<mpsc::Sender<MediaFileImportEvent>>,
 }
 
+struct ActiveChild {
+    child: Child,
+    // Holds the admission slot for the lifetime of the tracked process.
+    // Completed children remain tracked until session TTL cleanup so their
+    // generated HLS output remains available to existing playback sessions.
+    slot: Option<OwnedSemaphorePermit>,
+}
+
 impl TranscodeOrchestrator {
     pub fn new(
         rendition_repo: Arc<dyn RenditionRepo>,
@@ -620,7 +644,8 @@ impl TranscodeOrchestrator {
             ffmpeg_binary: "ffmpeg".to_string(),
             output_root: std::env::temp_dir().join("playarr-transcode"),
             session_ttl: Duration::from_secs(60),
-            max_concurrent_sessions: None,
+            transcode_slots: Arc::new(Semaphore::new(1)),
+            ffmpeg_threads: DEFAULT_FFMPEG_THREADS,
             active_children: Mutex::new(HashMap::new()),
             playback_transcodes: Mutex::new(HashMap::new()),
             tdarr_notify: None,
@@ -653,7 +678,14 @@ impl TranscodeOrchestrator {
     }
 
     pub fn with_max_concurrent_sessions(mut self, max: usize) -> Self {
-        self.max_concurrent_sessions = Some(max);
+        let max = max.max(1);
+        self.transcode_slots = Arc::new(Semaphore::new(max));
+        self
+    }
+
+    /// Sets the maximum number of threads FFmpeg may use per on-demand job.
+    pub fn with_ffmpeg_threads(mut self, threads: usize) -> Self {
+        self.ffmpeg_threads = threads.max(1);
         self
     }
 
@@ -764,6 +796,7 @@ impl TranscodeOrchestrator {
         start_position_ms: u64,
         audio_stream_index: Option<u32>,
     ) -> Result<TranscodeSession, TranscodeError> {
+        let slot = self.reserve_capacity().await?;
         self.spawn_on_demand(
             Uuid::new_v4(),
             media_file,
@@ -772,6 +805,7 @@ impl TranscodeOrchestrator {
             start_position_ms,
             audio_stream_index,
             None,
+            slot,
         )
         .await
     }
@@ -797,7 +831,7 @@ impl TranscodeOrchestrator {
         F: FnOnce(PathBuf) -> Fut,
         Fut: std::future::Future<Output = Result<(), String>>,
     {
-        self.check_capacity().await?;
+        let slot = self.reserve_capacity().await?;
         let session_id = Uuid::new_v4();
         let path = self.external_audio_path(session_id);
         tokio::fs::create_dir_all(&self.output_root).await?;
@@ -815,6 +849,7 @@ impl TranscodeOrchestrator {
                 start_position_ms,
                 None,
                 Some(&external),
+                slot,
             )
             .await;
         if result.is_err() {
@@ -831,14 +866,14 @@ impl TranscodeOrchestrator {
             .join(format!("{session_id}.external-audio"))
     }
 
-    async fn check_capacity(&self) -> Result<(), TranscodeError> {
-        if let Some(max) = self.max_concurrent_sessions {
-            let active = self.active_children.lock().await.len();
-            if active >= max {
-                return Err(TranscodeError::NoCapacity);
-            }
-        }
-        Ok(())
+    async fn reserve_capacity(&self) -> Result<OwnedSemaphorePermit, TranscodeError> {
+        // Release permits for children that exited naturally before trying
+        // the non-blocking admission check.
+        self.reap_finished_children().await;
+        self.transcode_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| TranscodeError::NoCapacity)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -851,9 +886,8 @@ impl TranscodeOrchestrator {
         start_position_ms: u64,
         audio_stream_index: Option<u32>,
         external: Option<&ExternalAudio>,
+        slot: OwnedSemaphorePermit,
     ) -> Result<TranscodeSession, TranscodeError> {
-        self.check_capacity().await?;
-
         let target_profile = TranscodeTargetProfile::resolve(profile);
         let output_dir = self.output_root.join(session_id.to_string());
         tokio::fs::create_dir_all(&output_dir).await?;
@@ -866,6 +900,7 @@ impl TranscodeOrchestrator {
             start_position_ms,
             audio_stream_index,
             external,
+            self.ffmpeg_threads,
         );
 
         let mut command = Command::new(&self.ffmpeg_binary);
@@ -899,7 +934,13 @@ impl TranscodeOrchestrator {
             return Err(err);
         }
 
-        self.active_children.lock().await.insert(session.id, child);
+        self.active_children.lock().await.insert(
+            session.id,
+            ActiveChild {
+                child,
+                slot: Some(slot),
+            },
+        );
         self.active_sessions.increment();
 
         // Someone is watching this file right now via this temporary,
@@ -981,17 +1022,19 @@ impl TranscodeOrchestrator {
     /// further lookups find it) and, if this node owns the underlying
     /// process, kills it and releases its capacity slot.
     pub async fn expire_session(&self, session_id: Uuid) -> Result<(), TranscodeError> {
-        self.cache
-            .delete(&Self::session_cache_key(session_id))
-            .await?;
-
-        if let Some(mut child) = self.active_children.lock().await.remove(&session_id) {
+        if let Some(mut active) = self.active_children.lock().await.remove(&session_id) {
             // The process may have already exited on its own (transcode
             // finished, or crashed) — `kill` erroring in that case is
             // expected, not a failure of expiry itself.
-            let _ = child.kill().await;
-            self.active_sessions.decrement();
+            if active.slot.take().is_some() {
+                let _ = active.child.kill().await;
+                self.active_sessions.decrement();
+            }
         }
+
+        self.cache
+            .delete(&Self::session_cache_key(session_id))
+            .await?;
 
         self.playback_transcodes
             .lock()
@@ -1022,6 +1065,7 @@ impl TranscodeOrchestrator {
     /// row vanished but the process kept encoding, competing for CPU.
     /// Returns how many sessions were reaped.
     pub async fn reap_idle_sessions(&self) -> usize {
+        self.reap_finished_children().await;
         let ids: Vec<Uuid> = self.active_children.lock().await.keys().copied().collect();
         let mut reaped = 0;
         for id in ids {
@@ -1041,6 +1085,19 @@ impl TranscodeOrchestrator {
             }
         }
         reaped
+    }
+
+    /// Drops children that completed naturally, releasing their admission
+    /// permits and active-process count. Called by the periodic reaper and
+    /// before each new admission attempt.
+    async fn reap_finished_children(&self) {
+        let mut active = self.active_children.lock().await;
+        for process in active.values_mut() {
+            if process.slot.is_some() && matches!(process.child.try_wait(), Ok(Some(_))) {
+                process.slot.take(); // release capacity, keep output/session tracked
+                self.active_sessions.decrement();
+            }
+        }
     }
 
     /// Runs [`Self::reap_idle_sessions`] every `interval` until the task is
@@ -1341,6 +1398,21 @@ mod tests {
             None,
         );
         assert!(!args.iter().any(|a| a == "apad" || a == "-shortest"));
+    }
+
+    #[test]
+    fn ffmpeg_decoder_encoder_and_filter_threads_have_safe_defaults() {
+        let profile = TranscodeTargetProfile::resolve("720p");
+        let args = build_ffmpeg_hls_args(Path::new("/m/a.mkv"), &profile, Path::new("/out"));
+        for option in ["-threads:v", "-filter_threads", "-filter_complex_threads"] {
+            let values: Vec<_> = args
+                .windows(2)
+                .filter(|window| window[0] == option)
+                .map(|window| window[1].as_str())
+                .collect();
+            assert!(!values.is_empty(), "{option} must be set");
+            assert!(values.iter().all(|value| *value == "2"));
+        }
     }
 
     use super::*;
@@ -1838,6 +1910,23 @@ mod tests {
     mod session_lifecycle {
         use super::*;
 
+        #[cfg(unix)]
+        async fn sleeping_ffmpeg(root: &Path) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+
+            tokio::fs::create_dir_all(root).await.unwrap();
+            let path = root.join("ffmpeg-sleeper");
+            tokio::fs::write(&path, "#!/bin/sh\nexec /usr/bin/sleep 30\n")
+                .await
+                .unwrap();
+            let mut permissions = tokio::fs::metadata(&path).await.unwrap().permissions();
+            permissions.set_mode(0o755);
+            tokio::fs::set_permissions(&path, permissions)
+                .await
+                .unwrap();
+            path
+        }
+
         #[tokio::test]
         async fn spawn_creates_a_lookupable_session_and_expire_removes_it() {
             let repo = Arc::new(FakeRenditionRepo::default());
@@ -2119,16 +2208,19 @@ mod tests {
             assert_eq!(found, None);
         }
 
+        #[cfg(unix)]
         #[tokio::test]
         async fn no_capacity_error_once_max_concurrent_sessions_reached() {
+            let root = unique_tmp_dir();
+            let sleeper = sleeping_ffmpeg(&root).await;
             let repo = Arc::new(FakeRenditionRepo::default());
             let orchestrator = TranscodeOrchestrator::new(
                 repo,
                 Arc::new(InMemory::new()),
                 ActiveSessionCounter::new(),
             )
-            .with_ffmpeg_binary("/usr/bin/true")
-            .with_output_root(unique_tmp_dir())
+            .with_ffmpeg_binary(sleeper)
+            .with_output_root(root.join("output"))
             .with_max_concurrent_sessions(1);
 
             let media_file = sample_media_file();
@@ -2142,6 +2234,122 @@ mod tests {
                 .await;
 
             assert!(matches!(second, Err(TranscodeError::NoCapacity)));
+        }
+
+        #[tokio::test]
+        async fn spawn_error_releases_admission_permit() {
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                ActiveSessionCounter::new(),
+            )
+            .with_ffmpeg_binary("/definitely/missing/playarr-ffmpeg")
+            .with_output_root(unique_tmp_dir())
+            .with_max_concurrent_sessions(1);
+
+            let error = orchestrator
+                .spawn_on_demand_transcode(&sample_media_file(), "profile-a", "node-a")
+                .await
+                .expect_err("missing executable must fail to spawn");
+            assert!(matches!(error, TranscodeError::Io(_)));
+            assert!(orchestrator.reserve_capacity().await.is_ok());
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn admission_permit_tracks_child_and_is_released_by_expiry() {
+            let root = unique_tmp_dir();
+            let sleeper = sleeping_ffmpeg(&root).await;
+
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary(sleeper)
+            .with_output_root(root.join("output"))
+            .with_max_concurrent_sessions(1);
+            let media_file = sample_media_file();
+            let first = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .expect("first child owns the only permit");
+
+            assert!(matches!(
+                orchestrator
+                    .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                    .await,
+                Err(TranscodeError::NoCapacity)
+            ));
+            assert_eq!(counter.get(), 1);
+
+            orchestrator.expire_session(first.id).await.unwrap();
+            assert_eq!(counter.get(), 0);
+            let second = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-c", "node-a")
+                .await
+                .expect("cleanup returns the permit");
+            orchestrator.expire_session(second.id).await.unwrap();
+            assert_eq!(counter.get(), 0);
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn natural_child_exit_releases_capacity_but_keeps_session_until_expiry() {
+            let root = unique_tmp_dir();
+            let output_root = root.join("output");
+            let counter = ActiveSessionCounter::new();
+            let cache = Arc::new(InMemory::new());
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                cache.clone(),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(output_root.clone())
+            .with_max_concurrent_sessions(1);
+            let media_file = sample_media_file();
+            let first = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .expect("first child starts");
+            let output_dir = output_root.join(first.id.to_string());
+            assert!(output_dir.is_dir());
+
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            orchestrator.reap_finished_children().await;
+            assert_eq!(counter.get(), 0, "finished process released its slot");
+            assert!(
+                orchestrator
+                    .lookup_session(first.id)
+                    .await
+                    .unwrap()
+                    .is_some(),
+                "the completed session remains available for playback"
+            );
+            assert!(
+                output_dir.is_dir(),
+                "completed output remains until cleanup"
+            );
+
+            let second = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                .await
+                .expect("natural child exit returned admission capacity");
+            orchestrator.expire_session(second.id).await.unwrap();
+
+            cache
+                .delete(&TranscodeOrchestrator::session_cache_key(first.id))
+                .await
+                .unwrap();
+            assert_eq!(orchestrator.reap_idle_sessions().await, 1);
+            assert!(!output_dir.exists(), "TTL cleanup removes completed output");
+            assert!(!orchestrator
+                .active_children
+                .lock()
+                .await
+                .contains_key(&first.id));
         }
 
         #[tokio::test]

@@ -807,6 +807,39 @@ fn transcode_session_idle_ttl_from_env() -> std::time::Duration {
     }
 }
 
+/// Node-local admission for on-demand FFmpeg processes, independent of
+/// per-user policy. The semaphore holds each slot for the child lifetime.
+fn transcode_max_concurrent_jobs_from_env() -> usize {
+    positive_usize_from_env("PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS", 1)
+}
+
+/// Decoder, encoder and filter thread bound for each on-demand FFmpeg job.
+fn ffmpeg_threads_from_env() -> usize {
+    positive_usize_from_env("PLAYARR_FFMPEG_THREADS", 2)
+}
+
+fn positive_usize_from_env(name: &'static str, default: usize) -> usize {
+    let Ok(raw) = std::env::var(name) else {
+        return default;
+    };
+    parse_positive_usize(name, &raw, default)
+}
+
+fn parse_positive_usize(name: &'static str, raw: &str, default: usize) -> usize {
+    match raw.parse::<usize>() {
+        Ok(value) if value > 0 => value,
+        _ => {
+            tracing::warn!(
+                variable = name,
+                value = %raw,
+                default,
+                "configuration must be a positive integer; using the safe default"
+            );
+            default
+        }
+    }
+}
+
 /// How often each `PeerSyncPoller` (`docs/architecture/peer-groups.md`
 /// §3.6) runs a full sync cycle against its one peer.
 /// `PLAYARR_PEER_SYNC_INTERVAL_SECS`, defaulting to
@@ -1542,6 +1575,8 @@ async fn boot_api(
         playarr_transcode::TranscodeOrchestrator::new(rendition_repo, cache, active_sessions)
             .with_output_root(std::env::temp_dir().join("playarr-transcode"))
             .with_session_ttl(transcode_session_idle_ttl_from_env())
+            .with_max_concurrent_sessions(transcode_max_concurrent_jobs_from_env())
+            .with_ffmpeg_threads(ffmpeg_threads_from_env())
             .with_tdarr_notify(tdarr_notify_tx),
     );
 
@@ -3251,6 +3286,15 @@ mod bootstrap_tests {
     use playarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
     use playarr_db::{DbPool, PolicyRepo, UserRepo};
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn transcode_resource_settings_require_positive_integers() {
+        assert_eq!(parse_positive_usize("TEST", "1", 9), 1);
+        assert_eq!(parse_positive_usize("TEST", "12", 9), 12);
+        assert_eq!(parse_positive_usize("TEST", "0", 9), 9);
+        assert_eq!(parse_positive_usize("TEST", "-1", 9), 9);
+        assert_eq!(parse_positive_usize("TEST", "many", 9), 9);
+    }
 
     /// Same private, migrated, in-memory SQLite pool idiom
     /// `playarr-api`'s `test_support::test_pool` and `playarr-catalog`'s
