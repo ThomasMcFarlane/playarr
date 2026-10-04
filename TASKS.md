@@ -13,10 +13,10 @@ Owner request (4 October 2026): filter the library by available subtitle languag
 |---|------|--------|--------------|-------|
 | 180 | Epic: audio/subtitle language filters (server, web, Android, other clients) | in progress | lang-filters | Parent of 181-185. |
 | 181 | Server: language index (migration, *arr mediaInfo at sync, ffprobe and sidecar backfill), browse/search params, facet endpoint, OpenAPI | done: merged in PR 138; region-b verification pending (row 185) | lang-filters | Parent: 180. Semantics: OR within a list (`lang_match=all` for AND), audio AND subtitle, series = union of episodes. |
-| 182 | Web: language filters in the library filters UI (including TV layout), persisted in the URL query, localised names | in progress: web PR open | lang-filters | Parent: 180. Depends on 181. |
-| 183 | Android: language filters in the native Compose Filters sheet (TV and phone), localised names | in progress: Android PR open | lang-filters | Parent: 180. Depends on 181. |
+| 182 | Web: language filters in the library filters UI (including TV layout), persisted in the URL query, localised names | done: merged in PR 146; live on playarr.app (bundle serves the filters) | lang-filters | Parent: 180. Depends on 181. |
+| 183 | Android: language filters in the native Compose Filters sheet (TV and phone), localised names | done: merged in PR 147; emulator validation pending (row 185) | lang-filters | Parent: 180. Depends on 181. |
 | 184 | Other clients: iOS, Apple TV, Fire TV Vega, Xbox, Harmony, Roku, VIDAA language filters | pending | Unassigned | Parent: 180. Depends on 181; use `audio_lang`/`subtitle_lang` and `/api/v1/catalog/languages`. |
-| 185 | Validate language filters on region-b, web and the Android emulator | pending | lang-filters | Parent: 180. Depends on 181-183. |
+| 185 | Validate language filters on region-b, web and the Android emulator | in progress: region-b API verified (facets, audio/subtitle filters, search, every_file); browser UI and emulator pass still to do | lang-filters | Parent: 180. Depends on 181-183. |
 ## Active: Dubarr dub tracks as alternate audio (2026-10-04)
 
 Owner decision (4 October 2026): Dubarr (AI dubbing manager, `ThomasMcFarlane/dubarr`) publishes finished dub tracks as sidecar audio; Playarr catalogues them as extra audio tracks. Contract: Dubarr `docs/architecture.md` section 7 and `server/openapi.yaml`.
