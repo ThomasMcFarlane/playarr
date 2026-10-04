@@ -51,6 +51,47 @@ data class LanguageFacets(
     val subtitle: List<LanguageFacetEntry> = emptyList(),
 )
 
+/** One server-computed Home rail (`HomeRailResponse`); the server omits empty rails and localises [title]. */
+@Serializable
+data class HomeRailDto(
+    val id: String,
+    val kind: String,
+    val library: String? = null,
+    val title: String,
+    val titleKey: String = "",
+    val viewId: String? = null,
+    val items: List<Work> = emptyList(),
+    val total: Long = 0,
+)
+
+/** `GET /api/v1/home/rails` response body. */
+@Serializable
+data class HomeRailsResponse(
+    val rails: List<HomeRailDto> = emptyList(),
+    val lang: String = "en",
+)
+
+/** One rail in the caller's own Home customisation list (`RailPreferenceEntry`). */
+@Serializable
+data class RailPreferenceEntry(
+    val id: String,
+    val kind: String,
+    val library: String? = null,
+    val title: String,
+    val hidden: Boolean = false,
+)
+
+/** `GET|PUT /api/v1/home/rails/preferences` response body. */
+@Serializable
+data class RailPreferences(val rails: List<RailPreferenceEntry> = emptyList())
+
+/** `PUT /api/v1/home/rails/preferences` request body: the desired order and the hidden rails. */
+@Serializable
+data class RailPreferencesRequest(
+    val order: List<String> = emptyList(),
+    val hidden: List<String> = emptyList(),
+)
+
 /** Minimal Playarr-facing projection returned by `GET /api/v1/views`. */
 @Serializable
 data class ViewSummary(

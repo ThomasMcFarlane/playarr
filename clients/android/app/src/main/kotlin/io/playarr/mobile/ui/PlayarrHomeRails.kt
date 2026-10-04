@@ -1,6 +1,8 @@
 package io.playarr.mobile.ui
 
 import io.playarr.shared.data.model.ResumePlan
+import io.playarr.shared.data.model.HomeRailDto
+import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.WatchProgress
 import io.playarr.shared.data.model.Work
 import io.playarr.shared.data.model.WorkChildren
@@ -25,10 +27,17 @@ internal data class PlayarrOnDeckEntry(
 )
 
 internal data class HomeRail(
-    val title: PlayarrString,
+    /** Built-in localised heading; `null` when the server supplied [literalTitle]. */
+    val title: PlayarrString?,
     val works: List<Work>,
     val onDeckByWork: Map<String, PlayarrOnDeckEntry> = emptyMap(),
-)
+    /** Server-localised heading for a server-computed rail. */
+    val literalTitle: String? = null,
+    /** Stable key; server rails use the rail definition id. */
+    val railId: String? = null,
+) {
+    val key: String get() = railId ?: title?.name ?: literalTitle.orEmpty()
+}
 
 internal fun resolvePlayarrOnDeckEntry(
     detail: WorkDetail,
@@ -56,6 +65,39 @@ internal fun resolvePlayarrOnDeckEntry(
         )
     }
     return null
+}
+
+/** A server rail as a [HomeRail]; the server already localised the title and dropped empty rails. */
+internal fun HomeRailDto.toHomeRail(): HomeRail =
+    HomeRail(title = null, works = items, literalTitle = title, railId = id)
+
+/**
+ * Home with server-computed rails: On deck first (when there is any), then the rails the
+ * server returned in the user's order, then "New sites" (the server has no site rails).
+ * Falls back to the built-in New/More shelves when the server returned none (older server).
+ */
+internal fun buildPlayarrHomeRails(
+    byKind: Map<WorkKind, List<Work>>,
+    onDeck: List<PlayarrOnDeckEntry>,
+    serverRails: List<HomeRailDto>,
+): List<HomeRail> {
+    val rails = serverRails.filter { it.items.isNotEmpty() }
+    if (rails.isEmpty()) return buildPlayarrHomeRails(byKind, onDeck)
+    val onDeckWorks = onDeck.map(PlayarrOnDeckEntry::work).distinctBy(Work::id).take(10)
+    val onDeckIds = onDeckWorks.mapTo(mutableSetOf(), Work::id)
+    return buildList {
+        if (onDeckWorks.isNotEmpty()) {
+            add(
+                HomeRail(
+                    title = PlayarrString.HomeRailOnDeck,
+                    works = onDeckWorks,
+                    onDeckByWork = onDeck.filter { it.work.id in onDeckIds }.associateBy { it.work.id },
+                ),
+            )
+        }
+        rails.forEach { add(it.toHomeRail()) }
+        add(HomeRail(PlayarrString.HomeRailNewSites, byKind[WorkKind.Site].orEmpty().take(12)))
+    }.filter { it.works.isNotEmpty() }
 }
 
 /** Mirrors Playarr Web Home's one primary rail followed by de-duplicated New/More shelves. */
@@ -97,4 +139,11 @@ internal fun buildPlayarrHomeRails(
         HomeRail(PlayarrString.HomeRailMoreSeries, takeUnused(series, 12)),
         HomeRail(PlayarrString.HomeRailMoreSites, takeUnused(sites, 12)),
     ).filter { it.works.isNotEmpty() }
+}
+
+/** [rails] with the entry at [index] moved by [delta] places (clamped); the list is otherwise unchanged. */
+internal fun moveRail(rails: List<RailPreferenceEntry>, index: Int, delta: Int): List<RailPreferenceEntry> {
+    val target = (index + delta).coerceIn(0, rails.lastIndex)
+    if (index !in rails.indices || target == index) return rails
+    return rails.toMutableList().also { it.add(target, it.removeAt(index)) }
 }

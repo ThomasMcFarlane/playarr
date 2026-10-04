@@ -405,6 +405,18 @@ internal enum class PlayarrString(
     HomeRailMoreMovies("More movies", "ภาพยนตร์เพิ่มเติม", "その他の映画"),
     HomeRailMoreSeries("More series", "ซีรีส์เพิ่มเติม", "その他のシリーズ"),
     HomeRailMoreSites("More sites", "ไซต์เพิ่มเติม", "その他のサイト"),
+    HomeCustomise("Customise Home", "ปรับแต่งหน้าแรก", "ホームをカスタマイズ"),
+    HomeCustomiseTitle("Customise Home", "ปรับแต่งหน้าแรก", "ホームをカスタマイズ"),
+    HomeCustomiseDescription(
+        "Choose which rails appear on your Home and in what order.",
+        "เลือกแถวที่จะแสดงบนหน้าแรกของคุณและลำดับของแถว",
+        "ホームに表示するレーンとその順序を選択します。",
+    ),
+    HomeCustomiseUp("Up", "ขึ้น", "上へ"),
+    HomeCustomiseDown("Down", "ลง", "下へ"),
+    HomeCustomiseHide("Hide", "ซ่อน", "非表示"),
+    HomeCustomiseShow("Show", "แสดง", "表示"),
+    HomeCustomiseReset("Reset", "รีเซ็ต", "リセット"),
 
     LibraryCollectionArtists("artists", "ศิลปิน", "アーティスト"),
     LibraryCollectionTitles("titles", "เรื่อง", "タイトル"),

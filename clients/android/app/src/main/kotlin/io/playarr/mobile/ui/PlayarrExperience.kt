@@ -191,6 +191,9 @@ import io.playarr.shared.data.model.SeasonDetail
 import io.playarr.shared.data.model.TrackDetail
 import io.playarr.shared.data.model.LanguageFacetEntry
 import io.playarr.shared.data.model.LanguageFacets
+import io.playarr.shared.data.model.HomeRailDto
+import io.playarr.shared.data.model.RailPreferenceEntry
+import io.playarr.shared.data.model.RailPreferencesRequest
 import io.playarr.shared.data.model.Work
 import io.playarr.shared.data.model.WorkChildren
 import io.playarr.shared.data.model.WorkDetail
@@ -438,6 +441,67 @@ internal class PlayarrExperienceViewModel @Inject constructor(
 ) : ViewModel() {
     private val _home = MutableStateFlow<ExperienceLoad<List<HomeRail>>>(ExperienceLoad.Loading)
     val home: StateFlow<ExperienceLoad<List<HomeRail>>> = _home.asStateFlow()
+    private var homeByKind: Map<WorkKind, List<Work>> = emptyMap()
+    private var homeOnDeck: List<PlayarrOnDeckEntry> = emptyList()
+    private var serverRails: List<HomeRailDto> = emptyList()
+    private var railLanguage = "en"
+    private val _railPreferences = MutableStateFlow<List<RailPreferenceEntry>?>(null)
+    val railPreferences: StateFlow<List<RailPreferenceEntry>?> = _railPreferences.asStateFlow()
+
+    /** The rails the server computed for the current app language (empty on failure or an older server). */
+    private suspend fun fetchServerRails(): List<HomeRailDto> =
+        runCatching { api.homeRails(railLanguage).rails }.getOrDefault(emptyList())
+
+    /** Re-titles the server rails when the app language changes. */
+    fun setRailLanguage(code: String) {
+        if (code == railLanguage) return
+        railLanguage = code
+        if (_home.value !is ExperienceLoad.Ready) return
+        viewModelScope.launch {
+            serverRails = fetchServerRails()
+            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(homeByKind, homeOnDeck, serverRails))
+        }
+    }
+
+    fun loadRailPreferences() {
+        viewModelScope.launch {
+            _railPreferences.value = runCatching { api.railPreferences(railLanguage).rails }.getOrNull()
+        }
+    }
+
+    /** Saves the customised order and hidden set, then refreshes Home. [rails] is the full list in order. */
+    fun saveRailPreferences(rails: List<RailPreferenceEntry>) {
+        viewModelScope.launch {
+            val saved = runCatching {
+                api.saveRailPreferences(
+                    RailPreferencesRequest(
+                        order = rails.map(RailPreferenceEntry::id),
+                        hidden = rails.filter(RailPreferenceEntry::hidden).map(RailPreferenceEntry::id),
+                    ),
+                )
+            }.getOrNull()
+            if (saved != null) {
+                _railPreferences.value = saved.rails
+                refreshServerRails()
+            }
+        }
+    }
+
+    fun resetRailPreferences() {
+        viewModelScope.launch {
+            if (runCatching { api.resetRailPreferences() }.isSuccess) {
+                _railPreferences.value = runCatching { api.railPreferences(railLanguage).rails }.getOrNull()
+                refreshServerRails()
+            }
+        }
+    }
+
+    private suspend fun refreshServerRails() {
+        serverRails = fetchServerRails()
+        if (_home.value is ExperienceLoad.Ready) {
+            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(homeByKind, homeOnDeck, serverRails))
+        }
+    }
 
     private val libraryJobs = mutableMapOf<WorkKind, Job>()
     private var languageJob: Job? = null
@@ -602,6 +666,7 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             val plansRequest = async {
                 runCatching { api.listResumePlans() }.getOrDefault(emptyList()).filter { it.isStacked }
             }
+            val railsRequest = async { fetchServerRails() }
             val kinds = listOf(WorkKind.Movie, WorkKind.Series, WorkKind.Site)
             val results = kinds.map { kind ->
                 async { kind to browseLibrary(kind = kind, availableOnly = true, sort = "recent", limit = 36) }
@@ -650,7 +715,10 @@ internal class PlayarrExperienceViewModel @Inject constructor(
             val onDeck = (fromRows + fromPlans).awaitAll().filterNotNull()
             _progress.value = progress
             if (progressRows != null) _progressLoaded.value = true
-            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, onDeck))
+            homeByKind = byKind
+            homeOnDeck = onDeck
+            serverRails = railsRequest.await()
+            _home.value = ExperienceLoad.Ready(buildPlayarrHomeRails(byKind, onDeck, serverRails))
         }
     }
 
@@ -2066,6 +2134,9 @@ private fun ExperienceHomeScreen(
     viewModel: PlayarrExperienceViewModel,
 ) {
     val homeView = LocalPlayarrDisplayPreferences.current.homeView
+    val railLanguageCode = LocalPlayarrLanguage.current.resolved.code
+    LaunchedEffect(railLanguageCode) { viewModel.setRailLanguage(railLanguageCode) }
+    var customising by remember { mutableStateOf(false) }
     val state by viewModel.home.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
@@ -2118,13 +2189,13 @@ private fun ExperienceHomeScreen(
                 },
                 rails = {
                     val railsState = androidx.compose.foundation.lazy.rememberLazyListState()
-                    var focusedRailTitle by remember { mutableStateOf<PlayarrString?>(null) }
+                    var focusedRailKey by remember { mutableStateOf<String?>(null) }
                     // D-pad Up/Down glides the focused rail to the same anchor (the top
                     // of the content padding) instead of nudging by whatever bring-into-view
                     // needs. animateScrollToItem is cancelled and restarted by the next
                     // focused rail, so a held key coalesces to the latest target.
-                    LaunchedEffect(focusedRailTitle) {
-                        val index = current.value.indexOfFirst { it.title == focusedRailTitle }
+                    LaunchedEffect(focusedRailKey) {
+                        val index = current.value.indexOfFirst { it.key == focusedRailKey }
                         if (isTelevision && index >= 0) railsState.animateScrollToItem(index)
                     }
                     LazyColumn(
@@ -2136,7 +2207,7 @@ private fun ExperienceHomeScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 16.dp),
                     ) {
-                        items(current.value, key = HomeRail::title) { rail ->
+                        items(current.value, key = HomeRail::key) { rail ->
                             ExperienceMediaRail(
                                 rail = rail,
                                 serverUrl = serverUrl,
@@ -2161,12 +2232,24 @@ private fun ExperienceHomeScreen(
                                     )
                                 },
                                 onContext = { contextWork = it },
-                                onRailFocused = { focusedRailTitle = rail.title },
+                                onRailFocused = { focusedRailKey = rail.key },
                             )
+                        }
+                        item(key = "customise-home") {
+                            PlayarrButton(
+                                variant = PlayarrButtonVariant.Secondary,
+                                onClick = { viewModel.loadRailPreferences(); customising = true },
+                                modifier = Modifier.padding(start = if (isTelevision) 46.dp else 16.dp),
+                            ) {
+                                Text(playarrString(PlayarrString.HomeCustomise))
+                            }
                         }
                     }
                 },
             )
+            if (customising) {
+                CustomiseHomeDialog(viewModel = viewModel, onDismiss = { customising = false })
+            }
             contextWork?.let { work ->
                 MediaContextDialog(
                     work = work,
@@ -2178,6 +2261,64 @@ private fun ExperienceHomeScreen(
             }
         }
     }
+}
+
+/** Per-user Home customisation: show or hide each rail, move it up or down, or reset to the admin's order. */
+@Composable
+private fun CustomiseHomeDialog(viewModel: PlayarrExperienceViewModel, onDismiss: () -> Unit) {
+    val saved by viewModel.railPreferences.collectAsState()
+    val rails = saved
+    PlayarrPanel(
+        onDismissRequest = onDismiss,
+        title = { Text(playarrString(PlayarrString.HomeCustomiseTitle)) },
+        text = {
+            if (rails == null) {
+                CircularProgressIndicator()
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item {
+                        Text(playarrString(PlayarrString.HomeCustomiseDescription), color = WebInkMuted, fontSize = 12.sp)
+                    }
+                    items(rails.size, key = { rails[it].id }) { index ->
+                        val rail = rails[index]
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                rail.title,
+                                color = if (rail.hidden) WebInkMuted else WebInk,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            PlayarrButton(
+                                variant = PlayarrButtonVariant.Ghost,
+                                enabled = index > 0,
+                                onClick = { viewModel.saveRailPreferences(moveRail(rails, index, -1)) },
+                            ) { Text(playarrString(PlayarrString.HomeCustomiseUp)) }
+                            PlayarrButton(
+                                variant = PlayarrButtonVariant.Ghost,
+                                enabled = index < rails.lastIndex,
+                                onClick = { viewModel.saveRailPreferences(moveRail(rails, index, 1)) },
+                            ) { Text(playarrString(PlayarrString.HomeCustomiseDown)) }
+                            PlayarrButton(
+                                variant = PlayarrButtonVariant.Secondary,
+                                onClick = {
+                                    viewModel.saveRailPreferences(
+                                        rails.toMutableList().also { it[index] = rail.copy(hidden = !rail.hidden) },
+                                    )
+                                },
+                            ) {
+                                Text(playarrString(if (rail.hidden) PlayarrString.HomeCustomiseShow else PlayarrString.HomeCustomiseHide))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            PlayarrButton(onClick = viewModel::resetRailPreferences, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.HomeCustomiseReset)) }
+        },
+        confirmButton = { PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.CommonClose)) } },
+    )
 }
 
 @Composable
@@ -2335,7 +2476,7 @@ private fun ExperienceMediaRail(
             .onFocusChanged { if (it.hasFocus) onRailFocused() }
             .padding(start = if (isTelevision) 46.dp else 16.dp),
     ) {
-        Text(playarrString(rail.title), color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(rail.literalTitle ?: rail.title?.let { playarrString(it) }.orEmpty(), color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
         Text(
             playarrString(PlayarrString.LibraryCollectionCount, "count" to rail.works.size, "collection" to collection),
             color = WebInkMuted,

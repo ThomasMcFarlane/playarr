@@ -5,6 +5,9 @@ import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarResponse
 import io.playarr.shared.data.model.CatalogPage
+import io.playarr.shared.data.model.HomeRailsResponse
+import io.playarr.shared.data.model.RailPreferences
+import io.playarr.shared.data.model.RailPreferencesRequest
 import io.playarr.shared.data.model.LanguageFacets
 import io.playarr.shared.data.model.ClientPlaybackReport
 import io.playarr.shared.data.model.PlaybackHealthReport
@@ -231,6 +234,21 @@ interface PlayarrApi {
 
     @DELETE("api/v1/calendar/feed")
     suspend fun revokeCalendarFeed(): Response<ResponseBody>
+
+    // ---- home rails ----------------------------------------------------------
+
+    /** `GET /api/v1/home/rails` -- the caller's ordered, non-empty rails, titled in [lang] (`en`/`th`/`ja`). */
+    @GET("api/v1/home/rails")
+    suspend fun homeRails(@Query("lang") lang: String? = null): HomeRailsResponse
+
+    @GET("api/v1/home/rails/preferences")
+    suspend fun railPreferences(@Query("lang") lang: String? = null): RailPreferences
+
+    @PUT("api/v1/home/rails/preferences")
+    suspend fun saveRailPreferences(@Body request: RailPreferencesRequest): RailPreferences
+
+    @DELETE("api/v1/home/rails/preferences")
+    suspend fun resetRailPreferences(): Response<ResponseBody>
 
     // ---- views ---------------------------------------------------------------
 

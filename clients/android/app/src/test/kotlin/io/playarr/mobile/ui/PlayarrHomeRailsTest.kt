@@ -3,6 +3,8 @@ package io.playarr.mobile.ui
 import io.playarr.shared.data.model.Availability
 import io.playarr.shared.data.model.Episode
 import io.playarr.shared.data.model.EpisodeDetail
+import io.playarr.shared.data.model.HomeRailDto
+import io.playarr.shared.data.model.RailPreferenceEntry
 import io.playarr.shared.data.model.Season
 import io.playarr.shared.data.model.ResumeAction
 import io.playarr.shared.data.model.ResumeOption
@@ -61,6 +63,41 @@ class PlayarrHomeRailsTest {
         val artist = work("artist", WorkKind.Artist, "2026-07-22T00:00:00Z")
 
         assertEquals(emptyList<HomeRail>(), buildPlayarrHomeRails(mapOf(WorkKind.Artist to listOf(artist)), emptyList()))
+    }
+
+    @Test
+    fun `server rails follow on deck in server order with server titles and hide when empty`() {
+        val a = work("a", WorkKind.Movie, "2026-07-20T00:00:00Z")
+        val b = work("b", WorkKind.Series, "2026-07-21T00:00:00Z")
+        val rails = buildPlayarrHomeRails(
+            mapOf(WorkKind.Movie to listOf(a), WorkKind.Series to listOf(b)),
+            listOf(PlayarrOnDeckEntry(b, progress(b.id, "2026-07-22T01:00:00Z"))),
+            listOf(
+                HomeRailDto("r1", "top_unwatched", "movie", "Top Unwatched Movies", "top_unwatched", items = listOf(a)),
+                HomeRailDto("r2", "seasonal", "movie", "Halloween Movies", "seasonal.halloween", items = emptyList()),
+                HomeRailDto("r3", "recently_added", "series", "Recently Added in Series", "recently_added", items = listOf(b)),
+            ),
+        )
+
+        assertEquals(listOf(PlayarrString.HomeRailOnDeck, null, null), rails.map(HomeRail::title))
+        assertEquals(listOf("Top Unwatched Movies", "Recently Added in Series"), rails.mapNotNull(HomeRail::literalTitle))
+        assertEquals(listOf("HomeRailOnDeck", "r1", "r3"), rails.map(HomeRail::key))
+    }
+
+    @Test
+    fun `no server rails falls back to the built in shelves`() {
+        val a = work("a", WorkKind.Movie, "2026-07-20T00:00:00Z")
+        val byKind = mapOf(WorkKind.Movie to listOf(a))
+        assertEquals(buildPlayarrHomeRails(byKind, emptyList()), buildPlayarrHomeRails(byKind, emptyList(), emptyList()))
+    }
+
+    @Test
+    fun `moveRail swaps within bounds and ignores out of range moves`() {
+        val rails = listOf("a", "b", "c").map { RailPreferenceEntry(it, "recently_added", "movie", it) }
+        assertEquals(listOf("b", "a", "c"), moveRail(rails, 0, 1).map { it.id })
+        assertEquals(listOf("a", "c", "b"), moveRail(rails, 2, -1).map { it.id })
+        assertEquals(rails, moveRail(rails, 0, -1))
+        assertEquals(rails, moveRail(rails, 2, 1))
     }
 
     @Test
