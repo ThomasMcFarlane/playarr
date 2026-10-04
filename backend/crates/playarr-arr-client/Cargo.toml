@@ -9,6 +9,7 @@ description = "Typed HTTP clients for the *arr apps Playarr Server treats as sou
 playarr-model = { path = "../playarr-model" }
 chrono = { workspace = true }
 reqwest = { workspace = true }
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
@@ -16,5 +17,4 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
 wiremock = "0.6"

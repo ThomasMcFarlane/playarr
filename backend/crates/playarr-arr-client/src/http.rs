@@ -149,4 +149,27 @@ mod tests {
             "expected Request, got {err:?}"
         );
     }
+    /// A source hosted under a path prefix (a reverse proxy such as
+    /// `https://host/user/prowlarr`) keeps the prefix on every request.
+    #[tokio::test]
+    async fn base_url_with_path_prefix_is_preserved() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/thomasmcfarlane/prowlarr/api/v1/system/status"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(2)
+            .mount(&server)
+            .await;
+
+        let http = build_http_client();
+        let api_key = Sensitive::new("test-key".to_string());
+        for base in [
+            format!("{}/thomasmcfarlane/prowlarr", server.uri()),
+            format!("{}/thomasmcfarlane/prowlarr/", server.uri()),
+        ] {
+            get_status(&http, "prowlarr", &base, &api_key, "/api/v1/system/status")
+                .await
+                .expect("the path prefix must be kept");
+        }
+    }
 }

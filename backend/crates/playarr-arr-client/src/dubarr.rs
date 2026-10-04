@@ -114,19 +114,71 @@ impl DubarrClient {
         .await
     }
 
-    /// Absolute URL of a track's audio file and the header an HTTP client
-    /// (for example ffmpeg) must send to fetch it.
-    pub fn download_target(&self, track: &DubarrTrack) -> (String, (&'static str, String)) {
-        (
-            format!(
-                "{}{}",
-                self.base_url.trim_end_matches('/'),
-                track.download_url
-            ),
-            ("X-Api-Key", self.api_key.expose_secret().clone()),
-        )
+    /// Streams a track's audio file into `dest`, sending the API key from
+    /// inside this process. Callers hand ffmpeg the local file, so the key
+    /// is never part of a child process's arguments. Returns the bytes
+    /// written; a non-2xx status or a short write is an error (the partial
+    /// file is removed).
+    pub async fn download_to_file(
+        &self,
+        track: &DubarrTrack,
+        dest: &std::path::Path,
+    ) -> Result<u64, ArrClientError> {
+        let result = self.download_inner(track, dest).await;
+        if result.is_err() {
+            let _ = tokio::fs::remove_file(dest).await;
+        }
+        result
+    }
+
+    async fn download_inner(
+        &self,
+        track: &DubarrTrack,
+        dest: &std::path::Path,
+    ) -> Result<u64, ArrClientError> {
+        use tokio::io::AsyncWriteExt;
+
+        let url = format!(
+            "{}{}",
+            self.base_url.trim_end_matches('/'),
+            track.download_url
+        );
+        let mut response = self
+            .http
+            .get(&url)
+            .header("X-Api-Key", self.api_key.expose_secret())
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(ArrClientError::UnexpectedStatus {
+                app: "dubarr",
+                status,
+                body,
+            });
+        }
+        let mut file = tokio::fs::File::create(dest).await?;
+        let mut written: u64 = 0;
+        while let Some(chunk) = response.chunk().await? {
+            written += chunk.len() as u64;
+            if written > MAX_DOWNLOAD_BYTES {
+                return Err(ArrClientError::Io(std::io::Error::other(
+                    "dub track exceeds the maximum download size",
+                )));
+            }
+            file.write_all(&chunk).await?;
+        }
+        file.flush().await?;
+        Ok(written)
     }
 }
+
+/// A dub is audio only (tens of MiB per hour); anything beyond this is not a
+/// dub track.
+const MAX_DOWNLOAD_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
 fn url_encode(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
@@ -189,9 +241,38 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(tracks[0].language, "th");
-        let (url, (name, value)) = client.download_target(&tracks[0]);
-        assert!(url.ends_with("/api/v1/tracks/t1/download"));
-        assert_eq!((name, value.as_str()), ("X-Api-Key", "k"));
+    }
+
+    #[tokio::test]
+    async fn download_to_file_sends_key_streams_body_and_cleans_up_on_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/tracks/t1/download"))
+            .and(header("X-Api-Key", "k"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![7u8; 4096]))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/tracks/gone/download"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        let client = DubarrClient::new(server.uri(), "k");
+        let dir = std::env::temp_dir().join(format!("dubarr-dl-{}", std::process::id()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+
+        let ok: DubarrTrack = serde_json::from_value(track()).unwrap();
+        let dest = dir.join("ok.audio");
+        assert_eq!(client.download_to_file(&ok, &dest).await.unwrap(), 4096);
+        assert_eq!(tokio::fs::read(&dest).await.unwrap().len(), 4096);
+
+        let mut missing = ok.clone();
+        missing.download_url = "/api/v1/tracks/gone/download".into();
+        let bad = dir.join("bad.audio");
+        let err = client.download_to_file(&missing, &bad).await.unwrap_err();
+        assert!(matches!(err, ArrClientError::UnexpectedStatus { .. }));
+        assert!(!bad.exists());
+        let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 
     #[tokio::test]

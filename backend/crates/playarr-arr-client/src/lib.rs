@@ -70,6 +70,8 @@ pub enum ArrClientError {
         status: reqwest::StatusCode,
         body: String,
     },
+    #[error("local file error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("failed to decode {app} response: {source}")]
     Decode {
         app: &'static str,

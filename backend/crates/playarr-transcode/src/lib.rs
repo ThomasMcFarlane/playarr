@@ -78,6 +78,8 @@ pub enum TranscodeError {
     Io(#[from] std::io::Error),
     #[error("failed to (de)serialize transcode session: {0}")]
     Serialize(#[from] serde_json::Error),
+    #[error("could not fetch the external audio track: {0}")]
+    ExternalAudio(String),
 }
 
 /// What a requesting client can play natively — the input to
@@ -371,12 +373,15 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
 }
 
 /// An audio file outside the source container (a Dubarr dub track) that
-/// replaces the source audio in an on-demand HLS transcode. `headers` are
-/// sent when `url` is an HTTP(S) address.
+/// replaces the source audio in an on-demand HLS transcode.
+///
+/// `path` is always a *local* file that Playarr itself already fetched (with
+/// whatever credentials the remote needs), so no credential, header or
+/// remote URL ever appears in ffmpeg's argument list (visible to anyone who
+/// can read the process table).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalAudio {
-    pub url: String,
-    pub headers: Vec<(String, String)>,
+    pub path: PathBuf,
 }
 
 /// Like [`build_ffmpeg_hls_args_at_with_audio`], but the audio comes from a
@@ -427,17 +432,8 @@ fn build_hls_args(
             args.push("-ss".to_string());
             args.push(format!("{:.3}", start_position_ms as f64 / 1000.0));
         }
-        if !ext.headers.is_empty() {
-            let block: String = ext
-                .headers
-                .iter()
-                .map(|(k, v)| format!("{k}: {v}\r\n"))
-                .collect();
-            args.push("-headers".to_string());
-            args.push(block);
-        }
         args.push("-i".to_string());
-        args.push(ext.url.clone());
+        args.push(ext.path.to_string_lossy().into_owned());
     }
     args.extend([
         "-c:v".to_string(),
@@ -460,6 +456,19 @@ fn build_hls_args(
         },
         "-sn".to_string(),
     ]);
+
+    if external.is_some() {
+        // A dub can be shorter than the title (a partial run, or a seek past
+        // its end). Pad it with silence so audio never runs out before the
+        // video, and let the finite video stream end the output
+        // (`-shortest`); otherwise ffmpeg emits no segments and the player
+        // buffers forever.
+        args.extend([
+            "-af".to_string(),
+            "apad".to_string(),
+            "-shortest".to_string(),
+        ]);
+    }
 
     if profile.height > 0 {
         args.push("-vf".to_string());
@@ -756,6 +765,7 @@ impl TranscodeOrchestrator {
         audio_stream_index: Option<u32>,
     ) -> Result<TranscodeSession, TranscodeError> {
         self.spawn_on_demand(
+            Uuid::new_v4(),
             media_file,
             profile,
             owning_node_id,
@@ -768,27 +778,73 @@ impl TranscodeOrchestrator {
 
     /// Starts an on-demand HLS transcode whose audio is an external file
     /// (a Dubarr dub track) instead of a source-container stream.
-    pub async fn spawn_on_demand_transcode_with_external_audio(
+    ///
+    /// `fetch` is handed a local path inside this orchestrator's scratch area
+    /// and must write the complete audio file there (Playarr downloads it
+    /// itself, so credentials stay inside this process and never reach
+    /// ffmpeg's argument list). The file is deleted with the session. If the
+    /// fetch fails nothing is spawned and [`TranscodeError::ExternalAudio`]
+    /// is returned so the caller can fall back to the source audio.
+    pub async fn spawn_on_demand_transcode_with_fetched_audio<F, Fut>(
         &self,
         media_file: &MediaFile,
         profile: &str,
         owning_node_id: &str,
         start_position_ms: u64,
-        external: &ExternalAudio,
-    ) -> Result<TranscodeSession, TranscodeError> {
-        self.spawn_on_demand(
-            media_file,
-            profile,
-            owning_node_id,
-            start_position_ms,
-            None,
-            Some(external),
-        )
-        .await
+        fetch: F,
+    ) -> Result<TranscodeSession, TranscodeError>
+    where
+        F: FnOnce(PathBuf) -> Fut,
+        Fut: std::future::Future<Output = Result<(), String>>,
+    {
+        self.check_capacity().await?;
+        let session_id = Uuid::new_v4();
+        let path = self.external_audio_path(session_id);
+        tokio::fs::create_dir_all(&self.output_root).await?;
+        if let Err(message) = fetch(path.clone()).await {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(TranscodeError::ExternalAudio(message));
+        }
+        let external = ExternalAudio { path: path.clone() };
+        let result = self
+            .spawn_on_demand(
+                session_id,
+                media_file,
+                profile,
+                owning_node_id,
+                start_position_ms,
+                None,
+                Some(&external),
+            )
+            .await;
+        if result.is_err() {
+            let _ = tokio::fs::remove_file(&path).await;
+        }
+        result
     }
 
+    /// Where a session's fetched external audio lives. A sibling of the HLS
+    /// output directory, never inside it, so the session file route can
+    /// never serve it.
+    fn external_audio_path(&self, session_id: Uuid) -> PathBuf {
+        self.output_root
+            .join(format!("{session_id}.external-audio"))
+    }
+
+    async fn check_capacity(&self) -> Result<(), TranscodeError> {
+        if let Some(max) = self.max_concurrent_sessions {
+            let active = self.active_children.lock().await.len();
+            if active >= max {
+                return Err(TranscodeError::NoCapacity);
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     async fn spawn_on_demand(
         &self,
+        session_id: Uuid,
         media_file: &MediaFile,
         profile: &str,
         owning_node_id: &str,
@@ -796,15 +852,9 @@ impl TranscodeOrchestrator {
         audio_stream_index: Option<u32>,
         external: Option<&ExternalAudio>,
     ) -> Result<TranscodeSession, TranscodeError> {
-        if let Some(max) = self.max_concurrent_sessions {
-            let active = self.active_children.lock().await.len();
-            if active >= max {
-                return Err(TranscodeError::NoCapacity);
-            }
-        }
+        self.check_capacity().await?;
 
         let target_profile = TranscodeTargetProfile::resolve(profile);
-        let session_id = Uuid::new_v4();
         let output_dir = self.output_root.join(session_id.to_string());
         tokio::fs::create_dir_all(&output_dir).await?;
 
@@ -951,6 +1001,11 @@ impl TranscodeOrchestrator {
         // HLS output is session-scoped and has no value once the process is
         // stopped. Ignore a missing directory (the process may have failed
         // before writing anything) but surface real filesystem errors.
+        match tokio::fs::remove_file(self.external_audio_path(session_id)).await {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(TranscodeError::Io(err)),
+        }
         match tokio::fs::remove_dir_all(self.session_output_dir(session_id)).await {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -958,6 +1013,47 @@ impl TranscodeOrchestrator {
         }
 
         Ok(())
+    }
+
+    /// Stops every ffmpeg process this node spawned whose session has aged
+    /// out of the cache (no client requested the playlist or a segment for
+    /// a full `session_ttl`: tab closed, network dropped, or the player
+    /// replaced the session without sending a stop). Without this the cache
+    /// row vanished but the process kept encoding, competing for CPU.
+    /// Returns how many sessions were reaped.
+    pub async fn reap_idle_sessions(&self) -> usize {
+        let ids: Vec<Uuid> = self.active_children.lock().await.keys().copied().collect();
+        let mut reaped = 0;
+        for id in ids {
+            let alive = match self.cache.get(&Self::session_cache_key(id)).await {
+                Ok(entry) => entry.is_some(),
+                // Cannot tell: leave the process alone this round.
+                Err(_) => true,
+            };
+            if alive {
+                continue;
+            }
+            match self.expire_session(id).await {
+                Ok(()) => reaped += 1,
+                Err(error) => {
+                    tracing::warn!(session_id = %id, %error, "failed to reap idle transcode session")
+                }
+            }
+        }
+        reaped
+    }
+
+    /// Runs [`Self::reap_idle_sessions`] every `interval` until the task is
+    /// dropped.
+    pub async fn run_idle_reaper(self: Arc<Self>, interval: Duration) {
+        let mut ticker = tokio::time::interval(interval);
+        loop {
+            ticker.tick().await;
+            let reaped = self.reap_idle_sessions().await;
+            if reaped > 0 {
+                tracing::info!(reaped, "stopped idle on-demand transcode sessions");
+            }
+        }
     }
 
     /// Associates a user-facing playback session with its live ffmpeg
@@ -1211,8 +1307,7 @@ mod tests {
     fn external_audio_adds_second_input_and_maps_it() {
         let profile = TranscodeTargetProfile::resolve("720p");
         let ext = ExternalAudio {
-            url: "http://dubarr.local/api/v1/tracks/t1/download".to_string(),
-            headers: vec![("X-Api-Key".to_string(), "k".to_string())],
+            path: PathBuf::from("/scratch/s1.external-audio"),
         };
         let args = build_ffmpeg_hls_args_at_with_external_audio(
             Path::new("/m/a.mkv"),
@@ -1225,8 +1320,27 @@ mod tests {
         assert_eq!(args.iter().filter(|a| *a == "-i").count(), 2);
         assert_eq!(args.iter().filter(|a| *a == "-ss").count(), 2);
         assert!(joined.contains("-map 0:v:0 -map 1:a:0"));
-        assert!(joined.contains("X-Api-Key: k"));
+        assert!(joined.contains("-i /scratch/s1.external-audio"));
+        // No credential-carrying option can reach the process arguments.
+        assert!(!joined.contains("-headers"));
+        assert!(!joined.contains("X-Api-Key"));
+        assert!(!joined.contains("http"));
+        // A short dub is padded with silence and the finite video ends output.
+        assert!(joined.contains("-af apad -shortest"));
         assert!(!joined.contains("0:a:0?"));
+    }
+
+    #[test]
+    fn source_audio_transcode_is_not_padded() {
+        let profile = TranscodeTargetProfile::resolve("720p");
+        let args = build_ffmpeg_hls_args_at_with_audio(
+            Path::new("/m/a.mkv"),
+            &profile,
+            Path::new("/out"),
+            0,
+            None,
+        );
+        assert!(!args.iter().any(|a| a == "apad" || a == "-shortest"));
     }
 
     use super::*;
@@ -1773,6 +1887,84 @@ mod tests {
                 .await
                 .expect("lookup should not error");
             assert_eq!(after_expiry, None);
+        }
+
+        #[tokio::test]
+        async fn reaper_stops_processes_whose_session_expired_from_the_cache() {
+            let counter = ActiveSessionCounter::new();
+            let root = unique_tmp_dir();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(root)
+            .with_session_ttl(Duration::from_millis(50));
+            let session = orchestrator
+                .spawn_on_demand_transcode(&sample_media_file(), "h264-720p-4mbps", "node-a")
+                .await
+                .unwrap();
+            // Still within its idle window: left alone.
+            assert_eq!(orchestrator.reap_idle_sessions().await, 0);
+            assert_eq!(counter.get(), 1);
+
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            assert_eq!(orchestrator.reap_idle_sessions().await, 1);
+            assert_eq!(counter.get(), 0);
+            assert!(!orchestrator.session_output_dir(session.id).exists());
+            assert_eq!(orchestrator.reap_idle_sessions().await, 0);
+        }
+
+        #[tokio::test]
+        async fn fetched_audio_is_local_removed_with_the_session_and_failure_spawns_nothing() {
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = TranscodeOrchestrator::new(
+                Arc::new(FakeRenditionRepo::default()),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            )
+            .with_ffmpeg_binary("/usr/bin/true")
+            .with_output_root(unique_tmp_dir());
+            let media_file = sample_media_file();
+
+            let seen = Arc::new(StdMutex::new(None::<PathBuf>));
+            let seen_in_fetch = seen.clone();
+            let session = orchestrator
+                .spawn_on_demand_transcode_with_fetched_audio(
+                    &media_file,
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    |path| async move {
+                        tokio::fs::write(&path, b"dub")
+                            .await
+                            .map_err(|e| e.to_string())?;
+                        *seen_in_fetch.lock().unwrap() = Some(path);
+                        Ok(())
+                    },
+                )
+                .await
+                .unwrap();
+            let path = seen.lock().unwrap().clone().expect("fetch ran");
+            assert!(path.exists());
+            // Outside the HLS output directory, so the session route can never serve it.
+            assert!(!path.starts_with(orchestrator.session_output_dir(session.id)));
+            orchestrator.expire_session(session.id).await.unwrap();
+            assert!(!path.exists());
+            assert_eq!(counter.get(), 0);
+
+            let failed = orchestrator
+                .spawn_on_demand_transcode_with_fetched_audio(
+                    &media_file,
+                    "h264-720p-4mbps",
+                    "node-a",
+                    0,
+                    |_| async { Err("dubarr down".to_string()) },
+                )
+                .await;
+            assert!(matches!(failed, Err(TranscodeError::ExternalAudio(_))));
+            assert_eq!(counter.get(), 0);
         }
 
         #[tokio::test]

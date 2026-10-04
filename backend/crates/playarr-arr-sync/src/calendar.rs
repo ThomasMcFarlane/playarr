@@ -345,6 +345,7 @@ pub fn classify_error(error: &ArrClientError) -> (CalendarSourceState, String) {
             CalendarSourceState::Error,
             format!("unexpected response (HTTP {})", status.as_u16()),
         ),
+        ArrClientError::Io(_) => (CalendarSourceState::Error, "local file error".to_string()),
         ArrClientError::Decode { .. } => (
             CalendarSourceState::Error,
             "response could not be read".to_string(),

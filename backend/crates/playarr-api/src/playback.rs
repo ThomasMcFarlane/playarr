@@ -692,6 +692,33 @@ async fn start_analytics_session(state: &AppState, session: PlaybackSession) -> 
         return existing.id;
     }
 
+    // The viewer replaced an earlier playback of the same title on the same
+    // device (an audio, quality or dub switch after the dedupe window): the
+    // old HLS session will never be requested again, so stop its ffmpeg now
+    // instead of letting it encode until the node runs out of CPU.
+    let superseded: Vec<Uuid> = state
+        .session_registry
+        .list_all()
+        .into_iter()
+        .filter(|existing| {
+            existing.id != session.id
+                && existing.user_id == session.user_id
+                && existing.device_id == session.device_id
+                && existing.media_file_id == session.media_file_id
+                && existing.ended_at.is_none()
+        })
+        .map(|existing| existing.id)
+        .collect();
+    for old_id in superseded {
+        if let Err(err) = state.transcode.expire_playback_session(old_id).await {
+            tracing::warn!(
+                session_id = %old_id,
+                error = %err,
+                "failed to stop the superseded transcode"
+            );
+        }
+    }
+
     let session_id = session.id;
     if let Err(err) = state.analytics.on_session_start(session).await {
         tracing::warn!(
@@ -1182,36 +1209,51 @@ pub(crate) async fn negotiate_playback(
     } else {
         query.start_position_ms
     };
+    let source_audio_transcode = || {
+        state.transcode.spawn_on_demand_transcode_at_with_audio(
+            &media_file,
+            &profile,
+            &state.node_id,
+            source_offset_ms,
+            selected_audio_stream_index,
+        )
+    };
     let transcode_session = match selected_dub {
         Some(dub) => {
-            let (url, (header_name, header_value)) = dub.client().download_target(&dub.track);
-            let external = playarr_transcode::ExternalAudio {
-                url,
-                headers: vec![(header_name.to_string(), header_value)],
-            };
-            state
+            // Playarr fetches the dub itself and hands ffmpeg a local file, so
+            // the Dubarr API key never appears in ffmpeg's argument list.
+            let client = dub.client();
+            let track = dub.track.clone();
+            let fetched = state
                 .transcode
-                .spawn_on_demand_transcode_with_external_audio(
+                .spawn_on_demand_transcode_with_fetched_audio(
                     &media_file,
                     &profile,
                     &state.node_id,
                     source_offset_ms,
-                    &external,
+                    |path| async move {
+                        client
+                            .download_to_file(&track, &path)
+                            .await
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    },
                 )
-                .await?
+                .await;
+            match fetched {
+                Ok(session) => session,
+                Err(playarr_transcode::TranscodeError::ExternalAudio(error)) => {
+                    tracing::warn!(
+                        media_file_id = %media_file_id,
+                        %error,
+                        "dub track download failed; playing the source audio instead"
+                    );
+                    source_audio_transcode().await?
+                }
+                Err(error) => return Err(error.into()),
+            }
         }
-        None => {
-            state
-                .transcode
-                .spawn_on_demand_transcode_at_with_audio(
-                    &media_file,
-                    &profile,
-                    &state.node_id,
-                    source_offset_ms,
-                    selected_audio_stream_index,
-                )
-                .await?
-        }
+        None => source_audio_transcode().await?,
     };
 
     let target_profile = playarr_transcode::TranscodeTargetProfile::resolve(&profile);
@@ -2418,6 +2460,81 @@ mod tests {
             None
         );
         assert_eq!(state.app.transcode.active_session_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn replacing_playback_after_the_dedupe_window_stops_the_old_transcode() {
+        let (router, state) = test_state().await;
+        let mut file = media_file();
+        file.container = "mp4".to_string();
+        file.codec = "h264".to_string();
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+        let request = |profile: &str| {
+            get_with_connect_info(
+                format!(
+                    "/api/v1/playback/{id}?containers=mp4&video_codecs=h264&force_transcode=true&profile={profile}"
+                ),
+                &token,
+            )
+        };
+        let session_of = |info: &PlaybackInfoResponse| {
+            info.url
+                .split("/sessions/")
+                .nth(1)
+                .and_then(|suffix| suffix.split('/').next())
+                .and_then(|id| Uuid::parse_str(id).ok())
+                .unwrap()
+        };
+
+        let first = router
+            .clone()
+            .oneshot(request("h264-480p-2mbps"))
+            .await
+            .unwrap();
+        let first: PlaybackInfoResponse = serde_json::from_slice(
+            &axum::body::to_bytes(first.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let first_transcode = session_of(&first);
+
+        // The viewer switches audio/quality well after the dedupe window.
+        state.app.session_registry.update(first.session_id, &|s| {
+            s.started_at -= chrono::Duration::seconds(60);
+        });
+        let second = router.oneshot(request("h264-720p-4mbps")).await.unwrap();
+        let second: PlaybackInfoResponse = serde_json::from_slice(
+            &axum::body::to_bytes(second.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_ne!(second.session_id, first.session_id);
+        assert_eq!(
+            state
+                .app
+                .transcode
+                .lookup_session(first_transcode)
+                .await
+                .unwrap(),
+            None,
+            "the superseded transcode must be stopped"
+        );
+        assert!(state
+            .app
+            .transcode
+            .lookup_session(session_of(&second))
+            .await
+            .unwrap()
+            .is_some());
+        assert_eq!(state.app.transcode.active_session_count(), 1);
     }
 
     #[tokio::test]

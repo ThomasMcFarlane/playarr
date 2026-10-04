@@ -52,13 +52,18 @@ pub struct SonarrSeries {
 pub struct SonarrImage {
     #[serde(rename = "coverType")]
     pub cover_type: String,
+    /// Sonarr's local, API-key-gated path. Sonarr v4 omits it entirely on
+    /// episode screenshots requested with `includeImages=true` (only
+    /// `remoteUrl` is present), so it defaults to empty rather than failing
+    /// the whole response with "missing field `url`".
+    #[serde(default)]
     pub url: String,
     /// Absolute, externally-hosted image URL (TheTVDB's CDN) -- present for
     /// most images but not guaranteed (e.g. images added purely from a
     /// local file). Absent from Sonarr's own `url` field's local path,
     /// which requires this instance's own API key to fetch and must never
     /// be forwarded to a Playarr Server client as-is.
-    #[serde(rename = "remoteUrl")]
+    #[serde(default, rename = "remoteUrl")]
     pub remote_url: Option<String>,
 }
 
@@ -89,13 +94,14 @@ pub struct SonarrEpisode {
     /// `url` is Sonarr's local API-key-gated path.
     #[serde(default)]
     pub images: Vec<SonarrImage>,
-    #[serde(rename = "hasFile")]
+    #[serde(default, rename = "hasFile")]
     pub has_file: bool,
+    #[serde(default)]
     pub monitored: bool,
     /// Sonarr uses `0` (not `null`) as the "no file imported" sentinel, so
     /// this deliberately stays a plain `i64` rather than `Option<i64>` to
     /// mirror the wire format exactly.
-    #[serde(rename = "episodeFileId")]
+    #[serde(default, rename = "episodeFileId")]
     pub episode_file_id: i64,
 }
 
@@ -838,6 +844,44 @@ mod tests {
         assert_eq!(
             episodes[0].air_date_utc.as_deref(),
             Some("2026-10-04T01:00:00Z")
+        );
+    }
+    /// Shape captured from Sonarr v4.0.19: episode screenshots requested with
+    /// `includeImages=true` carry `coverType` and `remoteUrl` but no `url`,
+    /// which used to fail the whole file sync with "missing field `url`".
+    /// Extra fields Playarr does not model must be ignored.
+    #[tokio::test]
+    async fn list_episodes_tolerates_v4_images_without_local_url() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
+                "seriesId": 1, "tvdbId": 1234567, "episodeFileId": 9,
+                "seasonNumber": 1, "episodeNumber": 1, "title": "Pilot",
+                "airDate": "2011-09-19", "airDateUtc": "2011-09-20T01:00:00Z",
+                "runtime": 22, "overview": "x", "hasFile": true, "monitored": true,
+                "absoluteEpisodeNumber": 1, "unverifiedSceneNumbering": false,
+                "images": [{
+                    "coverType": "screenshot",
+                    "remoteUrl": "https://artworks.thetvdb.com/banners/episodes/1/1.jpg"
+                }],
+                "id": 77
+            }, {
+                "seriesId": 1, "tvdbId": 1234567, "episodeFileId": 0,
+                "seasonNumber": 0, "episodeNumber": 2, "title": "Special",
+                "runtime": 0, "hasFile": false, "monitored": false,
+                "unverifiedSceneNumbering": false, "images": [], "id": 78
+            }])))
+            .mount(&server)
+            .await;
+
+        let client = SonarrClient::new(server.uri(), "test-key");
+        let episodes = client.list_episodes(1).await.expect("decode succeeds");
+        assert_eq!(episodes.len(), 2);
+        assert_eq!(episodes[0].images[0].url, "");
+        assert_eq!(
+            episodes[0].images[0].remote_url.as_deref(),
+            Some("https://artworks.thetvdb.com/banners/episodes/1/1.jpg")
         );
     }
 }

@@ -1706,6 +1706,15 @@ async fn boot_api(
         peer_sync_interval_secs_from_env(),
     ));
 
+    // Stop ffmpeg processes whose session went idle (closed tab, replaced
+    // player session): the cache row expires on its own, the process does not.
+    tokio::spawn(
+        state
+            .transcode
+            .clone()
+            .run_idle_reaper(std::time::Duration::from_secs(15)),
+    );
+
     // Keep Dubarr dub-track lookups fresh by watching each instance's change feed.
     tokio::spawn(playarr_api::dubarr_audio::run_change_poller(
         state.source_instances.clone(),
