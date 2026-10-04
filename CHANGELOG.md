@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Household controls rolled out to region-a and region-b (image `<image>`) with live verification recorded on TASKS rows 104-114.
 - Playarr Android (phone, tablet and TV): a native "Not available right now" screen when the
   server reports the profile outside its schedule or out of daily time (shows when it lifts,
   stops playback, offers "Ask a guardian for more time" and "Switch profile"), an "N min left"
