@@ -144,6 +144,8 @@ export type ImageKind = components["schemas"]["ImageKind"];
 export type ExternalRef = components["schemas"]["ExternalRef"];
 export type ExternalProvider = components["schemas"]["ExternalProvider"];
 export type CatalogPage = components["schemas"]["CatalogPageSchema"];
+export type LanguageFacetEntry = components["schemas"]["LanguageFacetEntry"];
+export type LanguageFacets = components["schemas"]["LanguageFacetsResponse"];
 export type WorkDetail = components["schemas"]["WorkDetailSchema"];
 export type WorkChildren = components["schemas"]["WorkChildrenSchema"];
 export type PersonResponse = components["schemas"]["PersonResponse"];
@@ -374,6 +376,14 @@ export interface BrowseCatalogParams {
   order?: string;
   limit?: number;
   offset?: number;
+  /** Comma-separated audio languages (codes or English names); OR within the list. */
+  audio_lang?: string;
+  /** Comma-separated subtitle languages, embedded or sidecar; OR within the list. */
+  subtitle_lang?: string;
+  /** `"any"` (default) or `"all"` listed languages per filter. */
+  lang_match?: string;
+  /** `"any_file"` (default) or `"every_file"` for series. */
+  lang_scope?: string;
 }
 
 export interface PlaybackInfoParams {
@@ -1275,6 +1285,31 @@ export class ApiClient {
             order: params.order,
             limit: params.limit,
             offset: params.offset,
+            audio_lang: params.audio_lang,
+            subtitle_lang: params.subtitle_lang,
+            lang_match: params.lang_match,
+            lang_scope: params.lang_scope,
+          },
+        },
+      })
+    );
+  }
+
+  /** Available audio and subtitle languages (with work counts) for the same filters as `browseCatalog`. */
+  async catalogLanguages(params: BrowseCatalogParams = {}): Promise<LanguageFacets> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/catalog/languages", {
+        params: {
+          query: {
+            kind: params.kind,
+            available_only: params.available_only,
+            source_instance_id: params.source_instance_id,
+            genre: params.genre,
+            tag: params.tag,
+            audio_lang: params.audio_lang,
+            subtitle_lang: params.subtitle_lang,
+            lang_match: params.lang_match,
+            lang_scope: params.lang_scope,
           },
         },
       })

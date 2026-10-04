@@ -10,9 +10,10 @@ import {
   type CSSProperties,
 } from "react";
 import { flushSync } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   describeApiError,
+  type LanguageFacets,
   type WatchProgress,
   type Work,
   type WorkKind,
@@ -40,6 +41,12 @@ import {
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useScrollEdges } from "../lib/useScrollEdges";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
+import {
+  formatLanguageParam,
+  languageDisplayName,
+  parseLanguageParam,
+  toggleLanguage,
+} from "../lib/languageFilters";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
@@ -129,7 +136,7 @@ function storedOrder(kind: LibraryKind): SortOrder {
  * activation opens its detail page. Playback never starts from this view.
  */
 export function LibraryPage({ kind }: { kind: LibraryKind }) {
-  const { t } = useLanguage();
+  const { t, language: uiLanguage } = useLanguage();
   const singular =
     kind === "series"
       ? t("pages.library.singular.series")
@@ -175,6 +182,21 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [sort, setSort] = useState<LibrarySort>(() => storedSort(kind));
   const [order, setOrder] = useState<SortOrder>(() => storedOrder(kind));
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
+  // so they survive reloads and can be shared or bookmarked.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const audioKey = searchParams.get("audio") ?? "";
+  const subtitleKey = searchParams.get("subs") ?? "";
+  const audioLangs = useMemo(() => parseLanguageParam(audioKey), [audioKey]);
+  const subtitleLangs = useMemo(() => parseLanguageParam(subtitleKey), [subtitleKey]);
+  const languageParams = useMemo(
+    () => ({
+      audio_lang: formatLanguageParam(audioLangs),
+      subtitle_lang: formatLanguageParam(subtitleLangs),
+    }),
+    [audioLangs, subtitleLangs]
+  );
+  const [languageFacets, setLanguageFacets] = useState<LanguageFacets | null>(null);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
   // Expand-only virtual mount: grow DOM prefix as focus moves, never shrink.
   const [mountedEnd, setMountedEnd] = useState(INITIAL_MOUNTED);
@@ -224,6 +246,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         order,
         limit: PAGE_SIZE,
         offset: 0,
+        ...languageParams,
       })
       .then((page) => {
         if (cancelled || generation !== generationRef.current) return;
@@ -250,7 +273,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     return () => {
       cancelled = true;
     };
-  }, [client, kind, order, sort]);
+  }, [client, kind, languageParams, order, sort]);
 
   useEffect(() => {
     setView(storedView(kind));
@@ -276,6 +299,66 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
       cancelled = true;
     };
   }, [client]);
+
+  // Facets follow the other active filters, so only offer languages that
+  // still match something. Fetched while the drawer is open.
+  useEffect(() => {
+    if (!filtersOpen) return;
+    let cancelled = false;
+    client
+      .catalogLanguages({ kind, available_only: true, ...languageParams })
+      .then((facets) => {
+        if (!cancelled) setLanguageFacets(facets);
+      })
+      .catch(() => {
+        if (!cancelled) setLanguageFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, filtersOpen, kind, languageParams]);
+
+  function changeLanguages(which: "audio" | "subs", next: string[]) {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        const value = formatLanguageParam(next);
+        if (value) params.set(which, value);
+        else params.delete(which);
+        return params;
+      },
+      { replace: true }
+    );
+  }
+
+  function clearLanguages() {
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current);
+        params.delete("audio");
+        params.delete("subs");
+        return params;
+      },
+      { replace: true }
+    );
+  }
+
+  function languageOptions(
+    facets: LanguageFacets["audio"] | undefined,
+    selected: string[]
+  ): { code: string; name: string; count: number | null }[] {
+    const rows = (facets ?? []).map((facet) => ({
+      code: facet.code,
+      name: languageDisplayName(facet.code, uiLanguage, facet.name),
+      count: facet.count as number | null,
+    }));
+    for (const code of selected) {
+      if (!rows.some((row) => row.code === code)) {
+        rows.push({ code, name: languageDisplayName(code, uiLanguage), count: null });
+      }
+    }
+    return rows;
+  }
 
   function changeView(nextView: LibraryView) {
     window.localStorage.setItem(`playarr.libraryView.${kind}`, nextView);
@@ -542,6 +625,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         order,
         limit: PAGE_SIZE,
         offset,
+        ...languageParams,
       })
       .then((page) => {
         if (generation !== generationRef.current) return [];
@@ -567,7 +651,7 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
 
     requestRef.current = request;
     return request;
-  }, [client, kind, order, sort]);
+  }, [client, kind, languageParams, order, sort]);
 
   const hasMore =
     !refreshing && items !== null && (total === null || items.length < total);
@@ -1074,6 +1158,46 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
               </button>
             </div>
           </section>
+
+          {(
+            [
+              ["audio", t("pages.library.audioLanguage"), languageFacets?.audio, audioLangs],
+              ["subs", t("pages.library.subtitleLanguage"), languageFacets?.subtitle, subtitleLangs],
+            ] as const
+          ).map(([which, heading, facets, selected]) => {
+            const options = languageOptions(facets, [...selected]);
+            return (
+              <section key={which} data-language-filter={which}>
+                <h3>{heading}</h3>
+                {options.length === 0 ? (
+                  <p>{t("pages.library.noLanguages")}</p>
+                ) : (
+                  <div className="tv-filter-choice-grid">
+                    {options.map((option) => (
+                      <button
+                        key={option.code}
+                        type="button"
+                        className={selected.includes(option.code) ? "is-active" : ""}
+                        onClick={() => changeLanguages(which, toggleLanguage(selected, option.code))}
+                        aria-pressed={selected.includes(option.code)}
+                      >
+                        {option.count === null ? option.name : `${option.name} · ${option.count}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          {audioLangs.length + subtitleLangs.length > 0 ? (
+            <section>
+              <div className="tv-filter-choice-grid">
+                <button type="button" onClick={clearLanguages}>
+                  {t("pages.library.clearLanguages")}
+                </button>
+              </div>
+            </section>
+          ) : null}
         </aside>
       ) : null}
 

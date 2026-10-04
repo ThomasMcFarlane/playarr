@@ -285,6 +285,28 @@ describe("ApiClient", () => {
     await client.browseCatalog({ source_instance_id: instanceId });
   });
 
+  it("threads language filters through browse and the language facet endpoint", async () => {
+    const fetchImpl = mockFetch((request) => {
+      const url = new URL(request.url);
+      expect(url.searchParams.get("audio_lang")).toBe("ja");
+      expect(url.searchParams.get("subtitle_lang")).toBe("en,fr");
+      if (url.pathname === "/api/v1/catalog/languages") {
+        return jsonResponse(200, {
+          audio: [{ code: "ja", name: "Japanese", count: 3 }],
+          subtitle: [{ code: "en", name: "English", count: 2 }],
+        });
+      }
+      expect(url.pathname).toBe("/api/v1/catalog");
+      return jsonResponse(200, { items: [], total: 0 });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    const params = { audio_lang: "ja", subtitle_lang: "en,fr" };
+    await client.browseCatalog(params);
+    const facets = await client.catalogLanguages({ kind: "movie", ...params });
+    expect(facets.audio[0]?.code).toBe("ja");
+    expect(facets.subtitle[0]?.count).toBe(2);
+  });
+
   it("lists authenticated catalog kinds visible to the caller", async () => {
     const fetchImpl = mockFetch((request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/catalog/kinds");

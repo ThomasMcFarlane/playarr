@@ -1069,6 +1069,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog_languages_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/search": {
         parameters: {
             query?: never;
@@ -4111,6 +4127,23 @@ export interface components {
              */
             seed_address: string;
         };
+        /** @description One available language with the number of works that carry it. */
+        LanguageFacetEntry: {
+            /** @description Canonical code: ISO 639-1 where one exists, otherwise ISO 639-2/T. */
+            code: string;
+            /**
+             * Format: int64
+             * @description Number of works (in the requested scope) with this language.
+             */
+            count: number;
+            /** @description English name when known (clients localise the code themselves). */
+            name?: string | null;
+        };
+        /** @description Facet counts for the language filters. */
+        LanguageFacetsResponse: {
+            audio: components["schemas"]["LanguageFacetEntry"][];
+            subtitle: components["schemas"]["LanguageFacetEntry"][];
+        };
         /**
          * @description Portable leaf identity -- never a peer-local `LeafRef`/`Uuid`, which is
          *     meaningless off the node that minted it. A receiving peer resolves
@@ -5700,7 +5733,7 @@ export interface components {
             status?: string | null;
         };
         /** @enum {string} */
-        SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr" | "whisparr";
+        SourceKind: "sonarr" | "radarr" | "lidarr" | "bazarr" | "prowlarr" | "readarr" | "whisparr" | "dubarr";
         /** @enum {string} */
         SourceKindTag: "library" | "peer" | "request" | "live_tv" | "game";
         SourceMatrixFileResponse: {
@@ -9452,6 +9485,28 @@ export interface operations {
                 order?: string | null;
                 limit?: number | null;
                 offset?: number | null;
+                /**
+                 * @description Comma-separated audio languages (ISO 639 codes or English names,
+                 *     e.g. `en,ja`). A work matches when any of its audio tracks has any
+                 *     listed language (`lang_match=all` requires every listed language).
+                 *     Combined with `subtitle_lang` using AND.
+                 */
+                audio_lang?: string | null;
+                /**
+                 * @description Comma-separated subtitle languages, embedded or sidecar (same
+                 *     format and semantics as `audio_lang`).
+                 */
+                subtitle_lang?: string | null;
+                /**
+                 * @description `any` (default): a work needs at least one listed language per
+                 *     filter. `all`: it needs every listed language.
+                 */
+                lang_match?: string | null;
+                /**
+                 * @description `any_file` (default): a series counts a language if any episode
+                 *     has it. `every_file`: every file of the work must have it.
+                 */
+                lang_scope?: string | null;
             };
             header?: never;
             path?: never;
@@ -9562,11 +9617,125 @@ export interface operations {
             };
         };
     };
+    catalog_languages_handler: {
+        parameters: {
+            query?: {
+                kind?: null | components["schemas"]["WorkKind"];
+                /**
+                 * @description Return only works that own at least one synced media file. Playarr
+                 *     enables this; Playarr Server Admin leaves it unset so records without
+                 *     playable leaves remain visible for library reconciliation.
+                 */
+                available_only?: boolean | null;
+                /**
+                 * @description Restricts results to works with at least one synced file from this
+                 *     source instance -- the "library" filter (two source instances of the
+                 *     same kind, e.g. two Radarr instances, browse as separate libraries).
+                 *     See `playarr_catalog::BrowseQuery::source_instance_id`'s doc
+                 *     comment for how this is resolved.
+                 */
+                source_instance_id?: string | null;
+                genre?: string | null;
+                tag?: string | null;
+                /**
+                 * @description `"title"` (default) or `"date_added"` (`"recent"` remains a
+                 *     backwards-compatible alias for date-added descending).
+                 */
+                sort?: string | null;
+                /** @description `"asc"` (default for title) or `"desc"` (default for date added). */
+                order?: string | null;
+                limit?: number | null;
+                offset?: number | null;
+                /**
+                 * @description Comma-separated audio languages (ISO 639 codes or English names,
+                 *     e.g. `en,ja`). A work matches when any of its audio tracks has any
+                 *     listed language (`lang_match=all` requires every listed language).
+                 *     Combined with `subtitle_lang` using AND.
+                 */
+                audio_lang?: string | null;
+                /**
+                 * @description Comma-separated subtitle languages, embedded or sidecar (same
+                 *     format and semantics as `audio_lang`).
+                 */
+                subtitle_lang?: string | null;
+                /**
+                 * @description `any` (default): a work needs at least one listed language per
+                 *     filter. `all`: it needs every listed language.
+                 */
+                lang_match?: string | null;
+                /**
+                 * @description `any_file` (default): a series counts a language if any episode
+                 *     has it. `every_file`: every file of the work must have it.
+                 */
+                lang_scope?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available audio and subtitle languages with work counts. Accepts the same filters as the catalog browse endpoint; each list honours every filter except its own language parameter, so choosing an audio language narrows the subtitle options but keeps every audio option listed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "audio": [
+                     *         {
+                     *           "code": "en",
+                     *           "count": 120,
+                     *           "name": "English"
+                     *         },
+                     *         {
+                     *           "code": "ja",
+                     *           "count": 14,
+                     *           "name": "Japanese"
+                     *         }
+                     *       ],
+                     *       "subtitle": [
+                     *         {
+                     *           "code": "en",
+                     *           "count": 98,
+                     *           "name": "English"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["LanguageFacetsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller has neither Playarr streaming access nor admin access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     search_catalog_handler: {
         parameters: {
             query: {
                 q: string;
                 limit?: number | null;
+                /** @description See `BrowseQueryParams::audio_lang`. */
+                audio_lang?: string | null;
+                /** @description See `BrowseQueryParams::subtitle_lang`. */
+                subtitle_lang?: string | null;
+                /** @description See `BrowseQueryParams::lang_match`. */
+                lang_match?: string | null;
+                /** @description See `BrowseQueryParams::lang_scope`. */
+                lang_scope?: string | null;
             };
             header?: never;
             path?: never;

@@ -2,6 +2,7 @@ import type {
   AccessTokenRequest,
   ApiClient,
   BrowseCatalogParams,
+  LanguageFacetEntry,
   CatalogPage,
   Work,
   WorkDetail,
@@ -210,6 +211,23 @@ export function createJoinedApiClient(servers: ConnectedServerClient[]): ApiClie
         (total, { page }) => total + (page.total ?? page.items.length),
         0
       ),
+    };
+  };
+  joined.catalogLanguages = async (params: BrowseCatalogParams = {}) => {
+    const results = successfulValues(
+      await Promise.allSettled(servers.map((server) => server.client.catalogLanguages(params)))
+    );
+    const merge = (lists: LanguageFacetEntry[][]): LanguageFacetEntry[] => {
+      const byCode = new Map<string, LanguageFacetEntry>();
+      for (const entry of lists.flat()) {
+        const existing = byCode.get(entry.code);
+        byCode.set(entry.code, existing ? { ...existing, count: existing.count + entry.count } : entry);
+      }
+      return [...byCode.values()].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+    };
+    return {
+      audio: merge(results.map((r) => r.audio)),
+      subtitle: merge(results.map((r) => r.subtitle)),
     };
   };
   joined.searchCatalog = async (query: string, limit = 50): Promise<Work[]> => {
