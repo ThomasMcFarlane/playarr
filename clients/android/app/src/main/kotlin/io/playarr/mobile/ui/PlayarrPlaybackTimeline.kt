@@ -32,6 +32,24 @@ internal fun shouldRecoverPlayarrHlsSession(
     requestUri: String?,
 ): Boolean = activeOnDemandHls && httpStatus == 404 && requestUri?.let(::isPlayarrOnDemandHls) == true
 
+internal const val DECODE_FALLBACK_PROFILE = "h264-1080p-8mbps"
+
+/**
+ * A direct-played source that no device decoder can handle should be retried
+ * once as a server transcode. [errorMessage] is the player's error code name.
+ */
+internal fun shouldFallBackToTranscodeAfterDecodeFailure(
+    activeDirectPlay: Boolean,
+    errorMessage: String,
+    alreadyAttempted: Boolean,
+): Boolean = activeDirectPlay && !alreadyAttempted && errorMessage.uppercase() in setOf(
+    "ERROR_CODE_DECODING_FAILED",
+    "ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES",
+    "ERROR_CODE_DECODING_FORMAT_UNSUPPORTED",
+    "ERROR_CODE_DECODER_INIT_FAILED",
+    "ERROR_CODE_DECODER_QUERY_FAILED",
+)
+
 internal fun formatPlayarrPlayerTime(totalMs: Long): String {
     val totalSeconds = totalMs.coerceAtLeast(0L) / 1_000L
     val hours = totalSeconds / 3_600L

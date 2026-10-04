@@ -50,6 +50,15 @@ class PlayarrPlaybackTimelineTest {
     }
 
     @Test
+    fun `undecodable direct play falls back to a transcode once`() {
+        assertEquals(true, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_DECODING_FAILED", false))
+        assertEquals(true, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES", false))
+        assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_DECODING_FAILED", true))
+        assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(false, "ERROR_CODE_DECODING_FAILED", false))
+        assertEquals(false, shouldFallBackToTranscodeAfterDecodeFailure(true, "ERROR_CODE_IO_NETWORK_CONNECTION_FAILED", false))
+    }
+
+    @Test
     fun `mini player timeline uses the source window after a seek on a large mp4`() {
         // Row 102: engine window after a seek reported ~0:10, source is 1:34:51 with the seek at 1:33:55.
         val sourceDuration = 5_691_000L

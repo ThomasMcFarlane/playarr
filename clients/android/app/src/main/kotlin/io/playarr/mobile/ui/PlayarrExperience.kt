@@ -5450,6 +5450,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private var activeOnDemandHls = false
     private var activePlaybackUrl = ""
     private var automaticRecoveryUrl: String? = null
+    private var activeDirectPlay = false
+    private var decoderFallbackAttempted = false
     private var prepareJob: Job? = null
     private var switchJob: Job? = null
     private var previousPlayerState = player.state.value
@@ -5478,6 +5480,14 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                         ) {
                             automaticRecoveryUrl = activePlaybackUrl
                             recoverExpiredHlsSession(currentError.message)
+                        } else if (shouldFallBackToTranscodeAfterDecodeFailure(
+                                activeDirectPlay,
+                                currentError.message,
+                                decoderFallbackAttempted,
+                            )
+                        ) {
+                            decoderFallbackAttempted = true
+                            fallBackToTranscode(currentError.message)
                         } else {
                             persistProgress()
                             closeActiveSession(PlaybackStopReason.Error, currentError.message)
@@ -5606,6 +5616,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             activeOnDemandHls = false
             activePlaybackUrl = ""
             automaticRecoveryUrl = null
+            activeDirectPlay = false
+            decoderFallbackAttempted = false
             _controls.value = PlayarrPlaybackControls()
             _state.value = ExperienceLoad.Loading
             val resumePosition = requestedStartPositionMs ?: runCatching { api.getWatchProgress(mediaFileId) }
@@ -5869,6 +5881,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         activeOnDemandHls = playback.mode == io.playarr.shared.data.model.PlaybackMode.Hls &&
             isPlayarrOnDemandHls(playback.url)
         activePlaybackUrl = playback.url
+        activeDirectPlay = playback.mode != io.playarr.shared.data.model.PlaybackMode.Hls
         val selectedSubtitleId = preferredSubtitleId
             ?.takeIf { selected -> playback.subtitleTracks.any { it.id == selected } }
             ?: playback.selectedSubtitleTrackId
@@ -5995,6 +6008,25 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         }
         player.seekTo(playarrEnginePositionMs(sourcePosition, activeSourceOffsetMs))
         checkpoint()
+    }
+
+    /**
+     * The device's decoders (after the player's own decoder retries) cannot
+     * decode the direct-played source, e.g. 4K HEVC Main 10 / Dolby Vision on
+     * an emulator or a low-end box. Ask the server for a 1080p H.264 transcode
+     * at the same position instead of surfacing "decoding failed".
+     */
+    private fun fallBackToTranscode(errorMessage: String) {
+        switchNegotiatedPlayback(
+            profile = DECODE_FALLBACK_PROFILE,
+            forceTranscode = true,
+            audioStreamIndex = selectedAudioStreamIndex(),
+            ignoreSavedPreferences = false,
+            requestedSourcePositionMs = currentSourcePositionMs(),
+            stopReason = PlaybackStopReason.Error,
+            errorMessage = errorMessage,
+            shouldPlayOverride = true,
+        )
     }
 
     private fun recoverExpiredHlsSession(errorMessage: String) {
