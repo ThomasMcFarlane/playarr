@@ -351,6 +351,34 @@ Instances redesign this document exists to drive** — noted here only so the pa
 whenever that screen gets its own design pass (e.g. the alphabet index rail and the colored
 underline-strip status signal are both real *arr details Playarr Server hasn't attempted to port yet).
 
+## 6. Binding UI rules (owner standing rules, 2026-10)
+
+These apply to every client. Web enforcement is in `clients/tv-web/web/src/lib/*.test.ts`.
+
+### 6.1 Page shell
+
+- Every routed page renders through the shared shell (`components/shell`): back button top-left, large
+  title, optional detail/breadcrumb after a divider, and page actions (Filters, secondary panels) on the
+  right of the same row. `pageHeaderRegistry.test.ts` fails when a page bypasses it.
+- Page-level navigation sits on the left, page filters on the right. Filters open a right-hand drawer
+  (`FiltersDrawer`) that always starts with the shared View toggle where views exist.
+- Every filter, the view, the date/anchor, the selection and the open panel are encoded in the URL query
+  string and restored on refresh, back and deep links.
+- Reuse the shared multiselect, date-range, view-toggle, master-detail and skeleton components before
+  writing new ones; promote anything reusable into `components/shell`.
+- The bottom-left profile chip and the top clock are reserved areas. Page bodies reserve
+  `--page-safe-bottom`; header detail text measures against the clock and actions and wraps beneath the
+  title with a horizontal rule when it does not fit (`pageHeaderLayout.ts`).
+- Loading renders the full structure of the active view with skeleton placeholders, so content fills in
+  without layout shift.
+
+### 6.2 Buttons
+
+One button family (`components/ui/Button.tsx`): `primary`, `secondary`, `ghost`, `icon`, `danger`, sizes
+`sm`/`md`/`lg`; always rounded, with a visible focus ring and TV focus scale; dark-mode safe through the
+colour tokens. New UI must not style raw `btn` classes: `buttonAudit.test.ts` keeps an allow-list of legacy
+files that may only shrink.
+
 ## 5. Explicitly out of scope / not yet observed
 
 Being direct about the boundaries of this document so a future pass knows what still needs

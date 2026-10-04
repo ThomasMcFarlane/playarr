@@ -29,7 +29,7 @@ addEventListener('keydown',e=>{cards[idx].style.outline='';const m={ArrowDown:3,
 </script></div></div></body></html>
 `;
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0 }) {
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -95,6 +95,21 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       })));
     }
     if (/continue|on-deck|progress/.test(p)) return json(res, []);
+    if (p === "/api/v1/calendar") {
+      const start = q.get("start") ?? "2026-10-01";
+      const end = q.get("end") ?? start;
+      const entries = [];
+      for (let day = new Date(`${start}T00:00:00Z`), n = 0; day <= new Date(`${end}T00:00:00Z`); day = new Date(day.getTime() + 86_400_000), n += 1) {
+        const date = day.toISOString().slice(0, 10);
+        for (let i = 0; i < 1 + (n % 4); i += 1) {
+          entries.push({ id: `e-${date}-${i}`, media_kind: "episode", release_type: "air", title: `Show ${(n + i) % 7}`, season_number: 1, episode_number: n + i, date, release_at: null, monitored: true, has_file: i % 2 === 0, work_id: null, sources: [{ source_instance_id: "s1", source_name: "Sonarr", source_kind: "sonarr", arr_id: n }] });
+        }
+      }
+      const body = { start, end, entries, sources: [{ source_instance_id: "s1", name: "Sonarr", kind: "sonarr", status: "ok", entry_count: entries.length }] };
+      if (calendarDelayMs > 0) return void setTimeout(() => json(res, body), calendarDelayMs);
+      return json(res, body);
+    }
+    if (p === "/api/v1/calendar/feed") return json(res, { active: false, created_at: null, last_used_at: null });
     if (p === "/api/v1/playlists" || p === "/api/v1/admin/playlists") return json(res, []);
     if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: false, can_request: false });
     unknown.add(`${req.method} ${p}`);

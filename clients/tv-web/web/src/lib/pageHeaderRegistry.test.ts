@@ -48,6 +48,15 @@ describe("shared page header coverage", () => {
     }
   });
 
+  it("renders Filters only through the header's shared filters slot", () => {
+    for (const file of ["Library.tsx", "Playlists.tsx", "Calendar.tsx"]) {
+      const source = readFileSync(join(pagesDir, file), "utf8");
+      expect(source, `${file} must pass filters={{...}} to the page header`).toMatch(/\bfilters=\{/);
+      expect(source, `${file} must not render FiltersButton/PanelButton itself`).not.toMatch(/<(FiltersButton|PanelButton)\b/);
+      expect(source, `${file} must not hand-roll page-filters-button`).not.toMatch(/page-filters-button/);
+    }
+  });
+
   it("keeps Filters on the right of the header through the shared FiltersButton", () => {
     for (const file of ["Library.tsx", "Playlists.tsx", "Calendar.tsx"]) {
       const source = readFileSync(join(pagesDir, file), "utf8");

@@ -1,3 +1,4 @@
+import { Drawer } from "./shell";
 import { useEffect, useRef, useState } from "react";
 import { describeApiError, type DownloadOptionsResponse } from "@playarr-tv/api-client";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -57,7 +58,6 @@ export function DownloadQualityDrawer({
 }) {
   const { t } = useLanguage();
   const client = useApiClient();
-  const closeRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<OptionsState>({ status: "loading" });
   const [qualityId, setQualityId] = useState("original");
   const [keepUntil, setKeepUntil] = useState<KeepUntilState>({
@@ -91,27 +91,6 @@ export function DownloadQualityDrawer({
     };
   }, [client, firstLeaf, t]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
-    const handleBack = (event: KeyboardEvent) => {
-      const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
-      if (!isBack) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", handleBack, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", handleBack, true);
-    };
-  }, [onClose]);
-
   const options = state.status === "ready" ? state.options.options : [];
   const selectedOption = options.find((option) => option.id === qualityId);
   const isBatch = leaves.length > 1;
@@ -126,26 +105,14 @@ export function DownloadQualityDrawer({
   }
 
   return (
-    <aside
-      className="tv-filter-drawer tv-playback-settings-drawer download-quality-drawer"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("components.downloadQualityDrawer.dialogLabel", { title })}
+    <Drawer
+      className="tv-playback-settings-drawer download-quality-drawer"
+      ariaLabel={t("components.downloadQualityDrawer.dialogLabel", { title })}
+      kicker={t("components.downloadQualityDrawer.kicker")}
+      title={title}
+      closeLabel={t("components.downloadQualityDrawer.close")}
+      onClose={onClose}
     >
-      <header>
-        <div>
-          <p>{t("components.downloadQualityDrawer.kicker")}</p>
-          <h2>{title}</h2>
-        </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label={t("components.downloadQualityDrawer.close")}
-        >
-          ×
-        </button>
-      </header>
 
       {state.status === "loading" ? (
         <div className="tv-playback-settings-status" role="status">
@@ -216,6 +183,6 @@ export function DownloadQualityDrawer({
           </div>
         </>
       )}
-    </aside>
+    </Drawer>
   );
 }

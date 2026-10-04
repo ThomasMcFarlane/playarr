@@ -7,11 +7,10 @@ import type {
   CalendarSourceStatus,
 } from "@playarr-tv/api-client";
 import { useAsyncData } from "@playarr-tv/api-client/react";
-import { CalendarSubscription } from "../components/CalendarSubscription";
+import { CalendarLink } from "../components/CalendarLink";
 import {
   DateRangeField,
   FilterSection,
-  FiltersButton,
   FiltersDrawer,
   MasterDetail,
   MultiSelect,
@@ -20,6 +19,8 @@ import {
   SkeletonLines,
   ViewToggle,
 } from "../components/shell";
+import { Button, buttonClassName } from "../components/ui";
+import { PeriodPicker } from "../components/shell";
 import { RequestButton } from "../components/RequestButton";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { useApiClient } from "../lib/ApiClientProvider";
@@ -355,6 +356,10 @@ function WeekTrack(props: Parameters<typeof DaySections>[0]) {
   );
 }
 
+/** Rows of vertical space one month-cell chip needs, used to decide how many fit before "+N more". */
+const CHIP_ROW_PX = 26;
+const CELL_CHROME_PX = 52;
+
 function MonthGrid({
   anchor,
   firstDay,
@@ -378,6 +383,24 @@ function MonthGrid({
 } & SelectHandlers) {
   const weeks = buildMonthGrid(anchor, firstDay, groups, today);
   const weekdayFormat = utcFormatter(locale, { weekday: "short" });
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [chipLimit, setChipLimit] = useState(MONTH_CHIP_LIMIT);
+
+  // The grid always fills the space below the header (loading and loaded alike);
+  // cells share it equally and show as many chips as fit, then "+N more".
+  useEffect(() => {
+    const element = bodyRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const update = () => {
+      const cellHeight = element.clientHeight / weeks.length;
+      setChipLimit(Math.max(1, Math.min(MONTH_CHIP_LIMIT + 2, Math.floor((cellHeight - CELL_CHROME_PX) / CHIP_ROW_PX))));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [weeks.length]);
+
   return (
     <div
       className="calendar-month-scroll"
@@ -386,27 +409,31 @@ function MonthGrid({
       data-navigation-scroll-key="calendar:month-x"
       aria-busy={loading ? true : undefined}
     >
-      <table className="calendar-month">
-        <thead>
-          <tr>
-            {weeks[0]!.map((cell) => (
-              <th key={cell.day} scope="col">
-                {weekdayFormat.format(parseDay(cell.day))}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
+      <div className="calendar-month" role="grid" aria-label={formatRangeLabel("month", anchor, firstDay, locale)}>
+        <div className="calendar-month-head" role="row">
+          {weeks[0]!.map((cell) => (
+            <div key={cell.day} role="columnheader" className="calendar-month-weekday">
+              {weekdayFormat.format(parseDay(cell.day))}
+            </div>
+          ))}
+        </div>
+        <div
+          ref={bodyRef}
+          className="calendar-month-body"
+          style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+        >
           {weeks.map((week, weekIndex) => (
-            <tr key={week[0]!.day}>
+            <div key={week[0]!.day} role="row" className="calendar-month-row">
               {week.map((cell, cellIndex) => {
                 const items = groupSeriesEpisodes(cell.entries);
-                const shown = items.slice(0, MONTH_CHIP_LIMIT);
+                const overflow = items.length > chipLimit;
+                const shown = overflow ? items.slice(0, Math.max(1, chipLimit - 1)) : items;
                 const hidden = items.length - shown.length;
                 return (
-                  <td
+                  <div
                     key={cell.day}
-                    className={`${cell.inMonth ? "" : "is-outside "}${cell.isToday ? "is-today" : ""}`}
+                    role="gridcell"
+                    className={`calendar-month-cell${cell.inMonth ? "" : " is-outside"}${cell.isToday ? " is-today" : ""}`}
                   >
                     <time dateTime={cell.day} className="calendar-month-day">
                       {parseDay(cell.day).getUTCDate()}
@@ -446,13 +473,13 @@ function MonthGrid({
                         {t("pages.calendar.more", { count: hidden })}
                       </button>
                     ) : null}
-                  </td>
+                  </div>
                 );
               })}
-            </tr>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -570,14 +597,14 @@ function ItemDetails({
       </dl>
       <div className="calendar-sheet-actions">
         {route && onOpen ? (
-          <button type="button" className="btn btn-primary" onClick={() => onOpen(route)}>
+          <Button variant="primary" onClick={() => onOpen(route)}>
             {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
-          </button>
+          </Button>
         ) : (
           <>
             <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p>
-            <RequestButton snapshot={snapshot} className="btn btn-primary" />
-            <WatchlistToggle snapshot={snapshot} className="btn btn-secondary" />
+            <RequestButton snapshot={snapshot} className={buttonClassName({ variant: "primary" })} />
+            <WatchlistToggle snapshot={snapshot} className={buttonClassName({ variant: "secondary" })} />
           </>
         )}
       </div>
@@ -639,9 +666,9 @@ function DetailSheet({
         onMouseDown={(event) => event.stopPropagation()}
       >
         {children}
-        <button ref={closeRef} type="button" className="btn btn-secondary" onClick={onClose}>
+        <Button ref={closeRef} variant="secondary" onClick={onClose}>
           {closeLabel}
-        </button>
+        </Button>
       </section>
     </div>
   );
@@ -694,7 +721,7 @@ export function CalendarPage() {
   );
   const setAnchor = (next: Day) => updateParams((params) => writeCalendarUrl(params, { date: next }));
   const setFilters = (next: CalendarFilters) => updateParams((params) => writeCalendarFilters(params, next));
-  const setPanel = (next: "filters" | "subscription" | null) =>
+  const setPanel = (next: "filters" | "link" | null) =>
     updateParams((params) => writeCalendarUrl(params, { panel: next }));
 
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -758,9 +785,9 @@ export function CalendarPage() {
       <div className="calendar-state" role="alert">
         <h2 className="calendar-state-title error-text">{t("pages.calendar.loadError")}</h2>
         <p className="muted">{state.message}</p>
-        <button type="button" className="btn btn-primary" onClick={() => setReloadNonce((n) => n + 1)}>
+        <Button variant="primary" onClick={() => setReloadNonce((n) => n + 1)}>
           {t("pages.calendar.retry")}
-        </button>
+        </Button>
       </div>
     ) : state.status === "ready" && visibleCount === 0 ? (
       <div className="calendar-state">
@@ -840,27 +867,21 @@ export function CalendarPage() {
     );
   }
 
-  const stackedActions = (
+  const navButtons = (
     <>
-      <FiltersButton
-        label={t("pages.library.filters")}
-        open={panel === "filters"}
-        onToggle={() => setPanel(panel === "filters" ? null : "filters")}
-        controls="calendar-filters-drawer"
-        activeCount={activeCount}
-      />
-      <button
-        type="button"
-        className={`page-filters-button${panel === "subscription" ? " is-active" : ""}`}
-        aria-expanded={panel === "subscription"}
-        aria-controls="calendar-subscribe-drawer"
-        onClick={() => setPanel(panel === "subscription" ? null : "subscription")}
+      <Button variant="icon" aria-label={t("pages.calendar.previous")} onClick={() => setAnchor(shiftAnchor(view, anchor, -1))}>
+        <span aria-hidden="true">←</span>
+      </Button>
+      <Button
+        variant="secondary"
+        data-tv-focus-default
+        onClick={() => setAnchor(anchorForView(view, localDayOf(new Date())))}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" />
-        </svg>
-        <span>{t("pages.calendar.subscription.title")}</span>
-      </button>
+        {t("pages.calendar.today")}
+      </Button>
+      <Button variant="icon" aria-label={t("pages.calendar.next")} onClick={() => setAnchor(shiftAnchor(view, anchor, 1))}>
+        <span aria-hidden="true">→</span>
+      </Button>
     </>
   );
 
@@ -870,40 +891,46 @@ export function CalendarPage() {
       ariaLabel={t("pages.calendar.title")}
       title={t("pages.calendar.title")}
       backLabel={t("pages.calendar.backToHome")}
-      actions={stackedActions}
-      stackActions
+      navigation={
+        <div className="calendar-nav calendar-nav-header" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+          {navButtons}
+        </div>
+      }
+      filters={{
+        label: t("pages.library.filters"),
+        open: panel === "filters",
+        onToggle: () => setPanel(panel === "filters" ? null : "filters"),
+        controls: "calendar-filters-drawer",
+        activeCount,
+      }}
+      panelButtons={[
+        {
+          id: "subscription",
+          label: t("pages.calendar.subscription.title"),
+          icon: (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" />
+            </svg>
+          ),
+          open: panel === "link",
+          onToggle: () => setPanel(panel === "link" ? null : "link"),
+          controls: "calendar-subscribe-drawer",
+        },
+      ]}
     >
       <div className="calendar-header">
-        <div className="calendar-toolbar">
-          <div className="calendar-nav" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-            <button
-              type="button"
-              className="btn btn-secondary calendar-icon-btn"
-              aria-label={t("pages.calendar.previous")}
-              onClick={() => setAnchor(shiftAnchor(view, anchor, -1))}
-            >
-              <span aria-hidden="true">←</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              data-tv-focus-default
-              onClick={() => setAnchor(anchorForView(view, localDayOf(new Date())))}
-            >
-              {t("pages.calendar.today")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary calendar-icon-btn"
-              aria-label={t("pages.calendar.next")}
-              onClick={() => setAnchor(shiftAnchor(view, anchor, 1))}
-            >
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-          <p className="calendar-range" aria-live="polite">
-            {rangeLabel}
-          </p>
+        <PeriodPicker
+          value={anchor}
+          label={rangeLabel}
+          locale={locale}
+          view={view}
+          dialogLabel={t("pages.calendar.jumpTitle")}
+          monthLabel={t("pages.calendar.jumpMonth")}
+          yearLabel={t("pages.calendar.jumpYear")}
+          onChange={(day) => setAnchor(day)}
+        />
+        <div className="calendar-nav calendar-nav-inline" role="group" aria-label={t("pages.calendar.navigationLabel")}>
+          {navButtons}
         </div>
       </div>
 
@@ -911,8 +938,6 @@ export function CalendarPage() {
       {stateMessage}
       <div
         className={`calendar-scroll${view === "agenda" ? " is-master-detail" : ""}${stateMessage ? " is-hidden" : ""}`}
-        data-tv-scroll-container={view === "agenda" ? undefined : true}
-        data-tv-scroll-axis={view === "agenda" ? undefined : "vertical"}
         data-navigation-scroll-key="calendar:body"
       >
         {body}
@@ -1015,14 +1040,14 @@ export function CalendarPage() {
 
       <FiltersDrawer
         id="calendar-subscribe-drawer"
-        open={panel === "subscription"}
+        open={panel === "link"}
         kicker={t("pages.calendar.title")}
         title={t("pages.calendar.subscription.title")}
         ariaLabel={t("pages.calendar.subscription.title")}
         closeLabel={t("pages.library.closeFilters")}
         onClose={() => setPanel(null)}
       >
-        <CalendarSubscription localeTag={locale} />
+        <CalendarLink />
       </FiltersDrawer>
 
       {view !== "agenda" && selectedItem ? (

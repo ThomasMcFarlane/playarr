@@ -1,4 +1,5 @@
-import type { KeyboardEventHandler, ReactNode, Ref } from "react";
+import { Button } from "../ui";
+import type { ReactNode, Ref } from "react";
 
 /** Header action that opens the page's {@link FiltersDrawer}. */
 export function FiltersButton({
@@ -22,9 +23,10 @@ export function FiltersButton({
   activeCount?: number;
 }) {
   return (
-    <button
-      type="button"
-      className={`page-filters-button${open ? " is-active" : ""}`}
+    <Button
+      variant="secondary"
+      className="page-filters-button"
+      active={open}
       onClick={onToggle}
       aria-expanded={open}
       aria-controls={controls}
@@ -40,73 +42,48 @@ export function FiltersButton({
       </svg>
       <span>{label}</span>
       {activeCount > 0 ? <b className="page-filters-count">{activeCount}</b> : null}
-    </button>
+    </Button>
   );
 }
 
-/** Shared filters pane: right-hand drawer with a title, close control and filter sections. */
-export function FiltersDrawer({
-  id,
+/** Secondary header action stacked directly below Filters (for example Calendar subscription); same style and slot family. */
+export function PanelButton({
+  label,
+  icon,
   open,
-  title,
-  kicker,
-  ariaLabel,
-  closeLabel,
-  onClose,
-  children,
-  drawerRef,
-  titleId,
-  modal,
-  onKeyDown,
+  onToggle,
+  controls,
+  buttonRef,
+  buttonProps,
 }: {
-  drawerRef?: Ref<HTMLElement>;
-  /** Labels the drawer by its heading (dialog semantics) instead of `ariaLabel`. */
-  titleId?: string;
-  modal?: boolean;
-  /** Replaces the default Escape-to-close handler (focus trapping). */
-  onKeyDown?: KeyboardEventHandler<HTMLElement>;
-  id: string;
+  buttonRef?: Ref<HTMLButtonElement>;
+  buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
+  label: string;
+  icon: ReactNode;
   open: boolean;
-  title: string;
-  kicker?: string;
-  ariaLabel: string;
-  closeLabel: string;
-  onClose: () => void;
-  children: ReactNode;
+  onToggle: () => void;
+  controls: string;
 }) {
-  if (!open) return null;
   return (
-    <aside
-      id={id}
-      ref={drawerRef}
-      className="tv-filter-drawer"
-      role={modal ? "dialog" : undefined}
-      aria-modal={modal ? true : undefined}
-      aria-label={titleId ? undefined : ariaLabel}
-      aria-labelledby={titleId}
-      onKeyDown={
-        onKeyDown ??
-        ((event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            onClose();
-          }
-        })
-      }
+    <Button
+      variant="secondary"
+      className="page-filters-button"
+      active={open}
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls={controls}
+      data-panel-button
+      ref={buttonRef}
+      {...buttonProps}
     >
-      <header>
-        <div>
-          {kicker ? <p>{kicker}</p> : null}
-          <h2 id={titleId}>{title}</h2>
-        </div>
-        <button type="button" onClick={onClose} aria-label={closeLabel}>
-          ×
-        </button>
-      </header>
-      {children}
-    </aside>
+      {icon}
+      <span>{label}</span>
+    </Button>
   );
 }
+
+/** The shared Drawer, used for page filters. */
+export { Drawer as FiltersDrawer } from "./Drawer";
 
 /** One titled section inside a {@link FiltersDrawer}. */
 export function FilterSection({ title, children }: { title?: string; children: ReactNode }) {

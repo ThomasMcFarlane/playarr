@@ -12227,11 +12227,7 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 
   .master-detail {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .master-detail-pane {
-    max-height: calc(38 * var(--viewport-unit));
+    grid-template-rows: calc(38 * var(--viewport-unit)) minmax(0, 1fr);
   }
 }
 
@@ -12262,25 +12258,177 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   align-items: center;
 }
 
-.tv-filter-drawer .calendar-subscription {
+.tv-filter-drawer .calendar-link {
   display: grid;
   gap: 0.75rem;
   font-size: clamp(0.62rem, 0.72vw, 0.9rem);
 }
 
-.tv-filter-drawer .calendar-subscription h2 {
+.tv-filter-drawer .calendar-link h2 {
   display: none;
 }
 
-.tv-filter-drawer .calendar-subscription p,
-.tv-filter-drawer .calendar-subscription li {
+.tv-filter-drawer .calendar-link p,
+.tv-filter-drawer .calendar-link li {
   font-size: inherit;
   line-height: 1.5;
 }
 
-.tv-filter-drawer .calendar-subscription-instructions {
+.tv-filter-drawer .calendar-link-instructions {
   display: grid;
   gap: 0.5rem;
   margin: 0;
   padding-left: 1.1rem;
+}
+
+/* Button family (components/ui/Button.tsx): rounded, focus ring, TV scale via .btn. */
+.ui-btn {
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--line-strong) 66%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.ui-btn--primary {
+  border-color: transparent;
+}
+
+.ui-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+  backdrop-filter: none;
+}
+
+.ui-btn--danger {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.ui-btn--sm {
+  min-height: 38px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.72rem;
+}
+
+.ui-btn--lg {
+  min-height: clamp(52px, 4.2vw, 68px);
+  padding: 0.9rem 1.6rem;
+}
+
+.ui-btn--icon {
+  width: clamp(38px, 2.8vw, 50px);
+  min-height: clamp(38px, 2.8vw, 50px);
+  height: clamp(38px, 2.8vw, 50px);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.ui-btn:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.ui-btn:hover:not(:disabled),
+.ui-btn.is-active {
+  border-color: transparent;
+}
+
+.ui-btn--secondary:hover:not(:disabled),
+.ui-btn--secondary.is-active,
+.ui-btn--icon:hover:not(:disabled),
+.ui-btn--icon.is-active,
+.ui-btn--ghost.is-active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.ui-btn svg {
+  width: 1.25em;
+  height: 1.25em;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+/* Header detail that cannot fit beside the title wraps beneath it with a horizontal rule. */
+.tv-library-heading > .page-header-detail {
+  white-space: nowrap;
+}
+
+.tv-library-heading.is-detail-wrapped {
+  --page-header-divider-pad: 20px;
+  right: clamp(24px, 4vw, 96px);
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
+}
+
+.tv-library-heading.is-detail-wrapped > .page-header-actions {
+  order: 1;
+}
+
+.tv-library-heading.is-detail-wrapped > .page-header-detail {
+  --wrapped-indent: calc(clamp(38px, 2.8vw, 50px) + clamp(14px, 1.2vw, 24px));
+  order: 2;
+  flex: 0 0 calc(100% - var(--wrapped-indent));
+  max-width: none;
+  margin-left: var(--wrapped-indent);
+  padding-top: 0.4rem;
+  padding-left: 0;
+  border-top: 1px solid var(--line-strong);
+  border-left: 0;
+}
+
+/* Filters + panel buttons share one slot: top-right, right-aligned, never stretched to each other's width. */
+.page-header-actions {
+  align-items: flex-start;
+}
+
+.page-header-stack {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: clamp(8px, 0.8vw, 16px);
+}
+
+/* Shared Drawer layout (components/shell/Drawer.tsx): header never squishes, body scrolls, footer pinned. */
+.drawer > .drawer-header {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.drawer .drawer-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.drawer .drawer-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.drawer > .drawer-header > .drawer-close {
+  flex: 0 0 auto;
+  width: clamp(36px, 2.7vw, 48px);
+  min-width: clamp(36px, 2.7vw, 48px);
+  height: clamp(36px, 2.7vw, 48px);
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 50%;
+  font-size: clamp(1rem, 1.4vw, 1.7rem);
+}
+
+.drawer > .drawer-body {
+  display: grid;
+  align-content: start;
+  gap: clamp(22px, calc(2.8 * var(--viewport-unit)), 34px);
+}
+
+.drawer > .drawer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }

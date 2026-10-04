@@ -48,7 +48,8 @@ import {
   toggleLanguage,
 } from "../lib/languageFilters";
 import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
-import { FiltersButton, FiltersDrawer, PageHeader, ViewToggle } from "../components/shell";
+import { usePanelParam } from "../lib/usePanelParam";
+import { FiltersDrawer, PageHeader, ViewToggle } from "../components/shell";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 
 /** Initial DOM mount for dense grids — enough for a full 4K viewport + headroom. */
@@ -182,7 +183,12 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
   const [artworkSize, setArtworkSize] = useState<ArtworkSize>(() => storedArtworkSize(kind));
   const [sort, setSort] = useState<LibrarySort>(() => storedSort(kind));
   const [order, setOrder] = useState<SortOrder>(() => storedOrder(kind));
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // The open Filters panel lives in the URL (`?panel=filters`) so refresh and deep links restore it.
+  const [panel, setPanel] = usePanelParam(["filters"] as const);
+  const filtersOpen = panel === "filters";
+  const setFiltersOpen = (next: boolean | ((open: boolean) => boolean)) =>
+    setPanel((typeof next === "function" ? next(filtersOpen) : next) ? "filters" : null);
+  const previousKind = useRef(kind);
   // Audio/subtitle language filters live in the URL (`?audio=en,ja&subs=fr`)
   // so they survive reloads and can be shared or bookmarked.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -281,7 +287,11 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
     setArtworkSize(storedArtworkSize(kind));
     setSort(storedSort(kind));
     setOrder(storedOrder(kind));
-    setFiltersOpen(false);
+    if (previousKind.current !== kind) {
+      previousKind.current = kind;
+      setPanel(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
   useEffect(() => {
@@ -890,15 +900,13 @@ export function LibraryPage({ kind }: { kind: LibraryKind }) {
         title={plural}
         backLabel={t("pages.library.backToHome")}
         detail={`${(total ?? items.length).toLocaleString()} ${collectionNoun}`}
-        actions={
-          <FiltersButton
-            label={t("pages.library.filters")}
-            open={filtersOpen}
-            onToggle={() => setFiltersOpen((open) => !open)}
-            controls={`${kind}-library-filters`}
-            activeCount={audioLangs.length + subtitleLangs.length}
-          />
-        }
+        filters={{
+          label: t("pages.library.filters"),
+          open: filtersOpen,
+          onToggle: () => setFiltersOpen((open) => !open),
+          controls: `${kind}-library-filters`,
+          activeCount: audioLangs.length + subtitleLangs.length,
+        }}
       />
 
       <aside className="tv-library-preview" key={`preview-${selected.id}`}>

@@ -147,9 +147,9 @@ export function applyCalendarFilters(
   });
 }
 
-/** Side panels that can be open; encoded as `?panel=filters|subscription`. */
-export type CalendarPanel = "filters" | "subscription";
-export const CALENDAR_PANELS: readonly CalendarPanel[] = ["filters", "subscription"];
+/** Side panels that can be open; encoded as `?panel=filters|link`. */
+export type CalendarPanel = "filters" | "link";
+export const CALENDAR_PANELS: readonly CalendarPanel[] = ["filters", "link"];
 
 /** Everything the calendar keeps in the URL besides the filters themselves. */
 export interface CalendarUrlState {
@@ -163,7 +163,9 @@ export interface CalendarUrlState {
 
 export function parseCalendarUrl(params: URLSearchParams): CalendarUrlState {
   const view = params.get("view");
-  const panel = params.get("panel");
+  // `subscription` is the pre-rename spelling of `link`; old deep links keep working.
+  const rawPanel = params.get("panel");
+  const panel = rawPanel === "subscription" ? "link" : rawPanel;
   return {
     view: view === "agenda" || view === "week" || view === "month" ? view : null,
     date: parseDayParam(params.get("date")),

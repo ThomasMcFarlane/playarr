@@ -253,42 +253,61 @@
   color: var(--ink);
 }
 
-/* Month grid */
+/* Month grid: fills the space below the header exactly, whether loading or loaded. */
 .calendar-month-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
 .calendar-month {
-  width: 100%;
+  height: 100%;
   min-width: 720px;
-  table-layout: fixed;
-  border-collapse: collapse;
+  display: flex;
+  flex-direction: column;
 }
 
-.calendar-month th {
+.calendar-month-head,
+.calendar-month-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-month-weekday {
   padding: 0.4rem;
   color: var(--ink-muted);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
+  text-align: center;
   text-transform: uppercase;
 }
 
-.calendar-month td {
-  height: 7.5rem;
-  min-width: 0;
-  padding: 0.3rem;
-  border: 1px solid var(--line);
-  vertical-align: top;
+.calendar-month-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
 }
 
-.calendar-month td.is-outside {
+.calendar-month-row {
+  min-height: 0;
+}
+
+.calendar-month-cell {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+}
+
+.calendar-month-cell.is-outside {
   background: color-mix(in srgb, var(--surface-soft) 40%, transparent);
   color: var(--ink-muted);
 }
 
-.calendar-month td.is-today {
+.calendar-month-cell.is-today {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
@@ -299,10 +318,13 @@
   font-weight: 640;
 }
 
-.calendar-month ul {
+.calendar-month-cell ul {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .calendar-chip,
@@ -445,12 +467,6 @@
   font-size: 0.8rem;
 }
 
-@media (min-width: 1400px) {
-  .calendar-days.calendar-days-week {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-}
 
 .calendar-scroll.is-hidden {
   display: none;
@@ -580,9 +596,144 @@
   flex: 1 1 auto;
 }
 
-.tv-filter-drawer .calendar-subscription {
+.tv-filter-drawer .calendar-link {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
   max-width: none;
+}
+
+/* Navigation lives in the header's right cluster; phones show it inline under the title instead. */
+.calendar-header {
+  flex-direction: row;
+  align-items: center;
+}
+
+.calendar-nav-inline {
+  display: none;
+  margin-left: auto;
+}
+
+.calendar-nav-header {
+  align-self: flex-start;
+  margin-right: clamp(4px, 0.5vw, 12px);
+}
+
+.calendar-nav-header .ui-btn {
+  height: clamp(38px, 2.8vw, 50px);
+  min-height: clamp(38px, 2.8vw, 50px);
+}
+
+.period-picker {
+  position: relative;
+}
+
+.period-picker-trigger .calendar-range {
+  margin: 0;
+  font-size: clamp(1rem, 1.3vw, 1.5rem);
+}
+
+.period-picker-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  box-shadow: 0 24px 64px rgba(40, 26, 24, 0.24);
+}
+
+.period-picker-list {
+  width: clamp(130px, 11vw, 190px);
+  max-height: min(calc(48 * var(--viewport-unit)), 420px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  list-style: none;
+  scroll-snap-type: y proximity;
+}
+
+.period-picker-option {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 640;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: center;
+}
+
+.period-picker-option[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.period-picker-option:hover,
+.period-picker-option:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+@media (max-width: 760px) {
+  .calendar-nav-header {
+    display: none;
+  }
+
+  .calendar-nav-inline {
+    display: flex;
+  }
+}
+
+.calendar-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.calendar-link-secret {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+
+/* Every view fills the body area; containers, not content, decide the size (zero shift on load). */
+.calendar-scroll {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-scroll > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.calendar-week-scroll {
+  height: 100%;
+}
+
+.calendar-week-scroll .calendar-days-week {
+  height: calc(100% - 0.75rem);
+}
+
+.calendar-week-scroll .calendar-day {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calendar-scroll {
+  overflow: hidden;
+  padding: 0;
 }

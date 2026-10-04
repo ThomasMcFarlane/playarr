@@ -1,3 +1,4 @@
+import { Drawer } from "./shell";
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { DownloadKeepUntilPolicy } from "../lib/downloadsDb";
@@ -28,51 +29,17 @@ export function EditKeepUntilDrawer({
   busy?: boolean;
 }) {
   const { t } = useLanguage();
-  const closeRef = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<KeepUntilState>(() => keepUntilStateFromPolicy(keepUntil));
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
-    const handleBack = (event: KeyboardEvent) => {
-      const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
-      if (!isBack) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", handleBack, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", handleBack, true);
-    };
-  }, [onClose]);
-
   return (
-    <aside
-      className="tv-filter-drawer tv-playback-settings-drawer download-quality-drawer"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("pages.downloads.editKeepUntilDialogLabel", { title })}
+    <Drawer
+      className="tv-playback-settings-drawer download-quality-drawer"
+      ariaLabel={t("pages.downloads.editKeepUntilDialogLabel", { title })}
+      kicker={t("components.downloadQualityDrawer.kicker")}
+      title={title}
+      closeLabel={t("components.downloadQualityDrawer.close")}
+      onClose={onClose}
     >
-      <header>
-        <div>
-          <p>{t("components.downloadQualityDrawer.kicker")}</p>
-          <h2>{title}</h2>
-        </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label={t("components.downloadQualityDrawer.close")}
-        >
-          ×
-        </button>
-      </header>
 
       <KeepUntilPicker state={state} onChange={setState} />
 
@@ -89,6 +56,6 @@ export function EditKeepUntilDrawer({
           {t("pages.downloads.save")}
         </button>
       </div>
-    </aside>
+    </Drawer>
   );
 }

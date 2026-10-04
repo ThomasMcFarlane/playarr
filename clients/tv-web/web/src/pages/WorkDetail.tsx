@@ -1,3 +1,4 @@
+import { Drawer } from "../components/shell";
 import { WatchlistToggle } from "../components/WatchlistToggle";
 import { snapshotFromWork } from "../lib/discovery";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -170,52 +171,18 @@ function MoviePlaybackSettingsDrawer({
   onClose: () => void;
 }) {
   const { t } = useLanguage();
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
-    const handleBack = (event: KeyboardEvent) => {
-      const isBack =
-        event.key === "Escape" ||
-        event.key === "BrowserBack" ||
-        event.key === "GoBack" ||
-        event.keyCode === 10009 ||
-        event.keyCode === 461;
-      if (!isBack) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", handleBack, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", handleBack, true);
-    };
-  }, [onClose]);
 
   const options = state.status === "ready" ? state.options : null;
   return (
-    <aside
+    <Drawer
       id="movie-playback-settings"
-      className="tv-filter-drawer tv-playback-settings-drawer"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("pages.workDetail.playbackSettingsFor", { title })}
+      className="tv-playback-settings-drawer"
+      ariaLabel={t("pages.workDetail.playbackSettingsFor", { title })}
+      kicker={t("pages.workDetail.kindMovie")}
+      title={t("pages.workDetail.playbackSettingsTitle")}
+      closeLabel={t("pages.workDetail.closeSettings")}
+      onClose={onClose}
     >
-      <header>
-        <div>
-          <p>{t("pages.workDetail.kindMovie")}</p>
-          <h2>{t("pages.workDetail.playbackSettingsTitle")}</h2>
-        </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          aria-label={t("pages.workDetail.closeSettings")}
-        >
-          ×
-        </button>
-      </header>
 
       {state.status === "loading" || state.status === "idle" ? (
         <div className="tv-playback-settings-status" role="status">
@@ -350,7 +317,7 @@ function MoviePlaybackSettingsDrawer({
           </div>
         </>
       ) : null}
-    </aside>
+    </Drawer>
   );
 }
 

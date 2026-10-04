@@ -104,7 +104,7 @@ describe("series episode grouping", () => {
 });
 
 describe("calendar URL state", () => {
-  const url = "view=agenda&date=2026-10-04&type=tv,movie&status=upcoming&selected=series:w1:2026-10-10:12:00&panel=subscription&from=2026-10-01";
+  const url = "view=agenda&date=2026-10-04&type=tv,movie&status=upcoming&selected=series:w1:2026-10-10:12:00&panel=link&from=2026-10-01";
 
   it("round-trips view, date, selection, panel and filters through one query string", () => {
     const params = new URLSearchParams(url);
@@ -113,11 +113,15 @@ describe("calendar URL state", () => {
       view: "agenda",
       date: "2026-10-04",
       selected: "series:w1:2026-10-10:12:00",
-      panel: "subscription",
+      panel: "link",
     });
     const rebuilt = writeCalendarUrl(writeCalendarFilters(new URLSearchParams(), parseCalendarFilters(params)), state);
     expect(parseCalendarUrl(rebuilt)).toEqual(state);
     expect(parseCalendarFilters(rebuilt)).toEqual(parseCalendarFilters(params));
+  });
+
+  it("still accepts the old panel=subscription spelling", () => {
+    expect(parseCalendarUrl(new URLSearchParams("panel=subscription")).panel).toBe("link");
   });
 
   it("ignores junk and clears values when set to null", () => {

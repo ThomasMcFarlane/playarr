@@ -13,7 +13,9 @@
     "smoke:nav": "node scripts/nav-smoke.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "smoke:header": "node scripts/header-parity.mjs",
+    "smoke:calendar-layout": "node scripts/calendar-layout.mjs"
   },
   "dependencies": {
     "@playarr-tv/api-client": "workspace:*",
