@@ -17,7 +17,7 @@ import type {
   Work,
   WorkChildren,
 } from "@playarr-tv/api-client";
-import { useCatalogBrowse } from "@playarr-tv/api-client/react";
+import { useCatalogBrowse, useHomeRails } from "@playarr-tv/api-client/react";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import {
@@ -78,14 +78,8 @@ function mergeRecent(...groups: Work[][]): Work[] {
     .sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
 }
 
-type HomeRailId =
-  | "primary"
-  | "new-movies"
-  | "new-series"
-  | "new-sites"
-  | "more-movies"
-  | "more-series"
-  | "more-sites";
+/** `primary`, `sites-new` / `sites-more`, or a server rail's definition id. */
+type HomeRailId = string;
 
 interface HomeRailDefinition {
   id: HomeRailId;
@@ -146,24 +140,13 @@ function centreHomeRail(
 
 /** TV-first landing page: a mixed library spotlight plus on-deck and recent rails. */
 export function HomePage() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { preference: homeView } = useHomeView();
   useDocumentTitle(t("pages.home.title"));
   const client = useApiClient();
   const liveCatalog = useLiveSubscription({ areas: ["catalog"] });
   const liveOnDeckRevision = useLiveRevision({ areas: ["progress", "catalog"] });
-  const seriesState = useCatalogBrowse(client, {
-    kind: "series",
-    available_only: true,
-    sort: "recent",
-    limit: 36,
-  }, { subscribe: liveCatalog });
-  const movieState = useCatalogBrowse(client, {
-    kind: "movie",
-    available_only: true,
-    sort: "recent",
-    limit: 36,
-  }, { subscribe: liveCatalog });
+  const railsState = useHomeRails(client, { lang: language }, { subscribe: liveCatalog });
   const siteState = useCatalogBrowse(client, {
     kind: "site",
     available_only: true,
@@ -171,15 +154,7 @@ export function HomePage() {
     limit: 36,
   }, { subscribe: liveCatalog });
   const [activeRail, setActiveRail] = useState<HomeRailId>("primary");
-  const [selectedByRail, setSelectedByRail] = useState<Record<HomeRailId, string | null>>({
-    primary: null,
-    "new-movies": null,
-    "new-series": null,
-    "new-sites": null,
-    "more-movies": null,
-    "more-series": null,
-    "more-sites": null,
-  });
+  const [selectedByRail, setSelectedByRail] = useState<Record<HomeRailId, string | null>>({});
   const [onDeck, setOnDeck] = useState<OnDeckEntry[]>([]);
   const [onDeckSettled, setOnDeckSettled] = useState(false);
   const [resumeChooser, setResumeChooser] = useState<{ work: Work; plan: ResumePlan } | null>(
@@ -314,12 +289,14 @@ export function HomePage() {
     };
   }, [client, liveOnDeckRevision]);
 
-  const seriesItems = seriesState.status === "ready" ? seriesState.data.items : EMPTY_WORKS;
-  const movieItems = movieState.status === "ready" ? movieState.data.items : EMPTY_WORKS;
+  const serverRails = useMemo(
+    () => (railsState.status === "ready" ? railsState.data.rails : []),
+    [railsState]
+  );
   const siteItems = siteState.status === "ready" ? siteState.data.items : EMPTY_WORKS;
   const items = useMemo(
-    () => mergeRecent(seriesItems, movieItems, siteItems),
-    [seriesItems, movieItems, siteItems]
+    () => mergeRecent(...serverRails.map((rail) => rail.items), siteItems),
+    [serverRails, siteItems]
   );
   const onDeckItems = useMemo(() => onDeck.map((entry) => entry.work), [onDeck]);
   const onDeckByWork = useMemo(
@@ -350,56 +327,42 @@ export function HomePage() {
         title: onDeckItems.length > 0 ? t("pages.home.rail.onDeck") : t("pages.home.rail.startWatching"),
         items: primaryItems,
       },
+      ...serverRails.map((rail) => ({
+        id: rail.id,
+        title: rail.title,
+        items: rail.items,
+      })),
       {
-        id: "new-movies",
-        title: t("pages.home.rail.newMovies"),
-        items: takeUnused(movieItems, 12),
-      },
-      {
-        id: "new-series",
-        title: t("pages.home.rail.newSeries"),
-        items: takeUnused(seriesItems, 12),
-      },
-      {
-        id: "new-sites",
+        id: "sites-new",
         title: t("pages.home.rail.newSites"),
         items: takeUnused(siteItems, 12),
       },
       {
-        id: "more-movies",
-        title: t("pages.home.rail.moreMovies"),
-        items: takeUnused(movieItems, 12),
-      },
-      {
-        id: "more-series",
-        title: t("pages.home.rail.moreSeries"),
-        items: takeUnused(seriesItems, 12),
-      },
-      {
-        id: "more-sites",
+        id: "sites-more",
         title: t("pages.home.rail.moreSites"),
         items: takeUnused(siteItems, 12),
       },
     ];
     return definitions.filter((rail) => rail.items.length > 0);
-  }, [items, movieItems, onDeckItems, seriesItems, siteItems, t]);
+  }, [items, onDeckItems, serverRails, siteItems, t]);
   const progressByWork = useMemo(
     () => indexWatchProgressByWork(watchProgress ?? []),
     [watchProgress]
   );
+  // An empty server response is still "settled": Home then shows what it has.
+  const homeDataSettled =
+    (railsState.status === "ready" ||
+      railsState.status === "empty" ||
+      railsState.status === "error") &&
+    siteState.status !== "idle" &&
+    siteState.status !== "loading";
   const railsKey = useMemo(() => rails.map((rail) => rail.id).join(":"), [rails]);
   const navigationLayer = useNavigationLayer(
     rails
       .map((rail) => `${rail.id}:${rail.items.map((item) => item.id).join(",")}`)
       .join("|"),
-    onDeckSettled &&
-      seriesState.status === "ready" &&
-      movieState.status === "ready" &&
-      siteState.status === "ready",
-    onDeckSettled &&
-      seriesState.status === "ready" &&
-      movieState.status === "ready" &&
-      siteState.status === "ready"
+    onDeckSettled && homeDataSettled,
+    onDeckSettled && homeDataSettled
   );
 
   useLayoutEffect(() => {
@@ -421,20 +384,12 @@ export function HomePage() {
     activeRail === "primary" && selected ? onDeckByWork.get(selected.id) : undefined;
   const isLoading =
     !onDeckSettled ||
-    seriesState.status === "idle" ||
-    seriesState.status === "loading" ||
-    movieState.status === "idle" ||
-    movieState.status === "loading" ||
+    railsState.status === "idle" ||
+    railsState.status === "loading" ||
     siteState.status === "idle" ||
     siteState.status === "loading";
   const error =
-    seriesState.status === "error"
-      ? seriesState.message
-      : movieState.status === "error"
-        ? movieState.message
-        : siteState.status === "error"
-          ? siteState.message
-        : null;
+    railsState.status === "error" && siteItems.length === 0 ? railsState.message : null;
 
   if (isLoading) {
     return <HomeLoader />;
@@ -552,6 +507,10 @@ export function HomePage() {
         />
       }
     >
+
+      <Link to="/customise-home" className="tv-home-customise" data-navigation-focus-key="home:customise">
+        {t("pages.home.customise.open")}
+      </Link>
 
       <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
         <p className="tv-provider">

@@ -136,11 +136,13 @@ export function useCatalogBrowse(
 /** The caller's server-computed Home rails; `{status: "empty"}` when none have items. */
 export function useHomeRails(
   client: ApiClient,
-  params: { lang?: string; library?: "movie" | "series" | "artist" } = {}
+  params: { lang?: string; library?: "movie" | "series" | "artist" } = {},
+  options: Pick<UseAsyncDataOptions<HomeRailsResponse>, "subscribe"> = {}
 ): AsyncState<HomeRailsResponse> {
   const key = JSON.stringify(params);
   return useAsyncData(() => client.getHomeRails(params), [client, key], {
     isEmpty: (data) => data.rails.length === 0,
+    subscribe: options.subscribe,
   });
 }
 

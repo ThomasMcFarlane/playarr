@@ -17,6 +17,7 @@ import {
 } from "react-router-dom";
 import { LibraryPage } from "./pages/Library";
 import { HomePage } from "./pages/Home";
+import { HomeCustomisePage } from "./pages/HomeCustomise";
 import { WorkDetailPage } from "./pages/WorkDetail";
 import { DownloadsPage } from "./pages/Downloads";
 import {
@@ -636,6 +637,7 @@ export function App() {
       ) : null}
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/customise-home" element={<HomeCustomisePage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/search/:workId" element={<WorkDetailPage />} />

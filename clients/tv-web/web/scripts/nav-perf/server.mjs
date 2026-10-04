@@ -56,6 +56,19 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       const limit = Number(q.get("limit") ?? 50);
       return json(res, { items: items.slice(offset, offset + limit), total: items.length });
     }
+    if (p === "/api/v1/home/rails") {
+      const rail = (id, kind, library, title, items) => ({ id, kind, library, title, title_key: kind, view_id: null, items, total: items.length });
+      const recent = (kind) => [...catalogue[kind]].sort((a, b) => b.added_at.localeCompare(a.added_at)).slice(0, 24);
+      return json(res, {
+        lang: "en",
+        generated_at: new Date().toISOString(),
+        rails: [
+          rail("rail-movies-added", "recently_added", "movie", "Recently Added in Movies", recent("movie")),
+          rail("rail-series-added", "recently_added", "series", "Recently Added in Series", recent("series")),
+          rail("rail-movies-top", "top_unwatched", "movie", "Top Unwatched Movies", [...catalogue.movie].slice(30, 54)),
+        ],
+      });
+    }
     if (p === "/api/v1/catalog/search") {
       const term = (q.get("q") ?? "").toLowerCase();
       const items = [...catalogue.movie, ...catalogue.series]
