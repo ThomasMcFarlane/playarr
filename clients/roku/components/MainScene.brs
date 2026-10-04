@@ -2479,6 +2479,8 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         item.title = work.title
         item.AddField("kind", "string", false)
         item.kind = work.kind
+        item.AddField("year", "string", false)
+        if work.release_date <> invalid and work.release_date.Len() >= 4 then item.year = work.release_date.Left(4)
         item.description = JsonString(work.overview)
         item.hdPosterUrl = artworkUrl(work)
         item.AddField("artHeaders", "assocarray", false)
@@ -3004,6 +3006,8 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.title = work.title
         item.AddField("kind", "string", false)
         item.kind = work.kind
+        item.AddField("year", "string", false)
+        if work.release_date <> invalid and work.release_date.Len() >= 4 then item.year = work.release_date.Left(4)
         item.description = JsonString(work.overview)
         ' Real catalog posters (same path as buildGridContent). Empty tiles
         ' were a residual-budget shortcut and made Home look unfinished.

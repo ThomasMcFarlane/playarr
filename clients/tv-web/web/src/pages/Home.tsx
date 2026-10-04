@@ -31,6 +31,7 @@ import {
   isNavigationLayerRestoring,
   useNavigationLayer,
 } from "../lib/navigationLayer";
+import { labelWithYear } from "../lib/workYear";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useHomeView, type HomeViewPreference } from "../lib/homeView";
 import { useLiveRevision, useLiveSubscription } from "../lib/liveEvents";
@@ -603,7 +604,7 @@ const HomeRail = memo(function HomeRail({
                   season: String(episode.seasonNumber).padStart(2, "0"),
                   episode: String(episode.detail.episode.episode_number).padStart(2, "0"),
                 })
-              : workKindLabel(work, t);
+              : labelWithYear(workKindLabel(work, t), work);
             return (
               <Link
                 key={work.id}

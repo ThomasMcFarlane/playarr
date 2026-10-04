@@ -147,6 +147,16 @@ Owner request (4 October 2026): more default Home rails per library (Recently Ad
 | 286 | Live verification against in-cluster Ombi (`media/ombi:3579`) with a harmless test request via the test-admin account: create, appears in Ombi, approve/decline syncs back, remove. Seerr: no instance deployed in the cluster, so Seerr is covered by mocked-API tests only until one is deployed. | done | requests-sync | Evidence to be recorded here. Live on region-a (image `<image>`, Ombi `media/ombi:3579`): backend=ombi, harmless movie request created as mapped Ombi user root, appeared in Ombi (id 191, approved), Ombi deny synced back to Playarr as declined (origin stayed playarr, no duplicate), admin DELETE removed it in Playarr and Ombi. Settings restored to direct, user override cleared, webhook secret rotated. Ombi has no Radarr configured, so nothing was downloaded. region-b shows the integration enabled and settings direct. |
 | 287 | Deploy: image tag bump in `values.yaml` plus deployment repository pin bump (deployment), after merge per the v2 merge rule. | done | requests-sync | Owner authorised autonomous merge and deploy. Playarr PR 219 and PR 221, deployment repository PR 57 (`<image>`) and PR 58 (`<image>`); region-a then region-b rolled to `<image>`, rollouts complete. |
 
+## Active: Release year on home tiles (2026-10-04)
+
+Owner request (4 October 2026): home rows and tiles show the release year under the title ("Movie · 2019"). `Work.release_date` already exists in the API for movies and series, so no server change is needed for the start year.
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 186 | Show "Kind · Year" on tiles: web (Home rails, WorkCard, Search), Android (home/library cards), iOS, tvOS, Roku | in progress | home-year | Web helper `lib/workYear.ts`; Android `playarrKindYear`. Harmony already shows the year as the card subtitle. Artists have no release date, so they keep the bare kind. |
+| 187 | Series end year ("Series · 2011–2019") | open | unassigned | Needs a new server field (Sonarr `ended`/`lastAired` via `playarr-arr-sync`, migration, DTO, OpenAPI) and a regional deploy before clients can show it. Start year ships first. |
+| 188 | Show the year on Xbox tiles | open | unassigned | UWP head cannot be built on Linux; label change deferred. |
+
 ## Active: Filter media by audio and subtitle language (2026-10-04)
 
 Owner request (4 October 2026): filter the library by available subtitle language and available audio-track language on every client. Languages are indexed per media file (Sonarr/Radarr `mediaInfo` at sync time, ffprobe for files the *arr app could not describe, sidecar subtitle files next to the video), normalised to ISO 639 codes, aggregated per work (a series is the union of its episode files; `lang_scope=every_file` requires every file) and exposed as `audio_lang=` / `subtitle_lang=` on catalogue browse and search plus a `GET /api/v1/catalog/languages` facet endpoint.

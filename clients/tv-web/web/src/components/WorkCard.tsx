@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Work } from "@playarr-tv/api-client";
 import { CachedArtworkImage } from "../lib/artwork";
+import { labelWithYear } from "../lib/workYear";
 import { useMediaContextMenu } from "./MediaContextMenu";
 
 /** Poster tile for a `Work`, shared by Home's "recently added" shelf and the full Library grid. */
@@ -32,7 +33,7 @@ export function WorkCard({ work }: { work: Work }) {
           />
         </div>
         <span className="poster-title">{work.title}</span>
-        <span className="poster-meta">{work.kind}</span>
+        <span className="poster-meta">{labelWithYear(work.kind, work)}</span>
       </Link>
       {mediaContext.contextMenu}
     </li>

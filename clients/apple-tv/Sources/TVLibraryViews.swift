@@ -628,7 +628,10 @@ struct TVHomeCard: View {
                 .lineLimit(1)
                 .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
                 .padding(.top, 8)
-            Text(work.kind.rawValue.capitalized)
+            Text(
+                [work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }]
+                    .compactMap { $0 }.joined(separator: " · ")
+            )
                 .font(TVTheme.font(size: 10, weight: .bold))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .padding(.top, 2)

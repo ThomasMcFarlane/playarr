@@ -2637,7 +2637,7 @@ private fun ExperienceMediaRail(
                             "season" to it.seasonNumber.toString().padStart(2, '0'),
                             "episode" to it.episodeNumber.toString().padStart(2, '0'),
                         )
-                    } ?: work.kind.playarrSingularLabel(),
+                    } ?: work.playarrKindYearLabel(),
                 )
             }
         }
@@ -2664,7 +2664,7 @@ private fun ExperienceLandscapeCard(
     /** More than 1 draws the card as a stack with a "N ways to continue" badge. */
     stackCount: Int = 0,
 ) {
-    val resolvedSubtitle = displaySubtitle ?: work.kind.playarrSingularLabel()
+    val resolvedSubtitle = displaySubtitle ?: work.playarrKindYearLabel()
     var focused by remember { mutableStateOf(false) }
     val scale = rememberPlayarrFocusScale(
         focused = focused,
@@ -7473,6 +7473,16 @@ private fun PlayarrNotFoundArtwork(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** "Movie · 2019" under card titles; just the kind when no release year is known (artists, authors). */
+@Composable
+private fun Work.playarrKindYearLabel(): String {
+    val kindLabel = kind.playarrSingularLabel()
+    return playarrKindYear(releaseDate)?.let { "$kindLabel · $it" } ?: kindLabel
+}
+
+internal fun playarrKindYear(releaseDate: java.time.Instant?): Int? =
+    releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year?.takeIf { it > 0 }
 
 @Composable
 private fun WorkKind.playarrSingularLabel(): String = playarrString(

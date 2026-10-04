@@ -30,6 +30,7 @@ import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
+import { labelWithYear } from "../lib/workYear";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useNavigationLayer } from "../lib/navigationLayer";
@@ -279,7 +280,7 @@ const SearchResultCard = memo(function SearchResultCard({
       </span>
       <span className="tv-search-result-copy">
         <strong>{work.title}</strong>
-        <small>{workTypeLabel(work, t)}</small>
+        <small>{labelWithYear(workTypeLabel(work, t), work)}</small>
       </span>
     </Link>
   );
@@ -903,7 +904,7 @@ export function SearchPage() {
 
         {selectedWork ? (
           <aside className="tv-search-preview" key={`search-preview-${selectedWork.id}`}>
-            <p>{workTypeLabel(selectedWork, t)}</p>
+            <p>{labelWithYear(workTypeLabel(selectedWork, t), selectedWork)}</p>
             <h2>{selectedWork.title}</h2>
             <div>
               {selectedWork.release_date ? (

@@ -25,7 +25,11 @@ sub onContentChanged()
     showKind = true
     if content.showKind <> invalid then showKind = content.showKind
     m.kind.visible = showKind
-    if showKind then m.kind.text = CapitalizeFirst(content.kind)
+    if showKind
+        kindText = CapitalizeFirst(content.kind)
+        if content.year <> invalid and content.year <> "" then kindText = kindText + " · " + content.year
+        m.kind.text = kindText
+    end if
     ' No per-item watched/unwatched state is threaded through from the
     ' catalog fetch yet (MainScene.brs's buildRailContent/buildGridContent
     ' don't carry it), so this always shows the badge. Confirmed live

@@ -285,7 +285,7 @@ struct PlayarrMediaCard: View {
                 .font(.custom("Avenir Next", fixedSize: width <= 210 ? 12.5 : 11).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
                 .lineLimit(1)
-            Text(work.kind.displayName)
+            Text(work.kindYearLabel)
                 .font(.custom("Avenir Next", fixedSize: width <= 210 ? 10 : 8.5).weight(.semibold))
                 .foregroundStyle(PlayarrStyle.muted)
         }
@@ -307,7 +307,7 @@ struct PlayarrPosterCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PlayarrStyle.ink)
                 .lineLimit(1)
-            Text(work.kind.displayName)
+            Text(work.kindYearLabel)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(PlayarrStyle.muted)
                 .textCase(.uppercase)
@@ -386,5 +386,15 @@ extension WorkKind {
         case .artist: "music.note"
         case .author: "books.vertical"
         }
+    }
+}
+
+extension Work {
+    /// "Movie · 2019" under card titles; just the kind when no release year is known.
+    var kindYearLabel: String {
+        guard let year = releaseDate?.prefix(4), year.count == 4, Int(year) != nil else {
+            return kind.displayName
+        }
+        return "\(kind.displayName) · \(year)"
     }
 }
