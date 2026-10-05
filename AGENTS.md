@@ -42,6 +42,32 @@ It overrides weaker or older wording elsewhere in the tree.
 - Before and after every push, verify the branch, upstream, and repository status. Report the real
   pushed commit hash rather than assuming the push succeeded.
 
+## Merging: the merge train
+
+Pull requests are landed by the merge train (`.github/workflows/merge-train.yml`,
+`scripts/merge-train.sh`), not by hand. It replaces GitHub's merge queue, which private
+repositories on a personal account do not get.
+
+- **Agents: when your PR is finished and its local checks pass, add the label `ready` and stop.**
+  Do not wait for CI to merge it and do not merge it manually (never `--admin`). Move on to
+  other work or report.
+- The train handles one PR at a time, oldest `ready` label first: it merges the latest `main`
+  into your branch, pushes, waits for `ci-required` on that exact head SHA, then squash-merges
+  if `main` has not moved in a way that overlaps your change (otherwise it repeats).
+- On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
+  `blocked` and comments the reason. Fix it, push, remove `blocked` and add `ready` again.
+- Do not push to a branch that carries `ready` unless you are withdrawing it (remove the label first).
+- Merge manually (merge rule v2: rebase, green `ci-required` on the pushed SHA, plain squash) only
+  while the train is down, which means the `Merge train` workflow is failing or disabled.
+- Dry run: Actions > Merge train > Run workflow (default `dry_run: true`, optional `pr`) merges main
+  locally and reports what it would do without pushing, labelling, commenting or merging.
+- Owner one-off for the best behaviour: store a write deploy key as the secret `TRAIN_DEPLOY_KEY`
+  (a helper script is provided in the hand-off). With it, the train's pushes and landings trigger CI
+  and the deploy workflows natively. Without it the train still works using `GITHUB_TOKEN`, starting
+  CI via `workflow_dispatch` and dispatching post-merge workflows itself; it cannot push a merge that
+  brings in `.github/workflows` changes (it blocks with an explanation) and it does not start the
+  Android Play upload (needs a version input).
+
 ## Changelog
 
 - Update `CHANGELOG.md` in the same commit as every change. Add a concise entry beneath

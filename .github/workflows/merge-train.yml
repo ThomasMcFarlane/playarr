@@ -1,0 +1,73 @@
+# =============================================================================
+# Merge train (stand-in for GitHub's merge queue, which private personal-account
+# repositories do not get). See scripts/merge-train.sh and AGENTS.md.
+#
+# Agents add the `ready` label and stop. This workflow lands one PR at a time,
+# oldest `ready` first: merge main in, push, wait for `ci-required` on that
+# exact SHA, squash-merge. Each run is a short step (no runner is held while CI
+# runs): it advances the head of the queue and exits; the CI-completion trigger
+# and the schedule resume it. Failures remove `ready`, add `blocked` and comment.
+#
+# Authentication: if the repository secret TRAIN_DEPLOY_KEY (a write deploy key)
+# exists, pushes use it and therefore trigger CI and the deploy workflows
+# normally; main is fast-forwarded to the CI-validated squash commit. Without
+# it the train falls back to GITHUB_TOKEN, starts CI with workflow_dispatch and
+# dispatches the post-merge workflows itself. Owner setup for the key lives in
+# the merge-train section of AGENTS.md.
+# =============================================================================
+name: Merge train
+
+on:
+  # pull_request_target runs this file from main and never executes PR code.
+  pull_request_target:
+    types: [labeled]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: merge main locally and report, push/label/comment/merge nothing'
+        type: boolean
+        default: true
+      pr:
+        description: 'Only process this PR number (blank: whole ready queue)'
+        type: string
+        required: false
+
+concurrency:
+  group: merge-train
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+  checks: read
+
+jobs:
+  train:
+    name: Land ready PRs
+    if: github.event_name != 'pull_request_target' || github.event.label.name == 'ready'
+    runs-on: playarr-runners
+    timeout-minutes: 30
+    env:
+      HAS_KEY: ${{ secrets.TRAIN_DEPLOY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          ssh-key: ${{ secrets.TRAIN_DEPLOY_KEY }}
+          persist-credentials: true
+
+      - name: Run the train
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          ONLY_PR: ${{ github.event_name == 'workflow_dispatch' && inputs.pr || '' }}
+          TRAIN_KEY_MODE: ${{ env.HAS_KEY }}
+        run: scripts/merge-train.sh

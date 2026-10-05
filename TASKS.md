@@ -5,6 +5,14 @@ status and the agent that picked it up. Update tasks as they start, progress,
 and complete. `CHANGELOG.md` remains the permanent engineering log; this file
 is the current-work board. Newest and most active work goes first.
 
+## Active: CI throughput and merge train (2026-10-05)
+
+| # | Task | Status | Picked up by | Notes |
+|---|------|--------|--------------|-------|
+| 330 | Merge train: label-driven serial landing of PRs (stand-in for the merge queue private personal repositories lack) | in progress: workflow and script in review | ci-train | `.github/workflows/merge-train.yml` + `scripts/merge-train.sh`: group `merge-train` (no cancel), triggered by label `ready`, main CI completion, a 15-minute schedule and manual dispatch (default dry run). Oldest-ready first; merges main into the branch, pushes, waits for `ci-required` on that exact SHA, lands only if main has not moved in an overlapping way; failures remove `ready`, add `blocked` and comment. Owner step for push-triggered deploys: `TRAIN_DEPLOY_KEY` secret (script in the hand-off); without it the train uses GITHUB_TOKEN with explicit workflow dispatches. |
+| 331 | Remove CHANGELOG.md / TASKS.md as merge-conflict hotspots (fragment files folded on main) | not started | ci-train | Follows task 330. |
+| 332 | CI speed: measured baseline, affected-only selection, caching, sharding, timeouts, always-on gate | not started | ci-train | Baseline over the last 150 CI runs: PR median 11.9 min (p max 51), main push median 7.5 min. Slowest: Android `./gradlew build` median 24.5 min, backend job median 24.5 min (of which `Ensure C toolchain` apt install 8.8 min, `cargo test` 8.7 min, rust-cache restore 3 min), tv-web 2.5 min, OpenAPI diff 1.5 min. |
+
 ## Active: iOS build and TestFlight pipeline (2026-10-04)
 
 ## Active: regional streaming reliability (2026-10-04)
