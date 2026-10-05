@@ -91,14 +91,18 @@ jobs:
         run: mkdocs build --strict --site-dir _site
 
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
         with:
           path: _site
 
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.event_name == 'push'
+    # Pages is unavailable for this private repository on the current plan (the
+    # deployment API answers 404), so deploying is opt-in: set the repository
+    # variable PAGES_ENABLED=true once Pages is enabled. Until then this
+    # workflow is the strict MkDocs build check.
+    if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
