@@ -2,6 +2,7 @@ package io.playarr.mobile.ui
 
 import io.playarr.mobile.connected.mergeLanguageFacets
 import io.playarr.shared.data.model.LanguageFacetEntry
+import java.io.File
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -38,5 +39,15 @@ class PlayarrLanguageFiltersTest {
         assertEquals(listOf("ja", "en"), merged.map { it.code })
         assertEquals(5L, merged.first().count)
         assertEquals("Japanese", merged.first().name)
+    }
+
+    @Test
+    fun `opening the library filters sheet loads the language facets`() {
+        val base = if (File("src/main").isDirectory) File(".") else File("clients/android/app")
+        val source = File(base, "src/main/kotlin/io/playarr/mobile/ui/PlayarrExperience.kt").readText()
+        // setLanguageSelection refreshes the facets after a change; the sheet itself must also load them
+        // when it opens, or the first visit shows an empty language list.
+        val effect = Regex("""LaunchedEffect\(kind, filtersOpen\)\s*\{[^}]*loadLanguageFacets\(kind, languageSelection\)""")
+        assertTrue("the library screen must load language facets when the filters sheet opens", effect.containsMatchIn(source))
     }
 }

@@ -3204,6 +3204,11 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                 }
             }
             }
+            // The facet list is only fetched on a selection change otherwise, so a first
+            // open of the sheet showed "No languages indexed yet" and no filter was reachable.
+            LaunchedEffect(kind, filtersOpen) {
+                if (filtersOpen) viewModel.loadLanguageFacets(kind, languageSelection)
+            }
             if (filtersOpen) {
                 LibraryFiltersDialog(
                     kind = kind,
