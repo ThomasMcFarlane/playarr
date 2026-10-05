@@ -123,7 +123,75 @@ pub async fn run_migrations(pool: &DbPool, is_postgres: bool) -> Result<(), DbEr
     } else {
         &SQLITE_MIGRATIONS
     };
+    if !is_postgres {
+        reconcile_reworded_migrations(pool, migrator).await?;
+    }
     migrator.run(pool).await?;
+    Ok(())
+}
+
+/// SQLite migrations whose file was edited in comments only after databases
+/// had applied it, as `(version, hex SHA-384 checksums of every earlier text
+/// that existing databases may have applied)`. sqlx refuses to start when an
+/// applied migration's checksum no longer matches the embedded file, so for
+/// exactly these known, comment-only edits the stored checksum is rewritten to
+/// the embedded one first. Any other mismatch still fails startup.
+///
+/// Version 15 (`0015_playlists.sql`): its example comment was reworded twice
+/// (once in a crate rename, once to neutralise an example title), and the
+/// planned history rewrite rewrites both earlier texts again. The list holds
+/// the text applied by the regional servers before the reword, the older
+/// rename-era text, and both texts as the history rewrite will produce them,
+/// so a database created by an image built from rewritten history also starts.
+/// Every entry differs from the current file only in `--` comments.
+const REWORDED_SQLITE_MIGRATIONS: &[(i64, &[&str])] = &[(
+    15,
+    &[
+        // Applied by the regional servers before the reword (pre-scrub text).
+        "766ac1e36e13df0c6948459db91dd69d6afac884f2bba7c31d8205c7609a160f7680a28bb449f855e15499d71e183613",
+        // Rename-era text.
+        "a07e1bca67d641a8dac46d39119b24c71f78ae636ed1fa8f467d810e2ea18425594ee71e8643e6a6fc88daeb8298abab",
+        // The pre-scrub text after the history rewrite.
+        "50d5c014e627572bfc39a3b2438ab5f94033955a8cfe3fa7486646c35f9d51a0e27ba376ace8ed555505bb07928f8708",
+        // The rename-era text after the history rewrite.
+        "7c32fe98908d28a86eea9e237c5a1f2b99f9386c634b1ad19d5b54c00b610390fcd44d26e43699f5321b7074c8cf8bfa",
+    ],
+)];
+
+fn decode_hex(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .filter_map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect()
+}
+
+async fn reconcile_reworded_migrations(
+    pool: &DbPool,
+    migrator: &sqlx::migrate::Migrator,
+) -> Result<(), DbError> {
+    let table_exists: Option<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_optional(pool)
+    .await?;
+    if table_exists.is_none() {
+        return Ok(());
+    }
+    for (version, old_hexes) in REWORDED_SQLITE_MIGRATIONS {
+        let Some(embedded) = migrator.iter().find(|m| m.version == *version) else {
+            continue;
+        };
+        for old_hex in *old_hexes {
+            sqlx::query(
+                "UPDATE _sqlx_migrations SET checksum = ? WHERE version = ? AND checksum = ?",
+            )
+            .bind(embedded.checksum.to_vec())
+            .bind(*version)
+            .bind(decode_hex(old_hex))
+            .execute(pool)
+            .await?;
+        }
+    }
     Ok(())
 }
 
@@ -188,6 +256,72 @@ pub(crate) async fn test_sqlite_pool() -> DbPool {
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    /// A database that applied any earlier comment-only text of migration 15
+    /// (before the reword, or as rewritten by the history rewrite) carries
+    /// that text's checksum; startup must accept it and keep working.
+    #[tokio::test]
+    async fn every_known_earlier_checksum_for_migration_15_still_migrates() {
+        let embedded = SQLITE_MIGRATIONS
+            .iter()
+            .find(|m| m.version == 15)
+            .unwrap()
+            .checksum
+            .to_vec();
+        let (version, old_hexes) = REWORDED_SQLITE_MIGRATIONS[0];
+        assert_eq!(version, 15);
+        assert_eq!(old_hexes.len(), 4);
+        for old_hex in old_hexes {
+            let old = decode_hex(old_hex);
+            assert_eq!(old.len(), 48, "SHA-384 checksum");
+            assert_ne!(old, embedded);
+            let pool = test_sqlite_pool().await;
+            sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = 15")
+                .bind(old)
+                .execute(&pool)
+                .await
+                .unwrap();
+            run_migrations(&pool, false)
+                .await
+                .expect("a known earlier checksum is reconciled");
+            let stored: Vec<u8> =
+                sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = 15")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(stored, embedded);
+        }
+    }
+
+    /// The embedded file is the reworded text the list was computed against.
+    #[test]
+    fn migration_15_embedded_checksum_is_the_current_text() {
+        let embedded = SQLITE_MIGRATIONS
+            .iter()
+            .find(|m| m.version == 15)
+            .unwrap()
+            .checksum
+            .to_vec();
+        assert_eq!(
+            embedded,
+            decode_hex(
+                "86437c733c8e2907301962f40eb0cc834c446a104d765d9e0171c3f441cdaaf29b9bcdfb6c11f8d7ca351f9723b748b0"
+            ),
+            "0015_playlists.sql changed: recompute REWORDED_SQLITE_MIGRATIONS"
+        );
+    }
+
+    /// Any other checksum mismatch must still stop startup.
+    #[tokio::test]
+    async fn an_unknown_checksum_mismatch_still_fails_startup() {
+        let pool = test_sqlite_pool().await;
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = 15")
+            .bind(vec![1u8, 2, 3])
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(run_migrations(&pool, false).await.is_err());
+    }
 
     #[test]
     fn appends_mode_rwc_to_a_bare_sqlite_url() {
