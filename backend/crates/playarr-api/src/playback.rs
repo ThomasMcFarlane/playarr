@@ -559,6 +559,30 @@ pub async fn update_watch_progress_handler(
     Ok(Json(progress))
 }
 
+/// Whether an audio switch can keep the source video untouched. True only
+/// when the quality is "original", the source video is H.264 or HEVC and the
+/// client reports that codec and a bitrate cap the file fits under.
+fn video_copy_for_audio_selection(
+    media_file: &MediaFile,
+    capabilities: &ClientCapabilities,
+    requires_audio_selection: bool,
+    force_transcode: bool,
+) -> Option<playarr_transcode::VideoCopy> {
+    if !requires_audio_selection || force_transcode {
+        return None;
+    }
+    let video = playarr_transcode::VideoCopy::for_codec(&media_file.codec)?;
+    let codec_ok = capabilities
+        .supported_video_codecs
+        .iter()
+        .any(|c| playarr_transcode::codecs_match(c, &media_file.codec));
+    let bitrate_ok = match (media_file.bitrate, capabilities.max_bitrate_bps) {
+        (Some(file_bitrate), Some(max_bitrate)) => file_bitrate <= max_bitrate,
+        _ => true,
+    };
+    (codec_ok && bitrate_ok).then_some(video)
+}
+
 /// Compares `media_file` against `capabilities` the same three ways
 /// `TranscodeOrchestrator::can_direct_play` does (container/video-codec/
 /// bitrate), but reports *which* check failed instead of collapsing to a
@@ -1209,14 +1233,45 @@ pub(crate) async fn negotiate_playback(
     } else {
         query.start_position_ms
     };
-    let source_audio_transcode = || {
-        state.transcode.spawn_on_demand_transcode_at_with_audio(
-            &media_file,
-            &profile,
-            &state.node_id,
-            source_offset_ms,
-            selected_audio_stream_index,
-        )
+    // An audio switch (a Dubarr dub or another source track) leaves the
+    // picture untouched, so when the client can play the source video codec
+    // within its bitrate cap and asked for the original quality, copy the
+    // video into fragmented-MP4 HLS and only encode the audio. Re-encoding a
+    // 4K HEVC remux in real time is not feasible on a node-limited CPU.
+    let video_copy = video_copy_for_audio_selection(
+        &media_file,
+        &capabilities,
+        requires_audio_selection,
+        force_transcode,
+    );
+    let source_audio_transcode = || async {
+        match video_copy {
+            Some(video) => {
+                state
+                    .transcode
+                    .spawn_video_copy_at_with_audio(
+                        &media_file,
+                        &profile,
+                        &state.node_id,
+                        source_offset_ms,
+                        selected_audio_stream_index,
+                        video,
+                    )
+                    .await
+            }
+            None => {
+                state
+                    .transcode
+                    .spawn_on_demand_transcode_at_with_audio(
+                        &media_file,
+                        &profile,
+                        &state.node_id,
+                        source_offset_ms,
+                        selected_audio_stream_index,
+                    )
+                    .await
+            }
+        }
     };
     let transcode_session = match selected_dub {
         Some(dub) => {
@@ -1224,22 +1279,40 @@ pub(crate) async fn negotiate_playback(
             // the Dubarr API key never appears in ffmpeg's argument list.
             let client = dub.client();
             let track = dub.track.clone();
-            let fetched = state
-                .transcode
-                .spawn_on_demand_transcode_with_fetched_audio(
-                    &media_file,
-                    &profile,
-                    &state.node_id,
-                    source_offset_ms,
-                    |path| async move {
-                        client
-                            .download_to_file(&track, &path)
-                            .await
-                            .map(|_| ())
-                            .map_err(|error| error.to_string())
-                    },
-                )
-                .await;
+            let fetch = |path: std::path::PathBuf| async move {
+                client
+                    .download_to_file(&track, &path)
+                    .await
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            };
+            let fetched = match video_copy {
+                Some(video) => {
+                    state
+                        .transcode
+                        .spawn_video_copy_with_fetched_audio(
+                            &media_file,
+                            &profile,
+                            &state.node_id,
+                            source_offset_ms,
+                            video,
+                            fetch,
+                        )
+                        .await
+                }
+                None => {
+                    state
+                        .transcode
+                        .spawn_on_demand_transcode_with_fetched_audio(
+                            &media_file,
+                            &profile,
+                            &state.node_id,
+                            source_offset_ms,
+                            fetch,
+                        )
+                        .await
+                }
+            };
             match fetched {
                 Ok(session) => session,
                 Err(playarr_transcode::TranscodeError::ExternalAudio(error)) => {
@@ -1255,23 +1328,43 @@ pub(crate) async fn negotiate_playback(
         }
         None => source_audio_transcode().await?,
     };
+    if video_copy.is_some() {
+        tracing::info!(
+            media_file_id = %media_file_id,
+            transcode_session_id = %transcode_session.id,
+            source_codec = %media_file.codec,
+            dub = selected_dub.is_some(),
+            "audio selection served with video copy (no video transcode)"
+        );
+    }
 
     let target_profile = playarr_transcode::TranscodeTargetProfile::resolve(&profile);
-    let session = seed.into_session(
-        // No durable rendition record for a short-lived on-demand
-        // transcode -- see `PlaybackSession::rendition_id`'s own doc
-        // comment.
-        None,
-        PlayMethod::Transcode,
-        Some(transcode_reason),
-        target_profile.video_codec,
-        // What `spawn_on_demand_transcode` actually produces -- HLS-
-        // segmented output, per that module's own doc comment.
-        "hls".to_string(),
-        target_profile
-            .video_bitrate_kbps
-            .map(|kbps| kbps as u64 * 1000),
-    );
+    let session = if video_copy.is_some() {
+        seed.into_session(
+            None,
+            PlayMethod::DirectStream,
+            None,
+            media_file.codec.clone(),
+            "hls".to_string(),
+            media_file.bitrate,
+        )
+    } else {
+        seed.into_session(
+            // No durable rendition record for a short-lived on-demand
+            // transcode -- see `PlaybackSession::rendition_id`'s own doc
+            // comment.
+            None,
+            PlayMethod::Transcode,
+            Some(transcode_reason),
+            target_profile.video_codec,
+            // What `spawn_on_demand_transcode` actually produces -- HLS-
+            // segmented output, per that module's own doc comment.
+            "hls".to_string(),
+            target_profile
+                .video_bitrate_kbps
+                .map(|kbps| kbps as u64 * 1000),
+        )
+    };
     let session_id = start_analytics_session(state, session).await;
     state
         .transcode
@@ -1992,6 +2085,58 @@ pub async fn record_playback_event_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn audio_switch_copies_video_only_when_the_client_can_play_it() {
+        let caps = |codecs: &[&str], max: Option<u64>| ClientCapabilities {
+            supported_containers: vec!["mp4".to_string()],
+            supported_video_codecs: codecs.iter().map(|c| c.to_string()).collect(),
+            supported_audio_codecs: vec![],
+            max_bitrate_bps: max,
+        };
+        let mut remux = media_file();
+        remux.codec = "hevc".to_string();
+        remux.bitrate = Some(64_000_000);
+
+        // A 4K HEVC remux and an HEVC-capable client: copy, whatever the container.
+        let video =
+            video_copy_for_audio_selection(&remux, &caps(&["h264", "h265"], None), true, false);
+        assert_eq!(video, Some(playarr_transcode::VideoCopy { hevc: true }));
+        // The client's cap is above the file's bitrate: still a copy.
+        assert!(video_copy_for_audio_selection(
+            &remux,
+            &caps(&["hevc"], Some(80_000_000)),
+            true,
+            false
+        )
+        .is_some());
+
+        // No audio switch, or an explicit quality: no copy.
+        assert!(
+            video_copy_for_audio_selection(&remux, &caps(&["hevc"], None), false, false).is_none()
+        );
+        assert!(
+            video_copy_for_audio_selection(&remux, &caps(&["hevc"], None), true, true).is_none()
+        );
+        // Client cannot play HEVC, reports nothing, or the file exceeds its cap: transcode.
+        assert!(
+            video_copy_for_audio_selection(&remux, &caps(&["h264"], None), true, false).is_none()
+        );
+        assert!(video_copy_for_audio_selection(&remux, &caps(&[], None), true, false).is_none());
+        assert!(video_copy_for_audio_selection(
+            &remux,
+            &caps(&["hevc"], Some(8_000_000)),
+            true,
+            false
+        )
+        .is_none());
+        // A codec the fragmented-MP4 path does not carry is transcoded.
+        let mut other = media_file();
+        other.codec = "vc1".to_string();
+        assert!(
+            video_copy_for_audio_selection(&other, &caps(&["vc1"], None), true, false).is_none()
+        );
+    }
 
     #[test]
     fn direct_play_mime_type_maps_video_containers() {

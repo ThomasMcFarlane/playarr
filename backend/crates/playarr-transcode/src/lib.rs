@@ -371,6 +371,7 @@ pub fn build_ffmpeg_hls_args_at_with_audio(
         start_position_ms,
         audio_stream_index,
         None,
+        None,
         DEFAULT_FFMPEG_THREADS,
     )
 }
@@ -404,10 +405,63 @@ pub fn build_ffmpeg_hls_args_at_with_external_audio(
         start_position_ms,
         None,
         Some(external),
+        None,
         DEFAULT_FFMPEG_THREADS,
     )
 }
 
+/// How the source video is carried into an on-demand HLS session whose only
+/// change is the audio (a Dubarr dub or another source audio track): the
+/// video stream is copied, never re-encoded, and the session is packaged as
+/// fragmented-MP4 HLS (the segment type every HEVC-capable player prefers).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoCopy {
+    /// The source video is HEVC and needs the `hvc1` sample tag so Apple
+    /// players accept it in fragmented MP4.
+    pub hevc: bool,
+}
+
+impl VideoCopy {
+    /// `Some` when `source_codec` can be copied into fragmented-MP4 HLS
+    /// (H.264 or HEVC); `None` for anything else, which must be transcoded.
+    pub fn for_codec(source_codec: &str) -> Option<Self> {
+        match normalise_codec(source_codec).as_str() {
+            "h264" => Some(Self { hevc: false }),
+            "hevc" => Some(Self { hevc: true }),
+            _ => None,
+        }
+    }
+}
+
+/// Audio bitrate for the video-copy path. The source is typically a surround
+/// mix, which sounds poor at the transcode ladder's stereo-sized 128 kbps.
+const VIDEO_COPY_AUDIO_KBPS: u32 = 256;
+
+/// Builds the video-copy HLS command: the first video stream is remuxed as-is,
+/// the selected audio (`audio_stream_index` in the source, or `external`) is
+/// encoded to AAC. Pure, like [`build_ffmpeg_hls_args`].
+pub fn build_ffmpeg_hls_args_video_copy(
+    input_path: &Path,
+    output_dir: &Path,
+    start_position_ms: u64,
+    audio_stream_index: Option<u32>,
+    external: Option<&ExternalAudio>,
+    video: VideoCopy,
+) -> Vec<String> {
+    let profile = TranscodeTargetProfile::resolve("");
+    build_hls_args(
+        input_path,
+        &profile,
+        output_dir,
+        start_position_ms,
+        audio_stream_index,
+        external,
+        Some(video),
+        DEFAULT_FFMPEG_THREADS,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn build_hls_args(
     input_path: &Path,
     profile: &TranscodeTargetProfile,
@@ -415,6 +469,7 @@ fn build_hls_args(
     start_position_ms: u64,
     audio_stream_index: Option<u32>,
     external: Option<&ExternalAudio>,
+    video_copy: Option<VideoCopy>,
     ffmpeg_threads: usize,
 ) -> Vec<String> {
     let mut args = vec![
@@ -448,17 +503,27 @@ fn build_hls_args(
         args.push("-i".to_string());
         args.push(ext.path.to_string_lossy().into_owned());
     }
+    match video_copy {
+        Some(video) => {
+            args.extend(["-c:v".to_string(), "copy".to_string()]);
+            if video.hevc {
+                args.extend(["-tag:v".to_string(), "hvc1".to_string()]);
+            }
+        }
+        None => args.extend([
+            "-c:v".to_string(),
+            profile.video_codec.clone(),
+            "-threads:v".to_string(),
+            ffmpeg_threads.to_string(),
+            // Browser MSE implementations generally accept 8-bit H.264 but
+            // reject High 10 output. Without an explicit pixel format, libx264
+            // preserves a 10-bit source as yuv420p10le, which produces valid TS
+            // segments that Chrome/Safari still fail to append (Shaka 3014/3015).
+            "-pix_fmt".to_string(),
+            "yuv420p".to_string(),
+        ]),
+    }
     args.extend([
-        "-c:v".to_string(),
-        profile.video_codec.clone(),
-        "-threads:v".to_string(),
-        ffmpeg_threads.to_string(),
-        // Browser MSE implementations generally accept 8-bit H.264 but
-        // reject High 10 output. Without an explicit pixel format, libx264
-        // preserves a 10-bit source as yuv420p10le, which produces valid TS
-        // segments that Chrome/Safari still fail to append (Shaka 3014/3015).
-        "-pix_fmt".to_string(),
-        "yuv420p".to_string(),
         "-map".to_string(),
         "0:v:0".to_string(),
         "-map".to_string(),
@@ -485,12 +550,12 @@ fn build_hls_args(
         ]);
     }
 
-    if profile.height > 0 {
+    if video_copy.is_none() && profile.height > 0 {
         args.push("-vf".to_string());
         args.push(format!("scale=-2:min({}\\,ih)", profile.height));
     }
 
-    if let Some(kbps) = profile.video_bitrate_kbps {
+    if let (None, Some(kbps)) = (video_copy, profile.video_bitrate_kbps) {
         args.push("-b:v".to_string());
         args.push(format!("{kbps}k"));
     }
@@ -498,7 +563,12 @@ fn build_hls_args(
     args.push("-c:a".to_string());
     args.push(profile.audio_codec.clone());
 
-    if let Some(kbps) = profile.audio_bitrate_kbps {
+    let audio_kbps = if video_copy.is_some() {
+        Some(VIDEO_COPY_AUDIO_KBPS)
+    } else {
+        profile.audio_bitrate_kbps
+    };
+    if let Some(kbps) = audio_kbps {
         args.push("-b:a".to_string());
         args.push(format!("{kbps}k"));
     }
@@ -511,13 +581,19 @@ fn build_hls_args(
     args.push("event".to_string());
     args.push("-hls_list_size".to_string());
     args.push("0".to_string());
+    let segment_name = if video_copy.is_some() {
+        args.extend([
+            "-hls_segment_type".to_string(),
+            "fmp4".to_string(),
+            "-hls_fmp4_init_filename".to_string(),
+            "init.mp4".to_string(),
+        ]);
+        "segment_%05d.m4s"
+    } else {
+        "segment_%05d.ts"
+    };
     args.push("-hls_segment_filename".to_string());
-    args.push(
-        output_dir
-            .join("segment_%05d.ts")
-            .to_string_lossy()
-            .into_owned(),
-    );
+    args.push(output_dir.join(segment_name).to_string_lossy().into_owned());
     args.push(
         output_dir
             .join("playlist.m3u8")
@@ -805,6 +881,33 @@ impl TranscodeOrchestrator {
             start_position_ms,
             audio_stream_index,
             None,
+            None,
+            slot,
+        )
+        .await
+    }
+
+    /// Like [`Self::spawn_on_demand_transcode_at_with_audio`], but the source
+    /// video is copied instead of re-encoded (see [`VideoCopy`]).
+    pub async fn spawn_video_copy_at_with_audio(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        audio_stream_index: Option<u32>,
+        video: VideoCopy,
+    ) -> Result<TranscodeSession, TranscodeError> {
+        let slot = self.reserve_capacity().await?;
+        self.spawn_on_demand(
+            Uuid::new_v4(),
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            audio_stream_index,
+            None,
+            Some(video),
             slot,
         )
         .await
@@ -831,6 +934,56 @@ impl TranscodeOrchestrator {
         F: FnOnce(PathBuf) -> Fut,
         Fut: std::future::Future<Output = Result<(), String>>,
     {
+        self.spawn_with_fetched_audio(
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            None,
+            fetch,
+        )
+        .await
+    }
+
+    /// [`Self::spawn_on_demand_transcode_with_fetched_audio`] with the source
+    /// video copied instead of re-encoded (see [`VideoCopy`]).
+    pub async fn spawn_video_copy_with_fetched_audio<F, Fut>(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        video: VideoCopy,
+        fetch: F,
+    ) -> Result<TranscodeSession, TranscodeError>
+    where
+        F: FnOnce(PathBuf) -> Fut,
+        Fut: std::future::Future<Output = Result<(), String>>,
+    {
+        self.spawn_with_fetched_audio(
+            media_file,
+            profile,
+            owning_node_id,
+            start_position_ms,
+            Some(video),
+            fetch,
+        )
+        .await
+    }
+
+    async fn spawn_with_fetched_audio<F, Fut>(
+        &self,
+        media_file: &MediaFile,
+        profile: &str,
+        owning_node_id: &str,
+        start_position_ms: u64,
+        video_copy: Option<VideoCopy>,
+        fetch: F,
+    ) -> Result<TranscodeSession, TranscodeError>
+    where
+        F: FnOnce(PathBuf) -> Fut,
+        Fut: std::future::Future<Output = Result<(), String>>,
+    {
         let slot = self.reserve_capacity().await?;
         let session_id = Uuid::new_v4();
         let path = self.external_audio_path(session_id);
@@ -849,6 +1002,7 @@ impl TranscodeOrchestrator {
                 start_position_ms,
                 None,
                 Some(&external),
+                video_copy,
                 slot,
             )
             .await;
@@ -886,6 +1040,7 @@ impl TranscodeOrchestrator {
         start_position_ms: u64,
         audio_stream_index: Option<u32>,
         external: Option<&ExternalAudio>,
+        video_copy: Option<VideoCopy>,
         slot: OwnedSemaphorePermit,
     ) -> Result<TranscodeSession, TranscodeError> {
         let target_profile = TranscodeTargetProfile::resolve(profile);
@@ -900,6 +1055,7 @@ impl TranscodeOrchestrator {
             start_position_ms,
             audio_stream_index,
             external,
+            video_copy,
             self.ffmpeg_threads,
         );
 
@@ -1386,6 +1542,60 @@ mod tests {
         // A short dub is padded with silence and the finite video ends output.
         assert!(joined.contains("-af apad -shortest"));
         assert!(!joined.contains("0:a:0?"));
+    }
+
+    #[test]
+    fn video_copy_remuxes_the_video_and_packages_fragmented_mp4() {
+        let ext = ExternalAudio {
+            path: PathBuf::from("/scratch/s1.external-audio"),
+        };
+        let args = build_ffmpeg_hls_args_video_copy(
+            Path::new("/m/a.mkv"),
+            Path::new("/out"),
+            0,
+            None,
+            Some(&ext),
+            VideoCopy { hevc: true },
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("-c:v copy -tag:v hvc1 -map 0:v:0 -map 1:a:0"));
+        // Nothing that implies a video re-encode.
+        for forbidden in ["libx264", "-pix_fmt", "-vf", "-b:v", "scale="] {
+            assert!(!joined.contains(forbidden), "{forbidden} in {joined}");
+        }
+        assert!(joined.contains("-af apad -shortest"));
+        assert!(joined.contains("-c:a aac -b:a 256k"));
+        assert!(joined.contains("-hls_segment_type fmp4 -hls_fmp4_init_filename init.mp4"));
+        assert!(joined.contains("/out/segment_%05d.m4s"));
+        assert!(!joined.contains(".ts"));
+    }
+
+    #[test]
+    fn video_copy_maps_a_selected_source_audio_stream_and_skips_hvc1_for_h264() {
+        let args = build_ffmpeg_hls_args_video_copy(
+            Path::new("/m/a.mkv"),
+            Path::new("/out"),
+            12_500,
+            Some(3),
+            None,
+            VideoCopy { hevc: false },
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("-ss 12.500 -i /m/a.mkv -c:v copy -map 0:v:0 -map 0:3"));
+        assert!(!joined.contains("hvc1"));
+        assert!(!joined.contains("apad"));
+    }
+
+    #[test]
+    fn video_copy_is_offered_only_for_h264_and_hevc_sources() {
+        assert_eq!(VideoCopy::for_codec("HEVC"), Some(VideoCopy { hevc: true }));
+        assert_eq!(VideoCopy::for_codec("x265"), Some(VideoCopy { hevc: true }));
+        assert_eq!(
+            VideoCopy::for_codec("avc1"),
+            Some(VideoCopy { hevc: false })
+        );
+        assert_eq!(VideoCopy::for_codec("av1"), None);
+        assert_eq!(VideoCopy::for_codec("vc1"), None);
     }
 
     #[test]

@@ -122,6 +122,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Selecting a Dubarr dub (or another source audio track) at original quality no longer re-encodes the video when the client can play the source codec (H.264 or HEVC) within its bitrate cap: the server copies the video into fragmented-MP4 HLS and encodes only the audio, so a 4K HEVC remux starts quickly without a CPU transcode. Other cases still transcode as before.
 - Repository hygiene ahead of making the repository public: real media titles in tests, fixtures, docs and history notes are replaced with neutral placeholders, and real artwork and screenshots (Apple TV parity fixtures, site screenshots, social card, Play feature graphic) are replaced with generated placeholder images. The Apple TV parity suite now generates its artwork procedurally. `AGENTS.md` and the pull request template forbid media titles and real artwork.
 - Deployment data no longer lives in this repository: the `playarr-dev` chart ships neutral (empty) defaults and documents its values, a worked example with placeholder data backs its tests, and the real instances, hostnames, addresses, hostPaths and image pins live in the private deployment repository. Regional image rollouts are now a deployment values change, not a Playarr PR.
 - The regional image workflow pushes to the registry named by the `REGIONAL_IMAGE_REGISTRY` repository variable, and the iOS dispatch reads its Apple release pipeline from `APPLE_BUILDS_REPOSITORY`.
@@ -2161,6 +2162,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- A PIN-locked profile's stored refresh token can no longer be redeemed without the PIN: the server holds a device-bound unlock lease (granted by login or `POST /api/v1/auth/unlock`, slid by refresh, cleared by `POST /api/v1/auth/lock`) and answers `403 pin_required` without one. Web and Android clients prompt for the PIN and lock a profile when switching away.
 - Playback capability URLs (`playback_session_id` cookie or query) previously skipped all
   account checks after the session was created. They now re-resolve the session owner's
   streaming grant, library access, schedule, budget and content rules on every request.
@@ -2175,6 +2177,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Unit tests for the video-copy ffmpeg arguments (copy, `hvc1` tag, fragmented MP4, padded dub audio) and for the rule that decides when an audio switch may copy the video.
 - CI rejects environment-specific data in tracked files (`scripts/ci/check-env-data.sh`): non-example IPv4 addresses, personal home paths, tailnet names and a secret-supplied denylist of internal names.
 - Apple simulator test targets now match actor isolation, current design tokens, Google Cast dependency inheritance and the `PlayerEngine` optional `AVPlayer` witness (TASK 333).
 - Verify artist catalogue details attach media identifiers and runtimes only to tracks that have
