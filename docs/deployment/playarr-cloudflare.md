@@ -26,6 +26,11 @@ native television self-update action and the Clients hub read them same-origin. 
 uploads to object storage and no object-storage credential is needed. See
 [Playarr Server releases](server-releases.md).
 
+GitHub Releases are tried first. When no matching release or asset exists (for example before the first
+release is cut, or for a version that predates the move), the Worker falls back to the same path in the
+downloads bucket binding, so existing installs and the Android self-updater keep working. A path returns
+404 only when neither source has it.
+
 The Roku developer-mode ZIP (and the webOS and Tizen packages, when published) are still stored in the
 private `playarr-client-downloads` R2 bucket and streamed by the Worker from
 `/downloads/roku/playarr-roku.zip`, while ordinary application routes come from Static Assets.

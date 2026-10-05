@@ -63,7 +63,7 @@ describe("client package downloads", () => {
     expect(response.headers.get("Location")).toBe(
       `${RELEASES}/download/android-v0.3.1/playarr-android.apk`
     );
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
@@ -196,6 +196,98 @@ describe("client package downloads", () => {
       `${RELEASES}/download/backend-v0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS`
     );
     expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+  });
+
+  describe("R2 fallback when no GitHub release exists", () => {
+    function r2Object(body, contentType) {
+      return {
+        body,
+        size: body.length,
+        httpEtag: '"r2-etag"',
+        writeHttpMetadata: (headers) => headers.set("Content-Type", contentType),
+      };
+    }
+
+    // No releases at all: the API lists none and every asset URL is a 404.
+    function noReleaseEnv(object) {
+      const fetchMock = vi.fn(async (url) =>
+        String(url).startsWith("https://api.github.com/")
+          ? new Response("[]", { status: 200 })
+          : new Response("Not Found", { status: 404 })
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      return { env: environment(object), fetchMock };
+    }
+
+    it.each([
+      ["/downloads/android/playarr-android.apk", "android/playarr-android.apk", "application/vnd.android.package-archive"],
+      ["/downloads/android/playarr-android.json", "android/playarr-android.json", "application/json; charset=utf-8"],
+      ["/downloads/android/releases/1.2.3/playarr-android.apk", "android/releases/1.2.3/playarr-android.apk", "application/vnd.android.package-archive"],
+      ["/downloads/android/releases/1.2.3/SHA256SUMS", "android/releases/1.2.3/SHA256SUMS", "text/plain; charset=utf-8"],
+      ["/downloads/server/latest.json", "server/latest.json", "application/json; charset=utf-8"],
+      ["/downloads/server/playarr-server-linux-amd64.tar.gz", "server/playarr-server-linux-amd64.tar.gz", "application/gzip"],
+      ["/downloads/server/playarr-server-linux-arm64.tar.gz.sha256", "server/playarr-server-linux-arm64.tar.gz.sha256", "text/plain; charset=utf-8"],
+      ["/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz", "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz", "application/gzip"],
+      ["/downloads/server/playarr-server-0.1.0-SHA256SUMS", "server/releases/0.1.0/playarr-server-0.1.0-SHA256SUMS", "text/plain; charset=utf-8"],
+    ])("serves %s from the bucket", async (path, key, contentType) => {
+      const { env } = noReleaseEnv(r2Object("payload", contentType));
+      const response = await worker.fetch(new Request(`https://playarr.app${path}`), env);
+
+      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(key);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe(contentType);
+      await expect(response.text()).resolves.toBe("payload");
+    });
+
+    it("falls back when the tag exists but the asset does not", async () => {
+      const fetchMock = vi.fn(async (url) =>
+        String(url).startsWith("https://api.github.com/")
+          ? new Response(JSON.stringify([{ tag_name: "android-v0.3.1", prerelease: false }]), { status: 200 })
+          : new Response("Not Found", { status: 404 })
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const env = environment(r2Object("{}", "application/json; charset=utf-8"));
+      const response = await worker.fetch(
+        new Request("https://playarr.app/downloads/android/playarr-android.json"),
+        env
+      );
+
+      expect(response.status).toBe(200);
+      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith("android/playarr-android.json");
+    });
+
+    it("falls back when GitHub cannot be reached", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+      const env = environment(r2Object("apk", "application/vnd.android.package-archive"));
+      const response = await worker.fetch(
+        new Request("https://playarr.app/downloads/android/playarr-android.apk"),
+        env
+      );
+
+      expect(response.status).toBe(200);
+      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith("android/playarr-android.apk");
+    });
+
+    it("returns 404 when neither a release nor a bucket object exists", async () => {
+      const { env } = noReleaseEnv(null);
+      const response = await worker.fetch(
+        new Request("https://playarr.app/downloads/server/latest.json"),
+        env
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("prefers a release over the bucket when one exists", async () => {
+      const { env } = releaseEnv();
+      const response = await worker.fetch(
+        new Request("https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz"),
+        env
+      );
+
+      expect(response.status).toBe(302);
+      expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+    });
   });
 
   it("does not expose other server R2 object paths", async () => {

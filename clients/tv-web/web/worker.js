@@ -8,7 +8,8 @@ const DOWNLOADS = new Map([
   ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
 ]);
 
-// Android and Playarr Server downloads live on GitHub Releases only. The
+// Android and Playarr Server downloads are served from GitHub Releases first,
+// falling back to the R2 bucket when no release or asset exists. The
 // stable /downloads/... paths resolve the newest stable release for the right
 // tag family (android-v*, backend-v*) and redirect to its assets; versioned
 // paths redirect straight to the matching tag.
@@ -573,42 +574,59 @@ function releaseDownload(pathname) {
   return undefined;
 }
 
-async function serveReleaseDownload(request, pathname, target) {
-  const tag = target.tag ?? (await latestReleaseTag(target.prefix));
-  if (!tag) {
-    return new Response("This Playarr download has not been published yet.", {
-      status: 404,
-      headers: { "Cache-Control": "no-store" },
-    });
-  }
-  const asset = target.asset(tag);
-  const location = `${RELEASES_URL}/download/${tag}/${asset}`;
-  const cacheControl = target.immutable
-    ? "public, max-age=86400"
-    : "public, max-age=300";
+// The R2 object key an Android or server download path had before downloads
+// moved to GitHub Releases. Used as the fallback while a path has no release.
+function legacyDownloadKey(pathname) {
+  const androidLatest = LATEST_ANDROID_DOWNLOADS.get(pathname);
+  if (androidLatest) return `android/${androidLatest}`;
+  const androidVersioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
+  if (androidVersioned) return `android/releases/${androidVersioned[1]}/${androidVersioned[2]}`;
+  const serverVersioned = pathname.match(VERSIONED_SERVER_DOWNLOAD);
+  if (serverVersioned) return `server/releases/${serverVersioned[2]}/${serverVersioned[1]}`;
+  const serverLatest = pathname.match(LATEST_SERVER_DOWNLOAD);
+  return serverLatest ? `server/${serverLatest[1]}` : undefined;
+}
 
-  // Small JSON manifests are proxied so browsers and the Android updater read
-  // them same-origin; everything else is a redirect to the release asset.
-  if (asset.endsWith(".json")) {
-    const upstream = await fetch(location, { cf: { cacheTtl: 300, cacheEverything: true } });
-    if (!upstream.ok) {
-      return new Response("This Playarr download has not been published yet.", {
-        status: 404,
-        headers: { "Cache-Control": "no-store" },
+// Resolves a GitHub Release response for the path, or undefined when no
+// matching release or asset exists (or GitHub cannot be reached), so the
+// caller can fall back to the R2 bucket.
+async function serveReleaseDownload(request, target) {
+  try {
+    const tag = target.tag ?? (await latestReleaseTag(target.prefix));
+    if (!tag) return undefined;
+    const asset = target.asset(tag);
+    const location = `${RELEASES_URL}/download/${tag}/${asset}`;
+    const cacheControl = target.immutable
+      ? "public, max-age=86400"
+      : "public, max-age=300";
+
+    // Small JSON manifests are proxied so browsers and the Android updater read
+    // them same-origin; everything else is a redirect to the release asset.
+    if (asset.endsWith(".json")) {
+      const upstream = await fetch(location, { cf: { cacheTtl: 300, cacheEverything: true } });
+      if (!upstream.ok) return undefined;
+      return new Response(request.method === "HEAD" ? null : upstream.body, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": cacheControl,
+          "X-Content-Type-Options": "nosniff",
+        },
       });
     }
-    return new Response(request.method === "HEAD" ? null : upstream.body, {
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": cacheControl,
-        "X-Content-Type-Options": "nosniff",
-      },
+    // Confirm the asset exists without following the redirect to storage.
+    const probe = await fetch(location, {
+      method: "HEAD",
+      redirect: "manual",
+      cf: { cacheTtl: 300, cacheEverything: true },
     });
+    if (probe.status === 404 || probe.status >= 500) return undefined;
+    return new Response(null, {
+      status: 302,
+      headers: { Location: location, "Cache-Control": cacheControl },
+    });
+  } catch {
+    return undefined;
   }
-  return new Response(null, {
-    status: 302,
-    headers: { Location: location, "Cache-Control": cacheControl },
-  });
 }
 
 export default {
@@ -689,7 +707,7 @@ export default {
     }
 
     const releaseTarget = releaseDownload(url.pathname);
-    const key = releaseTarget ? undefined : downloadKey(url.pathname);
+    const key = releaseTarget ? legacyDownloadKey(url.pathname) : downloadKey(url.pathname);
     if (!releaseTarget && !key) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -699,9 +717,13 @@ export default {
       });
     }
 
-    if (releaseTarget) return serveReleaseDownload(request, url.pathname, releaseTarget);
+    if (releaseTarget) {
+      // GitHub Releases first; fall back to the R2 bucket until a release exists.
+      const release = await serveReleaseDownload(request, releaseTarget);
+      if (release) return release;
+    }
 
-    const object = await env.CLIENT_DOWNLOADS.get(key);
+    const object = key ? await env.CLIENT_DOWNLOADS.get(key) : null;
     if (!object) {
       return new Response("This Playarr client package has not been published yet.", {
         status: 404,
