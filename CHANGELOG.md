@@ -119,6 +119,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: every workflow job now runs on the self-hosted `playarr-runners` pool; GitHub-hosted runners are no longer used. The Windows UWP placeholder job in `xbox-ci.yml` is disabled until a Windows runner serves this repository. `scripts/ci/check-no-hosted-runners.sh` (run by `ci-required`) fails any workflow that targets a hosted label.
+- The merge train blocks any PR whose merged tree targets a GitHub-hosted runner, and `no-hosted-runners.yml` re-checks `main` after every push and opens a `ready` revert PR if a hosted label slips through.
+- Fixed `clients/harmony/scripts/fetch-sdk.sh` exiting 1 on newer bash (its EXIT trap clobbered the exit status).
 - Pin REGION-A and REGION-B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
 - Server: add authenticated admin endpoints to manage peer-group libraries, map local source instances to group libraries, and create/update peer routing rules (TASK 299). Deletion is omitted because group sync has no tombstones; disable routing with an empty `preferred_nodes` list, then unmap the source when rolling back.
 - CI: task board evidence for the merge train, fragments and affected-only work (TASKS 330 to 332).

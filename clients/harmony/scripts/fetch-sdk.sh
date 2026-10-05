@@ -70,8 +70,10 @@ _TMP_STAGE_DIRS=()
 _cleanup_stage_dirs() {
     local d
     for d in "${_TMP_STAGE_DIRS[@]:-}"; do
-        [ -n "$d" ] && rm -rf "$d"
+        if [ -n "$d" ]; then rm -rf "$d"; fi
     done
+    # Newer bash makes an EXIT trap's last status the script's exit status.
+    return 0
 }
 trap _cleanup_stage_dirs EXIT
 

@@ -164,6 +164,16 @@ $(git grep -lE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock' ':!*.snap' | head -10 | sed 
       return
     fi
 
+    # Owner rule: no GitHub-hosted runners, whatever CI says (the tree here is main merged with the PR).
+    if ! hosted_out=$(scripts/ci/check-no-hosted-runners.sh 2>&1); then
+      block "$pr" "The resulting tree targets a GitHub-hosted runner, which this repository forbids (use \`runs-on: playarr-runners\`):
+
+\`\`\`
+$(printf '%s' "$hosted_out" | head -c 1500)
+\`\`\`"
+      return
+    fi
+
     if [ "$need_push" = true ]; then
       if [ "$KEY_MODE" = true ]; then
         # Squash to one commit on top of main so main stays linear and the PR

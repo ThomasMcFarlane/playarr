@@ -48,7 +48,7 @@ concurrency:
 jobs:
   build:
     name: Build docs site
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +103,7 @@ jobs:
     # variable PAGES_ENABLED=true once Pages is enabled. Until then this
     # workflow is the strict MkDocs build check.
     if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     timeout-minutes: 10
     environment:
       name: github-pages

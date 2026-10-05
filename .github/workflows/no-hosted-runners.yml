@@ -1,0 +1,61 @@
+# Owner rule: this repository must not use GitHub-hosted runners. ci.yml and the merge train
+# already reject offending PRs; this is the backstop for anything that reaches main anyway
+# (direct push, admin merge). It runs on the self-hosted pool, and if a hosted label is found it
+# opens a revert PR labelled `ready` and fails loudly.
+name: No hosted runners
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  guard:
+    name: Guard against GitHub-hosted runners
+    runs-on: playarr-runners
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check workflows
+        id: check
+        continue-on-error: true
+        run: scripts/ci/check-no-hosted-runners.sh
+
+      - name: Open a revert PR
+        if: steps.check.outcome == 'failure' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! command -v gh >/dev/null; then
+            v=2.62.0
+            curl -fsSL "https://github.com/cli/cli/releases/download/v${v}/gh_${v}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+            export PATH="$RUNNER_TEMP/gh_${v}_linux_amd64/bin:$PATH"
+          fi
+          br="revert/hosted-runners-${SHA::8}"
+          git config user.name "playarr-no-hosted-runners"
+          git config user.email "no-hosted-runners@users.noreply.github.com"
+          git checkout -q -b "$br"
+          # Revert the offending commit when it only touched workflows and reverts cleanly.
+          if git revert --no-edit "$SHA" >/dev/null 2>&1 && scripts/ci/check-no-hosted-runners.sh >/dev/null 2>&1; then
+            git push -q origin "$br"
+            url=$(gh pr create --base main --head "$br" --title "revert: ${SHA::8} introduced a GitHub-hosted runner" \
+              --body "Automated revert. Commit $SHA put a GitHub-hosted runner label on main, which the owner forbids for this repository.")
+            gh pr edit "$url" --add-label ready
+            echo "::error::Hosted runner label on main at $SHA; revert PR $url opened and labelled ready."
+          else
+            echo "::error::Hosted runner label on main at $SHA and an automatic revert is not clean. Fix runs-on by hand."
+          fi
+
+      - name: Fail loudly
+        if: steps.check.outcome == 'failure'
+        run: exit 1

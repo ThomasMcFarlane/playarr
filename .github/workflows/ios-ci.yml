@@ -29,8 +29,8 @@ permissions:
 jobs:
   dispatch-apple:
     if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/ios-v'))
-    name: Dispatch signed TestFlight release to Apple runner
-    runs-on: ubuntu-latest
+    name: Dispatch signed TestFlight release to the Apple release pipeline
+    runs-on: playarr-runners
     timeout-minutes: 5
     steps:
       - name: Validate dispatch credential

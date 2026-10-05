@@ -46,7 +46,7 @@ warning and skips; upload by hand from the workflow's `playarr-server-dist` arte
 `scripts/upload-server-release.sh <dist-dir> <version>` (it uses `wrangler`, so a `wrangler login` plus
 `CLOUDFLARE_ACCOUNT_ID` is enough), or add the secret with `scripts/server-release-owner-setup.sh` and
 re-run the workflow on the tag. The image push uses the job's `GITHUB_TOKEN` (`packages: write`). All
-builds run on GitHub-hosted runners; no self-hosted runner sees these credentials.
+builds run on the self-hosted `playarr-runners` pool (GitHub-hosted runners are not used in this repository).
 
 ## Making the image public
 

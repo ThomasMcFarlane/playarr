@@ -90,6 +90,9 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: scripts/ci/check-fragments.sh
 
+      - name: Reject GitHub-hosted runner labels
+        run: scripts/ci/check-no-hosted-runners.sh
+
       # Nightly and post-merge dispatches on main validate everything.
       - name: Full run?
         id: all

@@ -47,7 +47,7 @@ jobs:
   # ---------------------------------------------------------------------
   core-check:
     name: Build & test Playarr.Core
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     permissions:
       contents: read
     defaults:
@@ -56,9 +56,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The self-hosted runner user cannot write to /usr/share/dotnet, so
+      # install the SDK under the per-job temp directory instead.
       - uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           dotnet-version: '8.0.x'
+
+      - name: Put the SDK on PATH
+        run: echo "$RUNNER_TEMP/dotnet" >> "$GITHUB_PATH"
 
       - name: dotnet build (Playarr.Core)
         run: dotnet build src/Playarr.Core/Playarr.Core.csproj
@@ -69,7 +76,7 @@ jobs:
   # ---------------------------------------------------------------------
   # Placeholder job: the UWP application head (src/Playarr.Xbox) cannot be
   # built with the dotnet CLI at all -- it needs real MSBuild + the
-  # Windows 10 SDK + the UWP workload, so this runs on windows-latest with
+  # Windows 10 SDK + the UWP workload, so this needs a Windows runner with
   # genuine checkout/toolchain-setup steps. The restore/build/package/
   # upload steps themselves are unverified TODO placeholders -- see the
   # file header comment above for why, and ios-ci.yml for the identical
@@ -78,7 +85,13 @@ jobs:
   build-and-package:
     name: Build & package UWP MSIX (placeholder)
     needs: core-check
-    runs-on: windows-latest
+    # DISABLED: GitHub-hosted runners are forbidden for this repository and no
+    # self-hosted Windows runner serves it (the org `windows-builders` group
+    # cannot be used by a personal-account repository). Re-enable by pointing
+    # `runs-on` at a Windows runner registered to this repository and removing
+    # the `if: false`. The job is an echo-only placeholder today.
+    if: false
+    runs-on: playarr-runners
     environment: release-xbox
     steps:
       - uses: actions/checkout@v4

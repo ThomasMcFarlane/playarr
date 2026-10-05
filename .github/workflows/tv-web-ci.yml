@@ -12,12 +12,18 @@ permissions:
 jobs:
   build:
     name: Build package-ready webOS and Tizen apps
-    runs-on: ubuntu-latest
+    runs-on: playarr-runners
     defaults:
       run:
         working-directory: clients/tv-web
     steps:
       - uses: actions/checkout@v4
+
+      # pnpm 11 needs Node >= 22.13, and the self-hosted runner's default Node is
+      # older, so install Node before pnpm/action-setup runs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -26,7 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: pnpm
           cache-dependency-path: clients/tv-web/pnpm-lock.yaml
 
