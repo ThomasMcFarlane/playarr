@@ -195,7 +195,7 @@ internal fun ExperienceCalendarScreen(
                         CalendarViewMode.Agenda -> CalendarAgenda(
                             groups = groups, loading = loading, selected = detailItem, isTelevision = isTelevision,
                             today = today, zone = zone, locale = language.locale,
-                            onSelect = { holder.select(it.key) }, onOpenWork = onOpenWork, modifier = body,
+                            onSelect = { holder.select(it.key) }, onOpenWork = onOpenWork, actions = viewModel.actions, modifier = body,
                         )
                         CalendarViewMode.Week -> CalendarWeek(
                             groups = groups, loading = loading, isTelevision = isTelevision, today = today, zone = zone,
@@ -225,6 +225,7 @@ internal fun ExperienceCalendarScreen(
             item = selectedItem, isTelevision = isTelevision, locale = language.locale, zone = zone,
             onDismiss = { holder.select(null) },
             onOpenWork = { holder.select(null); onOpenWork(it) },
+            actions = viewModel.actions,
         )
     }
     when (state.panel) {
@@ -502,6 +503,7 @@ private fun CalendarAgenda(
     locale: Locale,
     onSelect: (CalendarItem) -> Unit,
     onOpenWork: (String) -> Unit,
+    actions: CalendarActionsHolder,
     modifier: Modifier,
 ) {
     PlayarrMasterDetail(
@@ -510,7 +512,7 @@ private fun CalendarAgenda(
         detail = {
             when {
                 loading -> CalendarDetailSkeleton()
-                selected != null -> CalendarItemDetails(selected, locale, zone, onOpenWork)
+                selected != null -> CalendarItemDetails(selected, locale, zone, onOpenWork, actions)
                 else -> Text(playarrString(PlayarrString.CalendarSelectPrompt), color = WebInkMuted)
             }
         },
@@ -672,10 +674,10 @@ private fun CalendarItemRow(
 
 /** Details of the selected release: facts plus Open when it exists in the library. */
 @Composable
-private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId, onOpenWork: (String) -> Unit) {
+private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId, onOpenWork: (String) -> Unit, actions: CalendarActionsHolder) {
     val entry = item.first
     val time = remember(entry.releaseAt, locale) { entry.localReleaseTime(zone, locale) }
-    val workId = entry.workId?.takeIf(String::isNotBlank)
+    val workId = entry.openWorkId
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 24.dp)) {
         CalendarPoster(entry.posterUrl, Modifier.size(width = 120.dp, height = 176.dp))
         Text(item.title, color = WebInk, fontSize = 28.sp, fontWeight = FontWeight(590), modifier = Modifier.semantics { heading() })
@@ -718,8 +720,37 @@ private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId
             }
         } else {
             Text(playarrString(PlayarrString.CalendarNotInCatalogue), color = WebInkMuted, fontSize = 12.sp)
+            CalendarEntryActions(entry, actions)
         }
     }
+}
+
+/** Request and watchlist for a release that is not in the library, exactly as the server offered them. */
+@Composable
+private fun CalendarEntryActions(entry: io.playarr.shared.data.model.CalendarEntry, holder: CalendarActionsHolder) {
+    val snapshot = entry.snapshot ?: return
+    val state by holder.state.collectAsState()
+    val request = entry.action(io.playarr.shared.data.model.CalendarAction.REQUEST)
+    val watchlist = entry.action(io.playarr.shared.data.model.CalendarAction.WATCHLIST)?.takeIf { it.enabled }
+    val busy = snapshot in state.busy
+    if (request != null) {
+        val requested = request.active || snapshot in state.requested
+        PlayarrButton(onClick = { holder.request(snapshot) }, enabled = request.enabled && !requested && !busy) {
+            Text(playarrString(if (requested) PlayarrString.DiscoveryRequested else PlayarrString.DiscoveryActionRequest))
+        }
+        if (!request.enabled && !requested) {
+            request.reason?.let { Text(it, color = WebInkMuted, fontSize = 12.sp) }
+        }
+    }
+    if (watchlist != null) {
+        val listed = state.listed[snapshot] ?: watchlist.active
+        PlayarrButton(
+            onClick = { holder.toggleWatchlist(snapshot, listed) },
+            variant = PlayarrButtonVariant.Secondary,
+            enabled = !busy,
+        ) { Text(playarrString(if (listed) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd)) }
+    }
+    state.error?.let { Text(playarrText(it), color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
 }
 
 /** Month and week selections open the same details in a dialog (agenda shows them in its left pane). */
@@ -731,11 +762,12 @@ private fun CalendarItemDialog(
     zone: ZoneId,
     onDismiss: () -> Unit,
     onOpenWork: (String) -> Unit,
+    actions: CalendarActionsHolder,
 ) {
     val focus = remember { FocusRequester() }
     PlayarrPanel(
         onDismissRequest = onDismiss,
-        text = { Box(Modifier.heightIn(max = if (isTelevision) 520.dp else 480.dp).verticalScroll(rememberScrollState())) { CalendarItemDetails(item, locale, zone, onOpenWork) } },
+        text = { Box(Modifier.heightIn(max = if (isTelevision) 520.dp else 480.dp).verticalScroll(rememberScrollState())) { CalendarItemDetails(item, locale, zone, onOpenWork, actions) } },
         confirmButton = {
             PlayarrButton(onClick = onDismiss, modifier = Modifier.focusRequester(focus)) { Text(playarrString(PlayarrString.CommonClose)) }
         },

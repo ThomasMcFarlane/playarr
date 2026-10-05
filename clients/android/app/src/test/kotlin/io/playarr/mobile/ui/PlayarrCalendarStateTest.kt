@@ -17,6 +17,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
+import io.playarr.shared.data.model.CalendarAction
+import io.playarr.shared.data.model.TitleSnapshot
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -31,6 +33,9 @@ private class FakeCalendarRepository : CalendarRepository {
     var feed = CalendarFeedStatus(active = false)
     var createCount = 0
     var revokeCount = 0
+    var lastRotate: Boolean? = null
+    val requested = mutableListOf<TitleSnapshot>()
+    val watchlisted = mutableListOf<Pair<TitleSnapshot, Boolean>>()
 
     override suspend fun calendar(start: LocalDate, end: LocalDate): CalendarResponse {
         requests += start to end
@@ -41,8 +46,19 @@ private class FakeCalendarRepository : CalendarRepository {
 
     override suspend fun feedStatus() = feed
 
-    override suspend fun createFeed(): CalendarFeedCreated {
+    override suspend fun requestTitle(snapshot: TitleSnapshot) {
         failure?.let { throw it }
+        requested += snapshot
+    }
+
+    override suspend fun setWatchlisted(snapshot: TitleSnapshot, listed: Boolean) {
+        failure?.let { throw it }
+        watchlisted += snapshot to listed
+    }
+
+    override suspend fun createFeed(rotate: Boolean): CalendarFeedCreated {
+        failure?.let { throw it }
+        lastRotate = rotate
         createCount++
         feed = CalendarFeedStatus(active = true, createdAt = Instant.parse("2026-10-04T08:00:00Z"))
         return CalendarFeedCreated("https://playarr.example/feed/token$createCount.ics", "token$createCount", Instant.parse("2026-10-04T08:00:00Z"))
@@ -179,6 +195,73 @@ class PlayarrCalendarStateTest {
         holder.createOrRegenerate()
         assertEquals("token2", holder.state.value.created!!.token)
         assertEquals(2, repo.createCount)
+    }
+
+    @Test
+    fun `opening the link panel fetches the existing link in one call when the server can show it`() {
+        val repo = FakeCalendarRepository().apply { feed = CalendarFeedStatus(active = true, linkAvailable = true) }
+        val holder = CalendarSubscriptionHolder(scope, repo, message)
+        holder.ensureLink()
+        assertEquals(1, repo.createCount)
+        assertEquals(false, repo.lastRotate)
+        assertEquals("token1", holder.state.value.created!!.token)
+    }
+
+    @Test
+    fun `opening the link panel never replaces a link the server cannot show again`() {
+        for (available in listOf(false, null)) {
+            val repo = FakeCalendarRepository().apply { feed = CalendarFeedStatus(active = true, linkAvailable = available) }
+            val holder = CalendarSubscriptionHolder(scope, repo, message)
+            holder.ensureLink()
+            assertEquals(0, repo.createCount)
+            assertNull(holder.state.value.created)
+        }
+    }
+
+    @Test
+    fun `reset asks the server to rotate while first open does not`() {
+        val repo = FakeCalendarRepository()
+        val holder = CalendarSubscriptionHolder(scope, repo, message)
+        holder.ensureLink()
+        assertEquals(false, repo.lastRotate)
+        holder.createOrRegenerate()
+        assertEquals(true, repo.lastRotate)
+    }
+
+    private val snapshot = TitleSnapshot(kind = "series", title = "Test Series A", year = 2026)
+
+    @Test
+    fun `request and watchlist use the server snapshot and remember the outcome`() {
+        val repo = FakeCalendarRepository()
+        val actions = CalendarActionsHolder(scope, repo, message)
+        actions.request(snapshot)
+        assertEquals(listOf(snapshot), repo.requested)
+        assertTrue(snapshot in actions.state.value.requested)
+
+        actions.toggleWatchlist(snapshot, currentlyListed = false)
+        assertEquals(listOf(snapshot to true), repo.watchlisted)
+        assertEquals(true, actions.state.value.listed[snapshot])
+        actions.toggleWatchlist(snapshot, currentlyListed = true)
+        assertEquals(false, actions.state.value.listed[snapshot])
+        assertTrue(actions.state.value.busy.isEmpty())
+    }
+
+    @Test
+    fun `a failed request is reported and not remembered`() {
+        val repo = FakeCalendarRepository().apply { failure = IOException("offline") }
+        val actions = CalendarActionsHolder(scope, repo, message)
+        actions.request(snapshot)
+        assertNotNull(actions.state.value.error)
+        assertFalse(snapshot in actions.state.value.requested)
+    }
+
+    @Test
+    fun `an entry opens only through the server's enabled open action`() {
+        val base = entry("a", "2026-10-05")
+        assertNull(base.copy(workId = "w").openWorkId)
+        val open = CalendarAction(CalendarAction.OPEN, enabled = true, workId = "w")
+        assertEquals("w", base.copy(actions = listOf(open)).openWorkId)
+        assertNull(base.copy(actions = listOf(open.copy(enabled = false))).openWorkId)
     }
 
     @Test

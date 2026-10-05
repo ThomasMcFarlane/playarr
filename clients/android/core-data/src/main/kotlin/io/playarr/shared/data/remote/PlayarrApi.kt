@@ -247,14 +247,19 @@ interface PlayarrApi {
         @Query("end") end: String? = null,
         @Query("kind") kind: String? = null,
         @Query("source_instance_id") sourceInstanceId: String? = null,
+        /** `series_day` folds same-day episodes of a series into one entry with `members`. */
+        @Query("group") group: String? = null,
     ): CalendarResponse
 
     @GET("api/v1/calendar/feed")
     suspend fun getCalendarFeed(): CalendarFeedStatus
 
-    /** Creates or regenerates the subscription; the previous URL stops working. The URL is only returned here. */
+    /**
+     * Returns the existing subscription link or creates one; [rotate] replaces it (the previous URL
+     * stops working). Servers that predate re-showable links always replace it.
+     */
     @POST("api/v1/calendar/feed")
-    suspend fun createCalendarFeed(): CalendarFeedCreated
+    suspend fun createCalendarFeed(@Query("rotate") rotate: Boolean? = null): CalendarFeedCreated
 
     @DELETE("api/v1/calendar/feed")
     suspend fun revokeCalendarFeed(): Response<ResponseBody>

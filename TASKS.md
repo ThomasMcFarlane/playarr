@@ -125,7 +125,7 @@ One shared page header, filters drawer and URL-held state on every page. Web and
 | 212 | Roku: shared page header + filters panel, Release Calendar parity | pending | Unassigned | Parent: 200. |
 | 213 | Xbox: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
 | 214 | Harmony: shared page header + filters pane, Release Calendar parity | pending | Unassigned | Parent: 200. |
-| 223 | Android Calendar: request and watchlist actions for releases not in the library, from server-computed actions | open | Unassigned | Needs the calendar API to return per-entry actions; today the details pane offers Open only when the title exists. |
+| 223 | Android Calendar: request and watchlist actions for releases not in the library, from server-computed actions | in progress: implemented, awaiting merge and a device check | Unassigned | Uses the server's `snapshot` and `actions[]` (row 205): Open only when the server enabled it, otherwise Request (disabled with the server's reason) and Watchlist; the link panel fetches the existing link in one call when the server can show it and rotates only on Reset. Verified by unit tests (decode of actions, snapshot and members, request and watchlist holders, link behaviour, query parameters). Not verified on the emulator: it was not available; verify on a device once a fixture account exists. |
 
 ## Active: Library browsing features (2026-10-04)
 

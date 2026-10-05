@@ -9,6 +9,7 @@ import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarMediaKind
 import io.playarr.shared.data.model.CalendarResponse
+import io.playarr.shared.data.model.TitleSnapshot
 import io.playarr.shared.domain.model.PlayarrError
 import io.playarr.shared.domain.model.PlayarrResult
 import io.playarr.shared.domain.model.runCatchingPlayarr
@@ -240,7 +241,11 @@ internal class CalendarSubscriptionHolder(
             when (val result = runCatchingPlayarr { repository.feedStatus() }) {
                 is PlayarrResult.Success -> {
                     _state.update { it.copy(status = result.value, loading = false) }
-                    if (createIfMissing && !result.value.active) createOrRegenerate()
+                    // The server keeps the link, so one call returns the existing one or creates it. Servers
+                    // that cannot show a link again (linkAvailable null/false) keep the hidden-link state.
+                    if (createIfMissing && (!result.value.active || result.value.linkAvailable == true)) {
+                        createOrRegenerate(rotate = false)
+                    }
                 }
                 is PlayarrResult.Failure -> _state.update {
                     it.copy(loading = false, error = failureMessage(result.error))
@@ -249,17 +254,17 @@ internal class CalendarSubscriptionHolder(
         }
     }
 
-    /** Creates the subscription, or regenerates it (the previous URL stops working). */
-    fun createOrRegenerate() {
+    /** Returns or creates the subscription; with [rotate] it is replaced (the previous URL stops working). */
+    fun createOrRegenerate(rotate: Boolean = true) {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, error = null) }
         scope.launch {
-            when (val result = runCatchingPlayarr { repository.createFeed() }) {
+            when (val result = runCatchingPlayarr { repository.createFeed(rotate) }) {
                 is PlayarrResult.Success -> _state.update {
                     it.copy(
                         busy = false,
                         created = result.value,
-                        status = CalendarFeedStatus(active = true, createdAt = result.value.createdAt, lastUsedAt = null),
+                        status = CalendarFeedStatus(active = true, createdAt = result.value.createdAt, lastUsedAt = null, linkAvailable = true),
                     )
                 }
                 is PlayarrResult.Failure -> _state.update { it.copy(busy = false, error = failureMessage(result.error)) }
@@ -289,6 +294,54 @@ internal class CalendarSubscriptionHolder(
     }
 }
 
+/** The signed-in user's request and watchlist state for entries not in the library, driven by the server's actions. */
+internal data class CalendarActionsState(
+    /** Snapshots requested during this session (the server then reports the action as already requested). */
+    val requested: Set<TitleSnapshot> = emptySet(),
+    /** Local watchlist overrides keyed by snapshot; absent means "as the server said". */
+    val listed: Map<TitleSnapshot, Boolean> = emptyMap(),
+    val busy: Set<TitleSnapshot> = emptySet(),
+    val error: PlayarrMessage? = null,
+)
+
+internal class CalendarActionsHolder(
+    private val scope: CoroutineScope,
+    private val repository: CalendarRepository,
+    private val failureMessage: (PlayarrError) -> PlayarrMessage = ::calendarFailure,
+) {
+    private val _state = MutableStateFlow(CalendarActionsState())
+    val state: StateFlow<CalendarActionsState> = _state.asStateFlow()
+
+    fun request(snapshot: TitleSnapshot) = run(snapshot) {
+        when (val result = runCatchingPlayarr { repository.requestTitle(snapshot) }) {
+            is PlayarrResult.Success -> _state.update { it.copy(requested = it.requested + snapshot) }
+            is PlayarrResult.Failure -> _state.update { it.copy(error = failureMessage(result.error)) }
+        }
+    }
+
+    /** Flips the watchlist for [snapshot]; [currentlyListed] is the state the reader is looking at. */
+    fun toggleWatchlist(snapshot: TitleSnapshot, currentlyListed: Boolean) = run(snapshot) {
+        when (val result = runCatchingPlayarr { repository.setWatchlisted(snapshot, !currentlyListed) }) {
+            is PlayarrResult.Success -> _state.update { it.copy(listed = it.listed + (snapshot to !currentlyListed)) }
+            is PlayarrResult.Failure -> _state.update { it.copy(error = failureMessage(result.error)) }
+        }
+    }
+
+    fun clearError() = _state.update { it.copy(error = null) }
+
+    private fun run(snapshot: TitleSnapshot, block: suspend () -> Unit) {
+        if (snapshot in _state.value.busy) return
+        _state.update { it.copy(busy = it.busy + snapshot, error = null) }
+        scope.launch {
+            try {
+                block()
+            } finally {
+                _state.update { it.copy(busy = it.busy - snapshot) }
+            }
+        }
+    }
+}
+
 @HiltViewModel
 internal class CalendarViewModel @Inject constructor(
     repository: CalendarRepository,
@@ -303,6 +356,7 @@ internal class CalendarViewModel @Inject constructor(
         initialUrlState = savedState.get<String>(QUERY_KEY)?.let(::parseCalendarQuery),
     )
     val subscription = CalendarSubscriptionHolder(viewModelScope, repository)
+    val actions = CalendarActionsHolder(viewModelScope, repository)
 
     init {
         calendar.load()

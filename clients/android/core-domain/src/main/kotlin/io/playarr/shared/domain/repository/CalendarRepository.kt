@@ -4,6 +4,7 @@ import io.playarr.shared.data.model.AvailabilityLag
 import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarResponse
+import io.playarr.shared.data.model.TitleSnapshot
 import io.playarr.shared.data.remote.PlayarrApi
 import java.time.LocalDate
 import javax.inject.Inject
@@ -15,8 +16,14 @@ interface CalendarRepository {
 
     suspend fun feedStatus(): CalendarFeedStatus
 
-    /** Creates or regenerates the subscription; the returned URL is the only time the secret is exposed. */
-    suspend fun createFeed(): CalendarFeedCreated
+    /** The existing subscription link or a new one; [rotate] replaces it (the old URL stops working). */
+    suspend fun createFeed(rotate: Boolean = false): CalendarFeedCreated
+
+    /** `POST /api/v1/discover/request` with the entry's server-built [snapshot]. */
+    suspend fun requestTitle(snapshot: TitleSnapshot)
+
+    /** Adds [snapshot] to, or removes it from, the user's watchlist. */
+    suspend fun setWatchlisted(snapshot: TitleSnapshot, listed: Boolean)
 
     suspend fun revokeFeed()
 
@@ -31,7 +38,21 @@ class DefaultCalendarRepository @Inject constructor(
 
     override suspend fun feedStatus(): CalendarFeedStatus = api.getCalendarFeed()
 
-    override suspend fun createFeed(): CalendarFeedCreated = api.createCalendarFeed()
+    override suspend fun createFeed(rotate: Boolean): CalendarFeedCreated =
+        api.createCalendarFeed(rotate = if (rotate) true else null)
+
+    override suspend fun requestTitle(snapshot: TitleSnapshot) {
+        api.requestTitle(snapshot)
+    }
+
+    override suspend fun setWatchlisted(snapshot: TitleSnapshot, listed: Boolean) {
+        if (listed) {
+            api.addToWatchlist(snapshot)
+        } else {
+            val response = api.removeFromWatchlist(api.resolveTitle(snapshot).title.titleKey)
+            if (!response.isSuccessful) throw retrofit2.HttpException(response)
+        }
+    }
 
     override suspend fun revokeFeed() {
         val response = api.revokeCalendarFeed()

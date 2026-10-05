@@ -42,6 +42,50 @@ data class CalendarEntry(
     val workId: String? = null,
     val averageLagSeconds: Long? = null,
     val sources: List<CalendarEntrySource> = emptyList(),
+    /** Title identity to post unchanged to the request and watchlist endpoints. */
+    val snapshot: TitleSnapshot? = null,
+    /** What the signed-in user can do with this entry, computed by the server. */
+    val actions: List<CalendarAction> = emptyList(),
+    /** Episodes folded into this entry when `group=series_day` was requested. */
+    val members: List<CalendarGroupMember> = emptyList(),
+) {
+    /** The server's action of [kind], if it listed one. */
+    fun action(kind: String): CalendarAction? = actions.firstOrNull { it.action == kind }
+
+    /** The library work to open: only when the server enabled `open` for this user. */
+    val openWorkId: String?
+        get() = action(CalendarAction.OPEN)?.takeIf { it.enabled }?.workId?.takeIf(String::isNotBlank)
+}
+
+/** One server-computed calendar action; a disabled one carries a [reason] to show instead of hiding it. */
+@Serializable
+data class CalendarAction(
+    val action: String,
+    val enabled: Boolean = false,
+    val reason: String? = null,
+    val workId: String? = null,
+    val mediaFileId: String? = null,
+    val positionMs: Long? = null,
+    /** `watchlist`: already listed. `request`: already requested. */
+    val active: Boolean = false,
+) {
+    companion object {
+        const val OPEN = "open"
+        const val PLAY = "play"
+        const val RESUME = "resume"
+        const val REQUEST = "request"
+        const val WATCHLIST = "watchlist"
+    }
+}
+
+@Serializable
+data class CalendarGroupMember(
+    val id: String,
+    val subtitle: String? = null,
+    val seasonNumber: Long? = null,
+    val episodeNumber: Long? = null,
+    val monitored: Boolean = false,
+    val hasFile: Boolean = false,
 )
 
 @Serializable
@@ -85,6 +129,8 @@ data class CalendarFeedStatus(
     val active: Boolean = false,
     @Serializable(with = InstantIsoSerializer::class) val createdAt: Instant? = null,
     @Serializable(with = InstantIsoSerializer::class) val lastUsedAt: Instant? = null,
+    /** True when the server can return the link again; null on servers that predate this (their POST replaces it). */
+    val linkAvailable: Boolean? = null,
 )
 
 /** `POST /api/v1/calendar/feed` response. [url] and [token] are secrets and are returned only here. */

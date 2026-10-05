@@ -32,7 +32,9 @@ class PlayarrLiveRefreshTest {
             )
         }
         override suspend fun feedStatus() = CalendarFeedStatus(active = false)
-        override suspend fun createFeed(): CalendarFeedCreated = error("unused")
+        override suspend fun createFeed(rotate: Boolean): CalendarFeedCreated = error("unused")
+        override suspend fun requestTitle(snapshot: io.playarr.shared.data.model.TitleSnapshot) = error("unused")
+        override suspend fun setWatchlisted(snapshot: io.playarr.shared.data.model.TitleSnapshot, listed: Boolean) = error("unused")
         override suspend fun revokeFeed() = Unit
         override suspend fun availabilityLag(workId: String) = io.playarr.shared.data.model.AvailabilityLag()
     }

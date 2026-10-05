@@ -38,6 +38,12 @@ class CalendarApiTest {
               "poster_url": "https://images.example.com/poster.jpg",
               "work_id": "11111111-1111-1111-1111-111111111111",
               "average_lag_seconds": 7200,
+              "snapshot": {"kind": "series", "title": "Example Show", "year": 2026, "work_id": "11111111-1111-1111-1111-111111111111", "external_refs": [{"provider": "tvdb", "external_id": "81189"}]},
+              "actions": [
+                {"action": "open", "enabled": true, "work_id": "11111111-1111-1111-1111-111111111111"},
+                {"action": "watchlist", "enabled": true, "active": true}
+              ],
+              "members": [{"id": "m1", "season_number": 1, "episode_number": 2, "monitored": true, "has_file": false}],
               "sources": [
                 {"source_instance_id": "22222222-2222-2222-2222-222222222222", "source_name": "Sonarr HD", "source_kind": "sonarr", "arr_id": 42}
               ]
@@ -84,7 +90,17 @@ class CalendarApiTest {
         assertEquals("Sonarr HD", episode.sources.single().sourceName)
         assertEquals(CalendarMediaKind.Episode, CalendarMediaKind.fromWire(episode.mediaKind))
 
+        assertEquals("series", episode.snapshot!!.kind)
+        assertEquals("81189", episode.snapshot!!.externalRefs.single().externalId)
+        assertEquals("11111111-1111-1111-1111-111111111111", episode.openWorkId)
+        assertTrue(episode.action("watchlist")!!.active)
+        assertNull(episode.action("request"))
+        assertEquals(2L, episode.members.single().episodeNumber)
+
         val movie = response.entries[1]
+        assertTrue(movie.actions.isEmpty())
+        assertNull(movie.snapshot)
+        assertNull(movie.openWorkId)
         assertNull(movie.releaseAt)
         assertNull(movie.workId)
         assertNull(movie.posterUrl)
@@ -107,6 +123,12 @@ class CalendarApiTest {
                 """{"url":"https://playarr.example/api/v1/calendar/feed/secret.ics","token":"secret","created_at":"2026-10-04T08:00:00Z"}""",
             ).setResponseCode(201),
         )
+        server.enqueue(
+            jsonResponse(
+                """{"url":"https://playarr.example/api/v1/calendar/feed/secret2.ics","token":"secret2","created_at":"2026-10-04T08:00:00Z"}""",
+            ).setResponseCode(201),
+        )
+        server.enqueue(jsonResponse(calendarBody))
         server.enqueue(MockResponse().setResponseCode(204))
         server.enqueue(
             jsonResponse(
@@ -131,6 +153,8 @@ class CalendarApiTest {
             assertNull(feed.lastUsedAt)
             val created = api.createCalendarFeed()
             assertEquals("secret", created.token)
+            api.createCalendarFeed(rotate = true)
+            api.getCalendar(start = "2026-10-04", group = "series_day")
             assertTrue(api.revokeCalendarFeed().isSuccessful)
             val lag = api.getAvailabilityLag("work-1")
             assertNull(lag.averageSeconds)
@@ -144,6 +168,8 @@ class CalendarApiTest {
             val create = server.takeRequest()
             assertEquals("POST", create.method)
             assertEquals("/api/v1/calendar/feed", create.path)
+            assertEquals("/api/v1/calendar/feed?rotate=true", server.takeRequest().path)
+            assertEquals("/api/v1/calendar?start=2026-10-04&group=series_day", server.takeRequest().path)
             val revoke = server.takeRequest()
             assertEquals("DELETE", revoke.method)
             assertEquals("/api/v1/calendar/feed", revoke.path)
