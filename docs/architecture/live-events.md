@@ -99,6 +99,11 @@ source_instance_id?, created_ms)`.
   (and, on the first sighting after a restart, when it exceeds the synced
   files; Sonarr counts episodes with a file, so a multi-episode file keeps the
   synced rows below it for good).
+- Season and episode rows are written by raw SQL in the arr sync (`MediaSync`), not through a
+  decorated repository, so the sync announces them itself: one `library`/`upserted` frame for the
+  series when a pass created a season or episode or changed an episode's title, overview, images,
+  air date, runtime or monitored flag. The update is guarded (`IS DISTINCT FROM`), so an identical
+  re-sync writes nothing and publishes nothing.
 - Household, account and source-instance handlers publish their own rows;
   the arr sync poller announces `sync_started` and `sync_finished`.
 - The stream tails the table (`seq > cursor`, oldest first, 500 per read),
