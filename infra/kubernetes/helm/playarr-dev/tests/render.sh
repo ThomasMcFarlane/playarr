@@ -24,7 +24,7 @@ test "$(grep -c '^        kubernetes.io/hostname: dev-node$' "$rendered")" -eq 6
 node_a_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-region-a/) printf "%s", block; show=0}' "$rendered")"
 node_b_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-region-b/) printf "%s", block; show=0}' "$rendered")"
 grep -q 'image: "registry.example.com/playarr-regional:c7613860"' <<<"$node_a_deployment"
-grep -q 'image: "registry.example.com/playarr-regional:66e2bf61"' <<<"$node_b_deployment"
+grep -q 'image: "registry.example.com/playarr-regional:c7613860"' <<<"$node_b_deployment"
 for deployment in "$node_a_deployment" "$node_b_deployment"; do
   grep -A1 -q 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment"
   grep -A1 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment" | grep -q 'value: "1"'
