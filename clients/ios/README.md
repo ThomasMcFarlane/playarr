@@ -100,16 +100,11 @@ The CI release workflow regenerates `Playarr.xcodeproj` from `project.yml` befor
 ## Distribution configuration
 
 Both distribution targets use the registered App Store Connect bundle identifier
-`app.playarr.ios`. The source project defaults to marketing version `1.0.0`; the private signed
+`app.playarr.ios`. The source project defaults to marketing version `1.0.0`; the signed
 release workflow assigns a fresh Apple-valid build number for each release. The iOS and tvOS
-targets have separate active App Store provisioning profiles and use the Apple runner
+targets have separate active App Store provisioning profiles and use a GitHub-hosted macOS runner
 for signed archive, export, and TestFlight upload. There is no unsigned release stage.
 
-The source repository's automatic/manual dispatcher requires the owner to create a fine-grained
-GitHub token with `Actions: read and write` access limited to the Apple release pipeline,
-then add it as `APPLE_DISPATCH_TOKEN` in this repository's Actions secrets. It is currently
-absent, so source-side dispatch is not ready. The private workflow can be inspected or dispatched
-from the Apple release workflow.
 See [the TestFlight runbook](../../docs/apple-testflight/README.md) for the owner setup links and
 current build evidence.
 

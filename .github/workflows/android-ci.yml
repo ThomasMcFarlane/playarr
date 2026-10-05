@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build-and-publish:
     name: Build, sign and publish Android APK
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release-android
     defaults:

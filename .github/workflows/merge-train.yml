@@ -1,6 +1,6 @@
 # =============================================================================
-# Merge train (stand-in for GitHub's merge queue, which private personal-account
-# repositories do not get). See scripts/merge-train.sh and AGENTS.md.
+# Merge train (stand-in for GitHub's merge queue, which repositories owned by a
+# personal account do not get). See scripts/merge-train.sh and AGENTS.md.
 #
 # Agents add the `ready` label and stop. This workflow lands one PR at a time,
 # oldest `ready` first: merge main in, push, wait for `ci-required` on that
@@ -8,7 +8,8 @@
 # runs): it advances the head of the queue and exits; the CI-completion trigger
 # and the schedule resume it. Failures remove `ready`, add `blocked` and comment.
 #
-# Authentication: if the repository secret TRAIN_DEPLOY_KEY (a write deploy key)
+# Authentication: if the repository secret TRAIN_DEPLOY_KEY (a write deploy key,
+# which must be re-created for this repository: deploy keys are per repository)
 # exists, pushes use it and therefore trigger CI and the deploy workflows
 # normally; main is fast-forwarded to the CI-validated squash commit. Without
 # it the train falls back to GITHUB_TOKEN, starts CI with workflow_dispatch and
@@ -52,7 +53,7 @@ jobs:
   train:
     name: Land ready PRs
     if: github.event_name != 'pull_request_target' || github.event.label.name == 'ready'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       HAS_KEY: ${{ secrets.TRAIN_DEPLOY_KEY != '' }}
@@ -64,7 +65,7 @@ jobs:
           ssh-key: ${{ secrets.TRAIN_DEPLOY_KEY }}
           persist-credentials: true
 
-      # The runner image ships neither gh nor sudo; fetch a pinned gh into the job temp dir.
+      # Hosted Ubuntu images ship gh; the fallback only matters on a bare image.
       - name: Ensure gh CLI
         run: |
           command -v gh >/dev/null && exit 0

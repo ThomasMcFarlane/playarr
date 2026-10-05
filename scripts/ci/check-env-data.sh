@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when tracked files contain deployment-specific data. This repository is
 # public: real hostnames, node names, addresses, hostPaths, registry hosts and
-# image pins belong in the private deployment (GitOps) repository instead.
+# image pins belong in your own deployment repository instead.
 #
 # Two kinds of check:
 #   1. Generic, in this file: any IPv4 literal that is not a documentation,
@@ -72,7 +72,7 @@ else
 fi
 
 if [ "$fail" -ne 0 ]; then
-  echo "Deployment data belongs in the private GitOps repository; see AGENTS.md, 'Deployment configuration'." >&2
+  echo "Deployment data belongs in your own deployment repository; see AGENTS.md, 'Deployment configuration'." >&2
   exit 1
 fi
 echo "env-data guard: clean"

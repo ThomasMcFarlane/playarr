@@ -3,20 +3,19 @@
 # =============================================================================
 #
 # Triggered by pushing a tag such as `backend-v0.1.0` (or a pre-release such as
-# `backend-v0.2.0-rc.1`). The repository is private; only build artefacts are
-# published, never source:
+# `backend-v0.2.0-rc.1`):
 #
 #   * Linux x86-64 and ARM64 tarballs (binary + Admin UI + LICENSE + example
-#     systemd units) and SHA-256 checksums, uploaded to the private R2 bucket
-#     `playarr-client-downloads` and served same-origin by the playarr.app
-#     Worker under /downloads/server/ (see docs/deployment/playarr-cloudflare.md).
+#     systemd units) and SHA-256 checksums, attached to the GitHub release. If
+#     the Cloudflare R2 credentials exist they are also uploaded to R2 (the
+#     step skips when the secret is absent); see docs/deployment/playarr-cloudflare.md.
 #   * A multi-arch container image, ghcr.io/thomasmcfarlane/playarr-server,
 #     tagged <version> and `latest` (pre-releases only get the version tag),
 #     with an SBOM and provenance attestation. The GHCR package must be public
 #     for anonymous `docker pull`; see scripts/ghcr-make-public.sh.
 #
-# Everything is built by infra/docker/backend.Dockerfile on the self-hosted
-# `playarr-runners` pool. The Rust build cross-compiles natively on the x86-64 runner (no QEMU
+# Everything is built by infra/docker/backend.Dockerfile on GitHub-hosted
+# runners. The Rust build cross-compiles natively on the x86-64 runner (no QEMU
 # compile), so the tarball binary is byte-identical to the one in the image.
 # =============================================================================
 
@@ -42,7 +41,7 @@ env:
 jobs:
   build:
     name: Build binaries and image
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 150
     permissions:
       contents: read
@@ -176,7 +175,7 @@ jobs:
   publish:
     name: Publish downloads
     needs: build
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     # Holds the Cloudflare credentials used for the Android APK uploads.
     environment: release-android
@@ -188,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner image has no Node; wrangler (scripts/upload-server-release.sh) needs it.
+      # wrangler (scripts/upload-server-release.sh) needs Node.
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -224,7 +223,7 @@ jobs:
             > dist/latest.json
           cat dist/latest.json
 
-      - name: Create GitHub release (private repository)
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: Playarr Server ${{ env.VERSION }}

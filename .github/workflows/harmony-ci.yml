@@ -41,7 +41,7 @@ concurrency:
 jobs:
   build:
     name: Build the HarmonyOS NEXT package
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: release-harmony
     defaults:

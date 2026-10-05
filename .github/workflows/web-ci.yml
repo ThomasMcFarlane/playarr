@@ -27,7 +27,7 @@ jobs:
     concurrency:
       group: deploy-web-prod
       cancel-in-progress: false
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: production-playarr-web

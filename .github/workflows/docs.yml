@@ -48,7 +48,7 @@ concurrency:
 jobs:
   build:
     name: Build docs site
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -98,12 +98,11 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    # Pages is unavailable for this private repository on the current plan (the
-    # deployment API answers 404), so deploying is opt-in: set the repository
-    # variable PAGES_ENABLED=true once Pages is enabled. Until then this
-    # workflow is the strict MkDocs build check.
+    # Deploying is opt-in: enable Pages (Source = GitHub Actions) and set the
+    # repository variable PAGES_ENABLED=true. Until then this workflow is the
+    # strict MkDocs build check.
     if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
       name: github-pages

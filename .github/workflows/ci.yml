@@ -62,7 +62,7 @@ jobs:
   # ---------------------------------------------------------------------
   changes:
     name: Detect changed platforms
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -90,8 +90,8 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: scripts/ci/check-fragments.sh
 
-      - name: Reject GitHub-hosted runner labels
-        run: scripts/ci/check-no-hosted-runners.sh
+      - name: Require GitHub-hosted runner labels
+        run: scripts/ci/check-hosted-runners.sh
 
       # The repository is public: no hostnames, addresses, paths or pins of a
       # real deployment. Site-specific names come from a secret, never the tree.
@@ -146,7 +146,7 @@ jobs:
     name: Backend checks (fmt, clippy, test, deny)
     needs: changes
     if: needs.changes.outputs.rust == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
@@ -160,15 +160,6 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - uses: actions/checkout@v4
-
-      # The cluster runner image has no C toolchain, so linking and build
-      # scripts (openssl-sys, libsqlite3-sys) fail with "linker `cc` not found".
-      - name: Ensure C toolchain
-        run: |
-          if ! command -v cc >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq build-essential pkg-config libssl-dev
-          fi
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -230,7 +221,7 @@ jobs:
     name: Android build
     needs: changes
     if: needs.changes.outputs.android == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
       contents: read
@@ -262,8 +253,9 @@ jobs:
         run: ./gradlew $TASKS
 
   # ---------------------------------------------------------------------
-  # iOS validation runs only through the explicit/tag Apple release pipeline
-  # in ios-ci.yml. It is a manual release gate, not an automatic PR/main check.
+  # iOS and tvOS validation runs on macos-latest through the manual
+  # simulator-tests.yml workflow, and signed TestFlight releases through
+  # ios-release.yml. They are manual/tag gates, not automatic PR/main checks.
   # ---------------------------------------------------------------------
   # ---------------------------------------------------------------------
   # Xbox (clients/xbox -- .NET solution). Only src/Playarr.Core (the
@@ -279,7 +271,7 @@ jobs:
     name: Xbox core build & test
     needs: changes
     if: needs.changes.outputs.xbox == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -289,16 +281,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The self-hosted runner user cannot write to /usr/share/dotnet, so
-      # install the SDK under the per-job temp directory instead.
       - uses: actions/setup-dotnet@v4
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           dotnet-version: '8.0.x'
-
-      - name: Put the SDK on PATH
-        run: echo "$RUNNER_TEMP/dotnet" >> "$GITHUB_PATH"
 
       - uses: actions/cache@v4
         with:
@@ -326,7 +311,7 @@ jobs:
     name: HarmonyOS client checks (validate, core tests)
     needs: changes
     if: needs.changes.outputs.harmony == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -358,7 +343,7 @@ jobs:
     name: tv-web lint & typecheck
     needs: changes
     if: needs.changes.outputs.tv-web == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -406,7 +391,7 @@ jobs:
     name: OpenAPI contract diff
     needs: changes
     if: needs.changes.outputs.openapi == 'true'
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
       contents: read
@@ -444,7 +429,7 @@ jobs:
       - tv-web-check
       - openapi-contract-check
     if: always()
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify no required job failed

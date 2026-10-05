@@ -1,10 +1,9 @@
-# Builds the self-contained regional server image (server binary, Admin web
-# assets, ffmpeg/ffprobe) and pushes it, tagged with the first 8 characters of
-# the commit SHA, to the registry named by the repository variable
-# REGIONAL_IMAGE_REGISTRY (host[:port], reachable from the runner without
-# credentials). Without the variable the job is skipped. Image pins are
-# deployment values: roll out by setting regionalInstances.<name>.image in the
-# deployment values repository, never in this repository.
+# Builds the self-contained server image (server binary, Admin web assets,
+# ffmpeg/ffprobe) for every commit on main and pushes it to GitHub Container
+# Registry as ghcr.io/<owner>/playarr-regional:<first 8 characters of the SHA>.
+# The package starts private: make it public once (Package settings > Change
+# visibility) so it can be pulled anonymously. Deployment pins are deployment
+# values and are never committed to this repository.
 name: Regional image
 
 on:
@@ -26,26 +25,37 @@ permissions:
   contents: read
 
 env:
-  IMAGE: playarr-regional
-  REGISTRY: ${{ vars.REGIONAL_IMAGE_REGISTRY }}
+  IMAGE_NAME: playarr-regional
 
 jobs:
   image:
     name: Build and push
-    if: vars.REGIONAL_IMAGE_REGISTRY != ''
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: |
           set -euo pipefail
           tag="$(git rev-parse --short=8 HEAD)"
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/$owner/$IMAGE_NAME" >> "$GITHUB_ENV"
           docker build -f infra/docker/backend.Dockerfile \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-            -t "$IMAGE:$tag" .
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -t "ghcr.io/$owner/$IMAGE_NAME:$tag" .
 
       - name: Verify tools in the image
         run: |
@@ -56,10 +66,5 @@ jobs:
 
       - name: Push
         run: |
-          docker tag "$IMAGE:$TAG" "$REGISTRY/$IMAGE:$TAG"
-          docker push "$REGISTRY/$IMAGE:$TAG"
-          {
-            echo "Pushed \`playarr-regional:$TAG\` (from \`$GITHUB_SHA\`)."
-            echo
-            echo "Roll out by setting \`regionalInstances.<instance>.image\` to this tag in the deployment values repository (one instance at a time; never to an older image)."
-          } >> "$GITHUB_STEP_SUMMARY"
+          docker push "$IMAGE:$TAG"
+          echo "Pushed \`$IMAGE:$TAG\` (from \`$GITHUB_SHA\`)." >> "$GITHUB_STEP_SUMMARY"

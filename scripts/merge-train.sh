@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Merge train: lands pull requests labelled `ready` one at a time, oldest first.
 #
-# Equivalent of GitHub's native merge queue (unavailable for private repos on a
+# Equivalent of GitHub's native merge queue (unavailable for repositories on a
 # personal account). For each ready PR it:
 #   1. keeps the tested head untouched when it needs no change: main is merged in
 #      only when main's new commits touch the PR's files (CHANGELOG.md, TASKS.md,
@@ -295,9 +295,9 @@ $(git grep -lE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock' ':!*.snap' | head -10 | sed 
       return
     fi
 
-    # Owner rule: no GitHub-hosted runners, whatever CI says (the tree here is main merged with the PR).
-    if ! hosted_out=$(scripts/ci/check-no-hosted-runners.sh 2>&1); then
-      block "$pr" "The resulting tree targets a GitHub-hosted runner, which this repository forbids (use \`runs-on: playarr-runners\`):
+    # Public repository rule: GitHub-hosted runners only, whatever CI says (the tree here is main merged with the PR).
+    if ! hosted_out=$(scripts/ci/check-hosted-runners.sh 2>&1); then
+      block "$pr" "The resulting tree targets a runner that is not GitHub-hosted, which this public repository forbids (use \`runs-on: ubuntu-latest\`, \`windows-latest\` or \`macos-latest\`):
 
 \`\`\`
 $(printf '%s' "$hosted_out" | head -c 1500)

@@ -20,8 +20,7 @@
 #     credentials configured yet. The `build-and-package` job below sets up
 #     real Windows/MSBuild tooling but its actual restore/build/package/
 #     upload steps are TODO placeholders for that reason, same as
-#     ios-ci.yml's placeholders for the iOS release job (clients/ios has
-#     the identical "no signable target yet" problem). Replace the
+#     a placeholder pending a signing certificate. Replace the
 #     placeholders with real MSBuild/MSIX steps once Playarr.Xbox has a
 #     signing certificate and the packaging steps have been verified by
 #     hand at least once. See ci.yml's xbox-check job for the PR-time
@@ -47,7 +46,7 @@ jobs:
   # ---------------------------------------------------------------------
   core-check:
     name: Build & test Playarr.Core
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     defaults:
@@ -56,16 +55,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The self-hosted runner user cannot write to /usr/share/dotnet, so
-      # install the SDK under the per-job temp directory instead.
       - uses: actions/setup-dotnet@v4
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           dotnet-version: '8.0.x'
-
-      - name: Put the SDK on PATH
-        run: echo "$RUNNER_TEMP/dotnet" >> "$GITHUB_PATH"
 
       - name: dotnet build (Playarr.Core)
         run: dotnet build src/Playarr.Core/Playarr.Core.csproj
@@ -79,19 +71,16 @@ jobs:
   # Windows 10 SDK + the UWP workload, so this needs a Windows runner with
   # genuine checkout/toolchain-setup steps. The restore/build/package/
   # upload steps themselves are unverified TODO placeholders -- see the
-  # file header comment above for why, and ios-ci.yml for the identical
-  # pattern applied to the iOS release job.
+  # file header comment above for why.
   # ---------------------------------------------------------------------
   build-and-package:
-    name: Build & package UWP MSIX (placeholder)
+    name: Build UWP head (MSIX signing and publish are placeholders)
     needs: core-check
-    # DISABLED: GitHub-hosted runners are forbidden for this repository and no
-    # self-hosted Windows runner serves it (the org `windows-builders` group
-    # cannot be used by a personal-account repository). Re-enable by pointing
-    # `runs-on` at a Windows runner registered to this repository and removing
-    # the `if: false`. The job is an echo-only placeholder today.
-    if: false
-    runs-on: playarr-runners
+    # Runs on a GitHub-hosted Windows runner, which ships MSBuild, the Windows
+    # 10/11 SDKs and the UWP workload. It only reaches the (still placeholder)
+    # signing/packaging steps; it is enabled so the toolchain setup is
+    # exercised on every Xbox tag.
+    runs-on: windows-latest
     environment: release-xbox
     steps:
       - uses: actions/checkout@v4
@@ -116,17 +105,16 @@ jobs:
         run: |
           echo "TODO: decode a base64-encoded .pfx into a temporary file from a secret such as XBOX_SIGNING_CERT_BASE64 (does not exist yet), then import it so MSBuild can sign the MSIX package."
 
-      # TODO: once src/Playarr.Xbox exists with a valid UWP project and
-      # package manifest (Package.appxmanifest), replace with a real
-      # MSBuild invocation, e.g. (UNVERIFIED -- do not copy verbatim
-      # without testing on an actual Windows/UWP toolchain):
-      #   msbuild src/Playarr.Xbox/Playarr.Xbox.csproj `
-      #     /p:Configuration=Release /p:Platform=x64 `
-      #     /p:AppxBundlePlatforms=x64 /p:AppxPackageDir=artifacts/msix `
-      #     /p:AppxBundle=Always /p:UapAppxPackageBuildMode=StoreUpload
-      - name: Build & package MSIX (placeholder)
+      # Unsigned Release x64 build of the UWP head on the hosted Windows image
+      # (MSBuild, Windows SDK and the UWP workload are preinstalled). UNVERIFIED
+      # on a hosted runner: the first xbox-v* tag run is the proof. Signing and
+      # Store packaging (AppxBundle/StoreUpload) are added once a certificate exists.
+      - name: Build UWP head (unsigned)
+        shell: pwsh
         run: |
-          echo "TODO: msbuild src/Playarr.Xbox/Playarr.Xbox.csproj (Release, MSIX packaging) for tag ${env:GITHUB_REF_NAME}. Command above is unverified -- confirm against a real UWP toolchain before using it."
+          msbuild clients/xbox/src/Playarr.Xbox/Playarr.Xbox.csproj /restore `
+            /p:Configuration=Release /p:Platform=x64 `
+            /p:AppxPackageSigningEnabled=false /p:AppxBundle=Never
 
       # TODO: publish the signed MSIX -- to a GitHub release
       # (softprops/action-gh-release@v2, matching android-ci.yml), to

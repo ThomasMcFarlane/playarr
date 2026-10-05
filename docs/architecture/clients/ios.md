@@ -19,7 +19,7 @@ platform or App Store capability limits (for example binary OTA rules).
   (iOS 15.0), chosen because `PlayarrKit`/`PlayarrApp` lean on modern
   Swift Concurrency and Observation-framework APIs (`@Observable`) without
   back-compat shims.
-- **Build toolchain:** the Apple release runner currently builds with Xcode 26.5.
+- **Build toolchain:** the Apple release workflow builds with Xcode 26.5.
 - **tvOS:** a native SwiftUI/AVKit Apple TV app exists at `clients/apple-tv` and shares
   `PlayarrKit` with iOS. It has its own target and active App Store provisioning profile. Both
   Apple targets use the App Store Connect bundle identifier `app.playarr.ios` and are uploaded
@@ -143,7 +143,7 @@ platform's client from one command.
 `clients/ios/project.yml` is the iOS project source and generates the SwiftUI application project.
 The release workflow regenerates it, installs the pinned Google Cast 4.8.6 CocoaPod, and builds
 from the resulting workspace. The iOS and Apple TV targets both link the local `PlayarrKit`
-package. Release builds are signed and exported by the Apple runner.
+package. Release builds are signed and exported by the Apple release workflow.
 
 The signed-only TestFlight workflow has separately uploaded both platforms as marketing version
 `1.0.0`. iOS build `11.1` was built from immutable source commit

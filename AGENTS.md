@@ -62,24 +62,23 @@ Do not keep a list of forbidden titles in the repository: such a list would itse
   generic IPv4 examples go in `scripts/ci/env-data-allowlist.txt`.
 - Kubernetes manifests and Helm charts here are generic templates with neutral defaults
   (`infra/kubernetes/helm/playarr-dev` renders nothing on its own; its README lists the values).
-  The real deployment values, including the regional image pins, live in the private GitOps
-  repository (the application's `values.yaml` there), which an Argo CD
-  multi-source Application applies on top of the chart.
-- Regional image rollout: the `regional-image` workflow pushes `playarr-regional:<sha8>` for each
-  `main` commit (registry from the repository variable `REGIONAL_IMAGE_REGISTRY`). To roll out,
-  open a PR in the GitOps repository that sets `regionalInstances.<instance>.image` to that tag,
-  one instance at a time, then confirm Argo is Synced/Healthy and the rollout finished. No Playarr
-  PR is needed and none goes through the merge train. Check the current pins first and never move
-  a pin to an older image; if a newer pin already contains your commit, verify instead of bumping.
-- Bump the chart `targetRevision` in the GitOps repository only when the chart templates changed,
-  to a full `main` merge SHA, after rendering the chart at that SHA with the deployment values and
-  confirming the manifests change only as intended.
+  Deployment of the server (values, image pins, rollouts) is out of scope of this repository.
+- The `regional-image` workflow publishes `ghcr.io/<owner>/playarr-regional:<sha8>` for each
+  `main` commit. Consumers pin an image tag in their own deployment configuration; never move a
+  pin to an older image.
+
+## Runners
+
+This repository is public: every workflow job runs on a GitHub-hosted runner (`ubuntu-latest`,
+`windows-latest` or `macos-latest`). Never add a self-hosted runner, a runner group or a
+`runs-on` expression. `scripts/ci/check-hosted-runners.sh` enforces this in CI and in the merge
+train.
 
 ## Merging: the merge train
 
 Pull requests are landed by the merge train (`.github/workflows/merge-train.yml`,
-`scripts/merge-train.sh`), not by hand. It replaces GitHub's merge queue, which private
-repositories on a personal account do not get.
+`scripts/merge-train.sh`), not by hand. It replaces GitHub's merge queue, which repositories
+on a personal account do not get.
 
 - **Agents: when your PR is finished and its local checks pass, add the label `ready` and stop.**
   Do not wait for CI to merge it and do not merge it manually (never `--admin`). Move on to
@@ -103,8 +102,9 @@ repositories on a personal account do not get.
   while the train is down, which means the `Merge train` workflow is failing or disabled.
 - Dry run: Actions > Merge train > Run workflow (default `dry_run: true`, optional `pr`) merges main
   locally and reports what it would do without pushing, labelling, commenting or merging.
-- Owner one-off for the best behaviour: store a write deploy key as the secret `TRAIN_DEPLOY_KEY`
-  (a helper script is provided in the hand-off). With it, the train's pushes and landings trigger CI
+- Owner one-off for the best behaviour: create a new write deploy key for this repository and store
+  its private half as the secret `TRAIN_DEPLOY_KEY` (deploy keys do not carry over from another
+  repository). With it, the train's pushes and landings trigger CI
   and the deploy workflows natively. Without it the train still works using `GITHUB_TOKEN`, starting
   CI via `workflow_dispatch` and dispatching post-merge workflows itself; it cannot push a merge that
   brings in `.github/workflows` changes (it blocks with an explanation) and it does not start the

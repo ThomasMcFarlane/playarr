@@ -30,7 +30,7 @@ permissions:
 jobs:
   update-compat-floor:
     name: Propose client-compatibility.toml update
-    runs-on: playarr-runners
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:

@@ -41,7 +41,7 @@ if [[ "$mode" == archive || "$mode" == export || "$mode" == testflight ]]; then
   profile_base64="${!profile_secret:-}"
   [[ -n "$profile_base64" ]] || fail "Missing $profile_secret"
   : "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}"
-  [[ "${RUNNER_ENVIRONMENT:-}" == self-hosted ]] || fail "signing/upload require the private authorised Apple runner"
+  [[ "${GITHUB_ACTIONS:-}" == true ]] || fail "signing/upload run only inside the release-ios GitHub Actions environment"
   if [[ "$mode" == testflight ]]; then
     : "${APP_STORE_CONNECT_API_KEY_ID:?Missing APP_STORE_CONNECT_API_KEY_ID}"
     : "${APP_STORE_CONNECT_ISSUER_ID:?Missing APP_STORE_CONNECT_ISSUER_ID}"

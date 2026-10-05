@@ -8,27 +8,16 @@ end-to-end Cast operation.
 
 ## Release path
 
-The source-side workflow is [iOS build and release dispatch](https://github.com/ThomasMcFarlane/playarr/blob/main/.github/workflows/ios-ci.yml).
-It accepts a manual dispatch on `main` or an `ios-v*` tag and forwards an immutable full source SHA
-to the Apple release pipeline. The private signed Apple release workflow
-checks that the source commit is reachable from Playarr `main`, regenerates both native Xcode
-projects, installs the pinned CocoaPods dependency, then signs, exports, and uploads iOS and tvOS.
-There is no unsigned or build-only release mode in this workflow. Historical unsigned build runs
-only validate development tooling; they are not release evidence.
+The workflow is [Apple signed release](https://github.com/ThomasMcFarlane/playarr/blob/main/.github/workflows/ios-release.yml),
+which runs on a GitHub-hosted macOS runner. It accepts an `ios-v*` tag or a manual dispatch,
+checks that the commit is reachable from `main`, regenerates both native Xcode projects, installs
+the pinned CocoaPods dependency, then signs, exports, and uploads iOS and tvOS. There is no
+unsigned or build-only release mode in this workflow.
 
-For a manual source dispatch, use the full source SHA (or leave it empty to use the selected `main`
-commit), a three-part numeric marketing version, and a fresh unique Apple-valid build number. The
-private workflow also accepts `source_repository`, `source_sha`, `marketing_version`, and
-`build_number` directly. Its automatic build-number fallback is the workflow run number and attempt.
-
-### Owner setup for source-side dispatch
-
-The `APPLE_DISPATCH_TOKEN` GitHub Actions secret is already configured, and the credential is also
-provisioned as an out-of-band Kubernetes Secret. The existing OAuth token is broader than a
-dedicated dispatch credential. At the next planned rotation, replace it with a short-lived,
-least-privilege token limited to dispatching the private Apple workflow, then update both secret
-stores without exposing its value. The private workflow holds the signing and App Store Connect
-credentials; the source workflow uses its dispatch credential only to request an authorised build.
+For a manual dispatch, use an optional full source SHA (default: the selected ref), a three-part
+numeric marketing version, and a fresh unique Apple-valid build number (default: the workflow run
+number and attempt). Signing and App Store Connect credentials live in the `release-ios`
+environment; see [the setup list](../ios/TESTFLIGHT.md).
 
 ## Verified internal TestFlight state
 

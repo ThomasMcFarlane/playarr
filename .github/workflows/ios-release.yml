@@ -1,0 +1,141 @@
+# Signed iOS and tvOS TestFlight release, built in this repository on GitHub-hosted macOS
+# runners. Runs on an `ios-v*` tag or by manual dispatch. Signing and App Store Connect secrets
+# live in the `release-ios` environment (never repository-wide). No signing material is committed.
+name: Apple signed release
+
+on:
+  push:
+    tags: ['ios-v*']
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Optional full commit SHA to release (default - the selected ref)
+        type: string
+        required: false
+      marketing_version:
+        description: Optional numeric three-part version; defaults to the tag version or 1.0.0
+        type: string
+        required: false
+      build_number:
+        description: Optional unique Apple-valid build number; defaults to run number and attempt
+        type: string
+        required: false
+      platform:
+        description: Platforms to release; choose tvOS to retry its upload without repeating iOS
+        required: true
+        type: choice
+        options:
+          - both
+          - ios
+          - tvos
+        default: both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playarr-apple-release-${{ inputs.source_sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  signed-testflight:
+    name: Sign, export and upload iOS and tvOS to TestFlight
+    environment: release-ios
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Validate the request
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          PLATFORM_INPUT: ${{ inputs.platform }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$SOURCE_SHA" ]]; then
+            [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'source_sha must be a full 40-character commit SHA.' >&2; exit 2; }
+          fi
+          platform="${PLATFORM_INPUT:-both}"
+          [[ "$platform" == both || "$platform" == ios || "$platform" == tvos ]] || { echo 'platform must be both, ios, or tvos.' >&2; exit 2; }
+          echo "RELEASE_PLATFORM=$platform" >> "$GITHUB_ENV"
+
+      - name: Preflight required signing credentials
+        env:
+          APPLE_DISTRIBUTION_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          APPLE_DISTRIBUTION_P12_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TVOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_TVOS_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_DISTRIBUTION_P12_BASE64 APPLE_DISTRIBUTION_P12_PASSWORD APPLE_TEAM_ID APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_API_KEY_BASE64; do
+            if [[ -z "${!name:-}" ]]; then echo "Missing required release-ios environment secret: $name" >&2; exit 2; fi
+          done
+          if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == ios ]]; then
+            [[ -n "$APPLE_PROVISIONING_PROFILE_BASE64" ]] || { echo 'Missing required release-ios environment secret: APPLE_PROVISIONING_PROFILE_BASE64' >&2; exit 2; }
+          fi
+          if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == tvos ]]; then
+            [[ -n "$APPLE_TVOS_PROVISIONING_PROFILE_BASE64" ]] || { echo 'Missing required release-ios environment secret: APPLE_TVOS_PROVISIONING_PROFILE_BASE64' >&2; exit 2; }
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Confirm the commit is on main
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main || { echo 'Signed releases require a commit reachable from main.' >&2; exit 2; }
+
+      - name: Confirm both app targets use the shared App Store Connect bundle ID
+        run: |
+          set -euo pipefail
+          grep -Fq 'PRODUCT_BUNDLE_IDENTIFIER: app.playarr.ios' clients/ios/project.yml
+          grep -Fq 'PRODUCT_BUNDLE_IDENTIFIER: app.playarr.ios' clients/apple-tv/project.yml
+
+      - name: Prepare generated Xcode project and CocoaPods workspace
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Set validated release version and build number
+        env:
+          VERSION_INPUT: ${{ inputs.marketing_version }}
+          BUILD_INPUT: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          tag_version=''
+          if [[ "${GITHUB_REF_TYPE}" == tag ]]; then tag_version="${GITHUB_REF_NAME#ios-v}"; fi
+          version="${VERSION_INPUT:-${tag_version:-1.0.0}}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Marketing version must be numeric major.minor.patch.' >&2; exit 2; }
+          build="${BUILD_INPUT:-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}}"
+          [[ "$build" =~ ^[1-9][0-9]{0,3}(\.[1-9][0-9]?)?$ ]] || { echo 'Build number must have Apple-valid components from 1 through 9999 with an optional .1-.99 suffix.' >&2; exit 2; }
+          echo "MARKETING_VERSION=$version" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$build" >> "$GITHUB_ENV"
+          echo "IOS_ARCHIVE_PATH=$RUNNER_TEMP/Playarr-signed.xcarchive" >> "$GITHUB_ENV"
+          echo "IOS_EXPORT_PATH=$RUNNER_TEMP/Playarr-export" >> "$GITHUB_ENV"
+          echo "TVOS_ARCHIVE_PATH=$RUNNER_TEMP/PlayarrTV-signed.xcarchive" >> "$GITHUB_ENV"
+          echo "TVOS_EXPORT_PATH=$RUNNER_TEMP/PlayarrTV-export" >> "$GITHUB_ENV"
+
+      - name: Sign, export IPA and upload once
+        env:
+          APPLE_DISTRIBUTION_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          APPLE_DISTRIBUTION_P12_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TVOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_TVOS_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == ios ]]; then
+            ARCHIVE_PATH="$IOS_ARCHIVE_PATH" EXPORT_PATH="$IOS_EXPORT_PATH" bash clients/ios/scripts/release.sh testflight ios
+          fi
+          if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == tvos ]]; then
+            ARCHIVE_PATH="$TVOS_ARCHIVE_PATH" EXPORT_PATH="$TVOS_EXPORT_PATH" bash clients/ios/scripts/release.sh testflight tvos
+          fi
