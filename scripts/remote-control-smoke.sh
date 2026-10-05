@@ -19,20 +19,14 @@
 # Usage:
 #   scripts/remote-control-smoke.sh [https://server:port]
 #
-# Credentials come from the environment or ~/.playarr-test.env
-# (TEST_SERVER, TEST_USERNAME, TEST_PASSWORD) and are never printed.
+# Credentials must be exported explicitly in the environment (TEST_SERVER,
+# TEST_USERNAME, TEST_PASSWORD); no env file is read and they are never printed.
 # Optional: SMOKE_COMMANDS (default 10), COMMAND_P95_MS (300), HANDOFF_MS (5000),
 # MEDIA_FILE_ID (otherwise the first movie in the catalogue is used).
 # Exit status is non-zero when a budget is exceeded or a step fails.
 
 set -euo pipefail
 
-if [[ -z "${TEST_USERNAME:-}" && -f "$HOME/.playarr-test.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "$HOME/.playarr-test.env"
-  set +a
-fi
 SERVER="${1:-${TEST_SERVER:-}}"
 if [[ -z "$SERVER" || -z "${TEST_USERNAME:-}" || -z "${TEST_PASSWORD:-}" ]]; then
   echo "usage: $0 https://server:port (with TEST_USERNAME/TEST_PASSWORD set)" >&2

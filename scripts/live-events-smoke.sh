@@ -9,12 +9,9 @@
 # its previous state afterwards.
 #
 # Usage: scripts/live-events-smoke.sh https://server:port
-# Credentials: TEST_USERNAME / TEST_PASSWORD from the environment or
-# ~/.playarr-test.env; never printed. Optional: MEDIA_FILE_ID, BUDGET_MS (1000).
+# Credentials: TEST_USERNAME / TEST_PASSWORD must be exported explicitly in the
+# environment (no env file is read); never printed. Optional: MEDIA_FILE_ID, BUDGET_MS (1000).
 set -euo pipefail
-if [[ -z "${TEST_USERNAME:-}" && -f "$HOME/.playarr-test.env" ]]; then
-  set -a; . "$HOME/.playarr-test.env"; set +a
-fi
 SERVER="${1:-${TEST_SERVER:-}}"
 [[ -n "$SERVER" && -n "${TEST_USERNAME:-}" && -n "${TEST_PASSWORD:-}" ]] || { echo "usage: $0 https://server:port" >&2; exit 2; }
 export SERVER
