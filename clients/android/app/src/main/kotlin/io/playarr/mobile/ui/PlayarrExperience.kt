@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CastConnected
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
@@ -601,6 +602,11 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     private val _availableKinds = MutableStateFlow<Set<WorkKind>?>(null)
     val availableKinds: StateFlow<Set<WorkKind>?> = _availableKinds.asStateFlow()
 
+    private val _hasFolders = MutableStateFlow(false)
+
+    /** Whether at least one unsorted-folders root is browsable by this account (shows the Folders destination). */
+    val hasFolders: StateFlow<Boolean> = _hasFolders.asStateFlow()
+
     private val _canDownload = MutableStateFlow<Boolean?>(null)
     val canDownload: StateFlow<Boolean?> = _canDownload.asStateFlow()
 
@@ -690,6 +696,9 @@ internal class PlayarrExperienceViewModel @Inject constructor(
     }
 
     private fun loadAvailableKinds() {
+        viewModelScope.launch {
+            _hasFolders.value = runCatching { api.listFolderRoots().roots.isNotEmpty() }.getOrDefault(false)
+        }
         viewModelScope.launch {
             _availableKinds.value = when (val result = listCatalogKinds()) {
                 is PlayarrResult.Success -> result.value.toSet()
@@ -1128,6 +1137,8 @@ internal data class ExperienceDestination(
     val label: PlayarrString,
     val icon: ImageVector,
     val kind: WorkKind? = null,
+    /** Hidden until an administrator has enabled at least one folder this account may browse. */
+    val requiresFolders: Boolean = false,
 )
 
 internal enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
@@ -1141,6 +1152,7 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("movies", PlayarrString.NavMovies, Icons.Outlined.Movie, WorkKind.Movie),
     ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
+    ExperienceDestination("folders", PlayarrString.NavFolders, Icons.Outlined.Folder, requiresFolders = true),
     ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
     ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
     ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.Bookmark),
@@ -1150,12 +1162,14 @@ internal val experienceDestinations = listOf(
 internal fun visibleExperienceDestinations(
     availableKinds: Set<WorkKind>?,
     canDownload: Boolean?,
+    hasFolders: Boolean = false,
 ): List<ExperienceDestination> = if (availableKinds == null) {
     emptyList()
 } else {
     experienceDestinations.filter { destination ->
         (destination.kind == null || availableKinds.contains(destination.kind)) &&
-            (destination.route != "downloads" || canDownload == true)
+            (destination.route != "downloads" || canDownload == true) &&
+            (!destination.requiresFolders || hasFolders)
     }
 }
 
@@ -1163,7 +1177,7 @@ internal fun televisionDestinationGroups(
     destinations: List<ExperienceDestination>,
 ): List<List<ExperienceDestination>> = listOf(
     destinations.filter { it.route in setOf("downloads", "search") },
-    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "calendar") },
+    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "folders", "calendar") },
     destinations.filter { it.route == "playlists" || it.route == "watchlist" || it.route == "requests" },
 ).filter(List<ExperienceDestination>::isNotEmpty)
 
@@ -1262,6 +1276,7 @@ internal fun PlayarrExperience(
     val profileAvatar by viewModel.profileAvatar.collectAsState()
     val availableKinds by viewModel.availableKinds.collectAsState()
     val canDownload by viewModel.canDownload.collectAsState()
+    val hasFolders by viewModel.hasFolders.collectAsState()
     val playbackQueue by viewModel.playbackQueue.collectAsState()
     val persistentPlayerState by playerViewModel.state.collectAsState()
     val playbackState by playerViewModel.player.state.collectAsState()
@@ -1484,7 +1499,7 @@ internal fun PlayarrExperience(
             }
 
             if (!isPlayer && !isProfiles && householdBlock == null) {
-                val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload)
+                val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload, hasFolders)
                 if (visibleDestinations.isNotEmpty()) {
                     ExperienceNavigation(
                         destinations = visibleDestinations,
@@ -2018,6 +2033,33 @@ private fun ExperienceNavHost(
                 )
             }
         }
+        // `folders?query=root%3D<id>%26path%3DSeason%2520A` seeds the folder view's SavedStateHandle with the exact
+        // query string the web Folders page puts in its URL.
+        composable(
+            route = "folders?query={query}",
+            arguments = listOf(
+                navArgument("query") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+            deepLinks = listOf(navDeepLink { uriPattern = "playarr://app/folders?query={query}" }),
+        ) {
+            ExperienceOnlineGate(isOnline, isTelevision, "folders") {
+                ExperienceFoldersScreen(
+                    serverUrl = serverUrl,
+                    accessToken = accessToken,
+                    isTelevision = isTelevision,
+                    onBack = { navController.openExperienceTopLevel("home") },
+                    onPlay = { entry, queue ->
+                        val mediaFileId = entry.mediaFileId ?: return@ExperienceFoldersScreen
+                        viewModel.startPlayback(mediaFileId, queue)
+                        navController.navigate("experience-player/${Uri.encode(mediaFileId)}")
+                    },
+                )
+            }
+        }
         composable("watchlist") {
             ExperienceOnlineGate(isOnline, isTelevision, "watchlist") {
                 ExperienceWatchlistScreen(
@@ -2113,7 +2155,7 @@ internal fun restorableExperienceRoute(
     val base = route?.substringBefore('?')
     return when {
         base in libraryRoutes -> libraryRouteFor(base!!, library)
-        base in setOf("home", "search", "calendar", "playlists", "watchlist", "requests", "settings", "downloads") -> base
+        base in setOf("home", "search", "calendar", "folders", "playlists", "watchlist", "requests", "settings", "downloads") -> base
         route == "experience-detail/{workId}?mediaFileId={mediaFileId}" -> workId?.takeIf(String::isNotBlank)?.let { id ->
             buildString {
                 append("experience-detail/")
@@ -7193,7 +7235,7 @@ internal fun AuthenticatedArtwork(
 }
 
 @Composable
-private fun AuthenticatedMediaThumbnail(
+internal fun AuthenticatedMediaThumbnail(
     mediaFileId: String,
     serverUrl: String,
     accessToken: String?,

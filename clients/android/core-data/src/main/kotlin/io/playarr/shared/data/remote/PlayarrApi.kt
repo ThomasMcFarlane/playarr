@@ -4,6 +4,8 @@ import io.playarr.shared.data.model.AvailabilityLag
 import io.playarr.shared.data.model.CalendarFeedCreated
 import io.playarr.shared.data.model.CalendarFeedStatus
 import io.playarr.shared.data.model.CalendarResponse
+import io.playarr.shared.data.model.FolderBrowseResponse
+import io.playarr.shared.data.model.FolderRootsResponse
 import io.playarr.shared.data.model.CatalogPage
 import io.playarr.shared.data.model.HomeRailsResponse
 import io.playarr.shared.data.model.RailPreferences
@@ -208,6 +210,28 @@ interface PlayarrApi {
      */
     @GET("api/v1/catalog/{id}/availability-lag")
     suspend fun getAvailabilityLag(@Path("id") id: String): AvailabilityLag
+
+    // ---- unsorted folders ---------------------------------------------------
+
+    /** `GET /api/v1/folders/roots` -- path-free root folders the caller may browse, optionally for one library kind. */
+    @GET("api/v1/folders/roots")
+    suspend fun listFolderRoots(@Query("kind") kind: String? = null): FolderRootsResponse
+
+    /**
+     * `GET /api/v1/folders/roots/{root_id}/browse` -- one directory level: sub-directories first, then media
+     * files. [sort] is `name|modified|size|duration`, [order] `asc|desc`, [type] `all|directories|media`.
+     */
+    @GET("api/v1/folders/roots/{root_id}/browse")
+    suspend fun browseFolder(
+        @Path("root_id") rootId: String,
+        @Query("path") path: String? = null,
+        @Query("q") q: String? = null,
+        @Query("sort") sort: String? = null,
+        @Query("order") order: String? = null,
+        @Query("type") type: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null,
+    ): FolderBrowseResponse
 
     // ---- calendar ------------------------------------------------------------
 
