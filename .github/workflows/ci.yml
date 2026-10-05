@@ -71,10 +71,10 @@ jobs:
       rust: ${{ steps.scope.outputs.rust_scope != 'none' }}
       rust_scope: ${{ steps.scope.outputs.rust_scope }}
       openapi: ${{ steps.scope.outputs.openapi }}
-      android: ${{ steps.filter.outputs.android }}
-      xbox: ${{ steps.filter.outputs.xbox }}
-      harmony: ${{ steps.filter.outputs.harmony }}
-      tv-web: ${{ steps.filter.outputs.tv-web }}
+      android: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.android == 'true' }}
+      xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
+      harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
+      tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +88,14 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: scripts/ci/check-fragments.sh
+
+      # Nightly and post-merge dispatches on main validate everything.
+      - name: Full run?
+        id: all
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = schedule ] || { [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF_NAME" = main ]; }; then
+            echo full=true >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select affected Rust crates
         id: scope

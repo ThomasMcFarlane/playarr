@@ -1,1 +1,0 @@
-- CI: CHANGELOG.md and TASKS.md are no longer edited in PRs. Per-change fragments (`changelog.d/`, `tasks.d/`) are folded by the merge train (`scripts/fold-fragments.mjs`), and CI rejects direct edits (TASKS 331).

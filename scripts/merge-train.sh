@@ -265,8 +265,9 @@ main() {
     fi
     process "$pr"
     # A PR waiting on CI holds the head of the queue: stop instead of holding a runner.
-    [ "$STOP" = true ] && break
+    if [ "$STOP" = true ]; then break; fi
   done
+  exit 0
 }
 
 main "$@"

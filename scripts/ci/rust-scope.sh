@@ -20,9 +20,13 @@ if [ -z "${CHANGED_FILES:-}" ]; then
     pull_request | workflow_dispatch) ;;
     *) full ;;
   esac
+  # A manual/train dispatch on main (post-merge validation) is a full run.
+  [ "${EVENT_NAME:-}" = workflow_dispatch ] && [ "${GITHUB_REF_NAME:-}" = main ] && full
   base="${BASE_REF:-main}"
   git fetch -q --no-tags origin "$base" 2>/dev/null || full
-  head=$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD)
+  # Pull requests check out a merge ref (second parent is the PR head); a dispatch checks out the
+  # branch head itself, which may be a train merge commit, so never take ^2 there.
+  if [ "${EVENT_NAME:-}" = pull_request ]; then head=$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD); else head=$(git rev-parse HEAD); fi
   CHANGED_FILES=$(git diff --name-only "origin/$base...$head") || full
 fi
 
