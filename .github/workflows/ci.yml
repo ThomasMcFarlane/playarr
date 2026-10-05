@@ -33,6 +33,13 @@ on:
   push:
     branches:
       - main
+  # Started by the merge train (scripts/merge-train.sh) for branches it pushed
+  # with GITHUB_TOKEN, whose pushes trigger no workflows. Also usable by hand.
+  workflow_dispatch:
+  # Nightly full run of everything (no affected-only selection) to catch drift
+  # that a narrowed PR run could miss.
+  schedule:
+    - cron: '17 2 * * *'
 
 concurrency:
   # PRs share one group per PR number and are cancelled by newer pushes. Every
@@ -56,25 +63,36 @@ jobs:
   changes:
     name: Detect changed platforms
     runs-on: playarr-runners
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
+      rust: ${{ steps.scope.outputs.rust_scope != 'none' }}
+      rust_scope: ${{ steps.scope.outputs.rust_scope }}
+      openapi: ${{ steps.scope.outputs.openapi }}
       android: ${{ steps.filter.outputs.android }}
       xbox: ${{ steps.filter.outputs.xbox }}
       harmony: ${{ steps.filter.outputs.harmony }}
       tv-web: ${{ steps.filter.outputs.tv-web }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Affected-only Rust selection (changed crates plus dependents; shared
+      # inputs and every non-PR event select the full workspace).
+      - name: Select affected Rust crates
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: scripts/ci/rust-scope.sh | tee -a "$GITHUB_OUTPUT"
 
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            rust:
-              - 'backend/**'
-              - '.github/workflows/ci.yml'
             android:
               - 'clients/android/**'
               - '.github/workflows/ci.yml'
@@ -94,6 +112,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 45
     permissions:
       contents: read
     defaults:
@@ -138,10 +157,18 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: cargo clippy (warnings denied)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        env:
+          SCOPE: ${{ needs.changes.outputs.rust_scope }}
+        run: |
+          if [ "$SCOPE" = full ]; then pkgs=--workspace; else pkgs="$SCOPE"; fi
+          cargo clippy $pkgs --all-targets --all-features -- -D warnings
 
       - name: cargo test
-        run: cargo test --workspace --all-features
+        env:
+          SCOPE: ${{ needs.changes.outputs.rust_scope }}
+        run: |
+          if [ "$SCOPE" = full ]; then pkgs=--workspace; else pkgs="$SCOPE"; fi
+          cargo test $pkgs --all-features
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
@@ -159,6 +186,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.android == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 50
     permissions:
       contents: read
     steps:
@@ -203,6 +231,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.xbox == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -249,6 +278,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.harmony == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 15
     permissions:
       contents: read
     defaults:
@@ -280,6 +310,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.tv-web == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -325,8 +356,9 @@ jobs:
   openapi-contract-check:
     name: OpenAPI contract diff
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.openapi == 'true'
     runs-on: playarr-runners
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -365,6 +397,7 @@ jobs:
       - openapi-contract-check
     if: always()
     runs-on: playarr-runners
+    timeout-minutes: 5
     steps:
       - name: Verify no required job failed
         env:
