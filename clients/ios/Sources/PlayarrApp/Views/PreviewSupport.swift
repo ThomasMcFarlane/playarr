@@ -8,11 +8,11 @@ struct PreviewAPIClient: PlayarrAPIClient {
 
     private static let works: [Work] = [
         sample("Voyage", kind: .movie, id: "00000000-0000-0000-0000-000000000001", genres: ["Science Fiction", "Drama"]),
-        sample("Test Series Beta", kind: .series, id: "00000000-0000-0000-0000-000000000002", genres: ["Drama", "Mystery"]),
+        sample("Series Beta", kind: .series, id: "00000000-0000-0000-0000-000000000002", genres: ["Drama", "Mystery"]),
         sample("Sample Title: Part Two", kind: .movie, id: "00000000-0000-0000-0000-000000000003", genres: ["Science Fiction"]),
         sample("Test Series H", kind: .series, id: "00000000-0000-0000-0000-000000000004", genres: ["Science Fiction"]),
         sample("Massive Attack", kind: .artist, id: "00000000-0000-0000-0000-000000000005", genres: ["Trip-hop"]),
-        sample("Sample Movie 2049", kind: .movie, id: "00000000-0000-0000-0000-000000000006", genres: ["Science Fiction", "Thriller"]),
+        sample("Sample Runner 2049", kind: .movie, id: "00000000-0000-0000-0000-000000000006", genres: ["Science Fiction", "Thriller"]),
     ]
 
     private static func sample(_ title: String, kind: WorkKind, id: String, genres: [String]) -> Work {

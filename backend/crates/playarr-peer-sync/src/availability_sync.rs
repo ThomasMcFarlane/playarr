@@ -245,8 +245,8 @@ mod tests {
 
     #[test]
     fn fallback_identity_normalizes_case_and_whitespace() {
-        let a = fallback_identity(WorkKind::Movie, "  Sample Movie Kilo  ", None);
-        let b = fallback_identity(WorkKind::Movie, "sample movie kilo", None);
+        let a = fallback_identity(WorkKind::Movie, "  The Sample Movie  ", None);
+        let b = fallback_identity(WorkKind::Movie, "the sample movie", None);
         assert_eq!(a, b);
     }
 
@@ -419,7 +419,7 @@ mod tests {
                 provider: ExternalProvider::Tmdb,
                 external_id: "603".to_string(),
             }],
-            "Sample Movie Kilo",
+            "The Sample Movie",
         )]));
 
         let row = availability_row(
@@ -442,7 +442,7 @@ mod tests {
                 provider: ExternalProvider::Imdb,
                 external_id: "tt0133093".to_string(),
             }],
-            "Sample Movie Kilo",
+            "The Sample Movie",
         );
         local.release_date = Some("1999-03-31T00:00:00Z".parse().unwrap());
         let repo: Arc<dyn WorkRepo> = Arc::new(InMemoryWorkRepo::seeded(vec![local]));
@@ -451,8 +451,12 @@ mod tests {
         // title (it only knows the same movie via `Imdb`) -- the exact-ref
         // match must miss, and the title/year fallback must still resolve
         // it.
-        let mut row =
-            availability_row(ExternalProvider::Tmdb, "603", WorkKind::Movie, "sample movie kilo");
+        let mut row = availability_row(
+            ExternalProvider::Tmdb,
+            "603",
+            WorkKind::Movie,
+            "the sample movie",
+        );
         row.release_date = Some("1999-01-01T00:00:00Z".parse().unwrap());
         let resolved = resolve_local_work(&repo, &row).await.unwrap();
         assert_eq!(resolved, Some(work_id));
@@ -520,7 +524,7 @@ mod tests {
                 provider: ExternalProvider::Tmdb,
                 external_id: "603".to_string(),
             }],
-            "Sample Movie Kilo",
+            "The Sample Movie",
         )]));
         let availability_repo = availability_repo().await;
         let sync_state_repo: Arc<dyn playarr_db::PeerSyncStateRepo> = {
@@ -539,12 +543,12 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "rows": [{
                     "media_file_id": Uuid::new_v4(), "source_instance_id": Uuid::new_v4(),
-                    "path": "/media/movies/Sample Movie Kilo.mkv",
+                    "path": "/media/movies/The Sample Movie.mkv",
                     "provider": "tmdb", "external_id": "603", "leaf_selector": "movie",
                     "group_library_id": null, "availability": "available",
                     "container": "mkv", "codec": "h264", "bitrate": 8000000,
                     "size_bytes": 1000000000_u64, "duration_ms": 7200000,
-                    "updated_at": Utc::now(), "title": "Sample Movie Kilo", "kind": "movie",
+                    "updated_at": Utc::now(), "title": "The Sample Movie", "kind": "movie",
                     "release_date": null,
                 }],
                 "server_time": "cursor-1",

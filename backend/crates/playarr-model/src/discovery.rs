@@ -533,7 +533,7 @@ mod tests {
     fn key_falls_back_to_normalised_title_and_year() {
         assert_eq!(
             identity_key(DiscoveryKind::Movie, "The Test Film!", Some(2008), &[]),
-            "title:movie:darkknight:2008"
+            "title:movie:testfilm:2008"
         );
     }
 
@@ -674,7 +674,7 @@ mod tests {
         let refs = vec![r(ExternalProvider::Tmdb, "78")];
         let a = cand(
             DiscoveryKind::Movie,
-            "Blade Runner",
+            "Sample Runner",
             Some(1982),
             refs.clone(),
             SourceKindTag::Library,
@@ -682,7 +682,7 @@ mod tests {
         );
         let b = cand(
             DiscoveryKind::Movie,
-            "Blade Runner",
+            "Sample Runner",
             Some(1982),
             refs,
             SourceKindTag::Library,

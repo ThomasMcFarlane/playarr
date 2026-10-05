@@ -51,8 +51,8 @@ class PlayarrJsonModelTest {
               "id": "11111111-1111-1111-1111-111111111111",
               "kind": "movie",
               "external_refs": [{"provider": "tmdb", "external_id": "603"}],
-              "title": "Sample Movie Kilo",
-              "sort_title": "Matrix, The",
+              "title": "The Sample Movie",
+              "sort_title": "Sample Movie, The",
               "overview": "A hacker learns the truth.",
               "images": [{"kind": "poster", "url": "https://example.com/poster.jpg", "width": 500, "height": 750}],
               "genres": ["Action", "Sci-Fi"],
@@ -65,7 +65,7 @@ class PlayarrJsonModelTest {
             """.trimIndent(),
         )
 
-        assertEquals("Matrix, The", work.sortTitle)
+        assertEquals("Sample Movie, The", work.sortTitle)
         assertEquals(WorkKind.Movie, work.kind)
         assertEquals(Availability.Available, work.availability)
         assertEquals(ExternalProvider.Tmdb, work.externalRefs.single().provider)

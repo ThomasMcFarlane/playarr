@@ -26,7 +26,7 @@ use crate::AppState;
             "eventType": "SeriesAdd",
             "series": {
                 "id": 42,
-                "title": "Test Series T",
+                "title": "Test Series D",
                 "tvdbId": 275908
             }
         })

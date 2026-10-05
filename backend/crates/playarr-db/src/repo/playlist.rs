@@ -398,7 +398,7 @@ mod tests {
         let pool = test_sqlite_pool().await;
         let repo = SqlxPlaylistRepo::new(pool);
         let user_id = Uuid::new_v4();
-        let playlist = sample_playlist("MCU", Some(user_id));
+        let playlist = sample_playlist("SCU", Some(user_id));
 
         repo.upsert(&playlist).await.expect("upsert");
         let fetched = repo.get(playlist.id).await.expect("get");
@@ -470,10 +470,10 @@ mod tests {
         let repo = SqlxPlaylistRepo::new(pool);
         let user_id = Uuid::new_v4();
 
-        let mut parent = sample_playlist("MCU", Some(user_id));
+        let mut parent = sample_playlist("SCU", Some(user_id));
         repo.upsert(&parent).await.unwrap();
 
-        let mut child = sample_playlist("Sample Movie Golf", Some(user_id));
+        let mut child = sample_playlist("Sample Hero", Some(user_id));
         child.parent_playlist_id = Some(parent.id);
         repo.upsert(&child).await.unwrap();
 

@@ -490,7 +490,7 @@ mod tests {
         let mut second = first.clone();
         second.media_file_id = Uuid::new_v4();
         second.source_instance_id = Uuid::new_v4();
-        second.path = "/media/alternate/Sample Movie Kilo.mkv".to_string();
+        second.path = "/media/alternate/The Sample Movie.mkv".to_string();
 
         repo.upsert(&first).await.unwrap();
         repo.upsert(&second).await.unwrap();

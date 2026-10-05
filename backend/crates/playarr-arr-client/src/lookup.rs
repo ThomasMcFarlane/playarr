@@ -108,8 +108,8 @@ mod tests {
     #[test]
     fn lookup_path_percent_encodes_the_term() {
         assert_eq!(
-            lookup_path("/api/v3/movie/lookup", "sampleseven & co"),
-            "/api/v3/movie/lookup?term=sampleseven+%26+co"
+            lookup_path("/api/v3/movie/lookup", "sample seven & co"),
+            "/api/v3/movie/lookup?term=sample+seven+%26+co"
         );
     }
 

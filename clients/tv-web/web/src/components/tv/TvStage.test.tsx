@@ -12,14 +12,14 @@ describe("TvDetailHeading", () => {
       <TvDetailHeading
         backLabel="Back to Music"
         sectionTitle="Music"
-        itemTitle="Sample Band Two"
+        itemTitle="Sample Band"
         onBack={() => undefined}
       />
     );
 
     expect(markup).toContain("<h1>Music</h1>");
     expect(markup).toContain(
-      '<span class="page-header-detail tv-detail-heading-item"><strong>Sample Band Two</strong></span>'
+      '<span class="page-header-detail tv-detail-heading-item"><strong>Sample Band</strong></span>'
     );
     expect(markup).not.toContain(">|<");
 

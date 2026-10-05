@@ -120,6 +120,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Repository hygiene ahead of making the repository public: real media titles in tests, fixtures, docs and history notes are replaced with neutral placeholders, and real artwork and screenshots (Apple TV parity fixtures, site screenshots, social card, Play feature graphic) are replaced with generated placeholder images. The Apple TV parity suite now generates its artwork procedurally. `AGENTS.md` and the pull request template forbid media titles and real artwork.
 - Deployment data no longer lives in this repository: the `playarr-dev` chart ships neutral (empty) defaults and documents its values, a worked example with placeholder data backs its tests, and the real instances, hostnames, addresses, hostPaths and image pins live in the private deployment repository. Regional image rollouts are now a deployment values change, not a Playarr PR.
 - The regional image workflow pushes to the registry named by the `REGIONAL_IMAGE_REGISTRY` repository variable, and the iOS dispatch reads its Apple release pipeline from `APPLE_BUILDS_REPOSITORY`.
 - Tests, docs and scripts use placeholders (`example.com`, RFC 5737 addresses, `/srv` paths); `scripts/mac-build.sh` and `scripts/appletv-parity-ae0.sh` now require `MAC_HOST`, and the marketing dev server takes extra hostnames from `SITE_ALLOWED_HOSTS`.
@@ -1215,7 +1216,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   SPA first-option y≈162 (was y≈133).
 - Apple TV detail Playback control uses SPA-like square.grid.2x2 brand glyph.
 - Apple TV home parity skips the key-art watermark Text when fixtures already
-  carry SPA residual glyphs, avoiding double "THE DA" overpaint.
+  carry SPA residual glyphs, avoiding double "THE TITLE" overpaint.
 - Apple TV detail title uses a tight soft-wrap VStack (SPA line-height 0.9)
   so "10 Brambleford Lane" inter-line gaps match web; movie honest AE
   3.98% → 3.46% (full53).

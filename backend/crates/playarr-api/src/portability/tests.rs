@@ -183,7 +183,7 @@ struct Library {
 async fn seed_library(state: &TestState) -> Library {
     let source = Uuid::new_v4();
     let movie_alpha = work(
-        "Sample Movie Alpha",
+        "Movie Alpha",
         WorkKind::Movie,
         2010,
         &[
@@ -195,7 +195,7 @@ async fn seed_library(state: &TestState) -> Library {
     let movie_alpha_file = seed_file(state, movie_alpha.id, LeafRef::Work, source).await;
 
     let series_beta = work(
-        "Test Series Beta",
+        "Series Beta",
         WorkKind::Series,
         2022,
         &[(ExternalProvider::Tvdb, "371980")],
@@ -339,7 +339,13 @@ async fn export_contains_only_the_callers_own_data_and_no_secrets() {
         at,
     )
     .await;
-    playlist(&state, a, "Weekend", &[lib.movie_alpha.id, lib.series_beta.id]).await;
+    playlist(
+        &state,
+        a,
+        "Weekend",
+        &[lib.movie_alpha.id, lib.series_beta.id],
+    )
+    .await;
     playlist(&state, b, "B private list", &[lib.movie_alpha.id]).await;
 
     let api = Api { router };
@@ -382,7 +388,7 @@ async fn export_contains_only_the_callers_own_data_and_no_secrets() {
         .iter()
         .map(|i| i.item.title.as_str())
         .collect();
-    assert_eq!(order, ["Sample Movie Alpha", "Test Series Beta"]);
+    assert_eq!(order, ["Movie Alpha", "Series Beta"]);
 
     // Nothing of B's, no credentials, no server paths in any entry.
     let everything = String::from_utf8_lossy(&bytes).to_string();
@@ -594,7 +600,7 @@ async fn round_trip_into_a_fresh_account_preserves_progress_playlists_order_and_
     assert_eq!(lists(&original), lists(&copy));
     assert_eq!(
         lists(&copy)[0].1,
-        ["日本語タイトル", "Test Series Beta", "Sample Movie Alpha"]
+        ["日本語タイトル", "Series Beta", "Movie Alpha"]
     );
     // A's own data is untouched.
     assert_eq!(
@@ -734,7 +740,7 @@ async fn cross_server_matching_uses_ids_then_titles_and_keeps_unmatched_recovera
         ),
         // Invalid state.
         watch(
-            serde_json::json!({"kind":"movie","title":"Sample Movie Alpha"}),
+            serde_json::json!({"kind":"movie","title":"Movie Alpha"}),
             "bogus",
             9,
             None
@@ -818,7 +824,7 @@ async fn conflicting_progress_follows_the_chosen_policy() {
     .await;
     let api = Api { router };
     let item =
-        serde_json::json!({"kind":"movie","title":"Sample Movie Alpha","external_ids":{"tmdb":"27205"}});
+        serde_json::json!({"kind":"movie","title":"Movie Alpha","external_ids":{"tmdb":"27205"}});
 
     // Older incoming record does not overwrite newer local progress.
     let older = hand_package(serde_json::json!([watch(
@@ -1069,10 +1075,10 @@ async fn malicious_text_is_neutralised_and_playlist_names_are_bounded() {
         "playlists": [
             {"id": Uuid::new_v4(), "name": "=HYPERLINK(\"http://evil\",\"x\")\u{202e}\u{0}  spaced", "media_type": "video",
              "created_at": "2026-09-01T20:00:00Z", "updated_at": "2026-09-01T20:00:00Z",
-             "items": [{"position":0,"added_at":"2026-09-01T20:00:00Z","item":{"kind":"movie","title":"Sample Movie Alpha","external_ids":{"tmdb":"27205"}}}]},
+             "items": [{"position":0,"added_at":"2026-09-01T20:00:00Z","item":{"kind":"movie","title":"Movie Alpha","external_ids":{"tmdb":"27205"}}}]},
             {"id": Uuid::new_v4(), "name": long, "media_type": "video",
              "created_at": "2026-09-01T20:00:00Z", "updated_at": "2026-09-01T20:00:00Z",
-             "items": [{"position":0,"added_at":"2026-09-01T20:00:00Z","item":{"kind":"movie","title":"Sample Movie Alpha","external_ids":{"tmdb":"27205"}}}]},
+             "items": [{"position":0,"added_at":"2026-09-01T20:00:00Z","item":{"kind":"movie","title":"Movie Alpha","external_ids":{"tmdb":"27205"}}}]},
         ]
     });
     // 300 characters is under the reader's field cap but over the playlist name cap.
@@ -1160,7 +1166,7 @@ async fn preferences_import_only_when_chosen_and_playback_choices_are_never_appl
     let doc = serde_json::json!({
         "format": "playarr.user-data", "schema_version": 1, "generated_at": "2026-09-01T20:00:00Z",
         "preferences": {"preferred_audio_language": "JA"},
-        "playback_preferences": [{"item": {"kind":"movie","title":"Sample Movie Alpha"}, "quality_id": "original"}]
+        "playback_preferences": [{"item": {"kind":"movie","title":"Movie Alpha"}, "quality_id": "original"}]
     });
     let bytes = doc.to_string().into_bytes();
     let (_, r) = api.apply(&token_c, &bytes, "").await;
@@ -1242,7 +1248,7 @@ async fn watchlist_round_trips_including_titles_that_are_not_in_any_library() {
     add(
         a,
         DiscoveryKind::Movie,
-        "Sample Movie Alpha",
+        "Movie Alpha",
         2010,
         vec![ExternalRef {
             provider: ExternalProvider::Tmdb,
@@ -1273,7 +1279,7 @@ async fn watchlist_round_trips_including_titles_that_are_not_in_any_library() {
         .map(|w| w.item.title.as_str())
         .collect();
     titles.sort();
-    assert_eq!(titles, ["Future Show", "Sample Movie Alpha", "Tile Game"]);
+    assert_eq!(titles, ["Future Show", "Movie Alpha", "Tile Game"]);
     assert!(
         !serde_json::to_string(&package).unwrap().contains("poster"),
         "poster URLs are not exported"
@@ -1290,7 +1296,7 @@ async fn watchlist_round_trips_including_titles_that_are_not_in_any_library() {
     assert_eq!(result["watchlist_added"], 3, "{result}");
     let rows = state.app.watchlist_repo.list(c).await.unwrap();
     assert_eq!(rows.len(), 3);
-    let library_title = rows.iter().find(|r| r.title == "Sample Movie Alpha").unwrap();
+    let library_title = rows.iter().find(|r| r.title == "Movie Alpha").unwrap();
     assert_eq!(
         library_title.work_id,
         Some(lib.movie_alpha.id),
@@ -1406,7 +1412,7 @@ async fn phone_upload_stages_a_package_that_only_its_owner_can_preview_and_apply
     let (_b, token_b) = user(&state, lib.source).await;
     let api = Api { router };
     let package = hand_package(serde_json::json!([watch(
-        serde_json::json!({"kind":"movie","title":"Sample Movie Alpha","external_ids":{"tmdb":"27205"}}),
+        serde_json::json!({"kind":"movie","title":"Movie Alpha","external_ids":{"tmdb":"27205"}}),
         "part_watched",
         120_000,
         Some("2026-09-01T20:00:00Z"),

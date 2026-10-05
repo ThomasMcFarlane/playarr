@@ -401,7 +401,7 @@ mod tests {
     async fn upsert_then_get_round_trips() {
         let pool = test_sqlite_pool().await;
         let repo = SqlxWorkRepo::new(pool);
-        let mut work = sample_work(WorkKind::Movie, "Sample Movie Kilo");
+        let mut work = sample_work(WorkKind::Movie, "The Sample Movie");
 
         repo.upsert(&work).await.expect("upsert");
         let mut fetched = repo.get(work.id).await.expect("get");

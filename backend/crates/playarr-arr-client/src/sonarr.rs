@@ -469,12 +469,12 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!([
                 {
                     "id": 1,
-                    "title": "Test Series Q",
-                    "sortTitle": "test series q",
+                    "title": "Test Series A",
+                    "sortTitle": "test series a",
                     "tvdbId": 81189,
                     "monitored": true,
                     "status": "ended",
-                    "path": "/tv/Test Series Q"
+                    "path": "/tv/Test Series A"
                 }
             ])))
             .mount(&server)
@@ -487,7 +487,7 @@ mod tests {
             .expect("list_series should succeed against a healthy mock");
 
         assert_eq!(series.len(), 1);
-        assert_eq!(series[0].title, "Test Series Q");
+        assert_eq!(series[0].title, "Test Series A");
         assert_eq!(series[0].tvdb_id, 81189);
         assert!(series[0].monitored);
     }
@@ -499,12 +499,12 @@ mod tests {
             .and(path("/api/v3/series/42"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": 42,
-                "title": "Test Series U",
+                "title": "Test Series B",
                 "sortTitle": "wire",
                 "tvdbId": 79126,
                 "monitored": false,
                 "status": "ended",
-                "path": "/tv/Test Series U"
+                "path": "/tv/Test Series B"
             })))
             .mount(&server)
             .await;
@@ -516,7 +516,7 @@ mod tests {
             .expect("get_series should succeed against a healthy mock");
 
         assert_eq!(series.id, 42);
-        assert_eq!(series.title, "Test Series U");
+        assert_eq!(series.title, "Test Series B");
         assert!(!series.monitored);
     }
 
@@ -527,12 +527,12 @@ mod tests {
             .and(path("/api/v3/series/1"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": 1,
-                "title": "Test Series Q",
-                "sortTitle": "test series q",
+                "title": "Test Series A",
+                "sortTitle": "test series a",
                 "tvdbId": 81189,
                 "monitored": true,
                 "status": "ended",
-                "path": "/tv/Test Series Q",
+                "path": "/tv/Test Series A",
                 "overview": "A high school chemistry teacher turns to a life of crime.",
                 "genres": ["Drama", "Crime", "Thriller"],
                 "images": [
@@ -633,7 +633,7 @@ mod tests {
                     "seriesId": 1,
                     "seasonNumber": 1,
                     "episodeNumber": 2,
-                    "title": "Test Episode Three...",
+                    "title": "Test Episode One...",
                     "hasFile": false,
                     "monitored": true,
                     "episodeFileId": 0
@@ -693,7 +693,7 @@ mod tests {
                     "seriesId": 1,
                     "seasonNumber": 1,
                     "relativePath": "Season 01/S01E01.mkv",
-                    "path": "/tv/Test Series Q/Season 01/S01E01.mkv",
+                    "path": "/tv/Test Series A/Season 01/S01E01.mkv",
                     "size": 1_234_567_890i64,
                     "quality": {
                         "quality": {
@@ -734,7 +734,7 @@ mod tests {
         let file = &files[0];
         assert_eq!(file.id, 55);
         assert_eq!(file.series_id, 1);
-        assert_eq!(file.path, "/tv/Test Series Q/Season 01/S01E01.mkv");
+        assert_eq!(file.path, "/tv/Test Series A/Season 01/S01E01.mkv");
         assert_eq!(file.size, 1_234_567_890);
         assert_eq!(file.quality.quality.name, "Bluray-1080p");
         assert_eq!(file.quality.revision.version, 1);

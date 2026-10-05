@@ -1239,7 +1239,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "id": 7,
                 "title": "Sample Seven",
-                "sortTitle": "sampleseven",
+                "sortTitle": "sample seven",
                 "tmdbId": 807,
                 "monitored": true,
                 "hasFile": false,
@@ -1393,7 +1393,7 @@ mod tests {
             .and(query_param("includeImages", "true"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 sonarr_episode_json(10, 1, 1, "Pilot", 55),
-                sonarr_episode_json(11, 1, 2, "Test Episode Three", 0),
+                sonarr_episode_json(11, 1, 2, "Test Episode One", 0),
             ])))
             .mount(server)
             .await;
@@ -1742,7 +1742,7 @@ mod tests {
                     "id": 8117,
                     "seriesId": 1,
                     "seasonNumber": 2006,
-                    "title": "Sample Track Three",
+                    "title": "Test Episode Adult",
                     "overview": "Scene synopsis",
                     "releaseDate": "2006-06-08",
                     "runtime": 41,
@@ -1757,7 +1757,7 @@ mod tests {
             .and(path("/api/v3/episodefile"))
             .and(query_param("seriesId", "1"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                whisparr_episode_file_json(55, 2006, "Sample Track Three.mkv"),
+                whisparr_episode_file_json(55, 2006, "Test Episode Adult.mkv"),
             ])))
             .mount(&server)
             .await;

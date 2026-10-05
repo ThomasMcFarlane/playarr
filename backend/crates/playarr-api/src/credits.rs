@@ -92,7 +92,7 @@ async fn resolve_credit(state: &AppState, credit: Credit) -> Result<CreditRespon
                     "name": "Sample Actor",
                     "headshot_url": "https://image.tmdb.org/t/p/original/qCpZn2e4ZTe8YHBaJcs4gEqvhX8.jpg"
                 },
-                "character": "Sample Character / Sample Vigilante",
+                "character": "Sample Character / Hero",
                 "department": null,
                 "job": null
             }],
@@ -205,9 +205,9 @@ pub async fn get_person_handler(
             "id": "6b1e4f83-2a9c-4d7e-8b3f-1c6a9e2d4b70",
             "kind": "movie",
             "external_refs": [{"provider": "tmdb", "external_id": "272"}],
-            "title": "Sample Movie Hotel",
-            "sort_title": "Sample Movie Hotel",
-            "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+            "title": "Test Prequel",
+            "sort_title": "Test Prequel",
+            "overview": "A sample synopsis for a test prequel.",
             "images": [{
                 "kind": "poster",
                 "url": "https://image.tmdb.org/t/p/original/dr6x4GyyESClpG4RG3aSVSXVMlv.jpg",
@@ -226,7 +226,7 @@ pub async fn get_person_handler(
             "external_refs": [{"provider": "tmdb", "external_id": "155"}],
             "title": "The Test Film",
             "sort_title": "Test Film, The",
-            "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+            "overview": "A sample synopsis for a test film.",
             "images": [{
                 "kind": "poster",
                 "url": "https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg",

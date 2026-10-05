@@ -373,7 +373,10 @@ mod tests {
         assert_eq!(file.id, 900);
         assert_eq!(file.author_id, 5);
         assert_eq!(file.book_id, 200);
-        assert_eq!(file.path, "/books/Sample Author/Sample Title/Sample Title.epub");
+        assert_eq!(
+            file.path,
+            "/books/Sample Author/Sample Title/Sample Title.epub"
+        );
         assert_eq!(file.quality.quality.name, "EPUB");
     }
 

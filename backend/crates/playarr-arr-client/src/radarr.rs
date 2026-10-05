@@ -455,7 +455,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": 7,
                 "title": "Sample Seven",
-                "sortTitle": "sampleseven",
+                "sortTitle": "sample seven",
                 "tmdbId": 807,
                 "monitored": true,
                 "hasFile": false,
@@ -614,7 +614,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "id": 7,
                 "title": "Sample Seven",
-                "sortTitle": "sampleseven",
+                "sortTitle": "sample seven",
                 "tmdbId": 807,
                 "monitored": true,
                 "hasFile": false,

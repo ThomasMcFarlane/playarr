@@ -3,10 +3,10 @@
 //! admin-managed and visible to every user, the same ownership shape
 //! `crate::LibraryView` uses for its own global/admin-managed scope).
 //! Playlists nest via [`Playlist::parent_playlist_id`] -- a self-reference,
-//! not a separate "folder" concept -- so a top-level playlist like "MCU"
-//! can have its own items *and* child playlists like "Sample Movie Golf"
+//! not a separate "folder" concept -- so a top-level playlist like "SCU"
+//! can have its own items *and* child playlists like "Sample Hero"
 //! nested under it, matching how the feature was actually asked for:
-//! "create something like 'MCU' and then a sub playlist for 'Captain
+//! "create something like 'SCU' and then a sub playlist for 'Captain
 //! America'".
 //!
 //! Items live in a separate ordered collection
@@ -48,7 +48,7 @@ pub struct Playlist {
     pub owner_user_id: Option<Uuid>,
     /// `None` = top-level. `Some(id)` = nested under another playlist --
     /// self-referential, arbitrarily deep (though in practice expected to
-    /// stay shallow, e.g. "MCU" -> "Sample Movie Golf"). A parent and its
+    /// stay shallow, e.g. "SCU" -> "Sample Hero"). A parent and its
     /// children share the same `owner_user_id` -- `playarr_api::playlists`
     /// enforces this at write time rather than this type asserting it
     /// structurally, matching how `ViewCriteria`'s own invariants are

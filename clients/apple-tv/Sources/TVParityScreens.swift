@@ -45,30 +45,24 @@ enum TVParityFixtures {
         "A fixed synopsis used by the Apple TV visual parity suite so native and web captures share identical copy."
 
     /// Deterministic catalogue for production-SwiftUI parity captures (no network).
+    /// All titles are neutral placeholders.
     static func sampleWorks() -> [Work] {
-        // Overviews/genres mirror the authenticated SPA home reference frame.
         let titles: [(String, WorkKind, String, String)] = [
-            (
-                "Test Series Y",
-                .series,
-                "A serial killer stalks the Scottish wilderness. When a young man’s body is discovered, DI Monica Kennedy must catch the murderer before a small community is torn apart.",
-                "Crime"
-            ),
-            ("Test Series R", .series, "Crime drama set in Aberdeen.", "Crime"),
-            ("10,000 Sample", .movie, "A prehistoric adventure.", "Action"),
-            ("2001: A Sample Voyage", .movie, "A voyage to Jupiter.", "Sci-Fi"),
-            ("Sample Film 2012", .movie, "The end of the world.", "Action"),
-            ("28 Sample Years", .movie, "The rage virus returns.", "Horror"),
-            ("28 Sample Years: The Sequel", .movie, "The next chapter.", "Horror"),
-            ("30 Sample Nights", .movie, "Vampires in the arctic dark.", "Horror"),
-            ("30 Sample Nights: The Sequel", .movie, "The sequel.", "Horror"),
-            ("47 Sample Metres", .movie, "Sharks and a shark cage.", "Thriller"),
+            ("Sample Series 1", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+            ("Sample Series 2", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+            ("Sample Movie 1", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 2", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 3", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 4", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 5", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 6", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 7", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+            ("Sample Movie 8", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
         ]
         return makeWorks(titles, idBase: 1)
     }
 
-    /// Library-directory fixtures aligned with SPA suite reference frames
-    /// (series → Test Series J first; music → Sample Band Two first).
+    /// Library-directory fixtures (series first for the default library; artists for music).
     static func libraryWorks(kind: WorkKind?) -> [Work] {
         switch kind {
         case .artist:
@@ -84,64 +78,48 @@ enum TVParityFixtures {
     }
 
     private static let seriesTitles: [(String, WorkKind, String, String)] = [
-        // genres: primary kicker + optional secondary for preview meta line
-        (
-            "Test Series J",
-            .series,
-            "In 1963, all the prisoners and guards mysteriously disappear from Test Series J. In the present day, they resurface and a secret agency are tasked with re-capturing them.",
-            "Action|Crime"
-        ),
-        ("Test Series K", .series, "A teenage spy inherits a dangerous mission.", "Action"),
-        ("Test Series L", .series, "Consciousness is digital and bodies are interchangeable.", "Sci-Fi"),
-        ("Test Series M", .series, "An animated spy-family sitcom.", "Comedy"),
-        ("Test Series N", .series, "Old gods and new clash in modern America.", "Fantasy"),
-        ("Test Series V", .series, "A vampire with a soul fights for redemption.", "Drama"),
-        ("Test Series W", .series, "A tech billionaire rebuilds a police precinct.", "Action"),
-        ("Test Series X", .series, "A billionaire vigilante returns to Starling City.", "Action"),
-        ("Test Series O", .series, "A young Avatar must master the four elements.", "Adventure"),
-        ("Test Series P", .series, "A retired superhero returns to protect his city.", "Action"),
-        ("Sample Movie Foxtrot", .series, "Wakanda forever.", "Action"),
-        ("Test Series S", .series, "A criminal mastermind helps the FBI.", "Crime"),
+        ("Sample Series 1", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 2", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 3", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 4", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 5", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 6", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 7", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 8", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 9", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 10", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 11", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
+        ("Sample Series 12", .series, "A placeholder synopsis used by the parity suite.", "Drama"),
     ]
 
     private static let musicTitles: [(String, WorkKind, String, String)] = [
-        (
-            "Sample Band Two",
-            .artist,
-            "Sample Band Two are an Australian rock band formed in Sydney in 1973. Their music has been variously described as hard rock, blues rock and heavy metal, although the band calls it simply \"rock and roll\". They are cited as a formative influence on the new…",
-            "Hard Rock|Rock"
-        ),
-        ("Sample Artist A", .artist, "Swedish metal band with pop-metal hooks.", "Metal"),
-        ("Sample Artist B", .artist, "American rock band from Wilkes-Barre.", "Rock"),
-        ("Sample Artist C", .artist, "Electronic rock project of Klayton.", "Electronic"),
-        ("Sample Artist H", .artist, "American hard rock singer-songwriter.", "Hard Rock"),
-        ("Sample Artist D", .artist, "South African rap-rave group.", "Hip-Hop"),
-        ("Sample Artist I", .artist, "American rapper from Detroit.", "Hip-Hop"),
-        ("Sample Artist F", .artist, "American gothic rock band.", "Rock"),
-        ("Sample Artist G", .artist, "American Christian rock band.", "Rock"),
-        ("Sample Artist E", .artist, "American heavy metal band.", "Metal"),
-        ("Sample Artist K", .artist, "French progressive death metal band.", "Metal"),
-        ("Sample Artist J", .artist, "American hard rock band led by Lzzy Hale.", "Hard Rock"),
+        ("Sample Artist 1", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 2", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 3", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 4", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 5", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 6", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 7", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 8", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 9", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 10", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 11", .artist, "A placeholder biography used by the parity suite.", "Rock"),
+        ("Sample Artist 12", .artist, "A placeholder biography used by the parity suite.", "Rock"),
     ]
 
     private static let movieTitles: [(String, WorkKind, String, String)] = [
-        (
-            "10 Brambleford Lane",
-            .movie,
-            "After a catastrophic car crash, a young woman wakes up in a survivalist's underground bunker, where he claims to have saved her from an apocalyptic attack that has left the outside world uninhabitable.",
-            "Thriller|Science Fiction|Drama"
-        ),
-        ("10,000 Sample", .movie, "A prehistoric adventure.", "Action"),
-        ("2001: A Sample Voyage", .movie, "A voyage to Jupiter.", "Sci-Fi"),
-        ("Sample Film 2012", .movie, "The end of the world.", "Action"),
-        ("28 Sample Years", .movie, "The rage virus returns.", "Horror"),
-        ("28 Sample Years: The Sequel", .movie, "The next chapter.", "Horror"),
-        ("30 Sample Nights", .movie, "Vampires in the arctic dark.", "Horror"),
-        ("30 Sample Nights: The Sequel", .movie, "The sequel.", "Horror"),
-        ("47 Sample Metres", .movie, "Sharks and a shark cage.", "Thriller"),
-        ("Sample Movie Echo", .movie, "Silence is survival.", "Horror"),
-        ("Voyage", .movie, "Linguists contact an alien species.", "Sci-Fi"),
-        ("Sample Movie 2049", .movie, "A new blade runner unearths a secret.", "Sci-Fi"),
+        ("Sample Movie 1", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 2", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 3", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 4", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 5", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 6", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 7", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 8", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 9", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 10", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 11", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
+        ("Sample Movie 12", .movie, "A placeholder synopsis used by the parity suite.", "Action"),
     ]
 
     private static func makeWorks(
@@ -215,7 +193,7 @@ struct TVParityPlayerFixtureView: View {
                 // bottom pad 32 drops chrome 1px; title.padding.bottom 5 restores title y912.
                 // Track colour matched to SPA sample (44,42,44) not pure #333.
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("10 Brambleford Lane")
+                    Text("Sample Movie 1")
                         .font(.system(size: 24, weight: .bold))
                         .tracking(-0.4)
                         .foregroundStyle(DesignTokens.Color.textPrimary)

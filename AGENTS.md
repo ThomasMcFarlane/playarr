@@ -28,6 +28,17 @@ It overrides weaker or older wording elsewhere in the tree.
   web packages) stay labelled as fallbacks until the native path matches.
   Known deviations are listed in the principles doc; do not extend them.
 
+## No media titles or real media assets
+
+This repository is public. **Never write the name of a real film, series, episode, album, track, artist or
+studio franchise anywhere in it**: not in code, tests, fixtures, comments, docs, `TASKS.md`, `tasks.d/`,
+`CHANGELOG.md`, `changelog.d/`, scripts, branch names, commit messages or PR text. Use neutral references
+(`Test Movie A`, `Sample Series 1`, "a 4K Dolby Vision remux at about 64 Mbps", "a test series with three seasons").
+Likewise never commit real posters, backdrops, stills, album art, cast photos, video clips or screenshots that show
+real titles or artwork; generate placeholders instead (solid colours, gradients, procedural art). Openly licensed
+demo media that the product genuinely needs is the only exception and must be justified where it is used.
+Do not keep a list of forbidden titles in the repository: such a list would itself leak them.
+
 ## Delivery
 
 - Do not leave completed work only in the working tree. Commit and push each logical change as

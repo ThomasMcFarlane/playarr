@@ -2,8 +2,8 @@
 -- -- named, ordered lists of works, owned by one user (a personal
 -- playlist) or by nobody (`owner_user_id IS NULL` -- a "System" playlist,
 -- admin-managed and visible to every user). Playlists nest via
--- `parent_playlist_id`, a self-reference, so e.g. "MCU" can have
--- "Sample Movie Golf" nested under it. See streamarr_model::playlist for the
+-- `parent_playlist_id`, a self-reference, so e.g. "SCU" can have
+-- "Sample Hero" nested under it. See streamarr_model::playlist for the
 -- full rationale.
 --
 -- Portability note (same convention as 0012_library_views.sql): id/

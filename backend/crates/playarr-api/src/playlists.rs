@@ -152,7 +152,7 @@ impl From<Playlist> for PlaylistResponse {
 pub struct CreatePlaylistRequest {
     pub name: String,
     /// `Some(id)` nests this playlist under an existing one the caller can
-    /// already write to (e.g. "Sample Movie Golf" under "MCU") -- checked in
+    /// already write to (e.g. "Sample Hero" under "SCU") -- checked in
     /// [`create_playlist_handler`], not structurally enforced here.
     #[serde(default)]
     pub parent_playlist_id: Option<Uuid>,
@@ -312,7 +312,7 @@ pub async fn list_admin_playlists_handler(
     path = "/api/v1/playlists",
     tag = "playlists",
     request_body(content = CreatePlaylistRequest, example = json!({
-        "name": "Sample Movie Golf",
+        "name": "Sample Hero",
         "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "is_system": false,
         "media_type": "video"
@@ -320,7 +320,7 @@ pub async fn list_admin_playlists_handler(
     responses(
         (status = 200, description = "The created playlist", body = PlaylistResponse, example = json!({
             "id": "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d",
-            "name": "Sample Movie Golf",
+            "name": "Sample Hero",
             "is_system": false,
             "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
             "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -837,7 +837,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/v1/playlists")
                     .header("content-type", "application/json")
-                    .body(Body::from(serde_json::json!({"name": "MCU"}).to_string()))
+                    .body(Body::from(serde_json::json!({"name": "SCU"}).to_string()))
                     .unwrap(),
             )
             .await
@@ -884,14 +884,14 @@ mod tests {
                     .uri("/api/v1/playlists")
                     .header("content-type", "application/json")
                     .header("Authorization", bearer_header(&token))
-                    .body(Body::from(serde_json::json!({"name": "MCU"}).to_string()))
+                    .body(Body::from(serde_json::json!({"name": "SCU"}).to_string()))
                     .unwrap(),
             )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let created: PlaylistResponse = json_body(response).await;
-        assert_eq!(created.name, "MCU");
+        assert_eq!(created.name, "SCU");
         assert!(!created.is_system);
 
         // Create a nested sub-playlist under it.
@@ -905,7 +905,7 @@ mod tests {
                     .header("Authorization", bearer_header(&token))
                     .body(Body::from(
                         serde_json::json!({
-                            "name": "Sample Movie Golf",
+                            "name": "Sample Hero",
                             "parent_playlist_id": created.id,
                         })
                         .to_string(),

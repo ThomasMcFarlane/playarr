@@ -34,7 +34,7 @@ Evidence is stored with the audit session scratchpad (`parity/web/*.png`,
 | Watchlist | None found in web source | None | n/a | |
 | Downloads | Route 404s in hosted web | Downloads screen when permitted | n/a | Android-only by design |
 | Player: audio / subtitle / quality menus | Yes | Quality menu verified on device; audio and subtitle menus appear only when the server reports tracks (dev server reports none) | partly verified | Playback returned HTTP 500 on web and Android at test time (`20-player-error-500`, `web/20b-player-controls`); error screens match |
-| Player: previous / next episode, queue | Yes | Next episode and queue panel verified on device | **verified on device** | H.264 1080p episode (2 Sample Friends) |
+| Player: previous / next episode, queue | Yes | Next episode and queue panel verified on device | **verified on device** | H.264 1080p episode (a test series) |
 | Player: chapters seek | Chapters on detail only | Same | matches | |
 | Player: skip intro, quality/direct-play badge | Not in web | Not in Android | n/a | |
 | Cast button | Yes | Yes | matches (source) | |

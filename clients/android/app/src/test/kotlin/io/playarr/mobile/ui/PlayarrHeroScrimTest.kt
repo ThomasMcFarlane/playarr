@@ -53,8 +53,8 @@ class PlayarrHeroScrimTest {
 
     @Test
     fun nearBlackArtGetsAnExposureLiftAndNormalArtDoesNot() {
-        val crow = IntArray(64) { 0xFF090909.toInt() } // ~9/255 like Sample Movie Four backdrop
-        val gain = heroArtExposureGain(heroArtMeanLuma(crow))
+        val nearBlack = IntArray(64) { 0xFF090909.toInt() } // ~9/255 like Sample Movie Four backdrop
+        val gain = heroArtExposureGain(heroArtMeanLuma(nearBlack))
         assertTrue("gain $gain", gain > 4f)
         assertEquals(1f, heroArtExposureGain(heroArtMeanLuma(IntArray(64) { 0xFF808080.toInt() })), 0f)
         assertEquals(1f, heroArtExposureGain(0.5f), 0f)

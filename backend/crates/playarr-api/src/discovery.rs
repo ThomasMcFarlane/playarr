@@ -1212,7 +1212,7 @@ mod tests {
 
         let response = router
             .clone()
-            .oneshot(get("/api/v1/discover?q=heat", &token))
+            .oneshot(get("/api/v1/discover?q=orbit", &token))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -1490,14 +1490,14 @@ mod tests {
         let token = mint_access_token(&state, user);
         let body: DiscoverResponse = json_body(
             router
-                .oneshot(get("/api/v1/discover?q=heat", &token))
+                .oneshot(get("/api/v1/discover?q=orbit", &token))
                 .await
                 .unwrap(),
         )
         .await;
         let by_key = |k: &str| body.titles.iter().find(|t| t.title.title_key == k).unwrap();
-        let heat = by_key("tmdb:movie:949");
-        assert!(heat
+        let orbit = by_key("tmdb:movie:949");
+        assert!(orbit
             .title
             .sources
             .iter()
@@ -1534,7 +1534,7 @@ mod tests {
         let token = mint_access_token(&state, user);
         let body: DiscoverResponse = json_body(
             router
-                .oneshot(get("/api/v1/discover?q=heat", &token))
+                .oneshot(get("/api/v1/discover?q=orbit", &token))
                 .await
                 .unwrap(),
         )

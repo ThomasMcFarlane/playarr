@@ -190,10 +190,10 @@ mod tests {
 
     #[test]
     fn collection_tag_round_trips_names_with_colons() {
-        let tag = collection_tag(86311, "Sample: The Sample Team Collection");
+        let tag = collection_tag(86311, "Sample: The Team Collection");
         assert_eq!(
             collection_from_tags(&["rating:PG".into(), tag]),
-            Some(("86311".into(), "Sample: The Sample Team Collection".into()))
+            Some(("86311".into(), "Sample: The Team Collection".into()))
         );
         assert_eq!(collection_from_tags(&["collection:".into()]), None);
     }

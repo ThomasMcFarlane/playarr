@@ -176,7 +176,7 @@ describe("live Activity filtering", () => {
         ...emptyActivityFilters(),
         userIds: ["user-a"],
         playMethods: ["direct_play"],
-        titleTerms: ["blue"],
+        titleTerms: ["series i"],
         libraryIds: ["library-a"],
         peerNodeIds: ["peer-a"],
         from: "2026-07-29T09:00:00.000Z",

@@ -1559,9 +1559,9 @@ mod tests {
 
     #[test]
     fn collection_and_score_tags_are_refreshed_and_other_tags_kept() {
-        let mut remote_work = remote("603", "Sample Movie Kilo", true);
+        let mut remote_work = remote("603", "The Sample Movie", true);
         remote_work.arr_tags = vec![
-            "collection:2344:Sample Movie Kilo Collection".into(),
+            "collection:2344:The Sample Movie Collection".into(),
             "score:8.1:100".into(),
         ];
         let mut existing = new_work(WorkKind::Movie, ExternalProvider::Tmdb, &remote_work);
@@ -1921,7 +1921,7 @@ mod tests {
         // since `WorkRepo` here is the in-memory fake, not this real pool.
         sqlx::query(
             "INSERT INTO works (id, kind, title, sort_title, added_at, availability) \
-             VALUES (?, 'movie', 'Orbit', 'heat', '2026-01-01T00:00:00Z', 'available')",
+             VALUES (?, 'movie', 'Orbit', 'orbit', '2026-01-01T00:00:00Z', 'available')",
         )
         .bind(work_id.to_string())
         .execute(&pool)

@@ -3003,7 +3003,7 @@ mod tests {
     async fn search_matches_title_and_overview_case_insensitively() {
         let pool = test_pool().await;
         let repo = work_repo(pool.clone());
-        repo.upsert(&movie("Sample Movie India", "Great Escape, The", &[], 0))
+        repo.upsert(&movie("The Sample Escape", "Sample Escape, The", &[], 0))
             .await
             .unwrap();
         repo.upsert(&movie("Unrelated", "Unrelated", &[], 0))
@@ -3011,9 +3011,9 @@ mod tests {
             .unwrap();
         let svc = service(pool, repo);
 
-        let by_title = svc.search("great escape", 10, None).await.unwrap();
+        let by_title = svc.search("sample escape", 10, None).await.unwrap();
         assert_eq!(by_title.len(), 1);
-        assert_eq!(by_title[0].title, "Sample Movie India");
+        assert_eq!(by_title[0].title, "The Sample Escape");
 
         let by_overview = svc.search("TESTING", 10, None).await.unwrap();
         assert_eq!(by_overview.len(), 2); // both fixtures' overview mentions "testing"
@@ -3065,9 +3065,7 @@ mod tests {
     async fn search_folds_diacritics_both_directions() {
         let pool = test_pool().await;
         let repo = work_repo(pool.clone());
-        repo.upsert(&movie("Sémon", "Semon", &[], 0))
-            .await
-            .unwrap();
+        repo.upsert(&movie("Sémon", "Semon", &[], 0)).await.unwrap();
         let svc = service(pool, repo);
 
         let ascii_query = svc.search("Semon", 10, None).await.unwrap();
@@ -3868,7 +3866,7 @@ mod tests {
             None,
             Some(target_group_library),
         );
-        unmatched.title = "Sample Movie Kilo".to_string();
+        unmatched.title = "The Sample Movie".to_string();
         availability_repo.upsert(&unmatched).await.unwrap();
 
         // A row scoped to a DIFFERENT group library must not leak in.
@@ -3891,7 +3889,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(page.remote_only.len(), 1);
-        assert_eq!(page.remote_only[0].title, "Sample Movie Kilo");
+        assert_eq!(page.remote_only[0].title, "The Sample Movie");
         assert_eq!(page.remote_only[0].external_id, "603");
         assert_eq!(page.remote_only[0].available_on.len(), 1);
         assert_eq!(page.remote_only[0].available_on[0].peer_node_id, peer_id);

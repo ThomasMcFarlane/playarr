@@ -167,7 +167,7 @@ describe("ApiClient", () => {
         "22222222-2222-4222-8222-222222222222",
       ],
       play_methods: ["direct_play", "transcode"],
-      title_terms: ["arrival", "matrix"],
+      title_terms: ["voyage", "sample movie"],
       library_ids: ["33333333-3333-4333-8333-333333333333"],
       peer_node_ids: ["44444444-4444-4444-8444-444444444444"],
       stop_reasons: ["completed", "other", "in_progress"],
@@ -289,7 +289,7 @@ describe("ApiClient", () => {
             external_refs: [],
             title: "Voyage",
             sort_title: "Voyage",
-            images: [{ kind: "poster", url: "https://img.example/arrival.jpg" }],
+            images: [{ kind: "poster", url: "https://img.example/voyage.jpg" }],
             genres: ["sci-fi"],
             tags: [],
             added_at: "2024-01-01T00:00:00Z",
@@ -418,10 +418,10 @@ describe("ApiClient", () => {
             id: "5f8b3e2a-1111-4a11-9a11-000000000001",
             person: {
               id: personId,
-              name: "Sample Actress",
+              name: "Sample Actor",
               headshot_url: "https://example.test/sample-actress.jpg",
             },
-            character: "Sample Character Two",
+            character: "Sample Character",
           },
         ],
         crew: [],
@@ -435,8 +435,8 @@ describe("ApiClient", () => {
 
     const credits = await client.getWorkCredits(workId);
 
-    expect(credits.cast[0]?.person.name).toBe("Sample Actress");
-    expect(credits.cast[0]?.character).toBe("Sample Character Two");
+    expect(credits.cast[0]?.person.name).toBe("Sample Actor");
+    expect(credits.cast[0]?.character).toBe("Sample Character");
     expect(credits.crew).toEqual([]);
   });
 
@@ -453,8 +453,8 @@ describe("ApiClient", () => {
           id: similarId,
           kind: "movie",
           external_refs: [],
-          title: "Sample Movie 2049",
-          sort_title: "Sample Movie 2049",
+          title: "Sample Runner 2049",
+          sort_title: "Sample Runner 2049",
           images: [],
           genres: ["science fiction"],
           tags: [],

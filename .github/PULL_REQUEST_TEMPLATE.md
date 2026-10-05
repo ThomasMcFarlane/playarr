@@ -21,6 +21,8 @@ canonical, always-run gate that re-verifies most of this automatically --
 this checklist is here for anything CI can't see (manual testing,
 screenshots, migration steps, deliberate scope decisions).
 
+- [ ] No real media titles (films, series, episodes, music) and no real posters, artwork or screenshots of
+      real titles appear in this PR, its commits or its description. Use neutral placeholders (see `AGENTS.md`).
 - [ ] All CI checks are green. Per-platform jobs (`backend-check`,
       `android-check`, `ios-check`, `harmony-check`, `tv-web-check`,
       `openapi-contract-check`) only run when this PR touches their path,

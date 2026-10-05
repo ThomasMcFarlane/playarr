@@ -360,7 +360,7 @@ mod tests {
             "id": 8117,
             "seriesId": 8,
             "seasonNumber": 2006,
-            "title": "Sample Track Three",
+            "title": "Test Episode Adult",
             "releaseDate": "2006-06-08",
             "runtime": 41,
             "hasFile": false,

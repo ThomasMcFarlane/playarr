@@ -109,7 +109,7 @@ pub struct Work {
     pub kind: WorkKind,
     pub external_refs: Vec<ExternalRef>,
     pub title: String,
-    /// Normalized title used for alphabetical sort/browse ("Dark Knight,
+    /// Normalized title used for alphabetical sort/browse ("Test Film,
     /// The" rather than "The Test Film").
     pub sort_title: String,
     pub overview: Option<String>,

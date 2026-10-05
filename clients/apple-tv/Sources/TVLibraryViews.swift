@@ -264,14 +264,11 @@ struct TVHomeView: View {
         if !interactive {
             let start = Array((series + works.filter { $0.kind != .series }).prefix(5))
             let preferred = [
-                "28 Sample Years",
-                "28 Sample Years: The Sequel",
-                "30 Sample Nights",
-                "30 Sample Nights: The Sequel",
-                "47 Sample Metres",
-                "10,000 Sample",
-                "2001: A Sample Voyage",
-                "Sample Film 2012",
+                "Sample Movie 1",
+                "Sample Movie 2",
+                "Sample Movie 3",
+                "Sample Movie 4",
+                "Sample Movie 5",
             ]
             var ordered: [Work] = []
             for title in preferred {
@@ -462,7 +459,7 @@ struct TVHomeView: View {
         if let focus = focusedCard, let match = works.first(where: { $0.id == focus.workID }) {
             return match
         }
-        // Prefer series for hero (live SPA highlights "Test Series Y").
+        // Prefer series for hero (live SPA highlights a series).
         return works.first(where: { $0.kind == .series }) ?? works.first
     }
 

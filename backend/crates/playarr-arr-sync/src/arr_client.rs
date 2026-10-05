@@ -556,7 +556,10 @@ mod tests {
         });
         assert_eq!(
             map_radarr(&movie).arr_tags,
-            vec!["collection:131292:Sample Hero Collection", "score:7.6:25000"]
+            vec![
+                "collection:131292:Sample Hero Collection",
+                "score:7.6:25000"
+            ]
         );
         assert!(map_radarr(&radarr_movie(2, "Solo", 2, true, true))
             .arr_tags

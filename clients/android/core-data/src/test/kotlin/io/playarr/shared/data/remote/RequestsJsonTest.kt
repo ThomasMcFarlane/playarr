@@ -23,7 +23,7 @@ class RequestsJsonTest {
                "status": "pending", "origin": "playarr", "requested_by": "sam", "mine": true,
                "status_note": "Sent to Radarr", "systems": ["radarr"],
                "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z", "future": 1},
-              {"id": "b", "title": "Dark", "kind": "series", "seasons": [1, 2], "status": "approved",
+              {"id": "b", "title": "Test Series J", "kind": "series", "seasons": [1, 2], "status": "approved",
                "origin": "ombi", "mine": false, "systems": [],
                "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}
             ]

@@ -2349,8 +2349,8 @@ mod sync_endpoint_tests {
                 provider: ExternalProvider::Tmdb,
                 external_id: "603".to_string(),
             }],
-            title: "Sample Movie Kilo".to_string(),
-            sort_title: "matrix, the".to_string(),
+            title: "The Sample Movie".to_string(),
+            sort_title: "sample movie, the".to_string(),
             overview: None,
             images: vec![],
             genres: vec![],
@@ -2384,7 +2384,7 @@ mod sync_endpoint_tests {
         assert_eq!(row["availability"], "available");
         assert_eq!(row["container"], "mkv");
         assert_eq!(row["codec"], "h264");
-        assert_eq!(row["title"], "Sample Movie Kilo");
+        assert_eq!(row["title"], "The Sample Movie");
         assert_eq!(row["kind"], "movie");
         assert!(body["server_time"].as_str().unwrap().parse::<i64>().is_ok());
 

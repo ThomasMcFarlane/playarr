@@ -532,8 +532,8 @@ pub async fn list_views_handler(
                     "external_refs": [
                         { "provider": "tmdb", "external_id": "603" }
                     ],
-                    "title": "Sample Movie Kilo",
-                    "sort_title": "Matrix, The",
+                    "title": "The Sample Movie",
+                    "sort_title": "Sample Movie, The",
                     "overview": "A computer hacker learns about the true nature of reality.",
                     "images": [
                         {

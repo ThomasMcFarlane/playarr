@@ -34,7 +34,7 @@ class JoinedPlayarrApiTest {
     fun `browse joins duplicate identities and tolerates an unavailable server`() = runBlocking {
         val first = work("primary-voyage", "Voyage", "329865")
         val duplicate = work("secondary-voyage", "Voyage (2016)", "329865")
-        val other = work("secondary-bear", "Test Series F", "136315")
+        val other = work("secondary-bear", "Zephyr Series", "136315")
         val primary = server("https://primary.example", fakeApi(
             "browseCatalog" to { CatalogPage(listOf(first), 1) },
         ))
@@ -74,7 +74,7 @@ class JoinedPlayarrApiTest {
             PlayarrServerSourceRegistry(),
         )
 
-        val response = joined.searchCatalog("arrival", limit = 2)
+        val response = joined.searchCatalog("voyage", limit = 2)
 
         assertEquals(listOf("primary-voyage", "secondary-moon"), response.items.map(Work::id))
     }

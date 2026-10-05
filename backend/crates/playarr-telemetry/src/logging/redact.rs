@@ -79,6 +79,9 @@ mod tests {
     #[test]
     fn redacts_matching_field_leaves_others_untouched() {
         assert_eq!(redact_if_sensitive("api_key", "sk-abc123"), "REDACTED");
-        assert_eq!(redact_if_sensitive("title", "Sample Movie Kilo"), "Sample Movie Kilo");
+        assert_eq!(
+            redact_if_sensitive("title", "The Sample Movie"),
+            "The Sample Movie"
+        );
     }
 }

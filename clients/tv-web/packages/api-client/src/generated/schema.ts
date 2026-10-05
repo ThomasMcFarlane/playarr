@@ -3908,7 +3908,7 @@ export interface components {
             /**
              * Format: uuid
              * @description `Some(id)` nests this playlist under an existing one the caller can
-             *     already write to (e.g. "Sample Movie Golf" under "MCU") -- checked in
+             *     already write to (e.g. "Sample Hero" under "SCU") -- checked in
              *     [`create_playlist_handler`], not structurally enforced here.
              */
             parent_playlist_id?: string | null;
@@ -7125,7 +7125,7 @@ export interface components {
              */
             release_date?: string | null;
             /**
-             * @description Normalized title used for alphabetical sort/browse ("Dark Knight,
+             * @description Normalized title used for alphabetical sort/browse ("Test Film,
              *     The" rather than "The Test Film").
              */
             sort_title: string;
@@ -8349,7 +8349,7 @@ export interface operations {
                      *         "library_id": "fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31",
                      *         "library_name": "Movies",
                      *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
-                     *         "media_title": "Sample Movie Kilo",
+                     *         "media_title": "The Sample Movie",
                      *         "peer_node_id": "f29eaea2-5023-4a46-ae31-d84ea62f46c8",
                      *         "peer_node_is_self": true,
                      *         "peer_node_name": "Living Room",
@@ -8422,7 +8422,7 @@ export interface operations {
                      *         "library_id": "fa76e5b3-dab8-43a3-bf2b-efb9f44e4e31",
                      *         "library_name": "Movies",
                      *         "media_file_id": "9c858901-8a57-4791-81fe-4c455b099bc9",
-                     *         "media_title": "Sample Movie Kilo",
+                     *         "media_title": "The Sample Movie",
                      *         "peer_node_id": "f29eaea2-5023-4a46-ae31-d84ea62f46c8",
                      *         "peer_node_is_self": true,
                      *         "peer_node_name": "Living Room",
@@ -11051,7 +11051,7 @@ export interface operations {
                      *           ],
                      *           "kind": "movie",
                      *           "monitored": true,
-                     *           "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *           "overview": "A sample synopsis for a test film.",
                      *           "release_date": "2008-07-16T00:00:00Z",
                      *           "sort_title": "Test Film, The",
                      *           "tags": [],
@@ -11280,7 +11280,7 @@ export interface operations {
                      *           ],
                      *           "kind": "movie",
                      *           "monitored": true,
-                     *           "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *           "overview": "A sample synopsis for a test film.",
                      *           "release_date": "2008-07-16T00:00:00Z",
                      *           "sort_title": "Test Film, The",
                      *           "tags": [],
@@ -11357,7 +11357,7 @@ export interface operations {
                      *         ],
                      *         "kind": "movie",
                      *         "monitored": true,
-                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *         "overview": "A sample synopsis for a test film.",
                      *         "release_date": "2008-07-16T00:00:00Z",
                      *         "sort_title": "Test Film, The",
                      *         "tags": [],
@@ -11457,7 +11457,7 @@ export interface operations {
                      * @example {
                      *       "cast": [
                      *         {
-                     *           "character": "Sample Character / Sample Vigilante",
+                     *           "character": "Sample Character / Hero",
                      *           "department": null,
                      *           "id": "7c3a9e21-4f8d-4b6a-9c1e-2d5f8a3b7c90",
                      *           "job": null,
@@ -11716,11 +11716,11 @@ export interface operations {
                      *         ],
                      *         "kind": "movie",
                      *         "monitored": true,
-                     *         "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+                     *         "overview": "A sample synopsis for a test prequel.",
                      *         "release_date": "2005-06-15T00:00:00Z",
-                     *         "sort_title": "Sample Movie Hotel",
+                     *         "sort_title": "Test Prequel",
                      *         "tags": [],
-                     *         "title": "Sample Movie Hotel"
+                     *         "title": "Test Prequel"
                      *       }
                      *     ]
                      */
@@ -14119,11 +14119,11 @@ export interface operations {
                      *         ],
                      *         "kind": "movie",
                      *         "monitored": true,
-                     *         "overview": "After training with his mentor, Sample Vigilante begins his fight to free crime-ridden Gotham City from corruption.",
+                     *         "overview": "A sample synopsis for a test prequel.",
                      *         "release_date": "2005-06-15T00:00:00Z",
-                     *         "sort_title": "Sample Movie Hotel",
+                     *         "sort_title": "Test Prequel",
                      *         "tags": [],
-                     *         "title": "Sample Movie Hotel"
+                     *         "title": "Test Prequel"
                      *       },
                      *       {
                      *         "added_at": "2024-01-15T10:30:00Z",
@@ -14150,7 +14150,7 @@ export interface operations {
                      *         ],
                      *         "kind": "movie",
                      *         "monitored": true,
-                     *         "overview": "Sample Vigilante raises the stakes in his war on crime with the help of Lt. Jim Gordon and District Attorney Harvey Dent.",
+                     *         "overview": "A sample synopsis for a test film.",
                      *         "release_date": "2008-07-16T00:00:00Z",
                      *         "sort_title": "Test Film, The",
                      *         "tags": [],
@@ -14837,7 +14837,7 @@ export interface operations {
                  * @example {
                  *       "is_system": false,
                  *       "media_type": "video",
-                 *       "name": "Sample Movie Golf",
+                 *       "name": "Sample Hero",
                  *       "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
                  *     }
                  */
@@ -14857,7 +14857,7 @@ export interface operations {
                      *       "id": "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d",
                      *       "is_system": false,
                      *       "media_type": "video",
-                     *       "name": "Sample Movie Golf",
+                     *       "name": "Sample Hero",
                      *       "owner_user_id": "9d3b3f8a-6b34-4b1e-8a4a-2e6f6b1a9c11",
                      *       "parent_playlist_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
                      *       "updated_at": "2026-01-15T10:30:00Z"
@@ -17693,9 +17693,9 @@ export interface operations {
                      *           "monitored": true,
                      *           "overview": "A computer hacker learns about the true nature of reality.",
                      *           "release_date": "1999-03-31T00:00:00Z",
-                     *           "sort_title": "Matrix, The",
+                     *           "sort_title": "Sample Movie, The",
                      *           "tags": [],
-                     *           "title": "Sample Movie Kilo"
+                     *           "title": "The Sample Movie"
                      *         }
                      *       ],
                      *       "total": 1
@@ -17858,7 +17858,7 @@ export interface operations {
                  *       "eventType": "SeriesAdd",
                  *       "series": {
                  *         "id": 42,
-                 *         "title": "Test Series T",
+                 *         "title": "Test Series D",
                  *         "tvdbId": 275908
                  *       }
                  *     }

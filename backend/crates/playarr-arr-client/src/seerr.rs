@@ -360,7 +360,7 @@ mod tests {
             .and(path("/api/v1/movie/603"))
             .and(header("X-Api-Key", "k"))
             .respond_with(ResponseTemplate::new(200).set_body_json(
-                json!({"title": "Sample Movie Kilo", "releaseDate": "1999-03-30", "posterPath": "/m.jpg"}),
+                json!({"title": "The Sample Movie", "releaseDate": "1999-03-30", "posterPath": "/m.jpg"}),
             ))
             .mount(&server)
             .await;
@@ -400,11 +400,14 @@ mod tests {
             Some("u@example.com")
         );
         let info = c.title_info(DiscoveryKind::Movie, 603).await.unwrap();
-        assert_eq!((info.title.as_str(), info.year), ("Sample Movie Kilo", Some(1999)));
+        assert_eq!(
+            (info.title.as_str(), info.year),
+            ("The Sample Movie", Some(1999))
+        );
         let created = c
             .create_request(&NewRemoteRequest {
                 kind: DiscoveryKind::Movie,
-                title: "Sample Movie Kilo".into(),
+                title: "The Sample Movie".into(),
                 tmdb_id: Some(603),
                 tvdb_id: None,
                 seasons: vec![],
@@ -414,7 +417,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             (created.id.as_str(), created.title.as_str()),
-            ("9", "Sample Movie Kilo")
+            ("9", "The Sample Movie")
         );
         c.approve(DiscoveryKind::Movie, "9").await.unwrap();
         c.decline(DiscoveryKind::Movie, "9", None).await.unwrap();
@@ -438,7 +441,7 @@ mod tests {
         let c = SeerrClient::new(&server.uri(), "k");
         let mut new = NewRemoteRequest {
             kind: DiscoveryKind::Series,
-            title: "GoT".into(),
+            title: "TS".into(),
             tmdb_id: Some(1399),
             tvdb_id: Some(121361),
             seasons: vec![],

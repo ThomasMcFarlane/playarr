@@ -136,12 +136,9 @@ mod tests {
 
     #[test]
     fn normalisation_folds_case_punctuation_articles_and_width() {
-        assert_eq!(
-            normalize_title("Sample Movie Juliet"),
-            "lord of the rings"
-        );
-        assert_eq!(normalize_title("Sample Cartoon"), "tom and jerry");
-        assert_eq!(normalize_title("ＳＡＭＰＬＥ·Ｅ"), "sample e");
+        assert_eq!(normalize_title("The Sample Trilogy"), "sample trilogy");
+        assert_eq!(normalize_title("Salt & Pepper"), "salt and pepper");
+        assert_eq!(normalize_title("ＤＥＭＯ·Ｘ"), "demo x");
         assert_eq!(normalize_title("The"), "the");
         assert_eq!(normalize_title("Zoé"), normalize_title("Zoe\u{301}"));
     }
@@ -158,8 +155,8 @@ mod tests {
 
     #[test]
     fn exact_normalised_title_matches_when_unique() {
-        let c = cand("Sample Movie Kilo", Some(1999));
-        let r = resolve_by_title(&item("matrix", Some(1999)), std::slice::from_ref(&c));
+        let c = cand("The Sample Movie", Some(1999));
+        let r = resolve_by_title(&item("sample movie", Some(1999)), std::slice::from_ref(&c));
         assert_eq!(r, Resolution::Matched(c.id));
     }
 
@@ -174,13 +171,19 @@ mod tests {
 
     #[test]
     fn same_title_twice_is_ambiguous_without_a_year() {
-        let (a, b) = (cand("Sample Title", Some(1984)), cand("Sample Title", Some(2021)));
+        let (a, b) = (
+            cand("Sample Title", Some(1984)),
+            cand("Sample Title", Some(2021)),
+        );
         assert!(matches!(
             resolve_by_title(&item("Sample Title", None), &[a, b]),
             Resolution::Ambiguous(v) if v.len() == 2
         ));
         // With a year the same data resolves.
-        let (a, b) = (cand("Sample Title", Some(1984)), cand("Sample Title", Some(2021)));
+        let (a, b) = (
+            cand("Sample Title", Some(1984)),
+            cand("Sample Title", Some(2021)),
+        );
         let expect = b.id;
         assert_eq!(
             resolve_by_title(&item("Sample Title", Some(2021)), &[a, b]),

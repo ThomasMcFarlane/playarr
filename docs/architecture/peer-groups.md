@@ -798,7 +798,7 @@ change to `playarr-auth/src/jwt.rs` is required.
 
 Each peer already independently reconciles its own catalog from its own
 *arr instances via `ReconciliationPoller` (poll-as-truth, single writer per
-row). Two peers cataloguing "Sample Movie Kilo (1999)" each mint their **own**
+row). Two peers cataloguing "The Sample Movie (1999)" each mint their **own**
 local `Uuid` via `new_work` in `poller.rs`, but both carry the same
 `ExternalRef{Tmdb, "603"}`: that ref, not `Work.id`, is the only thing
 portable across peers.

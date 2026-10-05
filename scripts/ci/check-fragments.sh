@@ -11,7 +11,9 @@ git fetch -q --no-tags origin "$base"
 head=$(git rev-parse HEAD^2 2>/dev/null || git rev-parse HEAD)
 bad=""
 for c in $(git rev-list --no-merges "origin/$base..$head"); do
-  case "$(git log -1 --format=%s "$c")" in "chore(train): fold fragments"*) continue ;; esac
+  # "chore(scrub):" is reserved for owner-ordered repository-wide scrubs (for example removing media
+  # titles) that must rewrite existing CHANGELOG.md/TASKS.md text, which fragments cannot express.
+  case "$(git log -1 --format=%s "$c")" in "chore(train): fold fragments"*|"chore(scrub):"*) continue ;; esac
   # Key mode: the train squashes the branch (with the folded fragments) into one commit it marks.
   git log -1 --format=%B "$c" | grep -qx 'Merge-Train: yes' && continue
   if git diff-tree --no-commit-id --name-only -r "$c" | grep -qxE 'CHANGELOG\.md|TASKS\.md'; then
