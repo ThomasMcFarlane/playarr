@@ -197,9 +197,6 @@ impl ReconciliationPoller {
     /// and file changes themselves are published by the event-decorated
     /// repositories the poller writes through, not here.
     pub fn with_live_events(mut self, events: playarr_db::LiveEventPublisher) -> Self {
-        // Season and episode rows are written by raw SQL inside `MediaSync`, so it
-        // announces their metadata edits through the same publisher.
-        self.media_sync = self.media_sync.with_live_events(events.clone());
         self.live_events = Some(events);
         self
     }

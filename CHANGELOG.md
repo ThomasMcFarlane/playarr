@@ -9,7 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Live events: a sync pass that creates a season or episode, or changes an episode's title, synopsis, artwork, air date or runtime, now publishes a `library` update for the series, so open clients refresh without a manual reload. Unchanged re-syncs publish nothing.
+- Playback delegated to a peer node now always proxies HLS through the entry node, even when `Redirect` delivery was chosen. A redirected HLS URL reached the peer without a playback capability (segment names in the manifest are relative and clients only send their bearer token to their own server), so the playlist answered HTTP 401 and the Android decode-failure transcode fallback ended in "io bad http status". Regression tests cover both the HLS and the direct-play paths.
 - Radarr, Whisparr and Lidarr artwork entries now tolerate a missing instance-local `url` (only `remoteUrl` present), as Sonarr already did, so one such image no longer fails a whole sync with "missing field `url`". Regression tests added for each client.
 - Merge train: stop re-merging `main` into every queued pull request. It now does so only when main's new commits touch the PR's files (fragment, CHANGELOG.md and TASKS.md paths excluded) or conflict, so landing one PR no longer cancels the CI of the next and the queue no longer starves. The train commits as Thomas McFarlane with a `Merge-Train: yes` trailer that `check-fragments.sh` exempts, and its decision logic has tests (`scripts/ci/test-merge-train.sh`).
 - Give iOS and tvOS release invocations separate temporary signing keychains and allow the `codesign` partition explicitly.
@@ -2182,7 +2182,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
-- Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.
 - Document VIDAA's invite-only partner registration and App Store release gates,
   including the production bootstrap decision required for self-hosted Playarr.

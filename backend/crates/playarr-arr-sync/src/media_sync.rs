@@ -206,11 +206,6 @@ pub struct MediaSync {
     /// Audio/subtitle language index (task 180). `None` by default, same
     /// opt-in builder shape as `credit_repo`.
     language_repo: Option<std::sync::Arc<dyn MediaLanguageRepo>>,
-    /// Live-event publisher (task 278). `None` by default, same opt-in builder
-    /// shape as `credit_repo`. Season and episode rows are written with raw SQL
-    /// (no event-decorated repository wraps them), so this announces the
-    /// metadata edits those writes make.
-    live_events: Option<playarr_db::LiveEventPublisher>,
 }
 
 impl MediaSync {
@@ -222,30 +217,6 @@ impl MediaSync {
             media_file_repo,
             credit_repo: None,
             language_repo: None,
-            live_events: None,
-        }
-    }
-
-    /// Opts this `MediaSync` into publishing a `library`/`upserted` live event
-    /// for a series whose season or episode rows were created or edited by a
-    /// sync pass (`docs/architecture/live-events.md`). Unchanged rows publish
-    /// nothing, so a quiet five-minute poll stays silent.
-    pub fn with_live_events(mut self, events: playarr_db::LiveEventPublisher) -> Self {
-        self.live_events = Some(events);
-        self
-    }
-
-    async fn announce_series_changed(&self, series_work_id: Uuid, source_instance_id: Uuid) {
-        if let Some(events) = &self.live_events {
-            events
-                .publish(playarr_db::NewLiveEvent::for_library(
-                    playarr_db::live_event_kind::LIBRARY,
-                    "work",
-                    series_work_id,
-                    &["upserted"],
-                    Some(source_instance_id),
-                ))
-                .await;
         }
     }
 
@@ -527,7 +498,6 @@ impl MediaSync {
         let files_by_id: HashMap<i64, SonarrEpisodeFile> =
             files.into_iter().map(|f| (f.id, f)).collect();
 
-        let mut metadata_changed = false;
         for episode in episodes {
             // Sonarr's `0` sentinel means "no file imported yet" (see
             // `SonarrEpisode::episode_file_id`'s doc comment).
@@ -541,12 +511,11 @@ impl MediaSync {
                 continue;
             };
 
-            let (season_id, season_changed) = self
+            let season_id = self
                 .find_or_create_season(series_work_id, episode.season_number as i32)
                 .await?;
-            metadata_changed |= season_changed;
             let images = sonarr_images(&episode.images);
-            let (episode_id, episode_changed) = self
+            let episode_id = self
                 .find_or_upsert_episode(
                     season_id,
                     episode.episode_number as i32,
@@ -558,7 +527,6 @@ impl MediaSync {
                     episode.monitored,
                 )
                 .await?;
-            metadata_changed |= episode_changed;
 
             let media_info = file.media_info.as_ref();
             let duration_ms = media_info
@@ -587,10 +555,6 @@ impl MediaSync {
                 media_info.and_then(|m| m.subtitles.as_deref()),
             )
             .await;
-        }
-        if metadata_changed {
-            self.announce_series_changed(series_work_id, source_instance_id)
-                .await;
         }
         Ok(())
     }
@@ -613,7 +577,6 @@ impl MediaSync {
         let files_by_id: HashMap<i64, WhisparrEpisodeFile> =
             files.into_iter().map(|f| (f.id, f)).collect();
 
-        let mut metadata_changed = false;
         for episode in episodes {
             // Whisparr uses the same `0` sentinel Sonarr does for "no file
             // imported yet" (see `WhisparrEpisode::episode_file_id`'s doc
@@ -628,10 +591,9 @@ impl MediaSync {
                 continue;
             };
 
-            let (season_id, season_changed) = self
+            let season_id = self
                 .find_or_create_season(series_work_id, episode.season_number as i32)
                 .await?;
-            metadata_changed |= season_changed;
             let images = whisparr_images(&episode.images);
             // Real Whisparr V3 instances omit `episodeNumber` entirely (see
             // `WhisparrEpisode::episode_number`'s doc comment) -- fall back
@@ -641,7 +603,7 @@ impl MediaSync {
             // (the same scene always carries the same Whisparr `id`),
             // rather than duplicating a row per pass.
             let episode_number = episode.episode_number.unwrap_or(episode.id) as i32;
-            let (episode_id, episode_changed) = self
+            let episode_id = self
                 .find_or_upsert_episode(
                     season_id,
                     episode_number,
@@ -653,7 +615,6 @@ impl MediaSync {
                     episode.monitored,
                 )
                 .await?;
-            metadata_changed |= episode_changed;
 
             let media_info = file.media_info.as_ref();
             let duration_ms = media_info
@@ -682,10 +643,6 @@ impl MediaSync {
                 media_info.and_then(|m| m.subtitles.as_deref()),
             )
             .await;
-        }
-        if metadata_changed {
-            self.announce_series_changed(series_work_id, source_instance_id)
-                .await;
         }
         Ok(())
     }
@@ -827,7 +784,7 @@ impl MediaSync {
         &self,
         series_work_id: Uuid,
         season_number: i32,
-    ) -> Result<(Uuid, bool), MediaSyncError> {
+    ) -> Result<Uuid, MediaSyncError> {
         let select_sql = match self.backend {
             Backend::Sqlite => {
                 "SELECT id FROM seasons WHERE series_work_id = ? AND season_number = ?"
@@ -840,7 +797,7 @@ impl MediaSync {
             .select_uuid(select_sql, series_work_id.to_string(), season_number as i64)
             .await?
         {
-            return Ok((id, false));
+            return Ok(id);
         }
 
         let id = Uuid::new_v4();
@@ -860,16 +817,14 @@ impl MediaSync {
             .bind(season_number as i64)
             .execute(&self.pool)
             .await?;
-        Ok((id, true))
+        Ok(id)
     }
 
     /// Finds the episode row for `(season_id, episode_number)`, updating its
     /// title/monitored/availability to the latest Sonarr state if it already
     /// exists, or inserting a fresh one (marked `available`, since this is
     /// only ever called for an episode a file was just matched against) if
-    /// not. The flag in the result is `true` when a row was inserted or an
-    /// existing row's metadata actually changed (the update is guarded so an
-    /// identical re-sync touches no row), which drives the live event.
+    /// not.
     #[allow(clippy::too_many_arguments)]
     async fn find_or_upsert_episode(
         &self,
@@ -881,7 +836,7 @@ impl MediaSync {
         air_date: Option<chrono::NaiveDate>,
         runtime_minutes: Option<u32>,
         monitored: bool,
-    ) -> Result<(Uuid, bool), MediaSyncError> {
+    ) -> Result<Uuid, MediaSyncError> {
         let images_json = serde_json::to_string(images).map_err(playarr_db::DbError::from)?;
         let select_sql = match self.backend {
             Backend::Sqlite => "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?",
@@ -895,40 +850,23 @@ impl MediaSync {
         {
             let update_sql = match self.backend {
                 Backend::Sqlite => {
-                    "UPDATE episodes SET title = ?, overview = ?, images = ?, air_date = ?, runtime_minutes = ?, monitored = ?, availability = 'available' WHERE id = ? \
-                     AND (title IS NOT ? OR overview IS NOT ? OR images IS NOT ? OR air_date IS NOT ? \
-                          OR runtime_minutes IS NOT ? OR monitored IS NOT ? OR availability IS NOT 'available')"
+                    "UPDATE episodes SET title = ?, overview = ?, images = ?, air_date = ?, runtime_minutes = ?, monitored = ?, availability = 'available' WHERE id = ?"
                 }
                 Backend::Postgres => {
-                    "UPDATE episodes SET title = $1, overview = $2, images = $3, air_date = $4, runtime_minutes = $5, monitored = $6, availability = 'available' WHERE id = $7 \
-                     AND (title IS DISTINCT FROM $1 OR overview IS DISTINCT FROM $2 OR images IS DISTINCT FROM $3 \
-                          OR air_date IS DISTINCT FROM $4 OR runtime_minutes IS DISTINCT FROM $5 \
-                          OR monitored IS DISTINCT FROM $6 OR availability IS DISTINCT FROM 'available')"
+                    "UPDATE episodes SET title = $1, overview = $2, images = $3, air_date = $4, runtime_minutes = $5, monitored = $6, availability = 'available' WHERE id = $7"
                 }
             };
-            let air_date = air_date.map(|date| date.format("%Y-%m-%d").to_string());
-            let runtime = runtime_minutes.map(i64::from);
-            let mut query = sqlx::query(update_sql)
+            sqlx::query(update_sql)
                 .bind(title)
                 .bind(overview)
                 .bind(&images_json)
-                .bind(air_date.clone())
-                .bind(runtime)
+                .bind(air_date.map(|date| date.format("%Y-%m-%d").to_string()))
+                .bind(runtime_minutes.map(i64::from))
                 .bind(monitored as i64)
-                .bind(id.to_string());
-            if self.backend == Backend::Sqlite {
-                // SQLite's `?` placeholders are positional: repeat the values
-                // for the "did anything change" guard.
-                query = query
-                    .bind(title)
-                    .bind(overview)
-                    .bind(&images_json)
-                    .bind(air_date)
-                    .bind(runtime)
-                    .bind(monitored as i64);
-            }
-            let changed = query.execute(&self.pool).await?.rows_affected() > 0;
-            return Ok((id, changed));
+                .bind(id.to_string())
+                .execute(&self.pool)
+                .await?;
+            return Ok(id);
         }
 
         let id = Uuid::new_v4();
@@ -954,7 +892,7 @@ impl MediaSync {
             .bind(monitored as i64)
             .execute(&self.pool)
             .await?;
-        Ok((id, true))
+        Ok(id)
     }
 
     async fn find_or_create_album(
@@ -1330,7 +1268,7 @@ mod tests {
         let work_id = Uuid::new_v4();
         let pool = test_pool_with_work(work_id, "series").await;
         let sync = media_sync(pool.clone());
-        let (season_id, _) = sync.find_or_create_season(work_id, 1).await.unwrap();
+        let season_id = sync.find_or_create_season(work_id, 1).await.unwrap();
         let images = vec![ImageAsset {
             kind: playarr_model::ImageKind::Thumb,
             url: "https://artworks.thetvdb.com/episodes/10.jpg".to_string(),
@@ -1338,7 +1276,7 @@ mod tests {
             height: None,
         }];
 
-        let (episode_id, created) = sync
+        let episode_id = sync
             .find_or_upsert_episode(
                 season_id,
                 1,
@@ -1357,7 +1295,7 @@ mod tests {
             width: None,
             height: None,
         }];
-        let (updated_id, updated) = sync
+        let updated_id = sync
             .find_or_upsert_episode(
                 season_id,
                 1,
@@ -1371,10 +1309,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(updated_id, episode_id);
-        assert!(
-            created && updated,
-            "insert and real edit both report a change"
-        );
 
         let images_json: (String,) = sqlx::query_as("SELECT images FROM episodes WHERE id = ?")
             .bind(episode_id.to_string())
@@ -1393,120 +1327,6 @@ mod tests {
         assert_eq!(metadata.0.as_deref(), Some("Updated synopsis"));
         assert_eq!(metadata.1.as_deref(), Some("2024-01-03"));
         assert_eq!(metadata.2, Some(44));
-    }
-
-    #[tokio::test]
-    async fn find_or_upsert_episode_reports_a_change_only_when_metadata_differs() {
-        let work_id = Uuid::new_v4();
-        let pool = test_pool_with_work(work_id, "series").await;
-        let sync = media_sync(pool);
-        let (season_id, season_created) = sync.find_or_create_season(work_id, 1).await.unwrap();
-        let (_, season_again) = sync.find_or_create_season(work_id, 1).await.unwrap();
-        assert!(season_created && !season_again);
-
-        let upsert = |title: &'static str, overview: Option<&'static str>, runtime| {
-            sync.find_or_upsert_episode(
-                season_id,
-                1,
-                title,
-                overview,
-                &[],
-                chrono::NaiveDate::from_ymd_opt(2024, 1, 2),
-                runtime,
-                true,
-            )
-        };
-        assert!(upsert("Pilot", None, Some(43)).await.unwrap().1, "insert");
-        assert!(
-            !upsert("Pilot", None, Some(43)).await.unwrap().1,
-            "identical"
-        );
-        assert!(
-            upsert("Pilot", Some("Synopsis"), Some(43)).await.unwrap().1,
-            "overview"
-        );
-        assert!(
-            !upsert("Pilot", Some("Synopsis"), Some(43)).await.unwrap().1,
-            "identical"
-        );
-        assert!(
-            upsert("Pilot", Some("Synopsis"), None).await.unwrap().1,
-            "runtime to null"
-        );
-        assert!(
-            !upsert("Pilot", Some("Synopsis"), None).await.unwrap().1,
-            "null is stable"
-        );
-        assert!(
-            upsert("Renamed", Some("Synopsis"), None).await.unwrap().1,
-            "title"
-        );
-    }
-
-    async fn series_upserted_events(pool: &DbPool, series: Uuid) -> usize {
-        let repo = playarr_db::SqlxLiveEventRepo::new(pool.clone());
-        playarr_db::LiveEventRepo::list_after(&repo, 0, 1000)
-            .await
-            .unwrap()
-            .iter()
-            .filter(|e| {
-                e.kind == "library"
-                    && e.entity == "work"
-                    && e.entity_id.as_deref() == Some(series.to_string().as_str())
-                    && e.changed == ["upserted"]
-            })
-            .count()
-    }
-
-    /// Season and episode rows are written with raw SQL, so the sync announces
-    /// metadata edits itself: once for the first sight, silence for an identical
-    /// re-sync, and once more when the *arr app edits an episode (task 278).
-    #[tokio::test]
-    async fn sync_sonarr_publishes_library_events_for_episode_metadata_edits_only() {
-        let work_id = Uuid::new_v4();
-        let pool = test_pool_with_work(work_id, "series").await;
-        let sync = media_sync(pool.clone())
-            .with_live_events(playarr_db::LiveEventPublisher::from_pool(pool.clone()));
-        let source = Uuid::new_v4();
-
-        let server = MockServer::start().await;
-        mount_sonarr(&server, 1).await;
-        let client = ArrClient::Sonarr(SonarrClient::new(server.uri(), "test-key"));
-        sync.sync_work(&client, work_id, 1, source).await.unwrap();
-        assert_eq!(
-            series_upserted_events(&pool, work_id).await,
-            1,
-            "first sight"
-        );
-        sync.sync_work(&client, work_id, 1, source).await.unwrap();
-        assert_eq!(
-            series_upserted_events(&pool, work_id).await,
-            1,
-            "unchanged re-sync is silent"
-        );
-
-        let edited = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/api/v3/episode"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                sonarr_episode_json(10, 1, 1, "Pilot, retitled", 55),
-            ])))
-            .mount(&edited)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/api/v3/episodefile"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                sonarr_episode_file_json(55, 1, "S01E01.mkv"),
-            ])))
-            .mount(&edited)
-            .await;
-        let client = ArrClient::Sonarr(SonarrClient::new(edited.uri(), "test-key"));
-        sync.sync_work(&client, work_id, 1, source).await.unwrap();
-        assert_eq!(
-            series_upserted_events(&pool, work_id).await,
-            2,
-            "title edit announced"
-        );
     }
 
     fn sonarr_episode_json(

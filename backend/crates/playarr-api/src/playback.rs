@@ -1726,6 +1726,17 @@ fn rewrite_for_delivery(
     peer: &PeerNode,
     delivery: DeliveryMode,
 ) -> Result<PlaybackInfoResponse, ApiError> {
+    // An HLS manifest names its segments relative to itself, so a redirected
+    // client loses the `playback_session_id` capability on every segment, and
+    // clients only send their bearer token to their own server origin. The
+    // peer then answers 401 (TASKS 260). HLS is therefore always proxied
+    // through this node, which rewrites the manifest to carry the capability
+    // (`media::proxy_*`); only a direct-play URL, which carries the
+    // capability itself, can be redirected.
+    let delivery = match (delivery, &response.mode) {
+        (DeliveryMode::Redirect, PlaybackMode::Hls) => DeliveryMode::Proxy,
+        (other, _) => other,
+    };
     match delivery {
         DeliveryMode::Redirect => {
             let mut reachable: Vec<&playarr_model::PeerAddress> = peer
@@ -3179,5 +3190,83 @@ mod tests {
         // A miss must be `None`, not a panic/error surfaced to the caller —
         // this is the behavior the playback handler's 404 depends on.
         assert!(lookup.get(Uuid::new_v4()).await.is_none());
+    }
+
+    fn delegated_response(mode: PlaybackMode, url: &str) -> PlaybackInfoResponse {
+        PlaybackInfoResponse {
+            mode,
+            url: url.to_string(),
+            mime_type: "application/x-mpegURL".to_string(),
+            duration_ms: 0,
+            source_offset_ms: 0,
+            audio_tracks: Vec::new(),
+            selected_audio_track_id: None,
+            subtitle_tracks: Vec::new(),
+            selected_subtitle_track_id: None,
+            quality_options: Vec::new(),
+            selected_quality_id: "original".to_string(),
+            session_id: Uuid::new_v4(),
+        }
+    }
+
+    fn reachable_peer() -> PeerNode {
+        let now = Utc::now();
+        PeerNode {
+            id: Uuid::new_v4(),
+            group_id: Uuid::new_v4(),
+            name: "remote".to_string(),
+            addresses: vec![PeerAddress {
+                url: "https://peer.invalid".to_string(),
+                priority: 0,
+                label: "wan".to_string(),
+                client_reachable: true,
+            }],
+            public_key: "test".to_string(),
+            is_self: false,
+            status: PeerNodeStatus::Active,
+            last_seen_at: Some(now),
+            last_sync_error: None,
+            joined_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// TASKS 260: a redirected HLS URL reached the peer without the
+    /// `playback_session_id` capability (manifest segment names are relative
+    /// and the client sends its bearer only to its own origin), so the
+    /// transcode fallback ended in HTTP 401. HLS must be proxied even when
+    /// the rule or the heuristic chose `Redirect`.
+    #[test]
+    fn delegated_hls_is_proxied_even_when_redirect_was_chosen() {
+        let peer = reachable_peer();
+        let response = delegated_response(
+            PlaybackMode::Hls,
+            "/api/v1/media/sessions/6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b/playlist.m3u8",
+        );
+        let session_id = response.session_id;
+        let rewritten = rewrite_for_delivery(response, &peer, DeliveryMode::Redirect).unwrap();
+        assert_eq!(
+            rewritten.url,
+            format!(
+                "/api/v1/media/proxy/{}/sessions/6a5e2c3e-2b9a-4b3e-9b7a-8e2f1c3d4a5b/playlist.m3u8?playback_session_id={session_id}",
+                peer.id
+            )
+        );
+    }
+
+    /// A direct-play URL already carries the capability, so it can still be
+    /// redirected to the peer's own client-reachable address.
+    #[test]
+    fn delegated_direct_play_is_still_redirected() {
+        let peer = reachable_peer();
+        let response = delegated_response(
+            PlaybackMode::Direct,
+            "/api/v1/media/abc/stream?playback_session_id=s1",
+        );
+        let rewritten = rewrite_for_delivery(response, &peer, DeliveryMode::Redirect).unwrap();
+        assert_eq!(
+            rewritten.url,
+            "https://peer.invalid/api/v1/media/abc/stream?playback_session_id=s1"
+        );
     }
 }
