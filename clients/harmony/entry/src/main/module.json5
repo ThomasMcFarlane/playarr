@@ -11,6 +11,7 @@
       "2in1"
     ],
     "pages": "$profile:main_pages",
+    "deliveryWithInstall": true,
     "installationFree": false,
     "routerMap": "$profile:router_map",
     "abilities": [

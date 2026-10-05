@@ -218,7 +218,8 @@ function checkBuildProfileJson5(harmonyDir, errors) {
 
   for (const product of products) {
     if (!product) continue;
-    if (!signingConfigNames.has(product.signingConfig)) {
+    // A product may omit signingConfig (unsigned build, signed afterwards by scripts/sign.sh).
+    if (product.signingConfig !== undefined && !signingConfigNames.has(product.signingConfig)) {
       errors.push(`build-profile.json5: product '${product.name}' signingConfig '${product.signingConfig}' does not resolve to any app.signingConfigs[].name`);
     }
     if (typeof product.compatibleSdkVersion !== 'string' || !product.compatibleSdkVersion.startsWith('5.0.0(12)')) {
@@ -289,14 +290,15 @@ function checkPageAndRouteIntegrity(harmonyDir, errors, warnings) {
   }
 
   // Every router_map.json entry's pageSourceFile must exist and export the
-  // named buildFunction.
+  // named buildFunction. hvigor resolves pageSourceFile relative to the module root
+  // (entry/), not to src/main/ets.
   const routerRows = Array.isArray(routerMap && routerMap.routerMap) ? routerMap.routerMap : [];
   for (const row of routerRows) {
     if (!row || typeof row.pageSourceFile !== 'string') {
       errors.push('router_map.json: an entry is missing pageSourceFile');
       continue;
     }
-    const pageSourcePath = path.join(etsRoot, row.pageSourceFile);
+    const pageSourcePath = path.join(harmonyDir, 'entry', row.pageSourceFile);
     if (!existsSync(pageSourcePath)) {
       errors.push(`router_map.json: pageSourceFile '${row.pageSourceFile}' (route '${row.name}') does not exist`);
       continue;

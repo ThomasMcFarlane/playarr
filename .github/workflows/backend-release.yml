@@ -27,6 +27,11 @@ on:
       - 'backend-v*'
   workflow_dispatch:
     # Run against an existing tag ("Use workflow from" = the tag) to re-publish.
+    inputs:
+      dry_run:
+        description: 'Build everything (binaries, tarballs, smoke test, multi-arch image) from any ref but publish nothing: no GHCR login or push, no downloads upload.'
+        type: boolean
+        default: false
 
 concurrency:
   group: backend-release-${{ github.ref }}
@@ -56,17 +61,23 @@ jobs:
       - name: Resolve and validate the version
         id: version
         shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          case "$GITHUB_REF_NAME" in
-            backend-v*) ;;
-            *) echo "Run this workflow from a backend-v* tag, not '$GITHUB_REF_NAME'." >&2; exit 1 ;;
-          esac
-          version="${GITHUB_REF_NAME#backend-v}"
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/Cargo.toml | head -n 1)"
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            version="${crate}-dryrun"
+          else
+            case "$GITHUB_REF_NAME" in
+              backend-v*) ;;
+              *) echo "Run this workflow from a backend-v* tag, not '$GITHUB_REF_NAME'." >&2; exit 1 ;;
+            esac
+            version="${GITHUB_REF_NAME#backend-v}"
+          fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             echo "Tag version '$version' is not semver." >&2; exit 1
           fi
-          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/Cargo.toml | head -n 1)"
           if [[ "${version%%-*}" != "$crate" ]]; then
             echo "Tag version $version does not match backend crate version $crate (backend/Cargo.toml)." >&2
             exit 1
@@ -80,24 +91,34 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: ${{ !inputs.dry_run }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # One BuildKit builder serves every build below, so the Rust layers are
-      # compiled once per architecture and reused by the image build.
+      # The runner has a fixed disk, and a release compiles Rust for two
+      # architectures. Each build exports only its binary (`-o type=local`, never
+      # into the image store) and the BuildKit cache is pruned after every
+      # architecture, so the peak is one architecture's compile rather than both
+      # plus a third compile for the image. The image step below reuses these
+      # exact binaries instead of compiling again.
       - name: Build server binaries and Admin UI
         shell: bash
         run: |
           set -euo pipefail
+          df -h . | tail -1
           for arch in amd64 arm64; do
             docker buildx build --target binary --platform "linux/$arch" \
               -f infra/docker/backend.Dockerfile -o "type=local,dest=build/$arch" .
+            docker buildx prune --all --force >/dev/null
+            df -h . | tail -1
           done
           docker buildx build --target web --platform linux/amd64 \
             -f infra/docker/backend.Dockerfile -o type=local,dest=build/web .
+          docker buildx prune --all --force >/dev/null
+          df -h . | tail -1
           for a in amd64 arm64; do
             test "$(head -c4 "build/$a/playarr-server" | od -An -c | tr -d ' ')" = '177ELF' && echo "$a: ELF binary ok"
           done
@@ -157,14 +178,20 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Assembles the runtime image around the binaries built above (named
+      # build context `prebuilt`, see the ARTIFACTS argument in the Dockerfile).
+      # The build context is infra/docker, a few kilobytes, not the repository.
       - name: Build and push multi-arch image
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: infra/docker
           file: infra/docker/backend.Dockerfile
+          target: runtime
+          build-contexts: prebuilt=build
+          build-args: ARTIFACTS=prebuilt-artifacts
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ !inputs.dry_run }}
           tags: ${{ steps.tags.outputs.tags }}
           sbom: true
           provenance: true
@@ -175,6 +202,7 @@ jobs:
   publish:
     name: Publish downloads
     needs: build
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

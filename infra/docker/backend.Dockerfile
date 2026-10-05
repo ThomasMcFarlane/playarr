@@ -45,6 +45,15 @@
 # ==============================================================================
 
 ARG RUST_VERSION=1
+# Where the runtime stage takes the server binary and Admin UI from:
+#   built-artifacts     (default) compiled by the `builder` and `web-builder` stages below;
+#   prebuilt-artifacts  taken from the named build context `prebuilt`
+#                       (`--build-context prebuilt=<dir>`, laid out as
+#                       <dir>/<amd64|arm64>/playarr-server and <dir>/web/web, exactly what
+#                       the `binary` and `web` export stages write). The release workflow
+#                       uses this so the image carries the tarball's binaries and the
+#                       multi-arch image step never compiles a second time (no disk spike).
+ARG ARTIFACTS=built-artifacts
 # trixie, not bookworm: the prebuilt ONNX Runtime that ort-sys links is built
 # with a newer libstdc++ (GCC 13+) than bookworm's GCC 12 provides, so the
 # final link fails with undefined `std::__cxx11::basic_string::_M_replace_cold`.
@@ -163,6 +172,17 @@ COPY --from=builder /build/out/playarr-server /playarr-server
 FROM scratch AS web
 COPY --from=web-builder /build/clients/tv-web/admin/dist/ /web/
 
+FROM scratch AS built-artifacts
+COPY --from=builder /build/out/playarr-server /playarr-server
+COPY --from=web-builder /build/clients/tv-web/admin/dist/ /web/
+
+FROM scratch AS prebuilt-artifacts
+ARG TARGETARCH
+COPY --from=prebuilt ${TARGETARCH}/playarr-server /playarr-server
+COPY --from=prebuilt web/web/ /web/
+
+FROM ${ARTIFACTS} AS artifacts
+
 # ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-
 # filesystem friendly. /data is writable (owned by the playarr user) for
@@ -208,8 +228,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --------------------------------------------------------------------
 RUN touch /.playarr-container && chmod 0444 /.playarr-container
 
-COPY --from=builder --chown=playarr:playarr /build/out/playarr-server /app/playarr-server
-COPY --from=web-builder --chown=playarr:playarr /build/clients/tv-web/admin/dist /app/web
+COPY --from=artifacts --chown=playarr:playarr /playarr-server /app/playarr-server
+COPY --from=artifacts --chown=playarr:playarr /web/ /app/web/
 
 WORKDIR /app
 USER playarr:playarr

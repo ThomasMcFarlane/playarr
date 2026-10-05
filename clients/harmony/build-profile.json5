@@ -1,29 +1,17 @@
 {
   "app": {
-    "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          // Real signing material never lives in the repo (see brief §10, risk R9).
-          // Populate these paths locally from your own DevEco Studio / AppGallery
-          // Connect debug identity before building a signed artefact:
-          // "storeFile": "/absolute/path/to/your/debug.p12",
-          // "storePassword": "<from local secret store, never committed>",
-          // "certpath": "/absolute/path/to/your/debug.cer",
-          // "keyAlias": "debug",
-          // "keyPassword": "<from local secret store, never committed>",
-          // "profile": "/absolute/path/to/your/debug.p7b",
-          // "signAlg": "SHA256withECDSA"
-        }
-      }
-    ],
+    // Empty on purpose: hvigor validates a declared signing config as complete material
+    // (certificate, profile, keystore, algorithm) before it compiles anything, so a placeholder
+    // entry breaks the unsigned CI build. The release build produces entry-default-unsigned.hap
+    // and scripts/sign.sh signs it afterwards from environment variables; real signing material
+    // never lives in the repo (see brief §10, risk R9). To sign from DevEco Studio locally, add a
+    // signingConfigs entry and set "signingConfig" on the product in an uncommitted change.
+    "signingConfigs": [],
     "products": [
       {
         "name": "default",
-        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.0(12)",
-        "compileSdkVersion": "6.1.1(24)",
+        "compileSdkVersion": "5.1.0(18)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
           "strictMode": {

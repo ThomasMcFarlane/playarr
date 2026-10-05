@@ -38,6 +38,13 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      # Workspace packages resolve each other through their built `dist/`
+      # (package.json `main`/`types`), so build them first; without it the
+      # AVPlay adapter cannot find `@playarr-tv/player-core` and every
+      # inherited member of its base class (`state`, `setState`) fails to type.
+      - name: Build shared packages
+        run: pnpm --filter './packages/**' run build
+
       - name: Test Samsung AVPlay adapter
         run: pnpm --filter @playarr-tv/player-avplay run test
 

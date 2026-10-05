@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- CI: the Backend Release image step no longer runs out of disk: binaries are built per architecture with the builder cache pruned in between, and the multi-arch image is assembled around those same binaries instead of compiling a third time. A `dry_run` dispatch input builds everything without publishing.
+- CI: the tv-web release workflow builds the shared packages first and the TV apps' runtime config files carry the right name; the Harmony release workflow configures the HarmonyOS npm registry for hvigor and uses the bundled SDK.
+- CI: tv-web lint and typecheck run only for changed workspace packages and their dependents on pull requests.
 - Web: after a backend restart or dropped connection the player now stays mounted and shows an inline "Reconnecting" state while the stream is re-negotiated with back-off and resumed at the same position, instead of replacing the player with a full-screen error.
 - CI: the merge train logic tests stub the hosted-runner guard under its current name, so the end-to-end test passes again.
 - Android: the library Filters sheet now loads the audio and subtitle language lists when it opens, instead of showing "No languages indexed yet" until a selection changed.

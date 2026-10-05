@@ -76,6 +76,7 @@ jobs:
       xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
       harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
       tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
+      tv_web_filters: ${{ steps.tvweb.outputs.tv_web_filters }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,6 +134,16 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: scripts/ci/android-scope.sh | tee -a "$GITHUB_OUTPUT"
+
+      # Affected-only tv-web lint and typecheck: changed workspace packages plus their
+      # dependents on a pull request; empty means everything (scripts/ci/tv-web-scope.sh).
+      # Full on nightly and main dispatches like the other scopes.
+      - name: Select affected tv-web packages
+        id: tvweb
+        env:
+          EVENT_NAME: ${{ steps.all.outputs.full == 'true' && 'schedule' || github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: scripts/ci/tv-web-scope.sh | tee -a "$GITHUB_OUTPUT"
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -376,16 +387,27 @@ jobs:
       - name: Build web workspace dependencies
         run: pnpm --filter './packages/**' run build
 
-      # These delegate to the workspace root's own scripts (see
-      # clients/tv-web/package.json: "lint": "pnpm -r --if-present run
-      # lint", "typecheck": "pnpm -r run typecheck"), which is exactly a
-      # recursive `pnpm -r lint` / `pnpm -r typecheck` across every package
-      # under packages/* and apps/* and web/.
+      # Without a selection these delegate to the workspace root's own scripts
+      # (clients/tv-web/package.json: "lint": "pnpm -r --if-present run lint",
+      # "typecheck": "pnpm -r run typecheck"), a recursive run across every
+      # package under packages/*, apps/*, web/ and admin/. On a pull request that only
+      # touches workspace packages, the same scripts run for the changed packages and
+      # their dependents (shared packages were built above either way).
       - name: Lint (recursive)
-        run: pnpm run lint
+        env:
+          FILTERS: ${{ needs.changes.outputs.tv_web_filters }}
+        run: |
+          if [ -z "$FILTERS" ]; then pnpm run lint; exit; fi
+          args=(); for f in $FILTERS; do args+=(--filter "$f"); done
+          pnpm -r "${args[@]}" --if-present run lint
 
       - name: Typecheck (recursive)
-        run: pnpm run typecheck
+        env:
+          FILTERS: ${{ needs.changes.outputs.tv_web_filters }}
+        run: |
+          if [ -z "$FILTERS" ]; then pnpm run typecheck; exit; fi
+          args=(); for f in $FILTERS; do args+=(--filter "$f"); done
+          pnpm -r "${args[@]}" run typecheck
 
   # ---------------------------------------------------------------------
   # OpenAPI contract: regenerate the utoipa-derived spec and diff it

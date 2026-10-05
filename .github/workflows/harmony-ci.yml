@@ -67,6 +67,14 @@ jobs:
           path: ~/.cache/ohos-sdk
           key: ohos-sdk-6.1-release-cli-5.1.0.840
 
+      # The SDK's resource compiler (restool) loads libGL at start-up; the runner image has none.
+      - name: Install the OpenGL runtime library for the SDK toolchain
+        run: |
+          if ! ldconfig -p | grep -q 'libGL\.so\.1'; then
+            sudo -n apt-get update -qq
+            sudo -n apt-get install -y --no-install-recommends libgl1
+          fi
+
       - name: Fetch the OpenHarmony SDK + Command Line Tools
         run: bash scripts/fetch-sdk.sh
 
