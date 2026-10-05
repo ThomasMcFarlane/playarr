@@ -20,7 +20,7 @@ use playarr_catalog::WorkChildren;
 use playarr_model::discovery::{
     compute_actions, identity_key, merge_candidates, ActionContext, DiscoveryCandidate,
     DiscoveryKind, DiscoveryScope, DiscoveryTitle, ProviderState, ProviderStatus,
-    SourceAvailability, SourceKindTag, TitleAction, TitleSource, WatchlistItem,
+    SourceAvailability, SourceKindTag, TitleAction, TitleSnapshot, TitleSource, WatchlistItem,
 };
 use playarr_model::{
     Availability, ExternalProvider, ExternalRef, SourceInstance, SourceKind, WatchState, Work,
@@ -58,19 +58,6 @@ pub struct DiscoverTitle {
     #[serde(flatten)]
     pub title: DiscoveryTitle,
     pub in_watchlist: bool,
-}
-
-/// A title snapshot as sent by clients (from a search result or a title
-/// page) to the watchlist and resolve endpoints.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct TitleSnapshot {
-    pub kind: DiscoveryKind,
-    pub title: String,
-    pub year: Option<i32>,
-    pub work_id: Option<Uuid>,
-    #[serde(default)]
-    pub external_refs: Vec<ExternalRef>,
-    pub poster_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -687,7 +674,7 @@ async fn build_action_context(
     Ok(ctx)
 }
 
-async fn resolve_snapshot(
+pub(crate) async fn resolve_snapshot(
     state: &AppState,
     viewer: &CatalogViewer,
     snap: &TitleSnapshot,

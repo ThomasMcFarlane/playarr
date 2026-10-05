@@ -53,7 +53,7 @@ the logical OR. Entries lacking a provider id fall back to
 
 ## 3. API
 
-`GET /api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD[&kind=episode,movie][&source_instance_id=<uuid>]`
+`GET /api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD[&kind=episode,movie][&source_instance_id=<uuid>][&group=series_day]`
 (bearer token, same admission as the catalog: `CatalogViewer`).
 
 - `start`/`end` are inclusive UTC days; the span is capped at 92 days
@@ -63,6 +63,22 @@ the logical OR. Entries lacking a provider id fall back to
   `status: ok | unreachable | rejected | error`, `error` message (no URLs,
   no credentials) and `entry_count`. An unreachable instance never fails the
   request and is never silently dropped: clients show a banner listing it.
+- `entries[].snapshot` is the title identity (`TitleSnapshot`: kind, title,
+  year, work id, external refs) that a client posts unchanged to
+  `POST /api/v1/discover/request` and `POST /api/v1/watchlist`.
+- `entries[].actions[]` are computed by the server for the caller with the
+  same logic as `POST /api/v1/discover/resolve`: `open` (and `play`/`resume`)
+  when the title is in a library the caller may see (household limits
+  included), otherwise `request` (disabled with a `reason` when the caller
+  lacks `can_request`, no provider is configured, or the title is already
+  requested), plus `watchlist` (`active` when already listed). Clients show
+  the actions as given and never build their own snapshot or decide
+  eligibility. The subscription feed carries none.
+- `group=series_day` folds episodes of one series released on the same UTC
+  day and at the same instant into one entry (the first episode) whose
+  `members[]` lists every episode; `has_file` is true only when all are in
+  the library. Movies, albums, books and lone episodes are unchanged.
+  Any other value is `400 invalid_group`.
 - Permissions: only instances in the caller's allowed libraries
   (`Policy::library_allow` plus resolved group libraries; admins see all).
   A restricted caller never receives another library's entries or even its
@@ -77,14 +93,18 @@ the logical OR. Entries lacking a provider id fall back to
 A per-user, revocable bearer token embedded in the URL, because calendar apps
 cannot send an `Authorization` header.
 
-- Table `calendar_feed_tokens(id, user_id, token_hash, created_at,
-  last_used_at, revoked_at)`; only a SHA-256 of the token is stored. The
-  plaintext (256 bits, URL-safe base64) is returned exactly once.
-- A user has at most one active token. `POST` creates or **rotates** (the old
-  token is revoked in the same transaction), `DELETE` revokes.
+- Table `calendar_feed_tokens(token_hash, user_id, created_at, last_used_at,
+  revoked_at, token_encrypted)`; lookups use a SHA-256 of the token. The
+  token (256 bits, URL-safe base64) is also stored sealed with
+  ChaCha20-Poly1305 under a key derived from the node identity, so the link
+  can be shown again. Rows from before `token_encrypted` existed have no
+  sealed copy.
+- A user has at most one active token. `POST /api/v1/calendar/feed` returns
+  the existing link (`200`) when it can be shown, otherwise creates one
+  (`201`); `?rotate=true` always replaces it (the old token is revoked in
+  the same transaction). `DELETE` revokes.
 - `GET /api/v1/calendar/feed` (auth) returns `{ active, created_at,
-  last_used_at }`; `POST /api/v1/calendar/feed` returns
-  `{ url, token, created_at }`; `DELETE /api/v1/calendar/feed` revokes.
+  last_used_at }`; `POST` returns `{ url, token, created_at }`.
 - `GET /api/v1/calendar/feed/{token}.ics` is unauthenticated apart from the
   token: it resolves the token to the user, re-resolves that user's *current*
   policy (so revoking a library takes effect immediately) and renders

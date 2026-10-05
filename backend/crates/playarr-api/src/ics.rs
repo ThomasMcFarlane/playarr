@@ -177,6 +177,9 @@ mod tests {
             poster_url: None,
             work_id: None,
             average_lag_seconds: None,
+            snapshot: None,
+            actions: vec![],
+            members: vec![],
             sources: vec![CalendarEntrySource {
                 source_instance_id: Uuid::nil(),
                 source_name: "TV".into(),

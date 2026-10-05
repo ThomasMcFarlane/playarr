@@ -4,6 +4,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::discovery::TitleSnapshot;
 use crate::SourceKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -73,6 +74,74 @@ pub struct CalendarEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub average_lag_seconds: Option<i64>,
     pub sources: Vec<CalendarEntrySource>,
+    /// Identity of the title for the request and watchlist endpoints
+    /// (`POST /api/v1/discover/request`, `POST /api/v1/watchlist`); clients send
+    /// it back verbatim instead of building their own. Absent when the entry
+    /// has no external id to identify it by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<TitleSnapshot>,
+    /// What the caller can do with this entry, computed by the server for that
+    /// caller (library access, household limits, `can_request`, request
+    /// provider, existing requests, watchlist). Clients show these as given.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<CalendarAction>,
+    /// Present on a grouped entry (`group=series_day`): every episode folded
+    /// into this entry, in season and episode order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<CalendarGroupMember>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum CalendarActionKind {
+    /// Open the title's detail page.
+    Open,
+    /// Play the title (or its next unwatched episode).
+    Play,
+    /// Continue a part-watched title.
+    Resume,
+    /// Ask the request provider to add the title.
+    Request,
+    /// Add to (or, when `active`, remove from) the caller's watchlist.
+    Watchlist,
+}
+
+/// One server-computed action. A disabled action carries a `reason` so a
+/// client can explain it rather than hide it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct CalendarAction {
+    pub action: CalendarActionKind,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Library work to open or play.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_file_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position_ms: Option<u64>,
+    /// `watchlist`: the title is already on the caller's watchlist.
+    /// `request`: the title is already requested (so the action is disabled).
+    #[serde(default)]
+    pub active: bool,
+}
+
+/// An episode folded into a grouped calendar entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct CalendarGroupMember {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub season_number: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub episode_number: Option<i64>,
+    pub monitored: bool,
+    pub has_file: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

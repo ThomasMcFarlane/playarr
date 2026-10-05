@@ -49,8 +49,9 @@ pub use availability::{
     BACKFILL_THRESHOLD_DAYS,
 };
 pub use calendar::{
-    CalendarEntry, CalendarEntrySource, CalendarMediaKind, CalendarReleaseType, CalendarResponse,
-    CalendarSourceState, CalendarSourceStatus,
+    CalendarAction, CalendarActionKind, CalendarEntry, CalendarEntrySource, CalendarGroupMember,
+    CalendarMediaKind, CalendarReleaseType, CalendarResponse, CalendarSourceState,
+    CalendarSourceStatus,
 };
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;

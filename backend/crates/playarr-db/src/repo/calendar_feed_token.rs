@@ -12,6 +12,9 @@ use crate::pool::{Backend, DbPool};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CalendarFeedTokenInfo {
+    /// The sealed token (opaque to this repository); `None` for rows created
+    /// before the token could be shown again.
+    pub token_encrypted: Option<String>,
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
 }
@@ -19,10 +22,12 @@ pub struct CalendarFeedTokenInfo {
 #[async_trait]
 pub trait CalendarFeedTokenRepo: Send + Sync {
     /// Revokes the user's active token (if any) and stores the new hash, atomically.
+    /// `token_encrypted` is the sealed token kept so the link can be shown again.
     async fn rotate(
         &self,
         user_id: Uuid,
         token_hash: &str,
+        token_encrypted: Option<&str>,
         now: DateTime<Utc>,
     ) -> Result<(), DbError>;
 
@@ -63,6 +68,7 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         &self,
         user_id: Uuid,
         token_hash: &str,
+        token_encrypted: Option<&str>,
         now: DateTime<Utc>,
     ) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
@@ -75,12 +81,13 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         .execute(&mut *tx)
         .await?;
         sqlx::query(self.q(
-            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at) VALUES (?, ?, ?)",
-            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at) VALUES ($1, $2, $3)",
+            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at, token_encrypted) VALUES (?, ?, ?, ?)",
+            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at, token_encrypted) VALUES ($1, $2, $3, $4)",
         ))
         .bind(token_hash)
         .bind(user_id.to_string())
         .bind(format_datetime(now))
+        .bind(token_encrypted)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -104,8 +111,8 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         user_id: Uuid,
     ) -> Result<Option<CalendarFeedTokenInfo>, DbError> {
         let row = sqlx::query(self.q(
-            "SELECT created_at, last_used_at FROM calendar_feed_tokens WHERE user_id = ? AND revoked_at IS NULL",
-            "SELECT created_at, last_used_at FROM calendar_feed_tokens WHERE user_id = $1 AND revoked_at IS NULL",
+            "SELECT created_at, last_used_at, token_encrypted FROM calendar_feed_tokens WHERE user_id = ? AND revoked_at IS NULL",
+            "SELECT created_at, last_used_at, token_encrypted FROM calendar_feed_tokens WHERE user_id = $1 AND revoked_at IS NULL",
         ))
         .bind(user_id.to_string())
         .fetch_optional(&self.pool)
@@ -113,7 +120,9 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         row.map(|row| {
             let created_at: String = row.try_get("created_at")?;
             let last_used_at: Option<String> = row.try_get("last_used_at")?;
+            let token_encrypted: Option<String> = row.try_get("token_encrypted")?;
             Ok(CalendarFeedTokenInfo {
+                token_encrypted,
                 created_at: parse_datetime(&created_at)?,
                 last_used_at: last_used_at.as_deref().map(parse_datetime).transpose()?,
             })
@@ -197,9 +206,11 @@ mod tests {
     async fn rotate_revokes_the_previous_token() {
         let (repo, user) = setup().await;
         let now = Utc::now();
-        repo.rotate(user, "hash-a", now).await.unwrap();
+        repo.rotate(user, "hash-a", None, now).await.unwrap();
         assert_eq!(repo.resolve("hash-a", now).await.unwrap(), Some(user));
-        repo.rotate(user, "hash-b", now).await.unwrap();
+        repo.rotate(user, "hash-b", Some("sealed-b"), now)
+            .await
+            .unwrap();
         assert_eq!(repo.resolve("hash-a", now).await.unwrap(), None);
         assert_eq!(repo.resolve("hash-b", now).await.unwrap(), Some(user));
         assert!(repo
@@ -212,11 +223,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sealed_token_is_returned_for_the_active_row_only() {
+        let (repo, user) = setup().await;
+        let now = Utc::now();
+        repo.rotate(user, "hash-a", None, now).await.unwrap();
+        assert_eq!(
+            repo.active_for_user(user)
+                .await
+                .unwrap()
+                .unwrap()
+                .token_encrypted,
+            None
+        );
+        repo.rotate(user, "hash-b", Some("sealed-b"), now)
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.active_for_user(user)
+                .await
+                .unwrap()
+                .unwrap()
+                .token_encrypted
+                .as_deref(),
+            Some("sealed-b")
+        );
+    }
+
+    #[tokio::test]
     async fn revoke_stops_resolution_and_reports_absence() {
         let (repo, user) = setup().await;
         let now = Utc::now();
         assert!(!repo.revoke(user, now).await.unwrap());
-        repo.rotate(user, "hash-a", now).await.unwrap();
+        repo.rotate(user, "hash-a", None, now).await.unwrap();
         assert!(repo.revoke(user, now).await.unwrap());
         assert_eq!(repo.resolve("hash-a", now).await.unwrap(), None);
         assert!(repo.active_for_user(user).await.unwrap().is_none());

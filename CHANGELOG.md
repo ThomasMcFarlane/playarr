@@ -31,6 +31,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Calendar entries now carry server-computed actions (open, play, resume, request, watchlist) and a title snapshot for the current user, honouring library access, household limits and the request permission, and `GET /api/v1/calendar` accepts `group=series_day` to fold same-day episodes of a series into one entry.
 - Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
 - CI: a weekly workflow lists remote branches whose commits are not on `main` and that have no open pull request and no task-board reference, and fails until each is given a PR, a row or deleted.
 - CI: pull requests now check only the Rust crates they change plus their dependents (`scripts/ci/rust-scope.sh`); shared inputs, pushes to main and a nightly schedule run the full workspace. OpenAPI diff runs only when the API crate is affected, and every CI job has a timeout (TASKS 332).
@@ -132,6 +133,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `POST /api/v1/calendar/feed` returns the existing calendar subscription link (`200`) or creates one (`201`); the token is stored sealed so it can be shown again, and `?rotate=true` replaces it. Links created before this change are replaced the first time they are requested.
 - CI now rejects pull requests with any commit carrying a `Co-authored-by:` trailer, and the merge train strips such lines from the title and body it uses for its squash commit.
 - CI: the merge train no longer comments on a pull request when it lands successfully; it comments only when it blocks the pull request or fails.
 - Android APK and Playarr Server downloads are published to GitHub Releases only. The release workflows no longer upload to object storage, and `playarr.app/downloads/android/...` and `playarr.app/downloads/server/...` now redirect (latest and versioned) to the matching GitHub Release assets.

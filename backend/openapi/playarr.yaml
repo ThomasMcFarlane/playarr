@@ -2876,6 +2876,17 @@ paths:
           - string
           - 'null'
           format: uuid
+      - name: group
+        in: query
+        description: |-
+          `series_day` folds episodes of the same series released on the same
+          (UTC) day and at the same time into one entry whose `members` lists
+          them. Omit for one entry per episode.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
       responses:
         '200':
           description: Upcoming releases from every permitted instance, with per-instance status
@@ -2913,9 +2924,22 @@ paths:
       tags:
       - calendar
       operationId: create_calendar_feed_handler
+      parameters:
+      - name: rotate
+        in: query
+        description: Replace the existing link with a new one (the old URL stops working).
+        required: false
+        schema:
+          type: boolean
       responses:
+        '200':
+          description: The caller's existing subscription URL, unchanged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarFeedCreated'
         '201':
-          description: A new subscription URL; any previous token stops working. The token is returned only here.
+          description: A new subscription URL (none existed, the stored one could not be shown, or `rotate=true`); any previous token stops working
           content:
             application/json:
               schema:
@@ -9179,6 +9203,53 @@ components:
           - string
           - 'null'
           format: uuid
+    CalendarAction:
+      type: object
+      description: |-
+        One server-computed action. A disabled action carries a `reason` so a
+        client can explain it rather than hide it.
+      required:
+      - action
+      - enabled
+      properties:
+        action:
+          $ref: '#/components/schemas/CalendarActionKind'
+        active:
+          type: boolean
+          description: |-
+            `watchlist`: the title is already on the caller's watchlist.
+            `request`: the title is already requested (so the action is disabled).
+        enabled:
+          type: boolean
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        position_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+        work_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Library work to open or play.
+    CalendarActionKind:
+      type: string
+      enum:
+      - open
+      - play
+      - resume
+      - request
+      - watchlist
     CalendarEntry:
       type: object
       required:
@@ -9191,6 +9262,14 @@ components:
       - has_file
       - sources
       properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarAction'
+          description: |-
+            What the caller can do with this entry, computed by the server for that
+            caller (library access, household limits, `can_request`, request
+            provider, existing requests, watchlist). Clients show these as given.
         average_lag_seconds:
           type:
           - integer
@@ -9213,6 +9292,13 @@ components:
           description: Stable across refreshes; derived from the deduplication key.
         media_kind:
           $ref: '#/components/schemas/CalendarMediaKind'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarGroupMember'
+          description: |-
+            Present on a grouped entry (`group=series_day`): every episode folded
+            into this entry, in season and episode order.
         monitored:
           type: boolean
         poster_url:
@@ -9233,6 +9319,15 @@ components:
           - integer
           - 'null'
           format: int64
+        snapshot:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/TitleSnapshot'
+            description: |-
+              Identity of the title for the request and watchlist endpoints
+              (`POST /api/v1/discover/request`, `POST /api/v1/watchlist`); clients send
+              it back verbatim instead of building their own. Absent when the entry
+              has no external id to identify it by.
         sources:
           type: array
           items:
@@ -9283,10 +9378,10 @@ components:
           format: date-time
         token:
           type: string
-          description: The secret path component, shown once.
+          description: The secret path component.
         url:
           type: string
-          description: Full subscription URL, shown once.
+          description: Full subscription URL.
     CalendarFeedStatus:
       type: object
       required:
@@ -9304,6 +9399,40 @@ components:
           - string
           - 'null'
           format: date-time
+        link_available:
+          type: boolean
+          description: |-
+            `POST /api/v1/calendar/feed` would return the existing link unchanged.
+            False for a link created before links could be shown again: asking for
+            it then replaces it. Servers without this field always replace.
+    CalendarGroupMember:
+      type: object
+      description: An episode folded into a grouped calendar entry.
+      required:
+      - id
+      - monitored
+      - has_file
+      properties:
+        episode_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        has_file:
+          type: boolean
+        id:
+          type: string
+        monitored:
+          type: boolean
+        season_number:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        subtitle:
+          type:
+          - string
+          - 'null'
     CalendarMediaKind:
       type: string
       enum:
@@ -15736,8 +15865,8 @@ components:
     TitleSnapshot:
       type: object
       description: |-
-        A title snapshot as sent by clients (from a search result or a title
-        page) to the watchlist and resolve endpoints.
+        A title snapshot as sent by clients (from a search result, a title page or a
+        calendar entry) to the watchlist, resolve and request endpoints.
       required:
       - kind
       - title

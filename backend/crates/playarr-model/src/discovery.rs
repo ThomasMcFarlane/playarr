@@ -353,6 +353,20 @@ pub enum ActionKind {
     Launch,
 }
 
+/// A title snapshot as sent by clients (from a search result, a title page or a
+/// calendar entry) to the watchlist, resolve and request endpoints.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TitleSnapshot {
+    pub kind: DiscoveryKind,
+    pub title: String,
+    pub year: Option<i32>,
+    pub work_id: Option<Uuid>,
+    #[serde(default)]
+    pub external_refs: Vec<ExternalRef>,
+    pub poster_url: Option<String>,
+}
+
 /// A source-aware thing the viewer can do with a title. Disabled actions are
 /// listed with a reason so clients can explain rather than hide them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

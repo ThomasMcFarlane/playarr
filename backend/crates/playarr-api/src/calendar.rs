@@ -14,13 +14,17 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::{ChaCha20Poly1305, Nonce};
+use chrono::{DateTime, Datelike, Duration as ChronoDuration, NaiveDate, Utc};
+use futures::StreamExt;
 use playarr_arr_sync::calendar::{
     classify_error, fetch_calendar, merge_candidates, CalendarCandidate,
 };
+use playarr_model::discovery::{ActionKind, DiscoveryKind, TitleSnapshot};
 use playarr_model::{
-    CalendarMediaKind, CalendarResponse, CalendarSourceState, CalendarSourceStatus, SourceInstance,
-    SourceKind,
+    CalendarAction, CalendarActionKind, CalendarGroupMember, CalendarMediaKind, CalendarResponse,
+    CalendarSourceState, CalendarSourceStatus, ExternalRef, SourceInstance, SourceKind,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -28,6 +32,7 @@ use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::auth_extractor::CatalogViewer;
+use crate::discovery::ResolvedTitle;
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -78,6 +83,10 @@ pub struct CalendarQuery {
     pub kind: Option<String>,
     /// Restrict to one source instance.
     pub source_instance_id: Option<Uuid>,
+    /// `series_day` folds episodes of the same series released on the same
+    /// (UTC) day and at the same time into one entry whose `members` lists
+    /// them. Omit for one entry per episode.
+    pub group: Option<String>,
 }
 
 /// Which instances a caller may query: `None` allows every instance.
@@ -111,6 +120,212 @@ fn parse_kinds(raw: Option<&str>) -> Result<Option<HashSet<CalendarMediaKind>>, 
     Ok(Some(kinds))
 }
 
+fn parse_group(raw: Option<&str>) -> Result<bool, ApiError> {
+    match raw.map(str::trim).filter(|r| !r.is_empty()) {
+        None => Ok(false),
+        Some("series_day") => Ok(true),
+        Some(other) => Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_group",
+            format!("unknown calendar grouping `{other}`; use `series_day`"),
+        )),
+    }
+}
+
+/// Folds episodes of one series released on the same day at the same time
+/// into a single entry (the first episode), listing every episode in
+/// `members`. Movies, albums, books and lone episodes are left alone.
+fn group_series_day(candidates: Vec<CalendarCandidate>) -> Vec<CalendarCandidate> {
+    type Key = (String, NaiveDate, Option<DateTime<Utc>>);
+    let key_of = |c: &CalendarCandidate| -> Option<Key> {
+        let e = &c.entry;
+        if e.media_kind != CalendarMediaKind::Episode
+            || e.season_number.is_none()
+            || e.episode_number.is_none()
+        {
+            return None;
+        }
+        let series = match &c.work_ref {
+            Some((provider, id)) => format!("{provider:?}:{id}"),
+            None => format!("title:{}", e.title.to_lowercase()),
+        };
+        Some((series, e.date, e.release_at))
+    };
+    let mut order: Vec<Result<Key, usize>> = Vec::new();
+    let mut groups: HashMap<Key, Vec<CalendarCandidate>> = HashMap::new();
+    let mut singles: Vec<Option<CalendarCandidate>> = Vec::new();
+    for candidate in candidates {
+        match key_of(&candidate) {
+            Some(key) => {
+                if !groups.contains_key(&key) {
+                    order.push(Ok(key.clone()));
+                }
+                groups.entry(key).or_default().push(candidate);
+            }
+            None => {
+                order.push(Err(singles.len()));
+                singles.push(Some(candidate));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for item in order {
+        match item {
+            Err(index) => out.extend(singles[index].take()),
+            Ok(key) => {
+                let mut members = groups.remove(&key).unwrap_or_default();
+                members.sort_by_key(|c| (c.entry.season_number, c.entry.episode_number));
+                if members.len() == 1 {
+                    out.extend(members);
+                    continue;
+                }
+                let list: Vec<CalendarGroupMember> = members
+                    .iter()
+                    .map(|c| CalendarGroupMember {
+                        id: c.entry.id.clone(),
+                        subtitle: c.entry.subtitle.clone(),
+                        season_number: c.entry.season_number,
+                        episode_number: c.entry.episode_number,
+                        monitored: c.entry.monitored,
+                        has_file: c.entry.has_file,
+                    })
+                    .collect();
+                let mut iter = members.into_iter();
+                let mut head = iter.next().expect("a group has members");
+                head.entry.subtitle = None;
+                head.entry.has_file = list.iter().all(|m| m.has_file);
+                head.entry.monitored = list.iter().any(|m| m.monitored);
+                for other in iter {
+                    for source in other.entry.sources {
+                        if !head.entry.sources.contains(&source) {
+                            head.entry.sources.push(source);
+                        }
+                    }
+                    if head.entry.poster_url.is_none() {
+                        head.entry.poster_url = other.entry.poster_url;
+                    }
+                }
+                head.entry.members = list;
+                out.push(head);
+            }
+        }
+    }
+    out
+}
+
+/// The identity a client sends back to the request and watchlist endpoints.
+fn entry_snapshot(c: &CalendarCandidate) -> Option<TitleSnapshot> {
+    let (provider, external_id) = c.work_ref.clone()?;
+    let e = &c.entry;
+    let kind = match e.media_kind {
+        CalendarMediaKind::Episode => DiscoveryKind::Series,
+        CalendarMediaKind::Movie => DiscoveryKind::Movie,
+        CalendarMediaKind::Album => DiscoveryKind::Artist,
+        CalendarMediaKind::Book => DiscoveryKind::Author,
+    };
+    Some(TitleSnapshot {
+        kind,
+        title: e.title.clone(),
+        year: Some(e.date.year()),
+        work_id: e.work_id,
+        external_refs: vec![ExternalRef {
+            provider,
+            external_id,
+        }],
+        poster_url: e.poster_url.clone(),
+    })
+}
+
+/// Turns a resolved title into the calendar's action list.
+fn calendar_actions(resolved: &ResolvedTitle) -> Vec<CalendarAction> {
+    let mut out = Vec::new();
+    let in_library = resolved
+        .actions
+        .iter()
+        .find(|a| a.action == ActionKind::Play)
+        .and_then(|a| a.work_id);
+    if let Some(work_id) = in_library {
+        out.push(CalendarAction {
+            action: CalendarActionKind::Open,
+            enabled: true,
+            reason: None,
+            work_id: Some(work_id),
+            media_file_id: None,
+            position_ms: None,
+            active: false,
+        });
+    }
+    for a in &resolved.actions {
+        let kind = match a.action {
+            ActionKind::Play if in_library.is_some() => CalendarActionKind::Play,
+            ActionKind::Resume => CalendarActionKind::Resume,
+            ActionKind::Request => CalendarActionKind::Request,
+            _ => continue,
+        };
+        out.push(CalendarAction {
+            action: kind,
+            enabled: a.enabled,
+            reason: a.reason.clone(),
+            work_id: a.work_id,
+            media_file_id: a.media_file_id,
+            position_ms: a.position_ms,
+            active: kind == CalendarActionKind::Request && resolved.request.is_some(),
+        });
+    }
+    out.push(CalendarAction {
+        action: CalendarActionKind::Watchlist,
+        enabled: true,
+        reason: None,
+        work_id: None,
+        media_file_id: None,
+        position_ms: None,
+        active: resolved.in_watchlist,
+    });
+    out
+}
+
+/// Attaches snapshots and per-caller actions. Each distinct title is resolved
+/// once, a few at a time, with the same logic as `POST /api/v1/discover/resolve`.
+async fn attach_actions(
+    state: &AppState,
+    viewer: &CatalogViewer,
+    candidates: &mut [CalendarCandidate],
+) {
+    let mut distinct: HashMap<String, TitleSnapshot> = HashMap::new();
+    let mut keys: Vec<Option<String>> = Vec::with_capacity(candidates.len());
+    for candidate in candidates.iter() {
+        let snapshot = entry_snapshot(candidate);
+        let key = snapshot.as_ref().map(|s| {
+            playarr_model::discovery::identity_key(s.kind, &s.title, s.year, &s.external_refs)
+        });
+        if let (Some(key), Some(snapshot)) = (&key, snapshot) {
+            distinct.entry(key.clone()).or_insert(snapshot);
+        }
+        keys.push(key);
+    }
+    let resolved: HashMap<String, Vec<CalendarAction>> = futures::stream::iter(distinct)
+        .map(|(key, snapshot)| async move {
+            match crate::discovery::resolve_snapshot(state, viewer, &snapshot).await {
+                Ok(resolved) => Some((key, calendar_actions(&resolved))),
+                Err(error) => {
+                    tracing::warn!(?error, "calendar action resolution failed");
+                    None
+                }
+            }
+        })
+        .buffer_unordered(8)
+        .filter_map(|r| async move { r })
+        .collect()
+        .await;
+    for (candidate, key) in candidates.iter_mut().zip(keys) {
+        let Some(key) = key else { continue };
+        candidate.entry.snapshot = entry_snapshot(candidate);
+        if let Some(actions) = resolved.get(&key) {
+            candidate.entry.actions = actions.clone();
+        }
+    }
+}
+
 /// Resolves the requested window, applying defaults and the span cap.
 pub(crate) fn resolve_window(
     start: Option<NaiveDate>,
@@ -128,6 +343,14 @@ pub(crate) fn resolve_window(
     Ok((start, end))
 }
 
+/// What the caller asked for beyond the window: grouping, and the viewer whose
+/// actions to compute (`None` for the subscription feed, which has no actions).
+#[derive(Clone, Copy, Default)]
+pub(crate) struct CalendarOptions<'a> {
+    pub group_series_day: bool,
+    pub viewer: Option<&'a CatalogViewer>,
+}
+
 /// Builds the calendar for `allowed` libraries (`None` = unrestricted).
 pub(crate) async fn build_calendar(
     state: &AppState,
@@ -136,6 +359,7 @@ pub(crate) async fn build_calendar(
     end: NaiveDate,
     kinds: Option<&HashSet<CalendarMediaKind>>,
     only_instance: Option<Uuid>,
+    options: CalendarOptions<'_>,
 ) -> CalendarResponse {
     let mut instances: Vec<SourceInstance> = state
         .source_instances
@@ -234,6 +458,13 @@ pub(crate) async fn build_calendar(
         }
     }
 
+    if options.group_series_day {
+        merged = group_series_day(merged);
+    }
+    if let Some(viewer) = options.viewer {
+        attach_actions(state, viewer, &mut merged).await;
+    }
+
     CalendarResponse {
         start,
         end,
@@ -261,6 +492,7 @@ pub async fn calendar_handler(
 ) -> Result<Json<CalendarResponse>, ApiError> {
     let (start, end) = resolve_window(params.start, params.end)?;
     let kinds = parse_kinds(params.kind.as_deref())?;
+    let group_series_day = parse_group(params.group.as_deref())?;
     let allowed = viewer.allowed_libraries();
     Ok(Json(
         build_calendar(
@@ -270,6 +502,10 @@ pub async fn calendar_handler(
             end,
             kinds.as_ref(),
             params.source_instance_id,
+            CalendarOptions {
+                group_series_day,
+                viewer: Some(&viewer),
+            },
         )
         .await,
     ))
@@ -336,13 +572,18 @@ pub struct CalendarFeedStatus {
     pub active: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub last_used_at: Option<DateTime<Utc>>,
+    /// `POST /api/v1/calendar/feed` would return the existing link unchanged.
+    /// False for a link created before links could be shown again: asking for
+    /// it then replaces it. Servers without this field always replace.
+    #[serde(default)]
+    pub link_available: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CalendarFeedCreated {
-    /// Full subscription URL, shown once.
+    /// Full subscription URL.
     pub url: String,
-    /// The secret path component, shown once.
+    /// The secret path component.
     pub token: String,
     pub created_at: DateTime<Utc>,
 }
@@ -404,19 +645,72 @@ pub async fn get_calendar_feed_handler(
         .active_for_user(viewer.user_id)
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
+    let link_available = match info.as_ref().and_then(|i| i.token_encrypted.as_deref()) {
+        Some(sealed) => open_token(&feed_cipher(&state).await?, sealed).is_some(),
+        None => false,
+    };
     Ok(Json(CalendarFeedStatus {
         active: info.is_some(),
         created_at: info.as_ref().map(|i| i.created_at),
         last_used_at: info.and_then(|i| i.last_used_at),
+        link_available,
     }))
+}
+
+#[derive(Debug, Default, Deserialize, IntoParams, ToSchema)]
+pub struct CalendarFeedCreateQuery {
+    /// Replace the existing link with a new one (the old URL stops working).
+    #[serde(default)]
+    pub rotate: bool,
+}
+
+/// Seals a feed token for storage so the link can be shown again. The key is
+/// derived from this node's persistent identity, so a database copy alone
+/// cannot reveal the token.
+async fn feed_cipher(state: &AppState) -> Result<ChaCha20Poly1305, ApiError> {
+    let identity = crate::admin_peer::ensure_node_identity(&state.node_identity_repo).await?;
+    let mut hasher = Sha256::new();
+    hasher.update(b"playarr:calendar-feed-token:v1:");
+    hasher.update(identity.private_key.expose_secret().as_bytes());
+    Ok(ChaCha20Poly1305::new(&hasher.finalize()))
+}
+
+fn seal_token(cipher: &ChaCha20Poly1305, token: &str) -> Result<String, ApiError> {
+    let random = Uuid::new_v4();
+    let nonce_bytes = &random.as_bytes()[..12];
+    let sealed = cipher
+        .encrypt(Nonce::from_slice(nonce_bytes), token.as_bytes())
+        .map_err(|_| ApiError::internal("could not seal the calendar token"))?;
+    let mut blob = nonce_bytes.to_vec();
+    blob.extend(sealed);
+    Ok(format!(
+        "v1:{}",
+        base64::engine::general_purpose::STANDARD.encode(blob)
+    ))
+}
+
+/// `None` for a malformed blob or one sealed under another key.
+fn open_token(cipher: &ChaCha20Poly1305, sealed: &str) -> Option<String> {
+    let blob = base64::engine::general_purpose::STANDARD
+        .decode(sealed.strip_prefix("v1:")?)
+        .ok()?;
+    if blob.len() <= 12 {
+        return None;
+    }
+    let (nonce, body) = blob.split_at(12);
+    let plain = cipher.decrypt(Nonce::from_slice(nonce), body).ok()?;
+    let token = String::from_utf8(plain).ok()?;
+    (token.len() == FEED_TOKEN_LEN).then_some(token)
 }
 
 #[utoipa::path(
     post,
     path = "/api/v1/calendar/feed",
     tag = "calendar",
+    params(CalendarFeedCreateQuery),
     responses(
-        (status = 201, description = "A new subscription URL; any previous token stops working. The token is returned only here.", body = CalendarFeedCreated),
+        (status = 200, description = "The caller's existing subscription URL, unchanged", body = CalendarFeedCreated),
+        (status = 201, description = "A new subscription URL (none existed, the stored one could not be shown, or `rotate=true`); any previous token stops working", body = CalendarFeedCreated),
         (status = 401, description = "Missing or invalid access token"),
         (status = 403, description = "Caller may not view the catalog")
     )
@@ -426,19 +720,46 @@ pub async fn create_calendar_feed_handler(
     viewer: CatalogViewer,
     uri: Uri,
     headers: HeaderMap,
+    Query(params): Query<CalendarFeedCreateQuery>,
 ) -> Result<(StatusCode, Json<CalendarFeedCreated>), ApiError> {
+    let cipher = feed_cipher(&state).await?;
+    let base = request_base(&headers, &uri);
+    if !params.rotate {
+        let existing = state
+            .calendar_feed_token_repo
+            .active_for_user(viewer.user_id)
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+        if let Some((info, token)) = existing.and_then(|info| {
+            let token = open_token(&cipher, info.token_encrypted.as_deref()?)?;
+            Some((info, token))
+        }) {
+            return Ok((
+                StatusCode::OK,
+                Json(CalendarFeedCreated {
+                    url: format!("{base}/api/v1/calendar/feed/{token}.ics"),
+                    token,
+                    created_at: info.created_at,
+                }),
+            ));
+        }
+    }
     let token = new_token();
     let now = Utc::now();
     state
         .calendar_feed_token_repo
-        .rotate(viewer.user_id, &hash_token(&token), now)
+        .rotate(
+            viewer.user_id,
+            &hash_token(&token),
+            Some(&seal_token(&cipher, &token)?),
+            now,
+        )
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
-    let url = request_base(&headers, &uri) + &format!("/api/v1/calendar/feed/{token}.ics");
     Ok((
         StatusCode::CREATED,
         Json(CalendarFeedCreated {
-            url,
+            url: format!("{base}/api/v1/calendar/feed/{token}.ics"),
             token,
             created_at: now,
         }),
@@ -505,6 +826,7 @@ pub async fn calendar_feed_ics_handler(
         today + ChronoDuration::days(FEED_DAYS_FORWARD),
         None,
         None,
+        CalendarOptions::default(),
     )
     .await;
     let body =
@@ -777,7 +1099,7 @@ mod tests {
         let (_, _, body) = send(
             router.clone(),
             "POST",
-            "/api/v1/calendar/feed",
+            "/api/v1/calendar/feed?rotate=true",
             Some(&token),
         )
         .await;
@@ -825,6 +1147,304 @@ mod tests {
             .0,
             StatusCode::NO_CONTENT
         );
+    }
+
+    async fn fake_sonarr_two_episodes_one_day() -> MockServer {
+        let server = MockServer::start().await;
+        let series = json!({"id": 1, "title": "Show", "tvdbId": 77, "images": []});
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                {"id": 1, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 2, "title": "Two",
+                 "airDate": "2026-10-10", "airDateUtc": "2026-10-10T20:00:00Z",
+                 "hasFile": true, "monitored": true, "series": series},
+                {"id": 2, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 1, "title": "One",
+                 "airDate": "2026-10-10", "airDateUtc": "2026-10-10T20:00:00Z",
+                 "hasFile": false, "monitored": true, "series": series},
+                {"id": 3, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 3, "title": "Three",
+                 "airDate": "2026-10-11", "airDateUtc": "2026-10-11T20:00:00Z",
+                 "hasFile": false, "monitored": false, "series": series}
+            ])))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    fn actions_of(entry: &serde_json::Value) -> Vec<(String, bool)> {
+        entry["actions"]
+            .as_array()
+            .map(|list| {
+                list.iter()
+                    .map(|a| {
+                        (
+                            a["action"].as_str().unwrap().to_string(),
+                            a["enabled"].as_bool().unwrap(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn entries_carry_server_computed_actions_for_the_caller() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr("Show").await;
+        let mut sonarr = instance(SourceKind::Sonarr, "TV", server.uri());
+        state.source_instances.upsert(sonarr.clone());
+        let uri = "/api/v1/calendar?start=2026-10-01&end=2026-10-31";
+
+        // No request provider configured: request is listed, disabled, with a reason.
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let admin_token = mint_access_token(&state, admin);
+        let (_, body) = get(router.clone(), &admin_token, uri).await;
+        let entry = &body["entries"][0];
+        assert_eq!(entry["snapshot"]["kind"], "series");
+        assert_eq!(entry["snapshot"]["external_refs"][0]["external_id"], "77");
+        let request = entry["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["action"] == "request")
+            .unwrap();
+        assert_eq!(request["enabled"], false);
+        assert!(request["reason"].as_str().unwrap().len() > 3);
+
+        // With a default root folder and quality profile the admin may request;
+        // a user without `can_request` sees the action disabled, and why.
+        sonarr.default_root_folder_id = Some("/tv".to_string());
+        sonarr.default_quality_profile_id = Some(4);
+        state.source_instances.upsert(sonarr.clone());
+        let (_, body) = get(router.clone(), &admin_token, uri).await;
+        assert!(actions_of(&body["entries"][0]).contains(&("request".to_string(), true)));
+        assert!(actions_of(&body["entries"][0]).contains(&("watchlist".to_string(), true)));
+        assert!(!actions_of(&body["entries"][0])
+            .iter()
+            .any(|a| a.0 == "open"));
+
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![sonarr.id]).await;
+        let (_, body) = get(router.clone(), &mint_access_token(&state, user), uri).await;
+        let request = body["entries"][0]["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["action"] == "request")
+            .unwrap()
+            .clone();
+        assert_eq!(request["enabled"], false);
+        assert!(request["reason"].as_str().unwrap().contains("not allowed"));
+
+        // A series that is in the library is opened, never requested.
+        let work_id = crate::test_support::seed_series_with_tvdb(&state, "Show", "77").await;
+        let (_, body) = get(router.clone(), &admin_token, uri).await;
+        let actions = actions_of(&body["entries"][0]);
+        assert!(actions.contains(&("open".to_string(), true)), "{actions:?}");
+        assert!(!actions.iter().any(|a| a.0 == "request"));
+        let open = body["entries"][0]["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["action"] == "open")
+            .unwrap()
+            .clone();
+        assert_eq!(open["work_id"], work_id.to_string());
+    }
+
+    #[tokio::test]
+    async fn watchlist_state_is_reflected_in_the_watchlist_action() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr("Show").await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let uri = "/api/v1/calendar?start=2026-10-01&end=2026-10-31";
+        let (_, body) = get(router.clone(), &token, uri).await;
+        let snapshot = body["entries"][0]["snapshot"].clone();
+        let watch = |body: &serde_json::Value| {
+            body["entries"][0]["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["action"] == "watchlist")
+                .unwrap()["active"]
+                .as_bool()
+                .unwrap()
+        };
+        assert!(!watch(&body));
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/watchlist")
+                    .header("Authorization", bearer_header(&token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(snapshot.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(response.status().is_success(), "{}", response.status());
+        let (_, body) = get(router, &token, uri).await;
+        assert!(watch(&body));
+    }
+
+    #[tokio::test]
+    async fn group_series_day_folds_same_day_episodes_into_one_entry() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr_two_episodes_one_day().await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let base = "/api/v1/calendar?start=2026-10-01&end=2026-10-31";
+
+        let (_, plain) = get(router.clone(), &token, base).await;
+        assert_eq!(plain["entries"].as_array().unwrap().len(), 3);
+        assert!(plain["entries"][0].get("members").is_none());
+
+        let (status, body) = get(router.clone(), &token, &format!("{base}&group=series_day")).await;
+        assert_eq!(status, StatusCode::OK);
+        let entries = body["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 2, "{body}");
+        let group = &entries[0];
+        let members = group["members"].as_array().unwrap();
+        assert_eq!(members.len(), 2);
+        assert_eq!(members[0]["episode_number"], 1);
+        assert_eq!(members[1]["episode_number"], 2);
+        assert_eq!(group["episode_number"], 1);
+        assert_eq!(
+            group["has_file"], false,
+            "in library only when every episode is"
+        );
+        assert!(group["actions"].as_array().unwrap().len() >= 2);
+        assert!(
+            entries[1].get("members").is_none(),
+            "a lone episode stays single"
+        );
+
+        let (status, _) = get(router, &token, &format!("{base}&group=week")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn feed_link_is_returned_again_until_rotated_or_revoked() {
+        let (router, state) = test_state().await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let post = |uri: &'static str| {
+            let router = router.clone();
+            let token = token.clone();
+            async move {
+                let (status, _, body) = send(router, "POST", uri, Some(&token)).await;
+                (
+                    status,
+                    serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+                )
+            }
+        };
+        let (status, first) = post("/api/v1/calendar/feed").await;
+        assert_eq!(status, StatusCode::CREATED);
+        let (_, _, body) = send(router.clone(), "GET", "/api/v1/calendar/feed", Some(&token)).await;
+        let status_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(status_json["link_available"], true);
+        let (status, again) = post("/api/v1/calendar/feed").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(first["token"], again["token"]);
+        assert_eq!(first["url"], again["url"]);
+
+        // The token is not stored in the clear.
+        let stored = state
+            .app
+            .calendar_feed_token_repo
+            .active_for_user(admin)
+            .await
+            .unwrap()
+            .unwrap();
+        let sealed = stored.token_encrypted.unwrap();
+        assert!(!sealed.contains(first["token"].as_str().unwrap()));
+
+        let (status, rotated) = post("/api/v1/calendar/feed?rotate=true").await;
+        assert_eq!(status, StatusCode::CREATED);
+        assert_ne!(first["token"], rotated["token"]);
+        assert_eq!(
+            send(router.clone(), "GET", &feed_path(&first), None)
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
+        let (status, same) = post("/api/v1/calendar/feed").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(rotated["token"], same["token"]);
+
+        // After revocation the next call creates a fresh link.
+        send(
+            router.clone(),
+            "DELETE",
+            "/api/v1/calendar/feed",
+            Some(&token),
+        )
+        .await;
+        let (status, fresh) = post("/api/v1/calendar/feed").await;
+        assert_eq!(status, StatusCode::CREATED);
+        assert_ne!(fresh["token"], same["token"]);
+    }
+
+    #[tokio::test]
+    async fn legacy_unsealed_or_foreign_tokens_are_replaced_not_shown() {
+        let (router, state) = test_state().await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        // A row from before the sealed column existed.
+        state
+            .app
+            .calendar_feed_token_repo
+            .rotate(admin, &hash_token("legacy"), None, Utc::now())
+            .await
+            .unwrap();
+        let (status, _, body) = send(
+            router.clone(),
+            "POST",
+            "/api/v1/calendar/feed",
+            Some(&token),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(created["token"].as_str().unwrap().len(), FEED_TOKEN_LEN);
+        // Garbage in the sealed column is treated the same way.
+        state
+            .app
+            .calendar_feed_token_repo
+            .rotate(admin, &hash_token("garbage"), Some("v1:AAAA"), Utc::now())
+            .await
+            .unwrap();
+        let (status, _, _) = send(router, "POST", "/api/v1/calendar/feed", Some(&token)).await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+
+    #[test]
+    fn sealing_round_trips_and_rejects_other_keys() {
+        let cipher = ChaCha20Poly1305::new(&[7u8; 32].into());
+        let token = new_token();
+        let sealed = seal_token(&cipher, &token).unwrap();
+        assert_ne!(sealed, token);
+        assert_eq!(
+            open_token(&cipher, &sealed).as_deref(),
+            Some(token.as_str())
+        );
+        let other = ChaCha20Poly1305::new(&[8u8; 32].into());
+        assert_eq!(open_token(&other, &sealed), None);
+        assert_eq!(open_token(&cipher, "not-sealed"), None);
     }
 
     #[test]
