@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
   "name": "playarr-web",
-  "account_id": "REDACTED_CF_ACCOUNT_ID",
   "main": "worker.js",
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
@@ -41,9 +40,6 @@
   ],
   "triggers": {
     "crons": ["17 4 * * *"]
-  },
-  "vars": {
-    "RELAY_ZONE_ID": "REDACTED_CF_ZONE_ID"
   },
   "routes": [
     {

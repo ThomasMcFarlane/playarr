@@ -51,8 +51,7 @@ canonical URLs, Open Graph tags and the sitemap.
 ## The copy linter (read this before writing any page)
 
 `scripts/check-copy.mjs` is not a style checker. It exists because
-[`docs/artifacts/playarr-legal-release.html`](../docs/artifacts/playarr-legal-release.html)
-concludes that for a project of this shape **the exposure surface is the
+for a project of this shape **the exposure surface is the
 marketing, not the code**: TickBox, Grokster and Filmspeler were each sunk
 primarily by their own promotional conduct rather than by what their software
 did.

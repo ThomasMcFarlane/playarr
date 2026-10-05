@@ -1,9 +1,8 @@
 /**
  * Single source of truth for site-wide strings, navigation and outbound links.
  *
- * Copy on this site is legally load-bearing: `docs/artifacts/playarr-legal-release.html`
- * concludes that promotional conduct, not source code, is what sank comparable
- * projects. Playarr is described here strictly as a playback, library and
+ * Copy on this site is legally load-bearing: promotional conduct, not source
+ * code, is what sank comparable projects. Playarr is described here strictly as a playback, library and
  * metadata layer over media the operator already holds. Nothing on this site
  * describes acquiring, indexing or searching for content.
  */

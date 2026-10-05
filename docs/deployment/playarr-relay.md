@@ -137,14 +137,14 @@ Honest limits:
 | --- | --- | --- |
 | `RELAY_HMAC_SECRET` | secret | HMAC key for the challenge tokens. 32 random bytes, base64. |
 | `RELAY_CF_API_TOKEN` | secret | Cloudflare API token with **Zone:DNS:Edit on `playarr.app` only**. |
-| `RELAY_ZONE_ID` | plain text | Zone id of `playarr.app` (not secret); set by `deploy-cloudflare-api.mjs`. |
+| `RELAY_ZONE_ID` | plain text | Zone id of `playarr.app`; set by `deploy-cloudflare-api.mjs` from the `PLAYARR_RELAY_ZONE_ID` secret. |
 
 Until both secrets exist, `/api/relay/*` answers `503 relay_not_configured` and
 the daily cleanup does nothing, so merging and deploying the code is inert.
 `deploy-cloudflare-api.mjs` keeps existing secret bindings
 (`keep_bindings: ["secret_text"]`) and sets the cron schedule
 (`PUT /workers/scripts/playarr-web/schedules`); `wrangler.jsonc` declares the
-same cron and `RELAY_ZONE_ID` for anyone deploying with Wrangler.
+same cron; Wrangler deployers must provide `RELAY_ZONE_ID` themselves (for example `--var RELAY_ZONE_ID:<zone id>`).
 
 ## Cloudflare zone facts (read-only inspection, 2026-10-03)
 
@@ -152,8 +152,8 @@ Found with a short-lived, read-only token (Zone Read, DNS Read, Zone Settings
 Read), which was revoked and verified revoked afterwards:
 
 - `playarr.app` is in the account that also hosts the `playarr-web` Worker
-  (`REDACTED_CF_ACCOUNT_ID`); zone id
-  `REDACTED_CF_ZONE_ID`, status active.
+  (account id held in the `CLOUDFLARE_ACCOUNT_ID` secret); zone id held in
+  the `PLAYARR_RELAY_ZONE_ID` secret, status active.
 - Plan: **Free Website**.
 - DNS record quota: **200 records**, 8 in use (`/dns_records/usage`), so about
   **190 dynamic records are available**. Each registered server uses one A

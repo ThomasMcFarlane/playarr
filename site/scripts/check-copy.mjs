@@ -2,9 +2,8 @@
 /**
  * Copy compliance linter for the Playarr Server marketing site.
  *
- * Why this exists: `docs/artifacts/playarr-legal-release.html` concludes that
- * for projects of this shape the exposure surface is the *marketing*, not the
- * code — TickBox, Grokster and Filmspeler were each sunk primarily by their own
+ * Why this exists: for projects of this shape the exposure surface is the
+ * *marketing*, not the code — TickBox, Grokster and Filmspeler were each sunk primarily by their own
  * promotional conduct. This script mechanically enforces the resulting
  * copywriting rules so a stray sentence cannot reach production.
  *

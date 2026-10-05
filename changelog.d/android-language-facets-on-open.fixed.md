@@ -1,1 +1,0 @@
-- Android: the library Filters sheet now loads the audio and subtitle language lists when it opens, instead of showing "No languages indexed yet" until a selection changed.

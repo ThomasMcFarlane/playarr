@@ -5,8 +5,8 @@ import { extname, join, relative, resolve, sep } from "node:path";
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const scriptName = "playarr-web";
-// Zone that holds the DNS-only relay records. Not a secret.
-const relayZoneId = process.env.PLAYARR_RELAY_ZONE_ID ?? "REDACTED_CF_ZONE_ID";
+// Zone that holds the DNS-only relay records, supplied by the deploy environment.
+const relayZoneId = process.env.PLAYARR_RELAY_ZONE_ID;
 // Runs the daily relay DNS cleanup (`scheduled` in worker.js).
 const relayCleanupCron = "17 4 * * *";
 const assetsDirectory = resolve("web/dist");
@@ -16,6 +16,7 @@ if (!existsSync(assetsDirectory)) throw new Error(`Missing assets: ${assetsDirec
 if (!existsSync(workerBundle)) throw new Error(`Missing Worker bundle: ${workerBundle}`);
 if (!accountId) throw new Error("CLOUDFLARE_ACCOUNT_ID is required");
 if (!apiToken) throw new Error("CLOUDFLARE_API_TOKEN is required");
+if (!relayZoneId) throw new Error("PLAYARR_RELAY_ZONE_ID is required");
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
