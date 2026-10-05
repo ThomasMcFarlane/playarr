@@ -35,6 +35,7 @@ MAX_ATTEMPTS="${MAX_ATTEMPTS:-4}"
 # Files that every PR may touch; ignored by the "did main move under me" check.
 SHARED_RE='^(CHANGELOG\.md|TASKS\.md|changelog\.d/|tasks\.d/)'
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
+for tool in gh git jq; do command -v "$tool" >/dev/null || { echo "[train] missing required tool: $tool" >&2; exit 1; }; done
 
 log() { echo "[train] $*"; echo "- $*" >>"$SUMMARY"; }
 run() { if [ "$DRY" = true ]; then echo "[dry-run] $*"; else "$@"; fi; }

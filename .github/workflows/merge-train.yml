@@ -64,6 +64,14 @@ jobs:
           ssh-key: ${{ secrets.TRAIN_DEPLOY_KEY }}
           persist-credentials: true
 
+      # The runner image ships neither gh nor sudo; fetch a pinned gh into the job temp dir.
+      - name: Ensure gh CLI
+        run: |
+          command -v gh >/dev/null && exit 0
+          v=2.62.0
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${v}/gh_${v}_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gh_${v}_linux_amd64/bin" >> "$GITHUB_PATH"
+
       - name: Run the train
         env:
           GH_TOKEN: ${{ github.token }}
