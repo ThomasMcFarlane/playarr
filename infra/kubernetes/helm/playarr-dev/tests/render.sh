@@ -23,8 +23,8 @@ test "$(grep -c '^        kubernetes.io/hostname: dev-node$' "$rendered")" -eq 6
 # Regional media access uses the host ACL group on both nodes.
 node_a_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-region-a/) printf "%s", block; show=0}' "$rendered")"
 node_b_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-region-b/) printf "%s", block; show=0}' "$rendered")"
-grep -q 'image: "registry.example.com/playarr-regional:8fde0095"' <<<"$node_a_deployment"
-grep -q 'image: "registry.example.com/playarr-regional:8fde0095"' <<<"$node_b_deployment"
+grep -q 'image: "registry.example.com/playarr-regional:87f60e66"' <<<"$node_a_deployment"
+grep -q 'image: "registry.example.com/playarr-regional:87f60e66"' <<<"$node_b_deployment"
 for deployment in "$node_a_deployment" "$node_b_deployment"; do
   grep -A1 -q 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment"
   grep -A1 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment" | grep -q 'value: "1"'

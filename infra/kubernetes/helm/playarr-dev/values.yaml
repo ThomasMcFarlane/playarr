@@ -112,7 +112,7 @@ workloads:
 # node-local state, runtime trees, security identities and public routes.
 regionalInstances:
   playarr-region-a:
-    image: registry.example.com/playarr-regional:8fde0095
+    image: registry.example.com/playarr-regional:87f60e66
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-a
@@ -216,7 +216,7 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-region-b:
-    image: registry.example.com/playarr-regional:8fde0095
+    image: registry.example.com/playarr-regional:87f60e66
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: region-b
