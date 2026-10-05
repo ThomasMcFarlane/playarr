@@ -82,6 +82,13 @@ jobs:
 
       # Affected-only Rust selection (changed crates plus dependents; shared
       # inputs and every non-PR event select the full workspace).
+      # CHANGELOG.md and TASKS.md are conflict hotspots: PRs add fragment files instead.
+      - name: Reject direct CHANGELOG.md / TASKS.md edits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/ci/check-fragments.sh
+
       - name: Select affected Rust crates
         id: scope
         env:

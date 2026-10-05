@@ -1,0 +1,1 @@
+- Docs: links from documentation pages to repository files outside `docs/` use absolute URLs, so the strict MkDocs build passes again; Docs also builds on PRs that touch it (TASKS 332).

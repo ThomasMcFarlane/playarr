@@ -70,25 +70,32 @@ repositories on a personal account do not get.
 
 ## Changelog
 
-- Update `CHANGELOG.md` in the same commit as every change. Add a concise entry beneath
-  `Unreleased` in the appropriate category.
+- **Do not edit `CHANGELOG.md` in a PR** (it is a merge-conflict hotspot; CI rejects such PRs).
+  Add one fragment file per change under `changelog.d/`, named `<slug>.<category>.md`
+  (categories: added, changed, fixed, removed, security, deprecated, documentation, performance,
+  testing), containing one or more `- ...` bullets. The merge train folds fragments into
+  `## [Unreleased]` and deletes them as the PR lands. See `changelog.d/README.md`.
 - Include user-visible behaviour, fixes, security changes, operational changes, tests,
   documentation, generated contracts, and developer workflow changes.
-- A commit whose only purpose is to maintain `CHANGELOG.md` does not need to describe itself in
-  the changelog.
+- A change whose only purpose is to maintain the changelog or task board does not need to describe itself.
 
 ## Task tracking
 
-- Add every newly discovered unit of work to `TASKS.md` immediately, using the numbered MC3-style
-  table pattern. Do not leave blockers, follow-up work, or acceptance gaps only in chat, logs, or
-  hand-off notes.
+- `TASKS.md` stays the live board, but **do not edit it directly in a PR** (CI rejects that). Add or
+  update rows with fragment files `tasks.d/<row-number>.md` (a `section:` line plus the complete
+  row; an existing row number replaces that row in place). The merge train folds them into
+  `TASKS.md` when the PR lands. See `tasks.d/README.md`. Validate with
+  `node scripts/fold-fragments.mjs --check`.
+- Add every newly discovered unit of work as a task row (fragment) immediately, using the numbered
+  MC3-style table pattern. Do not leave blockers, follow-up work, or acceptance gaps only in chat,
+  logs, or hand-off notes.
 - Update each active row's status, owner, notes, and concrete evidence as work starts, progresses,
   becomes blocked, or completes. Keep the board current during the work rather than reconciling it
   only at the end.
-- Every new owner requirement or bug must get a `TASKS.md` row in the same PR that starts the work.
+- Every new owner requirement or bug must get a task row in the same PR that starts the work.
   The coordinator logs requirements passed verbally (chat, calls, hand-offs) as rows straight away,
   so nothing exists only in conversation.
-- Any agent working in this repository must read and maintain `TASKS.md`; when delegating work,
+- Any agent working in this repository must read and maintain the board; when delegating work,
   include the relevant task number and require status/evidence to be returned for the board.
 
 ## Safety before committing or pushing

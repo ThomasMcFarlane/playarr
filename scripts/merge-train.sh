@@ -141,6 +141,22 @@ $files"
       need_push=true
     fi
     if [ "$KEY_MODE" = true ] && [ "$ncommits" -gt 1 ]; then need_push=true; fi
+    # Fold changelog.d/ and tasks.d/ fragments into CHANGELOG.md and TASKS.md on the branch, so the
+    # folded result is what CI validates and what lands (no post-merge commit on main).
+    if [ -n "$(find changelog.d tasks.d -name '*.md' ! -iname README.md 2>/dev/null)" ]; then
+      if ! node scripts/fold-fragments.mjs >/tmp/train-fold.log 2>&1; then
+        git checkout -q -- . 2>/dev/null; git clean -fdq changelog.d tasks.d 2>/dev/null
+        block "$pr" "Invalid changelog or task fragments:
+
+\`\`\`
+$(head -c 1500 /tmp/train-fold.log)
+\`\`\`"
+        return
+      fi
+      git add -A CHANGELOG.md TASKS.md changelog.d tasks.d
+      git commit -q -m "chore(train): fold fragments for #$pr" || true
+      need_push=true
+    fi
     if git grep -qE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock' ':!*.snap'; then
       block "$pr" "Conflict markers are present after merging \`main\`:
 

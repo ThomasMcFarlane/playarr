@@ -1,0 +1,1 @@
+- CI: merge train (`merge-train.yml`, `scripts/merge-train.sh`) lands PRs labelled `ready` one at a time, oldest first, after `ci-required` passes on the exact head; CI gains `workflow_dispatch` (TASKS 330).

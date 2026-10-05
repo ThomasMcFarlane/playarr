@@ -1,0 +1,1 @@
+- CI: pull requests now check only the Rust crates they change plus their dependents (`scripts/ci/rust-scope.sh`); shared inputs, pushes to main and a nightly schedule run the full workspace. OpenAPI diff runs only when the API crate is affected, and every CI job has a timeout (TASKS 332).
