@@ -63,7 +63,7 @@ Do not keep a list of forbidden titles in the repository: such a list would itse
 - Kubernetes manifests and Helm charts here are generic templates with neutral defaults
   (`infra/kubernetes/helm/playarr-dev` renders nothing on its own; its README lists the values).
   The real deployment values, including the regional image pins, live in the private GitOps
-  repository (the deployment repository, the deployment values file), which an Argo CD
+  repository (the application's `values.yaml` there), which an Argo CD
   multi-source Application applies on top of the chart.
 - Regional image rollout: the `regional-image` workflow pushes `playarr-regional:<sha8>` for each
   `main` commit (registry from the repository variable `REGIONAL_IMAGE_REGISTRY`). To roll out,

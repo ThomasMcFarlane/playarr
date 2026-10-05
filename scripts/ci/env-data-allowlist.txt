@@ -11,13 +11,6 @@
 # 169.254.0.0/16, multicast and reserved (224.0.0.0/3) and the RFC 5737
 # documentation ranges 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24.
 
-# Board and changelog history still name the old environment. They are
-# conflict hotspots edited only by the merge train, and are scrubbed by the
-# planned history rewrite (git filter-repo --replace-text). Remove these two
-# lines once that rewrite has landed.
-path: TASKS.md
-path: CHANGELOG.md
-
 # Lockfiles carry integrity hashes that can look like anything.
 path: *lock*
 

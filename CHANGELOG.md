@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Live events: a sync pass that creates a season or episode, or changes an episode's title, synopsis, artwork, air date or runtime, now publishes a `library` update for the series, so open clients refresh without a manual reload. Unchanged re-syncs publish nothing.
 - Playback delegated to a peer node now always proxies HLS through the entry node, even when `Redirect` delivery was chosen. A redirected HLS URL reached the peer without a playback capability (segment names in the manifest are relative and clients only send their bearer token to their own server), so the playlist answered HTTP 401 and the Android decode-failure transcode fallback ended in "io bad http status". Regression tests cover both the HLS and the direct-play paths.
 - Radarr, Whisparr and Lidarr artwork entries now tolerate a missing instance-local `url` (only `remoteUrl` present), as Sonarr already did, so one such image no longer fails a whole sync with "missing field `url`". Regression tests added for each client.
 - Merge train: stop re-merging `main` into every queued pull request. It now does so only when main's new commits touch the PR's files (fragment, CHANGELOG.md and TASKS.md paths excluded) or conflict, so landing one PR no longer cancels the CI of the next and the queue no longer starves. The train commits as Thomas McFarlane with a `Merge-Train: yes` trailer that `check-fragments.sh` exempts, and its decision logic has tests (`scripts/ci/test-merge-train.sh`).
@@ -17,7 +18,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI: affected-only selection no longer skips Rust checks on workflow-dispatched runs (merge train branches and post-merge runs on main now check everything or the true diff), and the merge train exits cleanly after landing a PR (TASKS 330, 332).
 - Docs: links from documentation pages to repository files outside `docs/` use absolute URLs, so the strict MkDocs build passes again; Docs also builds on PRs that touch it (TASKS 332).
 - Sessions: the owner was repeatedly signed out although the account was remembered. Refresh is now silent and race-safe: the web client renews a server-rejected token once and replays the request (REST, uploads and the live-events stream), shares one refresh across tabs with a Web Lock and re-reads the latest saved session under it, keeps stored credentials on any network, 5xx, 408 or 429 failure (only a definitive 400/401/403 from the server can show the profile switcher), saves profile sessions from local storage rather than per-tab state (and adopts other tabs' changes), and stops polling `/auth/refresh` and `/auth/login` with a dead token. The server accepts a just-retired refresh token for 120 s (`PLAYARR_REFRESH_REUSE_GRACE_SECS`, `0` for strict single use) instead of revoking the family, serialises rotation per device, and derives its fallback JWT secret from the persisted node identity instead of a per-boot random value. Tests: concurrent 401s cause one refresh, SSE open with a rejected token, outage keeps the session, cross-tab lock, restart persistence, concurrent server rotations (TASKS 304).
-- Server: new-file detection for Sonarr series now reacts to a rise in `statistics.episodeFileCount` since the last pass (and compares with synced rows only on the first sighting after a restart). The first cut compared counts every pass, but Sonarr counts episodes with a file, so 42 series with multi-episode files re-synced every five minutes on region-a (TASKS 275).
+- Server: new-file detection for Sonarr series now reacts to a rise in `statistics.episodeFileCount` since the last pass (and compares with synced rows only on the first sighting after a restart). The first cut compared counts every pass, but Sonarr counts episodes with a file, so 42 series with multi-episode files re-synced every five minutes on regional server A (TASKS 275).
 
 ### Added
 
@@ -26,13 +27,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI: merge train (`merge-train.yml`, `scripts/merge-train.sh`) lands PRs labelled `ready` one at a time, oldest first, after `ci-required` passes on the exact head; CI gains `workflow_dispatch` (TASKS 330).
 - Server: an episode imported into a series Playarr already knows is now synced (and so announced as live `library`/`files` and `calendar`/`imported` frames) on the next pass or webhook refetch; previously only a brand-new series or a Sonarr-reported change picked it up, because Sonarr series rows carry no availability. Sonarr's `statistics.episodeFileCount` is compared with the synced file count. Regression tests cover the sync, the event stream and the web live-event mapping (TASKS 275).
 - Web: Home On Deck and Continue Watching now always apply resume-plan, progress and detail results that arrive after the first-paint wait, so the stacked "N ways to continue" card appears on high-latency links; keyboard focus is kept when the rail fills in late (TASKS 302).
-- Home rails: verified on region-b (API, web, emulator-host Android emulator); Android server rails merged in PR 177 (task 244, 246).
-- Operations: pin REGION-A and REGION-B to regional image `<image>` (TASKS 295, 298), built from main commit and verified at digest `sha256:19297805e9d0f13f2017bb9826cecacc630d7b226e34c4b8c0e9aa297b83228d`; explicitly configure one concurrent transcode and two FFmpeg threads per regional node.
+- Home rails: verified on regional server B (API, web, the emulator host Android emulator); Android server rails merged in PR 177 (task 244, 246).
 - Operations: pin both regional servers to verified image `<image>` (TASK 292); deployment rollout and authenticated peer sync remain pending.
 - CI: push regional server image builds through the image registry while keeping public image names and tags unchanged (TASK 296).
 - Server: cap node-local on-demand FFmpeg jobs with an atomic child-lifetime permit and positive-value configuration; default to one job and two decoder, encoder and filter threads per job (TASK 295).
 - Server: proxy delegated HLS rendition/session playlists and segments through the entry peer, preserving playback capabilities, owner-side policy checks, HEAD/range responses and rewritten playlist child URLs (TASK 297).
-- Operations: grant the REGION-A regional server the host media access group, matching REGION-B, so its read-only library mount can be traversed and read; preserve the currently deployed regional image on both nodes (TASK 294).
 - Server: retry unreachable known peers after restart, and route configured server-to-server peer traffic through in-cluster Services while validating the existing public certificate identity; public client relay addresses remain unchanged (TASK 292).
 - iOS: track native QR login parity with Android, including signed iPhone and iPad acceptance (TASK 291).
 - iOS: verify Apple dispatch credential provisioning and successful source dispatch, with the signed iOS/tvOS child run accepted and queued (TASK 279).
@@ -81,7 +80,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Per-user request permission: `Policy.can_request` (off by default; administrators always may) with a Users admin toggle, enforcement on `/api/v1/discover/request`, and the Request action hidden in search for accounts without it. `PLAYARR_REQUESTS_ALLOW_ALL_USERS` remains as an override. Migration 0053 (SQLite) / 0054 (Postgres).
 - Server: smart Start/Resume for TV series (task 281). `GET /api/v1/catalog/{id}/resume-plan` returns the episode a Start/Resume press should play, or the options to offer when the history is ambiguous (unfinished episodes, a missed episode before watched ones, a rewatch behind further progress); `POST .../resume-plan/choice` records the answer (declining a missed episode, or choosing how to continue a rewatch, is remembered per profile in the new `resume_dismissals` table), `DELETE .../resume-plan/choices` forgets it and `GET /api/v1/playback/resume-plans` lists plans for Home. The rules are a pure, deterministic function with 47 unit tests; OpenAPI regenerated.
 - Server: `playarr-server create-admin --username <name>` creates an administrator (password on standard input, never in arguments) or resets that administrator's password, so operators can provision a dedicated operator or test account without touching the database.
-- Server: Sonarr episode screenshots without a local `url` (Sonarr v4.0.19 `includeImages=true`) no longer fail the whole file sync with "missing field `url`"; checked by decoding every series, episode and episode-file payload of the live region-b Sonarr (1,011 series, 53,453 episodes, 46,827 files). A source behind a reverse-proxy path prefix (for example Prowlarr at `https://host/user/prowlarr`) keeps the prefix on every request (tested).
+- Server: Sonarr episode screenshots without a local `url` (Sonarr v4.0.19 `includeImages=true`) no longer fail the whole file sync with "missing field `url`"; checked by decoding every series, episode and episode-file payload of the live regional server B Sonarr (1,011 series, 53,453 episodes, 46,827 files). A source behind a reverse-proxy path prefix (for example Prowlarr at `https://host/user/prowlarr`) keeps the prefix on every request (tested).
 - Server (TASKS 198): the Dubarr API key is no longer passed to ffmpeg as `-headers X-Api-Key: ...`. Playarr downloads the selected dub itself (key sent from inside the process) to a scratch file beside the session and ffmpeg reads that local file; if the download fails playback falls back to the source audio.
 - Server (TASKS 198): dub audio is padded with silence (`-af apad -shortest`) so a dub shorter than the title, or a seek past its end, still produces segments.
 - Server (TASKS 198): a new playback of the same title on the same device now stops the previous HLS transcode (audio, quality or dub switch after the 10 s dedupe window), and an idle reaper stops ffmpeg processes whose session expired from the cache (closed tab, dropped network).
@@ -89,13 +88,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playarr Android: Calendar link replaces Calendar subscription: the panel creates the personal iCal link on first open, shows Copy, QR and Google, Apple and Outlook instructions, and a confirmed Reset link, with friendly unreachable and unsupported-server messages. Panel buttons sit in one row left of Filters, drawn by one shared header cluster that Library and Calendar both use, and every pop-out uses the one shared right-side sheet (Library filters converted).
 - Playarr Android: one rounded button family (`PlayarrButton`, `PlayarrIconButton`) in the design system with focus ring and TV scale; the calendar and page headers use it, and a usage test stops new raw Material buttons. The calendar period label opens a month and year jump picker, previous, today and next sit beside Filters, and a header breadcrumb wraps under the title instead of running beneath the clock.
 - Playarr Android Release Calendar: Filters (View, type, source, status, date range, monitored) and a separate Calendar subscription button open right-side sheets; the agenda is master-detail (details left, list right); same-series episodes released together are grouped ("The Show, 3 episodes, S02E04-E06"); skeletons render the full view while loading; the week view scrolls horizontally through wide day columns; view, date, filters, selection and open panel are encoded in a web-style query string and restored after process death. The release calendar title is now "Release Calendar".
-- Household controls rolled out to region-a and region-b (image `<image>`) with live verification recorded on TASKS rows 104-114.
+- Household controls rolled out to regional server A and regional server B (image `<image>`) with live verification recorded on TASKS rows 104-114.
 - Playarr Android (phone, tablet and TV): a native "Not available right now" screen when the
   server reports the profile outside its schedule or out of daily time (shows when it lifts,
   stops playback, offers "Ask a guardian for more time" and "Switch profile"), an "N min left"
   pill in the last hour, and clear PIN messages for brute-force lockouts and for switching into a
   profile that has no PIN. English, Thai and Japanese.
-- Server: a Dubarr source instance can be created declaratively at boot from `PLAYARR_SOURCE_INSTANCE_URLS` (`dubarr=<url>`) and `PLAYARR_DUBARR_API_KEY`; chart 0.4.2 wires the in-cluster URL and an optional API-key Secret on region-a and region-b.
+- Server: a Dubarr source instance can be created declaratively at boot from `PLAYARR_SOURCE_INSTANCE_URLS` (`dubarr=<url>`) and `PLAYARR_DUBARR_API_KEY`; chart 0.4.2 wires the in-cluster URL and an optional API-key Secret on regional server A and regional server B.
 - Dubarr integration (task 195): a new `dubarr` source kind (Settings, Sources) connects Playarr to Dubarr. Dub tracks for a media file are listed as extra audio options in playback info; choosing one starts an on-demand HLS transcode with the dub as the audio track (video from the original, seeking aligned). Lookups are cached for 60 seconds, invalidated by Dubarr's change feed, and never block playback when Dubarr is down. Covered by wiremock tests for the client and lookup and a unit test for the ffmpeg arguments.
 - Web "Your data" and Android Settings import previews now show the watchlist section the server already returns (new, already here, could not be placed), in English, Thai and Japanese, with tests.
 - Dubarr integration (task 190): a new `dubarr` source kind (Settings, Sources) connects Playarr to Dubarr. Dub tracks for a media file are listed as extra audio options in playback info; choosing one starts an on-demand HLS transcode with the dub as the audio track (video from the original, seeking aligned). Lookups are cached for 60 seconds, invalidated by Dubarr's change feed, and never block playback when Dubarr is down. Covered by wiremock tests for the client and lookup and a unit test for the ffmpeg arguments.
@@ -130,16 +129,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI: every workflow job now runs on the self-hosted `playarr-runners` pool; GitHub-hosted runners are no longer used. The Windows UWP placeholder job in `xbox-ci.yml` is disabled until a Windows runner serves this repository. `scripts/ci/check-no-hosted-runners.sh` (run by `ci-required`) fails any workflow that targets a hosted label.
 - The merge train blocks any PR whose merged tree targets a GitHub-hosted runner, and `no-hosted-runners.yml` re-checks `main` after every push and opens a `ready` revert PR if a hosted label slips through.
 - Fixed `clients/harmony/scripts/fetch-sdk.sh` exiting 1 on newer bash (its EXIT trap clobbered the exit status).
-- Pin REGION-A and REGION-B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
+- Pin regional server A and regional server B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
 - Server: add authenticated admin endpoints to manage peer-group libraries, map local source instances to group libraries, and create/update peer routing rules (TASK 299). Deletion is omitted because group sync has no tombstones; disable routing with an empty `preferred_nodes` list, then unmap the source when rolling back.
 - CI: task board evidence for the merge train, fragments and affected-only work (TASKS 330 to 332).
 - Backups are local and encrypted by default; any off-node S3-compatible destination is optional, administrator-configured and provider-neutral. Removed the R2 bucket provisioning script and the chart's R2 endpoint defaults, and documented that Cloudflare hosts only the playarr.app client and never receives server data (backups, media, databases, logs) (TASKS 140).
-- Regional servers region-a and region-b now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
-- Regional region-b now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after region-a was rolled to the same image.
-- Regional servers region-a and region-b now run image `<image>`, which carries the release calendar, iCal
+- Regional servers regional server A and regional server B now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
+- Regional regional server B now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after regional server A was rolled to the same image.
+- Regional servers regional server A and regional server B now run image `<image>`, which carries the release calendar, iCal
   subscription and availability-lag endpoints (tasks 75-77).
-- Rolled the region-a and region-b regional servers to image `<image>`, which adds self-service portable user data export and import (tasks 67-71) on top of encrypted server backups, discovery/watchlist and the phone remote.
-- Rolled the region-a regional server to image `<image>`, which adds encrypted server backups (enabled by the chart: daily, state volume, bounded retention). region-b follows once region-a is verified.
+- Rolled the regional server A and regional server B regional servers to image `<image>`, which adds self-service portable user data export and import (tasks 67-71) on top of encrypted server backups, discovery/watchlist and the phone remote.
+- Rolled the regional server A regional server to image `<image>`, which adds encrypted server backups (enabled by the chart: daily, state volume, bounded retention). regional server B follows once regional server A is verified.
 - Regional servers now run image `<image>`, adding batched external-reference loading for catalogue browse (task 100).
 - Regional servers now run image `<image>`, which carries the catalogue latency fix, sidecar subtitles and the Radarr release-date mapping (tasks 95, 98, 100).
 
@@ -175,12 +174,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   30 days after release are reported as backfills and excluded, and items with no release time are
   counted as unknown. Episode calendar entries carry `average_lag_seconds`.
 - `scripts/remote-control-smoke.sh`: black-box check of the phone remote and handoff API against a live server.
-- Regional region-b now runs image `<image>` as well (phone remote and playback handoff API; discovery and
-  watchlist API), after region-a was verified.
-- Regional region-a now runs image `<image>`, which adds the phone remote and playback handoff API
-  (tasks 50-53; region-b follows after verification).
-- Regional region-a now runs image `<image>`, which adds the discovery and watchlist API (region-b follows after
-  region-a is verified).
+- Regional regional server B now runs image `<image>` as well (phone remote and playback handoff API; discovery and
+  watchlist API), after regional server A was verified.
+- Regional regional server A now runs image `<image>`, which adds the phone remote and playback handoff API
+  (tasks 50-53; regional server B follows after verification).
+- Regional regional server A now runs image `<image>`, which adds the discovery and watchlist API (regional server B follows after
+  regional server A is verified).
 - Playback info and playback options now list sidecar subtitles
   (`<video>.<lang>[.forced|.sdh].srt/.ass/.ssa/.vtt` next to the media file) in
   `subtitle_tracks`, served as WebVTT through the existing subtitle endpoint with
@@ -246,7 +245,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   destination acknowledges, with idempotency keys, replay protection and expiry. Design in
   `docs/architecture/remote-control.md`; migrations 0045 (SQLite) and 0046 (Postgres); OpenAPI
   updated.
-- playarr-dev chart: per-instance `backup` block (enabled for region-a and region-b) that sets the
+- playarr-dev chart: per-instance `backup` block (enabled for regional server A and regional server B) that sets the
   `PLAYARR_BACKUP_*` variables for encrypted server backups to `/data/backups` on the state volume
   (daily, keep the newest 3 and anything under 7 days, artwork capped at 1 GiB). Only the age public
   recovery key is in values; the schema rejects enabling backups without a valid public key.
@@ -404,7 +403,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playarr Admin has a System > Server capabilities page showing that report. Missing required
   software appears in a prominent alert with its impact and install hint, and the status filter
   is kept in the URL (`?show=attention|present`).
-- The regional servers run a self-contained image, `registry.example.com/playarr-regional:<sha>`
+- The regional servers run a self-contained image, `the regional image registry<sha>`
   (server binary, Admin UI, ffmpeg and ffprobe), built by `.github/workflows/regional-image.yml`
   and pulled from the cluster registry. The `streamarr-runtime` image, its `runtimePath` hostPath
   and the manual node import are removed.
@@ -430,7 +429,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   headroom without risking out-of-memory on TV devices. Playback starts after
   10 s buffered and resumes after 15 s following a stall (was 2.5 s and 5 s), so
   a remux on a link only slightly faster than its bitrate rides out peaks.
-- The regional servers `playarr-region-a` and `playarr-region-b` serve HTTPS on their public 8484 addresses
+- The regional servers `regional server A` and `regional server B` serve HTTPS on their public 8484 addresses
   using cert-manager certificates (optional per-instance `tls` in the `playarr-dev` chart). The
   server now hot-reloads a renewed static TLS certificate within a minute, without a restart.
 - Playarr Web remote navigation (Home, Movies/Series/Sites/Music, Search) now applies directional
@@ -459,7 +458,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Android playback health dialog: D-pad focus now starts on the first finding instead of Close, so Down walks the findings, detail, connection test and export buttons.
 - Catalogue browse loads each page of works' external references with batched `IN (...)`
   queries instead of one query per title, removing the remaining ~0.4 s per uncached
-  `/api/v1/catalog` call on region-b (task 100).
+  `/api/v1/catalog` call on regional server B (task 100).
 - Direct-play negotiation now treats the encoder names `x265`/`x264` (what Radarr and ffmpeg report
   for many files) as HEVC/H.264, so a client that supports HEVC no longer gets a needless
   transcode for an "x265" file. Playback health shows codec names, not encoder names.
@@ -532,8 +531,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Direct-play codec matching now treats `h265`/`hevc`, `h264`/`avc` and `av1`/`av01` as
   aliases, so HEVC remuxes are no longer sent to transcode when a client advertises `h265`.
   Direct-play responses for Matroska files now report `video/x-matroska` instead of `video/mp4`.
-- The development webOS route now uses `tv-web-webos.example.com`, which is
-  covered by the existing `*.example.com` certificate. A chart render
+- The development webOS route now uses `the hosted TV web host`, which is
+  covered by the existing deployment wildcard certificate. A chart render
   assertion prevents regression to a hostname outside that coverage.
 
 - The six active development web surfaces now use HTTP startup, readiness and
@@ -558,7 +557,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The Xbox core CI job installs the .NET SDK under the job temp directory so
   the self-hosted runner no longer fails writing to `/usr/share/dotnet`.
-- dev-host development workloads now mount the canonical Storage-backed Playarr
+- the build host development workloads now mount the canonical Storage-backed Playarr
   main checkout instead of the retired Projects filesystem.
 - Self-hosted Play run `<id>` committed the bounded Android TV pairing
   fix as `0.2.18-main.715`, versionCode, to private `alpha`; Google
@@ -677,11 +676,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A repository task board now tracks the pending private Google Play Android
   release and GitHub Actions publishing setup.
 
-- A namespace-safe Helm chart for the four dev-host Playarr development surfaces,
+- A namespace-safe Helm chart for the four the build host Playarr development surfaces,
   their Services and ten Emissary routes, preserving existing images, mounts
   and routing without committing runtime secrets.
 
-- The Playarr development chart can consolidate the region-a and region-b standalone
+- The Playarr development chart can consolidate the regional server A and regional server B standalone
   servers into one namespace while retaining their node-local PVs and keeping
   distinct runtime Secrets outside Git.
 
@@ -797,7 +796,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Android SDK 37.0 packages on each ephemeral runner. Google Play publishing
   uses the Publisher API directly, without requiring Ruby on the runner.
 
-- The VIDAA installer chart no longer owns the `playarr.example.com` public
+- The VIDAA installer chart no longer owns the `the hosted web host` public
   Mapping; that Playarr route now belongs exclusively to the Playarr chart.
 
 - Ignore generated Python bytecode, Wrangler runtime state, and repository-root
@@ -1155,7 +1154,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   uses the honest pure SPA residual closer, not freeze-crop harvest.
 - Android TV honest pure SPA AE=0 gate
   (`clients/android/tools/parity_pure_spa_ae0.py`): desktop Chromium vs
-  Android WebView freezes of live playarr.example.com. Harness is lock-only
+  Android WebView freezes of live the hosted web host Harness is lock-only
   (auth/clock/scroll/anim); product SPA owns FreeType/JPEG closure via
   `crossEngineAssets.ts` (`?tvCrossEngine=1`): path-stable bitmap text, fixed
   multi-colour media slots, non-product chrome hidden. AVD
@@ -1325,7 +1324,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apple TV search shell geometry aligned to live SPA CSS at 1920×1080
   (heading/form/empty positions, nav group chrome with labels, safe-area
   ignored for stage coordinates). Honest AE on search improved from ~1.33%
-  to ~0.50% vs authenticated playarr.example.com (still above the 0.1% bar).
+  to ~0.50% vs authenticated the hosted web host (still above the 0.1% bar).
 - Apple TV shell uses Avenir Next (SPA `--font`), an embedded raster of
   `playarr-icon.svg` for the header mark, frozen clock matching the suite
   reference frames, and measured empty-state placement on search.
@@ -1365,7 +1364,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Remote macOS build helper `scripts/mac-build.sh` for iOS/tvOS xcodebuild over
   SSH/rsync.
 - Apple TV visual-parity mode can full-bleed paint Playwright captures of
-  `playarr.example.com` (`-PlayarrParityWebRefBaseURL`) using the same AE0
+  `the hosted web host` (`-PlayarrParityWebRefBaseURL`) using the same AE0
   technique as Android's `parity_ae0.py`, so simulator captures can match the
   live web reference bit-exactly for the suite.
 - Add `scripts/appletv-parity-ae0.sh` to automate the Apple TV web-ref paint AE0 suite.
@@ -1392,7 +1391,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   comparison and triple-verify runs. The interactive pure suite freezes the live SPA in the TV
   WebView with zero desktop asset painting (local image self-freeze + stability gate), and
   records focused/unfocused animation evidence frames. The cross-engine pure suite
-  freezes desktop Chromium and the TV WebView on live playarr.example.com, records pure
+  freezes desktop Chromium and the TV WebView on live the hosted web host, records pure
   residual metrics, then applies residual-region identical rendered assets to reach AE=0.
 - Add Chromecast support: a real Google Cast sender/receiver pair, not a stub. A new
   `@playarr-tv/cast-protocol` package defines one shared wire protocol (mirrored by hand into
@@ -2185,6 +2184,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Add `SECURITY.md` (private vulnerability reporting) and stop naming the private deployment repository in `AGENTS.md`, as part of the public-readiness audit.
+- Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.
 - Document VIDAA's invite-only partner registration and App Store release gates,
   including the production bootstrap decision required for self-hosted Playarr.
