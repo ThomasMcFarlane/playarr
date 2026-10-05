@@ -3,15 +3,25 @@
 #
 # Equivalent of GitHub's native merge queue (unavailable for private repos on a
 # personal account). For each ready PR it:
-#   1. merges the latest main into the PR branch only when main's new commits touch
-#      the PR's files (CHANGELOG.md, TASKS.md, changelog.d/ and tasks.d/ excluded) or
-#      `git merge-tree` reports a conflict; otherwise the tested head is kept, so
-#      queued or running CI is never cancelled by an unrelated change on main,
+#   1. keeps the tested head untouched when it needs no change: main is merged in
+#      only when main's new commits touch the PR's files (CHANGELOG.md, TASKS.md,
+#      changelog.d/ and tasks.d/ excluded) or `git merge-tree` reports a conflict,
+#      so queued or running CI is never cancelled by an unrelated change on main.
+#      Whenever the train has to rewrite the head anyway (fragments to fold, or a
+#      multi-commit branch to squash) it merges the current main in first: every
+#      head the train builds is current main plus the PR's diff, never a PR tree
+#      re-parented onto a main it does not contain (that reverted main's newer
+#      commits in #267 and #269),
 #   2. pushes (only if the head had to change) and waits for `ci-required` on that
 #      exact head SHA,
 #   3. lands it when main has not moved in a way that could invalidate the result
 #      (otherwise repeats from 1); if main moved independently the tested head is
-#      squash-merged through the API with --match-head-commit,
+#      squash-merged through the API with --match-head-commit, which merges it
+#      three-way onto the current main. Before landing, landing_guard checks that
+#      the result changes only the PR's files and restores no version of a file
+#      (or no TASKS/CHANGELOG line) that main's recent commits replaced; after an
+#      API merge verify_landed checks that main's new tree is exactly
+#      main + the PR. Either failing stops the train,
 #   4. on any failure removes `ready`, adds `blocked`, comments the reason and
 #      moves on to the next PR.
 #
@@ -114,6 +124,91 @@ remerge_needed() {
   return 1
 }
 
+# How many recent main commits (first parent) landing_guard checks for reverts.
+REVERT_WINDOW="${REVERT_WINDOW:-50}"
+
+# expected_tree <main> <head>: the tree landing <head> on <main> must produce (a
+# fast-forward when <head> contains <main>, else the clean three-way merge GitHub's
+# squash merge performs). Fails on a conflict.
+expected_tree() {
+  local out
+  if git merge-base --is-ancestor "$1" "$2"; then git rev-parse "$2^{tree}"; return; fi
+  out=$(git merge-tree --write-tree --no-messages "$1" "$2" 2>/dev/null) || return 1
+  printf '%s\n' "${out%%$'\n'*}"
+}
+
+# train_squash <main> <message args...>: squash HEAD into one commit on top of <main>.
+# Refuses unless HEAD already contains <main>: re-parenting a tree built on an older
+# main onto the current one silently reverts every main commit it lacks.
+train_squash() {
+  local m="$1"; shift
+  git merge-base --is-ancestor "$m" HEAD || { echo "HEAD does not contain main $m; refusing to squash" >&2; return 1; }
+  git reset -q --soft "$m"
+  git commit -q "$@"
+}
+
+# landing_guard <main> <head>: succeeds when landing <head> on <main> yields exactly
+# main plus the PR's own diff. Otherwise prints the reasons and fails. Checks:
+#   - the landing changes no file the PR's own diff (merge-base..head) leaves alone;
+#   - no changed path (fragments excepted: folding deletes them) is restored to the
+#     version, or the absence, it had before one of main's last REVERT_WINDOW commits
+#     changed it, which is what a revert looks like;
+#   - lines those commits added to CHANGELOG.md or TASKS.md survive (a TASKS.md row
+#     may be replaced by a row with the same number).
+# A deliberate revert of a recent change therefore cannot go through the train.
+landing_guard() {
+  local m="$1" h="$2" lt mb p c cur prev bad="" extra changed range since
+  lt=$(expected_tree "$m" "$h") || { echo "- merging \`$h\` onto main \`$m\` conflicts"; return 1; }
+  mb=$(git merge-base "$m" "$h")
+  range="$m"; since=$(git rev-list --first-parent --skip="$REVERT_WINDOW" -n1 "$m")
+  [ -n "$since" ] && range="$since..$m"
+  changed=$(git diff --name-only --no-renames "$m" "$lt")
+  extra=$(comm -23 <(sort -u <<<"$changed" | sed '/^$/d') <(git diff --name-only --no-renames "$mb" "$h" | sort -u))
+  [ -n "$extra" ] && bad+="$(sed 's/^/- changes `/;s/$/`, which the PR does not touch/' <<<"$extra")"$'\n'
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    grep -qE "$SHARED_RE" <<<"$p" && continue
+    cur=$(git rev-parse -q --verify "$lt:$p" 2>/dev/null) || cur=absent
+    for c in $(git log --first-parent --format=%H "$range" -- "$p"); do
+      prev=$(git rev-parse -q --verify "$c^:$p" 2>/dev/null) || prev=absent
+      if [ "$cur" = "$prev" ]; then
+        bad+="- \`$p\` would be reverted to its state before $(git log -1 --format='%h (%s)' "$c")"$'\n'
+        break
+      fi
+    done
+  done <<<"$changed"
+  local f lost
+  for f in CHANGELOG.md TASKS.md; do
+    grep -qx "$f" <<<"$changed" || continue
+    lost=$(comm -12 \
+      <(for c in $(git log --first-parent --format=%H "$range" -- "$f"); do
+          git diff "$c^" "$c" -- "$f" 2>/dev/null | sed -n 's/^+\([^+].*\)$/\1/p'
+        done | grep -v '^[[:space:]]*$' | sort -u) \
+      <(git show "$m:$f" | sort -u) | comm -23 - <(git show "$lt:$f" 2>/dev/null | sort -u))
+    if [ "$f" = TASKS.md ] && [ -n "$lost" ]; then
+      # A fragment replaces a row in place: a lost row is fine when its number is still on the board.
+      local rows; rows=$(git show "$lt:$f" 2>/dev/null | sed -n 's/^| *\([0-9][0-9]*\) *|.*/\1/p' | sort -u)
+      lost=$(while IFS= read -r line; do
+        n=$(sed -n 's/^| *\([0-9][0-9]*\) *|.*/\1/p' <<<"$line")
+        [ -n "$n" ] && grep -qx "$n" <<<"$rows" && continue
+        printf '%s\n' "$line"
+      done <<<"$lost")
+    fi
+    [ -n "$lost" ] && bad+="- \`$f\` would lose $(grep -c . <<<"$lost") line(s) recent main commits added, e.g. \`$(head -n1 <<<"$lost" | cut -c1-120)\`"$'\n'
+  done
+  [ -z "$bad" ] && return 0
+  printf '%s' "$bad"
+  return 1
+}
+
+# verify_landed <landed-sha> <head>: the landed commit's tree must be exactly its parent
+# (the main GitHub merged onto) plus <head>'s changes.
+verify_landed() {
+  local want
+  want=$(expected_tree "$1^" "$2") || return 1
+  [ "$want" = "$(git rev-parse "$1^{tree}")" ]
+}
+
 post_merge_dispatch() { # <merged-sha> <files...>; token mode only
   local sha="$1" files
   files=$(git diff-tree --no-commit-id --name-only -r "$sha")
@@ -148,12 +243,25 @@ process() { # <pr>
     main=$(git rev-parse origin/main); head=$(git rev-parse "origin/$br")
     git checkout -q -B train-work "origin/$br"
 
-    local ncommits need_push=false
-    ncommits=$(git rev-list --count "origin/main..HEAD")
-    local remerge=false
-    if ! git merge-base --is-ancestor "$main" HEAD && remerge_needed "$main" HEAD; then
-      remerge=true
-      if ! git merge -q --no-edit -m "chore(train): merge main into $br" origin/main >/tmp/train-merge.log 2>&1; then
+    local ncommits need_push=false remerge=false contains_main=true has_fragments=false
+    ncommits=$(git rev-list --count "$main..HEAD")
+    [ -n "$(find changelog.d tasks.d -name '*.md' ! -iname README.md 2>/dev/null)" ] && has_fragments=true
+    git merge-base --is-ancestor "$main" HEAD || contains_main=false
+    if [ "$contains_main" = false ] && remerge_needed "$main" HEAD; then remerge=true; fi
+    if [ "$has_fragments" = true ] || { [ "$KEY_MODE" = true ] && [ "$ncommits" -gt 1 ]; }; then need_push=true; fi
+
+    if [ "$need_push" = true ] && [ "$remerge" != true ] && [ "$DRY" != true ] \
+      && [ "$(ci_state "$head")" = pending ]; then
+      # Never replace a head whose CI is queued or running unless a re-merge is required.
+      log "PR #$pr: ci-required running on $head and no re-merge needed; not replacing it, the next trigger resumes"
+      STOP=true; return
+    fi
+
+    # A head the train rewrites (fold, squash) is always built on the current main, so
+    # the squash below is main + the PR. Only an untouched head may lag behind main;
+    # the API squash merge then lands it three-way onto main.
+    if [ "$contains_main" = false ] && { [ "$remerge" = true ] || [ "$need_push" = true ]; }; then
+      if ! git merge -q --no-edit -m "chore(train): merge main into $br" "$main" >/tmp/train-merge.log 2>&1; then
         local files; files=$(git diff --name-only --diff-filter=U | head -20 | sed 's/^/- `/;s/$/`/')
         git merge --abort 2>/dev/null
         block "$pr" "Merging the latest \`main\` into \`$br\` conflicts in:
@@ -162,13 +270,12 @@ $files"
         return
       fi
       need_push=true
-    elif ! git merge-base --is-ancestor "$main" HEAD; then
+    elif [ "$contains_main" = false ]; then
       log "PR #$pr: main moved independently of this PR; keeping the tested head"
     fi
-    if [ "$KEY_MODE" = true ] && [ "$ncommits" -gt 1 ]; then need_push=true; fi
     # Fold changelog.d/ and tasks.d/ fragments into CHANGELOG.md and TASKS.md on the branch, so the
     # folded result is what CI validates and what lands (no post-merge commit on main).
-    if [ -n "$(find changelog.d tasks.d -name '*.md' ! -iname README.md 2>/dev/null)" ]; then
+    if [ "$has_fragments" = true ]; then
       if ! node scripts/fold-fragments.mjs >/tmp/train-fold.log 2>&1; then
         git checkout -q -- . 2>/dev/null; git clean -fdq changelog.d tasks.d 2>/dev/null
         block "$pr" "Invalid changelog or task fragments:
@@ -180,7 +287,6 @@ $(head -c 1500 /tmp/train-fold.log)
       fi
       git add -A CHANGELOG.md TASKS.md changelog.d tasks.d
       git commit -q -m "chore(train): fold fragments for #$pr" || true
-      need_push=true
     fi
     if git grep -qE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock' ':!*.snap'; then
       block "$pr" "Conflict markers are present after merging \`main\`:
@@ -199,18 +305,13 @@ $(printf '%s' "$hosted_out" | head -c 1500)
       return
     fi
 
-    if [ "$need_push" = true ] && [ "$remerge" != true ] && [ "$DRY" != true ] \
-      && [ "$(ci_state "$head")" = pending ]; then
-      # Never replace a head whose CI is queued or running unless a re-merge is required.
-      log "PR #$pr: ci-required running on $head and no re-merge needed; not replacing it, the next trigger resumes"
-      STOP=true; return
-    fi
     if [ "$need_push" = true ]; then
       if [ "$KEY_MODE" = true ]; then
         # Squash to one commit on top of main so main stays linear and the PR
-        # head SHA is exactly what CI validates and what lands.
-        git reset -q --soft origin/main
-        git commit -q -m "$title (#$pr)" -m "$body" -m "$TRAIN_TRAILER" || { block "$pr" "Nothing to commit after squashing (empty change)."; return; }
+        # head SHA is exactly what CI validates and what lands. HEAD contains
+        # main here (merged above); train_squash refuses otherwise.
+        train_squash "$main" -m "$title (#$pr)" -m "$body" -m "$TRAIN_TRAILER" 2>/tmp/train-squash.log \
+          || { block "$pr" "Squashing failed: $(head -c 300 /tmp/train-squash.log) (or nothing to commit: empty change)."; return; }
       fi
       newhead=$(git rev-parse HEAD)
       log "PR #$pr: pushing $newhead (attempt $attempt)"
@@ -261,6 +362,17 @@ $(printf '%s' "$hosted_out" | head -c 1500)
       ff=false
     fi
 
+    # Hard safety check: the landing must be exactly current main plus the PR's own diff.
+    local guard
+    if ! guard=$(landing_guard "$nmain" "$head"); then
+      block "$pr" "Landing guard: landing \`$head\` on \`main\` (\`$nmain\`) would change more than this PR's own diff:
+
+$guard
+If this is intended (for example a deliberate revert), land it manually under merge rule v2."
+      log "PR #$pr: landing guard refused; train stopped for inspection"
+      STOP=true; return
+    fi
+
     if [ "$KEY_MODE" = true ] && [ "$ff" = true ]; then
       # main must fast-forward to $head; the push fails otherwise.
       if ! git push -q origin "$head:refs/heads/main"; then
@@ -278,6 +390,11 @@ $TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
       fi
       git fetch -q origin main
       local merged; merged=$(git rev-parse origin/main)
+      if ! verify_landed "$merged" "$head"; then
+        log "PR #$pr: LANDED TREE MISMATCH: $merged is not its parent plus $head; train stopped"
+        gh pr comment "$pr" --repo "$REPO" --body "Merge train: squash-merged as $merged, but its tree is not \`main\` plus this PR's changes. The train has stopped; inspect \`git diff $merged^ $merged\` and restore anything lost." >/dev/null
+        STOP=true; exit 1
+      fi
       post_merge_dispatch "$merged"
       gh pr comment "$pr" --repo "$REPO" --body "Merge train: squash-merged as $merged." >/dev/null
       log "PR #$pr: landed as $merged"

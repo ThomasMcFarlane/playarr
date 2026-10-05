@@ -90,6 +90,12 @@ repositories on a personal account do not get.
   running CI is never cancelled by an unrelated landing. It waits for `ci-required` on that exact
   head SHA, then squash-merges. Its commits are authored by Thomas McFarlane and carry a
   `Merge-Train: yes` trailer, which `scripts/ci/check-fragments.sh` exempts.
+- Whenever the train rewrites a head anyway (folding fragments, squashing several commits) it
+  merges the current `main` in first, so what lands is always current main plus the PR's diff.
+  Before landing, a guard refuses any result that changes files outside the PR's diff, restores a
+  file to its state before one of main's last 50 commits, or drops TASKS/CHANGELOG lines those
+  commits added; after an API merge the train checks main's new tree is exactly main + the PR and
+  stops if not. A deliberate revert of a recent change is therefore landed by hand (merge rule v2).
 - On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
   `blocked` and comments the reason. Fix it, push, remove `blocked` and add `ready` again.
 - Do not push to a branch that carries `ready` unless you are withdrawing it (remove the label first).

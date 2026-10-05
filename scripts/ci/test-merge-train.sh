@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tests the merge-train re-merge decision and the check-fragments trailer exemption in a throwaway repo.
+# Tests the merge-train re-merge decision, the revert safeguards (#267/#269 regression) and the
+# check-fragments trailer exemption in throwaway repos.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -25,6 +26,76 @@ check "main touching only shared files keeps the head" no main3 pr
 git checkout -q -b pr2 "$base"; printf 'c\n' >src/c.txt; git add -A; git commit -qm c
 git checkout -q -b main4 "$base"; mkdir -p src/c.txt.d 2>/dev/null || true; rmdir src/c.txt.d; mkdir src/c.txt; printf 'q\n' >src/c.txt/f; git add -A; git commit -qm dirfile
 check "tree conflict forces a re-merge" yes main4 pr2
+
+ok() { echo "ok   $1"; }
+bad() { echo "FAIL $1"; fail=1; }
+
+# --- Revert regression (#267, #269): main gained commits the PR branch does not contain. ---
+git checkout -q -b r-main "$base"
+printf '| 1 | row one | open | x | |\n' >TASKS.md; git add -A; git commit -qm board
+rbase=$(git rev-parse HEAD)
+git checkout -q -b r-pr "$rbase"; printf 'a-pr\n' >src/a.txt; git commit -qam pr1; printf 'a-pr2\n' >src/a.txt; git commit -qam pr2
+git checkout -q r-main
+printf 'policy\n' >SECURITY.md; printf 'b-main\n' >src/b.txt; printf '## New section\n| 2 | row two | open | y | |\n' >>TASKS.md
+printf 'x\n- entry from main\n' >CHANGELOG.md; git add -A; git commit -qm "security policy and board"
+m1=$(git rev-parse HEAD)
+# The old squash: PR tree re-parented onto a main it does not contain.
+git checkout -q -b r-buggy r-pr; git reset -q --soft "$m1"; git commit -qm buggy; buggy=$(git rev-parse HEAD)
+[ "$(git diff --name-only "$m1" "$buggy" | LC_ALL=C sort | tr '\n' ' ')" = "CHANGELOG.md SECURITY.md TASKS.md src/a.txt src/b.txt " ] \
+  && ok "reproduced: the re-parented squash reverts main's files" || bad "revert scenario not reproduced"
+if out=$(landing_guard "$m1" "$buggy"); then bad "landing guard let a reverting squash through"; else
+  for want in '`SECURITY.md` would be reverted' '`src/b.txt` would be reverted' '`TASKS.md` would lose' '`CHANGELOG.md` would lose'; do
+    grep -qF "$want" <<<"$out" && ok "landing guard: $want" || bad "landing guard missed: $want"
+  done
+fi
+# API path: the reverting head lands three-way after main moved again; the guard still sees it.
+git checkout -q -b r-main2 "$m1"; printf 'c\n' >src/c.txt; git add -A; git commit -qm independent2; m2=$(git rev-parse HEAD)
+landing_guard "$m2" "$buggy" >/dev/null && bad "guard missed the revert on the API merge path" || ok "guard catches the revert on the API merge path"
+# train_squash refuses a HEAD that does not contain main.
+git checkout -q -B r-try r-pr
+train_squash "$m1" -m squash 2>/dev/null && bad "train_squash re-parented a head lacking main" || ok "train_squash refuses a head lacking main"
+[ "$(git rev-parse HEAD)" = "$(git rev-parse r-pr)" ] && ok "refused squash left the branch untouched" || bad "refused squash moved HEAD"
+# The fixed construction: merge main, then squash. Exactly the PR's diff on top of main.
+git merge -q --no-edit "$m1"; train_squash "$m1" -m squash; good=$(git rev-parse HEAD)
+[ "$(git diff --name-only "$m1" "$good")" = src/a.txt ] && ok "fixed squash is main plus only the PR's file" || bad "fixed squash changes $(git diff --name-only "$m1" "$good" | tr '\n' ' ')"
+landing_guard "$m1" "$good" >/dev/null && ok "guard passes main + PR (fast-forward)" || bad "guard refused a correct squash"
+landing_guard "$m2" "$good" >/dev/null && ok "guard passes main + PR (three-way after main moved)" || bad "guard refused a correct three-way landing"
+# verify_landed: what GitHub's squash must produce, and the reverting tree it must reject.
+git checkout -q --detach "$m2"
+gh_ok=$(git commit-tree "$(expected_tree "$m2" "$good")" -p "$m2" -m ok)
+gh_bad=$(git commit-tree "$(git rev-parse "$buggy^{tree}")" -p "$m2" -m bad)
+verify_landed "$gh_ok" "$good" && ok "verify_landed accepts main + PR" || bad "verify_landed rejected a correct landing"
+verify_landed "$gh_bad" "$good" && bad "verify_landed accepted a reverting landing" || ok "verify_landed rejects a reverting landing"
+# Legitimate changes still pass: deleting an old file, replacing a TASKS row in place, adding fragments' output.
+git checkout -q -b r-legit "$m1"; git rm -q src/b.txt; sed -i 's/| 2 | row two | open |/| 2 | row two | done |/' TASKS.md
+printf -- '- fixed entry\n' >>CHANGELOG.md; git commit -qam legit; legit=$(git rev-parse HEAD)
+REVERT_WINDOW=0 landing_guard "$m1" "$legit" >/dev/null && ok "guard allows an old-file deletion and an in-place row update" || bad "guard refused a legitimate change"
+git checkout -q -b r-recentdel "$m1"; git rm -q SECURITY.md; git commit -qm del
+landing_guard "$m1" "$(git rev-parse HEAD)" >/dev/null && bad "guard allowed deleting a just-added file" || ok "guard refuses deleting a file main just added (land manually)"
+
+# --- End to end: process() in key mode on a branch that lacks main's newest commit. ---
+e2e=$(mktemp -d); git init -q --bare "$e2e/origin.git"
+git push -q "$e2e/origin.git" "r-pr:refs/heads/feature" "$m1:refs/heads/main"
+git clone -q "$e2e/origin.git" "$e2e/work" 2>/dev/null
+mkdir -p "$e2e/work/scripts/ci"; printf '#!/bin/sh\nexit 0\n' >"$e2e/work/scripts/ci/check-no-hosted-runners.sh"; chmod +x "$e2e/work/scripts/ci/check-no-hosted-runners.sh"
+orig=$(git rev-parse r-pr)
+(
+  cd "$e2e/work"; git config user.name t; git config user.email t@example.invalid
+  gh() { case "$1 $2" in
+    "pr view") printf '{"headRefName":"feature","isCrossRepository":false,"isDraft":false,"title":"T","body":"B","baseRefName":"main","state":"OPEN"}\n' ;;
+    "pr edit") echo "blocked" >>"$e2e/gh.log" ;;
+    *) echo "$*" >>"$e2e/gh.log" ;;
+  esac; }
+  ci_state() { if [ "$1" = "$orig" ]; then echo none; else echo success; fi; }
+  KEY_MODE=true DRY=false SUMMARY=/dev/null process 7 >"$e2e/train.log" 2>&1
+)
+landed=$(git --git-dir="$e2e/origin.git" rev-parse main)
+if [ "$(git --git-dir="$e2e/origin.git" rev-parse "$landed^")" = "$m1" ] \
+  && [ "$(git --git-dir="$e2e/origin.git" diff --name-only "$m1" "$landed")" = src/a.txt ]; then
+  ok "end to end: the train lands main + the PR's diff, nothing reverted"
+else bad "end to end: landed $(git --git-dir="$e2e/origin.git" diff --name-only "$m1" "$landed" | tr '\n' ' ')"; cat "$e2e/train.log"; fi
+rm -rf "$e2e"
+git checkout -q main
 
 # check-fragments: a commit editing TASKS.md is rejected unless it carries the trailer.
 git checkout -q -b origin-main "$base"; git update-ref refs/remotes/origin/main HEAD
