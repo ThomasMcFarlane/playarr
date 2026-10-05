@@ -206,6 +206,8 @@ export const ja: Translations = {
   "components.player.surface.audioSurfaceAriaLabel": "音声再生画面",
   "components.player.surface.videoSurfaceAriaLabel": "動画再生画面",
   "components.player.surface.maximiseAriaLabel": "{{title}}を最大化",
+  "components.player.surface.reconnecting": "再接続しています…",
+  "components.player.surface.reconnectingMessage": "サーバーが復旧し次第、続きから再生します。",
   "components.player.surface.playbackInterruptedKicker": "再生が中断されました",
   "components.player.surface.playbackErrorTitle": "このタイトルの再生が停止しました",
   "components.player.surface.errorCode": "エラー {{code}}",

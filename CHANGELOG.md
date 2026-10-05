@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: after a backend restart or dropped connection the player now stays mounted and shows an inline "Reconnecting" state while the stream is re-negotiated with back-off and resumed at the same position, instead of replacing the player with a full-screen error.
 - CI: the merge train logic tests stub the hosted-runner guard under its current name, so the end-to-end test passes again.
 - Android: the library Filters sheet now loads the audio and subtitle language lists when it opens, instead of showing "No languages indexed yet" until a selection changed.
 - Merge train: stop landing squash commits that revert other commits already on `main`. When main had moved without touching the PR's files, the train re-parented the PR's tree (built on an older main) onto the current main, so PR 267 deleted `SECURITY.md` and undid PR 264's documentation, and PR 269 reverted the TASKS.md restructure (PR 266) and the live-events sync change (PR 268). Every head the train rewrites is now built on the current main, squashing refuses a head that lacks main, a landing guard blocks any result that changes files outside the PR's diff or restores an older version of something main recently changed, and API merges are verified after the fact. `scripts/ci/test-merge-train.sh` reproduces the revert end to end.

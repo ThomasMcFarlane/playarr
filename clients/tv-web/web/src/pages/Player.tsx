@@ -750,7 +750,7 @@ function PlayerPageInner({
     showPreparingScreen({
       negotiationKind: negotiation.kind,
       keepInlinePlayerMounted,
-      sourceSwitching: player.qualitySwitching,
+      sourceSwitching: player.qualitySwitching || player.reconnecting,
     })
   ) {
     if (minimised) {

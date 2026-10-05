@@ -181,6 +181,8 @@ export const en = {
   "components.player.surface.nowPlaying": "Now playing",
   "components.player.surface.openCoverFlowAriaLabel": "Open Cover Flow for {{title}}",
   "components.player.surface.playbackErrorTitle": "This title stopped playing",
+  "components.player.surface.reconnecting": "Reconnecting…",
+  "components.player.surface.reconnectingMessage": "Playback will resume where you left off as soon as the server is back.",
   "components.player.surface.playbackInterruptedKicker": "Playback interrupted",
   "components.player.surface.playlistAriaLabel": "Playback playlist",
   "components.player.surface.restartPlaybackButton": "Restart playback",

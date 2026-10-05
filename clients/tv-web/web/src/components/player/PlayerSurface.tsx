@@ -522,6 +522,7 @@ export function PlayerSurface({
     qualityOptions,
     activeQualityId,
     qualitySwitching,
+    reconnecting,
     qualityError,
     selectQuality,
     subtitleSwitching,
@@ -920,7 +921,7 @@ export function PlayerSurface({
       engineState.state === "idle" ||
       engineState.state === "loading" ||
       engineState.state === "buffering");
-  const isFatalError = !castConnected && engineState.state === "error";
+  const isFatalError = !castConnected && engineState.state === "error" && !reconnecting;
   const castPositionSeconds = (castState?.positionMs ?? 0) / 1000;
   const castDurationSeconds = (castState?.durationMs ?? 0) / 1000;
   const durationSeconds = engineState.durationSeconds;
@@ -1061,9 +1062,19 @@ export function PlayerSurface({
         </div>
       )}
 
-      {isBusy && !isFatalError && !minimised && (
+      {isBusy && !isFatalError && !reconnecting && !minimised && (
         <div className="player-overlay player-overlay-loading">
           <SpinnerIcon className="player-spinner" />
+        </div>
+      )}
+
+      {reconnecting && !castConnected && !minimised && (
+        <div className="player-overlay player-overlay-loading" role="status" aria-live="polite" data-testid="player-reconnecting">
+          <div className="player-status-card">
+            <SpinnerIcon className="player-spinner" />
+            <p className="player-error-title">{t("components.player.surface.reconnecting")}</p>
+            <p className="player-error-message">{t("components.player.surface.reconnectingMessage")}</p>
+          </div>
         </div>
       )}
 

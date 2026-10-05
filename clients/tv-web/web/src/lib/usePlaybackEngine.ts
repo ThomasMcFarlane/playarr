@@ -37,6 +37,11 @@ import { useDownloads, type LocalPlaybackSource } from "./DownloadsProvider";
 import { useOnlineStatus } from "./useOnlineStatus";
 import { IS_TIZEN } from "./clientPlatform";
 import { DOWNLOADED_QUALITY_ID } from "./qualityIds";
+import {
+  canReconnect,
+  isRecoverableConnectionError,
+  reconnectDelayMs,
+} from "./playbackReconnect";
 
 /** Selector id for the synthetic "Downloaded" quality option a completed local copy adds to `qualityOptions` -- never a real server rendition profile. */
 export { DOWNLOADED_QUALITY_ID } from "./qualityIds";
@@ -193,6 +198,8 @@ export interface PlaybackEngineController {
   qualityOptions: PlaybackQualityOption[];
   activeQualityId: string;
   qualitySwitching: boolean;
+  /** True while the stream is being re-established after a backend restart or dropped connection. */
+  reconnecting: boolean;
   qualityError?: string;
   selectQuality: (qualityId: string) => void;
   /** Re-runs the negotiation call (e.g. a "Try again" button on the error state). */
@@ -285,6 +292,10 @@ export function usePlaybackEngine(
   const [qualityOptions, setQualityOptions] = useState<PlaybackQualityOption[]>([]);
   const [activeQualityId, setActiveQualityId] = useState("original");
   const [qualitySwitching, setQualitySwitching] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectingRef = useRef(false);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [qualityError, setQualityError] = useState<string | undefined>();
   const [sourceAudioTracks, setSourceAudioTracks] = useState<PlaybackAudioTrack[]>([]);
   const [selectedSourceAudioTrackId, setSelectedSourceAudioTrackId] = useState<string | null>(
@@ -575,6 +586,13 @@ export function usePlaybackEngine(
         : {}),
     };
     automaticRecoveryUrlRef.current = null;
+    reconnectingRef.current = false;
+    reconnectAttemptRef.current = 0;
+    setReconnecting(false);
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     initialNegotiationRef.current = true;
     userSelectedQualityRef.current = false;
     onDemandTranscodeRef.current = false;
@@ -726,9 +744,23 @@ export function usePlaybackEngine(
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        const forbidden = err instanceof ApiError && err.status === 403;
+        if (reconnectingRef.current && !forbidden && canReconnect(reconnectAttemptRef.current)) {
+          // The backend is still away: stay mounted and try again shortly.
+          const delay = reconnectDelayMs(reconnectAttemptRef.current);
+          reconnectAttemptRef.current += 1;
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            setRetryCount((count) => count + 1);
+          }, delay);
+          return;
+        }
+        reconnectingRef.current = false;
+        setReconnecting(false);
+        pendingQualitySwitchRef.current = null;
         setNegotiation({
           kind: "error",
-          forbidden: err instanceof ApiError && err.status === 403,
+          forbidden,
           message: describeApiError(err),
         });
       });
@@ -747,14 +779,30 @@ export function usePlaybackEngine(
   ]);
 
   // A backend restart invalidates its in-memory on-demand HLS sessions while
-  // the browser can still hold the old manifest URL. Once Shaka has exhausted
-  // its own retries and reports that session URL as 404, negotiate one fresh
-  // source and resume at the same playhead position. The URL guard prevents a
-  // failed replacement session from creating an automatic recovery loop.
+  // the browser can still hold the old manifest URL (404), and a dropped
+  // connection surfaces as a network error on those same URLs. Once Shaka has
+  // exhausted its own retries, keep the player mounted in an inline
+  // "reconnecting" state, negotiate a fresh source with back-off and resume at
+  // the same playhead position. The URL guard stops a replacement session that
+  // fails immediately from looping; the attempt budget bounds the whole thing.
   useEffect(() => {
     if (qualitySwitching) return;
-    if (!mediaFileId || !isExpiredHlsSessionError(negotiation, engineState)) return;
+    if (negotiation.kind !== "ready" || negotiation.mode !== "hls") return;
+    if (engineState.state !== "error") return;
+    if (
+      !mediaFileId ||
+      !isRecoverableConnectionError(engineState.error, {
+        onDemandSession: isOnDemandHlsUrl(negotiation.url),
+      })
+    ) {
+      return;
+    }
     if (automaticRecoveryUrlRef.current === negotiation.url) return;
+    if (!canReconnect(reconnectAttemptRef.current)) {
+      reconnectingRef.current = false;
+      setReconnecting(false);
+      return;
+    }
 
     automaticRecoveryUrlRef.current = negotiation.url;
     const absolutePositionSeconds =
@@ -768,9 +816,19 @@ export function usePlaybackEngine(
       startPositionMs: Math.max(0, Math.round(absolutePositionSeconds * 1000)),
     };
     loadedForUrl.current = null;
-    void stopActiveSession("error").finally(() => {
-      setRetryCount((count) => count + 1);
-    });
+    reconnectingRef.current = true;
+    setReconnecting(true);
+    const delay = reconnectDelayMs(reconnectAttemptRef.current);
+    reconnectAttemptRef.current += 1;
+    reconnectTimerRef.current = setTimeout(() => {
+      reconnectTimerRef.current = null;
+      // The old session may be unreachable; closing it is best effort.
+      void stopActiveSession("error")
+        .catch(() => undefined)
+        .finally(() => {
+          setRetryCount((count) => count + 1);
+        });
+    }, delay);
   }, [
     engineState,
     mediaFileId,
@@ -778,6 +836,23 @@ export function usePlaybackEngine(
     qualitySwitching,
     stopActiveSession,
   ]);
+
+  // Playback is confirmed healthy again: forget the reconnect budget.
+  useEffect(() => {
+    if (!reconnectingRef.current) return;
+    if (engineState.state === "playing" && negotiation.kind === "ready") {
+      reconnectingRef.current = false;
+      reconnectAttemptRef.current = 0;
+      setReconnecting(false);
+    }
+  }, [engineState.state, negotiation.kind]);
+
+  useEffect(
+    () => () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    },
+    []
+  );
 
   // Create the platform engine once negotiation has succeeded and, for
   // Shaka, attach it to the `<video>`. `PlayerSurface` (which renders the `<video>`
@@ -840,7 +915,7 @@ export function usePlaybackEngine(
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the loading/error <-> ready transition (see comment above), not on every negotiation object identity change.
-  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching), getAccessToken]);
+  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching || reconnecting), getAccessToken]);
 
   // Load whatever the negotiation resolved to, once there's both a ready
   // negotiation result and an attached engine. Guarded by `loadedForUrl` so
@@ -1426,6 +1501,13 @@ export function usePlaybackEngine(
   const restart = useCallback(() => {
     loadedForUrl.current = null;
     automaticRecoveryUrlRef.current = null;
+    reconnectingRef.current = false;
+    reconnectAttemptRef.current = 0;
+    setReconnecting(false);
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     pendingQualitySwitchRef.current = null;
     latestUserSeekRef.current = 0;
     latestPlaybackRef.current.positionMs = 0;
@@ -1437,6 +1519,13 @@ export function usePlaybackEngine(
   const retryNegotiation = useCallback(() => {
     loadedForUrl.current = null;
     automaticRecoveryUrlRef.current = null;
+    reconnectingRef.current = false;
+    reconnectAttemptRef.current = 0;
+    setReconnecting(false);
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     void stopActiveSession("user_stopped").finally(() => {
       setRetryCount((n) => n + 1);
     });
@@ -1506,6 +1595,7 @@ export function usePlaybackEngine(
     qualityOptions,
     activeQualityId,
     qualitySwitching,
+    reconnecting,
     qualityError,
     selectQuality,
     retryNegotiation,

@@ -206,6 +206,8 @@ export const th: Translations = {
   "components.player.surface.audioSurfaceAriaLabel": "พื้นที่เล่นเสียง",
   "components.player.surface.videoSurfaceAriaLabel": "พื้นที่เล่นวิดีโอ",
   "components.player.surface.maximiseAriaLabel": "ขยาย {{title}} เต็มจอ",
+  "components.player.surface.reconnecting": "กำลังเชื่อมต่อใหม่…",
+  "components.player.surface.reconnectingMessage": "การเล่นจะดำเนินต่อจากจุดเดิมทันทีที่เซิร์ฟเวอร์กลับมา",
   "components.player.surface.playbackInterruptedKicker": "การเล่นถูกขัดจังหวะ",
   "components.player.surface.playbackErrorTitle": "เรื่องนี้หยุดเล่น",
   "components.player.surface.errorCode": "ข้อผิดพลาด {{code}}",
