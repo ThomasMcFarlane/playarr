@@ -35,6 +35,8 @@ unchanged through the same authenticated, allow-listed surface so the native
 Android image pipeline can display the real catalogue. Attribution: `(c)
 copyright Blender Foundation | www.bigbuckbunny.org`.
 
+Attribution: Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org, licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/); see the root `README.md` ("Third-party media").
+
 ## Test
 
 ```sh

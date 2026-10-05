@@ -162,6 +162,16 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full local-development
 walkthrough, and [`docs/architecture/overview.md`](docs/architecture/overview.md)
 for how the system fits together before you dive into a specific component.
 
+## Third-party media
+
+Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org,
+is licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
+(see <https://peach.blender.org/about/>). It is used only by the Google Play
+review demo server (`clients/tv-web/apps/play-review-server`) and in the Android
+Play store screenshots (`clients/android/fastlane/metadata/android/en-US/images/`).
+It is not distributed in the app. The licence does not cover Blender or Big Buck
+Bunny logos or trademarks, and none are used.
+
 ## License
 
 MIT, see [`LICENSE`](LICENSE).
