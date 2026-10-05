@@ -108,4 +108,16 @@ printf 'process.exit(0)\n' >scripts/fold-fragments.mjs
 cf() { git checkout -q -b "m-$1" "$base"; git merge -q --no-ff "$1" -m merge; git update-ref refs/remotes/origin/main "$base"; ( set +e; sed 's#git fetch -q --no-tags origin "\$base"#true#' scripts/ci/check-fragments.sh >scripts/ci/cf.sh; bash scripts/ci/cf.sh >/dev/null 2>&1; echo $? ); rm -f scripts/ci/cf.sh; }
 [ "$(cf t1)" = 1 ] && echo "ok   untrailered TASKS.md edit rejected" || { echo "FAIL untrailered edit accepted"; fail=1; }
 [ "$(cf t2)" = 0 ] && echo "ok   Merge-Train trailer exempt" || { echo "FAIL trailer not exempt"; fail=1; }
+
+# Co-authored-by: the train strips trailers from the title/body it writes, and CI rejects them in PR commits.
+msg=$(printf 'feat: x\n\nCo-authored-by: Claude <noreply@anthropic.com>\nbody line\n  co-AUTHORED-by : Y <y@example.invalid>\nMerge-Train: yes\n' | strip_coauthor)
+case "$msg" in *[Cc]o-[Aa]uthored*) echo "FAIL trailer survived strip_coauthor"; fail=1 ;; *) echo "ok   strip_coauthor removes trailers" ;; esac
+case "$msg" in *"body line"*"Merge-Train: yes"*) echo "ok   strip_coauthor keeps other lines" ;; *) echo "FAIL strip_coauthor dropped other lines"; fail=1 ;; esac
+nc() { git checkout -q -b "n-$1" "$base"; git merge -q --no-ff "$1" -m merge; git update-ref refs/remotes/origin/main "$base"; mkdir -p scripts/ci; ( set +e; sed 's#git fetch -q --no-tags origin "\$base"#true#' "$root/scripts/ci/check-no-coauthor.sh" >scripts/ci/nc.sh; bash scripts/ci/nc.sh >/dev/null 2>&1; echo $? ); rm -f scripts/ci/nc.sh; }
+git checkout -q -b c1 "$base"; printf 'k\n' >src/k.txt; git add src; git commit -qm "feat: k" -m "Co-authored-by: Claude <noreply@anthropic.com>"
+git checkout -q -b c2 "$base"; printf 'l\n' >src/l.txt; git add src; git commit -qm "feat: l" -m "co-authored-by: lower <l@example.invalid>"
+git checkout -q -b c3 "$base"; printf 'm\n' >src/m.txt; git add src; git commit -qm "feat: m mentions Co-authored-by: in prose" -m "Signed-off-by: t <t@example.invalid>"
+[ "$(nc c1)" = 1 ] && echo "ok   Co-authored-by commit rejected" || { echo "FAIL Co-authored-by commit accepted"; fail=1; }
+[ "$(nc c2)" = 1 ] && echo "ok   lower-case trailer rejected" || { echo "FAIL lower-case trailer accepted"; fail=1; }
+[ "$(nc c3)" = 0 ] && echo "ok   clean commit accepted" || { echo "FAIL clean commit rejected"; fail=1; }
 exit $fail

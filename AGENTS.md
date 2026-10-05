@@ -43,6 +43,9 @@ Do not keep a list of forbidden titles in the repository: such a list would itse
 
 - Do not leave completed work only in the working tree. Commit and push each logical change as
   soon as its relevant validation passes.
+- Never add a `Co-authored-by:` trailer (for example "Co-authored-by: Claude ...") to any commit,
+  squash message or PR merge body. Commits are authored by Thomas McFarlane alone. CI
+  (`scripts/ci/check-no-coauthor.sh`) fails a PR that contains one; the merge train strips them.
 - Keep commits small and atomic: one intent per commit, with its directly related tests,
   documentation, generated contracts, and migration files.
 - Use Conventional Commits in the form `type(scope): imperative summary`. Prefer `feat`, `fix`,

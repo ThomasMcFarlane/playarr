@@ -93,6 +93,13 @@ jobs:
       - name: Require GitHub-hosted runner labels
         run: scripts/ci/check-hosted-runners.sh
 
+      # Owner rule: no Co-authored-by trailers on any commit of a PR.
+      - name: Reject Co-authored-by trailers
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/ci/check-no-coauthor.sh
+
       # The repository is public: no hostnames, addresses, paths or pins of a
       # real deployment. Site-specific names come from a secret, never the tree.
       - name: Reject environment-specific data

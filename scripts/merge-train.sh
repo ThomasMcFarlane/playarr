@@ -57,6 +57,10 @@ TRAIN_NAME="Thomas McFarlane"
 TRAIN_EMAIL="thomas@mcfarlane.email"
 TRAIN_TRAILER="Merge-Train: yes"
 
+# Owner rule: a Co-authored-by trailer must never appear in a commit; the train neither adds one nor
+# lets one through from a PR title or body into the squash commit message it writes.
+strip_coauthor() { grep -viE '^[[:space:]]*co-authored-by[[:space:]]*:' || true; }
+
 log() { echo "[train] $*"; echo "- $*" >>"$SUMMARY"; }
 run() { if [ "$DRY" = true ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
@@ -229,7 +233,7 @@ process() { # <pr>
   info=$(gh pr view "$pr" --repo "$REPO" --json headRefName,isCrossRepository,isDraft,title,body,baseRefName,state) || {
     log "PR #$pr: cannot read, skipping"; return; }
   [ "$(jq -r .state <<<"$info")" = OPEN ] || { log "PR #$pr not open, skipping"; return; }
-  br=$(jq -r .headRefName <<<"$info"); title=$(jq -r .title <<<"$info"); body=$(jq -r .body <<<"$info")
+  br=$(jq -r .headRefName <<<"$info"); title=$(jq -r .title <<<"$info" | strip_coauthor); body=$(jq -r .body <<<"$info" | strip_coauthor)
   base=$(jq -r .baseRefName <<<"$info"); cross=$(jq -r .isCrossRepository <<<"$info"); draft=$(jq -r .isDraft <<<"$info")
   [ "$cross" = true ] && { block "$pr" "Pull requests from forks cannot be trained."; return; }
   [ "$draft" = true ] && { block "$pr" "The pull request is a draft."; return; }
