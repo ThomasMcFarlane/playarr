@@ -252,6 +252,32 @@ export type MediaPlaybackPreferences =
 export type UpdateMediaPlaybackPreferencesRequest =
   components["schemas"]["UpdateMediaPlaybackPreferencesRequest"];
 export type WatchProgress = components["schemas"]["WatchProgress"];
+
+// Unsorted folders (docs/architecture/unsorted-folders.md).
+export type FolderRoot = components["schemas"]["FolderRootResponse"];
+export type FolderRootsResponse = components["schemas"]["FolderRootsResponse"];
+export type FolderBrowseResponse = components["schemas"]["FolderBrowseResponse"];
+export type FolderEntry = components["schemas"]["FolderEntryResponse"];
+export type FolderBreadcrumb = components["schemas"]["FolderBreadcrumbResponse"];
+export type FolderSort = components["schemas"]["FolderSort"];
+export type FolderOrder = components["schemas"]["FolderOrder"];
+export type FolderEntryFilter = components["schemas"]["FolderEntryFilter"];
+export type AdminFolderRoot = components["schemas"]["AdminFolderRootResponse"];
+export type AdminFolderRoots = components["schemas"]["AdminFolderRootsResponse"];
+export type FolderScanSummary = components["schemas"]["ScanSummary"];
+export type CreateFolderRootRequest = components["schemas"]["CreateFolderRootRequest"];
+export type UpdateFolderRootRequest = components["schemas"]["UpdateFolderRootRequest"];
+
+export interface BrowseFolderParams {
+  /** Root-relative directory; empty or omitted is the root. */
+  path?: string;
+  q?: string;
+  sort?: FolderSort;
+  order?: FolderOrder;
+  type?: FolderEntryFilter;
+  limit?: number;
+  offset?: number;
+}
 export type ResumePlan = components["schemas"]["ResumePlan"];
 export type ResumeOption = components["schemas"]["ResumeOption"];
 export type ResumeOptionKind = components["schemas"]["ResumeOptionKind"];
@@ -842,6 +868,14 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/household/approvals/{id}/consume", method: "POST" },
   { schemaPath: "/api/v1/admin/users/{id}/household", method: "GET" },
   { schemaPath: "/api/v1/admin/users/{id}/household", method: "PUT" },
+  { schemaPath: "/api/v1/folders/roots", method: "GET" },
+  { schemaPath: "/api/v1/folders/roots/{root_id}/browse", method: "GET" },
+  { schemaPath: "/api/v1/admin/folders/roots", method: "GET" },
+  { schemaPath: "/api/v1/admin/folders/roots", method: "POST" },
+  { schemaPath: "/api/v1/admin/folders/roots/{root_id}", method: "PATCH" },
+  { schemaPath: "/api/v1/admin/folders/roots/{root_id}", method: "DELETE" },
+  { schemaPath: "/api/v1/admin/folders/roots/{root_id}/scan", method: "POST" },
+  { schemaPath: "/api/v1/admin/folders/discover", method: "POST" },
   { schemaPath: "/api/v1/catalog", method: "GET" },
   { schemaPath: "/api/v1/catalog/kinds", method: "GET" },
   { schemaPath: "/api/v1/catalog/{id}", method: "GET" },
@@ -1616,6 +1650,71 @@ export class ApiClient {
     return this.unwrap(
       await this.raw.GET("/api/v1/catalog/search", { params: { query: { q, limit } } })
     ).items;
+  }
+
+  /** Root folders the caller may browse (path-free), optionally for one library kind. */
+  async listFolderRoots(kind?: WorkKind): Promise<FolderRoot[]> {
+    return this.unwrap(await this.raw.GET("/api/v1/folders/roots", { params: { query: { kind } } }))
+      .roots;
+  }
+
+  /** One directory level of a folder root: sub-directories first, then media files. */
+  async browseFolder(rootId: string, params: BrowseFolderParams = {}): Promise<FolderBrowseResponse> {
+    return this.unwrap(
+      await this.raw.GET("/api/v1/folders/roots/{root_id}/browse", {
+        params: {
+          path: { root_id: rootId },
+          query: {
+            path: params.path || undefined,
+            q: params.q || undefined,
+            sort: params.sort,
+            order: params.order,
+            type: params.type,
+            limit: params.limit,
+            offset: params.offset,
+          },
+        },
+      })
+    );
+  }
+
+  /** Admin: every root with its scan configuration and state. */
+  async listAdminFolderRoots(): Promise<AdminFolderRoots> {
+    return this.unwrap(await this.raw.GET("/api/v1/admin/folders/roots", {}));
+  }
+
+  /** Admin: re-read root folders from every media-owning source. */
+  async discoverFolderRoots(): Promise<AdminFolderRoots> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/folders/discover", {}));
+  }
+
+  async createFolderRoot(body: CreateFolderRootRequest): Promise<AdminFolderRoot> {
+    return this.unwrap(await this.raw.POST("/api/v1/admin/folders/roots", { body }));
+  }
+
+  async updateFolderRoot(rootId: string, body: UpdateFolderRootRequest): Promise<AdminFolderRoot> {
+    return this.unwrap(
+      await this.raw.PATCH("/api/v1/admin/folders/roots/{root_id}", {
+        params: { path: { root_id: rootId } },
+        body,
+      })
+    );
+  }
+
+  async deleteFolderRoot(rootId: string): Promise<void> {
+    this.assertOk(
+      await this.raw.DELETE("/api/v1/admin/folders/roots/{root_id}", {
+        params: { path: { root_id: rootId } },
+      })
+    );
+  }
+
+  async scanFolderRoot(rootId: string): Promise<FolderScanSummary> {
+    return this.unwrap(
+      await this.raw.POST("/api/v1/admin/folders/roots/{root_id}/scan", {
+        params: { path: { root_id: rootId } },
+      })
+    );
   }
 
   async getWork(id: string): Promise<WorkDetail> {

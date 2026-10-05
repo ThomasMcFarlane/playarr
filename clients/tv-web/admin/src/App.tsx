@@ -20,6 +20,7 @@ import { RequestsPage } from "./pages/Requests";
 import { PlaylistsPage } from "./pages/PlaylistsPage";
 import { PlaylistEditPage } from "./pages/PlaylistEditPage";
 import { LoginPage } from "./pages/Login";
+import { FoldersPage } from "./pages/Folders";
 import { useEnsureSignedIn } from "./lib/ApiClientProvider";
 import { ApiExplorerProvider } from "./lib/ApiExplorerContext";
 import { TopNav } from "./components/TopNav";
@@ -57,6 +58,7 @@ const SYSTEM_NAV_LINKS = [
   { to: "/peer-groups", label: "Peer groups", end: false },
   { to: "/capabilities", label: "Server capabilities", end: false },
   { to: "/backups", label: "Backups", end: false },
+  { to: "/folders", label: "Folders", end: false },
   { to: "/tasks", label: "Tasks", end: false },
   { to: "/activity", label: "Activity", end: false },
 ] as const;
@@ -253,6 +255,7 @@ export function App() {
                       <Route path="/settings" element={<SystemSettingsPage />} />
                       <Route path="/capabilities" element={<ServerCapabilitiesPage />} />
                       <Route path="/backups" element={<BackupsPage />} />
+                      <Route path="/folders" element={<FoldersPage />} />
                       <Route path="/peer-groups" element={<PeerGroupsPage />} />
                       <Route
                         path="/api-explorer"

@@ -44,6 +44,7 @@ import { PlaylistsPage } from "./pages/Playlists";
 import { WatchlistPage } from "./pages/Watchlist";
 import { RequestsPage } from "./pages/Requests";
 import { CalendarPage } from "./pages/Calendar";
+import { FoldersPage } from "./pages/Folders";
 import { ProfilesPage } from "./pages/Profiles";
 import { HouseholdPage } from "./pages/Household";
 import {
@@ -69,6 +70,7 @@ import { TvEmptyState } from "./components/tv/TvEmptyState";
 import { ProfileAvatar, useStoredProfileAvatar } from "./components/ProfileAvatar";
 import {
   CalendarIcon,
+  FoldersIcon,
   DownloadsIcon,
   HomeIcon,
   MusicIcon,
@@ -231,6 +233,9 @@ function AppShell() {
     availableWorkKindsState.scope === catalogKindsCacheScope
       ? availableWorkKindsState.kinds
       : null;
+  // Unsorted folders: the nav entry only exists once an administrator has
+  // enabled a root this account may browse.
+  const [hasFolderRoots, setHasFolderRoots] = useState(false);
   const appUpdate = useAppUpdate(client, PLAYARR_CLIENT_PLATFORM);
   const location = useLocation();
   const navigate = useNavigate();
@@ -334,6 +339,22 @@ function AppShell() {
             kinds: new Set(),
           });
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authFailed, catalogKindsCacheScope, client]);
+
+  useEffect(() => {
+    if (authFailed) return;
+    let cancelled = false;
+    void client
+      .listFolderRoots()
+      .then((roots) => {
+        if (!cancelled) setHasFolderRoots(roots.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasFolderRoots(false);
       });
     return () => {
       cancelled = true;
@@ -519,6 +540,19 @@ function AppShell() {
                     <span className="app-nav-label">{t(labelKey)}</span>
                   </NavLink>
                 ))}
+              {group.id === "library" && hasFolderRoots ? (
+                <NavLink
+                  to="/folders"
+                  className={({ isActive }) =>
+                    `app-nav-link${isActive ? " is-active" : ""}`
+                  }
+                >
+                  <span className="app-nav-icon">
+                    <FoldersIcon />
+                  </span>
+                  <span className="app-nav-label">{t("pages.folders.entry")}</span>
+                </NavLink>
+              ) : null}
             </div>
           ))}
         </nav>
@@ -657,6 +691,7 @@ export function App() {
         <Route path="/requests" element={<RequestsPage />} />
         <Route path="/playlists" element={<PlaylistsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/folders" element={<FoldersPage />} />
         <Route path="/playlists/:workId" element={<WorkDetailPage />} />
         <Route path="/player/:mediaFileId" element={null} />
         <Route path="/settings" element={<SettingsIndexPage />}>

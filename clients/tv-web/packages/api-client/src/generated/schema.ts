@@ -116,6 +116,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/folders/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["admin_discover_folder_roots_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/folders/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["admin_list_folder_roots_handler"];
+        put?: never;
+        post: operations["admin_create_folder_root_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/folders/roots/{root_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["admin_delete_folder_root_handler"];
+        options?: never;
+        head?: never;
+        patch: operations["admin_update_folder_root_handler"];
+        trace?: never;
+    };
+    "/api/v1/admin/folders/roots/{root_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["admin_scan_folder_root_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/group-libraries": {
         parameters: {
             query?: never;
@@ -1628,6 +1692,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["events_stream_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_folder_roots_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/roots/{root_id}/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["browse_folder_handler"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3535,6 +3631,37 @@ export interface components {
             /** Format: uuid */
             work_id: string;
         };
+        AdminFolderRootResponse: {
+            active: boolean;
+            /** @description The directory the scanner will actually walk. */
+            effective_path: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            item_count: number;
+            /** Format: date-time */
+            last_scanned_at?: string | null;
+            library_kind: components["schemas"]["WorkKind"];
+            /** @description Explicit path on this server, when set. */
+            local_path?: string | null;
+            manual: boolean;
+            name: string;
+            /** @description Whether the effective path is a readable directory on this server. */
+            path_available: boolean;
+            /** @description The path as the source application (or the administrator) reported it. */
+            reported_path: string;
+            scan_enabled: boolean;
+            scan_error?: string | null;
+            scan_status: components["schemas"]["FolderScanStatus"];
+            /** Format: uuid */
+            source_instance_id: string;
+            source_name: string;
+        };
+        AdminFolderRootsResponse: {
+            /** @description Sources whose root folders could not be discovered (only on `discover`). */
+            failed_source_instance_ids: string[];
+            roots: components["schemas"]["AdminFolderRootResponse"][];
+        };
         Album: {
             album_type: components["schemas"]["AlbumType"];
             /** Format: uuid */
@@ -4032,6 +4159,17 @@ export interface components {
              */
             quality_id: string;
         };
+        CreateFolderRootRequest: {
+            name?: string | null;
+            /** @description Absolute directory on this server. */
+            path: string;
+            /**
+             * Format: uuid
+             * @description Source instance whose library the folder belongs to (decides the
+             *     library kind and who may browse it).
+             */
+            source_instance_id: string;
+        };
         CreateHandoffRequest: {
             /** Format: uuid */
             destination_device_id: string;
@@ -4474,6 +4612,89 @@ export interface components {
             storage_bucket: string;
             vapid_public_key: string;
         };
+        FolderBreadcrumbResponse: {
+            name: string;
+            /** @description Root-relative path of this ancestor (empty for the root). */
+            path: string;
+        };
+        FolderBrowseResponse: {
+            breadcrumbs: components["schemas"]["FolderBreadcrumbResponse"][];
+            entries: components["schemas"]["FolderEntryResponse"][];
+            limit: number;
+            offset: number;
+            path: string;
+            root: components["schemas"]["FolderRootResponse"];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @enum {string} */
+        FolderEntryFilter: "all" | "directories" | "media";
+        FolderEntryResponse: {
+            album?: string | null;
+            artist?: string | null;
+            audio_codec?: string | null;
+            /** Format: int64 */
+            bitrate_bps?: number | null;
+            container?: string | null;
+            /** Format: int64 */
+            duration_ms?: number | null;
+            entry_type: components["schemas"]["FolderEntryType"];
+            /** Format: int32 */
+            height?: number | null;
+            /**
+             * Format: int64
+             * @description Number of playable files below a directory.
+             */
+            item_count?: number | null;
+            /**
+             * Format: uuid
+             * @description Playback id for media entries (use the normal playback routes).
+             */
+            media_file_id?: string | null;
+            media_kind?: null | components["schemas"]["WorkKind"];
+            /** Format: date-time */
+            modified_at?: string | null;
+            name: string;
+            /** @description Root-relative path (pass as `path` to open a directory). */
+            path: string;
+            /** Format: int64 */
+            position_ms?: number | null;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            thumbnail_url?: string | null;
+            title?: string | null;
+            video_codec?: string | null;
+            watch_state?: null | components["schemas"]["WatchState"];
+            /** Format: int32 */
+            width?: number | null;
+        };
+        /** @enum {string} */
+        FolderEntryType: "directory" | "media";
+        /** @enum {string} */
+        FolderOrder: "asc" | "desc";
+        FolderRootResponse: {
+            /** @description False while the root has never scanned successfully or its last scan failed. */
+            available: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            item_count: number;
+            /** Format: date-time */
+            last_scanned_at?: string | null;
+            library_kind: components["schemas"]["WorkKind"];
+            name: string;
+            scan_status: components["schemas"]["FolderScanStatus"];
+            /** Format: uuid */
+            source_instance_id: string;
+            source_name: string;
+        };
+        FolderRootsResponse: {
+            roots: components["schemas"]["FolderRootResponse"][];
+        };
+        /** @enum {string} */
+        FolderScanStatus: "pending" | "scanning" | "ready" | "failed";
+        /** @enum {string} */
+        FolderSort: "name" | "modified" | "size" | "duration";
         /** @description Request body for [`found_peer_group_handler`]. */
         FoundPeerGroupRequest: {
             name: string;
@@ -6490,6 +6711,22 @@ export interface components {
             rows: components["schemas"]["RoutingRule"][];
             server_time: string;
         };
+        /** @description Result of one scan of one root. */
+        ScanSummary: {
+            /** Format: int64 */
+            added: number;
+            /** Format: int64 */
+            removed: number;
+            /**
+             * Format: int64
+             * @description Files that could not be probed as playable media.
+             */
+            skipped: number;
+            /** Format: int64 */
+            unchanged: number;
+            /** Format: int64 */
+            updated: number;
+        };
         /**
          * @description `GET /api/v1/catalog/search`'s real response shape: locally-known
          *     matches (`items`, from `CatalogService::search`, unchanged) plus the
@@ -7039,6 +7276,12 @@ export interface components {
          * @enum {string}
          */
         UnratedContent: "block" | "allow";
+        UpdateFolderRootRequest: {
+            /** @description Absolute directory on this server; an empty string clears the override. */
+            local_path?: string | null;
+            name?: string | null;
+            scan_enabled?: boolean | null;
+        };
         UpdateHomeRailRequest: {
             config?: null | components["schemas"]["HomeRailConfig"];
             enabled?: boolean | null;
@@ -7705,6 +7948,288 @@ export interface operations {
             };
             /** @description No backup with this id */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_discover_folder_roots_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Root folders re-read from every media-owning source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFolderRootsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_list_folder_roots_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every known root folder with its scan configuration and state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFolderRootsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_create_folder_root_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFolderRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Root added, enabled and scanning */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFolderRootResponse"];
+                };
+            };
+            /** @description Invalid path or source */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This folder is already configured for that source */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_delete_folder_root_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Folder root id */
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Root and its scanned files removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown root */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Roots reported by a source cannot be deleted; disable them instead */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_update_folder_root_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Folder root id */
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFolderRootRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated root */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminFolderRootResponse"];
+                };
+            };
+            /** @description Invalid path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown root */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    admin_scan_folder_root_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Folder root id */
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scan finished */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanSummary"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown root */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A scan of this root is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The root could not be scanned */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12826,6 +13351,105 @@ export interface operations {
             };
             /** @description Caller lacks Playarr access */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_folder_roots_handler: {
+        parameters: {
+            query?: {
+                /** @description Only roots of this library kind (`movie`, `series`, `artist`, ...). */
+                kind?: null | components["schemas"]["WorkKind"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Path-free root folders the caller may browse */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRootsResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller does not have Playarr access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    browse_folder_handler: {
+        parameters: {
+            query?: {
+                /** @description Root-relative directory. Empty or omitted means the root itself. */
+                path?: string | null;
+                /** @description Case-insensitive name filter applied to this directory's entries. */
+                q?: string | null;
+                sort?: components["schemas"]["FolderSort"];
+                order?: components["schemas"]["FolderOrder"];
+                /** @description Restrict to directories or media files (default: both). */
+                type?: components["schemas"]["FolderEntryFilter"];
+                limit?: number | null;
+                offset?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Folder root id */
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One directory level: sub-directories first, then media files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderBrowseResponse"];
+                };
+            };
+            /** @description Invalid path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No access to this library or folder */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown root or folder */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

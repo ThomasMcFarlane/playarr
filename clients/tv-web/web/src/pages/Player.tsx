@@ -89,7 +89,8 @@ function isDetailRoute(value: unknown): value is string {
   return (
     typeof value === "string" &&
     (/^\/(?:movies|series|sites|music)\/[^/?]+$/.test(value) ||
-      /^\/search\/[^/?]+(?:\?.*)?$/.test(value))
+      /^\/search\/[^/?]+(?:\?.*)?$/.test(value) ||
+      /^\/folders(?:\?.*)?$/.test(value))
   );
 }
 

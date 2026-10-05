@@ -16,6 +16,9 @@ export type PageHeaderCoverage =
 export const PAGE_HEADER_COVERAGE: readonly PageHeaderCoverage[] = [
   { file: "Calendar.tsx", mode: "header", routes: ["calendar"] },
   { file: "Downloads.tsx", mode: "header", routes: ["downloads"] },
+  // `/folders` is a web and Android surface for now; other clients are parked, so it is not in
+  // COMPLETE_CLIENT_SHELL_ROUTES yet.
+  { file: "Folders.tsx", mode: "header", routes: [] },
   { file: "Library.tsx", mode: "header", routes: ["series", "movies", "sites", "music"] },
   { file: "MusicDetail.tsx", mode: "header", routes: ["music-detail"] },
   { file: "Playlists.tsx", mode: "header", routes: ["playlists"] },
