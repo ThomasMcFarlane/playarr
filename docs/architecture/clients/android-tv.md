@@ -8,7 +8,7 @@ and tablets: `clients/android/`, canonical Play package
 **Product bar:** full native Compose + Media3 for the entire television
 experience, with behavioural parity to Playarr Web. See
 [`../client-principles.md`](../client-principles.md) and
-[`../../clients/android/AGENTS.md`](../../clients/android/AGENTS.md).
+[`https://github.com/ThomasMcFarlane/playarr/blob/main/clients/android/AGENTS.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/android/AGENTS.md).
 
 ## Presentation
 

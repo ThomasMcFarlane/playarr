@@ -25,7 +25,7 @@ gaps (for example offline downloads if the package cannot support them).
   release targeting/certification must enforce the floor; the manifest cannot.
 - **Tooling:** LG's current `@webos-tools/cli` provides `ares-package`,
   `ares-install`, `ares-launch`, and `ares-inspect`. The older webOS TV CLI is
-  deprecated. See the app [README](../../../clients/tv-web/apps/tv-webos/README.md)
+  deprecated. See the app [README](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/tv-web/apps/tv-webos/README.md)
   for build and physical-TV installation commands.
 
 The checked-in environment can build and validate the package-ready `dist/`

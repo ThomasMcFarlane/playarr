@@ -15,11 +15,11 @@ were live.
 
 ## `GET /api/system/version`
 
-Defined in [`backend/crates/playarr-api/src/version.rs`](../backend/crates/playarr-api/src/version.rs),
+Defined in [`backend/crates/playarr-api/src/version.rs`](https://github.com/ThomasMcFarlane/playarr/blob/main/backend/crates/playarr-api/src/version.rs),
 mounted like any other route in `api_router()` with no auth extractor — it is
 genuinely unauthenticated, so a client can ask "what version are you" before
 it has a session. The response body is `playarr_model::VersionEnvelope`,
-documented in [`backend/openapi/playarr.yaml`](../backend/openapi/playarr.yaml)
+documented in [`backend/openapi/playarr.yaml`](https://github.com/ThomasMcFarlane/playarr/blob/main/backend/openapi/playarr.yaml)
 as the `VersionEnvelope`/`CompatibilityEntry` schemas. The OpenAPI file is
 generated from the handler's `#[utoipa::path]` annotation and drift-checked
 in CI (`openapi_spec_matches_checked_in_file`), not hand-maintained, so the
@@ -74,7 +74,7 @@ sunset = "2026-12-31"
 Android platforms (`android-mobile`, `android-tv`) gate on Android's own
 monotonic `versionCode` integer; every other platform gates on a SemVer-shaped
 version string. `ClientCompatibilityTable` in
-[`version_gate.rs`](../backend/crates/playarr-api/src/version_gate.rs)
+[`version_gate.rs`](https://github.com/ThomasMcFarlane/playarr/blob/main/backend/crates/playarr-api/src/version_gate.rs)
 parses this with an untagged `ClientEntry` enum so both shapes deserialize
 correctly, and a test (`shipped_client_compatibility_toml_parses`) pins the
 checked-in file against that struct so the two can't silently drift apart.
@@ -93,7 +93,7 @@ platform as having no row to enforce against.
 
 ## Version-gate middleware: real plumbing, stubbed comparison
 
-[`version_gate.rs`](../backend/crates/playarr-api/src/version_gate.rs)
+[`version_gate.rs`](https://github.com/ThomasMcFarlane/playarr/blob/main/backend/crates/playarr-api/src/version_gate.rs)
 implements a genuine `tower::Layer`/`tower::Service` pair, and it is really
 layered over the whole router in `build_router` (`(router.layer(version_gate), api)`
 in `playarr-api::lib.rs`) — every request really does pass through it, not
@@ -296,7 +296,7 @@ floor against.
 
 ## Automation: the client-compatibility bump bot
 
-[`.github/workflows/release-client-compat-bot.yml`](../.github/workflows/release-client-compat-bot.yml)
+[`.github/workflows/release-client-compat-bot.yml`](https://github.com/ThomasMcFarlane/playarr/blob/main/.github/workflows/release-client-compat-bot.yml)
 triggers on any client release tag (`android-v*`, `ios-v*`, `tv-web-v*`,
 `web-v*`, `harmony-v*` — anything except `backend-v*`) and opens a
 PR proposing a version-floor bump in `client-compatibility.toml`; it never

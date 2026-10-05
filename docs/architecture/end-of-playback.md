@@ -4,7 +4,7 @@ Status: canonical cross-client product requirement (owner request, 3 October
 2026). Binding on every complete client: Web (browser/PWA), LG webOS, Samsung
 Tizen, VIDAA fallback, Cast receiver (where it renders player state), Android
 (phone, tablet, TV), iOS/iPadOS, tvOS, Roku, Xbox and HarmonyOS. Tracked in
-[`TASKS.md`](../../TASKS.md) task 78. Principles:
+[`TASKS.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/TASKS.md) task 78. Principles:
 [`client-principles.md`](client-principles.md).
 
 > When media finishes, there must be a UI with exit, replay, suggestions and

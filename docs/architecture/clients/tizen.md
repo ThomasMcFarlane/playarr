@@ -32,7 +32,7 @@ downloads).
   submission-dependent, not a universal requirement for this app.
 
 Exact source-build, signing, Developer Mode, install, and launch commands are
-in the app [README](../../../clients/tv-web/apps/tv-tizen/README.md).
+in the app [README](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/tv-web/apps/tv-tizen/README.md).
 
 ## Shared runtime integration
 

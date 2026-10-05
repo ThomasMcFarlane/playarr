@@ -117,4 +117,4 @@ reporting compatibility problems.
 - [VIDAA Partner Support and registration](https://www.vidaa.com/partner-support/)
 - [VIDAA Partner Portal terms](https://www.vidaa.com/terms-and-conditions/)
 - [VIDAA privacy notice](https://www.vidaa.com/privacy-policy-2026/)
-- [Optional self-hosted VIDAA gateway reference](../../infra/vidaa-gateway/README.md)
+- [Optional self-hosted VIDAA gateway reference](https://github.com/ThomasMcFarlane/playarr/blob/main/infra/vidaa-gateway/README.md)

@@ -135,7 +135,7 @@ and the discriminated-union sender/receiver message types) is defined once
 and shared, not duplicated per platform:
 
 - **Canonical definition (TypeScript):**
-  [`clients/tv-web/packages/cast-protocol/src/index.ts`](../../../clients/tv-web/packages/cast-protocol/src/index.ts),
+  [`clients/tv-web/packages/cast-protocol/src/index.ts`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/tv-web/packages/cast-protocol/src/index.ts),
   used directly by the Web sender and the receiver.
 - **Kotlin mirror:**
   `clients/android/app/src/main/kotlin/io/playarr/mobile/cast/PlayarrCastProtocol.kt`
@@ -200,6 +200,6 @@ limitations below.
 
 ## Related docs
 
-- [`clients/tv-web/apps/cast-receiver/README.md`](../../../clients/tv-web/apps/cast-receiver/README.md)
+- [`clients/tv-web/apps/cast-receiver/README.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/tv-web/apps/cast-receiver/README.md)
   for building and locally testing the receiver with the Cast Command & Control
   tool, before any sender is involved.

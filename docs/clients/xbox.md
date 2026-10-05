@@ -86,7 +86,7 @@ Nothing has been submitted to the Microsoft Store for Playarr yet. The
 checklist for that future submission — Partner Center registration, Xbox
 device-family access, package/manifest requirements, Xbox-specific
 certification items, and store listing assets — is tracked in
-[`clients/xbox/docs/store-submission.md`](../../clients/xbox/docs/store-submission.md).
+[`clients/xbox/docs/store-submission.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/xbox/docs/store-submission.md).
 That document is explicitly preparation material, not a record of anything
 already done: it states plainly that no signing certificate, no Partner
 Center account, and no Xbox device-family submission access exist for this

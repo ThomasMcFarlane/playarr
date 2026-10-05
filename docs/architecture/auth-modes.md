@@ -38,7 +38,7 @@ configurations.
 Set server-wide via `PLAYARR_AUTH_MODE` — `full-account` (the default;
 also the fallback when the variable is unset or holds an unrecognized
 value) or `trusted-network` (opt-in only — see
-[`auth_mode_from_env`'s doc comment](../../backend/src/main.rs) for why the
+[`auth_mode_from_env`'s doc comment](https://github.com/ThomasMcFarlane/playarr/blob/main/backend/src/main.rs) for why the
 default flipped from `trusted-network` to `full-account`: a real,
 persistent `UserRepo`/`PolicyRepo` now backs real per-user accounts, so
 IP-based zero-credential auto-admin is no longer the only login path that

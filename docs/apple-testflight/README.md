@@ -8,7 +8,7 @@ end-to-end Cast operation.
 
 ## Release path
 
-The source-side workflow is [iOS build and release dispatch](../../.github/workflows/ios-ci.yml).
+The source-side workflow is [iOS build and release dispatch](https://github.com/ThomasMcFarlane/playarr/blob/main/.github/workflows/ios-ci.yml).
 It accepts a manual dispatch on `main` or an `ios-v*` tag and forwards an immutable full source SHA
 to the Apple release pipeline. The private signed Apple release workflow
 checks that the source commit is reachable from Playarr `main`, regenerates both native Xcode

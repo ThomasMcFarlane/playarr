@@ -6,7 +6,7 @@ behavioural parity to Playarr Web (same account, catalogue, navigation,
 playback, profile, playlist, and settings tasks, platform-native controls, same
 visual hierarchy). Binding policy:
 [`../client-principles.md`](../client-principles.md) and
-[`../../clients/android/AGENTS.md`](../../clients/android/AGENTS.md).
+[`https://github.com/ThomasMcFarlane/playarr/blob/main/clients/android/AGENTS.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/android/AGENTS.md).
 
 **No WebView.** Television is the same native Compose graph as mobile with
 `isTelevision` adaptations. WebView shells of Playarr Web and SPA AE freeze

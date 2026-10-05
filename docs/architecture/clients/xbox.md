@@ -298,7 +298,7 @@ an actual signing/packaging/publish sequence. There is no signing certificate
 beyond the Visual-Studio-generated Dev Mode placeholder, no Microsoft Partner
 Center account has ever been used for this project, and Xbox device-family
 submission access has not been requested — see
-[`clients/xbox/docs/store-submission.md`](../../../clients/xbox/docs/store-submission.md)
+[`clients/xbox/docs/store-submission.md`](https://github.com/ThomasMcFarlane/playarr/blob/main/clients/xbox/docs/store-submission.md)
 for the full, honestly-labeled submission checklist. No icon, tile, or
 splash art exists. No physical or virtual Xbox console, and no Windows
 machine with the UWP workload, has ever run this code.
