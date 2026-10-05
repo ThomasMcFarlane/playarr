@@ -585,10 +585,25 @@ mod tests {
             let token = token.clone();
             async move { service.rotate(device_id, &token).await }
         });
-        // Give the follower a real chance to reach the in-flight join
-        // point before the leader is released and the entry is cleared.
-        tokio::task::yield_now().await;
-        tokio::task::yield_now().await;
+        // Wait until the follower has really joined the leader's in-flight
+        // cell (map entry + leader + follower hold it) before releasing the
+        // leader; a fixed number of yields was timing-dependent.
+        let key = (device_id, hash_token(&token));
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let holders = service
+                    .in_flight
+                    .get(&key)
+                    .map(|cell| Arc::strong_count(cell.value()))
+                    .unwrap_or(0);
+                if holders >= 3 {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .expect("follower joined the in-flight rotation");
 
         devices.release.notify_one();
 
