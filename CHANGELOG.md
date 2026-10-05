@@ -117,6 +117,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: task board evidence for the merge train, fragments and affected-only work (TASKS 330 to 332).
 - Backups are local and encrypted by default; any off-node S3-compatible destination is optional, administrator-configured and provider-neutral. Removed the R2 bucket provisioning script and the chart's R2 endpoint defaults, and documented that Cloudflare hosts only the playarr.app client and never receives server data (backups, media, databases, logs) (TASKS 140).
 - Regional servers region-a and region-b now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
 - Regional region-b now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after region-a was rolled to the same image.
