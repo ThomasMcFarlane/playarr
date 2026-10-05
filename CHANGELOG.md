@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Forward playback heartbeat and terminal lifecycle events from the entry node to the peer that owns a cross-peer playback session.
 - CI: the Backend Release image step no longer runs out of disk: binaries are built per architecture with the builder cache pruned in between, and the multi-arch image is assembled around those same binaries instead of compiling a third time. A `dry_run` dispatch input builds everything without publishing.
 - CI: the tv-web release workflow builds the shared packages first and the TV apps' runtime config files carry the right name; the Harmony release workflow configures the HarmonyOS npm registry for hvigor and uses the bundled SDK.
 - CI: tv-web lint and typecheck run only for changed workspace packages and their dependents on pull requests.

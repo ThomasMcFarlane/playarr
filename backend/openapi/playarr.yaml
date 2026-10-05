@@ -5488,6 +5488,44 @@ paths:
         peer_nonce_header: []
         peer_signature_header: []
         peer_timestamp_header: []
+  /api/v1/peer/playback/sessions/{session_id}/events:
+    post:
+      tags:
+      - peer-groups
+      summary: |-
+        The signed peer-to-peer equivalent of [`record_playback_event_handler`].
+        The entry node has already authenticated the viewer's JWT, but the owner
+        still checks the session and forwarded user id against its own registry
+        before recording anything.
+      operationId: peer_playback_event_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Owner-local PlaybackSession id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeerPlaybackEventRequest'
+        required: true
+      responses:
+        '204':
+          description: Event recorded
+        '401':
+          description: Missing or invalid peer signature
+        '403':
+          description: The forwarded user does not own the session
+        '404':
+          description: Unknown or already-closed session
+      security:
+      - peer_id_header: []
+        peer_nonce_header: []
+        peer_signature_header: []
+        peer_timestamp_header: []
   /api/v1/peer/routing-rules:
     get:
       tags:
@@ -12572,6 +12610,17 @@ components:
       - active
       - unreachable
       - left
+    PeerPlaybackEventRequest:
+      type: object
+      required:
+      - user_id
+      - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/PlaybackEventKind'
+        user_id:
+          type: string
+          format: uuid
     PeerPlaybackInfoRequest:
       type: object
       description: |-

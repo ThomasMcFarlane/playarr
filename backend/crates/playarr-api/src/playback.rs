@@ -22,6 +22,7 @@
 //! N+1 lookup is needed the way the catalog's `Work`-level checks require.
 
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use axum::extract::{ConnectInfo, Path, Query, State};
@@ -1593,6 +1594,12 @@ pub struct PeerPlaybackInfoRequest {
     pub query: PlaybackQuery,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct PeerPlaybackEventRequest {
+    pub user_id: Uuid,
+    pub kind: PlaybackEventKind,
+}
+
 /// Which leaf to negotiate playback for, on the peer actually holding it.
 /// `ExternalRef` -- `(provider, external_id, LeafSelector)`, §4.2's
 /// portability layer -- is the only variant either of this crate's own
@@ -1785,7 +1792,16 @@ async fn forward_negotiation_to_peer(
             .signed_post::<_, PlaybackInfoResponse>(&base_url, "/api/v1/peer/playback-info", &body)
             .await
         {
-            Ok(response) => return Ok(Json(rewrite_for_delivery(response, &peer, delivery)?)),
+            Ok(response) => {
+                // The client keeps using this entry node for lifecycle
+                // events, while the owner created the session in its own
+                // registry. Remember the authenticated owner selected by
+                // this negotiation so later events can be forwarded over
+                // the same signed peer transport.
+                let rewritten = rewrite_for_delivery(response, &peer, delivery)?;
+                remember_playback_session_route(state, rewritten.session_id, peer_node_id, user_id);
+                return Ok(Json(rewritten));
+            }
             Err(err) => {
                 tracing::warn!(
                     peer_node_id = %peer_node_id,
@@ -2034,23 +2050,132 @@ pub async fn record_playback_event_handler(
     Path(session_id): Path<Uuid>,
     Json(kind): Json<PlaybackEventKind>,
 ) -> Result<StatusCode, ApiError> {
-    let session = state
-        .session_registry
-        .get(session_id)
-        .ok_or_else(|| ApiError::not_found(format!("unknown or closed session {session_id}")))?;
+    let Some(session) = state.session_registry.get(session_id) else {
+        let Some((peer_node_id, negotiated_user_id)) = playback_session_route(&state, session_id)
+        else {
+            return Err(ApiError::not_found(format!(
+                "unknown or closed session {session_id}"
+            )));
+        };
+        if negotiated_user_id != streaming.user_id {
+            return Err(forbidden("session does not belong to this account"));
+        }
+
+        forward_playback_event_to_peer(&state, peer_node_id, session_id, streaming.user_id, kind)
+            .await?;
+        return Ok(StatusCode::NO_CONTENT);
+    };
     if session.user_id != streaming.user_id {
         return Err(forbidden("session does not belong to this account"));
     }
 
+    apply_playback_event(&state, session_id, kind).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+const PLAYBACK_SESSION_ROUTE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const MAX_PLAYBACK_SESSION_ROUTES: usize = 10_000;
+
+fn remember_playback_session_route(
+    state: &AppState,
+    session_id: Uuid,
+    peer_node_id: Uuid,
+    user_id: Uuid,
+) {
+    let now = Instant::now();
+    let mut routes = state
+        .playback_session_routes
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    routes.retain(|_, (_, _, created_at)| {
+        now.duration_since(*created_at) <= PLAYBACK_SESSION_ROUTE_TTL
+    });
+    routes.insert(session_id, (peer_node_id, user_id, now));
+    while routes.len() > MAX_PLAYBACK_SESSION_ROUTES {
+        let Some(oldest_session_id) = routes
+            .iter()
+            .min_by_key(|(_, (_, _, created_at))| *created_at)
+            .map(|(session_id, _)| *session_id)
+        else {
+            break;
+        };
+        routes.remove(&oldest_session_id);
+    }
+}
+
+fn playback_session_route(state: &AppState, session_id: Uuid) -> Option<(Uuid, Uuid)> {
+    let now = Instant::now();
+    let mut routes = state
+        .playback_session_routes
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    routes.retain(|_, (_, _, created_at)| {
+        now.duration_since(*created_at) <= PLAYBACK_SESSION_ROUTE_TTL
+    });
+    routes
+        .get(&session_id)
+        .map(|(peer_node_id, user_id, _)| (*peer_node_id, *user_id))
+}
+
+fn forget_playback_session_route(state: &AppState, session_id: Uuid) {
+    state
+        .playback_session_routes
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&session_id);
+}
+
+/// The signed peer-to-peer equivalent of [`record_playback_event_handler`].
+/// The entry node has already authenticated the viewer's JWT, but the owner
+/// still checks the session and forwarded user id against its own registry
+/// before recording anything.
+#[utoipa::path(
+    post,
+    path = "/api/v1/peer/playback/sessions/{session_id}/events",
+    tag = "peer-groups",
+    params(("session_id" = Uuid, Path, description = "Owner-local PlaybackSession id")),
+    request_body(content = PeerPlaybackEventRequest),
+    responses(
+        (status = 204, description = "Event recorded"),
+        (status = 401, description = "Missing or invalid peer signature"),
+        (status = 403, description = "The forwarded user does not own the session"),
+        (status = 404, description = "Unknown or already-closed session")
+    )
+)]
+pub async fn peer_playback_event_handler(
+    State(state): State<AppState>,
+    Path(session_id): Path<Uuid>,
+    peer_signed: PeerSignedRequest,
+) -> Result<StatusCode, ApiError> {
+    let body: PeerPlaybackEventRequest =
+        serde_json::from_slice(&peer_signed.body).map_err(|err| {
+            ApiError::bad_request(format!("invalid peer playback event request body: {err}"))
+        })?;
+    let session = state
+        .session_registry
+        .get(session_id)
+        .ok_or_else(|| ApiError::not_found(format!("unknown or closed session {session_id}")))?;
+    if session.user_id != body.user_id {
+        return Err(forbidden(
+            "session does not belong to the forwarded account",
+        ));
+    }
+    apply_playback_event(&state, session_id, body.kind).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn apply_playback_event(
+    state: &AppState,
+    session_id: Uuid,
+    kind: PlaybackEventKind,
+) -> Result<(), ApiError> {
     // Server clock, never client-supplied -- avoids clock-skew abuse.
-    let occurred_at = Utc::now();
     let event = PlaybackEvent {
         id: Uuid::new_v4(),
         session_id,
-        occurred_at,
+        occurred_at: Utc::now(),
         kind: kind.clone(),
     };
-
     state.analytics.on_event(session_id, event).await?;
 
     // A clean stop or terminal player error closes analytics and kills any
@@ -2078,8 +2203,80 @@ pub async fn record_playback_event_handler(
         analytics_result?;
         transcode_result?;
     }
+    Ok(())
+}
 
-    Ok(StatusCode::NO_CONTENT)
+async fn forward_playback_event_to_peer(
+    state: &AppState,
+    peer_node_id: Uuid,
+    session_id: Uuid,
+    user_id: Uuid,
+    kind: PlaybackEventKind,
+) -> Result<(), ApiError> {
+    let peer = state
+        .peer_node_repo
+        .get(peer_node_id)
+        .await?
+        .ok_or_else(|| ApiError::not_found(format!("unknown playback session {session_id}")))?;
+    let identity = crate::admin_peer::own_peer_identity(state).await?;
+    let client = playarr_peer_sync::PeerClient::new_with_routes(
+        state.peer_http.clone(),
+        identity,
+        state.peer_transport_routes.clone(),
+    );
+    let addresses = client.addresses_for_peer(peer.id, &peer.addresses);
+    if addresses.is_empty() {
+        return Err(ApiError::no_peer_available(format!(
+            "peer {peer_node_id} has no known address"
+        )));
+    }
+    let path = format!("/api/v1/peer/playback/sessions/{session_id}/events");
+    let body = PeerPlaybackEventRequest { user_id, kind };
+    let terminal = is_terminal_playback_event(&body.kind);
+    let mut last_error = None;
+    for base_url in addresses {
+        match client.signed_post_no_content(&base_url, &path, &body).await {
+            Ok(()) => {
+                if terminal {
+                    forget_playback_session_route(state, session_id);
+                }
+                return Ok(());
+            }
+            Err(playarr_peer_sync::peer_client::PeerClientError::Status { status, .. })
+                if status == StatusCode::NOT_FOUND =>
+            {
+                forget_playback_session_route(state, session_id);
+                return Err(ApiError::not_found(format!(
+                    "unknown or closed session {session_id}"
+                )));
+            }
+            Err(playarr_peer_sync::peer_client::PeerClientError::Status {
+                status, body, ..
+            }) if status == StatusCode::FORBIDDEN => {
+                return Err(forbidden(body));
+            }
+            Err(err) => {
+                tracing::warn!(
+                    peer_node_id = %peer_node_id,
+                    %base_url,
+                    error = %err,
+                    "peer playback event forward failed; trying next known address"
+                );
+                last_error = Some(err.to_string());
+            }
+        }
+    }
+    Err(ApiError::no_peer_available(format!(
+        "could not reach peer {peer_node_id} for playback event: {}",
+        last_error.unwrap_or_default()
+    )))
+}
+
+fn is_terminal_playback_event(kind: &PlaybackEventKind) -> bool {
+    matches!(
+        kind,
+        PlaybackEventKind::Stop { .. } | PlaybackEventKind::Error { .. }
+    )
 }
 
 #[cfg(test)]
@@ -2168,16 +2365,21 @@ mod tests {
     };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use base64::Engine;
     use chrono::Utc;
+    use ed25519_dalek::{Signer, SigningKey};
     use playarr_model::media::LeafRef;
     use playarr_model::{
         Availability, DeliveryMode, ExternalProvider, LeafSelector, PeerAddress,
         PeerLeafAvailability, PeerNode, PeerNodeStatus, RoutingRule, Sensitive, SourceInstance,
         SourceKind, WorkKind,
     };
+    use sha2::{Digest, Sha256};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use tower::ServiceExt;
+    use wiremock::matchers::{body_json, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     /// `playback_info_handler` now takes `ConnectInfo<SocketAddr>` (mirrors
     /// `login.rs`'s own tests, which hit the same requirement first) --
@@ -2212,6 +2414,96 @@ mod tests {
             .extensions_mut()
             .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 51234))));
         request
+    }
+
+    fn signed_peer_post(path: &str, body: &[u8], peer_id: Uuid, key: &SigningKey) -> Request<Body> {
+        let timestamp = Utc::now().timestamp();
+        let nonce = Uuid::new_v4().to_string();
+        let body_hash = hex::encode(Sha256::digest(body));
+        let canonical = format!("POST|{path}|{body_hash}|{timestamp}|{nonce}");
+        let signature = key.sign(canonical.as_bytes());
+        Request::builder()
+            .method("POST")
+            .uri(path)
+            .header(crate::peer_extractor::PEER_ID_HEADER, peer_id.to_string())
+            .header(
+                crate::peer_extractor::SIGNATURE_HEADER,
+                base64::engine::general_purpose::STANDARD.encode(signature.to_bytes()),
+            )
+            .header(
+                crate::peer_extractor::TIMESTAMP_HEADER,
+                timestamp.to_string(),
+            )
+            .header(crate::peer_extractor::NONCE_HEADER, nonce)
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_vec()))
+            .unwrap()
+    }
+
+    async fn seed_signed_peer(
+        state: &crate::test_support::TestState,
+        peer_id: Uuid,
+        key: &SigningKey,
+        address: String,
+    ) {
+        let group = playarr_model::PeerGroup {
+            id: Uuid::new_v4(),
+            name: "playback event test group".to_string(),
+            created_at: Utc::now(),
+        };
+        state.app.peer_group_repo.create(&group).await.unwrap();
+        let now = Utc::now();
+        state
+            .app
+            .peer_node_repo
+            .upsert(&PeerNode {
+                id: peer_id,
+                group_id: group.id,
+                name: "playback owner".to_string(),
+                addresses: vec![playarr_model::PeerAddress {
+                    url: address,
+                    priority: 0,
+                    label: "test".to_string(),
+                    client_reachable: true,
+                }],
+                public_key: base64::engine::general_purpose::STANDARD
+                    .encode(key.verifying_key().to_bytes()),
+                is_self: false,
+                status: playarr_model::PeerNodeStatus::Active,
+                last_seen_at: Some(now),
+                last_sync_error: None,
+                joined_at: now,
+                updated_at: now,
+            })
+            .await
+            .unwrap();
+    }
+
+    fn playback_session(user_id: Uuid, id: Uuid) -> PlaybackSession {
+        PlaybackSession {
+            id,
+            user_id,
+            device_id: Uuid::new_v4(),
+            media_file_id: Uuid::new_v4(),
+            rendition_id: None,
+            started_at: Utc::now(),
+            ended_at: None,
+            play_method: PlayMethod::DirectPlay,
+            transcode_reason: None,
+            source_codec: "h264".to_string(),
+            source_container: "mp4".to_string(),
+            source_bitrate: Some(1_000_000),
+            target_codec: "h264".to_string(),
+            target_container: "mp4".to_string(),
+            target_bitrate: Some(1_000_000),
+            client_platform: ClientPlatform::Web,
+            client_version: "test".to_string(),
+            ip_address: None,
+            bytes_streamed: 0,
+            buffering_events: 0,
+            buffering_ms_total: 0,
+            stop_reason: None,
+        }
     }
 
     fn media_file() -> MediaFile {
@@ -3006,6 +3298,221 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn owner_event_route_requires_a_valid_member_signature_and_session_user() {
+        let (router, state) = test_state().await;
+        let owner = Uuid::new_v4();
+        let wrong_user = Uuid::new_v4();
+        let peer_id = Uuid::new_v4();
+        let key = SigningKey::from_bytes(&[41u8; 32]);
+        seed_signed_peer(&state, peer_id, &key, "https://owner.invalid".to_string()).await;
+        let session_id = Uuid::new_v4();
+        state
+            .app
+            .session_registry
+            .insert(playback_session(owner, session_id));
+
+        let valid_body = serde_json::to_vec(&PeerPlaybackEventRequest {
+            user_id: owner,
+            kind: PlaybackEventKind::Heartbeat {
+                position_ms: 1_000,
+                bytes_streamed_total: Some(12),
+            },
+        })
+        .unwrap();
+        let response = router
+            .clone()
+            .oneshot(signed_peer_post(
+                &format!("/api/v1/peer/playback/sessions/{session_id}/events"),
+                &valid_body,
+                peer_id,
+                &key,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let wrong_user_body = serde_json::to_vec(&PeerPlaybackEventRequest {
+            user_id: wrong_user,
+            kind: PlaybackEventKind::Heartbeat {
+                position_ms: 2_000,
+                bytes_streamed_total: None,
+            },
+        })
+        .unwrap();
+        let response = router
+            .clone()
+            .oneshot(signed_peer_post(
+                &format!("/api/v1/peer/playback/sessions/{session_id}/events"),
+                &wrong_user_body,
+                peer_id,
+                &key,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let unknown_peer_body = valid_body.clone();
+        let response = router
+            .clone()
+            .oneshot(signed_peer_post(
+                &format!("/api/v1/peer/playback/sessions/{session_id}/events"),
+                &unknown_peer_body,
+                Uuid::new_v4(),
+                &key,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let mut left_peer = state
+            .app
+            .peer_node_repo
+            .get(peer_id)
+            .await
+            .unwrap()
+            .unwrap();
+        left_peer.status = PeerNodeStatus::Left;
+        state.app.peer_node_repo.upsert(&left_peer).await.unwrap();
+        let response = router
+            .oneshot(signed_peer_post(
+                &format!("/api/v1/peer/playback/sessions/{session_id}/events"),
+                &valid_body,
+                peer_id,
+                &key,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn entry_event_route_forwards_heartbeat_and_stop_and_binds_the_jwt_user() {
+        let (router, state) = test_state().await;
+        let owner = Uuid::new_v4();
+        let intruder = Uuid::new_v4();
+        seed_streaming_user(&state, owner).await;
+        seed_streaming_user(&state, intruder).await;
+        let owner_token = mint_access_token(&state, owner);
+        let intruder_token = mint_access_token(&state, intruder);
+
+        let server = MockServer::start().await;
+        let peer_id = Uuid::new_v4();
+        let peer_key = SigningKey::from_bytes(&[42u8; 32]);
+        seed_signed_peer(&state, peer_id, &peer_key, server.uri()).await;
+        let session_id = Uuid::new_v4();
+        remember_playback_session_route(&state.app, session_id, peer_id, owner);
+
+        let heartbeat = serde_json::json!({
+            "kind": "heartbeat",
+            "position_ms": 1_000,
+            "bytes_streamed_total": 128
+        });
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/api/v1/peer/playback/sessions/{session_id}/events"
+            )))
+            .and(body_json(serde_json::json!({
+                "user_id": owner,
+                "kind": {
+                    "kind": "heartbeat",
+                    "position_ms": 1_000,
+                    "bytes_streamed_total": 128
+                }
+            })))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let response = router
+            .clone()
+            .oneshot(post_with_connect_info(
+                format!("/api/v1/playback/sessions/{session_id}/events"),
+                &intruder_token,
+                heartbeat.clone(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(playback_session_route(&state.app, session_id).is_some());
+
+        let response = router
+            .clone()
+            .oneshot(post_with_connect_info(
+                format!("/api/v1/playback/sessions/{session_id}/events"),
+                &owner_token,
+                heartbeat,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let error_session_id = Uuid::new_v4();
+        remember_playback_session_route(&state.app, error_session_id, peer_id, owner);
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/api/v1/peer/playback/sessions/{error_session_id}/events"
+            )))
+            .and(body_json(serde_json::json!({
+                "user_id": owner,
+                "kind": {
+                    "kind": "error",
+                    "message": "decoder failed"
+                }
+            })))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let response = router
+            .clone()
+            .oneshot(post_with_connect_info(
+                format!("/api/v1/playback/sessions/{error_session_id}/events"),
+                &owner_token,
+                serde_json::json!({
+                    "kind": "error",
+                    "message": "decoder failed"
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(playback_session_route(&state.app, error_session_id).is_none());
+
+        let stop = serde_json::json!({
+            "kind": "stop",
+            "reason": "user_stopped",
+            "position_ms": 1_250
+        });
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/api/v1/peer/playback/sessions/{session_id}/events"
+            )))
+            .and(body_json(serde_json::json!({
+                "user_id": owner,
+                "kind": {
+                    "kind": "stop",
+                    "reason": "user_stopped",
+                    "position_ms": 1_250
+                }
+            })))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let response = router
+            .oneshot(post_with_connect_info(
+                format!("/api/v1/playback/sessions/{session_id}/events"),
+                &owner_token,
+                stop,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(playback_session_route(&state.app, session_id).is_none());
     }
 
     #[tokio::test]

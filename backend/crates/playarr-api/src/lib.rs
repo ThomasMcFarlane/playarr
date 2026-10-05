@@ -343,6 +343,7 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(playback::playback_info_handler))
         .routes(routes!(playback::by_external_ref_playback_info_handler))
         .routes(routes!(playback::peer_playback_info_handler))
+        .routes(routes!(playback::peer_playback_event_handler))
         .routes(routes!(playback::record_playback_event_handler))
         .routes(routes!(playback_health::playback_health_handler))
         .routes(routes!(playback_health::connection_test_handler))
@@ -620,6 +621,13 @@ pub fn openapi_spec() -> utoipa::openapi::OpenApi {
     api
 }
 
+/// Session id to (peer id, user id, recorded-at) routing hints.
+pub type PlaybackSessionRoutes = Arc<
+    std::sync::Mutex<
+        std::collections::HashMap<uuid::Uuid, (uuid::Uuid, uuid::Uuid, std::time::Instant)>,
+    >,
+>;
+
 /// Every service/repository handle the real routes in this crate depend
 /// on. `playarr-bin`'s `boot_api` is the composition root that
 /// constructs one of these from `playarr_config::Config`; every field
@@ -798,6 +806,12 @@ pub struct AppState {
     /// sessions endpoint, and (later) `Policy::max_concurrent_sessions`
     /// enforcement. The same `Arc` `analytics` below also holds.
     pub session_registry: Arc<dyn playarr_telemetry::analytics::SessionRegistry>,
+    /// Entry-node routing hints for playback sessions negotiated on another
+    /// peer. The client continues posting lifecycle events to the entry node,
+    /// so this short-lived map identifies the signed peer call that must
+    /// receive those events. The owning peer remains authoritative for the
+    /// session and user checks.
+    pub playback_session_routes: PlaybackSessionRoutes,
     /// Single fan-out point for session/event writes -- see
     /// `playarr_telemetry::analytics::collector`'s doc comment for the
     /// synchronous-registry / batched-durable-write split this owns.

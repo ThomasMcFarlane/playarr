@@ -262,6 +262,40 @@ impl PeerClient {
             .await
     }
 
+    /// `POST {base_url}{path}` with a signed body, accepting a successful
+    /// response with no body (typically `204 No Content`).
+    pub async fn signed_post_no_content<Req: Serialize>(
+        &self,
+        base_url: &str,
+        path: &str,
+        body: &Req,
+    ) -> Result<(), PeerClientError> {
+        let body = serde_json::to_vec(body).expect("peer sync request DTOs always serialize");
+        let url = format!("{}{path}", base_url.trim_end_matches('/'));
+        let headers = self.identity.sign_request("POST", path, &body);
+        let response = self
+            .http
+            .post(&url)
+            .header(PEER_ID_HEADER, headers.peer_id.to_string())
+            .header(SIGNATURE_HEADER, headers.signature_b64)
+            .header(TIMESTAMP_HEADER, headers.timestamp.to_string())
+            .header(NONCE_HEADER, headers.nonce)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body)
+            .send()
+            .await
+            .map_err(|source| PeerClientError::Http {
+                url: url.clone(),
+                source,
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(PeerClientError::Status { url, status, body });
+        }
+        Ok(())
+    }
+
     /// `GET {base_url}{path}`, signed with an empty body (a bodyless `GET`
     /// hashes the same as any other empty input, matching the receiving
     /// extractor's own handling).

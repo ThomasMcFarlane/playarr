@@ -1766,6 +1766,7 @@ async fn boot_api(
         node_id: uuid::Uuid::new_v4().to_string(),
         analytics_store: analytics_store.clone(),
         session_registry,
+        playback_session_routes: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         analytics,
         node_identity_repo,
         peer_group_repo,

@@ -746,6 +746,7 @@ pub async fn test_state() -> (Router, TestState) {
         node_id: "test-node".to_string(),
         analytics_store,
         session_registry,
+        playback_session_routes: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         analytics,
         node_identity_repo,
         peer_group_repo,
