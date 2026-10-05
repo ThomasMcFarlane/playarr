@@ -2192,6 +2192,10 @@ mod sync_endpoint_tests {
         // `created_at` (`UserInviteRepo::list_updated_since`'s own doc
         // comment).
         let redeemer_id = Uuid::new_v4();
+        // The cursor compares `updated_at` strictly after `server_time`; a fast machine can
+        // consume within the same clock tick, so let the clock move on first (flaked in CI
+        // once the suite got fast enough).
+        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
         assert!(state
             .app
             .user_invite_repo

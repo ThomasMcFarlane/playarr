@@ -1,1 +1,0 @@
-- Android, iOS, tvOS and web now default public IPv4 relay URLs to HTTPS port 443 while preserving explicit legacy port 8484 and local server addresses (TASK 293).

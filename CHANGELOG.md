@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Give iOS and tvOS release invocations separate temporary signing keychains and allow the `codesign` partition explicitly.
+- Android, iOS, tvOS and web now default public IPv4 relay URLs to HTTPS port 443 while preserving explicit legacy port 8484 and local server addresses (TASK 293).
 - CI: affected-only selection no longer skips Rust checks on workflow-dispatched runs (merge train branches and post-merge runs on main now check everything or the true diff), and the merge train exits cleanly after landing a PR (TASKS 330, 332).
 - Docs: links from documentation pages to repository files outside `docs/` use absolute URLs, so the strict MkDocs build passes again; Docs also builds on PRs that touch it (TASKS 332).
 - Sessions: the owner was repeatedly signed out although the account was remembered. Refresh is now silent and race-safe: the web client renews a server-rejected token once and replays the request (REST, uploads and the live-events stream), shares one refresh across tabs with a Web Lock and re-reads the latest saved session under it, keeps stored credentials on any network, 5xx, 408 or 429 failure (only a definitive 400/401/403 from the server can show the profile switcher), saves profile sessions from local storage rather than per-tab state (and adopts other tabs' changes), and stops polling `/auth/refresh` and `/auth/login` with a dead token. The server accepts a just-retired refresh token for 120 s (`PLAYARR_REFRESH_REUSE_GRACE_SECS`, `0` for strict single use) instead of revoking the family, serialises rotation per device, and derives its fallback JWT secret from the persisted node identity instead of a per-boot random value. Tests: concurrent 401s cause one refresh, SSE open with a rejected token, outage keeps the session, cross-tab lock, restart persistence, concurrent server rotations (TASKS 304).
@@ -117,6 +119,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Pin REGION-A and REGION-B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
+- Server: add authenticated admin endpoints to manage peer-group libraries, map local source instances to group libraries, and create/update peer routing rules (TASK 299). Deletion is omitted because group sync has no tombstones; disable routing with an empty `preferred_nodes` list, then unmap the source when rolling back.
 - CI: task board evidence for the merge train, fragments and affected-only work (TASKS 330 to 332).
 - Backups are local and encrypted by default; any off-node S3-compatible destination is optional, administrator-configured and provider-neutral. Removed the R2 bucket provisioning script and the chart's R2 endpoint defaults, and documented that Cloudflare hosts only the playarr.app client and never receives server data (backups, media, databases, logs) (TASKS 140).
 - Regional servers region-a and region-b now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
@@ -1446,6 +1450,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- CI: pull requests run only the affected Android modules plus the sideload debug app (`scripts/ci/android-scope.sh`); the full `build` stays on main and nightly. Gradle and Rust caches are written by main only and read by pull requests.
+- CI: backend tests run under cargo-nextest, and the Argon2 crates are optimised in dev/test builds (the playarr-api suite dropped from about 4.5 minutes to under one on two cores).
 - Cut Vidaa / limited-TV library lag further: expand-only grid mount (initial
   48 cards), debounce stage selection under remote holds (focus-visible chrome
   stays live), skip alphabet/scroll-edge re-renders mid-hold, drop transitions
@@ -2159,6 +2165,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Apple simulator test targets now match actor isolation, current design tokens, Google Cast dependency inheritance and the `PlayerEngine` optional `AVPlayer` witness (TASK 333).
 - Verify artist catalogue details attach media identifiers and runtimes only to tracks that have
   matching media files.
 

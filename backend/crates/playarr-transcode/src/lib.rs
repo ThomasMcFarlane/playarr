@@ -1998,7 +1998,7 @@ mod tests {
             )
             .with_ffmpeg_binary("/usr/bin/true")
             .with_output_root(root)
-            .with_session_ttl(Duration::from_millis(50));
+            .with_session_ttl(Duration::from_millis(500));
             let session = orchestrator
                 .spawn_on_demand_transcode(&sample_media_file(), "h264-720p-4mbps", "node-a")
                 .await
@@ -2007,7 +2007,7 @@ mod tests {
             assert_eq!(orchestrator.reap_idle_sessions().await, 0);
             assert_eq!(counter.get(), 1);
 
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            tokio::time::sleep(Duration::from_millis(800)).await;
             assert_eq!(orchestrator.reap_idle_sessions().await, 1);
             assert_eq!(counter.get(), 0);
             assert!(!orchestrator.session_output_dir(session.id).exists());

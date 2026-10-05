@@ -1,1 +1,0 @@
-- Give iOS and tvOS release invocations separate temporary signing keychains and allow the `codesign` partition explicitly.

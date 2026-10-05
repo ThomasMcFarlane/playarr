@@ -158,3 +158,13 @@ opentelemetry-otlp = "0.26"
 
 [workspace.lints.rust]
 unused_extern_crates = "warn"
+
+# Test speed: the suites hash PINs and passwords with Argon2id (19 MiB, 2 passes), which is
+# ~100x slower unoptimised. Optimise just the hashing crates in dev/test builds; first-party
+# code keeps its fast unoptimised compile and full debug assertions.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+[profile.dev.package.password-hash]
+opt-level = 3

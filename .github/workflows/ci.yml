@@ -71,7 +71,8 @@ jobs:
       rust: ${{ steps.scope.outputs.rust_scope != 'none' }}
       rust_scope: ${{ steps.scope.outputs.rust_scope }}
       openapi: ${{ steps.scope.outputs.openapi }}
-      android: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.android == 'true' }}
+      android: ${{ steps.android.outputs.android }}
+      android_tasks: ${{ steps.android.outputs.android_tasks }}
       xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
       harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
       tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
@@ -104,13 +105,19 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: scripts/ci/rust-scope.sh | tee -a "$GITHUB_OUTPUT"
 
+      # Affected-only Android selection with the same diff logic as the Rust scope (so dispatched
+      # train runs select correctly too). Full `build` on main, nightly and main dispatches.
+      - name: Select affected Android work
+        id: android
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: scripts/ci/android-scope.sh | tee -a "$GITHUB_OUTPUT"
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            android:
-              - 'clients/android/**'
-              - '.github/workflows/ci.yml'
             xbox:
               - 'clients/xbox/**'
               - '.github/workflows/ci.yml'
@@ -157,6 +164,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
+          # Only main (every push is a full run) and the nightly write the cache; PRs restore
+          # main's. PR-scoped 1 GB saves evicted main's entries from the 10 GB repository quota.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           # Persist the partial target dir even when clippy/test fails so the
           # re-run after a fix does not start cold.
           cache-on-failure: true
@@ -178,17 +188,24 @@ jobs:
           if [ "$SCOPE" = full ]; then pkgs=--workspace; else pkgs="$SCOPE"; fi
           cargo clippy $pkgs --all-targets --all-features -- -D warnings
 
-      - name: cargo test
+      - name: Install cargo-nextest and cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny
+
+      # nextest runs every test in its own process across all cores (the old `cargo test` ran
+      # the 5-minute playarr-api binary one binary at a time). Doctests are not supported by
+      # nextest; none exist today, so they run on full runs only.
+      - name: cargo nextest
         env:
           SCOPE: ${{ needs.changes.outputs.rust_scope }}
         run: |
           if [ "$SCOPE" = full ]; then pkgs=--workspace; else pkgs="$SCOPE"; fi
-          cargo test $pkgs --all-features
+          cargo nextest run $pkgs --all-features --no-fail-fast
 
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
+      - name: cargo test --doc
+        if: needs.changes.outputs.rust_scope == 'full'
+        run: cargo test --workspace --all-features --doc
 
       - name: cargo deny check
         run: cargo deny check
@@ -216,16 +233,20 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
-      # PR branches may write their own Gradle cache (ephemeral runners start
-      # empty; default is read-only off main), so pushes to the same PR reuse
-      # the dependency and build-cache entries of the previous run.
+      # Ephemeral runners start empty. Main (every push, the nightly and main dispatches run the
+      # full build) writes the Gradle home and build cache; PRs only read it, so a PR recompiles
+      # just what it changed instead of evicting main's entries from the 10 GB repository quota.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: false
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Gradle build (all modules)
+      # `build` on main/nightly; on PRs only the affected modules plus the sideload debug app
+      # (scripts/ci/android-scope.sh). Build cache and configuration cache are on in gradle.properties.
+      - name: Gradle ${{ needs.changes.outputs.android_tasks == 'build' && 'build (all modules)' || 'affected modules' }}
         working-directory: clients/android
-        run: ./gradlew build
+        env:
+          TASKS: ${{ needs.changes.outputs.android_tasks }}
+        run: ./gradlew $TASKS
 
   # ---------------------------------------------------------------------
   # iOS validation runs only through the explicit/tag Apple release pipeline
@@ -384,8 +405,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
-          # Persist the partial target dir even when clippy/test fails so the
-          # re-run after a fix does not start cold.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
       - name: Regenerate backend/openapi/playarr.yaml and diff

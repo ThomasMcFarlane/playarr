@@ -1,1 +1,0 @@
-- Pin REGION-A and REGION-B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
