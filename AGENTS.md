@@ -52,8 +52,11 @@ repositories on a personal account do not get.
   Do not wait for CI to merge it and do not merge it manually (never `--admin`). Move on to
   other work or report.
 - The train handles one PR at a time, oldest `ready` label first: it merges the latest `main`
-  into your branch, pushes, waits for `ci-required` on that exact head SHA, then squash-merges
-  if `main` has not moved in a way that overlaps your change (otherwise it repeats).
+  into your branch only when main's new commits touch your files (CHANGELOG.md, TASKS.md,
+  `changelog.d/` and `tasks.d/` excluded) or conflict; otherwise it keeps your tested head, so a
+  running CI is never cancelled by an unrelated landing. It waits for `ci-required` on that exact
+  head SHA, then squash-merges. Its commits are authored by Thomas McFarlane and carry a
+  `Merge-Train: yes` trailer, which `scripts/ci/check-fragments.sh` exempts.
 - On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
   `blocked` and comments the reason. Fix it, push, remove `blocked` and add `ready` again.
 - Do not push to a branch that carries `ready` unless you are withdrawing it (remove the label first).

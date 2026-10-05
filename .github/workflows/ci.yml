@@ -93,6 +93,9 @@ jobs:
       - name: Reject GitHub-hosted runner labels
         run: scripts/ci/check-no-hosted-runners.sh
 
+      - name: Merge train logic tests
+        run: scripts/ci/test-merge-train.sh
+
       # Nightly and post-merge dispatches on main validate everything.
       - name: Full run?
         id: all

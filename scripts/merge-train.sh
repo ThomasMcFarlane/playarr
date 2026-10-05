@@ -3,10 +3,15 @@
 #
 # Equivalent of GitHub's native merge queue (unavailable for private repos on a
 # personal account). For each ready PR it:
-#   1. merges the latest main into the PR branch (blocks on conflicts),
-#   2. pushes and waits for `ci-required` on that exact head SHA,
-#   3. lands it only if main has not moved in a way that could invalidate the
-#      result (otherwise repeats from 1),
+#   1. merges the latest main into the PR branch only when main's new commits touch
+#      the PR's files (CHANGELOG.md, TASKS.md, changelog.d/ and tasks.d/ excluded) or
+#      `git merge-tree` reports a conflict; otherwise the tested head is kept, so
+#      queued or running CI is never cancelled by an unrelated change on main,
+#   2. pushes (only if the head had to change) and waits for `ci-required` on that
+#      exact head SHA,
+#   3. lands it when main has not moved in a way that could invalidate the result
+#      (otherwise repeats from 1); if main moved independently the tested head is
+#      squash-merged through the API with --match-head-commit,
 #   4. on any failure removes `ready`, adds `blocked`, comments the reason and
 #      moves on to the next PR.
 #
@@ -19,7 +24,9 @@
 #                        DRY_RUN=true)
 #   TRAIN_KEY_MODE=true  git `origin` authenticates with a deploy key, so pushes
 #                        trigger workflows. The branch is squashed to one commit
-#                        and main is fast-forwarded to it. Otherwise (token
+#                        and main is fast-forwarded to it (or, when main moved
+#                        independently, the tested head is squash-merged through
+#                        the API). Otherwise (token
 #                        mode) CI is started with workflow_dispatch, the PR is
 #                        squash-merged through the API, and the post-merge
 #                        workflows are dispatched by hand, because pushes and
@@ -35,7 +42,10 @@ MAX_ATTEMPTS="${MAX_ATTEMPTS:-4}"
 # Files that every PR may touch; ignored by the "did main move under me" check.
 SHARED_RE='^(CHANGELOG\.md|TASKS\.md|changelog\.d/|tasks\.d/)'
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
-for tool in gh git jq; do command -v "$tool" >/dev/null || { echo "[train] missing required tool: $tool" >&2; exit 1; }; done
+# Identity of every commit the train creates; the trailer exempts them from check-fragments.sh.
+TRAIN_NAME="Thomas McFarlane"
+TRAIN_EMAIL="thomas@mcfarlane.email"
+TRAIN_TRAILER="Merge-Train: yes"
 
 log() { echo "[train] $*"; echo "- $*" >>"$SUMMARY"; }
 run() { if [ "$DRY" = true ]; then echo "[dry-run] $*"; else "$@"; fi; }
@@ -91,7 +101,18 @@ ci_state() {
   case " $runs " in *" completed:failure "* | *" completed:timed_out "*) echo failure ;; *) echo none ;; esac
 }
 
-changed_between() { git diff --name-only "$1" "$2" | grep -Ev "$SHARED_RE" || true; }
+changed_between() { git diff --name-only "$1" "$2" | grep -Ev "$SHARED_RE" | sort -u || true; }
+
+# remerge_needed <main-ref> <head-ref>: succeeds when main must be merged into the head
+# (main's commits since the merge base touch files the PR touches, or merging conflicts).
+remerge_needed() {
+  local mb overlap
+  mb=$(git merge-base "$1" "$2") || return 0
+  overlap=$(comm -12 <(changed_between "$mb" "$2") <(changed_between "$mb" "$1"))
+  [ -n "$overlap" ] && return 0
+  git merge-tree --write-tree "$1" "$2" >/dev/null 2>&1 || return 0
+  return 1
+}
 
 post_merge_dispatch() { # <merged-sha> <files...>; token mode only
   local sha="$1" files
@@ -129,7 +150,9 @@ process() { # <pr>
 
     local ncommits need_push=false
     ncommits=$(git rev-list --count "origin/main..HEAD")
-    if ! git merge-base --is-ancestor "$main" HEAD; then
+    local remerge=false
+    if ! git merge-base --is-ancestor "$main" HEAD && remerge_needed "$main" HEAD; then
+      remerge=true
       if ! git merge -q --no-edit -m "chore(train): merge main into $br" origin/main >/tmp/train-merge.log 2>&1; then
         local files; files=$(git diff --name-only --diff-filter=U | head -20 | sed 's/^/- `/;s/$/`/')
         git merge --abort 2>/dev/null
@@ -139,6 +162,8 @@ $files"
         return
       fi
       need_push=true
+    elif ! git merge-base --is-ancestor "$main" HEAD; then
+      log "PR #$pr: main moved independently of this PR; keeping the tested head"
     fi
     if [ "$KEY_MODE" = true ] && [ "$ncommits" -gt 1 ]; then need_push=true; fi
     # Fold changelog.d/ and tasks.d/ fragments into CHANGELOG.md and TASKS.md on the branch, so the
@@ -174,13 +199,18 @@ $(printf '%s' "$hosted_out" | head -c 1500)
       return
     fi
 
+    if [ "$need_push" = true ] && [ "$remerge" != true ] && [ "$DRY" != true ] \
+      && [ "$(ci_state "$head")" = pending ]; then
+      # Never replace a head whose CI is queued or running unless a re-merge is required.
+      log "PR #$pr: ci-required running on $head and no re-merge needed; not replacing it, the next trigger resumes"
+      STOP=true; return
+    fi
     if [ "$need_push" = true ]; then
       if [ "$KEY_MODE" = true ]; then
         # Squash to one commit on top of main so main stays linear and the PR
         # head SHA is exactly what CI validates and what lands.
         git reset -q --soft origin/main
-        git -c user.name="playarr-merge-train" -c user.email="thomas@mcfarlane.email" \
-          commit -q -m "$title (#$pr)" -m "$body" || { block "$pr" "Nothing to commit after squashing (empty change)."; return; }
+        git commit -q -m "$title (#$pr)" -m "$body" -m "$TRAIN_TRAILER" || { block "$pr" "Nothing to commit after squashing (empty change)."; return; }
       fi
       newhead=$(git rev-parse HEAD)
       log "PR #$pr: pushing $newhead (attempt $attempt)"
@@ -221,18 +251,17 @@ $(printf '%s' "$hosted_out" | head -c 1500)
     # CI is green on $head. Has main moved since it was validated?
     git fetch -q origin main
     local nmain; nmain=$(git rev-parse origin/main)
+    local ff=true
     if ! git merge-base --is-ancestor "$nmain" "$head"; then
-      local overlap pr_files
-      pr_files=$(git diff --name-only "origin/main...$head" | grep -Ev "$SHARED_RE" || true)
-      overlap=$(comm -12 <(sort <<<"$pr_files") <(changed_between "$main" "$nmain" | sort))
-      if [ -n "$overlap" ] || ! git merge-tree --write-tree "$nmain" "$head" >/dev/null 2>&1; then
+      if remerge_needed "$nmain" "$head"; then
         log "PR #$pr: main moved and overlaps or conflicts, repeating"
         continue
       fi
-      log "PR #$pr: main moved but is independent of this PR, landing"
+      log "PR #$pr: main moved but is independent of this PR, landing the tested head"
+      ff=false
     fi
 
-    if [ "$KEY_MODE" = true ]; then
+    if [ "$KEY_MODE" = true ] && [ "$ff" = true ]; then
       # main must fast-forward to $head; the push fails otherwise.
       if ! git push -q origin "$head:refs/heads/main"; then
         log "PR #$pr: main moved during landing, repeating"; continue
@@ -242,7 +271,9 @@ $(printf '%s' "$hosted_out" | head -c 1500)
       log "PR #$pr: landed as $head"
     else
       if ! gh pr merge "$pr" --repo "$REPO" --squash --match-head-commit "$head" \
-        --subject "$title (#$pr)" --body "$body" --delete-branch >/tmp/train-merge-api.log 2>&1; then
+        --subject "$title (#$pr)" --body "$body
+
+$TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
         log "PR #$pr: API merge failed ($(head -c 200 /tmp/train-merge-api.log)), repeating"; continue
       fi
       git fetch -q origin main
@@ -257,8 +288,8 @@ $(printf '%s' "$hosted_out" | head -c 1500)
 }
 
 main() {
-  git config user.name "playarr-merge-train"
-  git config user.email "thomas@mcfarlane.email"
+  git config user.name "$TRAIN_NAME"
+  git config user.email "$TRAIN_EMAIL"
   ensure_labels
   echo "### Merge train (dry_run=$DRY, key_mode=$KEY_MODE)" >>"$SUMMARY"
   if [ "${IGNORE_MAIN_RED:-false}" != true ] && [ "$DRY" != true ] && main_is_red; then
@@ -280,4 +311,8 @@ main() {
   exit 0
 }
 
-main "$@"
+# Sourcing the file (tests) only defines the functions.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  for tool in gh git jq; do command -v "$tool" >/dev/null || { echo "[train] missing required tool: $tool" >&2; exit 1; }; done
+  main "$@"
+fi
