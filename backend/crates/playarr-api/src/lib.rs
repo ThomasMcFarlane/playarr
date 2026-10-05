@@ -28,6 +28,7 @@ pub mod admin;
 pub mod admin_backups;
 pub mod admin_peer;
 pub mod admin_playback;
+pub mod admin_routing;
 pub mod artwork;
 pub mod auth_extractor;
 pub mod calendar;
@@ -75,6 +76,8 @@ pub mod version_gate;
 pub mod views;
 pub mod webhooks;
 
+#[cfg(test)]
+mod admin_routing_tests;
 #[cfg(test)]
 mod household_tests;
 #[cfg(test)]
@@ -286,6 +289,17 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin_backups::download_backup_handler))
         .routes(routes!(admin_backups::verify_backup_handler))
         .routes(routes!(admin_backups::delete_backup_handler))
+        .routes(routes!(
+            admin_routing::list_group_libraries_handler,
+            admin_routing::create_group_library_handler
+        ))
+        .routes(routes!(admin_routing::rename_group_library_handler))
+        .routes(routes!(admin_routing::map_source_instance_handler))
+        .routes(routes!(
+            admin_routing::list_routing_rules_handler,
+            admin_routing::create_routing_rule_handler
+        ))
+        .routes(routes!(admin_routing::update_routing_rule_handler))
         .routes(routes!(oauth::device_code_handler))
         .routes(routes!(oauth::authorize_device_handler))
         .routes(routes!(oauth::device_token_handler))

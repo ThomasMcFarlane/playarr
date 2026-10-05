@@ -733,6 +733,24 @@ self), `GET /api/v1/admin/peer-nodes/{id}/sync-status`
 `last_seen_at`/`last_sync_error`/rotate-key/remove) and a "Sync Conflicts"
 page reading `sync_conflict_log`.
 
+Cross-peer stream configuration is managed through authenticated admin
+endpoints: `GET`/`POST /api/v1/admin/group-libraries`, `PUT
+/api/v1/admin/group-libraries/{id}`, `PUT
+/api/v1/admin/source-instances/{id}/group-library`, and `GET`/`POST
+/api/v1/admin/routing-rules` plus `PUT
+/api/v1/admin/routing-rules/{id}`. These routes scope writes to the local
+peer's group. Configure the logical group catalog by creating group
+libraries and mapping each node's corresponding local source instance to the
+matching group library. Cross-node forwarding requires a matching routing
+rule with a non-empty `preferred_nodes` list. With no matching rule, or with an empty
+`preferred_nodes` list, playback resolves to `ServeLocally` and is served by
+the local node. Group libraries and routing rules have no sync tombstones,
+so they are intentionally not deleted through the admin API. To roll back a
+routing choice, update the rule with an empty `preferred_nodes` list (which
+restores local serving), then clear an affected node's source mapping by
+setting `group_library_id` to `null`. Existing per-instance grants remain
+untouched.
+
 ### 3.7 Refresh tokens are explicitly not synced
 
 `POST /api/v1/auth/refresh` (`playarr-api/src/refresh.rs`) already

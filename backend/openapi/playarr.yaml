@@ -169,6 +169,85 @@ paths:
           description: No backup with this id
       security:
       - bearer_auth: []
+  /api/v1/admin/group-libraries:
+    get:
+      operationId: list_group_libraries_handler
+      responses:
+        '200':
+          description: Group libraries for this server's peer group
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupLibrary'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '409':
+          description: Server has not joined a peer group
+      security:
+      - bearer_auth: []
+    post:
+      operationId: create_group_library_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupLibraryRequest'
+        required: true
+      responses:
+        '201':
+          description: Group library created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupLibrary'
+        '400':
+          description: Invalid library name
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '409':
+          description: Server has not joined a peer group
+      security:
+      - bearer_auth: []
+  /api/v1/admin/group-libraries/{id}:
+    put:
+      operationId: rename_group_library_handler
+      parameters:
+      - name: id
+        in: path
+        description: Group library ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupLibraryRequest'
+        required: true
+      responses:
+        '200':
+          description: Group library renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupLibrary'
+        '400':
+          description: Invalid library name
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Group library not found
+      security:
+      - bearer_auth: []
   /api/v1/admin/home-rails:
     get:
       tags:
@@ -1174,6 +1253,87 @@ paths:
           description: Ombi or Seerr rejected the change
       security:
       - bearer_auth: []
+  /api/v1/admin/routing-rules:
+    get:
+      operationId: list_routing_rules_handler
+      responses:
+        '200':
+          description: Routing rules for this server's peer group
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoutingRule'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '409':
+          description: Server has not joined a peer group
+      security:
+      - bearer_auth: []
+    post:
+      operationId: create_routing_rule_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRuleRequest'
+        required: true
+      responses:
+        '201':
+          description: Routing rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingRule'
+        '400':
+          description: Invalid group, user, or preferred peer
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Group library not found
+        '409':
+          description: Server has not joined a peer group
+      security:
+      - bearer_auth: []
+  /api/v1/admin/routing-rules/{id}:
+    put:
+      operationId: update_routing_rule_handler
+      parameters:
+      - name: id
+        in: path
+        description: Routing rule ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRuleRequest'
+        required: true
+      responses:
+        '200':
+          description: Routing rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingRule'
+        '400':
+          description: Invalid group, user, or preferred peer
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Routing rule or group library not found
+      security:
+      - bearer_auth: []
   /api/v1/admin/source-instances:
     get:
       tags:
@@ -1350,6 +1510,38 @@ paths:
           description: Caller is authenticated but not an admin
         '404':
           description: No source instance registered with this id
+      security:
+      - bearer_auth: []
+  /api/v1/admin/source-instances/{id}/group-library:
+    put:
+      operationId: map_source_instance_handler
+      parameters:
+      - name: id
+        in: path
+        description: Local source instance ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceGroupLibraryRequest'
+        required: true
+      responses:
+        '200':
+          description: Source instance group-library mapping updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceGroupLibraryResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is authenticated but not an admin
+        '404':
+          description: Source instance or group library not found
       security:
       - bearer_auth: []
   /api/v1/admin/source-instances/{id}/sync:
@@ -9946,6 +10138,13 @@ components:
         updated_at:
           type: string
           format: date-time
+    GroupLibraryRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
     HandoffResponse:
       type: object
       required:
@@ -13861,6 +14060,33 @@ components:
           - string
           - 'null'
           format: uuid
+    RoutingRuleRequest:
+      type: object
+      required:
+      - priority
+      - preferred_nodes
+      - delivery_mode
+      properties:
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryMode'
+        group_library_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        preferred_nodes:
+          type: array
+          items:
+            type: string
+            format: uuid
+        priority:
+          type: integer
+          format: int32
+        user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
     RoutingRulesResponse:
       type: object
       description: |-
@@ -14305,6 +14531,31 @@ components:
           propertyNames:
             type: string
             format: uuid
+    SourceGroupLibraryRequest:
+      type: object
+      properties:
+        group_library_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Set to null to remove the source instance's group mapping.
+    SourceGroupLibraryResponse:
+      type: object
+      description: |-
+        The mapping response deliberately excludes the source instance's encrypted
+        credentials and other private configuration.
+      required:
+      - source_instance_id
+      properties:
+        group_library_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        source_instance_id:
+          type: string
+          format: uuid
     SourceInstanceRequest:
       type: object
       description: |-
