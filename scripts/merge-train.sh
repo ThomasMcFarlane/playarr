@@ -379,7 +379,6 @@ If this is intended (for example a deliberate revert), land it manually under me
         log "PR #$pr: main moved during landing, repeating"; continue
       fi
       git push -q origin --delete "$br" 2>/dev/null || true
-      gh pr comment "$pr" --repo "$REPO" --body "Merge train: landed on \`main\` as $head." >/dev/null
       log "PR #$pr: landed as $head"
     else
       if ! gh pr merge "$pr" --repo "$REPO" --squash --match-head-commit "$head" \
@@ -396,7 +395,6 @@ $TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
         STOP=true; exit 1
       fi
       post_merge_dispatch "$merged"
-      gh pr comment "$pr" --repo "$REPO" --body "Merge train: squash-merged as $merged." >/dev/null
       log "PR #$pr: landed as $merged"
     fi
     return

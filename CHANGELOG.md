@@ -125,6 +125,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: the merge train no longer comments on a pull request when it lands successfully; it comments only when it blocks the pull request or fails.
 - Android APK and Playarr Server downloads are published to GitHub Releases only. The release workflows no longer upload to object storage, and `playarr.app/downloads/android/...` and `playarr.app/downloads/server/...` now redirect (latest and versioned) to the matching GitHub Release assets.
 - CI: every workflow now runs on GitHub-hosted runners (Linux, Windows for the Xbox UWP build, macOS for iOS and tvOS Simulator tests and the signed TestFlight release); the self-hosted-runner guard is replaced by a check that requires hosted runners, and the regional image is published to GitHub Container Registry.
 - Selecting a Dubarr dub (or another source audio track) at original quality no longer re-encodes the video when the client can play the source codec (H.264 or HEVC) within its bitrate cap: the server copies the video into fragmented-MP4 HLS and encodes only the audio, so a 4K HEVC remux starts quickly without a CPU transcode. Other cases still transcode as before.

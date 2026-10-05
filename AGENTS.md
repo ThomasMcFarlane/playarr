@@ -96,7 +96,7 @@ on a personal account do not get.
   commits added; after an API merge the train checks main's new tree is exactly main + the PR and
   stops if not. A deliberate revert of a recent change is therefore landed by hand (merge rule v2).
 - On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
-  `blocked` and comments the reason. Fix it, push, remove `blocked` and add `ready` again.
+  `blocked` and comments the reason. It posts no comment when a PR lands successfully. Fix it, push, remove `blocked` and add `ready` again.
 - Do not push to a branch that carries `ready` unless you are withdrawing it (remove the label first).
 - Merge manually (merge rule v2: rebase, green `ci-required` on the pushed SHA, plain squash) only
   while the train is down, which means the `Merge train` workflow is failing or disabled.
