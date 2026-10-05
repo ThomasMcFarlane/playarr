@@ -145,13 +145,18 @@ The release workflow regenerates it, installs the pinned Google Cast 4.8.6 Cocoa
 from the resulting workspace. The iOS and Apple TV targets both link the local `PlayarrKit`
 package. Release builds are signed and exported by the Apple runner.
 
-Private Apple run <id>
-successfully signed, archived, exported, and uploaded both platforms from immutable source commit
-`b47fda4956f6a0adee39027689504bfcdd2b2adb` as marketing version `1.0.0`, build `1.2`. App Store
-Connect reports both platform builds `VALID`, with internal beta state `IN_BETA_TESTING` and
-`usesNonExemptEncryption=false`. This proves build and upload processing, not delivery to or
-installation on a physical device. Source-side workflow dispatch still requires the owner to add
-the missing `APPLE_DISPATCH_TOKEN`; see the [TestFlight runbook](../../apple-testflight/README.md).
+The signed-only TestFlight workflow has separately uploaded both platforms as marketing version
+`1.0.0`. iOS build `11.1` was built from immutable source commit
+`3b969d445c9d01ee010eb19c2356b0b5cc6bf714` in private run
+<id>; App Store
+Connect reports it `VALID`. tvOS build `12.1` was built from immutable source commit
+`f2e4e70b579075c1057ce3b16e1305f346cb400a` in private run
+<id>; its App Store
+Connect build record is `VALID` and expires on `2027-01-02`. Both builds are available in the
+`Playarr Internal Testers` group, which has access to all builds. An existing tester record reports
+`INSTALLED`; this does not establish installation of the tvOS app on a device. These records verify
+build processing and TestFlight availability, not public App Store release or physical-device
+installation. See the [TestFlight runbook](../../apple-testflight/README.md).
 
 ## Store submission process and constraints
 
