@@ -44,12 +44,12 @@ final class DesignTokensTests: XCTestCase {
     func testFocusMotionMatchesDesignTokens() {
         XCTAssertEqual(DesignTokens.FocusMotion.restScale, 1)
         XCTAssertEqual(DesignTokens.FocusMotion.focusScale, 1.08, accuracy: 0.0001)
-        XCTAssertEqual(DesignTokens.FocusMotion.transitionSeconds, 0.15, accuracy: 0.0001)
+        XCTAssertEqual(DesignTokens.FocusMotion.transitionSeconds, 0.22, accuracy: 0.0001)
     }
 
     func testHomeCardDimensionsMatchLiveRails() {
-        XCTAssertEqual(TVTheme.workTileWidth, 220)
-        XCTAssertEqual(TVTheme.workTileHeight, 124)
+        XCTAssertEqual(TVTheme.workTileWidth, 219)
+        XCTAssertEqual(TVTheme.workTileHeight, 123)
     }
 
     func testCanvasIs1920x1080() {

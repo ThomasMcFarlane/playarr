@@ -5,8 +5,8 @@ project 'Playarr.xcodeproj'
 
 target 'PlayarrApp' do
   pod 'google-cast-sdk', '= 4.8.6'
-end
 
-target 'PlayarrAppTests' do
-  inherit! :search_paths
+  target 'PlayarrAppTests' do
+    inherit! :search_paths
+  end
 end

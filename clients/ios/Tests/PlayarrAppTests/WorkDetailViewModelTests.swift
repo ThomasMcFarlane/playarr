@@ -276,7 +276,7 @@ private final class PlayerEngineSpy: PlayerEngine {
     var loadedItem: PlayableItem?
     var didPlay = false
 
-    let avPlayer = AVPlayer()
+    let avPlayer: AVPlayer? = AVPlayer()
     var statePublisher: AnyPublisher<PlayerPlaybackState, Never> { Empty().eraseToAnyPublisher() }
     var currentTimePublisher: AnyPublisher<Double, Never> { Empty().eraseToAnyPublisher() }
 

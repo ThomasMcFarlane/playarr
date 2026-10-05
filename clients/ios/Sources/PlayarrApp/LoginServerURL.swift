@@ -50,7 +50,8 @@ enum LoginServerURL {
         let path = components.percentEncodedPath == "/" ? "" : components.percentEncodedPath
         let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
         let fragment = components.percentEncodedFragment.map { "#\($0)" } ?? ""
-        return "https://v4-\(octets.map(String.init).joined(separator: "-")).\(relayHost):\(playarrPort)\(path)\(query)\(fragment)"
+        let port = components.port == playarrPort ? ":\(playarrPort)" : ""
+        return "https://v4-\(octets.map(String.init).joined(separator: "-")).\(relayHost)\(port)\(path)\(query)\(fragment)"
     }
 
     private static func encodedRelayOctets(_ host: String) -> [Int]? {

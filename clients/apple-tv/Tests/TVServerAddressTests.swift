@@ -9,6 +9,31 @@ final class TVServerAddressTests: XCTestCase {
         )
     }
 
+    func testPublicIPv4DefaultsToVerifiedHTTPSRelayPort() {
+        XCTAssertEqual(
+            TVServerAddress.normalisedURL(from: "11.22.33.44")?.absoluteString,
+            "https://v4-11-22-33-44.relay.playarr.app"
+        )
+    }
+
+    func testPublicIPv4PreservesExplicitLegacyRelayPort() {
+        XCTAssertEqual(
+            TVServerAddress.normalisedURL(from: "http://11.22.33.44:8484")?.absoluteString,
+            "https://v4-11-22-33-44.relay.playarr.app:8484"
+        )
+    }
+
+    func testPrivateAndLocalServerPortsRemainUnchanged() {
+        XCTAssertEqual(
+            TVServerAddress.normalisedURL(from: "http://192.168.1.20:8484")?.absoluteString,
+            "http://192.168.1.20:8484"
+        )
+        XCTAssertEqual(
+            TVServerAddress.normalisedURL(from: "playarr.local:8484")?.absoluteString,
+            "http://playarr.local:8484"
+        )
+    }
+
     func testPreservesHTTPSAndPath() {
         XCTAssertEqual(
             TVServerAddress.normalisedURL(from: "https://media.example.test/playarr")?.absoluteString,
@@ -31,10 +56,12 @@ final class TVServerAddressTests: XCTestCase {
         XCTAssertNil(TVServerAddress.normalisedURL(from: "   "))
     }
 
+    @MainActor
     func testFirstLaunchUsesHostedDeviceLink() {
         XCTAssertTrue(TVAppEnvironment.shouldUseHostedDeviceLink(hasConfiguredServer: false))
     }
 
+    @MainActor
     func testRememberedServerStillUsesHostedGateForAppLinkQR() {
         // A stored relay/server URL must not take over the pairing chrome —
         // QR + "visit" always come from playarr.app/link.
@@ -54,4 +81,3 @@ final class TVServerAddressTests: XCTestCase {
         )
     }
 }
-

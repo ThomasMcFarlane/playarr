@@ -83,9 +83,16 @@ final class LoginServerURLTests: XCTestCase {
         ] {
             XCTAssertEqual(
                 try LoginServerURL.normalise(value).absoluteString,
-                "https://v4-11-22-33-44.relay.playarr.app:8484"
+                "https://v4-11-22-33-44.relay.playarr.app"
             )
         }
+    }
+
+    func testExplicitLegacyRelayPortIsPreserved() throws {
+        XCTAssertEqual(
+            try LoginServerURL.normalise("http://11.22.33.44:8484").absoluteString,
+            "https://v4-11-22-33-44.relay.playarr.app:8484"
+        )
     }
 
     func testPrivateLANAddressRemainsDirect() throws {

@@ -24,9 +24,17 @@ class PlayarrAppTest {
     }
 
     @Test
+    fun `public ipv4 address defaults to HTTPS port 443`() {
+        assertEquals(
+            "https://v4-11-22-33-44.relay.playarr.app",
+            normaliseServerUrl("11.22.33.44"),
+        )
+    }
+
+    @Test
     fun `existing relay hostname is normalised before authenticated requests`() {
         assertEquals(
-            "https://v4-203-0-113-10.relay.playarr.app:8484",
+            "https://v4-203-0-113-10.relay.playarr.app",
             normaliseServerUrl("http://v4-203-0-113-10.relay.playarr.app"),
         )
     }
@@ -34,7 +42,7 @@ class PlayarrAppTest {
     @Test
     fun `public relay preserves path query and fragment`() {
         assertEquals(
-            "https://v4-11-22-33-44.relay.playarr.app:8484/api?q=one#result",
+            "https://v4-11-22-33-44.relay.playarr.app/api?q=one#result",
             normaliseServerUrl("https://11.22.33.44:9443/api?q=one#result"),
         )
     }

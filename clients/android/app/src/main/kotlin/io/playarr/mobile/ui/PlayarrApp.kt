@@ -444,7 +444,8 @@ private fun publicIpv4RelayUrl(uri: URI): String? {
         uri.rawQuery?.let { append('?').append(it) }
         uri.rawFragment?.let { append('#').append(it) }
     }
-    return "https://v4-${octets.joinToString("-")}.$RELAY_DOMAIN:$PLAYARR_PORT$suffix"
+    val port = if (uri.port == PLAYARR_PORT) ":$PLAYARR_PORT" else ""
+    return "https://v4-${octets.joinToString("-")}.$RELAY_DOMAIN$port$suffix"
 }
 
 private fun publicIpv4Octets(hostname: String): List<Int>? {

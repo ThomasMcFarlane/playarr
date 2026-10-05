@@ -26,6 +26,9 @@ enum TVPairingState {
 }
 
 enum TVServerAddress {
+    private static let relayHost = "relay.playarr.app"
+    private static let legacyRelayPort = 8484
+
     static func normalisedURL(from input: String) -> URL? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -38,7 +41,43 @@ enum TVServerAddress {
               let url = components.url else {
             return nil
         }
-        return url
+        guard let octets = relayOctets(components.host ?? "") else { return url }
+        var relay = URLComponents()
+        relay.scheme = "https"
+        relay.host = "v4-\(octets.map(String.init).joined(separator: "-")).\(relayHost)"
+        if components.port == legacyRelayPort { relay.port = legacyRelayPort }
+        relay.percentEncodedPath = components.percentEncodedPath == "/" ? "" : components.percentEncodedPath
+        relay.percentEncodedQuery = components.percentEncodedQuery
+        relay.percentEncodedFragment = components.percentEncodedFragment
+        return relay.url
+    }
+
+    private static func relayOctets(_ host: String) -> [Int]? {
+        let pattern = #"^v4-(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.relay\.playarr\.app$"#
+        let values: [String]
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+           let match = regex.firstMatch(in: host, range: NSRange(host.startIndex..., in: host)) {
+            values = (1..<5).compactMap { index in
+                Range(match.range(at: index), in: host).map { String(host[$0]) }
+            }
+            guard values.count == 4 else { return nil }
+        } else {
+            values = host.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        }
+        let octets = values.compactMap(Int.init)
+        guard values.count == 4, octets.count == 4, octets.allSatisfy({ 0...255 ~= $0 }) else { return nil }
+        let first = octets[0], second = octets[1], third = octets[2]
+        let reserved = first == 0 || first == 10 || first == 127 ||
+            (first == 100 && 64...127 ~= second) ||
+            (first == 169 && second == 254) ||
+            (first == 172 && 16...31 ~= second) ||
+            (first == 192 && second == 0 && (third == 0 || third == 2)) ||
+            (first == 192 && second == 88 && third == 99) ||
+            (first == 192 && second == 168) ||
+            (first == 198 && 18...19 ~= second) ||
+            (first == 198 && second == 51 && third == 100) ||
+            (first == 203 && second == 0 && third == 113) || first >= 224
+        return reserved ? nil : octets
     }
 }
 

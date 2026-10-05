@@ -82,6 +82,12 @@ describe("publicIpv4RelayUrl", () => {
     "  11.22.33.44:8080  ",
   ])("normalises public IPv4 form %s to the relay address", (value) => {
     expect(publicIpv4RelayUrl(value)).toBe(
+      "https://v4-11-22-33-44.relay.playarr.app"
+    );
+  });
+
+  it("preserves an explicitly selected legacy relay port", () => {
+    expect(publicIpv4RelayUrl("http://11.22.33.44:8484")).toBe(
       "https://v4-11-22-33-44.relay.playarr.app:8484"
     );
   });
@@ -90,9 +96,9 @@ describe("publicIpv4RelayUrl", () => {
     "v4-203-0-113-10.relay.playarr.app",
     "http://v4-203-0-113-10.relay.playarr.app",
     "https://v4-203-0-113-10.relay.playarr.app",
-  ])("normalises relay hostname form %s to HTTPS on the Playarr Server port", (value) => {
+  ])("normalises relay hostname form %s to the HTTPS default port", (value) => {
     expect(publicIpv4RelayUrl(value)).toBe(
-      "https://v4-203-0-113-10.relay.playarr.app:8484"
+      "https://v4-203-0-113-10.relay.playarr.app"
     );
   });
 
@@ -102,13 +108,13 @@ describe("publicIpv4RelayUrl", () => {
     "https://11.22.33.44:9443/api?q=one#result",
   ])("preserves paths, queries, and fragments for %s", (value) => {
     expect(publicIpv4RelayUrl(value)).toBe(
-      "https://v4-11-22-33-44.relay.playarr.app:8484/api?q=one#result"
+      "https://v4-11-22-33-44.relay.playarr.app/api?q=one#result"
     );
   });
 
   it("normalises a root query without retaining a redundant slash", () => {
     expect(publicIpv4RelayUrl("11.22.33.44:8080?q=one#result")).toBe(
-      "https://v4-11-22-33-44.relay.playarr.app:8484?q=one#result"
+      "https://v4-11-22-33-44.relay.playarr.app?q=one#result"
     );
   });
 

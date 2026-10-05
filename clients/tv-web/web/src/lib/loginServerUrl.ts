@@ -2,7 +2,7 @@ import { getStoredApiBaseUrl, readKnownServers } from "@playarr-tv/domain";
 
 const HOSTED_PLAYARR_HOSTNAME = "playarr.app";
 const PUBLIC_IPV4_RELAY_HOSTNAME = "relay.playarr.app";
-const PLAYARR_PORT = "8484";
+const LEGACY_RELAY_PORT = "8484";
 
 function publicIpv4Octets(hostname: string): [number, number, number, number] | undefined {
   const rawOctets = hostname.split(".");
@@ -72,7 +72,8 @@ export function publicIpv4RelayUrl(value: string): string {
 
     const hostname = `v4-${octets.join("-")}.${PUBLIC_IPV4_RELAY_HOSTNAME}`;
     const path = url.pathname === "/" ? "" : url.pathname;
-    return `https://${hostname}:${PLAYARR_PORT}${path}${url.search}${url.hash}`;
+    const port = url.port === LEGACY_RELAY_PORT ? `:${LEGACY_RELAY_PORT}` : "";
+    return `https://${hostname}${port}${path}${url.search}${url.hash}`;
   } catch {
     return value;
   }
