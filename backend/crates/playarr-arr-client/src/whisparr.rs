@@ -294,6 +294,20 @@ impl ArrConnector for WhisparrClient {
     }
 }
 
+impl WhisparrClient {
+    /// `GET /api/v3/rootfolder` — every root folder configured in the app.
+    pub async fn list_root_folders(&self) -> Result<Vec<crate::ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "whisparr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v3/rootfolder",
+        )
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// Newer *arr releases omit the instance-local `url` on some images
@@ -323,6 +337,28 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_the_rootfolder_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"id": 3, "path": "/library/sample", "accessible": true,
+                  "freeSpace": 100, "totalSpace": 200, "unmappedFolders": []}
+            ])))
+            .mount(&server)
+            .await;
+        let roots = WhisparrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("root folders parse");
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].id, 3);
+        assert_eq!(roots[0].path, "/library/sample");
+        assert_eq!(roots[0].free_space, Some(100));
+    }
 
     #[test]
     fn episode_payload_parses_remote_screenshot_and_defaults_missing_images() {

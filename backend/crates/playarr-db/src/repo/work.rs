@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use playarr_model::{ExternalProvider, ExternalRef, Work, WorkKind};
+use playarr_model::{folder_work_provider, ExternalProvider, ExternalRef, Work, WorkKind};
 use sqlx::any::AnyRow;
 use sqlx::Row;
 use uuid::Uuid;
@@ -196,20 +196,30 @@ impl WorkRepo for SqlxWorkRepo {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Work>, DbError> {
+        // Hidden backing works of folder-discovered files (see
+        // `playarr_model::folder`) never appear in catalogue enumeration;
+        // they stay reachable by id for playback and detail lookups.
         let sql = match self.backend {
             Backend::Sqlite => {
-                "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, release_date, monitored, availability FROM works \
-                 WHERE kind = ? ORDER BY sort_title LIMIT ? OFFSET ?"
+                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
+                 w.tags, w.added_at, w.release_date, w.monitored, w.availability FROM works w \
+                 WHERE w.kind = ? \
+                 AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
+                                 WHERE r.work_id = w.id AND r.provider = ?) \
+                 ORDER BY w.sort_title LIMIT ? OFFSET ?"
             }
             Backend::Postgres => {
-                "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, release_date, monitored, availability FROM works \
-                 WHERE kind = $1 ORDER BY sort_title LIMIT $2 OFFSET $3"
+                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
+                 w.tags, w.added_at, w.release_date, w.monitored, w.availability FROM works w \
+                 WHERE w.kind = $1 \
+                 AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
+                                 WHERE r.work_id = w.id AND r.provider = $2) \
+                 ORDER BY w.sort_title LIMIT $3 OFFSET $4"
             }
         };
         let rows = sqlx::query(sql)
             .bind(work_kind_to_str(kind))
+            .bind(provider_to_str(&folder_work_provider()))
             .bind(limit)
             .bind(offset)
             .fetch_all(&self.pool)

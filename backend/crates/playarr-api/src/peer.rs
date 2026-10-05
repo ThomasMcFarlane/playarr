@@ -917,6 +917,15 @@ async fn derive_own_availability(
                 continue;
             }
         };
+        // Folder-discovered backing works are local filesystem inventory, not
+        // portable catalogue leaves; another peer cannot resolve them.
+        if work
+            .external_refs
+            .iter()
+            .any(|r| r.provider == playarr_model::folder_work_provider())
+        {
+            continue;
+        }
         let Some(external_ref) = work.external_refs.first() else {
             continue;
         };

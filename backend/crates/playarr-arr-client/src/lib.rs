@@ -66,6 +66,20 @@ pub use whisparr::{
 };
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+/// The subset of an *arr root-folder resource that folder discovery needs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrRootFolder {
+    pub id: i64,
+    pub path: String,
+    #[serde(default)]
+    pub accessible: bool,
+    #[serde(default, rename = "freeSpace")]
+    pub free_space: Option<i64>,
+    #[serde(default, rename = "totalSpace")]
+    pub total_space: Option<i64>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArrClientError {

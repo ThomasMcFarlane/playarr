@@ -30,6 +30,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
 - CI: a weekly workflow lists remote branches whose commits are not on `main` and that have no open pull request and no task-board reference, and fails until each is given a PR, a row or deleted.
 - CI: pull requests now check only the Rust crates they change plus their dependents (`scripts/ci/rust-scope.sh`); shared inputs, pushes to main and a nightly schedule run the full workspace. OpenAPI diff runs only when the API crate is affected, and every CI job has a timeout (TASKS 332).
 - CI: CHANGELOG.md and TASKS.md are no longer edited in PRs. Per-change fragments (`changelog.d/`, `tasks.d/`) are folded by the merge train (`scripts/fold-fragments.mjs`), and CI rejects direct edits (TASKS 331).
@@ -2190,6 +2191,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
 - Unit tests for the video-copy ffmpeg arguments (copy, `hvc1` tag, fragmented MP4, padded dub audio) and for the rule that decides when an audio switch may copy the video.
 - CI rejects environment-specific data in tracked files (`scripts/ci/check-env-data.sh`): non-example IPv4 addresses, personal home paths, tailnet names and a secret-supplied denylist of internal names.
 - Apple simulator test targets now match actor isolation, current design tokens, Google Cast dependency inheritance and the `PlayerEngine` optional `AVPlayer` witness (TASK 333).

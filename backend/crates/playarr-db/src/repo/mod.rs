@@ -15,6 +15,7 @@ mod device;
 mod download_ticket;
 mod embedding;
 mod eventing;
+mod folder;
 mod group_library;
 mod home_rail;
 mod household;
@@ -62,6 +63,7 @@ pub use eventing::{
     EventingDownloadTicketRepo, EventingMediaFileRepo, EventingPlaylistRepo,
     EventingWatchProgressRepo, EventingWatchlistRepo, EventingWorkRepo,
 };
+pub use folder::{DiscoveredRoot, FolderRepo, RootConfigUpdate, ScanIndexRow, SqlxFolderRepo};
 pub use group_library::{GroupLibraryRepo, SqlxGroupLibraryRepo};
 pub use home_rail::{seed_default_rails, HomeRailRepo, SqlxHomeRailRepo};
 pub use household::{

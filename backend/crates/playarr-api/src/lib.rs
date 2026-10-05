@@ -39,6 +39,8 @@ pub mod downloads;
 pub mod dubarr_audio;
 pub mod error;
 pub mod events;
+pub mod folder_scan;
+pub mod folders;
 pub mod health;
 pub mod home_rails;
 pub mod household;
@@ -78,6 +80,8 @@ pub mod webhooks;
 
 #[cfg(test)]
 mod admin_routing_tests;
+#[cfg(test)]
+mod folders_tests;
 #[cfg(test)]
 mod household_tests;
 #[cfg(test)]
@@ -237,7 +241,10 @@ impl Modify for SecurityAddon {
         playarr_model::PlaybackSession,
         playarr_model::discovery::DiscoveryScope,
         playarr_model::discovery::DiscoveryKind,
-        portability::ProgressConflicts
+        portability::ProgressConflicts,
+        folders::FolderSort,
+        folders::FolderOrder,
+        folders::FolderEntryFilter
     )),
     tags(
         (name = "system", description = "Process health, readiness, and version endpoints"),
@@ -260,6 +267,7 @@ impl Modify for SecurityAddon {
         (name = "events", description = "Per-user live change stream (server-sent events; see docs/architecture/live-events.md)"),
         (name = "remote", description = "Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)"),
         (name = "household", description = "Household and child controls: profile status, schedules, guardian approvals"),
+        (name = "folders", description = "Native folder browsing of administrator-enabled root folders (unsorted media)"),
         (name = "peer-groups", description = "Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)")
     )
 )]
@@ -370,6 +378,18 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(media::media_chapters_handler))
         .routes(routes!(media::media_subtitle_handler))
         .routes(routes!(media::media_thumbnail_handler))
+        .routes(routes!(folders::list_folder_roots_handler))
+        .routes(routes!(folders::browse_folder_handler))
+        .routes(routes!(
+            folders::admin_list_folder_roots_handler,
+            folders::admin_create_folder_root_handler
+        ))
+        .routes(routes!(folders::admin_discover_folder_roots_handler))
+        .routes(routes!(
+            folders::admin_update_folder_root_handler,
+            folders::admin_delete_folder_root_handler
+        ))
+        .routes(routes!(folders::admin_scan_folder_root_handler))
         .routes(routes!(media::serve_rendition_file_handler))
         .routes(routes!(media::serve_session_file_handler))
         .routes(routes!(media::media_download_options_handler))
@@ -885,6 +905,9 @@ pub struct AppState {
     pub calendar_feed_token_repo: Arc<dyn playarr_db::CalendarFeedTokenRepo>,
     /// Grab and import events behind the availability-lag statistic.
     pub availability_event_repo: Arc<dyn playarr_db::AvailabilityEventRepo>,
+    /// Root folders and the unsorted-folder scan cache (`folders.rs`,
+    /// `folder_scan.rs`).
+    pub folder_repo: Arc<dyn playarr_db::FolderRepo>,
 }
 
 impl FromRef<AppState> for ReadinessState {

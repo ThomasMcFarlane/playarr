@@ -50,6 +50,7 @@ read API.
 | `watch` | `work` / work id | `progress`, `watched`, `unwatched` | the account | work progress and watched badges, Continue Watching, Up Next, Home rails, series season/episode state |
 | `library` | `work` / work id | `files` (a file was imported: new movie or episode playable), `upserted`, `removed` | users whose libraries cover the work | work detail, seasons and episodes, library lists, Home rails, search |
 | `library` | `*` | `bulk` | every user | all catalogue-derived views |
+| `library` | `folder_root` / root id | `entries` (a scan added, changed or removed files, or an admin enabled, disabled or re-pointed the root) | users whose libraries cover the root's source | the Folders view: roots list and the open directory |
 | `calendar` | `work` / work id | `imported` | users whose libraries cover the work | calendar window |
 | `playlist` | `playlist` / playlist id | `meta`, `items`, `deleted` | the owner; everyone for a System playlist | playlist list and detail |
 | `watchlist` | `watchlist` / title key | `added`, `removed` | the account | watchlist, discovery badges |
@@ -57,6 +58,7 @@ read API.
 | `household` | `profile` / profile id | `policy`, `status`, `approval` | the profile and its guardians | household status, approvals, schedule gate |
 | `account` | `profile` / user id | `policy`, `profile`, `removed` | the account | capabilities, profile, library access |
 | `admin` | `source_instance` / instance id | `created`, `removed`, `sync_started`, `sync_finished` | admins | source lists and sync status |
+| `admin` | `folder_root` / root id | `scan` (a scan started or finished) | admins | the admin folders page |
 
 Large runs are coalesced on the server: more than 50 rows of one type in one
 batch (a first sync touches every title) become one `*` / `bulk` frame, so

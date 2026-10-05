@@ -169,6 +169,162 @@ paths:
           description: No backup with this id
       security:
       - bearer_auth: []
+  /api/v1/admin/folders/discover:
+    post:
+      tags:
+      - admin
+      operationId: admin_discover_folder_roots_handler
+      responses:
+        '200':
+          description: Root folders re-read from every media-owning source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminFolderRootsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+      security:
+      - bearer_auth: []
+  /api/v1/admin/folders/roots:
+    get:
+      tags:
+      - admin
+      operationId: admin_list_folder_roots_handler
+      responses:
+        '200':
+          description: Every known root folder with its scan configuration and state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminFolderRootsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - admin
+      operationId: admin_create_folder_root_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRootRequest'
+        required: true
+      responses:
+        '201':
+          description: Root added, enabled and scanning
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminFolderRootResponse'
+        '400':
+          description: Invalid path or source
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '409':
+          description: This folder is already configured for that source
+      security:
+      - bearer_auth: []
+  /api/v1/admin/folders/roots/{root_id}:
+    delete:
+      tags:
+      - admin
+      operationId: admin_delete_folder_root_handler
+      parameters:
+      - name: root_id
+        in: path
+        description: Folder root id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Root and its scanned files removed
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '404':
+          description: Unknown root
+        '409':
+          description: Roots reported by a source cannot be deleted; disable them instead
+      security:
+      - bearer_auth: []
+    patch:
+      tags:
+      - admin
+      operationId: admin_update_folder_root_handler
+      parameters:
+      - name: root_id
+        in: path
+        description: Folder root id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFolderRootRequest'
+        required: true
+      responses:
+        '200':
+          description: Updated root
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminFolderRootResponse'
+        '400':
+          description: Invalid path
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '404':
+          description: Unknown root
+      security:
+      - bearer_auth: []
+  /api/v1/admin/folders/roots/{root_id}/scan:
+    post:
+      tags:
+      - admin
+      operationId: admin_scan_folder_root_handler
+      parameters:
+      - name: root_id
+        in: path
+        description: Folder root id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Scan finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanSummary'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller is not an admin
+        '404':
+          description: Unknown root
+        '409':
+          description: A scan of this root is already running
+        '422':
+          description: The root could not be scanned
+      security:
+      - bearer_auth: []
   /api/v1/admin/group-libraries:
     get:
       operationId: list_group_libraries_handler
@@ -3831,6 +3987,111 @@ paths:
           description: Missing or invalid access token
         '403':
           description: Caller lacks Playarr access
+      security:
+      - bearer_auth: []
+  /api/v1/folders/roots:
+    get:
+      tags:
+      - folders
+      operationId: list_folder_roots_handler
+      parameters:
+      - name: kind
+        in: query
+        description: Only roots of this library kind (`movie`, `series`, `artist`, ...).
+        required: false
+        schema:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+      responses:
+        '200':
+          description: Path-free root folders the caller may browse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderRootsResponse'
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: Caller does not have Playarr access
+      security:
+      - bearer_auth: []
+  /api/v1/folders/roots/{root_id}/browse:
+    get:
+      tags:
+      - folders
+      operationId: browse_folder_handler
+      parameters:
+      - name: root_id
+        in: path
+        description: Folder root id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: path
+        in: query
+        description: Root-relative directory. Empty or omitted means the root itself.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: q
+        in: query
+        description: Case-insensitive name filter applied to this directory's entries.
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      - name: sort
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/FolderSort'
+      - name: order
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/FolderOrder'
+      - name: type
+        in: query
+        description: 'Restrict to directories or media files (default: both).'
+        required: false
+        schema:
+          $ref: '#/components/schemas/FolderEntryFilter'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+      responses:
+        '200':
+          description: 'One directory level: sub-directories first, then media files'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderBrowseResponse'
+        '400':
+          description: Invalid path
+        '401':
+          description: Missing or invalid access token
+        '403':
+          description: No access to this library or folder
+        '404':
+          description: Unknown root or folder
       security:
       - bearer_auth: []
   /api/v1/home/rails:
@@ -8226,6 +8487,86 @@ components:
         work_id:
           type: string
           format: uuid
+    AdminFolderRootResponse:
+      type: object
+      required:
+      - id
+      - source_instance_id
+      - source_name
+      - library_kind
+      - name
+      - reported_path
+      - effective_path
+      - manual
+      - active
+      - scan_enabled
+      - path_available
+      - scan_status
+      - item_count
+      properties:
+        active:
+          type: boolean
+        effective_path:
+          type: string
+          description: The directory the scanner will actually walk.
+        id:
+          type: string
+          format: uuid
+        item_count:
+          type: integer
+          format: int64
+          minimum: 0
+        last_scanned_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        library_kind:
+          $ref: '#/components/schemas/WorkKind'
+        local_path:
+          type:
+          - string
+          - 'null'
+          description: Explicit path on this server, when set.
+        manual:
+          type: boolean
+        name:
+          type: string
+        path_available:
+          type: boolean
+          description: Whether the effective path is a readable directory on this server.
+        reported_path:
+          type: string
+          description: The path as the source application (or the administrator) reported it.
+        scan_enabled:
+          type: boolean
+        scan_error:
+          type:
+          - string
+          - 'null'
+        scan_status:
+          $ref: '#/components/schemas/FolderScanStatus'
+        source_instance_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+    AdminFolderRootsResponse:
+      type: object
+      required:
+      - roots
+      - failed_source_instance_ids
+      properties:
+        failed_source_instance_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Sources whose root folders could not be discovered (only on `discover`).
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminFolderRootResponse'
     Album:
       type: object
       required:
@@ -9238,6 +9579,25 @@ components:
           description: |-
             `"original"`, or a transcode profile name from
             `GET /api/v1/media/{media_file_id}/download-options`.
+    CreateFolderRootRequest:
+      type: object
+      required:
+      - source_instance_id
+      - path
+      properties:
+        name:
+          type:
+          - string
+          - 'null'
+        path:
+          type: string
+          description: Absolute directory on this server.
+        source_instance_id:
+          type: string
+          format: uuid
+          description: |-
+            Source instance whose library the folder belongs to (decides the
+            library kind and who may browse it).
     CreateHandoffRequest:
       type: object
       required:
@@ -10128,6 +10488,232 @@ components:
           type: string
         vapid_public_key:
           type: string
+    FolderBreadcrumbResponse:
+      type: object
+      required:
+      - name
+      - path
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+          description: Root-relative path of this ancestor (empty for the root).
+    FolderBrowseResponse:
+      type: object
+      required:
+      - root
+      - path
+      - breadcrumbs
+      - entries
+      - total
+      - offset
+      - limit
+      properties:
+        breadcrumbs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderBreadcrumbResponse'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderEntryResponse'
+        limit:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+        path:
+          type: string
+        root:
+          $ref: '#/components/schemas/FolderRootResponse'
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+    FolderEntryFilter:
+      type: string
+      enum:
+      - all
+      - directories
+      - media
+    FolderEntryResponse:
+      type: object
+      required:
+      - entry_type
+      - name
+      - path
+      properties:
+        album:
+          type:
+          - string
+          - 'null'
+        artist:
+          type:
+          - string
+          - 'null'
+        audio_codec:
+          type:
+          - string
+          - 'null'
+        bitrate_bps:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        container:
+          type:
+          - string
+          - 'null'
+        duration_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        entry_type:
+          $ref: '#/components/schemas/FolderEntryType'
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        item_count:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Number of playable files below a directory.
+          minimum: 0
+        media_file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Playback id for media entries (use the normal playback routes).
+        media_kind:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WorkKind'
+        modified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        name:
+          type: string
+        path:
+          type: string
+          description: Root-relative path (pass as `path` to open a directory).
+        position_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        thumbnail_url:
+          type:
+          - string
+          - 'null'
+        title:
+          type:
+          - string
+          - 'null'
+        video_codec:
+          type:
+          - string
+          - 'null'
+        watch_state:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/WatchState'
+            description: The caller's own watched state, when they have watched some of it.
+        width:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+    FolderEntryType:
+      type: string
+      enum:
+      - directory
+      - media
+    FolderOrder:
+      type: string
+      enum:
+      - asc
+      - desc
+    FolderRootResponse:
+      type: object
+      required:
+      - id
+      - source_instance_id
+      - source_name
+      - library_kind
+      - name
+      - available
+      - scan_status
+      - item_count
+      properties:
+        available:
+          type: boolean
+          description: False while the root has never scanned successfully or its last scan failed.
+        id:
+          type: string
+          format: uuid
+        item_count:
+          type: integer
+          format: int64
+          minimum: 0
+        last_scanned_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        library_kind:
+          $ref: '#/components/schemas/WorkKind'
+        name:
+          type: string
+        scan_status:
+          $ref: '#/components/schemas/FolderScanStatus'
+        source_instance_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+    FolderRootsResponse:
+      type: object
+      required:
+      - roots
+      properties:
+        roots:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderRootResponse'
+    FolderScanStatus:
+      type: string
+      enum:
+      - pending
+      - scanning
+      - ready
+      - failed
+    FolderSort:
+      type: string
+      enum:
+      - name
+      - modified
+      - size
+      - duration
     FoundPeerGroupRequest:
       type: object
       description: Request body for [`found_peer_group_handler`].
@@ -14144,6 +14730,37 @@ components:
             $ref: '#/components/schemas/RoutingRule'
         server_time:
           type: string
+    ScanSummary:
+      type: object
+      description: Result of one scan of one root.
+      required:
+      - added
+      - updated
+      - removed
+      - unchanged
+      - skipped
+      properties:
+        added:
+          type: integer
+          format: int64
+          minimum: 0
+        removed:
+          type: integer
+          format: int64
+          minimum: 0
+        skipped:
+          type: integer
+          format: int64
+          description: Files that could not be probed as playable media.
+          minimum: 0
+        unchanged:
+          type: integer
+          format: int64
+          minimum: 0
+        updated:
+          type: integer
+          format: int64
+          minimum: 0
     SearchResponse:
       type: object
       description: |-
@@ -15308,6 +15925,22 @@ components:
       enum:
       - block
       - allow
+    UpdateFolderRootRequest:
+      type: object
+      properties:
+        local_path:
+          type:
+          - string
+          - 'null'
+          description: Absolute directory on this server; an empty string clears the override.
+        name:
+          type:
+          - string
+          - 'null'
+        scan_enabled:
+          type:
+          - boolean
+          - 'null'
     UpdateHomeRailRequest:
       type: object
       properties:
@@ -16078,5 +16711,7 @@ tags:
   description: Phone remote pairing, remote commands and transactional playback handoff (see docs/architecture/remote-control.md)
 - name: household
   description: 'Household and child controls: profile status, schedules, guardian approvals'
+- name: folders
+  description: Native folder browsing of administrator-enabled root folders (unsorted media)
 - name: peer-groups
   description: Multi-node peer group identity, founding, and join flow (see docs/architecture/peer-groups.md)

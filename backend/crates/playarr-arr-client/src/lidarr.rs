@@ -384,6 +384,20 @@ impl ArrConnector for LidarrClient {
     }
 }
 
+impl LidarrClient {
+    /// `GET /api/v1/rootfolder` — every root folder configured in the app.
+    pub async fn list_root_folders(&self) -> Result<Vec<crate::ArrRootFolder>, ArrClientError> {
+        get_json(
+            &self.http,
+            "lidarr",
+            &self.base_url,
+            &self.api_key,
+            "/api/v1/rootfolder",
+        )
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// Newer *arr releases omit the instance-local `url` on some images
@@ -413,6 +427,28 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
+
+    #[tokio::test]
+    async fn list_root_folders_uses_the_rootfolder_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/rootfolder"))
+            .and(header("X-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"id": 3, "path": "/library/sample", "accessible": true,
+                  "freeSpace": 100, "totalSpace": 200, "unmappedFolders": []}
+            ])))
+            .mount(&server)
+            .await;
+        let roots = LidarrClient::new(server.uri(), "test-key")
+            .list_root_folders()
+            .await
+            .expect("root folders parse");
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].id, 3);
+        assert_eq!(roots[0].path, "/library/sample");
+        assert_eq!(roots[0].free_space, Some(100));
+    }
 
     #[tokio::test]
     async fn list_artists_parses_response_and_sends_api_key() {

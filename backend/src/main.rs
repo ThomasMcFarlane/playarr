@@ -1789,6 +1789,7 @@ async fn boot_api(
         portability: Arc::new(playarr_api::portability::ExportRegistry::new()),
         calendar_feed_token_repo,
         availability_event_repo,
+        folder_repo: Arc::new(playarr_db::SqlxFolderRepo::new(pool.clone())),
     };
     let version_gate = VersionGateLayer::new(compatibility_table);
 
@@ -1853,6 +1854,11 @@ async fn boot_api(
     tokio::spawn(playarr_api::dubarr_audio::run_change_poller(
         state.source_instances.clone(),
     ));
+
+    // Unsorted folders: discover root folders from the sources and keep each
+    // enabled root's scan cache current. Runs where the media is readable
+    // (the API role); a per-root in-flight guard keeps overlapping scans out.
+    tokio::spawn(playarr_api::folder_scan::run_folder_scanner(state.clone()));
 
     let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
 

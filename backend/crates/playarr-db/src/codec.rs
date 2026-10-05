@@ -18,8 +18,9 @@ use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 // adding that export, since `playarr-model` is outside this crate's scope.
 use playarr_model::media::LeafRef;
 use playarr_model::{
-    Availability, DownloadStatus, ExternalProvider, PlayMethod, PlaybackEventKind, ProducedBy,
-    RenditionStatus, SourceKind, StopReason, TranscodeReason, WorkKind,
+    Availability, DownloadStatus, ExternalProvider, FolderScanStatus, PlayMethod,
+    PlaybackEventKind, ProducedBy, RenditionStatus, SourceKind, StopReason, TranscodeReason,
+    WorkKind,
 };
 use uuid::Uuid;
 
@@ -123,6 +124,25 @@ pub(crate) fn source_kind_from_str(raw: &str) -> Result<SourceKind, DbError> {
         "whisparr" => Ok(SourceKind::Whisparr),
         "dubarr" => Ok(SourceKind::Dubarr),
         other => Err(decode_err(format!("unknown source kind {other:?}"))),
+    }
+}
+
+pub(crate) fn folder_scan_status_to_str(status: FolderScanStatus) -> &'static str {
+    match status {
+        FolderScanStatus::Pending => "pending",
+        FolderScanStatus::Scanning => "scanning",
+        FolderScanStatus::Ready => "ready",
+        FolderScanStatus::Failed => "failed",
+    }
+}
+
+pub(crate) fn folder_scan_status_from_str(raw: &str) -> Result<FolderScanStatus, DbError> {
+    match raw {
+        "pending" => Ok(FolderScanStatus::Pending),
+        "scanning" => Ok(FolderScanStatus::Scanning),
+        "ready" => Ok(FolderScanStatus::Ready),
+        "failed" => Ok(FolderScanStatus::Failed),
+        other => Err(decode_err(format!("unknown folder scan status {other:?}"))),
     }
 }
 

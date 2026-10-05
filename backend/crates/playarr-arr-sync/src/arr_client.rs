@@ -7,10 +7,10 @@
 
 use chrono::{DateTime, Utc};
 use playarr_arr_client::{
-    ArrClientError, BazarrClient, DubarrClient, LidarrAlbum, LidarrArtist, LidarrClient,
-    LidarrImage, ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie, ReadarrAuthor,
-    ReadarrClient, SonarrClient, SonarrImage, SonarrSeries, WhisparrClient, WhisparrImage,
-    WhisparrSeries,
+    ArrClientError, ArrRootFolder, BazarrClient, DubarrClient, LidarrAlbum, LidarrArtist,
+    LidarrClient, LidarrImage, ProwlarrClient, RadarrClient, RadarrImage, RadarrMovie,
+    ReadarrAuthor, ReadarrClient, SonarrClient, SonarrImage, SonarrSeries, WhisparrClient,
+    WhisparrImage, WhisparrSeries,
 };
 use playarr_model::{
     Availability, ExternalProvider, ImageAsset, ImageKind, SourceInstance, SourceKind, WorkKind,
@@ -448,6 +448,19 @@ impl ArrClient {
             SourceKind::Prowlarr => ArrClient::Prowlarr(ProwlarrClient::new(base_url, api_key)),
             SourceKind::Whisparr => ArrClient::Whisparr(WhisparrClient::new(base_url, api_key)),
             SourceKind::Dubarr => ArrClient::Dubarr(DubarrClient::new(base_url, api_key)),
+        }
+    }
+
+    /// Every root folder configured in a media-owning source app. Empty for
+    /// apps that own no media library (Bazarr, Prowlarr, Dubarr).
+    pub async fn list_root_folders(&self) -> Result<Vec<ArrRootFolder>, ArrClientError> {
+        match self {
+            ArrClient::Sonarr(client) => client.list_root_folders().await,
+            ArrClient::Radarr(client) => client.list_root_folders().await,
+            ArrClient::Lidarr(client) => client.list_root_folders().await,
+            ArrClient::Readarr(client) => client.list_root_folders().await,
+            ArrClient::Whisparr(client) => client.list_root_folders().await,
+            ArrClient::Bazarr(_) | ArrClient::Prowlarr(_) | ArrClient::Dubarr(_) => Ok(Vec::new()),
         }
     }
 

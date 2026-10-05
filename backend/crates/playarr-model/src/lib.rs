@@ -16,6 +16,7 @@ pub mod calendar;
 pub mod discovery;
 pub mod download;
 pub mod embedding;
+pub mod folder;
 pub mod group_library;
 pub mod home_rail;
 pub mod household;
@@ -53,6 +54,11 @@ pub use calendar::{
 };
 pub use download::{DownloadStatus, DownloadTicket};
 pub use embedding::WorkEmbedding;
+pub use folder::{
+    folder_work_provider, FolderFileMetadata, FolderMediaEntry, FolderScanStatus,
+    ScannedFolderFile, SourceRootFolder, FOLDER_SOURCE_FILE_PREFIX, FOLDER_WORK_PROVIDER,
+    MANUAL_ROOT_PREFIX,
+};
 pub use group_library::{GroupLibrary, LeafSelector, PeerLeafAvailability};
 pub use home_rail::{HomeRail, HomeRailConfig, HomeRailKind, UserRailPref};
 pub use household::{Approval, ApprovalKind, ApprovalStatus, HouseholdControls, UnratedContent};
