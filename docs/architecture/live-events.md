@@ -95,8 +95,10 @@ source_instance_id?, created_ms)`.
   `calendar`/`imported` scoped to its source instance. Updates of an existing
   file on each poll are deliberately silent. A Sonarr series row never changes
   when an episode arrives (Sonarr gives no series availability), so the poller
-  compares `statistics.episodeFileCount` with the synced files and re-syncs the
-  series when the source holds more.
+  watches `statistics.episodeFileCount` and re-syncs the series when it rises
+  (and, on the first sighting after a restart, when it exceeds the synced
+  files; Sonarr counts episodes with a file, so a multi-episode file keeps the
+  synced rows below it for good).
 - Household, account and source-instance handlers publish their own rows;
   the arr sync poller announces `sync_started` and `sync_finished`.
 - The stream tails the table (`seq > cursor`, oldest first, 500 per read),

@@ -120,6 +120,11 @@ pub struct ReconciliationPoller {
     embedding_sync: Option<crate::EmbeddingSync>,
     /// `None` by default -- see [`Self::with_live_events`].
     live_events: Option<playarr_db::LiveEventPublisher>,
+    /// Last source file count seen per arr entity (Sonarr `episodeFileCount`).
+    /// Sonarr counts episodes with a file, not files, so a multi-episode file
+    /// keeps the synced row count permanently below it; a rise since the last
+    /// pass is the import signal, not the difference.
+    seen_file_counts: std::sync::Mutex<HashMap<i64, u32>>,
 }
 
 impl ReconciliationPoller {
@@ -148,6 +153,42 @@ impl ReconciliationPoller {
             artwork_prewarm: None,
             embedding_sync: None,
             live_events: None,
+            seen_file_counts: std::sync::Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Whether the source's file count for `arr_source_id` says files were
+    /// imported that Playarr has not synced. The first sighting in this
+    /// process compares with the synced rows (downtime imports); later passes
+    /// react to a rise only. `None` when the source gives no count.
+    async fn files_imported(
+        &self,
+        work_id: Uuid,
+        arr_source_id: i64,
+        remote_files: Option<u32>,
+    ) -> bool {
+        let Some(remote) = remote_files else {
+            return false;
+        };
+        let previous = self
+            .seen_file_counts
+            .lock()
+            .expect("file count lock")
+            .insert(arr_source_id, remote);
+        match previous {
+            Some(previous) => remote > previous,
+            None => match self.media_sync.media_file_count(work_id).await {
+                Ok(local) => local < remote as usize,
+                Err(err) => {
+                    tracing::warn!(
+                        source_instance_id = %self.source_instance_id,
+                        work_id = %work_id,
+                        error = %err,
+                        "failed to count media files; skipping new-file check for this work"
+                    );
+                    false
+                }
+            },
         }
     }
 
@@ -447,15 +488,9 @@ impl ReconciliationPoller {
             Some(existing) => {
                 let merged = merge_work(&existing, work_kind, &remote);
                 if merged == existing {
-                    let new_files = match remote.file_count {
-                        Some(remote_files) => self
-                            .media_sync
-                            .media_file_count(existing.id)
-                            .await
-                            .map(|local| local < remote_files as usize)
-                            .unwrap_or(false),
-                        None => false,
-                    };
+                    let new_files = self
+                        .files_imported(existing.id, id, remote.file_count)
+                        .await;
                     if new_files
                         || self
                             .media_sync
@@ -736,29 +771,17 @@ impl ReconciliationPoller {
     ) {
         // A source that counts its files (Sonarr) tells us an import happened
         // even though the series row itself did not change.
-        if let Some(remote) = remote_files {
-            match self.media_sync.media_file_count(work_id).await {
-                Ok(local) if local < remote as usize => {
-                    tracing::info!(
-                        source_instance_id = %self.source_instance_id,
-                        work_id = %work_id,
-                        local,
-                        remote,
-                        "source holds more files than are synced; importing the new ones"
-                    );
-                    self.sync_media_file(work_id, arr_source_id).await;
-                    return;
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    tracing::warn!(
-                        source_instance_id = %self.source_instance_id,
-                        work_id = %work_id,
-                        error = %err,
-                        "failed to count media files; skipping new-file check for this work"
-                    );
-                }
-            }
+        if self
+            .files_imported(work_id, arr_source_id, remote_files)
+            .await
+        {
+            tracing::info!(
+                source_instance_id = %self.source_instance_id,
+                work_id = %work_id,
+                "source reports new files; importing them"
+            );
+            self.sync_media_file(work_id, arr_source_id).await;
+            return;
         }
         let has_files = match self.media_sync.has_any_media_file(work_id).await {
             Ok(has_files) => has_files,
@@ -2090,6 +2113,71 @@ mod tests {
     }
 
     /// Same, for the webhook-triggered targeted refetch (Sonarr `Download`).
+    /// Sonarr's `episodeFileCount` counts episodes with a file, so a
+    /// multi-episode file leaves the synced rows permanently below it. That
+    /// must not make every pass refetch the series (it did in the first cut
+    /// of the new-episode fix: 42 series on region-a re-synced every five minutes).
+    #[tokio::test]
+    async fn a_permanent_count_gap_does_not_resync_the_series_on_every_pass() {
+        let server = MockServer::start().await;
+        let episode = |id: i64, number: i64| {
+            serde_json::json!({
+                "id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
+                "title": format!("Part {number}"), "runtime": 43, "monitored": true,
+                "episodeFileId": 1, "images": []
+            })
+        };
+        Mock::given(method("GET"))
+            .and(path("/api/v3/series"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                    "id": 1, "title": "Two Parter", "sortTitle": "two parter", "tvdbId": 222,
+                    "monitored": true, "status": "ended", "path": "/tv/Two",
+                    "statistics": { "episodeFileCount": 2 }
+                }])),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episode"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([episode(10, 1), episode(11, 2)])),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v3/episodefile"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                "id": 1, "seriesId": 1, "seasonNumber": 1, "relativePath": "S01E01-E02.mkv",
+                "path": "/tv/Two/S01E01-E02.mkv", "size": 1_000_000i64,
+                "quality": {
+                    "quality": { "id": 7, "name": "Bluray-1080p", "source": "bluray", "resolution": 1080 },
+                    "revision": { "version": 1, "real": 0, "isRepack": false }
+                },
+                "mediaInfo": { "videoCodec": "x264", "runTime": "00:42:00.500" }
+            }])))
+            .mount(&server)
+            .await;
+        let (poller, _files, _events, _) = series_import_poller(&server).await;
+
+        for _ in 0..4 {
+            poller.reconcile_all().await.unwrap();
+        }
+        let file_listings = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|r| r.url.path() == "/api/v3/episodefile")
+            .count();
+        // Insert pass, plus one first-sighting check after the insert; never again.
+        assert!(
+            file_listings <= 2,
+            "series refetched on every pass: {file_listings}"
+        );
+    }
+
     #[tokio::test]
     async fn reconcile_one_imports_a_new_episode_of_an_already_synced_series() {
         let server = MockServer::start().await;
