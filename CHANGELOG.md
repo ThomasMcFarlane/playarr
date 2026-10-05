@@ -2181,6 +2181,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.
 - Document VIDAA's invite-only partner registration and App Store release gates,
   including the production bootstrap decision required for self-hosted Playarr.
