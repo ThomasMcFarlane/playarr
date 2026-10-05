@@ -9255,7 +9255,7 @@ export interface operations {
             content: {
                 /**
                  * @example {
-                 *       "instance_name": "REGION-A Cinema"
+                 *       "instance_name": "Lounge Cinema"
                  *     }
                  */
                 "application/json": components["schemas"]["UpdateSystemSettingsRequest"];
@@ -9270,7 +9270,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "instance_name": "REGION-A Cinema"
+                     *       "instance_name": "Lounge Cinema"
                      *     }
                      */
                     "application/json": components["schemas"]["SystemSettings"];

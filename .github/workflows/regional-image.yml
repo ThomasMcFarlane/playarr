@@ -1,8 +1,10 @@
 # Builds the self-contained regional server image (server binary, Admin web
-# assets, ffmpeg/ffprobe) and publishes it to the cluster registry, tagged with
-# the first 8 characters of the commit SHA. The regional Deployments reference
-# that tag in infra/kubernetes/helm/playarr-dev/values.yaml. The registry
-# accepts pushes from inside the cluster without credentials.
+# assets, ffmpeg/ffprobe) and pushes it, tagged with the first 8 characters of
+# the commit SHA, to the registry named by the repository variable
+# REGIONAL_IMAGE_REGISTRY (host[:port], reachable from the runner without
+# credentials). Without the variable the job is skipped. Image pins are
+# deployment values: roll out by setting regionalInstances.<name>.image in the
+# deployment values repository, never in this repository.
 name: Regional image
 
 on:
@@ -24,12 +26,13 @@ permissions:
   contents: read
 
 env:
-  IMAGE: registry.example.com/playarr-regional
-  INTERNAL_REGISTRY: registry.example.com
+  IMAGE: playarr-regional
+  REGISTRY: ${{ vars.REGIONAL_IMAGE_REGISTRY }}
 
 jobs:
   image:
     name: Build and push
+    if: vars.REGIONAL_IMAGE_REGISTRY != ''
     runs-on: playarr-runners
     timeout-minutes: 90
     steps:
@@ -53,5 +56,10 @@ jobs:
 
       - name: Push
         run: |
-          docker tag "$IMAGE:$TAG" "$INTERNAL_REGISTRY/playarr-regional:$TAG"
-          docker push "$INTERNAL_REGISTRY/playarr-regional:$TAG"
+          docker tag "$IMAGE:$TAG" "$REGISTRY/$IMAGE:$TAG"
+          docker push "$REGISTRY/$IMAGE:$TAG"
+          {
+            echo "Pushed \`playarr-regional:$TAG\` (from \`$GITHUB_SHA\`)."
+            echo
+            echo "Roll out by setting \`regionalInstances.<instance>.image\` to this tag in the deployment values repository (one instance at a time; never to an older image)."
+          } >> "$GITHUB_STEP_SUMMARY"

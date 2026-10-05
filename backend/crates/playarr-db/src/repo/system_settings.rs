@@ -86,7 +86,7 @@ mod tests {
     async fn upsert_replaces_the_singleton() {
         let repo = SqlxSystemSettingsRepo::new(test_sqlite_pool().await);
         let settings = SystemSettings {
-            instance_name: "REGION-A".to_string(),
+            instance_name: "Lounge".to_string(),
         };
         repo.upsert(&settings).await.unwrap();
         assert_eq!(repo.get().await.unwrap(), settings);

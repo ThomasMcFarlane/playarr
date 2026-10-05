@@ -42,8 +42,9 @@ To run it in a local Kubernetes cluster, apply the manifests in `k8s/`:
 kubectl apply -f k8s/
 ```
 
-That serves the site at `playarr-marketing.localhost`,
-`playarr-marketing.dev.home.arpa` and `playarr-marketing.example.com`. The
+That serves the site at `playarr-marketing.localhost` and
+`playarr-marketing.dev.home.arpa`; add further dev-server hostnames (such as
+your deployment's public alias) with `SITE_ALLOWED_HOSTS` (comma-separated). The
 production hostname is not settled yet; set `SITE_URL` at build time to control
 canonical URLs, Open Graph tags and the sitemap.
 

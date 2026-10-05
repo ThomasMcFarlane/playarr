@@ -543,7 +543,7 @@ mod tests {
     fn internal_routes_preserve_tls_hostname_and_replace_public_targets_without_fallback() {
         let peer_id = Uuid::new_v4();
         let parsed = parse_internal_peer_routes(&format!(
-            "{peer_id}=playarr-b.example.com@playarr-region-b.playarr.svc.cluster.local:443"
+            "{peer_id}=playarr-b.example.com@playarr-b.playarr.svc.cluster.local:443"
         ))
         .unwrap();
         let routes = PeerTransportRoutes {

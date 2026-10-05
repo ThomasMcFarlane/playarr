@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// **Stage palette** mirrors the live deployed SPA dark theme
 /// (`clients/tv-web/web/src/styles/global.css` `:root[data-theme="dark"]`),
-/// which is the visual reference at `https://playarr.example.com`.
+/// which is the visual reference at `https://playarr.app`.
 ///
 /// **Arr palette** (`Hex.arr*`) mirrors `@playarr-tv/design-tokens` for
 /// ui-tv / *arr-family accents (brand primary blue, focus ring).

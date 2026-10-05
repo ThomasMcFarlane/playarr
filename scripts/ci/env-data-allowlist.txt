@@ -1,0 +1,87 @@
+# Allow-list for scripts/ci/check-env-data.sh.
+#
+# ip: <literal>   an IPv4 literal that may appear in tracked files. Only generic
+#                 examples belong here: RFC 1918 / RFC 6598 sample addresses used
+#                 by tests and docs, range boundaries, well-known public
+#                 resolvers and Cloudflare's published ranges. Never add a
+#                 real host, node, LAN or tailnet address.
+# path: <spec>    a git pathspec excluded from every check.
+#
+# Always allowed without a line here: 0.0.0.0, 127.0.0.0/8, 255.255.255.255,
+# 169.254.0.0/16, multicast and reserved (224.0.0.0/3) and the RFC 5737
+# documentation ranges 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24.
+
+# Board and changelog history still name the old environment. They are
+# conflict hotspots edited only by the merge train, and are scrubbed by the
+# planned history rewrite (git filter-repo --replace-text). Remove these two
+# lines once that rewrite has landed.
+path: TASKS.md
+path: CHANGELOG.md
+
+# Lockfiles carry integrity hashes that can look like anything.
+path: *lock*
+
+# Private-range examples (tests, docs, form placeholders).
+ip: 10.0.0.0
+ip: 10.0.0.1
+ip: 10.0.0.4
+ip: 10.0.0.5
+ip: 10.0.2.2
+ip: 10.1.2.3
+ip: 172.15.0.1
+ip: 172.16.0.0
+ip: 172.16.0.1
+ip: 172.16.0.5
+ip: 172.31.255.255
+ip: 172.32.0.1
+ip: 192.168.0.0
+ip: 192.168.0.4
+ip: 192.168.1.1
+ip: 192.168.1.5
+ip: 192.168.1.10
+ip: 192.168.1.20
+ip: 192.168.1.42
+ip: 192.168.1.50
+ip: 100.63.255.255
+ip: 100.64.0.0
+ip: 100.64.0.1
+ip: 100.127.255.255
+ip: 100.128.0.1
+
+# Well-known public resolvers and placeholder addresses.
+ip: 1.1.1.1
+ip: 1.2.3.4
+ip: 8.8.8.8
+ip: 9.9.9.9
+ip: 11.22.33.44
+ip: 149.112.112.112
+
+# Cloudflare published ranges and IANA special-purpose blocks (relay validation).
+ip: 1.0.0.0
+ip: 3.0.0.0
+ip: 4.0.0.0
+ip: 5.0.0.0
+ip: 0.1.0.0
+ip: 103.21.244.0
+ip: 103.22.200.0
+ip: 103.31.4.0
+ip: 104.16.0.0
+ip: 104.16.0.1
+ip: 104.24.0.0
+ip: 108.162.192.0
+ip: 120.0.0.0
+ip: 131.0.72.0
+ip: 141.101.64.0
+ip: 162.158.0.0
+ip: 172.64.0.0
+ip: 172.67.1.1
+ip: 173.245.48.0
+ip: 173.245.48.1
+ip: 188.114.96.0
+ip: 190.93.240.0
+ip: 192.0.0.0
+ip: 192.88.99.0
+ip: 197.234.240.0
+ip: 198.18.0.0
+ip: 198.18.0.1
+ip: 198.41.128.0

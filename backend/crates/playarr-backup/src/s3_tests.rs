@@ -259,7 +259,7 @@ fn config(endpoint: &str) -> S3Config {
         endpoint: endpoint.to_string(),
         bucket: "bk".to_string(),
         region: "auto".to_string(),
-        prefix: "region-a/".to_string(),
+        prefix: "site-a/".to_string(),
         access_key_id: "AK".to_string(),
         secret_access_key: "SK".to_string(),
         path_style: true,
@@ -346,7 +346,7 @@ async fn replicates_with_multipart_verifies_and_prunes_remotely() {
     // Several parts were used and the bytes match the local archive.
     assert!(fake.completed_parts.lock().unwrap().iter().all(|n| *n > 1));
     let newest = sidecars.last().unwrap();
-    let key = format!("region-a/{}", newest.archive_name);
+    let key = format!("site-a/{}", newest.archive_name);
     let (sha, size) = store.download_sha256(&key).await.unwrap();
     assert_eq!(sha, newest.archive_sha256);
     assert_eq!(size, newest.archive_size);
@@ -427,12 +427,15 @@ async fn remote_retention_clears_orphans_but_keeps_the_last_good_backup() {
     };
     // One old complete backup, one old archive with no sidecar, one sidecar
     // with no archive, and a recent archive that may be an upload in flight.
-    put("region-a/playarr-backup-20200101T000000Z-old.parbak", 5);
-    put("region-a/playarr-backup-20200101T000000Z-old.parbak.json", 2);
-    put("region-a/playarr-backup-20200102T000000Z-orphan.parbak", 5);
-    put("region-a/playarr-backup-20200103T000000Z-nosize.parbak.json", 2);
+    put("site-a/playarr-backup-20200101T000000Z-old.parbak", 5);
+    put("site-a/playarr-backup-20200101T000000Z-old.parbak.json", 2);
+    put("site-a/playarr-backup-20200102T000000Z-orphan.parbak", 5);
+    put(
+        "site-a/playarr-backup-20200103T000000Z-nosize.parbak.json",
+        2,
+    );
     let recent = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
-    put(&format!("region-a/playarr-backup-{recent}-live.parbak"), 5);
+    put(&format!("site-a/playarr-backup-{recent}-live.parbak"), 5);
     put("other/unrelated.txt", 1);
 
     let removed = store
@@ -441,8 +444,8 @@ async fn remote_retention_clears_orphans_but_keeps_the_last_good_backup() {
         .unwrap();
     assert_eq!(removed.len(), 2, "{removed:?}");
     let keys: Vec<String> = fake.objects.lock().unwrap().keys().cloned().collect();
-    assert!(keys.contains(&"region-a/playarr-backup-20200101T000000Z-old.parbak.json".to_string()));
-    assert!(keys.contains(&format!("region-a/playarr-backup-{recent}-live.parbak")));
+    assert!(keys.contains(&"site-a/playarr-backup-20200101T000000Z-old.parbak.json".to_string()));
+    assert!(keys.contains(&format!("site-a/playarr-backup-{recent}-live.parbak")));
     assert!(keys.contains(&"other/unrelated.txt".to_string()));
     assert_eq!(keys.len(), 4);
 }

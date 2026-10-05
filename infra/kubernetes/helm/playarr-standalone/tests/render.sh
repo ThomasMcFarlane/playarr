@@ -15,8 +15,8 @@ helm template playarr "$chart_dir" \
   --set persistence.enabled=true \
   --set persistence.local.create=true \
   --set persistence.local.path=/var/lib/streamarr \
-  --set persistence.local.nodeHostname=region-b \
-  --set nodeSelector.kubernetes\.io/hostname=region-b >"$rendered"
+  --set persistence.local.nodeHostname=node-b \
+  --set nodeSelector.kubernetes\.io/hostname=node-b >"$rendered"
 
 grep -q 'persistentVolumeReclaimPolicy: Retain' "$rendered"
 grep -q 'type: Recreate' "$rendered"

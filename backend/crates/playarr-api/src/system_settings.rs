@@ -44,11 +44,11 @@ pub async fn get_system_settings_handler(
     path = "/api/v1/admin/system-settings",
     tag = "admin",
     request_body(content = UpdateSystemSettingsRequest, example = json!({
-        "instance_name": "REGION-A Cinema"
+        "instance_name": "Lounge Cinema"
     })),
     responses(
         (status = 200, description = "Updated instance-wide settings", body = SystemSettings, example = json!({
-            "instance_name": "REGION-A Cinema"
+            "instance_name": "Lounge Cinema"
         })),
         (status = 400, description = "Instance name is empty or longer than 100 characters"),
         (status = 401, description = "Missing or invalid access token"),
@@ -120,7 +120,7 @@ mod tests {
                     .uri("/api/v1/admin/system-settings")
                     .header("authorization", bearer_header(&token))
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"instance_name":"  REGION-A Cinema  "}"#))
+                    .body(Body::from(r#"{"instance_name":"  Lounge Cinema  "}"#))
                     .unwrap(),
             )
             .await
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let settings: SystemSettings = serde_json::from_slice(&body).unwrap();
-        assert_eq!(settings.instance_name, "REGION-A Cinema");
+        assert_eq!(settings.instance_name, "Lounge Cinema");
 
         let response = router
             .oneshot(
@@ -141,7 +141,7 @@ mod tests {
             .unwrap();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let envelope: playarr_model::VersionEnvelope = serde_json::from_slice(&body).unwrap();
-        assert_eq!(envelope.instance_name, "REGION-A Cinema");
+        assert_eq!(envelope.instance_name, "Lounge Cinema");
     }
 
     #[tokio::test]

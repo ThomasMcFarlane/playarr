@@ -1,7 +1,7 @@
 # Android TV vs Playarr Web: parity matrix
 
 Audit date: 2026-10-03. Reference: Playarr Web (`clients/tv-web/web`, live at
-`https://playarr.app`, signed in to `https://playarr.example.com` at
+`https://playarr.app`, signed in to a Playarr server at
 1920 x 1080) against the native Compose app (`io.playarr.mobile` sideload
 build) on the Android TV emulator, driven by D-pad. Test account:
 `test-user-a`. Both clients are native-vs-web comparisons; no WebView is

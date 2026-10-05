@@ -18,8 +18,8 @@
 #   ./scripts/mac-build.sh ios test "platform=iOS Simulator,name=iPhone 16"
 set -euo pipefail
 
-MAC_HOST="${MAC_HOST:-192.0.2.21}"
-MAC_USER="${MAC_USER:-thomas}"
+MAC_HOST="${MAC_HOST:?set MAC_HOST to the macOS build host (address or SSH alias)}"
+MAC_USER="${MAC_USER:-$USER}"
 MAC_KEY="${MAC_KEY:-$HOME/.ssh/id_mac_builder}"
 REMOTE_DIR="${REMOTE_DIR:-~/streamarr-mac-build}"
 

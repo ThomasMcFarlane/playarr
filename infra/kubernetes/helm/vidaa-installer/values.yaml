@@ -9,6 +9,9 @@ dns:
   # -- Interception policy: disabled, allowlist, or all. Keep disabled except
   # during an installation.
   mode: disabled
+  # -- Label (set to "true") by which the cluster LAN resolver discovers
+  # ConfigMaps carrying CoreDNS server blocks. Match your resolver's setting.
+  resolverLabel: lan-dns.example.com/enabled
   # -- TTL, in seconds, for the intercepted vidaahub.com A response.
   ttl: 30
   # -- Source IPv4 CIDRs allowed to receive the intercepted response in

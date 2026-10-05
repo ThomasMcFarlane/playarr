@@ -17,7 +17,7 @@ import {
 
 const NOW = 1_800_000_000;
 const SECRET = "test-hmac-secret";
-const IP = "203.0.113.10";
+const IP = "9.9.9.9";
 const ENV = { RELAY_HMAC_SECRET: SECRET, RELAY_CF_API_TOKEN: "cf-token", RELAY_ZONE_ID: "zone123" };
 const encoder = new TextEncoder();
 
@@ -169,7 +169,7 @@ describe("IPv4 validation", () => {
     expect(isPublicUnicastIpv4(address)).toBe(false);
   });
 
-  it.each(["203.0.113.10", "8.8.8.8", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "203.0.113.20"])(
+  it.each(["9.9.9.9", "8.8.8.8", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "149.112.112.112"])(
     "accepts %s",
     (address) => {
       expect(isPublicUnicastIpv4(address)).toBe(true);
@@ -177,8 +177,8 @@ describe("IPv4 validation", () => {
   );
 
   it("derives the deterministic hostnames", () => {
-    expect(relayHostname(IP)).toBe("v4-203-0-113-10.relay.playarr.app");
-    expect(acmeChallengeName(IP)).toBe("_acme-challenge.v4-203-0-113-10.relay.playarr.app");
+    expect(relayHostname(IP)).toBe("v4-9-9-9-9.relay.playarr.app");
+    expect(acmeChallengeName(IP)).toBe("_acme-challenge.v4-9-9-9-9.relay.playarr.app");
   });
 });
 
@@ -257,7 +257,7 @@ describe("POST /api/relay/register", () => {
     );
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body).toMatchObject({ ip: IP, hostname: "v4-203-0-113-10.relay.playarr.app", server_id: identity.serverId });
+    expect(body).toMatchObject({ ip: IP, hostname: "v4-9-9-9-9.relay.playarr.app", server_id: identity.serverId });
     expect(body.expires_at).toBe(NOW + 120);
     expect(await verifyChallenge(SECRET, body.challenge, NOW)).toEqual({
       ip: IP,
@@ -290,7 +290,7 @@ describe("POST /api/relay/register", () => {
     expect(cloudflare.records).toHaveLength(1);
     expect(cloudflare.records[0]).toMatchObject({
       type: "A",
-      name: "v4-203-0-113-10.relay.playarr.app",
+      name: "v4-9-9-9-9.relay.playarr.app",
       content: IP,
       ttl: 300,
       proxied: false,

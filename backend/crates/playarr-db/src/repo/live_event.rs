@@ -11,7 +11,7 @@
 //! table. That makes the same code correct for a single process, for the
 //! API and worker roles running as separate processes, and for several replicas
 //! sharing one Postgres. A wake only cuts latency; streams also poll on a timer.
-//! Separate servers with separate databases (region-a and region-b) never share events.
+//! Separate servers with separate databases (for example two regional servers) never share events.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};

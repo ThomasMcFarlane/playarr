@@ -315,7 +315,7 @@ spec:
             - name: state
               mountPath: /data
             - name: media
-              mountPath: /srv/media
+              mountPath: {{ $instance.mediaMountPath | default $instance.mediaPath }}
               readOnly: true
             {{- if $tlsOn }}
             - name: tls

@@ -1,86 +1,124 @@
-# Playarr development Helm chart
+# Playarr Helm chart (`playarr-dev`)
 
-This chart captures the six development web surfaces previously maintained as
-ad-hoc resources in the `dev` namespace and the standalone servers previously
-split between `playarr-region-a` and `playarr-region-b`. It creates eight Deployments, eight
-ClusterIP Services, sixteen Emissary `Mapping` resources, two ServiceAccounts
-and two pre-bound PVCs in the Helm release namespace.
+A generic chart for two kinds of Playarr workloads in one release namespace:
+
+- **Regional instances** (`regionalInstances`): self-contained Playarr servers,
+  each pinned to one node with its own retained local state volume, runtime
+  Secret, optional public host port, cert-manager certificate, public relay
+  certificate, encrypted backups and an Emissary route.
+- **Development workloads** (`workloads`): web surfaces (Vite dev servers,
+  Admin and marketing previews) with a Service and Emissary Mappings.
+
+The chart is a template only. Its defaults are empty and render nothing; every
+deployment-specific value (instance names, hostnames, public addresses, node
+names, hostPaths, Secret names, image references and pins) comes from the
+operator's values, normally kept in a private GitOps repository and applied by
+an Argo CD multi-source Application:
+
+```yaml
+sources:
+  - repoURL: https://github.com/ThomasMcFarlane/playarr.git
+    targetRevision: <full main commit SHA>
+    path: infra/kubernetes/helm/playarr-dev
+    helm:
+      releaseName: playarr
+      valueFiles:
+        - $values/<path to your values file>
+  - repoURL: <your GitOps repository>
+    targetRevision: main
+    ref: values
+```
+
+[`tests/example-values.yaml`](tests/example-values.yaml) is a complete worked
+example with placeholder data (example.com names, RFC 5737 addresses, `/srv`
+paths); `tests/render.sh` and `tests/backup.sh` render against it.
 
 ```sh
-helm upgrade --install playarr-dev ./infra/kubernetes/helm/playarr-dev \
-  --namespace playarr --create-namespace
+helm template playarr ./infra/kubernetes/helm/playarr-dev \
+  --namespace playarr -f my-values.yaml
 ```
 
 The chart contains no Secrets. Public and LAN DNS are external prerequisites;
 this chart manages only the matching Emissary routes.
 
-The six dev-host development workloads are pinned to `dev-node`. Their
-`localhost:5000` images and local hostPaths are not portable to region-a or region-b.
-Each serves its readiness, liveness and startup checks from its HTTP root;
-the marketing Astro probe sends the hostname required by its explicit Vite
-host allowlist.
+## Values reference
 
-Before enabling either regional Deployment, create its external runtime Secret
-in the release namespace:
+### Top level
 
-| Secret | Required keys copied from the source namespace |
-| --- | --- |
-| `playarr-region-a-runtime` | `DATABASE_URL`, `PLAYARR_JWT_SECRET`, `PLAYARR_WEB_ASSETS_DIR`, `STREAMARR_WEB_ASSETS_DIR` |
-| `playarr-region-b-runtime` | `DATABASE_URL`, `PLAYARR_AUTH_MODE`, `PLAYARR_JWT_SECRET`, `PLAYARR_WEB_ASSETS_DIR`, `STREAMARR_AUTH_MODE`, `STREAMARR_JWT_SECRET`, `STREAMARR_WEB_ASSETS_DIR` |
-
-Do not put their values in Git or Helm values.
-
-The source Secrets are not interchangeable. Their common `DATABASE_URL` and
-web-assets values currently match, but their `PLAYARR_JWT_SECRET` values are
-different and region-b has additional auth and legacy JWT keys. Keep the two target
-Secret names distinct.
-
-Two defaults deliberately preserve the current dev-host development behaviour:
-
-- `playarr` requires the canonical
-  `/path/to/playarr`
-  checkout to exist on the scheduled node.
-- `playarr-marketing` requires that checkout's `site/src` and `site/public`
-  directories.
-
-If those paths do not exist, Kubernetes leaves the Pods in
-`ContainerCreating` with `FailedMount`, as it does in the source deployment.
-Changing them is a separate operational decision. None of the six dev-host Pods requests
-`hostNetwork` or `hostPort`; port 8080 is a pod-local container port.
-
-## Direct host exposure (regional instances)
-
-Each entry in `regionalInstances` may set an optional
-`hostExposure: {hostIP, hostPort}`. When present, the `http` container port
-(8484) also gets that `hostIP`/`hostPort`, which k3s publishes through the CNI
-portmap plugin on that address. Omit the key to keep the instance cluster-only.
-
-| Instance | Node | Address |
+| Key | Default | Meaning |
 | --- | --- | --- |
-| `playarr-region-a` | region-a | `https://playarr-a.example.com:8484` (`203.0.113.10`) |
-| `playarr-region-b` | region-b | `https://playarr-b.example.com:8484` (`203.0.113.20`) |
+| `workloadNodeSelector` | `{}` | Node selector for every development workload. |
+| `workloads` | `{}` | Development workloads, keyed by name. |
+| `regionalInstances` | `{}` | Regional servers, keyed by instance name (also the Deployment, Service and Mapping name). |
+
+### Regional instance (`regionalInstances.<name>`)
+
+Required:
+
+| Key | Meaning |
+| --- | --- |
+| `image` | Full image reference, for example `<registry>/playarr-regional:<sha8>`. |
+| `imagePullPolicy` | `IfNotPresent` for immutable SHA tags. |
+| `replicas` | `1` (each instance owns a SQLite database on a local volume). |
+| `nodeName` | Node the instance and its local PV are pinned to. |
+| `secretName` | Pre-created runtime Secret (see below). |
+| `podSecurityContext` | Pod security context (UID/GID matching the state and media ownership). |
+| `thumbnailConcurrency`, `transcodeMaxConcurrentJobs`, `ffmpegThreads` | Resource guards for ffmpeg work. |
+| `resources` | Container requests and limits. |
+| `persistence` | `{create, claimName, volumeName, storageClassName, size}`; the PV is a static local volume with `Retain`. |
+| `mediaPath` | Host directory holding the media libraries (mounted read-only). |
+| `routeHost` | Hostname of the Emissary Mapping. |
+
+Optional: `mediaMountPath` (container path for the media mount; defaults to
+`mediaPath` so the paths reported by the media managers resolve unchanged),
+`peerInternalRoutes`, `sourceInstanceUrls`, `dubarrApiKeySecret`,
+`requestIntegrations`, `ombiApiKeySecret`, `seerrApiKeySecret`, `backup`,
+`hostExposure`, `tls` and `acme`, each described below. `values.schema.json`
+is the authoritative contract.
+
+### Development workload (`workloads.<name>`)
+
+Required: `image`, `imagePullPolicy`, `replicas`, `containerPort`, `routes`
+(a list of `{name, host, hostRewrite?}` Mappings, may be empty). Optional:
+`command`, `env`, `workingDir`, `podSecurityContext`, `hostPathVolumes`
+(`{name, path, type, mounts: [{mountPath, readOnly?}]}`) and `probeHost` (Host
+header for the HTTP probes when the server enforces a host allowlist). Each
+serves its readiness, liveness and startup checks from its HTTP root.
+
+### Runtime Secret
+
+Create each instance's runtime Secret (`secretName`) in the release namespace
+before enabling it, with at least `DATABASE_URL` and `PLAYARR_JWT_SECRET`
+(plus `PLAYARR_AUTH_MODE` if not the default). Never put their values in Git or
+Helm values, and never share one Secret between instances.
+
+## Direct host exposure (`hostExposure`)
+
+Each regional instance may set `hostExposure: {hostIP, hostPort}`. When
+present, the `http` container port (8484) also gets that `hostIP`/`hostPort`,
+which k3s publishes through the CNI portmap plugin on that address. Omit the
+key to keep the instance cluster-only.
 
 Only the `http` container port is published; metrics (9090) stays pod-local.
 Deployments use the `Recreate` strategy, so the old Pod releases the host port
-before the new one starts. The node firewall must allow TCP 8484.
+before the new one starts. The node firewall must allow the port.
 
-### HTTPS (`tls`)
+## HTTPS (`tls`)
 
-The owner requires HTTPS on both public addresses, and performance testing must
-use it. Each instance sets `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
+Each instance can set `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
 
 - The chart renders a cert-manager `Certificate` (`<instance>-tls`, ECDSA P-256,
   PKCS#8) in the release namespace. The `letsencrypt-prod` ClusterIssuer solves
-  DNS-01 through Cloudflare for any name, so `*.example.com` names work.
+  DNS-01 through Cloudflare for any name, so any name in a zone the issuer can answer for works.
 - The Secret is mounted read-only at `/tls` and the Pod gets
   `PLAYARR_TLS_CERT_PATH=/tls/tls.crt` and `PLAYARR_TLS_KEY_PATH=/tls/tls.key`.
   The server then serves HTTPS on `PLAYARR_HTTP_BIND_ADDR` (the relay ACME
   certificate described under "Public relay" can be added alongside it). Probes use `scheme: HTTPS`; the Service exposes 443 and the
-  Emissary Mapping uses `https://<instance>.<namespace>:443`, so the existing
-  `playarr-a.example.com` and `playarr.example.com` routes keep working. Emissary
+  Emissary Mapping uses `https://<instance>.<namespace>:443`, so the `routeHost`
+  route keeps working. Emissary
   does not verify the upstream certificate, so `routeHost` needs no SAN.
-- Only the node-facing name is a SAN. `playarr.example.com` resolves to the
-  cluster ingress, not the region-b address, so nobody reaches region-b:8484 by that name.
+- Only the node-facing names in `tls.hostnames` are SANs; a `routeHost` that
+  resolves to the cluster ingress does not need to be one.
 - Renewal: cert-manager renews about 30 days before expiry and updates the Secret
   in place. The server checks the two files every 60 seconds and hot-reloads a
   changed, valid pair (an invalid or half-written pair keeps the old certificate).
@@ -97,19 +135,19 @@ use it. Each instance sets `tls: {hostnames: [...], issuer: letsencrypt-prod}`:
 Verify after rollout:
 
 ```sh
-kubectl get certificate -n playarr          # READY=True for playarr-region-a-tls, playarr-region-b-tls
-curl -sv https://playarr-b.example.com:8484/healthz
-echo | openssl s_client -connect playarr-b.example.com:8484 \
-  -servername playarr-b.example.com 2>/dev/null | openssl x509 -noout -issuer -dates -subject
+kubectl get certificate -n <namespace>      # READY=True for <instance>-tls
+curl -sv https://<tls-hostname>:8484/healthz
+echo | openssl s_client -connect <tls-hostname>:8484 \
+  -servername <tls-hostname> 2>/dev/null | openssl x509 -noout -issuer -dates -subject
 ```
 
-Repeat for `playarr-region-a`. Rollback: unset `tls` for the instance (plain HTTP
+Repeat for each instance. Rollback: unset `tls` for the instance (plain HTTP
 wiring returns) and sync.
 
-## Regional server image (registry, GitOps)
+## Regional server image
 
 The regional servers run a self-contained image,
-`registry.example.com/playarr-regional:<main-sha>`, built from
+`<registry>/playarr-regional:<main-sha>`, built from
 [`infra/docker/backend.Dockerfile`](../../../docker/backend.Dockerfile): the
 `playarr-server` binary, the Admin web assets (`/app/web`) and `ffmpeg` /
 `ffprobe` (the server shells out to both for transcoding, HLS, thumbnails,
@@ -118,10 +156,9 @@ earlier `streamarr-runtime` image with a `runtimePath` hostPath and a manual
 `ctr images import` is gone. What stays on the node is the state PVC, the media
 hostPath (`mediaPath`, read-only) and the TLS Secret.
 
-`registry.example.com` is the cluster registry's public name (the
-`registry-public` certificate in namespace `example`), so the nodes pull from it
-over HTTPS with no registry configuration and no credentials. `imagePullPolicy`
-is `IfNotPresent` because tags are immutable commit SHAs.
+The registry is the operator's choice; the image reference (including the tag)
+is a deployment value. `imagePullPolicy: IfNotPresent` suits immutable
+commit-SHA tags.
 
 The chart sets `PLAYARR_WEB_ASSETS_DIR=/app/web`, overriding the legacy
 `/opt/streamarr/web` value the runtime Secrets still carry.
@@ -131,30 +168,34 @@ The chart sets `PLAYARR_WEB_ASSETS_DIR=/app/web`, overriding the legacy
 The workflow `.github/workflows/regional-image.yml` builds and pushes
 `playarr-regional:<first 8 characters of the commit SHA>` on every push to
 `main` that touches the backend, the Admin UI or the Dockerfile, and fails if
-`ffprobe` or `playarr-server --version` does not run inside the image. To build
+`ffprobe` or `playarr-server --version` does not run inside the image. It
+pushes to the registry named by the repository variable `REGIONAL_IMAGE_REGISTRY`
+(the job is skipped when it is unset). To build
 by hand from a checkout of the commit:
 
 ```sh
 SHA=$(git rev-parse --short=8 HEAD)
 docker build -f infra/docker/backend.Dockerfile \
-  -t registry.example.com/playarr-regional:$SHA .
-docker run --rm --entrypoint ffprobe registry.example.com/playarr-regional:$SHA -version | head -n 1
-docker push registry.example.com/playarr-regional:$SHA
+  -t $REGISTRY/playarr-regional:$SHA .
+docker run --rm --entrypoint ffprobe $REGISTRY/playarr-regional:$SHA -version | head -n 1
+docker push $REGISTRY/playarr-regional:$SHA
 ```
 
 ### Rollout
 
-1. Wait for the image of the commit you want (or push it by hand as above).
-2. Set `regionalInstances.<name>.image` to that tag in `values.yaml` and merge.
-   Do region-a first, then region-b, which serves the public hostname.
-3. Bump the `playarr` `targetRevision` in the deployment repository repository to the
-   merge commit; Argo syncs and the `Recreate` strategy replaces each Pod (a
-   short outage per server).
-4. Verify per server:
+Image pins are deployment values, so a rollout is a change in the GitOps
+repository, never in this chart:
+
+1. Wait for the `regional-image` workflow to publish the image of the `main`
+   commit you want (or build and push it by hand as above).
+2. Set `regionalInstances.<name>.image` to that tag in the deployment values
+   and merge; roll one instance at a time. Never move a pin to an older image.
+3. Bump the chart `targetRevision` only when the chart itself changed.
+4. Verify per instance:
 
    ```sh
-   kubectl -n playarr rollout status deploy/playarr-region-a
-   kubectl -n playarr exec deploy/playarr-region-a -c playarr -- ffprobe -version | head -n 1
+   kubectl -n <namespace> rollout status deploy/<instance>
+   kubectl -n <namespace> exec deploy/<instance> -c playarr -- ffprobe -version | head -n 1
    ```
 
    Then open Admin, System, Server capabilities and confirm no required item is
@@ -162,16 +203,12 @@ docker push registry.example.com/playarr-regional:$SHA
 
 ### Rollback
 
-Revert the deployment repository pin (or the `values.yaml` image bump) and let Argo sync.
-The state PVC is untouched by either image. If Argo is unavailable,
-`kubectl -n playarr rollout undo deploy/playarr-region-a` returns to the previous
-ReplicaSet, but Argo will show drift until the pin is reverted.
+Revert the image pin in the deployment values and let Argo sync. The state PVC
+is untouched by either image.
 
 ## Public relay (HTTPS on 8484, DNS-01 through the Worker)
 
-When region-a and region-b moved from systemd to k3s pods they lost their public
-exposure and ACME settings, so the public relay stopped working. The relay
-now needs only one public port per server: 8484.
+The relay needs only one public port per server: 8484.
 
 Cloudflare only holds DNS. There is no DNS server in the cluster and no port
 80. Each server tells the `playarr.app` Worker its public IPv4 address; the
@@ -185,17 +222,14 @@ API requests never pass through Cloudflare. See the repository's
 The public port is the existing `hostExposure` (see "Direct host exposure"
 above): `hostIP` and `hostPort` 8484 publish the container's 8484 through the
 CNI `portmap` plugin on the node's public address only. Static TLS (`tls`, see
-"HTTPS" above) stays the active transport for the `example.com` names. The
+"HTTPS" above) stays the active transport for the `tls.hostnames` names. The
 optional per-instance `acme` block adds the relay certificate on the same port:
 the server holds both certificates and presents the one matching the TLS SNI
 name (`v4-*.relay.playarr.app` gets the relay certificate, everything else the
 static one). `acme.enabled` requires `hostExposure`; the chart fails to render
-otherwise. It is `true` for region-a and region-b since the 2026-10-03 relay cut-over.
-
-| Setting | region-a | region-b |
-| --- | --- | --- |
-| `hostExposure` | 203.0.113.10:8484 | 203.0.113.20:8484 |
-| `acme.domain` | `v4-203-0-113-10.relay.playarr.app` | `v4-203-0-113-20.relay.playarr.app` |
+otherwise. `acme.domain` is `v4-A-B-C-D.relay.playarr.app` for
+`hostExposure.hostIP` A.B.C.D (for example `203.0.113.10` gives
+`v4-203-0-113-10.relay.playarr.app`).
 
 The pods stay non-root with every capability dropped and bind no low port at
 all. With ACME enabled the chart additionally sets `PLAYARR_ACME_DOMAIN`,
@@ -220,9 +254,9 @@ support, and the Worker side must be live first: do not enable `acme` before the
 relay cut-over steps in `docs/deployment/playarr-relay.md` have been approved and
 carried out.
 
-### Relay rollout (needs owner approval; changes the cluster)
+### Relay rollout
 
-These steps must not be run until the owner approves them. Merge only after the
+Enable the relay only after the server image supports it. Merge only after the
 runtime image work this chart revision builds on is merged.
 
 1. Preflight on each node (read-only): TCP 8484 must be free on the public
@@ -232,18 +266,18 @@ runtime image work this chart revision builds on is merged.
 
    ```sh
    sudo ss -lntp | grep -E ':8484\b'
-   systemctl is-active playarr-region-a playarr-region-b
+   systemctl is-active playarr   # any previous host service must be stopped
    ```
 
 2. Complete the Worker cut-over (secrets, cron, removal of the `relay`
    delegation) as written in `docs/deployment/playarr-relay.md`.
 
-3. Merge, then bump the chart `targetRevision` in the GitOps repository and let
-   Argo sync the `playarr` application. Roll one instance at a time:
+3. Set `acme.enabled: true` in the deployment values (GitOps repository) and
+   let Argo sync. Roll one instance at a time:
 
    ```sh
-   kubectl -n playarr rollout status deploy/playarr-region-a
-   kubectl -n playarr logs deploy/playarr-region-a | grep -i -E 'acme|relay|certificate'
+   kubectl -n <namespace> rollout status deploy/<instance>
+   kubectl -n <namespace> logs deploy/<instance> | grep -i -E 'acme|relay|certificate'
    ```
 
    Expect "registered relay hostname" and then "automatic HTTPS enabled with
@@ -253,18 +287,17 @@ runtime image work this chart revision builds on is merged.
 
    ```sh
    # The Worker published the DNS-only record.
-   dig +short A v4-203-0-113-20.relay.playarr.app
    dig +short A v4-203-0-113-10.relay.playarr.app
 
    # Public HTTPS with a browser-trusted Let's Encrypt certificate.
-   curl -sv https://v4-203-0-113-20.relay.playarr.app:8484/healthz
-   openssl s_client -connect 203.0.113.20:8484 \
-     -servername v4-203-0-113-20.relay.playarr.app </dev/null 2>/dev/null \
+   curl -sv https://v4-203-0-113-10.relay.playarr.app:8484/healthz
+   openssl s_client -connect 203.0.113.10:8484 \
+     -servername v4-203-0-113-10.relay.playarr.app </dev/null 2>/dev/null \
      | openssl x509 -noout -issuer -subject -dates
 
    # Pods and routes.
-   kubectl -n playarr get pods -l app.kubernetes.io/name=playarr-standalone
-   kubectl -n playarr get mapping playarr-region-a playarr-region-b
+   kubectl -n <namespace> get pods -l app.kubernetes.io/name=playarr-standalone
+   kubectl -n <namespace> get mapping <instance>
    ```
 
    Then request each regional route host through the normal public edge and
@@ -273,7 +306,7 @@ runtime image work this chart revision builds on is merged.
 
 ### Relay rollback
 
-Set `acme.enabled: false` for both instances and sync. The Deployment is
+Set `acme.enabled: false` for the instances and sync. The Deployment is
 recreated without the relay variables and keeps serving HTTPS with the static
 certificate on the `hostExposure` port, so the route hosts are unaffected. The
 ACME account and certificate on the state volume are kept and reused on the
@@ -299,7 +332,7 @@ old and new Deployments writing the same volume concurrently.
 
 Each regional instance can register Dubarr declaratively. `sourceInstanceUrls.dubarr`
 is the in-cluster URL (`http://dubarr.dubarr.svc.cluster.local:8686`) and
-`dubarrApiKeySecret` names a Secret in the `playarr` namespace whose key holds the
+`dubarrApiKeySecret` names a Secret in the release namespace whose key holds the
 Dubarr API key. At boot the server ensures a `Dubarr` source instance exists with
 that URL and key (a rotated key is applied on the next restart; the Secret is
 `optional`, so the pod starts without it and Dubarr is simply not registered).
@@ -308,9 +341,9 @@ echoing it:
 
 ```sh
 kubectl -n dubarr get secret dubarr-secrets -o jsonpath='{.data.DUBARR_API_KEY}' | base64 -d |
-  kubectl -n playarr create secret generic playarr-dubarr --from-file=DUBARR_API_KEY=/dev/stdin \
+  kubectl -n <namespace> create secret generic playarr-dubarr --from-file=DUBARR_API_KEY=/dev/stdin \
     --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n playarr rollout restart deploy/playarr-region-a deploy/playarr-region-b
+kubectl -n <namespace> rollout restart deploy/<instance>
 ```
 
 ## Ombi and Seerr request integrations
@@ -341,7 +374,7 @@ backup:
   maxAssetMiB: 1024
 ```
 
-Only public keys live in the chart. The matching recovery identity is created
+Only public keys go in the values. The matching recovery identity is created
 offline with `playarr-server backup keygen --out <file>` and held by the
 administrator; the server cannot decrypt its own backups. The state volume is
 the same disk as the database, so it protects against corruption and mistakes,
@@ -366,14 +399,14 @@ s3:
   endpoint: https://s3.example.com # your S3-compatible endpoint
   bucket: playarr-backups
   region: us-east-1 # whatever the endpoint expects
-  prefix: playarr-region-a/      # one prefix per server sharing a bucket
+  prefix: playarr-a/        # one prefix per server sharing a bucket
   credentialsSecret:
     name: playarr-backup-s3 # keys: access-key-id, secret-access-key
 ```
 
 Create the Secret out of band (never in Git) with an access key limited to
 that bucket, for example
-`kubectl -n playarr create secret generic playarr-backup-s3 --from-literal=access-key-id=... --from-literal=secret-access-key=...`.
+`kubectl -n <namespace> create secret generic playarr-backup-s3 --from-literal=access-key-id=... --from-literal=secret-access-key=...`.
 Only the encrypted archive and the plaintext sidecar (names and counts) leave
 the node.
 

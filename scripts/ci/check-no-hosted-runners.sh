@@ -6,7 +6,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 exec python3 - "$@" <<'PY'
-import glob, re, sys
+import glob, os, re, sys
+
+# Reviewed reusable-workflow prefixes (owner/repo/), comma-separated; configuration, not code.
+ALLOWED_REUSABLE = tuple(p.strip() for p in os.environ.get('ALLOWED_REUSABLE_WORKFLOWS', '').split(',') if p.strip())
 
 HOSTED = re.compile(r'(?<![\w.-])(ubuntu|windows|macos)-[\w.]+|-latest\b', re.I)
 errors = []
@@ -35,7 +38,7 @@ for path in files:
             elif '${{' in text and 'matrix.' in text:
                 errors.append(f'{path}:{i + 1}: runs-on uses a matrix expression; use a literal self-hosted label: {text.strip()}')
         m = re.match(r'^\s*uses:\s*(?!\./)(\S+/\S+\.ya?ml@\S+)', code)
-        if m and not m.group(1).startswith('example-org/.github/'):
+        if m and not (ALLOWED_REUSABLE and m.group(1).startswith(ALLOWED_REUSABLE)):
             errors.append(f'{path}:{i + 1}: reusable workflow {m.group(1)} may run on hosted runners; review and allow-list it here')
         i += 1
 if errors:

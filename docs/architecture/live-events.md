@@ -114,7 +114,7 @@ the log or older than the oldest retained row yields `resync`.
 
 ## Multi-node and peers
 
-- **Separate servers (region-a, region-b) are separate event domains.** Each has its own
+- **Separate servers (for example two regional servers) are separate event domains.** Each has its own
   database, users and sequence. A client only ever holds a cursor for the server
   it is signed in to; a cursor from one server is meaningless on another and is
   answered with `resync`.

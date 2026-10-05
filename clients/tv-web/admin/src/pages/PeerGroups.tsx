@@ -425,7 +425,7 @@ export function PeerGroupsPage() {
                 className="input"
                 value={nodeName}
                 maxLength={100}
-                placeholder="Home, Office, REGION-A..."
+                placeholder="Home, Office, Cabin..."
                 disabled={busy}
                 onChange={(event) => setNodeName(event.target.value)}
               />

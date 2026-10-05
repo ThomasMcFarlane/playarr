@@ -93,12 +93,12 @@ describe("publicIpv4RelayUrl", () => {
   });
 
   it.each([
-    "v4-203-0-113-10.relay.playarr.app",
-    "http://v4-203-0-113-10.relay.playarr.app",
-    "https://v4-203-0-113-10.relay.playarr.app",
+    "v4-11-22-33-44.relay.playarr.app",
+    "http://v4-11-22-33-44.relay.playarr.app",
+    "https://v4-11-22-33-44.relay.playarr.app",
   ])("normalises relay hostname form %s to the HTTPS default port", (value) => {
     expect(publicIpv4RelayUrl(value)).toBe(
-      "https://v4-203-0-113-10.relay.playarr.app"
+      "https://v4-11-22-33-44.relay.playarr.app"
     );
   });
 

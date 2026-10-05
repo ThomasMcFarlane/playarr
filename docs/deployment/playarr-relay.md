@@ -169,7 +169,7 @@ Read), which was revoked and verified revoked afterwards:
 ## Cut-over plan (do not execute without owner approval)
 
 The `NS relay.playarr.app -> relay-ns1.playarr.app` delegation hands the whole
-`relay` subtree to the in-process DNS server on region-a. While it exists, Cloudflare
+`relay` subtree to the in-process DNS server on one regional server. While it exists, Cloudflare
 does **not** answer for names below `relay.playarr.app`, so records the Worker
 creates there would be invisible to resolvers. The order below avoids downtime.
 
@@ -206,5 +206,5 @@ creates there would be invisible to resolvers. The order below avoids downtime.
    still be present in the image for that, so keep the previous image until the
    new path is verified.
 
-Certificate note: region-a/region-b certificates were issued by HTTP-01 for the same
+Certificate note: the regional servers' certificates were issued by HTTP-01 for the same
 names, so the cache is reused and nothing needs reissuing unless it is due.

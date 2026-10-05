@@ -42,6 +42,28 @@ It overrides weaker or older wording elsewhere in the tree.
 - Before and after every push, verify the branch, upstream, and repository status. Report the real
   pushed commit hash rather than assuming the push succeeded.
 
+## Deployment configuration (this repository is public)
+
+- Never commit environment data: real hostnames or domains, node names, LAN, tailnet or public
+  host addresses, hostPaths, registry hosts, image pins, cluster Secret names or personal paths.
+  Use placeholders in code, tests and docs (`example.com`, `<node>`, RFC 5737 addresses such as
+  `203.0.113.10`, `/srv/...`). `scripts/ci/check-env-data.sh` enforces this in CI; genuinely
+  generic IPv4 examples go in `scripts/ci/env-data-allowlist.txt`.
+- Kubernetes manifests and Helm charts here are generic templates with neutral defaults
+  (`infra/kubernetes/helm/playarr-dev` renders nothing on its own; its README lists the values).
+  The real deployment values, including the regional image pins, live in the private GitOps
+  repository (the deployment repository, the deployment values file), which an Argo CD
+  multi-source Application applies on top of the chart.
+- Regional image rollout: the `regional-image` workflow pushes `playarr-regional:<sha8>` for each
+  `main` commit (registry from the repository variable `REGIONAL_IMAGE_REGISTRY`). To roll out,
+  open a PR in the GitOps repository that sets `regionalInstances.<instance>.image` to that tag,
+  one instance at a time, then confirm Argo is Synced/Healthy and the rollout finished. No Playarr
+  PR is needed and none goes through the merge train. Check the current pins first and never move
+  a pin to an older image; if a newer pin already contains your commit, verify instead of bumping.
+- Bump the chart `targetRevision` in the GitOps repository only when the chart templates changed,
+  to a full `main` merge SHA, after rendering the chart at that SHA with the deployment values and
+  confirming the manifests change only as intended.
+
 ## Merging: the merge train
 
 Pull requests are landed by the merge train (`.github/workflows/merge-train.yml`,

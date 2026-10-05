@@ -11,9 +11,15 @@ import sitemap from '@astrojs/sitemap'
  *
  * The production hostname is not settled yet, so SITE_URL is the single knob
  * that feeds canonical URLs, Open Graph tags and the sitemap. Until it is set,
- * the site builds against the devdeploy public alias.
+ * the site builds against a placeholder origin.
  */
-const SITE_URL = process.env.SITE_URL ?? 'http://playarr-marketing.example.com'
+const SITE_URL = process.env.SITE_URL ?? 'http://playarr-marketing.localhost'
+// Extra dev-server hostnames (comma-separated), e.g. the deployment's public
+// alias for the marketing preview. Deployment-specific, so never hard-coded.
+const EXTRA_ALLOWED_HOSTS = (process.env.SITE_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter(Boolean)
 
 export default defineConfig({
   site: SITE_URL,
@@ -33,7 +39,7 @@ export default defineConfig({
       allowedHosts: [
         'playarr-marketing.localhost',
         'playarr-marketing.dev.home.arpa',
-        'playarr-marketing.example.com',
+        ...EXTRA_ALLOWED_HOSTS,
       ],
     },
   },

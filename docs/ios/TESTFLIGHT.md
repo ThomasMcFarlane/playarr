@@ -13,17 +13,17 @@ The dispatcher is private, uses the `apple-builders` group and stable `apple-bui
 2. In the same Apple Developer team already used by AppSwitcher, use the existing matching distribution certificate and create App Store profiles for bundle ID `app.playarr.ios` on both iOS and tvOS. Export the certificate as a password-protected `.p12`; do not use AppSwitcher Developer ID or notarisation credentials.
 3. Create an App Store Connect API key with permission to upload builds. Record its key ID and issuer ID and retain the `.p8` file securely.
 4. Add these Actions secrets to the `release-ios` environment in the Apple release pipeline: `APPLE_DISTRIBUTION_P12_BASE64`, `APPLE_DISTRIBUTION_P12_PASSWORD`, `APPLE_PROVISIONING_PROFILE_BASE64` (iOS), `APPLE_TVOS_PROVISIONING_PROFILE_BASE64` (tvOS), `APPLE_TEAM_ID`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, and `APP_STORE_CONNECT_API_KEY_BASE64`. Values ending in `BASE64` are the base64 encoding of the original binary file, without wrapping newlines. The signed release fails if any required credential is absent.
-   Replace `KEYID` in the filename with the actual App Store Connect key ID. With GitHub CLI, set file secrets without putting their contents in shell history:
+   Replace `KEYID` in the filename with the actual App Store Connect key ID. With GitHub CLI (and `APPLE_BUILDS_REPOSITORY=<owner>/<repo>` of the Apple release pipeline, the same value as the Playarr repository variable of that name), set file secrets without putting their contents in shell history:
 
    ```sh
-   base64 -i distribution.p12 | tr -d '\r\n' | gh secret set APPLE_DISTRIBUTION_P12_BASE64 --repo REDACTED --env release-ios
-   base64 -i AppStore-iOS.mobileprovision | tr -d '\r\n' | gh secret set APPLE_PROVISIONING_PROFILE_BASE64 --repo REDACTED --env release-ios
-   base64 -i AppStore-tvOS.mobileprovision | tr -d '\r\n' | gh secret set APPLE_TVOS_PROVISIONING_PROFILE_BASE64 --repo REDACTED --env release-ios
-   base64 -i AuthKey_KEYID.p8 | tr -d '\r\n' | gh secret set APP_STORE_CONNECT_API_KEY_BASE64 --repo REDACTED --env release-ios
-   gh secret set APPLE_DISTRIBUTION_P12_PASSWORD --repo REDACTED --env release-ios
-   gh secret set APPLE_TEAM_ID --repo REDACTED --env release-ios
-   gh secret set APP_STORE_CONNECT_API_KEY_ID --repo REDACTED --env release-ios
-   gh secret set APP_STORE_CONNECT_ISSUER_ID --repo REDACTED --env release-ios
+   base64 -i distribution.p12 | tr -d '\r\n' | gh secret set APPLE_DISTRIBUTION_P12_BASE64 --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   base64 -i AppStore-iOS.mobileprovision | tr -d '\r\n' | gh secret set APPLE_PROVISIONING_PROFILE_BASE64 --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   base64 -i AppStore-tvOS.mobileprovision | tr -d '\r\n' | gh secret set APPLE_TVOS_PROVISIONING_PROFILE_BASE64 --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   base64 -i AuthKey_KEYID.p8 | tr -d '\r\n' | gh secret set APP_STORE_CONNECT_API_KEY_BASE64 --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   gh secret set APPLE_DISTRIBUTION_P12_PASSWORD --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   gh secret set APPLE_TEAM_ID --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   gh secret set APP_STORE_CONNECT_API_KEY_ID --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
+   gh secret set APP_STORE_CONNECT_ISSUER_ID --repo "$APPLE_BUILDS_REPOSITORY" --env release-ios
    ```
 5. The source repository's read-only deploy key is installed on Playarr and its private half is stored as the dispatcher repository secret `PLAYARR_READONLY_DEPLOY_KEY`. This has been configured read-only. Do not grant write access.
 6. Install a fine-grained GitHub token scoped only to the Apple release pipeline with Actions write permission, then save it as Playarr's `APPLE_DISPATCH_TOKEN` using `gh secret set APPLE_DISPATCH_TOKEN --repo ThomasMcFarlane/playarr`. The source workflow requires it to dispatch the private workflow. No broad personal token belongs in the dispatcher.

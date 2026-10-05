@@ -206,7 +206,7 @@ watch. Purely backend/architecture, no frontend implication.
 - Playarr Web: `playarr-web` devserver session, `http://localhost:5173`
   (Vite, HMR). `pnpm -F web exec tsc --noEmit` to typecheck without a full
   build.
-- Browser testing: this session used the `example` Chrome (Claude MCP)
+- Browser testing: this session used a dedicated Chrome profile (Claude MCP)
   profile via `mcp__chrome-devtools__*` tools — reuse the same approach
   (`tabs_context`/`new_page`/`navigate_page`/`take_screenshot`) rather than
   `claude-in-chrome`, which is blocked for this identity.

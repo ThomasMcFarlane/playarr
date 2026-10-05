@@ -812,13 +812,13 @@ describe("session persistence under races and outages", () => {
       }
       const bearer = request.headers.get("Authorization");
       return bearer === "Bearer access-1"
-        ? jsonResponse(200, { instance_name: "REGION-A" })
+        ? jsonResponse(200, { instance_name: "Lounge" })
         : new Response(null, { status: 401 });
     });
 
     const results = await Promise.all(Array.from({ length: 8 }, () => client.getSystemSettings()));
 
-    expect(results.every((r) => r.instance_name === "REGION-A")).toBe(true);
+    expect(results.every((r) => r.instance_name === "Lounge")).toBe(true);
     expect(refreshCalls).toBe(1);
     expect(loginCalls).toBe(0);
     expect(store.get()?.refreshToken).toBe("refresh-1");

@@ -1027,11 +1027,11 @@ mod unit_tests {
             ("PLAYARR_BACKUP_S3_ENDPOINT", "https://s3.example.com/"),
             ("PLAYARR_BACKUP_S3_ACCESS_KEY_ID", "AKID-VISIBLE?"),
             ("PLAYARR_BACKUP_S3_SECRET_ACCESS_KEY", "SECRET-VALUE"),
-            ("PLAYARR_BACKUP_S3_PREFIX", "/region-a"),
+            ("PLAYARR_BACKUP_S3_PREFIX", "/site-a"),
         ]))
         .unwrap()
         .unwrap();
-        assert_eq!(config.prefix, "region-a/");
+        assert_eq!(config.prefix, "site-a/");
         assert_eq!(config.endpoint, "https://s3.example.com");
         assert_eq!(config.region, "auto");
         assert!(config.path_style);

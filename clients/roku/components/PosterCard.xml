@@ -84,7 +84,7 @@
              no-art card (an artist with no image) went fully invisible
              except for its title text. -->
         <!-- Surface-soft match to live web .tv-home-card-art (sampled
-             ~rgb(38,33,38) @1920 from playarr.example.com home freeze).
+             ~rgb(38,33,38) @1920 from playarr.app home freeze).
              Prior 0x312A30 left cards above the parity suite's dark-bg
              normalise threshold while web cards fell below it, inventing
              large pure-AE false positives on empty art tiles. -->

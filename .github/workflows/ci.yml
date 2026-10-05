@@ -1,6 +1,6 @@
-# =============================================================================
+# ======================================================================
 # Playarr Server CI
-# =============================================================================
+# ======================================================================
 #
 # Single CI workflow for pull requests and pushes to `main`. A `changes` job
 # runs dorny/paths-filter once and every platform-specific check job is
@@ -24,7 +24,7 @@
 #   skipped -> pass while failure/cancelled -> fail. That makes it the only
 #   job that is guaranteed to always report a final pass/fail for any PR,
 #   regardless of which paths changed, so it's the only one safe to require.
-# =============================================================================
+# ======================================================================
 
 name: CI
 
@@ -92,6 +92,13 @@ jobs:
 
       - name: Reject GitHub-hosted runner labels
         run: scripts/ci/check-no-hosted-runners.sh
+
+      # The repository is public: no hostnames, addresses, paths or pins of a
+      # real deployment. Site-specific names come from a secret, never the tree.
+      - name: Reject environment-specific data
+        env:
+          ENV_DATA_DENYLIST: ${{ secrets.ENV_DATA_DENYLIST }}
+        run: scripts/ci/check-env-data.sh
 
       - name: Merge train logic tests
         run: scripts/ci/test-merge-train.sh

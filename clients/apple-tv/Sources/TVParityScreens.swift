@@ -40,7 +40,7 @@ enum TVParityFixtures {
     static let trackTitle = "Parity Track"
     static let bookTitle = "Parity Book"
     static let userCode = "ABCD-2345"
-    static let verificationURI = "https://playarr.example.com/link"
+    static let verificationURI = "https://playarr.app/link"
     static let overview =
         "A fixed synopsis used by the Apple TV visual parity suite so native and web captures share identical copy."
 

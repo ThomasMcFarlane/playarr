@@ -14,7 +14,7 @@ metadata:
   name: {{ include "vidaa-installer.fullname" . }}-dns
   labels:
     {{- include "vidaa-installer.labels" . | nindent 4 }}
-    lan-dns.example.com/enabled: "true"
+    {{ .Values.dns.resolverLabel }}: "true"
 data:
   vidaa.server: |
     . {

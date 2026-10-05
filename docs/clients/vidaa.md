@@ -57,7 +57,7 @@ service-menu codes, firmware downgrades, or third-party firmware.
 
 ### Repository-managed k3s installation
 
-Operators using the example cluster LAN resolver can deploy the
+Operators running a cluster LAN resolver (CoreDNS importing labelled `*.server` ConfigMaps) can deploy the
 `infra/kubernetes/helm/vidaa-installer` Helm chart; its `README.md` is the
 operator guide.
 It reuses the hosted `playarr.app/vidaa-store/` portal and keeps both its DNS

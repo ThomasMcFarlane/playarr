@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Screen-by-screen visual parity suite: native tvOS Simulator screenshots
- * vs Playwright captures of https://playarr.example.com at 1920×1080.
+ * vs Playwright captures of https://playarr.app at 1920×1080.
  *
  * Usage:
  *   node scripts/appletv-parity-suite.mjs --run-dir <dir> [--native-dir <dir>]
@@ -9,7 +9,7 @@
  *   node scripts/appletv-parity-suite.mjs --diff-only --run-dir <dir>
  *
  * Environment:
- *   PLAYARR_WEB_ORIGIN  (default https://playarr.example.com)
+ *   PLAYARR_WEB_ORIGIN  (default https://playarr.app)
  *   PARITY_TOLERANCE_PCT (default 0.1)
  */
 import { chromium } from "playwright";
@@ -24,13 +24,13 @@ const pixelmatch = pixelmatchImport.default || pixelmatchImport;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
-const WEB_ORIGIN = process.env.PLAYARR_WEB_ORIGIN || "https://playarr.example.com";
+const WEB_ORIGIN = process.env.PLAYARR_WEB_ORIGIN || "https://playarr.app";
 const TOLERANCE_PCT = Number(process.env.PARITY_TOLERANCE_PCT || "0.1");
 const VIEWPORT = { width: 1920, height: 1080 };
 
 /**
  * Required suite screens (plan acceptance criteria).
- * `webPath` is the route on playarr.example.com.
+ * `webPath` is the route on playarr.app.
  * `nativeFile` is the expected native screenshot basename (without .png).
  * `note` documents known mapping caveats.
  */

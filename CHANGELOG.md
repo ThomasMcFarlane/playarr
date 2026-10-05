@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Merge train: stop re-merging `main` into every queued pull request. It now does so only when main's new commits touch the PR's files (fragment, CHANGELOG.md and TASKS.md paths excluded) or conflict, so landing one PR no longer cancels the CI of the next and the queue no longer starves. The train commits as Thomas McFarlane with a `Merge-Train: yes` trailer that `check-fragments.sh` exempts, and its decision logic has tests (`scripts/ci/test-merge-train.sh`).
 - Give iOS and tvOS release invocations separate temporary signing keychains and allow the `codesign` partition explicitly.
 - Android, iOS, tvOS and web now default public IPv4 relay URLs to HTTPS port 443 while preserving explicit legacy port 8484 and local server addresses (TASK 293).
 - CI: affected-only selection no longer skips Rust checks on workflow-dispatched runs (merge train branches and post-merge runs on main now check everything or the true diff), and the merge train exits cleanly after landing a PR (TASKS 330, 332).
@@ -119,6 +120,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Deployment data no longer lives in this repository: the `playarr-dev` chart ships neutral (empty) defaults and documents its values, a worked example with placeholder data backs its tests, and the real instances, hostnames, addresses, hostPaths and image pins live in the private deployment repository. Regional image rollouts are now a deployment values change, not a Playarr PR.
+- The regional image workflow pushes to the registry named by the `REGIONAL_IMAGE_REGISTRY` repository variable, and the iOS dispatch reads its Apple release pipeline from `APPLE_BUILDS_REPOSITORY`.
+- Tests, docs and scripts use placeholders (`example.com`, RFC 5737 addresses, `/srv` paths); `scripts/mac-build.sh` and `scripts/appletv-parity-ae0.sh` now require `MAC_HOST`, and the marketing dev server takes extra hostnames from `SITE_ALLOWED_HOSTS`.
 - CI: every workflow job now runs on the self-hosted `playarr-runners` pool; GitHub-hosted runners are no longer used. The Windows UWP placeholder job in `xbox-ci.yml` is disabled until a Windows runner serves this repository. `scripts/ci/check-no-hosted-runners.sh` (run by `ci-required`) fails any workflow that targets a hosted label.
 - The merge train blocks any PR whose merged tree targets a GitHub-hosted runner, and `no-hosted-runners.yml` re-checks `main` after every push and opens a `ready` revert PR if a hosted label slips through.
 - Fixed `clients/harmony/scripts/fetch-sdk.sh` exiting 1 on newer bash (its EXIT trap clobbered the exit status).
@@ -2168,6 +2172,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- CI rejects environment-specific data in tracked files (`scripts/ci/check-env-data.sh`): non-example IPv4 addresses, personal home paths, tailnet names and a secret-supplied denylist of internal names.
 - Apple simulator test targets now match actor isolation, current design tokens, Google Cast dependency inheritance and the `PlayerEngine` optional `AVPlayer` witness (TASK 333).
 - Verify artist catalogue details attach media identifiers and runtimes only to tracks that have
   matching media files.

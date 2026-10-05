@@ -1606,7 +1606,7 @@ paths:
             schema:
               $ref: '#/components/schemas/UpdateSystemSettingsRequest'
             example:
-              instance_name: REGION-A Cinema
+              instance_name: Lounge Cinema
         required: true
       responses:
         '200':
@@ -1616,7 +1616,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SystemSettings'
               example:
-                instance_name: REGION-A Cinema
+                instance_name: Lounge Cinema
         '400':
           description: Instance name is empty or longer than 100 characters
         '401':

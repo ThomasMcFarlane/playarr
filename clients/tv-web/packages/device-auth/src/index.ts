@@ -50,7 +50,7 @@ export {
  * Visual tokens for Playarr device-login QR tiles.
  *
  * Source of truth: live `/login/qr` `.device-login-qr` (measured 2026-07-29
- * at playarr.example.com): border-box 240×240, 12px solid #fff edge,
+ * at playarr.app): border-box 240×240, 12px solid #fff edge,
  * border-radius 18px, pure white plate, black modules (ECC M, margin 2),
  * soft drop shadow. Content box after the border is 216×216.
  *

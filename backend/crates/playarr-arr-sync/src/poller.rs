@@ -2116,7 +2116,7 @@ mod tests {
     /// Sonarr's `episodeFileCount` counts episodes with a file, so a
     /// multi-episode file leaves the synced rows permanently below it. That
     /// must not make every pass refetch the series (it did in the first cut
-    /// of the new-episode fix: 42 series on region-a re-synced every five minutes).
+    /// of the new-episode fix: 42 series on one server re-synced every five minutes).
     #[tokio::test]
     async fn a_permanent_count_gap_does_not_resync_the_series_on_every_pass() {
         let server = MockServer::start().await;

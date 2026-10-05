@@ -34,8 +34,8 @@ class PlayarrAppTest {
     @Test
     fun `existing relay hostname is normalised before authenticated requests`() {
         assertEquals(
-            "https://v4-203-0-113-10.relay.playarr.app",
-            normaliseServerUrl("http://v4-203-0-113-10.relay.playarr.app"),
+            "https://v4-11-22-33-44.relay.playarr.app",
+            normaliseServerUrl("http://v4-11-22-33-44.relay.playarr.app"),
         )
     }
 

@@ -1038,7 +1038,7 @@ async fn ensure_media_thumbnail(
     }
     // Each ffmpeg frame grab of a UHD source holds ~0.5 GiB. A chapter rail
     // asks for a dozen frames at once, so bound the fan-out or the pod's
-    // memory cgroup OOM-kills the whole server (observed on region-b: four
+    // memory cgroup OOM-kills the whole server (observed on a production server: four
     // parallel grabs against a 2 GiB limit). Waiters re-check the cache in
     // `ensure_media_thumbnail_at` once admitted.
     let _permit = thumbnail_permits()

@@ -89,10 +89,7 @@ mod tests {
     fn unchanged_when_neither_var_is_set() {
         with_env(None, None, || {
             let resolved = resolve_media_path(Path::new("/srv/media/Movies/Orbit/Orbit.mkv"));
-            assert_eq!(
-                resolved,
-                PathBuf::from("/srv/media/Movies/Orbit/Orbit.mkv")
-            );
+            assert_eq!(resolved, PathBuf::from("/srv/media/Movies/Orbit/Orbit.mkv"));
         });
     }
 
@@ -100,10 +97,7 @@ mod tests {
     fn unchanged_when_only_one_var_is_set() {
         with_env(Some("/srv/media"), None, || {
             let resolved = resolve_media_path(Path::new("/srv/media/Movies/Orbit/Orbit.mkv"));
-            assert_eq!(
-                resolved,
-                PathBuf::from("/srv/media/Movies/Orbit/Orbit.mkv")
-            );
+            assert_eq!(resolved, PathBuf::from("/srv/media/Movies/Orbit/Orbit.mkv"));
         });
     }
 

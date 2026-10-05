@@ -701,15 +701,15 @@ describe("ApiClient", () => {
     const fetchImpl = mockFetch(async (request) => {
       bodies.push(await request.text());
       return request.headers.get("Authorization") === `Bearer ${tokens[1]}`
-        ? jsonResponse(200, { instance_name: "REGION-A" })
+        ? jsonResponse(200, { instance_name: "Lounge" })
         : new Response(null, { status: 401 });
     });
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken });
 
-    await expect(client.updateSystemSettings({ instance_name: "REGION-A" })).resolves.toEqual({
-      instance_name: "REGION-A",
+    await expect(client.updateSystemSettings({ instance_name: "Lounge" })).resolves.toEqual({
+      instance_name: "Lounge",
     });
-    expect(bodies).toEqual([JSON.stringify({ instance_name: "REGION-A" }), JSON.stringify({ instance_name: "REGION-A" })]);
+    expect(bodies).toEqual([JSON.stringify({ instance_name: "Lounge" }), JSON.stringify({ instance_name: "Lounge" })]);
     expect(getAccessToken).toHaveBeenCalledWith({ forceRefresh: true, rejectedAccessToken: "stale-token" });
   });
 
@@ -730,8 +730,8 @@ describe("ApiClient", () => {
       expect(new URL(request.url).pathname).toBe("/api/v1/admin/system-settings");
       expect(request.headers.get("Authorization")).toBe("Bearer admin-token");
       if (request.method === "PUT") {
-        expect(await request.json()).toEqual({ instance_name: "REGION-A" });
-        return jsonResponse(200, { instance_name: "REGION-A" });
+        expect(await request.json()).toEqual({ instance_name: "Lounge" });
+        return jsonResponse(200, { instance_name: "Lounge" });
       }
       return jsonResponse(200, { instance_name: "Playarr Server" });
     });
@@ -742,8 +742,8 @@ describe("ApiClient", () => {
     });
 
     await expect(client.getSystemSettings()).resolves.toEqual({ instance_name: "Playarr Server" });
-    await expect(client.updateSystemSettings({ instance_name: "REGION-A" })).resolves.toEqual({
-      instance_name: "REGION-A",
+    await expect(client.updateSystemSettings({ instance_name: "Lounge" })).resolves.toEqual({
+      instance_name: "Lounge",
     });
   });
 

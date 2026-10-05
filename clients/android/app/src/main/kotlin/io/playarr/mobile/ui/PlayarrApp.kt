@@ -837,7 +837,7 @@ private fun LoginField(
 }
 
 /**
- * Television pairing UI matches web `https://playarr.example.com/login/qr`.
+ * Television pairing UI matches web `https://playarr.app/login/qr`.
  *
  * Sized to fit a 1920×1080 stage without scroll: decorative QR glow does not
  * inflate layout height, and vertical padding scales with available height.

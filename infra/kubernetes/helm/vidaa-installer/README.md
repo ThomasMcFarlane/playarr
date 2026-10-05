@@ -11,7 +11,7 @@ for the installation window and then returned to `disabled`.
 ## Prerequisites
 
 - The cluster-managed LAN resolver must watch ConfigMaps labelled
-  `lan-dns.example.com/enabled: "true"`, import `*.server` data before its
+  `<dns.resolverLabel>: "true"` (default `lan-dns.example.com/enabled`), import `*.server` data before its
   unfiltered catch-all, provide the `lan-dns-common` CoreDNS snippet, and set
   `LAN_DNS_TARGET_IPV4` in the CoreDNS container.
 - Emissary-ingress must already have HTTP and HTTPS Listeners that discover the
@@ -56,7 +56,7 @@ exact `vidaahub.com` `Mapping`. Requests are forwarded to
 `https://playarr.app/vidaa-store/`; suffixes are preserved and the upstream
 Host is rewritten to `playarr.app`. The installer Mapping uses the upstream
 TLSContext. Neither resource requires Headscale or Tailscale. The
-`playarr.example.com` Mapping belongs to the Playarr chart and must not be added
+The Playarr server's own public Mapping (for example `playarr.example.com`) belongs to the Playarr chart and must not be added
 to this release.
 
 Prefer a one-device allowlist during installation:

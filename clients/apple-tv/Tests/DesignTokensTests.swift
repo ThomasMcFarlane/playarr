@@ -1,7 +1,7 @@
 import XCTest
 @testable import PlayarrTV
 
-/// Locks the live SPA dark stage palette (playarr.example.com) and arr tokens.
+/// Locks the live SPA dark stage palette (playarr.app) and arr tokens.
 final class DesignTokensTests: XCTestCase {
     func testStageBackgroundMatchesLiveDarkTheme() {
         XCTAssertEqual(DesignTokens.Hex.backgroundBase, "#151315")

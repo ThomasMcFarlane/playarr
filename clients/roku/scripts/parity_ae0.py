@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Roku SceneGraph vs live playarr.example.com full-stage AE suite.
+"""Roku SceneGraph vs live playarr.app full-stage AE suite.
 
 Pass criteria (plan + OBJECTIVE + evaluator full-stage bar):
   - full_ae == 0 across the entire 1920×1080 stage after normalise_bg.
