@@ -126,7 +126,9 @@ import io.playarr.mobile.update.createAndroidSelfUpdateController
 import io.playarr.shared.auth.ConnectedServerSessionManager
 import io.playarr.shared.auth.ConnectedServerSessionStore
 import io.playarr.shared.auth.KnownServerGroupStore
+import io.playarr.shared.auth.PinRequiredException
 import io.playarr.shared.auth.SavedProfile
+import io.playarr.shared.auth.SessionRefresher
 import io.playarr.shared.auth.TokenStore
 import io.playarr.shared.auth.model.ClientPlatform
 import io.playarr.shared.auth.model.LoginRequest
@@ -1401,7 +1403,10 @@ internal class ProfilesViewModel @Inject constructor(
     private val loginApi: LoginApi,
     private val tokenStore: TokenStore,
     private val serverConfigStore: ServerConfigStore,
+    private val sessionRefresher: SessionRefresher,
 ) : ViewModel() {
+    /** Saved profiles the server asked a PIN for (`pin_required`); their next PIN goes to the unlock endpoint. */
+    private val pinLeaseProfileIds = mutableSetOf<String>()
     private val _state = MutableStateFlow<ParityLoad<ProfilesSnapshot>>(ParityLoad.Loading)
     val state = _state.asStateFlow()
     private val _switchingProfileId = MutableStateFlow<String?>(null)
@@ -1461,9 +1466,33 @@ internal class ProfilesViewModel @Inject constructor(
             val serverUrl = (owning.firstOrNull { it.serverUrl == currentServer } ?: owning.firstOrNull())?.serverUrl
                 ?: currentServer
                 ?: serverConfigStore.baseUrl.first()
-            if (pin == null && tokenStore.isProfileSaved(serverUrl, profile.id)) {
+            val saved = tokenStore.isProfileSaved(serverUrl, profile.id)
+            if (saved && (pin == null || profile.id in pinLeaseProfileIds)) {
+                val previousUserId = tokenStore.currentUserId.first()?.takeIf { it != profile.id }
+                val previousServer = tokenStore.currentServerUrl.first()
+                // Leaving a profile locks it (TASKS 115): a PIN-locked profile's saved
+                // session then needs its PIN again. Best effort, never blocks the switch.
+                if (previousUserId != null) runCatching { api.lockProfile() }
                 // Swaps the active session (tokens, server, device id) without credentials.
                 check(tokenStore.activateProfile(serverUrl, profile.id))
+                try {
+                    if (pin != null) {
+                        sessionRefresher.unlockWithPin(pin)
+                    } else {
+                        // Check the unlock lease now rather than on the next 401; an offline
+                        // or failing server must not stop switching to a saved profile.
+                        runCatching { sessionRefresher.refreshNow() }.onFailure { failure ->
+                            if (failure is PinRequiredException) throw failure
+                        }
+                    }
+                    pinLeaseProfileIds.remove(profile.id)
+                } catch (failure: Throwable) {
+                    if (failure is PinRequiredException) pinLeaseProfileIds.add(profile.id)
+                    if (previousUserId != null && previousServer != null) {
+                        tokenStore.activateProfile(previousServer, previousUserId)
+                    }
+                    throw failure
+                }
             } else {
                 val deviceId = tokenStore.deviceIdForLogin(serverUrl, profile.displayName, profile.id)
                 serverConfigStore.setBaseUrl(serverUrl)
@@ -1607,7 +1636,15 @@ internal fun ExperienceProfilesScreen(
                 pinError = null
             }
             is ProfileActionResolution.Switch -> switchProfile(profile, action, null) { failure ->
-                actionError = failure.playarrMessage(PlayarrFailureSubject.Profile)
+                if (failure is PinRequiredException) {
+                    // The saved session is fine; the server wants this profile's PIN.
+                    pinProfile = profile
+                    pinAction = action
+                    pin = ""
+                    pinError = null
+                } else {
+                    actionError = failure.playarrMessage(PlayarrFailureSubject.Profile)
+                }
             }
         }
     }

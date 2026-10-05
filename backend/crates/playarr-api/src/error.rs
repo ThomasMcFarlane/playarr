@@ -173,6 +173,11 @@ impl From<playarr_auth::RefreshError> for ApiError {
                 "unauthorized",
                 "refresh token is invalid or expired",
             ),
+            RefreshError::PinRequired => Self::new(
+                StatusCode::FORBIDDEN,
+                "pin_required",
+                "this profile is PIN-locked; unlock it with the profile PIN",
+            ),
             RefreshError::Db(inner) => inner.into(),
             RefreshError::Jwt(err) => Self::internal(err.to_string()),
         }

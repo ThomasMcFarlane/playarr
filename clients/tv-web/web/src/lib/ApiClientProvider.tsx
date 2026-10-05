@@ -473,6 +473,13 @@ interface ApiClientContextValue {
   ) => void;
   /** Activates a profile session already saved in this browser and validates/refreshes it. */
   switchProfile: (userId: string) => Promise<void>;
+  /**
+   * Redeems a saved PIN-locked profile's stored session with its PIN
+   * (`POST /api/v1/auth/unlock`) and switches to it: the server then holds
+   * an unlock lease for this device. Call after `switchProfile` rejected
+   * with `PinRequiredError`.
+   */
+  unlockProfile: (userId: string, pin: string) => Promise<void>;
   /** True when this browser already has a reusable session for the profile. */
   isProfileSaved: (userId: string) => boolean;
   /** Clears the stored session and `currentUserId`/`authFailed`. Callers still navigate to `/profiles` themselves. */
@@ -1232,21 +1239,25 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     [apiBaseUrl, applyApiBaseUrl, persistProfileSession, t]
   );
 
-  const switchProfile = useCallback(
-    async (userId: string) => {
+  const activateStoredProfile = useCallback(
+    async (target: StoredProfileSession) => {
       if (!client) {
         throw new Error(t("lib.apiClientProvider.cannotSwitchProfilesNotReady"));
       }
-      const target = storedProfileSessions.find(
-        (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
-      );
-      if (!target) {
-        throw new Error(t("lib.apiClientProvider.profileNotSignedIn"));
-      }
-
+      const userId = target.userId;
       const tokenStore = tokenStoreRef.current as TokenStore;
       const previousSession = tokenStore.get();
       const previousProfile = activeProfileRef.current;
+      // Switching away locks the profile being left (TASKS 115): if it has a
+      // PIN, its stored session needs the PIN again before it can refresh.
+      // Best effort -- a failure never blocks the switch.
+      if (previousSession && previousProfile && previousProfile.userId !== userId) {
+        try {
+          await client.lockProfile();
+        } catch {
+          // Offline or already signed out: the server-side lease also lapses on its own.
+        }
+      }
       tokenStore.set(target.session);
       activeProfileRef.current = {
         profileKey: target.profileKey,
@@ -1263,7 +1274,13 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
             ...PLAYARR_LOGIN_IDENTITY,
             deviceId: target.deviceId,
           },
-          { serverGroup: readKnownServers(), clientForUrl: buildClientForServerGroupUrl }
+          {
+            serverGroup: readKnownServers(),
+            clientForUrl: buildClientForServerGroupUrl,
+            // Always go to the server on a switch so a PIN-locked profile
+            // is checked against its unlock lease, not a cached token.
+            forceRefresh: true,
+          }
         );
         const resolvedUserId = decodeAccessTokenUserId(token);
         if (resolvedUserId !== userId) {
@@ -1303,7 +1320,45 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [apiBaseUrl, applyApiBaseUrl, client, persistProfileSession, storedProfileSessions]
+    [apiBaseUrl, applyApiBaseUrl, client, persistProfileSession, t]
+  );
+
+  const switchProfile = useCallback(
+    async (userId: string) => {
+      const target = storedProfileSessions.find(
+        (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
+      );
+      if (!target) {
+        throw new Error(t("lib.apiClientProvider.profileNotSignedIn"));
+      }
+      await activateStoredProfile(target);
+    },
+    [activateStoredProfile, apiBaseUrl, storedProfileSessions, t]
+  );
+
+  const unlockProfile = useCallback(
+    async (userId: string, pin: string) => {
+      if (!client) {
+        throw new Error(t("lib.apiClientProvider.cannotSwitchProfilesNotReady"));
+      }
+      const target = storedProfileSessions.find(
+        (profile) => profile.apiBaseUrl === apiBaseUrl && profile.userId === userId
+      );
+      if (!target) {
+        throw new Error(t("lib.apiClientProvider.profileNotSignedIn"));
+      }
+      const unlocked = await client.unlockProfile({
+        device_id: target.deviceId,
+        refresh_token: target.session.refreshToken,
+        pin,
+      });
+      const session = toStoredSession(unlocked);
+      persistProfileSession(apiBaseUrl, target.profileKey, userId, target.name, target.deviceId, session);
+      // Switch with the freshly rotated session: the saved-sessions state
+      // has not re-rendered yet and still holds the retired refresh token.
+      await activateStoredProfile({ ...target, session });
+    },
+    [activateStoredProfile, apiBaseUrl, client, persistProfileSession, storedProfileSessions, t]
   );
 
   const isProfileSaved = useCallback(
@@ -1406,6 +1461,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
         getServerAccessToken,
         loginWithDeviceToken,
         switchProfile,
+        unlockProfile,
         isProfileSaved,
         logout,
         logoutProfile,
@@ -1478,6 +1534,7 @@ export function useAuth(): {
     target?: DeviceLoginTarget
   ) => void;
   switchProfile: (userId: string) => Promise<void>;
+  unlockProfile: (userId: string, pin: string) => Promise<void>;
   isProfileSaved: (userId: string) => boolean;
   logout: () => void;
   logoutProfile: (userId: string) => void;
@@ -1494,6 +1551,7 @@ export function useAuth(): {
     disconnectServer,
     loginWithDeviceToken,
     switchProfile,
+    unlockProfile,
     isProfileSaved,
     logout,
     logoutProfile,
@@ -1510,6 +1568,7 @@ export function useAuth(): {
     disconnectServer,
     loginWithDeviceToken,
     switchProfile,
+    unlockProfile,
     isProfileSaved,
     logout,
     logoutProfile,

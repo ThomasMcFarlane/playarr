@@ -1659,7 +1659,10 @@ async fn boot_api(
             jwt.clone(),
             chrono::Duration::days(30),
         )
-        .with_reuse_grace(refresh_reuse_grace_from_env()),
+        .with_reuse_grace(refresh_reuse_grace_from_env())
+        // TASKS 115: refreshing a PIN-locked profile needs an unlock lease
+        // (granted by login or the PIN unlock endpoint, slid by refresh).
+        .with_pin_lease(profile_pin_repo.clone(), chrono::Duration::minutes(30)),
     );
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),

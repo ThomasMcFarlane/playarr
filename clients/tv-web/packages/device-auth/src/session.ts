@@ -282,6 +282,29 @@ export class TransientAuthError extends Error {
   }
 }
 
+/**
+ * Raised when the server refuses to renew a profile's session because the
+ * profile is PIN-locked and this device holds no unlock lease (`403
+ * pin_required`, TASKS 115). The stored session is untouched: the caller
+ * should ask for the profile PIN and redeem it through
+ * `ApiClient.unlockProfile`, never fall back to a credential-less login.
+ */
+export class PinRequiredError extends Error {
+  override readonly name = "PinRequiredError";
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    (this as { cause?: unknown }).cause = cause;
+  }
+}
+
+/** True for the server's `403 pin_required` answer. */
+export function isPinRequiredError(err: unknown): boolean {
+  if (err instanceof PinRequiredError) return true;
+  const candidate = err as { status?: unknown; body?: unknown } | null;
+  if (candidate?.status !== 403) return false;
+  return (candidate.body as { error?: unknown } | null | undefined)?.error === "pin_required";
+}
+
 /** HTTP statuses on which the server has definitively refused the credential. */
 const DEFINITIVE_REJECTION_STATUSES = new Set([400, 401, 403, 404, 410, 422]);
 
@@ -516,6 +539,11 @@ async function refreshExistingSession(
       store.set(toStoredSession(refreshed));
       return refreshed.access_token;
     } catch (err) {
+      // A PIN-locked profile with no unlock lease: the session is fine, it
+      // just needs the PIN. Do not retry elsewhere, cool down or log in.
+      if (isPinRequiredError(err)) {
+        throw new PinRequiredError("this profile needs its PIN to continue", err);
+      }
       if (options.serverGroup && options.clientForUrl) {
         const candidates = nodeScopedServerGroupCandidates(
           options.serverGroup,

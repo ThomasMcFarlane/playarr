@@ -134,6 +134,8 @@ const PUBLIC_OPENAPI_PATHS: &[&str] = &[
     "/api/v1/auth/login",
     "/api/v1/auth/signup",
     "/api/v1/auth/refresh",
+    // The refresh token plus the profile PIN are the credential here.
+    "/api/v1/auth/unlock",
     // Authenticated by the revocable token embedded in the path, because
     // calendar apps cannot send an Authorization header.
     "/api/v1/calendar/feed/{file}",
@@ -306,6 +308,8 @@ fn api_router() -> OpenApiRouter<AppState> {
         .routes(routes!(login::login_handler))
         .routes(routes!(users::signup_handler))
         .routes(routes!(refresh::refresh_handler))
+        .routes(routes!(refresh::unlock_handler))
+        .routes(routes!(refresh::lock_handler))
         .routes(routes!(webhooks::arr_webhook_handler))
         .routes(routes!(calendar::calendar_handler))
         .routes(routes!(

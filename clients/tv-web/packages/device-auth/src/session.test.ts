@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError } from "@playarr-tv/api-client";
-import { ensureAccessToken, isTransientAuthFailure, TransientAuthError } from "./session";
+import {
+  ensureAccessToken,
+  isTransientAuthFailure,
+  PinRequiredError,
+  TransientAuthError,
+} from "./session";
 import { TokenStore } from "./tokenStore";
 
 function mockFetch(handler: (request: Request) => Response | Promise<Response>) {
@@ -251,6 +256,26 @@ describe("ensureAccessToken", () => {
     });
 
     await ensureAccessToken(client, store, { ...IDENTITY, deviceId: profileDeviceId });
+  });
+
+  it("surfaces a PIN-locked profile's pin_required answer without logging in or dropping the session", async () => {
+    const paths: string[] = [];
+    const client = new ApiClient({
+      baseUrl: BASE_URL,
+      fetchImpl: mockFetch(async (request) => {
+        paths.push(new URL(request.url).pathname);
+        return jsonResponse(403, { error: "pin_required", message: "PIN needed" });
+      }),
+    });
+    const store = new TokenStore();
+    store.set({ accessToken: "stale", refreshToken: "rt-locked", tokenType: "Bearer", expiresAt: Date.now() - 1 });
+
+    const failure = await ensureAccessToken(client, store, IDENTITY).catch((err: unknown) => err);
+
+    expect(failure).toBeInstanceOf(PinRequiredError);
+    expect(paths).toEqual(["/api/v1/auth/refresh"]);
+    expect(store.get()).toMatchObject({ refreshToken: "rt-locked" });
+    expect(isTransientAuthFailure(failure)).toBe(true);
   });
 
   it("falls back to a transparent login when the stored refresh token itself no longer works", async () => {

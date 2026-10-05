@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { describeApiError } from "@playarr-tv/api-client";
+import { isPinRequiredError } from "@playarr-tv/device-auth";
 import { useApiBaseUrl, useApiClient, useAuth } from "../lib/ApiClientProvider";
 import { selectDeviceProfiles } from "../lib/deviceProfiles";
 import { ProfileAvatar, useStoredProfileAvatar } from "../components/ProfileAvatar";
@@ -95,6 +96,7 @@ export function ProfilesPage(
     savedProfiles,
     isProfileSaved,
     switchProfile,
+    unlockProfile,
     logoutProfile,
   } = useAuth();
   const location = useLocation();
@@ -116,6 +118,9 @@ export function ProfilesPage(
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinSubmitting, setPinSubmitting] = useState(false);
+  // True when the PIN is for the server-side unlock lease of a saved profile
+  // (the server answered `pin_required`), not the pre-switch verification.
+  const [pinForLease, setPinForLease] = useState(false);
   const [updateState, setUpdateState] = useState<AndroidTvUpdateState>({
     status: "idle",
   });
@@ -318,6 +323,16 @@ export function ProfilesPage(
       if (action === "settings") openSettings();
       else navigate(loginFrom, { replace: true });
     } catch (error) {
+      if (isPinRequiredError(error)) {
+        // The saved session is intact; the server only wants the PIN.
+        setSwitchingId(null);
+        setPin("");
+        setPinError(null);
+        setPinAction(action);
+        setPinForLease(true);
+        setPinProfile(profile);
+        return;
+      }
       setLoadState({ status: "error", message: describeApiError(error) });
       setSwitchingId(null);
       const settingsOrigin =
@@ -342,6 +357,7 @@ export function ProfilesPage(
       setPin("");
       setPinError(null);
       setPinAction(action);
+      setPinForLease(false);
       setPinProfile(profile);
       return;
     }
@@ -354,6 +370,18 @@ export function ProfilesPage(
     setPinSubmitting(true);
     setPinError(null);
     try {
+      if (pinForLease) {
+        const leaseProfile = pinProfile;
+        const leaseAction = pinAction;
+        await unlockProfile(leaseProfile.id, pin);
+        setPinProfile(null);
+        setPin("");
+        setPinForLease(false);
+        setPinSubmitting(false);
+        if (leaseAction === "settings") openSettings();
+        else navigate(loginFrom, { replace: true });
+        return;
+      }
       const result = await client.verifyProfilePin(pinProfile.id, { pin });
       if (!result.verified) {
         setPinError(t("pages.profiles.pinNotAccepted"));
@@ -377,6 +405,7 @@ export function ProfilesPage(
     setPinProfile(null);
     setPin("");
     setPinError(null);
+    setPinForLease(false);
     setPinSubmitting(false);
     window.requestAnimationFrame(() => {
       if (!profileId) return;

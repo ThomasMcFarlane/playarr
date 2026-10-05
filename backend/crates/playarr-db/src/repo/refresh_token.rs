@@ -81,6 +81,7 @@ impl SqlxRefreshTokenRepo {
         let expires_at: String = row.try_get("expires_at")?;
         let rotated_at: Option<String> = row.try_get("rotated_at")?;
         let revoked: i64 = row.try_get("revoked")?;
+        let unlock_until: Option<String> = row.try_get("unlock_until")?;
 
         Ok(RefreshTokenRecord {
             device_id: parse_uuid(&device_id)?,
@@ -97,6 +98,7 @@ impl SqlxRefreshTokenRepo {
             expires_at: parse_datetime(&expires_at)?,
             rotated_at: rotated_at.map(|raw| parse_datetime(&raw)).transpose()?,
             revoked: bool_from_i64(revoked),
+            unlock_until: unlock_until.map(|raw| parse_datetime(&raw)).transpose()?,
         })
     }
 }
@@ -107,12 +109,12 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
         let sql = match self.backend {
             Backend::Sqlite => {
                 "SELECT device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked \
+                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until \
                  FROM refresh_token_families WHERE device_id = ?"
             }
             Backend::Postgres => {
                 "SELECT device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked \
+                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until \
                  FROM refresh_token_families WHERE device_id = $1"
             }
         };
@@ -130,26 +132,28 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
             Backend::Sqlite => {
                 "INSERT INTO refresh_token_families \
                  (device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (device_id) DO UPDATE SET \
                  user_id = excluded.user_id, session_id = excluded.session_id, \
                  family_id = excluded.family_id, generation = excluded.generation, \
                  current_hash = excluded.current_hash, used_hashes = excluded.used_hashes, \
                  issued_at = excluded.issued_at, expires_at = excluded.expires_at, \
-                 rotated_at = excluded.rotated_at, revoked = excluded.revoked"
+                 rotated_at = excluded.rotated_at, revoked = excluded.revoked, \
+                 unlock_until = excluded.unlock_until"
             }
             Backend::Postgres => {
                 "INSERT INTO refresh_token_families \
                  (device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
                  ON CONFLICT (device_id) DO UPDATE SET \
                  user_id = excluded.user_id, session_id = excluded.session_id, \
                  family_id = excluded.family_id, generation = excluded.generation, \
                  current_hash = excluded.current_hash, used_hashes = excluded.used_hashes, \
                  issued_at = excluded.issued_at, expires_at = excluded.expires_at, \
-                 rotated_at = excluded.rotated_at, revoked = excluded.revoked"
+                 rotated_at = excluded.rotated_at, revoked = excluded.revoked, \
+                 unlock_until = excluded.unlock_until"
             }
         };
         sqlx::query(sql)
@@ -164,6 +168,7 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
             .bind(format_datetime(record.expires_at))
             .bind(record.rotated_at.map(format_datetime))
             .bind(bool_to_i64(record.revoked))
+            .bind(record.unlock_until.map(format_datetime))
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -197,6 +202,7 @@ mod tests {
             expires_at: now + chrono::Duration::days(30),
             rotated_at: None,
             revoked: false,
+            unlock_until: Some(now + chrono::Duration::minutes(30)),
         }
     }
 

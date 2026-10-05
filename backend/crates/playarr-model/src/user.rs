@@ -213,4 +213,11 @@ pub struct RefreshTokenRecord {
     pub expires_at: DateTime<Utc>,
     pub rotated_at: Option<DateTime<Utc>>,
     pub revoked: bool,
+    /// Device-bound unlock lease for a PIN-locked profile (TASKS 115):
+    /// while this is in the future, a refresh for a profile that has a PIN
+    /// is allowed (and slides the lease forward). Set by a full login or by
+    /// `POST /api/v1/auth/unlock`, cleared by `POST /api/v1/auth/lock`.
+    /// `None` means "locked"; it has no effect for a profile without a PIN.
+    #[serde(default)]
+    pub unlock_until: Option<DateTime<Utc>>,
 }

@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/group-libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_group_libraries_handler"];
+        put?: never;
+        post: operations["create_group_library_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/group-libraries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["rename_group_library_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/home-rails": {
         parameters: {
             query?: never;
@@ -676,6 +708,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/routing-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_routing_rules_handler"];
+        put?: never;
+        post: operations["create_routing_rule_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/routing-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_routing_rule_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/source-instances": {
         parameters: {
             query?: never;
@@ -756,6 +820,22 @@ export interface paths {
          *     carries this change to every peer.
          */
         put: operations["update_source_folder_mappings_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/source-instances/{id}/group-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["map_source_instance_handler"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1112,6 +1192,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["lock_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1159,6 +1255,22 @@ export interface paths {
          *     concurrent submissions can never create two accounts from one QR code.
          */
         post: operations["signup_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unlock_handler"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1620,6 +1732,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media/proxy/{peer_node_id}/renditions/{rendition_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["proxy_rendition_hls_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/proxy/{peer_node_id}/sessions/{session_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["proxy_session_hls_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/media/proxy/{peer_node_id}/{media_file_id}/stream": {
         parameters: {
             query?: never;
@@ -1948,6 +2092,38 @@ export interface paths {
          *     §3.4 steps 3-4.
          */
         post: operations["enroll_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/hls/renditions/{rendition_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["peer_rendition_hls_file_handler"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/peer/hls/sessions/{session_id}/{file_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["peer_session_hls_file_handler"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4325,6 +4501,9 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        GroupLibraryRequest: {
+            name: string;
+        };
         HandoffResponse: {
             /** Format: int64 */
             acked_position_ms?: number | null;
@@ -5947,6 +6126,14 @@ export interface components {
             reason?: string | null;
             state: components["schemas"]["ProviderState"];
         };
+        PullReport: {
+            created: number;
+            fetched: number;
+            linked: number;
+            removed: number;
+            unmapped: number;
+            updated: number;
+        };
         RailPreferenceEntry: {
             hidden: boolean;
             /** Format: uuid */
@@ -5965,14 +6152,6 @@ export interface components {
         RailPreferencesResponse: {
             /** @description Every rail the admin has enabled, in this user's effective order. */
             rails: components["schemas"]["RailPreferenceEntry"][];
-        };
-        PullReport: {
-            created: number;
-            fetched: number;
-            linked: number;
-            removed: number;
-            unmapped: number;
-            updated: number;
         };
         RefreshRequest: {
             /**
@@ -6289,6 +6468,16 @@ export interface components {
             /** Format: uuid */
             user_id?: string | null;
         };
+        RoutingRuleRequest: {
+            delivery_mode: components["schemas"]["DeliveryMode"];
+            /** Format: uuid */
+            group_library_id?: string | null;
+            preferred_nodes: string[];
+            /** Format: int32 */
+            priority: number;
+            /** Format: uuid */
+            user_id?: string | null;
+        };
         /**
          * @description Response body for [`routing_rules_handler`] -- `docs/architecture/
          *     peer-groups.md` §3.6: `routing_rules` rows. `RoutingRule` is reused
@@ -6498,6 +6687,23 @@ export interface components {
             folder_mappings: {
                 [key: string]: string;
             };
+        };
+        SourceGroupLibraryRequest: {
+            /**
+             * Format: uuid
+             * @description Set to null to remove the source instance's group mapping.
+             */
+            group_library_id?: string | null;
+        };
+        /**
+         * @description The mapping response deliberately excludes the source instance's encrypted
+         *     credentials and other private configuration.
+         */
+        SourceGroupLibraryResponse: {
+            /** Format: uuid */
+            group_library_id?: string | null;
+            /** Format: uuid */
+            source_instance_id: string;
         };
         /**
          * @description Request body for registering (or re-registering, by re-POSTing with the
@@ -6815,6 +7021,16 @@ export interface components {
             /** Format: uuid */
             peer_node_id: string;
             peer_node_name: string;
+        };
+        /**
+         * @description Body of `POST /api/v1/auth/unlock`: the stored refresh credential of a
+         *     PIN-locked profile plus its PIN.
+         */
+        UnlockRequest: {
+            /** Format: uuid */
+            device_id: string;
+            pin: string;
+            refresh_token: string;
         };
         /**
          * @description What to do with content that has no usable rating when the profile has a
@@ -7488,6 +7704,154 @@ export interface operations {
                 content?: never;
             };
             /** @description No backup with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_group_libraries_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group libraries for this server's peer group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupLibrary"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Server has not joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_group_library_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupLibraryRequest"];
+            };
+        };
+        responses: {
+            /** @description Group library created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupLibrary"];
+                };
+            };
+            /** @description Invalid library name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Server has not joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rename_group_library_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Group library ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupLibraryRequest"];
+            };
+        };
+        responses: {
+            /** @description Group library renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupLibrary"];
+                };
+            };
+            /** @description Invalid library name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group library not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -8901,6 +9265,161 @@ export interface operations {
             };
         };
     };
+    list_routing_rules_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routing rules for this server's peer group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRule"][];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Server has not joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_routing_rule_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoutingRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Routing rule created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRule"];
+                };
+            };
+            /** @description Invalid group, user, or preferred peer */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Server has not joined a peer group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_routing_rule_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Routing rule ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoutingRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Routing rule updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRule"];
+                };
+            };
+            /** @description Invalid group, user, or preferred peer */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Routing rule or group library not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_source_instances_handler: {
         parameters: {
             query?: never;
@@ -9148,6 +9667,54 @@ export interface operations {
                 content?: never;
             };
             /** @description No source instance registered with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    map_source_instance_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Local source instance ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceGroupLibraryRequest"];
+            };
+        };
+        responses: {
+            /** @description Source instance group-library mapping updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceGroupLibraryResponse"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is authenticated but not an admin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source instance or group library not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -10599,6 +11166,31 @@ export interface operations {
             };
         };
     };
+    lock_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description This device's unlock lease is cleared: the next refresh needs the profile PIN */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid bearer token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     login_handler: {
         parameters: {
             query?: never;
@@ -10769,6 +11361,51 @@ export interface operations {
             };
             /** @description Invitation is invalid, expired, or already used */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlock_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "device_id": "8f14e45f-ceea-467e-adde-3fb5c8f88e4b",
+                 *       "pin": "4821",
+                 *       "refresh_token": "rt_9f8c2e1a4b3d4c5e8f9a0b1c2d3e4f5a"
+                 *     }
+                 */
+                "application/json": components["schemas"]["UnlockRequest"];
+            };
+        };
+        responses: {
+            /** @description PIN accepted: the device holds an unlock lease and a fresh token pair is issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshResponse"];
+                };
+            };
+            /** @description refresh token invalid, or PIN wrong (`invalid_pin`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12552,6 +13189,68 @@ export interface operations {
             };
         };
     };
+    proxy_rendition_hls_file_handler: {
+        parameters: {
+            query: {
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                peer_node_id: string;
+                rendition_id: string;
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proxied HLS playlist or segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxied HLS byte range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    proxy_session_hls_file_handler: {
+        parameters: {
+            query: {
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                peer_node_id: string;
+                session_id: string;
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proxied HLS playlist or segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Proxied HLS byte range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     proxy_stream_media_handler: {
         parameters: {
             query: {
@@ -13635,6 +14334,94 @@ export interface operations {
             };
             /** @description Join token is invalid, expired, or already used */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_rendition_hls_file_handler: {
+        parameters: {
+            query: {
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                rendition_id: string;
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist or segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description HLS byte range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown playback session or session does not authorise the media */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current policy does not grant access */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    peer_session_hls_file_handler: {
+        parameters: {
+            query: {
+                playback_session_id: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+                file_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist or segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description HLS byte range */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown playback session or session does not authorise the media */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current policy does not grant access */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

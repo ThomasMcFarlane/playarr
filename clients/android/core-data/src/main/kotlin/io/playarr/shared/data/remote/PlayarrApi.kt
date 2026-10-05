@@ -418,6 +418,13 @@ interface PlayarrApi {
         @Body request: VerifyProfilePinRequest,
     ): VerifyProfilePinResponse
 
+    /**
+     * Clears this device's unlock lease for the signed-in profile, so its saved
+     * session needs the profile PIN again before it can refresh (TASKS 115).
+     */
+    @POST("api/v1/auth/lock")
+    suspend fun lockProfile(): Response<Unit>
+
     // ---- Household and child controls --------------------------------------
 
     @GET("api/v1/household/status")

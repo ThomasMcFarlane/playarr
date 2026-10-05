@@ -2525,6 +2525,18 @@ paths:
           description: The metadata-provider artwork could not be safely cached
       security:
       - bearer_auth: []
+  /api/v1/auth/lock:
+    post:
+      tags:
+      - auth
+      operationId: lock_handler
+      responses:
+        '204':
+          description: 'This device''s unlock lease is cleared: the next refresh needs the profile PIN'
+        '401':
+          description: Missing or invalid bearer token
+      security:
+      - bearer_auth: []
   /api/v1/auth/login:
     post:
       tags:
@@ -2639,6 +2651,32 @@ paths:
           description: Username is already taken
         '410':
           description: Invitation is invalid, expired, or already used
+  /api/v1/auth/unlock:
+    post:
+      tags:
+      - auth
+      operationId: unlock_handler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnlockRequest'
+            example:
+              device_id: 8f14e45f-ceea-467e-adde-3fb5c8f88e4b
+              pin: '4821'
+              refresh_token: rt_9f8c2e1a4b3d4c5e8f9a0b1c2d3e4f5a
+        required: true
+      responses:
+        '200':
+          description: 'PIN accepted: the device holds an unlock lease and a fresh token pair is issued'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          description: refresh token invalid, or PIN wrong (`invalid_pin`)
+        '429':
+          description: Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`)
   /api/v1/calendar:
     get:
       tags:
@@ -15243,6 +15281,23 @@ components:
           type: string
           format: uuid
         peer_node_name:
+          type: string
+    UnlockRequest:
+      type: object
+      description: |-
+        Body of `POST /api/v1/auth/unlock`: the stored refresh credential of a
+        PIN-locked profile plus its PIN.
+      required:
+      - device_id
+      - refresh_token
+      - pin
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        pin:
+          type: string
+        refresh_token:
           type: string
     UnratedContent:
       type: string

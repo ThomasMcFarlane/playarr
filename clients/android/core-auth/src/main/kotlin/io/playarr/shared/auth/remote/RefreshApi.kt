@@ -2,6 +2,7 @@ package io.playarr.shared.auth.remote
 
 import io.playarr.shared.auth.model.RefreshRequest
 import io.playarr.shared.auth.model.RefreshResponse
+import io.playarr.shared.auth.model.UnlockRequest
 import retrofit2.http.Body
 import retrofit2.http.POST
 
@@ -9,6 +10,14 @@ import retrofit2.http.POST
 interface RefreshApi {
     @POST("api/v1/auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): RefreshResponse
+
+    /**
+     * Redeems a stored refresh token together with the profile PIN. Grants the
+     * server-side unlock lease a PIN-locked profile needs before its refresh
+     * token works again (`403 pin_required` on [refresh]).
+     */
+    @POST("api/v1/auth/unlock")
+    suspend fun unlock(@Body body: UnlockRequest): RefreshResponse
 }
 
 /**

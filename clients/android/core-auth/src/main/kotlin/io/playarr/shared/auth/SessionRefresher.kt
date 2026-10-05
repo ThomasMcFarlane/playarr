@@ -2,6 +2,7 @@ package io.playarr.shared.auth
 
 import io.playarr.shared.auth.model.RefreshRequest
 import io.playarr.shared.auth.model.RefreshResponse
+import io.playarr.shared.auth.model.UnlockRequest
 import io.playarr.shared.auth.model.sameNodeCandidateUrls
 import io.playarr.shared.auth.model.toTokenResponse
 import io.playarr.shared.auth.remote.RefreshApi
@@ -12,6 +13,20 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
+
+/**
+ * The server refused to renew a PIN-locked profile's session because this
+ * device holds no unlock lease (`403 pin_required`). The saved session is
+ * intact; ask for the profile PIN and call [SessionRefresher.unlockWithPin].
+ */
+class PinRequiredException : Exception("this profile needs its PIN to continue")
+
+/** True for a `403 pin_required` answer from the refresh or unlock endpoint. */
+internal fun HttpException.isPinRequired(): Boolean {
+    if (code() != 403) return false
+    val body = runCatching { response()?.errorBody()?.string() }.getOrNull().orEmpty()
+    return Regex("\"error\"\\s*:\\s*\"pin_required\"").containsMatchIn(body)
+}
 
 /**
  * Refreshes and rotates one native client's token pair after an
@@ -57,6 +72,44 @@ class SessionRefresher @Inject constructor(
     private val refreshApiForUrl: RefreshApiForUrl,
 ) {
     private val mutex = Mutex()
+
+    /**
+     * Redeems the current session's refresh token right now (no 401 needed)
+     * and stores the rotated pair. Used when switching to a saved profile so a
+     * PIN-locked one is checked against its unlock lease immediately. Throws
+     * [PinRequiredException] when the profile needs its PIN; any other failure
+     * leaves the stored session untouched and rethrows.
+     */
+    suspend fun refreshNow(): String = mutex.withLock {
+        val request = currentRequest() ?: error("no stored session to refresh")
+        try {
+            val response = refreshApi.refresh(request)
+            tokenStore.save(response.toTokenResponse())
+            knownServerGroupStore.rememberPeerAddresses(response.peerAddresses)
+            response.accessToken
+        } catch (error: HttpException) {
+            if (error.isPinRequired()) throw PinRequiredException()
+            throw error
+        }
+    }
+
+    /**
+     * Unlocks the current (PIN-locked) profile on this device with [pin] and
+     * stores the rotated token pair. A wrong PIN surfaces as the server's
+     * `401 invalid_pin` or `429 pin_locked` [HttpException].
+     */
+    suspend fun unlockWithPin(pin: String): String = mutex.withLock {
+        val base = currentRequest() ?: error("no stored session to unlock")
+        val response = refreshApi.unlock(UnlockRequest(base.deviceId, base.refreshToken, pin))
+        tokenStore.save(response.toTokenResponse())
+        knownServerGroupStore.rememberPeerAddresses(response.peerAddresses)
+        response.accessToken
+    }
+
+    private suspend fun currentRequest(): RefreshRequest? {
+        val refreshToken = tokenStore.refreshToken.first()?.takeIf { it.isNotBlank() } ?: return null
+        return RefreshRequest(deviceId = tokenStore.getOrCreateDeviceId(), refreshToken = refreshToken)
+    }
 
     suspend fun refreshAccessToken(rejectedAccessToken: String?): String? = mutex.withLock {
         val currentAccessToken = tokenStore.accessToken.first()

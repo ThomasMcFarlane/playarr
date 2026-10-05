@@ -607,7 +607,8 @@ pub async fn test_state() -> (Router, TestState) {
             // replay to be rejected; the grace window itself is covered in
             // playarr-auth.
         )
-        .with_reuse_grace(Duration::zero()),
+        .with_reuse_grace(Duration::zero())
+        .with_pin_lease(profile_pin_repo.clone(), Duration::minutes(30)),
     );
     let device_flow: Arc<dyn DeviceFlowHandler> = Arc::new(DashMapDeviceFlowHandler::new(
         Arc::new(InMemoryDeviceAuthorizationStore::new()),

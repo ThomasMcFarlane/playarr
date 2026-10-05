@@ -1,0 +1,1 @@
+- A PIN-locked profile's stored refresh token can no longer be redeemed without the PIN: the server holds a device-bound unlock lease (granted by login or `POST /api/v1/auth/unlock`, slid by refresh, cleared by `POST /api/v1/auth/lock`) and answers `403 pin_required` without one. Web and Android clients prompt for the PIN and lock a profile when switching away.

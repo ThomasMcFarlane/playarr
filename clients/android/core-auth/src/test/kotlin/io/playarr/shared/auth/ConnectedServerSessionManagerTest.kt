@@ -8,6 +8,7 @@ import io.playarr.shared.auth.model.LoginRequest
 import io.playarr.shared.auth.model.LoginResponse
 import io.playarr.shared.auth.model.RefreshRequest
 import io.playarr.shared.auth.model.RefreshResponse
+import io.playarr.shared.auth.model.UnlockRequest
 import io.playarr.shared.auth.remote.LoginApi
 import io.playarr.shared.auth.remote.LoginApiForUrl
 import io.playarr.shared.auth.remote.RefreshApi
@@ -115,6 +116,7 @@ class ConnectedServerSessionManagerTest {
         },
         RefreshApiForUrl {
             object : RefreshApi {
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
                 override suspend fun refresh(body: RefreshRequest): RefreshResponse = refresh(body)
             }
         },

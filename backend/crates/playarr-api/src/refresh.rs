@@ -108,6 +108,101 @@ pub async fn refresh_handler(
     }))
 }
 
+/// Body of `POST /api/v1/auth/unlock`: the stored refresh credential of a
+/// PIN-locked profile plus its PIN.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UnlockRequest {
+    pub device_id: Uuid,
+    pub refresh_token: String,
+    pub pin: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/unlock",
+    tag = "auth",
+    request_body(
+        content = UnlockRequest,
+        example = json!({
+            "device_id": "8f14e45f-ceea-467e-adde-3fb5c8f88e4b",
+            "refresh_token": "rt_9f8c2e1a4b3d4c5e8f9a0b1c2d3e4f5a",
+            "pin": "4821"
+        })
+    ),
+    responses(
+        (status = 200, description = "PIN accepted: the device holds an unlock lease and a fresh token pair is issued", body = RefreshResponse),
+        (status = 401, description = "refresh token invalid, or PIN wrong (`invalid_pin`)"),
+        (status = 429, description = "Too many incorrect PIN attempts (`pin_locked`, with `retry_after_seconds`)")
+    )
+)]
+pub async fn unlock_handler(
+    State(state): State<AppState>,
+    Json(body): Json<UnlockRequest>,
+) -> Result<Json<RefreshResponse>, ApiError> {
+    // The refresh token proves which profile is being unlocked; without a
+    // valid one there is no PIN oracle at all.
+    let user_id = state
+        .sessions
+        .peek_user(body.device_id, &body.refresh_token)
+        .await?;
+    state
+        .household
+        .ensure_pin_not_locked(user_id, user_id)
+        .await?;
+    let pin_hash = state
+        .profile_pin_repo
+        .find_hash(user_id)
+        .await
+        .map_err(|error| ApiError::internal(format!("failed to load profile PIN: {error}")))?;
+    // A profile with no PIN has nothing to unlock; treat it as a plain
+    // refresh so a client can call this unconditionally.
+    if let Some(pin_hash) = pin_hash {
+        let verifier = playarr_auth::Argon2PasswordVerifier;
+        if !playarr_auth::PasswordVerifier::verify(&verifier, &body.pin, &pin_hash) {
+            state.household.record_pin_failure(user_id, user_id).await;
+            return Err(ApiError::new(
+                axum::http::StatusCode::UNAUTHORIZED,
+                "invalid_pin",
+                "the PIN is incorrect",
+            ));
+        }
+        state.household.reset_pin_failures(user_id, user_id).await;
+    }
+    let (session, token_response) = state
+        .sessions
+        .unlock(body.device_id, &body.refresh_token)
+        .await?;
+    let peer_addresses = peer_addresses_for_response(&state).await?;
+    Ok(Json(RefreshResponse {
+        access_token: token_response.access_token,
+        refresh_token: token_response.refresh_token,
+        token_type: token_response.token_type,
+        expires_in: token_response.expires_in,
+        user_id: session.user_id,
+        peer_addresses,
+    }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/lock",
+    tag = "auth",
+    responses(
+        (status = 204, description = "This device's unlock lease is cleared: the next refresh needs the profile PIN"),
+        (status = 401, description = "Missing or invalid bearer token")
+    )
+)]
+pub async fn lock_handler(
+    State(state): State<AppState>,
+    auth: crate::auth_extractor::AuthUser,
+) -> Result<axum::http::StatusCode, ApiError> {
+    state
+        .sessions
+        .set_unlock_lease(auth.claims.device_id, None)
+        .await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,5 +461,235 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    async fn post_json(
+        router: &axum::Router,
+        uri: &str,
+        bearer: Option<&str>,
+        body: serde_json::Value,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("content-type", "application/json");
+        if let Some(token) = bearer {
+            builder = builder.header("authorization", format!("Bearer {token}"));
+        }
+        let response = router
+            .clone()
+            .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        (status, json)
+    }
+
+    async fn issue_for(state: &crate::test_support::TestState, user_id: Uuid) -> (Uuid, String) {
+        let device_id = Uuid::new_v4();
+        let device = playarr_model::Device {
+            id: device_id,
+            user_id,
+            name: "test device".to_string(),
+            platform: playarr_model::ClientPlatform::Web,
+            client_version: "1.0.0".to_string(),
+            last_seen_at: None,
+            trusted: false,
+        };
+        let (_session, issued) = state
+            .app
+            .sessions
+            .issue(device, state.app.refresh_ttl)
+            .await
+            .expect("issue session");
+        (device_id, issued.refresh_token)
+    }
+
+    /// TASKS 115: a stored refresh token for a PIN-locked profile cannot be
+    /// redeemed without the PIN once the device's unlock lease is gone, so a
+    /// modified client that never calls the PIN check gets nowhere.
+    #[tokio::test]
+    async fn pin_locked_profile_refresh_needs_an_unlock_lease() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        state
+            .app
+            .profile_pin_repo
+            .upsert_hash(user_id, &playarr_auth::login::hash_password("4821"))
+            .await
+            .unwrap();
+        let (device_id, token) = issue_for(&state, user_id).await;
+
+        // A fresh login holds a lease, so the active profile refreshes.
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let token = json["refresh_token"].as_str().unwrap().to_string();
+        let access = json["access_token"].as_str().unwrap().to_string();
+
+        // Switching away locks the device's lease.
+        let (status, _) = post_json(
+            &router,
+            "/api/v1/auth/lock",
+            Some(&access),
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        // Bypass attempt: redeem the stored token directly.
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"], "pin_required");
+
+        // The refusal did not burn the token: the right PIN still unlocks it.
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/unlock",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token, "pin": "0000" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"], "invalid_pin");
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/unlock",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token, "pin": "4821" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let token = json["refresh_token"].as_str().unwrap().to_string();
+
+        // The lease now lets the profile refresh again.
+        let (status, _) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn expired_lease_and_pinless_profiles() {
+        let (router, state) = test_state().await;
+        let locked_user = Uuid::new_v4();
+        seed_streaming_user(&state, locked_user).await;
+        state
+            .app
+            .profile_pin_repo
+            .upsert_hash(locked_user, &playarr_auth::login::hash_password("4821"))
+            .await
+            .unwrap();
+        let (device_id, token) = issue_for(&state, locked_user).await;
+        state
+            .app
+            .sessions
+            .set_unlock_lease(
+                device_id,
+                Some(chrono::Utc::now() - chrono::Duration::seconds(1)),
+            )
+            .await
+            .unwrap();
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"], "pin_required");
+
+        // A profile without a PIN is never gated, even with no lease.
+        let open_user = Uuid::new_v4();
+        seed_streaming_user(&state, open_user).await;
+        let (open_device, open_token) = issue_for(&state, open_user).await;
+        state
+            .app
+            .sessions
+            .set_unlock_lease(open_device, None)
+            .await
+            .unwrap();
+        let (status, _) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": open_device, "refresh_token": open_token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn unlock_pin_guesses_lock_out_and_need_a_valid_token() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        state
+            .app
+            .profile_pin_repo
+            .upsert_hash(user_id, &playarr_auth::login::hash_password("4821"))
+            .await
+            .unwrap();
+        let (device_id, token) = issue_for(&state, user_id).await;
+        state
+            .app
+            .sessions
+            .set_unlock_lease(device_id, None)
+            .await
+            .unwrap();
+
+        // No valid refresh token: no PIN oracle, no failure counted.
+        let (status, _) = post_json(
+            &router,
+            "/api/v1/auth/unlock",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": "rt_nope", "pin": "4821" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+        let mut last = StatusCode::OK;
+        let mut last_json = serde_json::Value::Null;
+        for _ in 0..8 {
+            (last, last_json) = post_json(
+                &router,
+                "/api/v1/auth/unlock",
+                None,
+                serde_json::json!({ "device_id": device_id, "refresh_token": token, "pin": "1111" }),
+            )
+            .await;
+        }
+        assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(last_json["error"], "pin_locked");
+        // Even the correct PIN is refused while locked out.
+        let (status, _) = post_json(
+            &router,
+            "/api/v1/auth/unlock",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token, "pin": "4821" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     }
 }

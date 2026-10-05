@@ -314,6 +314,7 @@ export type LoginRequest = components["schemas"]["LoginRequest"];
 export type LoginResponse = components["schemas"]["LoginResponse"];
 export type RefreshRequest = components["schemas"]["RefreshRequest"];
 export type RefreshResponse = components["schemas"]["RefreshResponse"];
+export type UnlockRequest = components["schemas"]["UnlockRequest"];
 export type DeviceCodeRequest = components["schemas"]["DeviceCodeRequest"];
 export type DeviceCodeResponse = components["schemas"]["DeviceCodeResponseSchema"];
 export type DeviceAuthorizationRequest = components["schemas"]["DeviceAuthorizationRequest"];
@@ -832,6 +833,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/users/me/profile-pin", method: "PATCH" },
   { schemaPath: "/api/v1/users/profiles", method: "GET" },
   { schemaPath: "/api/v1/users/profiles/{id}/verify-pin", method: "POST" },
+  { schemaPath: "/api/v1/auth/lock", method: "POST" },
   { schemaPath: "/api/v1/oauth/device/authorize", method: "POST" },
   { schemaPath: "/api/v1/household/status", method: "GET" },
   { schemaPath: "/api/v1/household/approvals", method: "GET" },
@@ -1489,6 +1491,25 @@ export class ApiClient {
    */
   async refresh(body: RefreshRequest): Promise<RefreshResponse> {
     return this.unwrap(await this.raw.POST("/api/v1/auth/refresh", { body }));
+  }
+
+  /**
+   * `POST /api/v1/auth/unlock` -- presents a stored refresh token together
+   * with the profile PIN. On success the server holds a device-bound unlock
+   * lease for that profile and returns a rotated token pair. A PIN-locked
+   * profile's refresh token cannot be redeemed through `refresh` without
+   * such a lease (`403 pin_required`).
+   */
+  async unlockProfile(body: UnlockRequest): Promise<RefreshResponse> {
+    return this.unwrap(await this.raw.POST("/api/v1/auth/unlock", { body }));
+  }
+
+  /**
+   * `POST /api/v1/auth/lock` -- clears this device's unlock lease for the
+   * signed-in profile, so its stored refresh token needs the PIN again.
+   */
+  async lockProfile(): Promise<void> {
+    await this.unwrap(await this.raw.POST("/api/v1/auth/lock", {}));
   }
 
   // ---------------------------------------------------------------------

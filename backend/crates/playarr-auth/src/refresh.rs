@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
-use playarr_db::{DbError, DeviceRepo};
+use playarr_db::{DbError, DeviceRepo, ProfilePinRepo};
 use playarr_model::{Device, Session};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
@@ -61,6 +61,11 @@ pub enum RefreshError {
     ReuseDetected,
     #[error("token family has been revoked")]
     FamilyRevoked,
+    /// The profile is PIN-locked and this device holds no unexpired unlock
+    /// lease (TASKS 115). The token family is untouched; the client must
+    /// call the unlock endpoint with the profile PIN.
+    #[error("profile PIN required to refresh")]
+    PinRequired,
     #[error(transparent)]
     Db(#[from] DbError),
     #[error(transparent)]
@@ -86,6 +91,7 @@ enum RotationOutcome {
     Expired,
     ReuseDetected,
     FamilyRevoked,
+    PinRequired,
     /// The redeeming call failed for an infrastructure reason (a database
     /// or JWT-issuance error) rather than a security-relevant outcome --
     /// too rare, and too dependent on non-`Clone` inner error types, to
@@ -103,6 +109,7 @@ impl From<Result<(Session, TokenResponse), RefreshError>> for RotationOutcome {
             Err(RefreshError::Expired) => RotationOutcome::Expired,
             Err(RefreshError::ReuseDetected) => RotationOutcome::ReuseDetected,
             Err(RefreshError::FamilyRevoked) => RotationOutcome::FamilyRevoked,
+            Err(RefreshError::PinRequired) => RotationOutcome::PinRequired,
             Err(RefreshError::Db(_)) | Err(RefreshError::Jwt(_)) => RotationOutcome::Infra,
         }
     }
@@ -136,6 +143,15 @@ pub struct RefreshTokenService {
     /// both read the same record and the later write would drop the other's
     /// freshly minted token.
     device_locks: DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>,
+    /// When set, refreshing a profile that has a PIN needs an unexpired
+    /// unlock lease (see [`Self::with_pin_lease`]).
+    pin_lease: Option<PinLease>,
+}
+
+#[derive(Clone)]
+struct PinLease {
+    pins: Arc<dyn ProfilePinRepo>,
+    ttl: Duration,
 }
 
 impl RefreshTokenService {
@@ -153,7 +169,92 @@ impl RefreshTokenService {
             reuse_grace: Duration::seconds(DEFAULT_REUSE_GRACE_SECS),
             in_flight: DashMap::new(),
             device_locks: DashMap::new(),
+            pin_lease: None,
         }
+    }
+
+    /// Enforces the unlock lease for PIN-locked profiles (TASKS 115): a
+    /// refresh for a user that has a profile PIN is refused with
+    /// [`RefreshError::PinRequired`] unless the device's family holds an
+    /// unexpired lease. A login (`issue`) or [`Self::unlock`] grants a lease
+    /// of `ttl`; every permitted refresh slides it forward, so an active
+    /// profile is never interrupted while an idle, stored one locks itself.
+    pub fn with_pin_lease(mut self, pins: Arc<dyn ProfilePinRepo>, ttl: Duration) -> Self {
+        self.pin_lease = Some(PinLease { pins, ttl });
+        self
+    }
+
+    /// Whether `user_id` has a profile PIN, for callers that need to know
+    /// whether the lease applies.
+    pub async fn user_has_pin(&self, user_id: Uuid) -> Result<bool, DbError> {
+        match &self.pin_lease {
+            Some(lease) => Ok(lease.pins.find_hash(user_id).await?.is_some()),
+            None => Ok(false),
+        }
+    }
+
+    /// Returns the user a still-valid refresh token for `device_id` belongs
+    /// to, without rotating it. Used by the unlock endpoint to check the
+    /// PIN against the right profile before granting a lease.
+    pub async fn peek_user(&self, device_id: Uuid, raw_token: &str) -> Result<Uuid, RefreshError> {
+        let record = self
+            .store
+            .get(device_id)
+            .await?
+            .ok_or(RefreshError::UnknownToken)?;
+        if record.revoked {
+            return Err(RefreshError::FamilyRevoked);
+        }
+        if Utc::now() > record.expires_at {
+            return Err(RefreshError::Expired);
+        }
+        if !record.used_hashes.contains(&hash_token(raw_token)) {
+            return Err(RefreshError::UnknownToken);
+        }
+        Ok(record.user_id)
+    }
+
+    /// Grants (or, with `None`, clears) the unlock lease of `device_id`'s
+    /// family. `None` is the explicit "lock now" used when switching away.
+    pub async fn set_unlock_lease(
+        &self,
+        device_id: Uuid,
+        until: Option<chrono::DateTime<Utc>>,
+    ) -> Result<(), RefreshError> {
+        let device_lock = self
+            .device_locks
+            .entry(device_id)
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        let _guard = device_lock.lock().await;
+        let mut record = self
+            .store
+            .get(device_id)
+            .await?
+            .ok_or(RefreshError::UnknownToken)?;
+        record.unlock_until = until;
+        self.store.put(record).await?;
+        Ok(())
+    }
+
+    /// Lease length configured with [`Self::with_pin_lease`], if any.
+    pub fn pin_lease_ttl(&self) -> Option<Duration> {
+        self.pin_lease.as_ref().map(|lease| lease.ttl)
+    }
+
+    /// Grants a lease on `device_id`'s family (the caller has just verified
+    /// the PIN) and rotates the presented refresh token in one step.
+    pub async fn unlock(
+        &self,
+        device_id: Uuid,
+        raw_token: &str,
+    ) -> Result<(Session, TokenResponse), RefreshError> {
+        let ttl = self.pin_lease_ttl().unwrap_or_else(Duration::zero);
+        // Validate the presented token before touching the lease.
+        self.peek_user(device_id, raw_token).await?;
+        self.set_unlock_lease(device_id, Some(Utc::now() + ttl))
+            .await?;
+        self.rotate(device_id, raw_token).await
     }
 
     /// Sets the reuse grace window: a token that was retired no more than
@@ -198,6 +299,7 @@ impl RefreshTokenService {
             expires_at: now + refresh_ttl,
             rotated_at: None,
             revoked: false,
+            unlock_until: self.pin_lease.as_ref().map(|lease| now + lease.ttl),
         };
         {
             let device_lock = self
@@ -295,6 +397,7 @@ impl RefreshTokenService {
             RotationOutcome::Expired => Err(RefreshError::Expired),
             RotationOutcome::ReuseDetected => Err(RefreshError::ReuseDetected),
             RotationOutcome::FamilyRevoked => Err(RefreshError::FamilyRevoked),
+            RotationOutcome::PinRequired => Err(RefreshError::PinRequired),
             RotationOutcome::Infra => self.rotate_uncoalesced(device_id, raw_token).await,
         }
     }
@@ -361,6 +464,20 @@ impl RefreshTokenService {
                 family_id = %record.family_id,
                 "refresh token reuse within the grace window; rotating again without revoking"
             );
+        }
+
+        if let Some(lease) = &self.pin_lease {
+            let locked = !record.unlock_until.is_some_and(|until| until > now);
+            if locked && lease.pins.find_hash(record.user_id).await?.is_some() {
+                tracing::info!(
+                    %device_id,
+                    "refresh refused: PIN-locked profile has no unlock lease"
+                );
+                return Err(RefreshError::PinRequired);
+            }
+            // Slide for every permitted refresh (PIN or not) so setting a
+            // PIN later never locks out the profile that is in use.
+            record.unlock_until = Some(now + lease.ttl);
         }
 
         let raw_new = opaque_token();

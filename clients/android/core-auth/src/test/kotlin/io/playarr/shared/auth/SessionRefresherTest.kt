@@ -9,6 +9,7 @@ import io.playarr.shared.auth.model.PeerAddressBundle
 import io.playarr.shared.auth.model.PeerAddressEntry
 import io.playarr.shared.auth.model.RefreshRequest
 import io.playarr.shared.auth.model.RefreshResponse
+import io.playarr.shared.auth.model.UnlockRequest
 import io.playarr.shared.auth.model.TokenResponse
 import io.playarr.shared.auth.remote.RefreshApi
 import java.io.IOException
@@ -38,6 +39,7 @@ private class RefreshFakeDataStore(initial: Preferences = emptyPreferences()) : 
 
 /** A [RefreshApi] fake that always throws [HttpException] 401 -- a definitive server rejection. */
 private fun rejectingRefreshApi(): RefreshApi = object : RefreshApi {
+    override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
     override suspend fun refresh(body: RefreshRequest): RefreshResponse {
         throw HttpException(Response.error<RefreshResponse>(401, "{}".toResponseBody("application/json".toMediaType())))
     }
@@ -45,6 +47,7 @@ private fun rejectingRefreshApi(): RefreshApi = object : RefreshApi {
 
 /** A [RefreshApi] fake that always throws a plain network [IOException] -- an unreachable address, not a rejection. */
 private fun unreachableRefreshApi(): RefreshApi = object : RefreshApi {
+    override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
     override suspend fun refresh(body: RefreshRequest): RefreshResponse = throw IOException("no route to host")
 }
 
@@ -75,6 +78,7 @@ class SessionRefresherTest {
         var captured: RefreshRequest? = null
         val refresher = SessionRefresher(
             refreshApi = object : RefreshApi {
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
                 override suspend fun refresh(body: RefreshRequest): RefreshResponse {
                     captured = body
                     return RefreshResponse("new-access", "new-refresh", "Bearer", 900, "user")
@@ -92,11 +96,49 @@ class SessionRefresherTest {
     }
 
     @Test
+    fun `pin_required refresh keeps the saved session and unlock with the pin stores the rotated pair`() = runBlocking {
+        val store = tokenStore()
+        var unlocked: UnlockRequest? = null
+        val refresher = SessionRefresher(
+            refreshApi = object : RefreshApi {
+                override suspend fun refresh(body: RefreshRequest): RefreshResponse {
+                    val json = """{"error":"pin_required","message":"PIN needed"}"""
+                    throw HttpException(Response.error<RefreshResponse>(403, json.toResponseBody("application/json".toMediaType())))
+                }
+
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse {
+                    unlocked = body
+                    return RefreshResponse("unlocked-access", "unlocked-refresh", "Bearer", 900, "user")
+                }
+            },
+            tokenStore = store,
+            knownServerGroupStore = emptyKnownServerGroupStore(),
+            refreshApiForUrl = { error("no known group -- should not be called") },
+        )
+
+        var thrown: Throwable? = null
+        try {
+            refresher.refreshNow()
+        } catch (failure: Throwable) {
+            thrown = failure
+        }
+        assertEquals(true, thrown is PinRequiredException)
+        // The session is intact: nothing was cleared or rotated.
+        assertEquals("old-refresh", store.refreshToken.first())
+
+        assertEquals("unlocked-access", refresher.unlockWithPin("4821"))
+        assertEquals("4821", unlocked?.pin)
+        assertEquals("old-refresh", unlocked?.refreshToken)
+        assertEquals("unlocked-refresh", store.refreshToken.first())
+    }
+
+    @Test
     fun `second rejected request reuses token already refreshed by first request`() = runBlocking {
         val store = tokenStore()
         var refreshCalls = 0
         val refresher = SessionRefresher(
             refreshApi = object : RefreshApi {
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
                 override suspend fun refresh(body: RefreshRequest): RefreshResponse {
                     refreshCalls++
                     return RefreshResponse("new-access", "new-refresh", "Bearer", 900, "user")
@@ -150,6 +192,7 @@ class SessionRefresherTest {
                 refreshApiForUrl = { url ->
                     when (url) {
                         "https://node-a-lan.example" -> object : RefreshApi {
+                            override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
                             override suspend fun refresh(body: RefreshRequest): RefreshResponse {
                                 captured = body
                                 return RefreshResponse("new-access", "new-refresh", "Bearer", 900, "user")
@@ -299,6 +342,7 @@ class SessionRefresherTest {
         val knownServerGroupStore = emptyKnownServerGroupStore()
         val refresher = SessionRefresher(
             refreshApi = object : RefreshApi {
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
                 override suspend fun refresh(body: RefreshRequest): RefreshResponse = RefreshResponse(
                     "new-access",
                     "new-refresh",

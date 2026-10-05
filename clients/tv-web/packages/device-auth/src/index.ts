@@ -33,6 +33,8 @@ export {
   ensureAccessToken,
   isTransientAuthFailure,
   TransientAuthError,
+  PinRequiredError,
+  isPinRequiredError,
   toStoredSession,
   type EnsureAccessTokenIdentity,
   type EnsureAccessTokenOptions,

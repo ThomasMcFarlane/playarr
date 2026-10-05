@@ -10,6 +10,14 @@ data class RefreshRequest(
     @SerialName("refresh_token") val refreshToken: String,
 )
 
+/** Body for `POST /api/v1/auth/unlock`: a stored refresh token plus the profile PIN. */
+@Serializable
+data class UnlockRequest(
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("refresh_token") val refreshToken: String,
+    val pin: String,
+)
+
 /** Fresh access token plus the rotated refresh token returned by the server. */
 @Serializable
 data class RefreshResponse(
