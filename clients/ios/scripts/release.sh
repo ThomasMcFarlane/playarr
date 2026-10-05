@@ -49,7 +49,7 @@ if [[ "$mode" == archive || "$mode" == export || "$mode" == testflight ]]; then
   fi
 
   umask 077
-  work="$RUNNER_TEMP/playarr-signing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+  work="$RUNNER_TEMP/playarr-signing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$platform"
   library_dir="$HOME/Library"
   developer_dir="$library_dir/Developer"
   xcode_dir="$developer_dir/Xcode"
@@ -108,7 +108,7 @@ if temporary_keychain not in keychains:
 PY
   printf '%s' "$APPLE_DISTRIBUTION_P12_BASE64" | base64 -D > "$work/distribution.p12"
   security import "$work/distribution.p12" -k "$keychain" -P "$APPLE_DISTRIBUTION_P12_PASSWORD" -T /usr/bin/codesign >/dev/null
-  security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
   printf '%s' "$profile_base64" | base64 -D > "$work/profile.mobileprovision"
   security cms -D -i "$work/profile.mobileprovision" > "$work/profile.plist"
   profile_application_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$work/profile.plist")"
