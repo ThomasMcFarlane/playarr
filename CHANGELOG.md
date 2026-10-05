@@ -27,6 +27,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- CI: a weekly workflow lists remote branches whose commits are not on `main` and that have no open pull request and no task-board reference, and fails until each is given a PR, a row or deleted.
 - CI: pull requests now check only the Rust crates they change plus their dependents (`scripts/ci/rust-scope.sh`); shared inputs, pushes to main and a nightly schedule run the full workspace. OpenAPI diff runs only when the API crate is affected, and every CI job has a timeout (TASKS 332).
 - CI: CHANGELOG.md and TASKS.md are no longer edited in PRs. Per-change fragments (`changelog.d/`, `tasks.d/`) are folded by the merge train (`scripts/fold-fragments.mjs`), and CI rejects direct edits (TASKS 331).
 - CI: merge train (`merge-train.yml`, `scripts/merge-train.sh`) lands PRs labelled `ready` one at a time, oldest first, after `ci-required` passes on the exact head; CI gains `workflow_dispatch` (TASKS 330).

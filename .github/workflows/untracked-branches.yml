@@ -1,0 +1,31 @@
+# Weekly report of remote branches with work nobody tracks: commits not on main, no
+# open pull request and no task-board reference. Fails (with the list in the job
+# summary) so untracked work cannot sit unnoticed. One `gh pr list` call per run.
+name: Untracked branches
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: untracked-branches
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: Untracked branch report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: List untracked branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/check-untracked-branches.sh
