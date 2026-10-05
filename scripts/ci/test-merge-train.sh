@@ -77,7 +77,7 @@ landing_guard "$m1" "$(git rev-parse HEAD)" >/dev/null && bad "guard allowed del
 e2e=$(mktemp -d); git init -q --bare "$e2e/origin.git"
 git push -q "$e2e/origin.git" "r-pr:refs/heads/feature" "$m1:refs/heads/main"
 git clone -q "$e2e/origin.git" "$e2e/work" 2>/dev/null
-mkdir -p "$e2e/work/scripts/ci"; printf '#!/bin/sh\nexit 0\n' >"$e2e/work/scripts/ci/check-no-hosted-runners.sh"; chmod +x "$e2e/work/scripts/ci/check-no-hosted-runners.sh"
+mkdir -p "$e2e/work/scripts/ci"; printf '#!/bin/sh\nexit 0\n' >"$e2e/work/scripts/ci/check-hosted-runners.sh"; chmod +x "$e2e/work/scripts/ci/check-hosted-runners.sh"
 orig=$(git rev-parse r-pr)
 (
   cd "$e2e/work"; git config user.name t; git config user.email t@example.invalid
