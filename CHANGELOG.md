@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Radarr, Whisparr and Lidarr artwork entries now tolerate a missing instance-local `url` (only `remoteUrl` present), as Sonarr already did, so one such image no longer fails a whole sync with "missing field `url`". Regression tests added for each client.
 - Merge train: stop re-merging `main` into every queued pull request. It now does so only when main's new commits touch the PR's files (fragment, CHANGELOG.md and TASKS.md paths excluded) or conflict, so landing one PR no longer cancels the CI of the next and the queue no longer starves. The train commits as Thomas McFarlane with a `Merge-Train: yes` trailer that `check-fragments.sh` exempts, and its decision logic has tests (`scripts/ci/test-merge-train.sh`).
 - Give iOS and tvOS release invocations separate temporary signing keychains and allow the `codesign` partition explicitly.
 - Android, iOS, tvOS and web now default public IPv4 relay URLs to HTTPS port 443 while preserving explicit legacy port 8484 and local server addresses (TASK 293).
@@ -2180,7 +2181,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
-- Add `SECURITY.md` (private vulnerability reporting) and stop naming the private deployment repository in `AGENTS.md`, as part of the public-readiness audit.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.
 - Document VIDAA's invite-only partner registration and App Store release gates,
   including the production bootstrap decision required for self-hosted Playarr.

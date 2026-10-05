@@ -60,6 +60,7 @@ pub struct WhisparrSeries {
 pub struct WhisparrImage {
     #[serde(rename = "coverType")]
     pub cover_type: String,
+    #[serde(default)]
     pub url: String,
     /// Absolute, externally-hosted image URL (ThePornDB's CDN) -- present
     /// for most images but not guaranteed. Absent from Whisparr's own `url`
@@ -295,6 +296,28 @@ impl ArrConnector for WhisparrClient {
 
 #[cfg(test)]
 mod tests {
+    /// Newer *arr releases omit the instance-local `url` on some images
+    /// (only `remoteUrl` is present); that must not fail the whole decode
+    /// with "missing field `url`" (TASKS 258).
+    #[test]
+    fn image_without_local_url_decodes() {
+        let image: WhisparrImage = serde_json::from_value(serde_json::json!({
+            "coverType": "poster",
+            "remoteUrl": "https://img.example.com/p.jpg"
+        }))
+        .expect("decode succeeds");
+        assert_eq!(image.url, "");
+        assert_eq!(
+            image.remote_url.as_deref(),
+            Some("https://img.example.com/p.jpg")
+        );
+        let bare: WhisparrImage =
+            serde_json::from_value(serde_json::json!({ "coverType": "fanart" }))
+                .expect("bare image");
+        assert_eq!(bare.url, "");
+        assert_eq!(bare.remote_url, None);
+    }
+
     use serde_json::json;
     use wiremock::matchers::{header, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
