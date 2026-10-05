@@ -1,1 +1,0 @@
-- CI: every workflow now runs on GitHub-hosted runners (Linux, Windows for the Xbox UWP build, macOS for iOS and tvOS Simulator tests and the signed TestFlight release); the self-hosted-runner guard is replaced by a check that requires hosted runners, and the regional image is published to GitHub Container Registry.

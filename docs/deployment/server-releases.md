@@ -1,7 +1,6 @@
 # Playarr Server releases
 
-Playarr Server is published as build artefacts only. The source repository is private;
-nothing in a release links to it.
+Playarr Server is published as build artefacts on GitHub Releases.
 
 | Artefact | Where |
 |---|---|
@@ -25,13 +24,13 @@ Admin UI, which the binary finds beside itself or via `PLAYARR_WEB_ASSETS_DIR`),
    `infra/docker/backend.Dockerfile` (the Rust build cross-compiles natively on the x86-64 runner, so
    the tarball binary is byte-identical to the one in the image), smoke-tests the amd64 tarball
    (`/healthz` and the Admin UI), packs the tarballs with `scripts/package-server-release.sh`, pushes
-   the image, and uploads the tarballs and checksums to the private R2 bucket
-   `playarr-client-downloads` under `server/releases/<version>/`. Stable releases also refresh the
-   `server/playarr-server-linux-<arch>.tar.gz` aliases and `server/latest.json`; pre-releases do not,
-   and do not get the `latest` image tag.
-4. The Worker (`clients/tv-web/web/worker.js`) serves those keys same-origin under
-   `/downloads/server/`, the same way as the Android APK. Versioned paths are immutable and cached for
-   a year; aliases and the manifest for five minutes. The Clients hub page `/clients/server` shows the
+   the image, and attaches the tarballs, checksums and `latest.json` to the GitHub release for the
+   tag (`backend-v<version>`). GitHub Releases is the only download store. Pre-releases are marked as
+   such, are never the "latest" stable release, and do not get the `latest` image tag.
+4. The Worker (`clients/tv-web/web/worker.js`) keeps the stable `https://playarr.app/downloads/server/`
+   URLs: the unversioned aliases resolve the newest stable `backend-v*` release and redirect to its
+   assets, versioned paths redirect to the matching tag, and `latest.json` is proxied same-origin. The
+   Android APK is served the same way from `android-v*` releases. The Clients hub page `/clients/server` shows the
    buttons and reads the manifest for the version and checksums. Bump `SERVER_FALLBACK_VERSION` in
    `Clients.tsx` when convenient; it is only the pre-load fallback.
 
@@ -39,19 +38,13 @@ Re-run a failed release with **Run workflow** on the tag (the workflow refuses n
 
 ## Credentials
 
-The upload step runs in the `release-android` environment (where the Cloudflare account ID lives)
-and needs `CLOUDFLARE_R2_API_TOKEN` there (Workers R2 Storage Edit). The Workers deploy token
-`CLOUDFLARE_API_TOKEN` has no R2 access, so it is not used. Until the secret exists the step prints a
-warning and skips; upload by hand from the workflow's `playarr-server-dist` artefact with
-`scripts/upload-server-release.sh <dist-dir> <version>` (it uses `wrangler`, so a `wrangler login` plus
-`CLOUDFLARE_ACCOUNT_ID` is enough), or add the secret with `scripts/server-release-owner-setup.sh` and
-re-run the workflow on the tag. The image push uses the job's `GITHUB_TOKEN` (`packages: write`). All
-builds run on GitHub-hosted runners.
+The release job needs no object-storage credential. The image push and the GitHub release use the
+job's `GITHUB_TOKEN` (`contents: write`, `packages: write`). All builds run on GitHub-hosted runners.
 
 ## Making the image public
 
 A package created by the workflow starts private and GitHub's API cannot change that. Run
-`scripts/ghcr-make-public.sh` (or `scripts/server-release-owner-setup.sh`) to see the current visibility; if it is private it prints the single
+`scripts/ghcr-make-public.sh` to see the current visibility; if it is private it prints the single
 manual step (Package settings, Danger Zone, Change visibility, Public). It only has to be done once.
 Verify with a logged-out Docker config:
 

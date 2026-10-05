@@ -14,17 +14,21 @@ redirect there, and `/vidaa-store/` publishes the fixed Playarr-only VIDAA custo
 store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choose
 and control a compatible DNS, proxy, or self-hosted interception method themselves.
 
-The signed universal Android APK and Roku developer-mode ZIP are stored in the private
-`playarr-client-downloads` R2 bucket. The Worker streams them from the same-origin
-`/downloads/android/playarr-android.apk` and `/downloads/roku/playarr-roku.zip` URLs while
-continuing to serve ordinary application routes from Static Assets. Android releases also publish
-a short-lived latest-version manifest and an immutable, versioned APK route used by the native
-television self-update action.
+The signed universal Android APK and the Playarr Server tarballs are published to GitHub Releases only
+(tags `android-v<version>` and `backend-v<version>`). The Worker keeps the stable same-origin URLs and
+resolves them to release assets: `/downloads/android/playarr-android.apk` and
+`/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (plus `.sha256`) redirect to the newest
+stable release of the matching tag family (looked up through the GitHub Releases API and cached for five
+minutes), and the versioned paths `/downloads/android/releases/<version>/...` and
+`/downloads/server/playarr-server-<version>-...` redirect straight to that tag's assets. The small JSON
+manifests (`/downloads/android/playarr-android.json`, `/downloads/server/latest.json`) are proxied so the
+native television self-update action and the Clients hub read them same-origin. No release workflow
+uploads to object storage and no object-storage credential is needed. See
+[Playarr Server releases](server-releases.md).
 
-Playarr Server release tarballs use the same bucket and Worker: `/downloads/server/latest.json`,
-`/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (stable aliases) and the immutable
-`/downloads/server/playarr-server-<version>-linux-<arch>.tar.gz` (plus `.sha256` and `-SHA256SUMS`)
-map to `server/...` keys in R2. See [Playarr Server releases](server-releases.md).
+The Roku developer-mode ZIP (and the webOS and Tizen packages, when published) are still stored in the
+private `playarr-client-downloads` R2 bucket and streamed by the Worker from
+`/downloads/roku/playarr-roku.zip`, while ordinary application routes come from Static Assets.
 
 The Worker also owns the short-lived first-contact broker under `/api/link/*`. Each
 generated code is isolated in a Durable Object and expires after five minutes. The record contains
@@ -40,10 +44,7 @@ Playarr Server device code; it never receives a password, browser bearer token, 
 3. In the GitHub repository, add these Actions secrets:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
-4. Create the private R2 bucket `playarr-client-downloads`. Add a separate
-   `CLOUDFLARE_R2_API_TOKEN` secret with only Account R2 Storage Edit access to
-   the `release-android` environment.
-5. Run the **Deploy Playarr Web** workflow once, or deploy locally. The first
+4. Run the **Deploy Playarr Web** workflow once, or deploy locally. The first
    deployment creates the `playarr-web` Worker, its `LinkSession` Durable Object namespace, and
    the `playarr.app` custom domain. Cloudflare manages its DNS record and TLS certificate.
 

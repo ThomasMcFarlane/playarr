@@ -1,21 +1,28 @@
 import * as QRCode from "qrcode/lib/core/qrcode.js";
 import { handleRelayRequest, runCleanup } from "./relay.js";
 
+// Roku, webOS and Tizen packages are still served from the private R2 bucket.
 const DOWNLOADS = new Map([
-  ["/downloads/android/playarr-android.apk", "android/playarr-android.apk"],
-  ["/downloads/android/playarr-android.json", "android/playarr-android.json"],
   ["/downloads/roku/playarr-roku.zip", "roku/playarr-roku.zip"],
   ["/downloads/webos/playarr-webos.ipk", "webos/playarr-webos.ipk"],
   ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
-  // Playarr Server release tarballs: stable "latest" aliases (overwritten on
-  // every release) plus the manifest the Clients hub reads for the version
-  // and checksums. Versioned, immutable copies are matched below.
-  ["/downloads/server/latest.json", "server/latest.json"],
-  ["/downloads/server/playarr-server-linux-amd64.tar.gz", "server/playarr-server-linux-amd64.tar.gz"],
-  ["/downloads/server/playarr-server-linux-amd64.tar.gz.sha256", "server/playarr-server-linux-amd64.tar.gz.sha256"],
-  ["/downloads/server/playarr-server-linux-arm64.tar.gz", "server/playarr-server-linux-arm64.tar.gz"],
-  ["/downloads/server/playarr-server-linux-arm64.tar.gz.sha256", "server/playarr-server-linux-arm64.tar.gz.sha256"],
 ]);
+
+// Android and Playarr Server downloads live on GitHub Releases only. The
+// stable /downloads/... paths resolve the newest stable release for the right
+// tag family (android-v*, backend-v*) and redirect to its assets; versioned
+// paths redirect straight to the matching tag.
+const RELEASES_REPO = "ThomasMcFarlane/playarr";
+const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
+const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=50`;
+
+const LATEST_ANDROID_DOWNLOADS = new Map([
+  ["/downloads/android/playarr-android.apk", "playarr-android.apk"],
+  ["/downloads/android/playarr-android.json", "playarr-android.json"],
+]);
+
+const LATEST_SERVER_DOWNLOAD =
+  /^\/downloads\/server\/(latest\.json|playarr-server-linux-(?:amd64|arm64)\.tar\.gz(?:\.sha256)?)$/;
 
 // /downloads/server/playarr-server-<version>-linux-<arch>.tar.gz (and its
 // .sha256, plus playarr-server-<version>-SHA256SUMS) is immutable per version.
@@ -519,12 +526,89 @@ export class LinkSession {
 }
 
 function downloadKey(pathname) {
-  const stableKey = DOWNLOADS.get(pathname);
-  if (stableKey) return stableKey;
-  const versioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
-  if (versioned) return `android/releases/${versioned[1]}/${versioned[2]}`;
-  const server = pathname.match(VERSIONED_SERVER_DOWNLOAD);
-  return server ? `server/releases/${server[2]}/${server[1]}` : undefined;
+  return DOWNLOADS.get(pathname);
+}
+
+async function latestReleaseTag(prefix) {
+  const response = await fetch(RELEASES_API, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "playarr-downloads" },
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!response.ok) return undefined;
+  const releases = await response.json();
+  const latest = releases.find(
+    (release) =>
+      !release.draft &&
+      !release.prerelease &&
+      typeof release.tag_name === "string" &&
+      release.tag_name.startsWith(prefix)
+  );
+  return latest?.tag_name;
+}
+
+// Returns { tag, asset, immutable } for a GitHub Releases download path, or
+// undefined when the path is not one. `tag` is resolved lazily for "latest".
+function releaseDownload(pathname) {
+  const androidAsset = LATEST_ANDROID_DOWNLOADS.get(pathname);
+  if (androidAsset) return { prefix: "android-v", asset: () => androidAsset };
+  const androidVersioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
+  if (androidVersioned) {
+    return { tag: `android-v${androidVersioned[1]}`, asset: () => androidVersioned[2], immutable: true };
+  }
+  const serverVersioned = pathname.match(VERSIONED_SERVER_DOWNLOAD);
+  if (serverVersioned) {
+    return { tag: `backend-v${serverVersioned[2]}`, asset: () => serverVersioned[1], immutable: true };
+  }
+  const serverLatest = pathname.match(LATEST_SERVER_DOWNLOAD);
+  if (serverLatest) {
+    const name = serverLatest[1];
+    return {
+      prefix: "backend-v",
+      asset: (tag) =>
+        name === "latest.json"
+          ? name
+          : name.replace("playarr-server-", `playarr-server-${tag.slice("backend-v".length)}-`),
+    };
+  }
+  return undefined;
+}
+
+async function serveReleaseDownload(request, pathname, target) {
+  const tag = target.tag ?? (await latestReleaseTag(target.prefix));
+  if (!tag) {
+    return new Response("This Playarr download has not been published yet.", {
+      status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+  const asset = target.asset(tag);
+  const location = `${RELEASES_URL}/download/${tag}/${asset}`;
+  const cacheControl = target.immutable
+    ? "public, max-age=86400"
+    : "public, max-age=300";
+
+  // Small JSON manifests are proxied so browsers and the Android updater read
+  // them same-origin; everything else is a redirect to the release asset.
+  if (asset.endsWith(".json")) {
+    const upstream = await fetch(location, { cf: { cacheTtl: 300, cacheEverything: true } });
+    if (!upstream.ok) {
+      return new Response("This Playarr download has not been published yet.", {
+        status: 404,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    return new Response(request.method === "HEAD" ? null : upstream.body, {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": cacheControl,
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  return new Response(null, {
+    status: 302,
+    headers: { Location: location, "Cache-Control": cacheControl },
+  });
 }
 
 export default {
@@ -604,8 +688,9 @@ export default {
       return response;
     }
 
-    const key = downloadKey(url.pathname);
-    if (!key) return env.ASSETS.fetch(request);
+    const releaseTarget = releaseDownload(url.pathname);
+    const key = releaseTarget ? undefined : downloadKey(url.pathname);
+    if (!releaseTarget && !key) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", {
@@ -613,6 +698,8 @@ export default {
         headers: { Allow: "GET, HEAD" },
       });
     }
+
+    if (releaseTarget) return serveReleaseDownload(request, url.pathname, releaseTarget);
 
     const object = await env.CLIENT_DOWNLOADS.get(key);
     if (!object) {
@@ -631,13 +718,7 @@ export default {
     const isJson = filename.endsWith(".json");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
-    headers.set(
-      "Cache-Control",
-      VERSIONED_ANDROID_DOWNLOAD.test(url.pathname) ||
-        VERSIONED_SERVER_DOWNLOAD.test(url.pathname)
-        ? "public, max-age=31536000, immutable"
-        : "public, max-age=300"
-    );
+    headers.set("Cache-Control", "public, max-age=300");
     headers.set(
       "Content-Disposition",
       `${isApk || isIpk || isWgt || isZip || isTarball ? "attachment" : "inline"}; filename="${filename}"`

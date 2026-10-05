@@ -1,1 +1,0 @@
-- CI: the merge train logic tests stub the hosted-runner guard under its current name, so the end-to-end test passes again.

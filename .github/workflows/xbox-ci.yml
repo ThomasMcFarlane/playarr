@@ -117,8 +117,7 @@ jobs:
             /p:AppxPackageSigningEnabled=false /p:AppxBundle=Never
 
       # TODO: publish the signed MSIX -- to a GitHub release
-      # (softprops/action-gh-release@v2, matching android-ci.yml), to
-      # Cloudflare R2 (matching android-ci.yml's wrangler r2 upload), and/or
+      # (softprops/action-gh-release@v2, matching android-ci.yml) and/or
       # submit via the Microsoft Store submission API once Partner Center
       # credentials exist. None of those credentials/targets are wired up
       # yet.

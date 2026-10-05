@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, { LinkSession } from "./worker.js";
 
 class MemoryStorage {
@@ -31,61 +31,64 @@ function environment(object) {
   };
 }
 
-describe("client package downloads", () => {
-  it("serves a published APK without authentication as a same-origin attachment", async () => {
-    const env = environment({
-      body: new Uint8Array([1, 2, 3]),
-      httpEtag: '"release-etag"',
-      size: 3,
-      writeHttpMetadata(headers) {
-        headers.set("Last-Modified", "Fri, 18 Jul 2026 00:00:00 GMT");
-      },
-    });
+const RELEASES = "https://github.com/ThomasMcFarlane/playarr/releases";
 
+function releaseEnv(releases) {
+  const list = releases ?? [
+    { tag_name: "android-v0.4.0-rc.1", prerelease: true },
+    { tag_name: "backend-v0.4.0", prerelease: false },
+    { tag_name: "android-v0.3.1", prerelease: false },
+    { tag_name: "android-v0.3.0", prerelease: false },
+  ];
+  const fetchMock = vi.fn(async (url) =>
+    String(url).startsWith("https://api.github.com/")
+      ? new Response(JSON.stringify(list), { status: 200 })
+      : new Response("{}", { status: 200 })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return { env: environment(null), fetchMock };
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("client package downloads", () => {
+  it("redirects the latest Android APK to the newest stable android release asset", async () => {
+    const { env, fetchMock } = releaseEnv();
     const response = await worker.fetch(
       new Request("https://playarr.app/downloads/android/playarr-android.apk"),
       env
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Disposition")).toContain(
-      "playarr-android.apk"
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe(
+      `${RELEASES}/download/android-v0.3.1/playarr-android.apk`
     );
-    expect(response.headers.get("Content-Type")).toBe(
-      "application/vnd.android.package-archive"
-    );
-    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(
-      "android/playarr-android.apk"
-    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
-  it("returns a clear 404 until the signed release is published", async () => {
+  it("returns a clear 404 when no stable android release exists", async () => {
+    const { env } = releaseEnv([{ tag_name: "backend-v1.0.0", prerelease: false }]);
     const response = await worker.fetch(
       new Request("https://playarr.app/downloads/android/playarr-android.apk"),
-      environment(null)
+      env
     );
 
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toContain("not been published");
   });
 
-  it("serves the latest Android manifest and its immutable versioned APK", async () => {
-    const object = {
-      body: new Uint8Array([1]),
-      httpEtag: '"release-etag"',
-      size: 1,
-      writeHttpMetadata() {},
-    };
-    const env = environment(object);
-
+  it("proxies the latest Android manifest and redirects versioned APKs to their tag", async () => {
+    const { env, fetchMock } = releaseEnv();
     const manifest = await worker.fetch(
       new Request("https://playarr.app/downloads/android/playarr-android.json"),
       env
     );
+    expect(manifest.status).toBe(200);
     expect(manifest.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "android/playarr-android.json"
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${RELEASES}/download/android-v0.3.1/playarr-android.json`,
+      expect.anything()
     );
 
     const apk = await worker.fetch(
@@ -94,13 +97,11 @@ describe("client package downloads", () => {
       ),
       env
     );
-    expect(apk.headers.get("Content-Type")).toBe(
-      "application/vnd.android.package-archive"
+    expect(apk.status).toBe(302);
+    expect(apk.headers.get("Location")).toBe(
+      `${RELEASES}/download/android-v1.2.3/playarr-android.apk`
     );
-    expect(apk.headers.get("Cache-Control")).toContain("immutable");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "android/releases/1.2.3/playarr-android.apk"
-    );
+    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -164,46 +165,37 @@ describe("client package downloads", () => {
     await expect(response.text()).resolves.toContain("has not been published yet");
   });
 
-  it("serves Playarr Server tarballs, checksums and the latest manifest", async () => {
-    const env = environment({
-      body: new Uint8Array([1]),
-      httpEtag: '"release-etag"',
-      size: 1,
-      writeHttpMetadata() {},
-    });
+  it("redirects Playarr Server tarballs and checksums to GitHub Release assets", async () => {
+    const { env } = releaseEnv();
     const get = async (path) =>
       worker.fetch(new Request(`https://playarr.app${path}`), env);
 
     const stable = await get("/downloads/server/playarr-server-linux-arm64.tar.gz");
-    expect(stable.headers.get("Content-Type")).toBe("application/gzip");
-    expect(stable.headers.get("Content-Disposition")).toBe(
-      'attachment; filename="playarr-server-linux-arm64.tar.gz"'
+    expect(stable.status).toBe(302);
+    expect(stable.headers.get("Location")).toBe(
+      `${RELEASES}/download/backend-v0.4.0/playarr-server-0.4.0-linux-arm64.tar.gz`
     );
-    expect(stable.headers.get("Cache-Control")).toBe("public, max-age=300");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "server/playarr-server-linux-arm64.tar.gz"
+
+    const sha = await get("/downloads/server/playarr-server-linux-amd64.tar.gz.sha256");
+    expect(sha.headers.get("Location")).toBe(
+      `${RELEASES}/download/backend-v0.4.0/playarr-server-0.4.0-linux-amd64.tar.gz.sha256`
     );
 
     const manifest = await get("/downloads/server/latest.json");
+    expect(manifest.status).toBe(200);
     expect(manifest.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith("server/latest.json");
 
     const versioned = await get(
       "/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz"
     );
-    expect(versioned.headers.get("Cache-Control")).toContain("immutable");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz"
+    expect(versioned.headers.get("Location")).toBe(
+      `${RELEASES}/download/backend-v0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz`
     );
-
-    await get("/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz.sha256");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz.sha256"
+    const sums = await get("/downloads/server/playarr-server-0.2.0-rc.1-SHA256SUMS");
+    expect(sums.headers.get("Location")).toBe(
+      `${RELEASES}/download/backend-v0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS`
     );
-    await get("/downloads/server/playarr-server-0.2.0-rc.1-SHA256SUMS");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenLastCalledWith(
-      "server/releases/0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS"
-    );
+    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
   it("does not expose other server R2 object paths", async () => {

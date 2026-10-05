@@ -6,9 +6,9 @@
 # `backend-v0.2.0-rc.1`):
 #
 #   * Linux x86-64 and ARM64 tarballs (binary + Admin UI + LICENSE + example
-#     systemd units) and SHA-256 checksums, attached to the GitHub release. If
-#     the Cloudflare R2 credentials exist they are also uploaded to R2 (the
-#     step skips when the secret is absent); see docs/deployment/playarr-cloudflare.md.
+#     systemd units) and SHA-256 checksums, attached to the GitHub release.
+#     GitHub Releases is the only download store; https://playarr.app/downloads/server/
+#     redirects to these assets (see docs/deployment/server-releases.md).
 #   * A multi-arch container image, ghcr.io/thomasmcfarlane/playarr-server,
 #     tagged <version> and `latest` (pre-releases only get the version tag),
 #     with an SBOM and provenance attestation. The GHCR package must be public
@@ -177,8 +177,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Holds the Cloudflare credentials used for the Android APK uploads.
-    environment: release-android
     permissions:
       contents: write
     env:
@@ -186,11 +184,6 @@ jobs:
       PRERELEASE: ${{ needs.build.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
-
-      # wrangler (scripts/upload-server-release.sh) needs Node.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
 
       - uses: actions/download-artifact@v4
         with:
@@ -238,20 +231,3 @@ jobs:
             Container image: `${{ env.IMAGE }}:${{ env.VERSION }}` (`${{ needs.build.outputs.digest }}`)
 
             Downloads: https://playarr.app/clients/server
-
-      - name: Upload to Cloudflare R2
-        shell: bash
-        env:
-          # The Workers deploy token (CLOUDFLARE_API_TOKEN) has no R2 access, so
-          # this needs its own token with Workers R2 Storage Edit.
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_R2_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
-            msg="CLOUDFLARE_R2_API_TOKEN is not set in the release-android environment, so the downloads were NOT uploaded to R2. Run scripts/upload-server-release.sh with the dist artefact, or add the secret (scripts/server-release-owner-setup.sh) and re-run this workflow on the tag."
-            echo "::warning::$msg"
-            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          scripts/upload-server-release.sh dist "$VERSION" "$PRERELEASE"
