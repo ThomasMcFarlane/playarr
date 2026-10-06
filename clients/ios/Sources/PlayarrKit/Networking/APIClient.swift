@@ -178,6 +178,8 @@ public protocol PlayarrAPIClient: Sendable {
     ) async throws -> CatalogPage
 
     func searchCatalog(query: String, limit: Int?) async throws -> [Work]
+    /// `GET /api/v1/home/rails`: the server-computed Home shelves (the same rails the web client shows).
+    func fetchHomeRails() async throws -> [HomeRail]
     func fetchWork(id: UUID) async throws -> WorkDetail
     func fetchWorkCredits(id: UUID) async throws -> WorkCredits
     func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work]
@@ -389,7 +391,22 @@ public final class APIClient: PlayarrAPIClient {
     public func searchCatalog(query searchQuery: String, limit: Int? = nil) async throws -> [Work] {
         var query = [URLQueryItem(name: "q", value: searchQuery)]
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
-        return try await get("/api/v1/catalog/search", query: query)
+        // The server wraps the hits in `{ "items": [...] }` (as for browse); accept a bare array too.
+        do {
+            let envelope: SearchEnvelope = try await get("/api/v1/catalog/search", query: query)
+            return envelope.items
+        } catch {
+            return try await get("/api/v1/catalog/search", query: query)
+        }
+    }
+
+    public func fetchHomeRails() async throws -> [HomeRail] {
+        let response: HomeRailsResponse = try await get("/api/v1/home/rails")
+        return response.rails
+    }
+
+    private struct SearchEnvelope: Decodable {
+        let items: [Work]
     }
 
     public func fetchWork(id: UUID) async throws -> WorkDetail {
@@ -1032,4 +1049,20 @@ private actor AccessTokenCoordinator {
             throw APIError.decoding(error)
         }
     }
+}
+
+/// One server-computed Home shelf.
+public struct HomeRail: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let items: [Work]
+}
+
+struct HomeRailsResponse: Decodable, Sendable {
+    let rails: [HomeRail]
+}
+
+public extension PlayarrAPIClient {
+    /// Default for conformers (test doubles) that predate Home rails.
+    func fetchHomeRails() async throws -> [HomeRail] { [] }
 }

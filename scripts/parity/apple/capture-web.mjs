@@ -78,6 +78,28 @@ for (const s of cfg.screens) {
   await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
   await page.waitForTimeout(5000);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
+  // Layout dump (rect, font, colour per visible element) so the native layout can be fixed from numbers.
+  const dom = await page.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll("body *")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight) continue;
+      const cs = getComputedStyle(el);
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 60);
+      const painted = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.borderTopWidth !== "0px" || cs.backgroundImage !== "none";
+      if (!own && !painted && el.tagName !== "IMG" && el.tagName !== "svg") continue;
+      out.push({
+        tag: el.tagName.toLowerCase(), cls: String(el.getAttribute("class") ?? "").slice(0, 80), text: own,
+        x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
+        font: own ? `${cs.fontSize}/${cs.fontWeight}/${cs.letterSpacing}/${cs.fontFamily.slice(0, 30)}` : undefined,
+        color: own ? cs.color : undefined, bg: cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : undefined,
+        radius: cs.borderTopLeftRadius !== "0px" ? cs.borderTopLeftRadius : undefined, opacity: cs.opacity !== "1" ? cs.opacity : undefined,
+      });
+    }
+    return out;
+  });
+  fs.mkdirSync(path.join(outDir, "dom"), { recursive: true });
+  fs.writeFileSync(path.join(outDir, "dom", `${s.id}.json`), JSON.stringify(dom));
   results.push({ id: s.id, route, url: page.url() });
   console.log(`web ${s.id} -> ${page.url()}`);
   await page.close();
