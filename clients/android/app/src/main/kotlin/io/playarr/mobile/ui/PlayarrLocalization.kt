@@ -845,6 +845,8 @@ internal enum class PlayarrString(
         "利用できる字幕トラックはありません",
     ),
     PlayerSubtitleForced("Forced", "บังคับ", "強制"),
+    PlayerChannelsMono("Mono", "โมโน", "モノラル"),
+    PlayerChannelsStereo("Stereo", "สเตอริโอ", "ステレオ"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
     PlayerPlaylistLabelSingular(

@@ -4830,13 +4830,26 @@ private fun MoviePlaybackOptionsDialog(
                 )
                 MoviePlaybackChoiceGroup(
                     title = playarrString(PlayarrString.DetailAudio),
-                    choices = listOf("" to playarrString(PlayarrString.DetailAutomatic)) + options.audioTracks.map { it.id to it.label },
+                    choices = listOf("" to playarrString(PlayarrString.DetailAutomatic)) + options.audioTracks.map {
+                        it.id to playarrAudioTrackLabel(
+                            it,
+                            LocalPlayarrLanguage.current.locale,
+                            playarrString(PlayarrString.PlayerChannelsMono),
+                            playarrString(PlayarrString.PlayerChannelsStereo),
+                        )
+                    },
                     selected = audioTrackId.orEmpty(),
                     onSelected = { audioTrackId = it.ifBlank { null } },
                 )
                 MoviePlaybackChoiceGroup(
                     title = playarrString(PlayarrString.DetailSubtitles),
-                    choices = listOf("" to playarrString(PlayarrString.DetailSubtitlesOff)) + options.subtitleTracks.map { it.id to it.label },
+                    choices = listOf("" to playarrString(PlayarrString.DetailSubtitlesOff)) + options.subtitleTracks.map {
+                        it.id to playarrSubtitleTrackLabel(
+                            it,
+                            LocalPlayarrLanguage.current.locale,
+                            playarrString(PlayarrString.PlayerSubtitleForced),
+                        )
+                    },
                     selected = subtitleTrackId.orEmpty(),
                     onSelected = { subtitleTrackId = it.ifBlank { null } },
                 )

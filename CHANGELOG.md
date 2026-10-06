@@ -184,6 +184,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
 - Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
 - Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
