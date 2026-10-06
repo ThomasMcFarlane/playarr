@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Release notes for the single all-platform release (.github/workflows/release.yml).
 //
-// Usage: node scripts/release-notes.mjs <version> [<previous-tag>] > notes.md
+// Usage: node scripts/release-notes.mjs [--summary] <version> [<previous-tag>] > notes.md
+// (--summary prints the short highlights used as the GitHub Release body instead of the full notes.)
 //
 // Takes the `## [Unreleased]` section of CHANGELOG.md at HEAD (the merge train folds
 // `changelog.d/` fragments into it as PRs land) and, when a previous release tag is given,
@@ -53,15 +54,40 @@ export function releaseNotes(version, changelog, previousChangelog) {
   return `## Playarr ${version}\n\n${body}\n`;
 }
 
+// A short body for the GitHub Release page (which caps a body at 125,000 characters): per category,
+// the first few entries cut to their first line, and a count of the rest. The full notes are attached
+// to the release as a file, so nothing is lost by summarising here.
+export function releaseSummary(version, changelog, previousChangelog, { perCategory = 3, maxLength = 200 } = {}) {
+  const seen = new Set(unreleasedSections(previousChangelog ?? '').flatMap((section) => section.entries));
+  const clip = (entry) => {
+    const line = entry.split('\n')[0].trim();
+    if (line.length <= maxLength) return line;
+    const cut = line.slice(0, maxLength - 1);
+    return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 1)).trimEnd()}…`;
+  };
+  const parts = [];
+  for (const section of unreleasedSections(changelog)) {
+    const entries = section.entries.filter((entry) => !seen.has(entry));
+    if (entries.length === 0) continue;
+    const lines = entries.slice(0, perCategory).map(clip);
+    if (entries.length > perCategory) lines.push(`- …and ${entries.length - perCategory} more`);
+    parts.push(`### ${section.heading}\n\n${lines.join('\n')}`);
+  }
+  const body = parts.length > 0 ? parts.join('\n\n') : '- Maintenance release.';
+  return `## Highlights\n\n${body}\n`;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const [version, previousTag] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const summary = args.includes('--summary');
+  const [version, previousTag] = args.filter((arg) => arg !== '--summary');
   if (!version) {
-    console.error('usage: release-notes.mjs <version> [<previous-tag>]');
+    console.error('usage: release-notes.mjs [--summary] <version> [<previous-tag>]');
     process.exit(2);
   }
   const changelog = readFileSync('CHANGELOG.md', 'utf8');
   const previous = previousTag
     ? execFileSync('git', ['show', `${previousTag}:CHANGELOG.md`], { encoding: 'utf8' })
     : undefined;
-  process.stdout.write(releaseNotes(version, changelog, previous));
+  process.stdout.write((summary ? releaseSummary : releaseNotes)(version, changelog, previous));
 }

@@ -11,11 +11,11 @@
 #   android   android-ci.yml        signed sideload APK and its update manifest
 #   tv        tv-web-ci.yml         LG webOS IPK, unsigned Samsung Tizen package root
 #   roku      (below)               Roku sideload channel zip
-#   xbox      xbox-ci.yml           unsigned x64 sideload MSIX
+#   xbox      xbox-ci.yml           unsigned x64 sideload package (.appx)
 #   harmony   harmony-ci.yml        unsigned HarmonyOS HAP
 #
 # then creates ONE GitHub Release `v<version>` with every artefact, a combined SHA256SUMS and notes
-# generated from CHANGELOG.md, and only then publishes to the stores:
+# a short summary body with the full changelog attached, and only then publishes to the stores:
 #
 #   play      android-play-internal.yml   Google Play closed testing (alpha)
 #   apple     ios-release.yml             iOS and tvOS to TestFlight
@@ -275,21 +275,17 @@ jobs:
             echo "| LG webOS | \`playarr-webos-$VERSION.ipk\` |"
             echo "| Samsung Tizen | \`playarr-tizen-$VERSION-unsigned.zip\` (sign with your Samsung certificate profile) |"
             echo "| Roku | \`playarr-roku-$VERSION.zip\` (sideload) |"
-            echo "| Xbox | \`playarr-xbox-$VERSION-x64-unsigned.msix\` (sign before sideloading) |"
+            echo "| Xbox | \`playarr-xbox-$VERSION-x64-unsigned.appx\` (unsigned; sign before sideloading) |"
             echo "| HarmonyOS | \`playarr-harmony-$VERSION-unsigned.hap\` |"
             echo
             echo "A platform whose package is missing below did not build for this release; see the run summary."
             echo "Verify downloads against \`SHA256SUMS\`."
             echo
           } > "$RUNNER_TEMP/notes.md"
-          notes="assets/playarr-$VERSION-CHANGELOG.md"
-          # GitHub caps a release body at 125,000 characters; the full notes are always attached.
-          if (( $(wc -c < "$notes") > 110000 )); then
-            head -c 110000 "$notes" | sed '$d' >> "$RUNNER_TEMP/notes.md"
-            printf '\n\n…truncated: the full notes are in `playarr-%s-CHANGELOG.md` below.\n' "$VERSION" >> "$RUNNER_TEMP/notes.md"
-          else
-            cat "$notes" >> "$RUNNER_TEMP/notes.md"
-          fi
+          # GitHub caps a release body at 125,000 characters, so the body carries a short summary and the
+          # full notes are attached as a file.
+          node scripts/release-notes.mjs --summary "$VERSION" $PREVIOUS_TAG >> "$RUNNER_TEMP/notes.md"
+          printf '\nThe full changelog for this release is attached as `playarr-%s-CHANGELOG.md`.\n' "$VERSION" >> "$RUNNER_TEMP/notes.md"
           wc -c "$RUNNER_TEMP/notes.md"
 
       - name: Create the GitHub Release
@@ -362,7 +358,7 @@ jobs:
             echo "| iOS and tvOS | $(mark "$(result apple)") | TestFlight | build $APPLE_BUILD |"
             echo "| webOS and Tizen | $(mark "$(result tv)") | GitHub Release | Tizen is unsigned (no Samsung certificate in CI) |"
             echo "| Roku | $(mark "$(result roku)") | GitHub Release | sideload zip |"
-            echo "| Xbox | $(mark "$(result xbox)") | GitHub Release | unsigned MSIX (no signing certificate) |"
+            echo "| Xbox | $(mark "$(result xbox)") | GitHub Release | unsigned .appx (no signing certificate) |"
             echo "| HarmonyOS | $(mark "$(result harmony)") | GitHub Release | unsigned HAP (no AppGallery signing material) |"
             echo "| GitHub Release | $(mark "$(result release)") | ${RELEASE_URL:-} | |"
           } >> "$GITHUB_STEP_SUMMARY"

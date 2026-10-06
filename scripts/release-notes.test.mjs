@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { releaseNotes, unreleasedSections } from './release-notes.mjs';
+import { releaseNotes, releaseSummary, unreleasedSections } from './release-notes.mjs';
 
 const previous = `# Changelog
 
@@ -56,4 +56,20 @@ test('lists the whole Unreleased section for a first release', () => {
 
 test('says so when nothing changed', () => {
   assert.equal(releaseNotes('1.0.1', previous, previous), '## Playarr 1.0.1\n\n- Maintenance release.\n');
+});
+
+test('summary keeps a few entries per category and counts the rest', () => {
+  const many = `## [Unreleased]\n\n### Added\n\n${Array.from({ length: 5 }, (_, i) => `- Feature ${i}\n  more detail.`).join('\n')}\n`;
+  assert.equal(
+    releaseSummary('1.0.0', many, undefined, { perCategory: 2 }),
+    '## Highlights\n\n### Added\n\n- Feature 0\n- Feature 1\n- …and 3 more\n',
+  );
+});
+
+test('summary clips long entries on a word boundary and stays small', () => {
+  const long = `## [Unreleased]\n\n### Fixed\n\n- ${'word '.repeat(100)}\n`;
+  const summary = releaseSummary('1.0.0', long, undefined, { maxLength: 50 });
+  assert.match(summary, /- word( word)+…\n$/);
+  assert.ok(summary.length < 200);
+  assert.equal(releaseSummary('1.0.1', previous, previous), '## Highlights\n\n- Maintenance release.\n');
 });

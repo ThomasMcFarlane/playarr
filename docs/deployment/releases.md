@@ -28,7 +28,7 @@ is stamped with it at build time.
 | Android APK | `android-ci.yml` | signed sideload `playarr-android.apk` and its update manifest `playarr-android.json` |
 | TV packages | `tv-web-ci.yml` | `playarr-webos-<version>.ipk`, `playarr-tizen-<version>-unsigned.zip` (Tizen package root; a `.wgt` needs the owner's Samsung certificate profile) |
 | Roku | inline | `playarr-roku-<version>.zip` (sideload channel) |
-| Xbox | `xbox-ci.yml` | `playarr-xbox-<version>-x64-unsigned.msix` (no signing certificate yet) |
+| Xbox | `xbox-ci.yml` | `playarr-xbox-<version>-x64-unsigned.appx` (no signing certificate yet) |
 | HarmonyOS | `harmony-ci.yml` | `playarr-harmony-<version>-unsigned.hap` (no AppGallery signing material yet) |
 | GitHub Release | inline | release `v<version>` with every package above, a combined `SHA256SUMS` and `playarr-<version>-CHANGELOG.md` |
 | Google Play | `android-play-internal.yml` | closed-testing (alpha) track, after the release exists |
@@ -42,7 +42,10 @@ tags (`backend-v*`, `android-v*`, `ios-v*`, `harmony-v*`, `xbox-v*`, `tv-web-v*`
 platform needs a release of its own.
 
 Release notes come from `scripts/release-notes.mjs`: the `## [Unreleased]` entries of `CHANGELOG.md`
-that were not already there at the previous `v*` tag.
+that were not already there at the previous `v*` tag. The GitHub Release body is a short summary
+(`--summary`: a few entries per category, a count of the rest, and the artefact table); the full notes
+are attached to the release as `playarr-<version>-CHANGELOG.md`, which keeps the body inside GitHub's
+125,000-character limit.
 
 ## Version numbers
 
