@@ -16,6 +16,9 @@ final class TVHomeViewModel {
 
     private(set) var state: State = .idle
     private(set) var works: [Work] = []
+    /// Server-computed rails (`GET /api/v1/home/rails`); empty means the legacy
+    /// client-built rails are used.
+    private(set) var serverRails: [HomeRail] = []
     private let apiClient: PlayarrAPIClient
 
     init(apiClient: PlayarrAPIClient) {
@@ -24,6 +27,22 @@ final class TVHomeViewModel {
 
     func load() async {
         state = .loading
+        serverRails = []
+        if TVParityLaunch.requestedScreen == nil {
+            let language = HomeRailsClient.railLanguage(
+                forLocaleIdentifier: Locale.preferredLanguages.first ?? "en"
+            )
+            let result = await HomeRailsClient(transport: apiClient).fetchRails(language: language)
+            if case .success(let optionalRails) = result,
+               let rails = optionalRails,
+               !rails.isEmpty {
+                serverRails = rails
+                var seen = Set<UUID>()
+                works = rails.flatMap { $0.items }.filter { seen.insert($0.id).inserted }
+                state = .loaded
+                return
+            }
+        }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
         if TVParityLaunch.requestedScreen != nil,

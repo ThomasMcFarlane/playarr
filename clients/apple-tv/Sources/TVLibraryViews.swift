@@ -64,17 +64,12 @@ struct TVHomeView: View {
     /// Focus-first production home: rails are real layout children (not buried
     /// under GeometryReader absolute stacks), so the remote can land focus.
     private func productionHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
-        let (startWatching, newMovies) = Self.homeRailMembership(
-            works: viewModel.works,
-            interactive: true
-        )
+        let railRows = Self.productionRailRows(for: viewModel)
         let hero = heroWork(from: viewModel.works)
-        let defaultFocus: HomeRailCardFocus? = startWatching.first.map {
-            HomeRailCardFocus(rail: "start", workID: $0.id)
-        } ?? newMovies.first.map { HomeRailCardFocus(rail: "movies", workID: $0.id) }
-        let leadingIDs = Set(
-            [startWatching.first?.id, newMovies.first?.id].compactMap { $0 }
-        )
+        let defaultFocus: HomeRailCardFocus? = railRows.first.flatMap { row in
+            row.works.first.map { HomeRailCardFocus(rail: row.id, workID: $0.id) }
+        }
+        let leadingIDs = Set(railRows.compactMap { $0.works.first?.id })
 
         return ZStack(alignment: .topLeading) {
             GeometryReader { geo in
@@ -113,30 +108,20 @@ struct TVHomeView: View {
                     .allowsHitTesting(false)
                 }
 
-                VStack(alignment: .leading, spacing: 36) {
-                    if !startWatching.isEmpty {
-                        interactiveRail(
-                            railID: "start",
-                            title: "Start watching",
-                            works: startWatching,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
-                    }
-                    if !newMovies.isEmpty {
-                        interactiveRail(
-                            railID: "movies",
-                            title: "New movies",
-                            works: newMovies,
-                            artW: DesignTokens.Shell.homeCardWidth,
-                            artH: DesignTokens.Shell.homeCardHeight,
-                            titleBlock: DesignTokens.Shell.homeCardTitleBlock,
-                            gap: DesignTokens.Shell.homeCardGap,
-                            headingH: DesignTokens.Shell.homeRailHeadingOffsetY
-                        )
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 36) {
+                        ForEach(railRows) { row in
+                            interactiveRail(
+                                railID: row.id,
+                                title: row.title,
+                                works: row.works,
+                                artW: DesignTokens.Shell.homeCardWidth,
+                                artH: DesignTokens.Shell.homeCardHeight,
+                                titleBlock: DesignTokens.Shell.homeCardTitleBlock,
+                                gap: DesignTokens.Shell.homeCardGap,
+                                headingH: DesignTokens.Shell.homeRailHeadingOffsetY
+                            )
+                        }
                     }
                 }
                 .padding(.leading, 28)
@@ -240,6 +225,28 @@ struct TVHomeView: View {
                 homeRailsAbsolute(startWatching: startWatching, newMovies: newMovies, size: size)
             }
         }
+    }
+
+    private struct HomeRailRow: Identifiable {
+        let id: String
+        let title: String
+        let works: [Work]
+    }
+
+    /// Server rails when the server provides them, else the legacy two rails.
+    private static func productionRailRows(for viewModel: TVHomeViewModel) -> [HomeRailRow] {
+        if !viewModel.serverRails.isEmpty {
+            return viewModel.serverRails.map { HomeRailRow(id: $0.id, title: $0.title, works: $0.items) }
+        }
+        let (startWatching, newMovies) = homeRailMembership(works: viewModel.works, interactive: true)
+        var rows: [HomeRailRow] = []
+        if !startWatching.isEmpty {
+            rows.append(HomeRailRow(id: "start", title: "Start watching", works: startWatching))
+        }
+        if !newMovies.isEmpty {
+            rows.append(HomeRailRow(id: "movies", title: "New movies", works: newMovies))
+        }
+        return rows
     }
 
     /// Match SPA Home.tsx `takeUnused`: a work appears on at most one rail.

@@ -54,6 +54,7 @@ public final class HomeViewModel {
 
     public func load() async {
         loadState = .loading
+        if await loadServerRails() { return }
         do {
             async let moviesRequest = browse(kind: .movie)
             async let seriesRequest = browse(kind: .series)
@@ -107,6 +108,28 @@ public final class HomeViewModel {
         } catch {
             loadState = .failed(error.localizedDescription)
         }
+    }
+
+    /// Server-computed rails (`GET /api/v1/home/rails`). Returns `false` when the
+    /// server has none (older server, error or no content) so `load()` falls back
+    /// to the client-built rails.
+    private func loadServerRails() async -> Bool {
+        let language = HomeRailsClient.railLanguage(
+            forLocaleIdentifier: Locale.preferredLanguages.first ?? "en"
+        )
+        let result = await HomeRailsClient(transport: apiClient).fetchRails(language: language)
+        guard case .success(let optionalRails) = result,
+              let serverRails = optionalRails,
+              !serverRails.isEmpty
+        else { return false }
+        rails = serverRails.map { Rail(id: $0.id, title: $0.title, works: $0.items) }
+        var seen = Set<UUID>()
+        recentlyAdded = serverRails.flatMap(\.items).filter { seen.insert($0.id).inserted }
+        continueWatching = []
+        loadState = .loaded
+        let progress = (try? await apiClient.listWatchProgress()) ?? []
+        progressByWorkID = Self.indexLatestProgress(progress)
+        return true
     }
 
     private func browse(kind: WorkKind) async throws -> [Work] {
