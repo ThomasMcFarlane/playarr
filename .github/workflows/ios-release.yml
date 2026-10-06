@@ -1,6 +1,9 @@
 # Signed iOS and tvOS TestFlight release, built in this repository on GitHub-hosted macOS
 # runners. Runs on an `ios-v*` tag or by manual dispatch. Signing and App Store Connect secrets
 # live in the `release-ios` environment (never repository-wide). No signing material is committed.
+# After a real (non-dry-run) upload, a final step prepares the App Store Connect draft version:
+# it renames the editable draft to the marketing version and attaches the processed build. It only
+# prepares a draft; it never submits for review, so publishing stays a manual App Store Connect action.
 name: Apple signed release
 
 on:
@@ -13,7 +16,7 @@ on:
         type: string
         required: false
       marketing_version:
-        description: Optional numeric three-part version; defaults to the tag version or 1.0.0
+        description: Optional numeric three-part version; defaults to the tag version, or PLAYARR_VERSION_NAME from clients/android/version.properties
         type: string
         required: false
       build_number:
@@ -139,7 +142,11 @@ jobs:
           set -euo pipefail
           tag_version=''
           if [[ "${GITHUB_REF_TYPE}" == tag ]]; then tag_version="${GITHUB_REF_NAME#ios-v}"; fi
-          version="${VERSION_INPUT:-${tag_version:-1.0.0}}"
+          version="${VERSION_INPUT:-$tag_version}"
+          if [[ -z "$version" ]]; then
+            version="$(sed -n 's/^PLAYARR_VERSION_NAME=//p' clients/android/version.properties | head -n1 | tr -d '[:space:]')"
+            [[ -n "$version" ]] || { echo 'No marketing version given and PLAYARR_VERSION_NAME is missing from clients/android/version.properties.' >&2; exit 2; }
+          fi
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Marketing version must be numeric major.minor.patch.' >&2; exit 2; }
           build="${BUILD_INPUT:-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}}"
           [[ "$build" =~ ^[1-9][0-9]{0,3}(\.[1-9][0-9]?)?$ ]] || { echo 'Build number must have Apple-valid components from 1 through 9999 with an optional .1-.99 suffix.' >&2; exit 2; }
@@ -169,3 +176,16 @@ jobs:
           if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == tvos ]]; then
             ARCHIVE_PATH="$TVOS_ARCHIVE_PATH" EXPORT_PATH="$TVOS_EXPORT_PATH" bash clients/ios/scripts/release.sh "$RELEASE_MODE" tvos
           fi
+
+      - name: Prepare App Store draft version and attach build
+        if: ${{ !inputs.dry_run }}
+        timeout-minutes: 40
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/asc-venv"
+          "$RUNNER_TEMP/asc-venv/bin/pip" install --quiet 'pyjwt>=2.8,<3' 'cryptography>=42'
+          "$RUNNER_TEMP/asc-venv/bin/python" clients/ios/scripts/asc_prepare_version.py

@@ -141,6 +141,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: after a TestFlight upload, the Apple signed release prepares the App Store Connect draft version (renames it to the marketing version and attaches the processed build) without submitting it for review; `--plan` previews the changes read-only. The marketing version now defaults to `PLAYARR_VERSION_NAME` rather than a hard-coded `1.0.0`.
 - The merge train no longer posts any pull request comment. A blocked PR still loses `ready` and gains `blocked`, with the reason written to the run's job summary and logs; a landed-tree mismatch stops the train and fails the run. AGENTS.md tells agents to watch for `blocked` and re-add `ready` themselves.
 - Version 0.3.0: Playarr Server (`backend/Cargo.toml`, `[server] version`) and the Android app (`version.properties`), with Google Play notes for 0.3.0.
 - CI: the Xbox release job builds an unsigned x64 sideload MSIX on the hosted Visual Studio 2022 image instead of placeholder steps.

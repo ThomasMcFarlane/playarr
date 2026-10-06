@@ -18,3 +18,19 @@ test('the temporary signing key allows codesign partition access', () => {
     /security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "\$keychain_password" "\$keychain"/,
   );
 });
+
+test('the version preparation step runs after the upload and is skipped on dry runs', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/ios-release.yml', import.meta.url), 'utf8');
+  const step = workflow.slice(workflow.indexOf('- name: Prepare App Store draft version and attach build'));
+  assert.ok(workflow.indexOf('Sign, export IPA and upload once') < workflow.indexOf('Prepare App Store draft version'));
+  assert.match(step, /if: \$\{\{ !inputs\.dry_run \}\}/);
+  assert.match(step, /asc_prepare_version\.py/);
+});
+
+test('the marketing version falls back to version.properties, not a hard-coded default', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/ios-release.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /PLAYARR_VERSION_NAME=/);
+  assert.match(workflow, /clients\/android\/version\.properties/);
+  assert.doesNotMatch(workflow, /:-1\.0\.0/);
+  assert.doesNotMatch(workflow, /tag version or 1\.0\.0/);
+});
