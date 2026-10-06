@@ -2110,6 +2110,8 @@ private fun ExperienceNavHost(
         composable("profiles") {
             val profileAvatar by viewModel.profileAvatar.collectAsState()
             val currentUserId by viewModel.currentUserId.collectAsState()
+            val householdStatus by viewModel.household.collectAsState()
+            val guardianFor = householdStatus?.guardianFor.orEmpty().toSet()
             ExperienceProfilesScreen(
                 isTelevision = isTelevision,
                 currentUserId = currentUserId.orEmpty(),
@@ -2117,7 +2119,22 @@ private fun ExperienceNavHost(
                 onHome = { navController.openExperienceTopLevel(profileReturnRoute) },
                 onSettings = { navController.openExperienceTopLevel("settings") },
                 onAddProfile = onAddProfile,
+                canApproveRequests = guardianFor.isNotEmpty(),
+                onApproveRequests = { navController.navigate("guardian-approvals") },
             )
+        }
+        composable("guardian-approvals") {
+            val currentUserId by viewModel.currentUserId.collectAsState()
+            val householdStatus by viewModel.household.collectAsState()
+            val guardianFor = householdStatus?.guardianFor.orEmpty().toSet()
+            ExperienceOnlineGate(isOnline, isTelevision, "guardian-approvals") {
+                ExperienceGuardianApprovalsScreen(
+                    isTelevision = isTelevision,
+                    selfId = currentUserId.orEmpty(),
+                    guardianFor = guardianFor,
+                    onBack = navController::popBackStack,
+                )
+            }
         }
         composable("settings") {
             ExperienceOnlineGate(isOnline, isTelevision, "settings") {

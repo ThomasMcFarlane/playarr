@@ -43,6 +43,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.
 - CI: one Release workflow (`.github/workflows/release.yml`) releases every app from a single `version` dispatch on `main`: server tarballs and the `playarr-server` and `playarr-regional` images, the signed Android APK, webOS, Tizen, Roku, Xbox and HarmonyOS packages in one GitHub Release with a combined `SHA256SUMS` and generated notes, then Google Play closed testing and TestFlight, with a per-platform summary. The per-platform workflows are reusable and keep their own tags.
 - The downloads Worker serves the Android and server downloads from the all-platform `v*` releases as well as `android-v*` and `backend-v*` ones.
 - Android: the Release Calendar offers Request and Add to watchlist for releases that are not in the library, using the actions the server computes for the signed-in user (a disabled Request shows the server's reason), and the calendar link is fetched in one call and no longer needs resetting to be shown again.
