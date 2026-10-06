@@ -94,8 +94,23 @@ if [ "$(git --git-dir="$e2e/origin.git" rev-parse "$landed^")" = "$m1" ] \
   && [ "$(git --git-dir="$e2e/origin.git" diff --name-only "$m1" "$landed")" = src/a.txt ]; then
   ok "end to end: the train lands main + the PR's diff, nothing reverted"
 else bad "end to end: landed $(git --git-dir="$e2e/origin.git" diff --name-only "$m1" "$landed" | tr '\n' ' ')"; cat "$e2e/train.log"; fi
+grep -q 'pr comment\|issues/.*/comments' "$e2e/gh.log" 2>/dev/null && bad "end to end: the train posted a comment" || ok "end to end: the train posted no comment"
 rm -rf "$e2e"
 git checkout -q main
+
+# block(): label change and summary only, never a comment.
+bl=$(mktemp -d)
+(
+  gh() { echo "$*" >>"$bl/gh.log"; }
+  SUMMARY="$bl/summary.md" DRY=false block 9 "reason text" >"$bl/out.log" 2>&1
+)
+grep -q 'pr edit 9 .*--remove-label ready --add-label blocked' "$bl/gh.log" && ok "block removes ready and adds blocked" || bad "block did not relabel"
+grep -qE 'comment' "$bl/gh.log" && bad "block posted a comment" || ok "block posts no comment"
+grep -q 'reason text' "$bl/summary.md" && ok "block writes the reason to the job summary" || bad "block left the reason out of the summary"
+rm -rf "$bl"
+# Static: no comment call of any kind may exist in the train.
+grep -nE 'gh pr comment|pr/comments|issues/[^ ]*/comments|-X POST[^|]*comments' "$root/scripts/merge-train.sh" "$root/.github/workflows/merge-train.yml" >/dev/null \
+  && bad "a comment call exists in the train" || ok "no comment call exists in the train"
 
 # check-fragments: a commit editing TASKS.md is rejected unless it carries the trailer.
 git checkout -q -b origin-main "$base"; git update-ref refs/remotes/origin/main HEAD

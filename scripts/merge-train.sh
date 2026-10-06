@@ -22,14 +22,15 @@
 #      (or no TASKS/CHANGELOG line) that main's recent commits replaced; after an
 #      API merge verify_landed checks that main's new tree is exactly
 #      main + the PR. Either failing stops the train,
-#   4. on any failure removes `ready`, adds `blocked`, comments the reason and
+#   4. on any failure removes `ready`, adds `blocked`, writes the reason to the
+#      run's job summary and logs (never a PR comment: the train posts none) and
 #      moves on to the next PR.
 #
 # Environment:
 #   GH_TOKEN             token for gh (github.token is enough)
 #   GITHUB_REPOSITORY    owner/name
-#   DRY_RUN=true         do everything locally and read-only; no push, label,
-#                        comment or merge
+#   DRY_RUN=true         do everything locally and read-only; no push, label
+#                        or merge
 #   ONLY_PR=<n>          process just this PR (still must carry `ready`, unless
 #                        DRY_RUN=true)
 #   TRAIN_KEY_MODE=true  git `origin` authenticates with a deploy key, so pushes
@@ -66,20 +67,18 @@ run() { if [ "$DRY" = true ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 block() { # <pr> <reason>
   local pr="$1" reason="$2"
+  # The train never comments on a PR. The reason goes to the job summary and the log; the PR's agent
+  # watches for the `blocked` label, reads the run summary, fixes the cause and re-adds `ready`.
   log "PR #$pr blocked: $reason"
+  echo "::warning title=Merge train blocked PR #$pr::$reason"
   if [ "$DRY" = true ]; then return; fi
   gh pr edit "$pr" --repo "$REPO" --remove-label ready --add-label blocked >/dev/null 2>&1
-  gh pr comment "$pr" --repo "$REPO" --body "Merge train: removed \`ready\` and added \`blocked\`.
-
-$reason
-
-Fix the cause, push, then re-add the \`ready\` label (and remove \`blocked\`) to re-enter the queue." >/dev/null
 }
 
 ensure_labels() {
   [ "$DRY" = true ] && return
   gh label create ready --repo "$REPO" --color 0E8A16 --description "Queued for the merge train" >/dev/null 2>&1 || true
-  gh label create blocked --repo "$REPO" --color B60205 --description "Removed from the merge train; see comment" >/dev/null 2>&1 || true
+  gh label create blocked --repo "$REPO" --color B60205 --description "Removed from the merge train; see the Merge train run summary" >/dev/null 2>&1 || true
 }
 
 ready_queue() { # prints PR numbers, oldest `ready` label first
@@ -395,7 +394,11 @@ $TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
       local merged; merged=$(git rev-parse origin/main)
       if ! verify_landed "$merged" "$head"; then
         log "PR #$pr: LANDED TREE MISMATCH: $merged is not its parent plus $head; train stopped"
-        gh pr comment "$pr" --repo "$REPO" --body "Merge train: squash-merged as $merged, but its tree is not \`main\` plus this PR's changes. The train has stopped; inspect \`git diff $merged^ $merged\` and restore anything lost." >/dev/null
+        {
+          echo "### Merge train FAILED: landed tree mismatch"
+          echo "PR #$pr was squash-merged as $merged, but its tree is not \`main\` plus this PR's changes. The train has stopped. Inspect \`git diff $merged^ $merged\` and restore anything lost."
+        } >>"$SUMMARY"
+        echo "::error title=Merge train stopped::PR #$pr squash-merged as $merged but its tree is not main plus the PR; inspect git diff $merged^ $merged"
         STOP=true; exit 1
       fi
       post_merge_dispatch "$merged"

@@ -6,7 +6,7 @@
 # oldest `ready` first: merge main in, push, wait for `ci-required` on that
 # exact SHA, squash-merge. Each run is a short step (no runner is held while CI
 # runs): it advances the head of the queue and exits; the CI-completion trigger
-# and the schedule resume it. Failures remove `ready`, add `blocked` and comment.
+# and the schedule resume it. Failures remove `ready`, add `blocked` and write the reason to the run summary (no PR comments).
 #
 # Authentication: if the repository secret TRAIN_DEPLOY_KEY (a write deploy key,
 # which must be re-created for this repository: deploy keys are per repository)
@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run: merge main locally and report, push/label/comment/merge nothing'
+        description: 'Dry run: merge main locally and report, push/label/merge nothing'
         type: boolean
         default: true
       pr:

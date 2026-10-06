@@ -99,12 +99,17 @@ on a personal account do not get.
   commits added; after an API merge the train checks main's new tree is exactly main + the PR and
   stops if not. A deliberate revert of a recent change is therefore landed by hand (merge rule v2).
 - On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
-  `blocked` and comments the reason. It posts no comment when a PR lands successfully. Fix it, push, remove `blocked` and add `ready` again.
+  `blocked` and writes the reason to the run's job summary and logs. The train posts no PR comment at
+  all (not on success, block or failure). The agent that owns a PR watches for the `blocked` label on it
+  (`gh pr view <n> --json labels`), reads the reason in the Merge train run summary
+  (`gh run list --workflow merge-train.yml`, `gh run view <id>`), fixes it, pushes, removes `blocked` and
+  adds `ready` again itself. The owner should never need to intervene. A landed-tree mismatch stops the
+  train and fails the run loudly (summary and non-zero exit).
 - Do not push to a branch that carries `ready` unless you are withdrawing it (remove the label first).
 - Merge manually (merge rule v2: rebase, green `ci-required` on the pushed SHA, plain squash) only
   while the train is down, which means the `Merge train` workflow is failing or disabled.
 - Dry run: Actions > Merge train > Run workflow (default `dry_run: true`, optional `pr`) merges main
-  locally and reports what it would do without pushing, labelling, commenting or merging.
+  locally and reports what it would do without pushing, labelling or merging.
 - Owner one-off for the best behaviour: create a new write deploy key for this repository and store
   its private half as the secret `TRAIN_DEPLOY_KEY` (deploy keys do not carry over from another
   repository). With it, the train's pushes and landings trigger CI
