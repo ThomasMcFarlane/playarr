@@ -7,6 +7,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Deprecated
+
+- Postgres support is deprecated and will be removed in the next change: Playarr becomes SQLite-only (ADR 0002, superseding ADR 0001). Multi-node deployments use peer sync between SQLite nodes. The shared-database Kubernetes tier and Docker Compose with Postgres are dropped.
+
 ### Fixed
 
 - Deleting a user now frees their username for a new account (the tombstone is renamed; migration 0077 does the same for existing ones), and an administrator delete revokes all of the user's refresh-token families and sessions immediately.
@@ -517,6 +521,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Postgres storage support is being removed from the server, Helm chart and compose files; a `postgres://` database URL will be rejected at startup. See ADR 0002.
 - Task board: fragments can now remove a row (`remove: <row-number>`); work belonging to other repositories such as Dubarr is no longer tracked on the board.
 - Smoke scripts (`live-events-smoke.sh`, `remote-control-smoke.sh`) no longer read `~/.playarr-test.env`; export `TEST_SERVER`, `TEST_USERNAME` and `TEST_PASSWORD` explicitly. Shared test-account references were removed from the docs.
 - The in-process authoritative relay DNS server and `PLAYARR_RELAY_DNS_BIND_ADDR` /
@@ -2258,6 +2263,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.
 - README: rebuilt with a banner, a screenshot showcase, light and dark platform and architecture diagrams, collapsible reference sections, and an expanded third-party media attribution for the openly licensed titles shown in the screenshots.
 - Add `SECURITY.md` (private vulnerability reporting) and stop naming the deployment configuration in `AGENTS.md`, as part of the public-readiness audit.
 - Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.

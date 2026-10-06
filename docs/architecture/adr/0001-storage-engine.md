@@ -1,6 +1,6 @@
 # ADR 0001: Dual-Backend Storage Engine (SQLite for single-node, Postgres for multi-node)
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0002](0002-sqlite-only-storage.md) (2026-10-07). Postgres support was removed; the text below is kept as history.
 - **Date:** 2026-07-15
 - **Owners:** Playarr Server core team
 - **Related:** [`docs/architecture/overview.md`](../overview.md) (crate layout, deployment tiers),
