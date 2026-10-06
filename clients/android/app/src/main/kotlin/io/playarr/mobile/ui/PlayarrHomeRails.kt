@@ -85,6 +85,10 @@ internal fun buildPlayarrHomeRails(
     if (rails.isEmpty()) return buildPlayarrHomeRails(byKind, onDeck)
     val onDeckWorks = onDeck.map(PlayarrOnDeckEntry::work).distinctBy(Work::id).take(10)
     val onDeckIds = onDeckWorks.mapTo(mutableSetOf(), Work::id)
+    // Web Home always leads with a primary rail: On deck when there is any, else "Start watching" with the
+    // eight most recently added works across the server rails and the sites.
+    val sites = byKind[WorkKind.Site].orEmpty()
+    val recent = (rails.flatMap(HomeRailDto::items) + sites).sortedByDescending(Work::addedAt).distinctBy(Work::id)
     return buildList {
         if (onDeckWorks.isNotEmpty()) {
             add(
@@ -94,6 +98,8 @@ internal fun buildPlayarrHomeRails(
                     onDeckByWork = onDeck.filter { it.work.id in onDeckIds }.associateBy { it.work.id },
                 ),
             )
+        } else {
+            add(HomeRail(title = PlayarrString.HomeRailStartWatching, works = recent.take(8)))
         }
         rails.forEach { add(it.toHomeRail()) }
         add(HomeRail(PlayarrString.HomeRailNewSites, byKind[WorkKind.Site].orEmpty().take(12)))

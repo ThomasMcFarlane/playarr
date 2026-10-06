@@ -85,6 +85,24 @@ class PlayarrHomeRailsTest {
     }
 
     @Test
+    fun `server rails lead with Start watching when nothing is on deck, newest first without duplicates`() {
+        val a = work("a", WorkKind.Movie, "2026-07-20T00:00:00Z")
+        val b = work("b", WorkKind.Series, "2026-07-21T00:00:00Z")
+        val rails = buildPlayarrHomeRails(
+            mapOf(WorkKind.Movie to listOf(a), WorkKind.Series to listOf(b)),
+            emptyList(),
+            listOf(
+                HomeRailDto("r1", "recently_added", "movie", "Recently Added in Movies", "recently_added", items = listOf(a)),
+                HomeRailDto("r2", "recently_added", "series", "Recently Added in Series", "recently_added", items = listOf(b, a)),
+            ),
+        )
+
+        assertEquals(PlayarrString.HomeRailStartWatching, rails.first().title)
+        assertEquals(listOf("b", "a"), rails.first().works.map(Work::id))
+        assertEquals(listOf("HomeRailStartWatching", "r1", "r2"), rails.map(HomeRail::key))
+    }
+
+    @Test
     fun `no server rails falls back to the built in shelves`() {
         val a = work("a", WorkKind.Movie, "2026-07-20T00:00:00Z")
         val byKind = mapOf(WorkKind.Movie to listOf(a))

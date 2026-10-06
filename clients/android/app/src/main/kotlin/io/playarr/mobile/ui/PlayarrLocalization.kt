@@ -323,6 +323,10 @@ internal enum class PlayarrString(
     CalendarStateInLibrary("In library", "อยู่ในไลบรารี", "ライブラリにあります"),
     CalendarStateMonitored("Monitored", "ติดตามอยู่", "監視中"),
     CalendarStateNotMonitored("Not monitored", "ไม่ได้ติดตาม", "監視していません"),
+    CalendarSheetWhen("Release", "วันที่วางจำหน่าย", "公開日時"),
+    CalendarSheetState("Status", "สถานะ", "状態"),
+    CalendarSheetSources("Reported by", "รายงานโดย", "報告元"),
+    CalendarDetailKindEpisode("Episodes", "ตอน", "エピソード"),
     CalendarReleaseAir("Airs", "ออกอากาศ", "放送"),
     CalendarReleaseCinema("In cinemas", "ฉายในโรงภาพยนตร์", "劇場公開"),
     CalendarReleaseDigital("Digital release", "เผยแพร่แบบดิจิทัล", "デジタル配信"),
@@ -770,6 +774,10 @@ internal enum class PlayarrString(
         "{{hours}}時間{{minutes}}分",
     ),
     DetailUnavailable("Unavailable", "ไม่พร้อมใช้งาน", "利用できません"),
+    DetailReleased("Released {{date}}", "เข้าฉายเมื่อ {{date}}", "公開日 {{date}}"),
+    DetailDownloadButton("Download", "ดาวน์โหลด", "ダウンロード"),
+    DetailSceneMarkersCount("{{count}} scene markers", "{{count}} จุดคั่นฉาก", "{{count}}件のシーンマーカー"),
+    DetailKindMovie("Movie", "ภาพยนตร์", "映画"),
     DetailChapters("Chapters", "บท", "チャプター"),
     WatchStateUnwatched("Unwatched", "ยังไม่ได้ดู", "未視聴"),
     DetailChapterNumber("Chapter {{number}}", "บทที่ {{number}}", "チャプター{{number}}"),
@@ -1159,6 +1167,52 @@ internal enum class PlayarrString(
         "未対応の{{count}}件を保存",
     ),
     YourDataImported("Your data was imported.", "นำเข้าข้อมูลของคุณแล้ว", "データを取り込みました。"),
+    SettingsIndexAvatarDescription(
+        "Choose how your profile appears on this device.",
+        "เลือกรูปลักษณ์ของโปรไฟล์ในอุปกรณ์นี้",
+        "この端末でのプロフィール表示を選択します。",
+    ),
+    SettingsIndexLanguageDescription(
+        "Follow this device or keep a language fixed.",
+        "ใช้ตามอุปกรณ์นี้ หรือกำหนดภาษาไว้ตายตัว",
+        "この端末の設定に従うか、言語を固定できます。",
+    ),
+    SettingsIndexPlayerDescription(
+        "Choose how Playarr should start quality, subtitles and audio.",
+        "เลือกคุณภาพ คำบรรยาย และเสียงเมื่อเริ่มเล่น",
+        "再生開始時の画質、字幕、音声を選択します。",
+    ),
+    SettingsIndexServerDescription(
+        "Combine libraries from multiple servers in one Playarr interface.",
+        "รวมไลบรารีจากหลายเซิร์ฟเวอร์ไว้ในอินเทอร์เฟซ Playarr เดียว",
+        "複数のサーバーのライブラリを1つのPlayarr画面にまとめます。",
+    ),
+    SettingsIndexProfileLockDescription(
+        "Require a four-digit PIN before switching profiles.",
+        "กำหนดให้ต้องใช้ PIN 4 หลักก่อนสลับโปรไฟล์",
+        "プロフィールを切り替える前に4桁のPINを要求します。",
+    ),
+    SettingsIndexInviteDescription(
+        "Ask your Playarr Server admin for one friend-invite QR code.",
+        "ขอคิวอาร์โค้ดเชิญเพื่อนหนึ่งใบจากผู้ดูแลระบบ Playarr Server ของคุณ",
+        "Playarr Serverの管理者に友達招待用のQRコードを1枚依頼してください。",
+    ),
+    SettingsRequestLatency("Request latency", "ความหน่วงของคำขอ", "リクエストのレイテンシ"),
+    SettingsIndexRequestLatencyDescription(
+        "Per-route HTTP request latency for admins.",
+        "ความหน่วงของคำขอ HTTP แยกตามเส้นทาง สำหรับผู้ดูแลระบบ",
+        "管理者向けのルート別HTTPリクエストのレイテンシ。",
+    ),
+    SettingsRequestLatencyOnWeb(
+        "Request latency is shown in Playarr Web.",
+        "ดูความหน่วงของคำขอได้ใน Playarr Web",
+        "リクエストのレイテンシはPlayarr Webで確認できます。",
+    ),
+    SettingsIndexRemoteDescription(
+        "Control this device from your phone, or control another device.",
+        "ควบคุมอุปกรณ์นี้จากโทรศัพท์ หรือควบคุมอุปกรณ์อื่น",
+        "スマートフォンからこの端末を操作、または別の端末を操作します。",
+    ),
     SettingsLegal("Privacy and account", "ความเป็นส่วนตัวและบัญชี", "プライバシーとアカウント"),
     SettingsRemote("Phone remote", "รีโมทโทรศัพท์", "スマホリモコン"),
     RemoteDescription("Control this device from your phone, or control another device.", "ควบคุมอุปกรณ์นี้จากโทรศัพท์ หรือควบคุมอุปกรณ์อื่น", "スマートフォンからこの端末を操作、または別の端末を操作します。"),
@@ -1931,8 +1985,10 @@ internal enum class PlayarrString(
 internal data class PlayarrLanguageState(
     val preference: String,
     val resolved: PlayarrResolvedLanguage,
+    /** The device's own locale, used for dates and numbers when it is in the resolved language (region formats). */
+    private val deviceLocale: Locale? = null,
 ) {
-    val locale: Locale get() = resolved.locale
+    val locale: Locale get() = deviceLocale?.takeIf { it.language == resolved.locale.language } ?: resolved.locale
 
     fun text(key: PlayarrString, parameters: Map<String, Any> = emptyMap()): String {
         val template = when (resolved) {
@@ -2007,9 +2063,10 @@ private val PlayarrInterpolationPattern = "\\{\\{(\\w+)\\}\\}".toRegex()
 internal fun rememberPlayarrLanguageState(preference: String): PlayarrLanguageState {
     val locales = LocalConfiguration.current.locales
     val languageTags = remember(locales) { (0 until locales.size()).map { locales[it].toLanguageTag() } }
+    val deviceLocale = if (locales.size() > 0) locales[0] else null
     val normalisedPreference = parsePlayarrLanguagePreference(preference)
     return remember(normalisedPreference, languageTags) {
-        PlayarrLanguageState(normalisedPreference, resolvePlayarrLanguage(normalisedPreference, languageTags))
+        PlayarrLanguageState(normalisedPreference, resolvePlayarrLanguage(normalisedPreference, languageTags), deviceLocale)
     }
 }
 

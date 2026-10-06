@@ -192,6 +192,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android phone: header, navigation, home rails, library grid, search, settings index, title detail pages and calendar follow the web mobile layout in light and dark themes.
 - Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.
 - The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.

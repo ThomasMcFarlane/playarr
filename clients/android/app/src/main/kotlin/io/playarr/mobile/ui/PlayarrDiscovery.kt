@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -281,10 +283,27 @@ internal class DiscoveryViewModel @Inject constructor(
 internal fun WatchlistToggleButton(
     work: Work,
     viewModel: DiscoveryViewModel = hiltViewModel(),
+    /** Web phone action pill: accent plus glyph and an 8 px label. */
+    webPhone: Boolean = false,
 ) {
     val snapshot = remember(work.id) { work.toSnapshot() }
     var listed by remember(work.id) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(work.id) { listed = viewModel.isListed(snapshot) ?: false }
+    if (webPhone) {
+        PhonePill(
+            onClick = { viewModel.toggleWatchlist(snapshot, listed == true) { listed = it } },
+            container = WebSurfaceStrong.copy(alpha = 0.72f),
+            enabled = listed != null,
+        ) {
+            Text(if (listed == true) "✓" else "+", color = WebKicker, fontSize = 9.2.sp, lineHeight = 13.8.sp, style = WebTextStyle)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                playarrString(if (listed == true) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd),
+                color = WebInk, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1,
+            )
+        }
+        return
+    }
     PlayarrButton(
         onClick = { viewModel.toggleWatchlist(snapshot, listed == true) { listed = it } },
         enabled = listed != null,
@@ -321,13 +340,22 @@ internal fun DiscoveryExtrasSection(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     viewModel: DiscoveryViewModel = hiltViewModel(),
+    /** Web phone `.tv-discovery-extras`: 8 px capitals heading and 8.8 px notes. */
+    webPhone: Boolean = false,
 ) {
     val state by viewModel.discover.collectAsState()
     val requested by viewModel.requested.collectAsState()
     LaunchedEffect(query, gamesOnly) { viewModel.search(query, gamesOnly) }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            playarrString(if (gamesOnly) PlayarrString.DiscoveryGames else PlayarrString.DiscoveryOtherSources),
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (webPhone) 12.dp else 8.dp)) {
+        val headingText = playarrString(if (gamesOnly) PlayarrString.DiscoveryGames else PlayarrString.DiscoveryOtherSources)
+        if (webPhone) {
+            Text(
+                headingText.uppercase(LocalPlayarrLanguage.current.locale),
+                color = WebInkMuted, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight(720), letterSpacing = 0.56.sp,
+                style = WebTextStyle,
+            )
+        } else Text(
+            headingText,
             color = WebInkMuted,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -337,13 +365,14 @@ internal fun DiscoveryExtrasSection(
             DiscoveryLoad.Loading -> Text(playarrString(PlayarrString.DiscoveryChecking), color = WebInkMuted, fontSize = 12.sp)
             is DiscoveryLoad.Failed -> Text(playarrText(current.message), color = WebInkMuted, fontSize = 12.sp)
             is DiscoveryLoad.Ready -> {
+                val noteSize = if (webPhone) 8.8.sp else 12.sp
                 val titles = extraDiscoveryTitles(current.response.titles)
                 val notices = current.response.providers.filter {
                     gamesOnly && it.provider == DiscoveryWire.SOURCE_GAME && it.state != "ok" && !it.reason.isNullOrBlank()
                 }
                 notices.forEach { Text(it.reason.orEmpty(), color = WebInkMuted, fontSize = 12.sp) }
                 if (titles.isEmpty() && notices.isEmpty()) {
-                    Text(playarrString(PlayarrString.DiscoveryNone), color = WebInkMuted, fontSize = 12.sp)
+                    Text(playarrString(PlayarrString.DiscoveryNone), color = WebInkMuted, fontSize = noteSize, lineHeight = if (webPhone) 13.2.sp else androidx.compose.ui.unit.TextUnit.Unspecified, style = if (webPhone) WebTextStyle else androidx.compose.ui.text.TextStyle.Default)
                 }
                 titles.forEach { title ->
                     DiscoveryTitleRow(
