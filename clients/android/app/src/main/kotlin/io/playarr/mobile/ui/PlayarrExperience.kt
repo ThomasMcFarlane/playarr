@@ -93,6 +93,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -1426,7 +1427,7 @@ internal fun PlayarrExperience(
     // The mini player must read the same source timeline as the expanded player (engine position plus
     // HLS source offset, duration from the negotiated source), not the raw engine window.
     var miniTimeline by remember { mutableStateOf(PlayarrPlayerTimeline()) }
-    val miniPlayerVisible = shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed)
+    val miniPlayerVisible = shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed, activePlaybackItem?.music == true)
     LaunchedEffect(miniPlayerVisible, activePlaybackItem?.mediaFileId) {
         if (!miniPlayerVisible) return@LaunchedEffect
         while (true) {
@@ -1525,7 +1526,7 @@ internal fun PlayarrExperience(
                 }
             }
 
-            if (shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed)) {
+            if (shouldShowPlayarrMiniPlayer(isPlayer, activePlaybackItem != null, persistentPlayerState is ExperienceLoad.Ready && !playbackFailed, activePlaybackItem?.music == true)) {
                 PlayarrMiniPlayer(
                     item = activePlaybackItem!!,
                     timeline = miniTimeline,
@@ -2003,6 +2004,11 @@ private fun ExperienceNavHost(
                     navController.popBackStack()
                 },
                 onMinimise = navController::popBackStack,
+                onClosePictureInPicture = {
+                    playerViewModel.stopPlayback()
+                    viewModel.clearPlayback()
+                    navController.popBackStack()
+                },
                 onOpenWork = { workId ->
                     playerViewModel.stopPlayback()
                     viewModel.clearPlayback()
@@ -6714,6 +6720,7 @@ private fun ExperiencePlayerScreen(
     onSelectPlayback: (Int) -> Unit,
     onBack: () -> Unit,
     onMinimise: () -> Unit,
+    onClosePictureInPicture: () -> Unit,
     onOpenWork: (String) -> Unit,
     viewModel: ExperiencePlayerViewModel = hiltViewModel(),
 ) {
@@ -6783,6 +6790,62 @@ private fun ExperiencePlayerScreen(
         if (nearEnd && endCardWork != null) viewModel.loadSuggestions(endCardWork)
     }
     val healthContext = LocalContext.current
+    val currentItem = playbackQueue.currentItem
+    val localVideoShown = currentItem != null && !currentItem.music && castingMediaFileId != currentItem.mediaFileId
+    val pipSupported = remember { PlayarrPictureInPicture.supported }
+    val inPip by PlayarrPictureInPicture.inPip.collectAsState()
+    var videoSize by remember { mutableStateOf(androidx.media3.common.VideoSize.UNKNOWN) }
+    DisposableEffect(viewModel) {
+        val raw = viewModel.player.rawPlayer
+        videoSize = raw.videoSize
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) { videoSize = size }
+        }
+        raw.addListener(listener)
+        onDispose { raw.removeListener(listener) }
+    }
+    val pipLabels = PlayarrPipLabels(
+        play = playarrString(PlayarrString.PlayerPlay),
+        pause = playarrString(PlayarrString.PlayerPause),
+        skipBack = playarrString(PlayarrString.PlayerPipSkipBack),
+        skipForward = playarrString(PlayarrString.PlayerPipSkipForward),
+    )
+    val pipEligible = playarrPipEligible(
+        supported = pipSupported,
+        localVideoShown = localVideoShown,
+        ready = state is ExperienceLoad.Ready,
+        hasEnded = playbackState.hasEnded,
+        hasError = playbackState.error != null,
+    )
+    LaunchedEffect(pipEligible, playbackState.playWhenReady, videoSize, pipLabels) {
+        PlayarrPictureInPicture.publish(
+            PlayarrPipState(
+                eligible = pipEligible,
+                playing = playbackState.playWhenReady,
+                aspect = playarrPipAspectRatio(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio),
+                labels = pipLabels,
+            ),
+        )
+    }
+    val latestViewModel by rememberUpdatedState(viewModel)
+    val latestClose by rememberUpdatedState(onClosePictureInPicture)
+    DisposableEffect(Unit) {
+        PlayarrPictureInPicture.onControl = { control ->
+            when (control) {
+                PlayarrPipControl.SkipBack -> latestViewModel.seekBy(-PIP_SEEK_STEP_MS)
+                PlayarrPipControl.PlayPause -> latestViewModel.togglePlayback()
+                PlayarrPipControl.SkipForward -> latestViewModel.seekBy(PIP_SEEK_STEP_MS)
+            }
+        }
+        PlayarrPictureInPicture.onWindowClosed = { latestClose() }
+        onDispose {
+            PlayarrPictureInPicture.onControl = null
+            PlayarrPictureInPicture.onWindowClosed = null
+            PlayarrPictureInPicture.clear()
+        }
+    }
+    // Video minimises to Picture-in-Picture; Back closes the player (progress recorded).
+    BackHandler(enabled = localVideoShown && !inPip) { onBack() }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
             ExperienceLoad.Loading -> PlayarrPlayerStatus(
@@ -6824,11 +6887,18 @@ private fun ExperiencePlayerScreen(
                                 useController = false
                             }
                         },
+                        // Re-bind on every recomposition (layout and PiP size changes) so the surface
+                        // never stays attached to a stale or detached player.
+                        update = { view ->
+                            if (view.player !== viewModel.player.rawPlayer) view.player = viewModel.player.rawPlayer
+                        },
                     )
                 }
             }
         }
-        if (state is ExperienceLoad.Ready && !endCard.visible) {
+        if (inPip) {
+            // Picture-in-Picture shows the video only: no controls, close button or end card.
+        } else if (state is ExperienceLoad.Ready && !endCard.visible) {
             PlayarrPlayerChrome(
                 playbackState = playbackState,
                 timeline = timeline,
@@ -6843,7 +6913,11 @@ private fun ExperiencePlayerScreen(
                 onNext = { onMovePlayback(1) },
                 onSelectQueueItem = onSelectPlayback,
                 onBack = onBack,
-                onMinimise = onMinimise,
+                onMinimise = when {
+                    playbackQueue.currentItem?.music == true -> onMinimise
+                    pipSupported -> ({ PlayarrPictureInPicture.enter(); Unit })
+                    else -> null
+                },
                 onTogglePlayback = viewModel::togglePlayback,
                 onSeek = viewModel::seekToSourcePosition,
                 onQuality = viewModel::selectQuality,
@@ -6885,7 +6959,7 @@ private fun ExperiencePlayerScreen(
                     tint = Color.White)
             }
         }
-        if (state is ExperienceLoad.Ready) {
+        if (state is ExperienceLoad.Ready && !inPip) {
             PlayarrEndOfPlaybackHost(
                 state = endCard,
                 onStateChange = { endCard = it },

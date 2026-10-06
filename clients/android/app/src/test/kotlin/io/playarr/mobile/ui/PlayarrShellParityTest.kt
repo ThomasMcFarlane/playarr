@@ -48,10 +48,12 @@ class PlayarrShellParityTest {
 
     @Test
     fun miniPlayerOnlyShowsWhenPlaybackIsReady() {
-        assertTrue(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = true))
-        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = false))
-        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = true, hasPlayback = true, playerReady = true))
-        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = false, playerReady = true))
+        assertTrue(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = true, isMusic = true))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = false, isMusic = true))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = true, hasPlayback = true, playerReady = true, isMusic = true))
+        // Video minimises to Picture-in-Picture, never to the in-app mini player.
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = true, isMusic = false))
+        assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = false, playerReady = true, isMusic = true))
     }
 
     @Test

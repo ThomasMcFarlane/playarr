@@ -1,0 +1,1 @@
+- Android: the minimised player no longer shows an empty or black surface for video; the video surface is re-bound to the player on every layout change and the in-app mini player (artwork only) is no longer used for video.

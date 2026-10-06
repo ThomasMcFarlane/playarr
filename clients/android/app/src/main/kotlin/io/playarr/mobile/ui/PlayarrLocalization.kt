@@ -862,6 +862,8 @@ internal enum class PlayarrString(
     PlayerClosePlayer("Close player", "ปิดเครื่องเล่น", "プレーヤーを閉じる"),
     PlayerMinimise("Minimise player", "ย่อเครื่องเล่น", "プレイヤーを最小化"),
     PlayerMinimiseLabel("Minimise", "ย่อ", "最小化"),
+    PlayerPipSkipBack("Back 10 seconds", "ย้อนกลับ 10 วินาที", "10秒戻る"),
+    PlayerPipSkipForward("Forward 10 seconds", "ข้ามไปข้างหน้า 10 วินาที", "10秒進む"),
     PlayerClosePlaylist("Close playlist", "ปิดเพลย์ลิสต์", "プレイリストを閉じる"),
     PlayerUpNext("Up next", "ต่อไป", "次はこちら"),
     EndCardFinished("Finished", "จบแล้ว", "再生終了"),
