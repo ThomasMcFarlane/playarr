@@ -1,0 +1,1 @@
+- CI: `parity-apple` dispatch workflow that builds the fixture server on a hosted macOS runner and captures the iOS app on a 390x844 simulator, screen by screen, for pixel parity against the web mobile layout; the iOS app gains debug-only launch arguments to sign in and open a screen.

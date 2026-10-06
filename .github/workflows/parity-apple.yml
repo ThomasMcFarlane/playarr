@@ -1,0 +1,166 @@
+name: Apple pixel parity
+
+# Builds the fixture server on the runner, boots a simulator, opens every parity
+# screen through launch arguments, captures it and uploads the captures. Shared
+# by the iOS and tvOS parity work: the platform input selects the app, the
+# simulator and the screen set.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which Apple client to capture
+        required: true
+        type: choice
+        options:
+          - ios
+          - tvos
+        default: ios
+      source_sha:
+        description: Optional full commit SHA to build (default - the selected ref)
+        required: false
+        type: string
+      screens:
+        description: Optional space-separated screen ids (default - all)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity-apple-${{ inputs.platform }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: Capture ${{ inputs.platform }} parity screens
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      PLATFORM: ${{ inputs.platform }}
+      SCREENS: ${{ inputs.screens }}
+      FIXTURE_PORT: "18484"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install fixture tools
+        shell: bash
+        run: brew install ffmpeg
+
+      - name: Restore the fixture server binary
+        id: server-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/playarr-server
+          key: parity-server-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('backend/**/*.rs', 'backend/**/Cargo.toml', 'backend/Cargo.lock', 'backend/migrations/**') }}
+
+      - name: Build the fixture server
+        if: steps.server-cache.outputs.cache-hit != 'true'
+        shell: bash
+        timeout-minutes: 40
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          cargo build --bin playarr-server
+          cp target/debug/playarr-server "$RUNNER_TEMP/playarr-server"
+
+      - name: Start and seed the fixture server
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          export PLAYARR_SERVER_BIN="$RUNNER_TEMP/playarr-server"
+          export PLAYARR_FIXTURE_DIR="$RUNNER_TEMP/fixtures"
+          export PLAYARR_FIXTURE_PORT="$FIXTURE_PORT"
+          chmod +x "$PLAYARR_SERVER_BIN"
+          scripts/fixtures/up.sh --fresh
+          node scripts/fixtures/verify.mjs
+          echo "PLAYARR_FIXTURE_DIR=$PLAYARR_FIXTURE_DIR" >> "$GITHUB_ENV"
+
+      - name: Prepare the iOS CocoaPods workspace
+        if: ${{ inputs.platform == 'ios' }}
+        shell: bash
+        timeout-minutes: 20
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Prepare the tvOS project
+        if: ${{ inputs.platform == 'tvos' }}
+        shell: bash
+        timeout-minutes: 20
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Create the simulator
+        id: simulator
+        shell: bash
+        timeout-minutes: 5
+        env:
+          # 390x844 points at 3x gives the 1170x2532 reference size. Only the
+          # iPhone 12, 13 and 14 families have that logical size.
+          INPUT_DESTINATION: ${{ inputs.platform == 'ios' && 'platform=iOS Simulator,name=iPhone 14' || 'platform=tvOS Simulator,name=Apple TV' }}
+        run: node .github/scripts/apple-test-simulator/main.js
+
+      - name: Build the app
+        shell: bash
+        timeout-minutes: 40
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          if [[ "$PLATFORM" == ios ]]; then
+            xcodebuild build -workspace clients/ios/Playarr.xcworkspace -scheme PlayarrApp \
+              -configuration Debug -destination "id=$SIMULATOR_UDID" \
+              -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO | tail -n 40
+            app="$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name '*.app' | head -n 1)"
+          else
+            xcodebuild build -project clients/apple-tv/PlayarrTV.xcodeproj -scheme PlayarrTV \
+              -configuration Debug -destination "id=$SIMULATOR_UDID" \
+              -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO | tail -n 40
+            app="$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name '*.app' | head -n 1)"
+          fi
+          echo "APP_PATH=$app" >> "$GITHUB_ENV"
+
+      - name: Boot, install and capture
+        shell: bash
+        timeout-minutes: 30
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl ui "$SIMULATOR_UDID" appearance light || true
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+          bundle="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          mkdir -p "$RUNNER_TEMP/out"
+          export PARITY_PASSWORD="$(node -e 'import("./scripts/fixtures/catalog.mjs").then(m=>console.log(m.FIXTURE_PASSWORD))')"
+          if [[ "$PLATFORM" == ios ]]; then
+            # shellcheck disable=SC2086
+            scripts/parity/apple/capture-ios.sh "$SIMULATOR_UDID" "$bundle" "http://127.0.0.1:$FIXTURE_PORT" \
+              "$RUNNER_TEMP/out/captures" $SCREENS
+          else
+            echo "tvOS capture is provided by the tvOS parity work" >&2
+          fi
+          xcrun simctl shutdown "$SIMULATOR_UDID" || true
+
+      - name: Stop the fixture server
+        if: always()
+        shell: bash
+        run: scripts/fixtures/down.sh || true
+
+      - name: Delete the simulator
+        if: ${{ always() && steps.simulator.outputs.udid != '' }}
+        shell: bash
+        env:
+          STATE_simulator_udid: ${{ steps.simulator.outputs.udid }}
+        run: node .github/scripts/apple-test-simulator/cleanup.js
+
+      - name: Upload the captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parity-${{ inputs.platform }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: ignore
+          retention-days: 14

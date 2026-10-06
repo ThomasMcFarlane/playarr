@@ -1,0 +1,17 @@
+{
+  "note": "Launch arguments used to open each parity screen in the iOS app (see ParityLaunch.swift). Ids follow scripts/parity/screens.json. A null args value means the iOS app has no such screen yet; it is captured as the home screen and reported as missing.",
+  "screens": {
+    "home": { "screen": "home" },
+    "movies": { "screen": "movies" },
+    "series": { "screen": "series" },
+    "detail-film": { "screen": "detail-film", "title": "Test Movie A" },
+    "detail-series": { "screen": "detail-series", "title": "Sample Series 1" },
+    "search": { "screen": "search", "query": "Test" },
+    "settings": { "screen": "settings" },
+    "profiles": { "screen": "profiles" },
+    "calendar": null,
+    "player": null,
+    "player-quality": null,
+    "blocked": null
+  }
+}
