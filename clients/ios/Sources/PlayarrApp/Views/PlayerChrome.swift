@@ -223,7 +223,7 @@ struct PlayerPanel<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            WMText(heading.uppercased(), 8.64, 760, color: .white.opacity(0.56), lh: 13, ls: 1.296)
+            WMText(heading.uppercased(), 8.64, 650, color: .white.opacity(0.56), lh: 13, ls: 1.296)
                 .padding(.top, 8.8)
                 .padding(.bottom, 7.2)
                 .padding(.leading, 11.2)
@@ -247,7 +247,7 @@ struct PlayerOptionRow: View {
         Button(action: action) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2.4) {
-                    WMText(title, 11.04, 700, lh: 16.5)
+                    WMText(title, 11.04, 650, lh: 16.5)
                     if let detail, !detail.isEmpty {
                         WMText(detail, 8.32, 400, color: .white.opacity(0.55), lh: 12.5)
                     }
@@ -304,14 +304,14 @@ struct PlayerQualityMatrix: View {
                 HStack(spacing: gap) {
                     Color.clear.frame(width: headingColumn, height: 23.68)
                     ForEach(PlayerQuality.levels, id: \.self) { level in
-                        WMText(level.uppercased(), 7.68, 760, color: .white.opacity(0.54), lh: 11.5, ls: 0.6144)
+                        WMText(level.uppercased(), 7.68, 650, color: .white.opacity(0.54), lh: 11.5, ls: 0.6144)
                             .frame(width: choiceColumn, height: 23.68)
                     }
                 }
                 ForEach(PlayerQuality.tiers) { tier in
                     HStack(spacing: gap) {
                         VStack(alignment: .leading, spacing: 1.92) {
-                            WMText(tier.name, 8.96, 760, lh: 13.44)
+                            WMText(tier.name, 8.96, 650, lh: 13.44)
                             WMText(tier.resolution, 7.04, 400, color: .white.opacity(0.54), lh: 10.56)
                         }
                         .padding(.horizontal, 4)
@@ -341,7 +341,7 @@ struct PlayerQualityMatrix: View {
         return Button { onSelect(id) } label: {
             HStack(spacing: 5.6) {
                 VStack(alignment: .leading, spacing: 1.92) {
-                    WMText(label, 9.28, 700, lh: 13.92)
+                    WMText(label, 9.28, 650, lh: 13.92)
                     WMText(detail, 7.04, 400, color: .white.opacity(0.54), lh: 10.56)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

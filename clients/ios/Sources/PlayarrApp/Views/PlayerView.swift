@@ -381,11 +381,11 @@ struct PlayerView: View {
         return Button { toggle(.quality) } label: {
             // The web button is 42pt wide on phones, so its label wraps and overflows evenly.
             HStack(spacing: 8.8) {
-                WMText(PlayerQuality.badge(option), 7.68, 700, lh: 20, ls: 0.3072)
+                WMText(PlayerQuality.badge(option), 7.68, 650, lh: 20, ls: 0.3072)
                     .frame(minWidth: 22)
                 VStack(spacing: 0) {
                     ForEach(Array(PlayerQuality.lines(PlayerQuality.displayLabel(option)).enumerated()), id: \.offset) { _, line in
-                        WMText(line, 10.56, 700, lh: 15.84, ls: 0.1056)
+                        WMText(line, 10.56, 650, lh: 15.84, ls: 0.1056)
                     }
                 }
             }
@@ -526,7 +526,7 @@ struct PlayerView: View {
             }
         }
         .frame(width: panelWidth)
-        .frame(maxHeight: size.height * 0.58 + 40)
+        .frame(maxHeight: size.height * 0.58 + 40, alignment: .bottom)
         .padding(.bottom, bottom)
         .frame(width: size.width, height: size.height, alignment: .bottom)
         .transition(.opacity)
