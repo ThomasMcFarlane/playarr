@@ -39,7 +39,15 @@ enum WM {
     }
 
     static func font(_ size: CGFloat, _ css: Int = 400) -> Font {
-        .custom("Avenir Next", fixedSize: size).weight(weight(css))
+        #if DEBUG
+        // The committed web references were rendered on a host without Avenir Next, so the browser
+        // fell back to a metric-compatible Arial. The parity run draws the same face to compare
+        // layout rather than typeface; the shipped app always uses Avenir Next.
+        if ParityLaunch.isActive {
+            return .custom(css >= 600 ? "Arial-BoldMT" : "ArialMT", fixedSize: size)
+        }
+        #endif
+        return .custom("Avenir Next", fixedSize: size).weight(weight(css))
     }
 
     /// `--mobile-top-inset`: max(14px, safe-area-inset-top). The parity
