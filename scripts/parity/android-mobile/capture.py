@@ -59,6 +59,8 @@ def main(out, screens):
             tap(desc="Movies"); time.sleep(1.5); tap(text="Test Movie A")
         elif s == "series-detail":
             tap(desc="Series"); time.sleep(1.5); tap(text="Sample Series 1")
+        elif s == "household-blocked":
+            pass  # sign in as fx-child-locked first: the blocked screen replaces the app
         elif s == "profile-switcher":
             tap(contains="Profiles for")
         elif s == "settings":

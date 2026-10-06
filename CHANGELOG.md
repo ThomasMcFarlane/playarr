@@ -2296,6 +2296,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
 - Regenerated the `@2x` architecture diagram PNGs from the SQLite-only SVGs, and corrected docs left over from the Postgres era: the backup description on the site (opt-in, age-encrypted, local unless an S3 destination is configured, offline CLI restore), the Kubernetes tier (StatefulSet, volume claim template, no Secret hook), the JWT secret fallback, the multi-node locking claims and the stale persistence gaps in the architecture overview.
 - `sqlx-postgres` stays in `Cargo.lock` because the lockfile records sqlx's optional dependencies whatever the features; it is not in the build graph.
 - Corrected `docs/architecture/auth-modes.md`, which still described the user, policy and refresh-token stores as in-memory.

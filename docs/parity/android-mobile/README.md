@@ -28,7 +28,7 @@ Mismatch against the web reference of the same theme, system bars masked (see be
 | player-controls | not measured | not measured | open |
 | player-quality-menu | not measured | not measured | open |
 | profile-switcher | not measured | not measured | open (Android layout is a different design) |
-| household-blocked | not measured | not measured | open (Android layout is a different design) |
+| household-blocked | 0.83% | 0.84% | pass |
 
 Before this work (first measurement, dark theme, before the fixture gained artwork): home 4.49%, movies 2.85%, series 2.56%,
 film-detail 15.92%, series-detail 9.34%, search 4.00%, calendar 14.86%, settings 4.50%, profile-switcher 12.57%,
@@ -81,8 +81,8 @@ and `report-dark.json` the raw numbers.
 
 ## Known gaps
 
-- Player screens, profile switcher and household blocked are not ported yet (the Android layouts are different designs from the
-  web ones; the web profile page also overlaps its theme and language dropdowns with the heading on a phone, which is a web issue).
+- Player screens and the profile switcher are not ported yet (the Android layouts are different designs from the web ones; the web
+  profile page also overlaps its theme and language dropdowns with the heading on a phone, which is a web issue).
 - Calendar: the web "Play" action for an entry is not ported (it needs the playback queue set up from the calendar).
 - Settings: the web lists "Request latency" for every user; Android has no such view, so the row opens a note that it is shown in
   Playarr Web.
