@@ -7,6 +7,11 @@ name: Apple TV parity captures
 # The PNGs are uploaded as a workflow artifact; none are committed.
 
 on:
+  # Also runs when this file changes, so an edit is exercised before the
+  # workflow exists on the default branch (workflow_dispatch needs it there).
+  pull_request:
+    paths:
+      - .github/workflows/appletv-parity.yml
   workflow_dispatch:
     inputs:
       source_sha:
