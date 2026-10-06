@@ -228,9 +228,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Only the packages: docker/build-push-action also uploads a `.dockerbuild` build record.
       - uses: actions/download-artifact@v4
         with:
           path: artefacts
+          pattern: playarr-*
 
       - name: Collect the release assets
         shell: bash
