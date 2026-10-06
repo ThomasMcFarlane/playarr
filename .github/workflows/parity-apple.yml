@@ -33,11 +33,11 @@ concurrency:
 
 jobs:
   capture:
-    name: Capture ${{ inputs.platform }} parity screens
+    name: Capture ${{ inputs.platform || 'ios' }} parity screens
     runs-on: macos-latest
     timeout-minutes: 90
     env:
-      PLATFORM: ${{ inputs.platform }}
+      PLATFORM: ${{ inputs.platform || 'ios' }}
       SCREENS: ${{ inputs.screens }}
       FIXTURE_PORT: "18484"
     steps:
@@ -81,13 +81,13 @@ jobs:
           echo "PLAYARR_FIXTURE_DIR=$PLAYARR_FIXTURE_DIR" >> "$GITHUB_ENV"
 
       - name: Prepare the iOS CocoaPods workspace
-        if: ${{ inputs.platform == 'ios' }}
+        if: ${{ env.PLATFORM == 'ios' }}
         shell: bash
         timeout-minutes: 20
         run: bash clients/ios/scripts/prepare.sh
 
       - name: Prepare the tvOS project
-        if: ${{ inputs.platform == 'tvos' }}
+        if: ${{ env.PLATFORM == 'tvos' }}
         shell: bash
         timeout-minutes: 20
         run: bash clients/ios/scripts/prepare.sh
@@ -99,7 +99,7 @@ jobs:
         env:
           # 390x844 points at 3x gives the 1170x2532 reference size. Only the
           # iPhone 12, 13 and 14 families have that logical size.
-          INPUT_DESTINATION: ${{ inputs.platform == 'ios' && 'platform=iOS Simulator,name=iPhone 14' || 'platform=tvOS Simulator,name=Apple TV' }}
+          INPUT_DESTINATION: ${{ env.PLATFORM == 'ios' && 'platform=iOS Simulator,name=iPhone 14' || 'platform=tvOS Simulator,name=Apple TV' }}
         run: node .github/scripts/apple-test-simulator/main.js
 
       - name: Build the app
@@ -160,7 +160,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: parity-${{ inputs.platform }}-attempt-${{ github.run_attempt }}
+          name: parity-${{ env.PLATFORM }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/out
           if-no-files-found: ignore
           retention-days: 14
