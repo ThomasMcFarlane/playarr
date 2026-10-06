@@ -1187,6 +1187,8 @@ internal enum class PlayarrString(
     RemoteEnter("Enter", "ยืนยัน", "確定"),
     RemoteFailed("That did not work on the device.", "คำสั่งนั้นใช้ไม่ได้บนอุปกรณ์", "端末で実行できませんでした。"),
     RemoteDeviceOffline("The device is not connected.", "อุปกรณ์ไม่ได้เชื่อมต่อ", "端末が接続されていません。"),
+    RemoteNoConnection("No connection. Check this phone's network and try again.", "ไม่มีการเชื่อมต่อ ตรวจสอบเครือข่ายของโทรศัพท์เครื่องนี้แล้วลองอีกครั้ง", "接続がありません。このスマホのネットワークを確認してもう一度お試しください。"),
+    RemoteNoResponse("The device did not respond. Check that Playarr is open on it.", "อุปกรณ์ไม่ตอบสนอง ตรวจสอบว่าเปิด Playarr บนอุปกรณ์นั้นอยู่", "端末が応答しませんでした。端末で Playarr が開いているか確認してください。"),
     RemotePairingsTitle("Paired remotes", "รีโมทที่จับคู่แล้ว", "ペアリング済みのリモコン"),
     RemotePairingsEmpty("No remotes are paired.", "ยังไม่มีรีโมทที่จับคู่", "ペアリング済みのリモコンはありません。"),
     RemoteRevoke("Revoke", "เพิกถอน", "解除"),

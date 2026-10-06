@@ -300,7 +300,7 @@ public extension PlayarrAPIClient {
 }
 
 /// Real, working `URLSession`-backed implementation of `PlayarrAPIClient`.
-public final class APIClient: PlayarrAPIClient {
+public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
     private let configuration: APIClientConfiguration
     private let session: URLSession
     private let decoder: JSONDecoder
@@ -633,6 +633,26 @@ public final class APIClient: PlayarrAPIClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = body
         }
+        try await attachAuthorization(to: &request)
+        do {
+            return try await sendRaw(request, expectedStatuses: expectedStatuses)
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            return try await sendRaw(request, expectedStatuses: expectedStatuses)
+        }
+    }
+
+    public func uploadData(
+        method: String,
+        path: String,
+        query: [URLQueryItem],
+        body: Data,
+        contentType: String,
+        expectedStatuses: Set<Int>
+    ) async throws -> Data {
+        var request = try makeRequest(path: path, method: method, query: query)
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
         try await attachAuthorization(to: &request)
         do {
             return try await sendRaw(request, expectedStatuses: expectedStatuses)

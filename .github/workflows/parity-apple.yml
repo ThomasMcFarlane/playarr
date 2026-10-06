@@ -94,6 +94,7 @@ jobs:
         run: cargo build --bin playarr-server
 
       - name: Build the web client
+        if: env.PLATFORM == 'tvos'
         working-directory: clients/tv-web
         run: |
           pnpm install --frozen-lockfile
@@ -101,13 +102,17 @@ jobs:
 
       - name: Install the parity tools
         working-directory: scripts/parity/apple
-        run: npm install --no-audit --no-fund && npx playwright-core install chromium
+        run: |
+          npm install --no-audit --no-fund
+          if [[ "$PLATFORM" == tvos ]]; then npx playwright-core install chromium; fi
 
       - name: Start the fixture environment
         env:
           PLAYARR_SERVER_BIN: ${{ github.workspace }}/backend/target/debug/playarr-server
           PLAYARR_FIXTURE_NO_BUILD: "1"
-          PLAYARR_WEB_ASSETS_DIR: ${{ github.workspace }}/clients/tv-web/web/dist
+          PLAYARR_WEB_ASSETS_DIR: ${{ env.PLATFORM == 'tvos' && format('{0}/clients/tv-web/web/dist', github.workspace) || '' }}
+          # The committed mobile references show the player at 2.0 s of a 60 s clip.
+          PLAYARR_FIXTURE_CLIP_SECONDS: ${{ env.PLATFORM == 'ios' && '60' || '' }}
           PLAYARR_FIXTURE_DIR: ${{ runner.temp }}/fixtures
         run: |
           scripts/fixtures/up.sh --fresh
@@ -122,7 +127,14 @@ jobs:
             echo "screens=scripts/parity/apple/screens.mobile.json" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Use the committed web reference (iOS)
+        if: env.PLATFORM == 'ios'
+        run: |
+          mkdir -p "$RUNNER_TEMP/parity/reference"
+          cp docs/parity/web/mobile/*.png "$RUNNER_TEMP/parity/reference/"
+
       - name: Capture the web reference
+        if: env.PLATFORM == 'tvos'
         run: |
           node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
             "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/reference"

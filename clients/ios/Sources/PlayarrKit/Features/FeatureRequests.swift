@@ -17,6 +17,18 @@ public protocol PlayarrRequestTransport: Sendable {
     ) async throws -> Data
 }
 
+/// Transport that can also send a non-JSON body (for example a ZIP package).
+public protocol PlayarrUploadTransport: PlayarrRequestTransport {
+    func uploadData(
+        method: String,
+        path: String,
+        query: [URLQueryItem],
+        body: Data,
+        contentType: String,
+        expectedStatuses: Set<Int>
+    ) async throws -> Data
+}
+
 /// Typed JSON helpers over `PlayarrRequestTransport.requestData`, shared by
 /// every feature client so each one only declares its models and paths.
 public extension PlayarrRequestTransport {
@@ -27,6 +39,20 @@ public extension PlayarrRequestTransport {
     ) async throws -> T {
         let data = try await requestData(
             method: "GET", path: path, query: query, body: nil, expectedStatuses: [200]
+        )
+        return try Self.decodeFeature(T.self, from: data)
+    }
+
+    /// A request with no body whose response is decoded (for example a POST that starts a job).
+    func requestJSON<T: Decodable>(
+        method: String,
+        _ path: String,
+        query: [URLQueryItem] = [],
+        expectedStatuses: Set<Int> = Set(200..<300),
+        as type: T.Type = T.self
+    ) async throws -> T {
+        let data = try await requestData(
+            method: method, path: path, query: query, body: nil, expectedStatuses: expectedStatuses
         )
         return try Self.decodeFeature(T.self, from: data)
     }
