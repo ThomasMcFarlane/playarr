@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="t d">
+<title id="t">Playarr clients</title><desc id="d">Supported Playarr clients: Android, Android TV, Web, LG webOS, Samsung Tizen, Hisense VIDAA, Roku, Xbox, Apple and HarmonyOS.</desc>
+<rect width="1280" height="420" rx="20" fill="#f5f3f2"/><rect x=".5" y=".5" width="1279" height="419" rx="20" fill="none" stroke="#38262148"/>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif"><text x="640.0" y="46" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2.2" fill="#cf3157">ONE SERVER, EVERY SCREEN</text></g>
+<g transform="translate(28 76)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="8" width="20" height="30" rx="3"/><rect x="32" y="16" width="9" height="22" rx="2"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Android</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Phones &amp; tablets</text></g>
+<circle cx="77" cy="127" r="4" fill="#0f7d71"/><text x="87" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Available</text></g>
+<g transform="translate(276 76)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="38" height="24" rx="3"/><path d="M16 38h16"/><path d="M20 15l9 5-9 5Z"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Android TV</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Google TV</text></g>
+<circle cx="77" cy="127" r="4" fill="#0f7d71"/><text x="87" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Available</text></g>
+<g transform="translate(524 76)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="38" height="28" rx="3"/><path d="M5 17h38"/><path d="M10 13h1M14 13h1"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Web</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Any modern browser</text></g>
+<circle cx="77" cy="127" r="4" fill="#0f7d71"/><text x="87" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Available</text></g>
+<g transform="translate(772 76)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="38" height="24" rx="3"/><path d="M17 38h14M24 32v6"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">LG webOS</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Televisions</text></g>
+<circle cx="67" cy="127" r="4" fill="#b8710b"/><text x="77" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Experimental</text></g>
+<g transform="translate(1020 76)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="38" height="24" rx="3"/><path d="M17 38h14M24 32v6"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Samsung Tizen</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Televisions</text></g>
+<circle cx="67" cy="127" r="4" fill="#b8710b"/><text x="77" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Experimental</text></g>
+<g transform="translate(28 240)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="38" height="24" rx="3"/><path d="M17 38h14M24 32v6"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Hisense VIDAA</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Televisions</text></g>
+<circle cx="67" cy="127" r="4" fill="#b8710b"/><text x="77" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Experimental</text></g>
+<g transform="translate(276 240)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="19" width="38" height="12" rx="3"/><path d="M12 25h6"/><circle cx="35" cy="25" r="2"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Roku</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Players &amp; TV</text></g>
+<circle cx="67" cy="127" r="4" fill="#b8710b"/><text x="77" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Experimental</text></g>
+<g transform="translate(524 240)"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="18" width="36" height="12" rx="3"/><path d="M12 24h8M32 24h4"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Xbox</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Native client</text></g>
+<circle cx="60" cy="127" r="4" fill="#6b4fbb"/><text x="70" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">In development</text></g>
+<g transform="translate(772 240)" opacity=".85"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="17" width="32" height="14" rx="4"/><path d="M19 24h10"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">Apple</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">iPhone, iPad, Apple TV</text></g>
+<circle cx="71" cy="127" r="4" fill="#a5969e"/><text x="81" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Coming soon</text></g>
+<g transform="translate(1020 240)" opacity=".85"><rect width="232" height="148" rx="14" fill="#fbfaf9" stroke="#38262124"/>
+<g transform="translate(92.0 16)" fill="none" stroke="#cf3157" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="6" width="16" height="32" rx="3"/><path d="M22 33h4"/></g>
+<g font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" text-anchor="middle"><text x="116.0" y="86" font-size="18" font-weight="700" fill="#382621">HarmonyOS</text>
+<text x="116.0" y="106" font-size="13" fill="#675961">Phones, tablets, TV</text></g>
+<circle cx="71" cy="127" r="4" fill="#a5969e"/><text x="81" y="131" font-family="'Avenir Next', Avenir, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#675961">Coming soon</text></g>
+</svg>
