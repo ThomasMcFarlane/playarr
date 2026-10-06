@@ -79,4 +79,15 @@ describe("Home layout", () => {
     expect(css).not.toContain(".tv-music-detail .tv-detail-copy");
     expect(previewExpandFrames).not.toContain("width:");
   });
+
+  it("left-aligns mobile rails at the page gutter instead of the TV left-fade inset", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const mobile = css.slice(css.indexOf("--mobile-page-gutter: 16px;"));
+    const rule = mobile.match(/\n  \.tv-media-track\s*\{(?<d>[^}]*--tv-track-left-fade[^}]*)\}/)?.groups?.d ?? "";
+    expect(rule).toMatch(/--tv-track-left-fade:\s*var\(--mobile-page-gutter\)/);
+    expect(rule).toMatch(/padding-left:\s*var\(--mobile-page-gutter\)/);
+    expect(mobile).not.toMatch(/\.tv-media-track\s*\{\s*padding-left:\s*var\(--tv-track-left-fade\);\s*\}/);
+    // Rails stay start-packed: no distributed spacing on the card rows.
+    expect(css).not.toMatch(/\.tv-(home-rail|media-track-scroll)\s*\{[^}]*justify-content:\s*space-/s);
+  });
 });
