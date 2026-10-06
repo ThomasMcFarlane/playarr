@@ -10,7 +10,7 @@ use crate::codec::{
     work_kind_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// CRUD + lookup surface over the `Work` aggregate root (movies, series,
 /// artists, authors — see `playarr_model::Work`). Season/episode/album/
@@ -50,29 +50,19 @@ pub trait WorkRepo: Send + Sync {
 
 pub struct SqlxWorkRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxWorkRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     /// Loads a work's `work_external_refs` rows. Split out of `hydrate` so
     /// `find_by_external_ref` can reuse it without an extra round trip
     /// through the `works` table it already has the row for.
     async fn load_external_refs(&self, work_id: Uuid) -> Result<Vec<ExternalRef>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT provider, external_id FROM work_external_refs \
-                 WHERE work_id = ? ORDER BY provider, external_id"
-            }
-            Backend::Postgres => {
-                "SELECT provider, external_id FROM work_external_refs \
-                 WHERE work_id = $1 ORDER BY provider, external_id"
-            }
-        };
+        let sql = "SELECT provider, external_id FROM work_external_refs \
+                 WHERE work_id = ? ORDER BY provider, external_id";
         let rows = sqlx::query(sql)
             .bind(work_id.to_string())
             .fetch_all(&self.pool)
@@ -101,10 +91,7 @@ impl SqlxWorkRepo {
             std::collections::HashMap::new();
         for chunk in work_ids.chunks(500) {
             let placeholders = (1..=chunk.len())
-                .map(|n| match self.backend {
-                    Backend::Sqlite => "?".to_string(),
-                    Backend::Postgres => format!("${n}"),
-                })
+                .map(|_| "?".to_string())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(
@@ -172,16 +159,8 @@ impl SqlxWorkRepo {
 #[async_trait]
 impl WorkRepo for SqlxWorkRepo {
     async fn get(&self, id: Uuid) -> Result<Work, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, release_date, monitored, availability FROM works WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
-                 added_at, release_date, monitored, availability FROM works WHERE id = $1"
-            }
-        };
+        let sql = "SELECT id, kind, title, sort_title, overview, images, genres, tags, \
+                 added_at, release_date, monitored, availability FROM works WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -199,24 +178,12 @@ impl WorkRepo for SqlxWorkRepo {
         // Hidden backing works of folder-discovered files (see
         // `playarr_model::folder`) never appear in catalogue enumeration;
         // they stay reachable by id for playback and detail lookups.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
+        let sql = "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
                  w.tags, w.added_at, w.release_date, w.monitored, w.availability FROM works w \
                  WHERE w.kind = ? \
                  AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
                                  WHERE r.work_id = w.id AND r.provider = ?) \
-                 ORDER BY w.sort_title LIMIT ? OFFSET ?"
-            }
-            Backend::Postgres => {
-                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.release_date, w.monitored, w.availability FROM works w \
-                 WHERE w.kind = $1 \
-                 AND NOT EXISTS (SELECT 1 FROM work_external_refs r \
-                                 WHERE r.work_id = w.id AND r.provider = $2) \
-                 ORDER BY w.sort_title LIMIT $3 OFFSET $4"
-            }
-        };
+                 ORDER BY w.sort_title LIMIT ? OFFSET ?";
         let rows = sqlx::query(sql)
             .bind(work_kind_to_str(kind))
             .bind(provider_to_str(&folder_work_provider()))
@@ -245,28 +212,14 @@ impl WorkRepo for SqlxWorkRepo {
 
         let mut tx = self.pool.begin().await?;
 
-        let upsert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO works \
+        let upsert_sql = "INSERT INTO works \
                  (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, monitored, availability) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
                  overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
                  tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, \
-                 monitored = excluded.monitored, availability = excluded.availability"
-            }
-            Backend::Postgres => {
-                "INSERT INTO works \
-                 (id, kind, title, sort_title, overview, images, genres, tags, added_at, release_date, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 kind = excluded.kind, title = excluded.title, sort_title = excluded.sort_title, \
-                 overview = excluded.overview, images = excluded.images, genres = excluded.genres, \
-                 tags = excluded.tags, added_at = excluded.added_at, release_date = excluded.release_date, \
-                 monitored = excluded.monitored, availability = excluded.availability"
-            }
-        };
+                 monitored = excluded.monitored, availability = excluded.availability";
         sqlx::query(upsert_sql)
             .bind(work.id.to_string())
             .bind(work_kind_to_str(work.kind))
@@ -283,23 +236,14 @@ impl WorkRepo for SqlxWorkRepo {
             .execute(&mut *tx)
             .await?;
 
-        let delete_refs_sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM work_external_refs WHERE work_id = ?",
-            Backend::Postgres => "DELETE FROM work_external_refs WHERE work_id = $1",
-        };
+        let delete_refs_sql = "DELETE FROM work_external_refs WHERE work_id = ?";
         sqlx::query(delete_refs_sql)
             .bind(work.id.to_string())
             .execute(&mut *tx)
             .await?;
 
-        let insert_ref_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES ($1, $2, $3)"
-            }
-        };
+        let insert_ref_sql =
+            "INSERT INTO work_external_refs (work_id, provider, external_id) VALUES (?, ?, ?)";
         for external_ref in &work.external_refs {
             sqlx::query(insert_ref_sql)
                 .bind(work.id.to_string())
@@ -314,10 +258,7 @@ impl WorkRepo for SqlxWorkRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM works WHERE id = ?",
-            Backend::Postgres => "DELETE FROM works WHERE id = $1",
-        };
+        let sql = "DELETE FROM works WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -333,22 +274,11 @@ impl WorkRepo for SqlxWorkRepo {
         provider: &ExternalProvider,
         external_id: &str,
     ) -> Result<Option<Work>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
+        let sql = "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
                  w.tags, w.added_at, w.release_date, w.monitored, w.availability \
                  FROM works w \
                  JOIN work_external_refs r ON r.work_id = w.id \
-                 WHERE r.provider = ? AND r.external_id = ? LIMIT 1"
-            }
-            Backend::Postgres => {
-                "SELECT w.id, w.kind, w.title, w.sort_title, w.overview, w.images, w.genres, \
-                 w.tags, w.added_at, w.release_date, w.monitored, w.availability \
-                 FROM works w \
-                 JOIN work_external_refs r ON r.work_id = w.id \
-                 WHERE r.provider = $1 AND r.external_id = $2 LIMIT 1"
-            }
-        };
+                 WHERE r.provider = ? AND r.external_id = ? LIMIT 1";
         let row = sqlx::query(sql)
             .bind(provider_to_str(provider))
             .bind(external_id)

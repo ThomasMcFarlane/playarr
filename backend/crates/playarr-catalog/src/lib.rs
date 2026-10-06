@@ -17,7 +17,7 @@
 //! nothing in `playarr-db` exposes those yet (its `WorkRepo` doc comment
 //! explicitly scopes them out until "the catalog write path is built"), so
 //! this crate queries `DbPool` directly for just that slice — see
-//! `CatalogService::pool` and `backend/migrations/{sqlite,postgres}/000{4,5}_catalog_children.sql`.
+//! `CatalogService::pool` and `backend/migrations/sqlite/000{4,5}_catalog_children.sql`.
 // `async_trait` expansions trip clippy::double_must_use on current stable.
 #![allow(clippy::double_must_use)]
 
@@ -2340,7 +2340,7 @@ mod tests {
             .connect(&url)
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run real embedded sqlite migrations");
         pool
@@ -4017,7 +4017,7 @@ mod real_work_repo_integration {
             .connect("sqlite://playarr_catalog_real_repo_test?mode=memory&cache=shared")
             .await
             .unwrap();
-        playarr_db::run_migrations(&pool, false).await.unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
         pool
     }
 

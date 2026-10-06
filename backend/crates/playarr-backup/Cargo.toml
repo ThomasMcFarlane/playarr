@@ -3,10 +3,10 @@ name = "playarr-backup"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Encrypted, consistent server backups and staged restore for Playarr Server (SQLite and PostgreSQL)."
+description = "Encrypted, consistent server backups and staged restore for Playarr Server (SQLite)."
 
 [dependencies]
-playarr-db = { path = "../playarr-db", features = ["sqlite", "postgres"] }
+playarr-db = { path = "../playarr-db" }
 age = "0.11"
 tar = "0.4"
 flate2 = "1"
@@ -16,7 +16,7 @@ hmac = "0.12"
 base64 = "0.22"
 reqwest = { workspace = true }
 fs4 = "0.13"
-sqlx = { workspace = true, features = ["any", "sqlite", "postgres"] }
+sqlx = { workspace = true, features = ["any", "sqlite"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

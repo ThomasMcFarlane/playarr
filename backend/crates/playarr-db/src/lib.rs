@@ -1,10 +1,10 @@
 //! `playarr-db` — the sqlx-based persistence layer: connection pooling,
-//! embedded migrations (`backend/migrations/{sqlite,postgres}`), and the
+//! embedded migrations (`backend/migrations/sqlite`), and the
 //! repository traits the rest of the backend codes against.
 //!
 //! Nothing outside this crate should import `sqlx` directly — depend on
-//! [`DbPool`] and the trait exports below instead, so the SQLite/Postgres
-//! split stays contained here.
+//! [`DbPool`] and the trait exports below instead, so the storage engine
+//! stays contained here.
 // `async_trait` expansions trip clippy::double_must_use on current stable.
 #![allow(clippy::double_must_use)]
 
@@ -17,7 +17,7 @@ pub use repo::remote_wake;
 pub use repo::seed_default_rails;
 
 pub use error::DbError;
-pub use pool::{connect, run_migrations, DbPool, POSTGRES_MIGRATIONS, SQLITE_MIGRATIONS};
+pub use pool::{connect, run_migrations, DbPool, SQLITE_MIGRATIONS};
 pub use repo::{
     ApprovalRepo, CreditRepo, DeviceRepo, DiscoveredRoot, DownloadTicketRepo, EmbeddingRepo,
     FolderRepo, GroupLibraryRepo, HomeRailRepo, HouseholdUsageRepo, InMemoryRefreshTokenStore,

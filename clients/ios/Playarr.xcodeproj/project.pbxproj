@@ -46,6 +46,10 @@
 		E1389984B8C1516C94B36CE8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1A5D5A4D38A5841E26E836 /* SettingsView.swift */; };
 		E52095CEE58BB07403C84780 /* LoginServerURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55BE188FEDD01B033F5E6267 /* LoginServerURL.swift */; };
 		FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */; };
+		D439B5E042B3EA08FA2D6470 /* RemoteControllerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F25973FB98A0B953177E6B /* RemoteControllerViewModel.swift */; };
+		C37C77DBEFD95D58F608A9CE /* RemoteControllerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA4905A97F63176026664AF /* RemoteControllerView.swift */; };
+		EE99149B0A21B972AA50FB9F /* FeatureTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F85BFB0DD9088F6CF2012B /* FeatureTransportTests.swift */; };
+		183F09E62B559D7984551DFC /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28753530ACEA48912E9A72E /* RemoteTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,6 +104,10 @@
 		F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		BAD829AFB7E4361822926692 /* EndOfPlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndOfPlaybackView.swift; sourceTree = "<group>"; };
 		FF473E7FBA8AF8F108E8681D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		36F25973FB98A0B953177E6B /* RemoteControllerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControllerViewModel.swift; sourceTree = "<group>"; };
+		3AA4905A97F63176026664AF /* RemoteControllerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteControllerView.swift; sourceTree = "<group>"; };
+		71F85BFB0DD9088F6CF2012B /* FeatureTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureTransportTests.swift; sourceTree = "<group>"; };
+		A28753530ACEA48912E9A72E /* RemoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +135,8 @@
 			children = (
 				7E9F5AD7BEE43A57468E1FF1 /* APIClientAuthenticationTests.swift */,
 				530064E9763897EB523F7328 /* AppUpdateEvaluatorTests.swift */,
+				71F85BFB0DD9088F6CF2012B /* FeatureTransportTests.swift */,
+				A28753530ACEA48912E9A72E /* RemoteTests.swift */,
 				DB77C9F9366C65A153551833 /* KnownServerGroupTests.swift */,
 				6A013FE69C7592477831D1D0 /* EndOfPlaybackTests.swift */,
 				22FB21E00BEA101D1E185EFF /* OpenAPISchemasTests.swift */,
@@ -203,6 +213,7 @@
 				0DE220C6ECB3C9B272667EDE /* PlayarrComponents.swift */,
 				F55C2EDD38D3EE78CF143BE1 /* PlayerView.swift */,
 				BAD829AFB7E4361822926692 /* EndOfPlaybackView.swift */,
+				3AA4905A97F63176026664AF /* RemoteControllerView.swift */,
 				5AC040680B1DE183A7B9AF48 /* PlaylistsView.swift */,
 				9343AADF6E982DB2A8A53515 /* PreviewSupport.swift */,
 				238F31E1B80D5BD46ACA0808 /* ProfilesView.swift */,
@@ -231,6 +242,7 @@
 				D2EA71A178219F9CBB095F37 /* PlayerViewModel.swift */,
 				14D3D68B86AD7CBFDC9B6CD0 /* SettingsViewModel.swift */,
 				4DDB83EE590182C8B4B0F8CB /* UpdateViewModel.swift */,
+				36F25973FB98A0B953177E6B /* RemoteControllerViewModel.swift */,
 				B8525AEDD13C65F22CAA667F /* WorkDetailViewModel.swift */,
 			);
 			path = ViewModels;
@@ -369,6 +381,7 @@
 				9109CB34833A61572E4D9198 /* PlayarrComponents.swift in Sources */,
 				CB69E35C9C56E7AA3C8363A0 /* PlayerView.swift in Sources */,
 				8D3499FB09698273DF7FC721 /* EndOfPlaybackView.swift in Sources */,
+				C37C77DBEFD95D58F608A9CE /* RemoteControllerView.swift in Sources */,
 				3D9C69CD0BE2BE5CC8DFCA08 /* PlayerViewModel.swift in Sources */,
 				CD51D8C6FC0C2D5E06A16560 /* PlaylistsView.swift in Sources */,
 				529F02E697DC075CF33EDAD5 /* PreviewSupport.swift in Sources */,
@@ -378,6 +391,7 @@
 				84B3D28EC80CEF35F73B994D /* SettingsViewModel.swift in Sources */,
 				BEFB5AF3F0944B968C99E53C /* UpdateGateView.swift in Sources */,
 				B53CC88DDC7E6206A8268D89 /* UpdateViewModel.swift in Sources */,
+				D439B5E042B3EA08FA2D6470 /* RemoteControllerViewModel.swift in Sources */,
 				A49664A4D13847A223A8E1D8 /* WorkDetailView.swift in Sources */,
 				2803A8AB28DD8487529C6C88 /* WorkDetailViewModel.swift in Sources */,
 			);
@@ -389,6 +403,8 @@
 			files = (
 				4D5B51C84C335C7AA2F963D1 /* APIClientAuthenticationTests.swift in Sources */,
 				FC280A968B55BD609D112F88 /* AppUpdateEvaluatorTests.swift in Sources */,
+				EE99149B0A21B972AA50FB9F /* FeatureTransportTests.swift in Sources */,
+				183F09E62B559D7984551DFC /* RemoteTests.swift in Sources */,
 				0C97FF1D2C239D4199B02257 /* KnownServerGroupTests.swift in Sources */,
 				76C5D9B38F7CCD2AA3ACD1B0 /* EndOfPlaybackTests.swift in Sources */,
 				37478F9C0FAA2B8BA6F84F30 /* OpenAPISchemasTests.swift in Sources */,

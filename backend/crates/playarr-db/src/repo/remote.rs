@@ -2,8 +2,7 @@
 //! (`docs/architecture/remote-control.md`): registered remote targets,
 //! pairings, the per-target event queue and handoff records.
 //!
-//! Every query is written once with `?` placeholders and rewritten to `$n`
-//! for Postgres. Times are Unix epoch milliseconds. Status columns are plain
+//! Every query is written with `?` placeholders. Times are Unix epoch milliseconds. Status columns are plain
 //! strings; the API layer owns the vocabulary and the transition rules, this
 //! layer only offers compare-and-set updates so concurrent callers cannot
 //! both win a transition.
@@ -22,7 +21,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// In-process wake-ups for the push transports (SSE and long poll). The
 /// database queue stays the source of truth; a wake only cuts the latency of
@@ -67,6 +66,8 @@ pub struct RemoteTarget {
     pub state: Option<Value>,
     pub state_at_ms: Option<i64>,
     pub last_seen_ms: i64,
+    /// Optional install-independent device fingerprint a reinstall can reclaim by.
+    pub fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +135,24 @@ pub trait RemoteRepo: Send + Sync {
         now_ms: i64,
     ) -> Result<(), DbError>;
     async fn delete_target(&self, device_id: Uuid) -> Result<(), DbError>;
+    /// A reinstalled device (`new_id`) takes over `old_id`: pairings and queued events move
+    /// across and the stale target row is deleted. Pairings that become duplicates of one
+    /// another (same controller and target, both pending or active) keep only the newest.
+    async fn reclaim_device(
+        &self,
+        user_id: Uuid,
+        old_id: Uuid,
+        new_id: Uuid,
+        now_ms: i64,
+    ) -> Result<(), DbError>;
+    /// Deletes the user's targets not seen since `cutoff_ms` and revokes their live pairings.
+    /// Returns how many targets were removed.
+    async fn prune_stale_targets(
+        &self,
+        user_id: Uuid,
+        cutoff_ms: i64,
+        now_ms: i64,
+    ) -> Result<u64, DbError>;
 
     async fn insert_pairing(&self, pairing: &RemotePairing) -> Result<(), DbError>;
     async fn get_pairing(&self, id: Uuid) -> Result<Option<RemotePairing>, DbError>;
@@ -210,33 +229,15 @@ pub trait RemoteRepo: Send + Sync {
 
 pub struct SqlxRemoteRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRemoteRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn sql(&self, q: &str) -> String {
-        match self.backend {
-            Backend::Sqlite => q.to_string(),
-            Backend::Postgres => {
-                let mut out = String::with_capacity(q.len() + 8);
-                let mut n = 0;
-                for c in q.chars() {
-                    if c == '?' {
-                        n += 1;
-                        out.push('$');
-                        out.push_str(&n.to_string());
-                    } else {
-                        out.push(c);
-                    }
-                }
-                out
-            }
-        }
+        q.to_string()
     }
 }
 
@@ -258,7 +259,7 @@ fn strings(raw: &str) -> Result<Vec<String>, DbError> {
 }
 
 const TARGET_COLS: &str =
-    "device_id, user_id, name, platform, capabilities, state, state_at_ms, last_seen_ms";
+    "device_id, user_id, name, platform, capabilities, state, state_at_ms, last_seen_ms, fingerprint";
 const PAIRING_COLS: &str = "id, user_id, controller_device_id, controller_name, target_device_id, \
      status, scopes, verification_code, created_ms, expires_ms, approved_ms, revoked_ms, revoked_by";
 const EVENT_COLS: &str = "id, target_device_id, seq, kind, pairing_id, user_id, \
@@ -277,6 +278,7 @@ fn target_from(row: &AnyRow) -> Result<RemoteTarget, DbError> {
         state: opt_json(row.try_get("state")?)?,
         state_at_ms: row.try_get("state_at_ms")?,
         last_seen_ms: row.try_get("last_seen_ms")?,
+        fingerprint: row.try_get("fingerprint")?,
     })
 }
 
@@ -339,10 +341,11 @@ fn handoff_from(row: &AnyRow) -> Result<RemoteHandoff, DbError> {
 impl RemoteRepo for SqlxRemoteRepo {
     async fn upsert_target(&self, t: &RemoteTarget) -> Result<(), DbError> {
         let sql = self.sql(&format!(
-            "INSERT INTO remote_targets ({TARGET_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+            "INSERT INTO remote_targets ({TARGET_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT (device_id) DO UPDATE SET user_id = excluded.user_id, \
              name = excluded.name, platform = excluded.platform, \
-             capabilities = excluded.capabilities, last_seen_ms = excluded.last_seen_ms"
+             capabilities = excluded.capabilities, last_seen_ms = excluded.last_seen_ms, \
+             fingerprint = excluded.fingerprint"
         ));
         sqlx::query(&sql)
             .bind(t.device_id.to_string())
@@ -353,6 +356,7 @@ impl RemoteRepo for SqlxRemoteRepo {
             .bind(json_str(&t.state))
             .bind(t.state_at_ms)
             .bind(t.last_seen_ms)
+            .bind(t.fingerprint.clone())
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -417,6 +421,94 @@ impl RemoteRepo for SqlxRemoteRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn reclaim_device(
+        &self,
+        user_id: Uuid,
+        old_id: Uuid,
+        new_id: Uuid,
+        now_ms: i64,
+    ) -> Result<(), DbError> {
+        let (u, old, new) = (user_id.to_string(), old_id.to_string(), new_id.to_string());
+        for col in ["controller_device_id", "target_device_id"] {
+            let sql = self.sql(&format!(
+                "UPDATE remote_pairings SET {col} = ? WHERE {col} = ? AND user_id = ?"
+            ));
+            sqlx::query(&sql)
+                .bind(new.clone())
+                .bind(old.clone())
+                .bind(u.clone())
+                .execute(&self.pool)
+                .await?;
+        }
+        // Queued commands for the old install can never be delivered to the new one.
+        let sql = self.sql("DELETE FROM remote_events WHERE target_device_id = ? AND user_id = ?");
+        sqlx::query(&sql)
+            .bind(old.clone())
+            .bind(u.clone())
+            .execute(&self.pool)
+            .await?;
+        self.delete_target(old_id).await?;
+        // Collapse duplicates the move created: keep the newest live pairing per pair.
+        let sql = self.sql(
+            "UPDATE remote_pairings SET status = 'revoked', revoked_ms = ? \
+             WHERE user_id = ? AND status IN ('pending', 'active') \
+             AND (controller_device_id = ? OR target_device_id = ?) \
+             AND EXISTS (SELECT 1 FROM remote_pairings n WHERE n.user_id = remote_pairings.user_id \
+               AND n.controller_device_id = remote_pairings.controller_device_id \
+               AND n.target_device_id = remote_pairings.target_device_id \
+               AND n.status IN ('pending', 'active') \
+               AND (n.created_ms > remote_pairings.created_ms \
+                    OR (n.created_ms = remote_pairings.created_ms AND n.id > remote_pairings.id)))",
+        );
+        sqlx::query(&sql)
+            .bind(now_ms)
+            .bind(u)
+            .bind(new.clone())
+            .bind(new)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn prune_stale_targets(
+        &self,
+        user_id: Uuid,
+        cutoff_ms: i64,
+        now_ms: i64,
+    ) -> Result<u64, DbError> {
+        let u = user_id.to_string();
+        let stale = "SELECT device_id FROM remote_targets WHERE user_id = ? AND last_seen_ms < ?";
+        for col in ["controller_device_id", "target_device_id"] {
+            let sql = self.sql(&format!(
+                "UPDATE remote_pairings SET status = 'revoked', revoked_ms = ? \
+                 WHERE user_id = ? AND status IN ('pending', 'active') AND {col} IN ({stale})"
+            ));
+            sqlx::query(&sql)
+                .bind(now_ms)
+                .bind(u.clone())
+                .bind(u.clone())
+                .bind(cutoff_ms)
+                .execute(&self.pool)
+                .await?;
+        }
+        let sql = self.sql(&format!(
+            "DELETE FROM remote_events WHERE user_id = ? AND target_device_id IN ({stale})"
+        ));
+        sqlx::query(&sql)
+            .bind(u.clone())
+            .bind(u.clone())
+            .bind(cutoff_ms)
+            .execute(&self.pool)
+            .await?;
+        let sql = self.sql("DELETE FROM remote_targets WHERE user_id = ? AND last_seen_ms < ?");
+        let done = sqlx::query(&sql)
+            .bind(u)
+            .bind(cutoff_ms)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected())
     }
 
     async fn insert_pairing(&self, p: &RemotePairing) -> Result<(), DbError> {
@@ -795,101 +887,6 @@ mod tests {
             created_ms: 10,
             expires_ms: 10_000,
         }
-    }
-
-    /// Runs the same scenarios against a real Postgres when
-    /// `PLAYARR_TEST_POSTGRES_URL` points at an empty database.
-    #[tokio::test]
-    async fn repo_behaves_the_same_on_postgres() {
-        let Ok(url) = std::env::var("PLAYARR_TEST_POSTGRES_URL") else {
-            return;
-        };
-        sqlx::any::install_default_drivers();
-        let pool = crate::pool::connect(&url).await.unwrap();
-        crate::pool::run_migrations(&pool, true).await.unwrap();
-        let repo = SqlxRemoteRepo::new(pool);
-        let target = Uuid::new_v4();
-        let a = repo
-            .enqueue_event(event(target, json!({"text": "a"})))
-            .await
-            .unwrap();
-        let b = repo
-            .enqueue_event(event(target, json!({"text": "b"})))
-            .await
-            .unwrap();
-        assert_eq!((a.seq, b.seq), (1, 2));
-        let got = repo.deliver_events(target, 0, 100, 10).await.unwrap();
-        assert_eq!(got.len(), 2);
-        assert!(repo
-            .ack_event(a.id, target, "ok", Some(&json!({"detail": "x"})))
-            .await
-            .unwrap());
-        assert!(repo
-            .get_event(a.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .payload
-            .is_none());
-        let p = pairing(Uuid::new_v4(), Uuid::new_v4(), target);
-        repo.insert_pairing(&p).await.unwrap();
-        assert!(repo
-            .set_pairing_scopes(p.id, &["text".to_string()])
-            .await
-            .unwrap());
-        assert!(repo
-            .transition_pairing(p.id, &["pending"], "active", 5, Some(9000), None)
-            .await
-            .unwrap());
-        let who = Uuid::new_v4();
-        assert!(repo
-            .transition_pairing(p.id, &["pending", "active"], "revoked", 7, None, Some(who))
-            .await
-            .unwrap());
-        let got = repo.get_pairing(p.id).await.unwrap().unwrap();
-        assert_eq!(
-            (got.status.as_str(), got.revoked_by, got.scopes),
-            ("revoked", Some(who), vec!["text".to_string()])
-        );
-        let t = RemoteTarget {
-            device_id: target,
-            user_id: Uuid::new_v4(),
-            name: "TV".into(),
-            platform: "android-tv".into(),
-            capabilities: vec!["navigate".into()],
-            state: None,
-            state_at_ms: None,
-            last_seen_ms: 1,
-        };
-        repo.upsert_target(&t).await.unwrap();
-        repo.set_target_state(target, &json!({"position_ms": 5}), 9)
-            .await
-            .unwrap();
-        assert_eq!(
-            repo.get_target(target).await.unwrap().unwrap().state_at_ms,
-            Some(9)
-        );
-        let h = RemoteHandoff {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            initiator_device_id: Uuid::new_v4(),
-            request_key: "k".into(),
-            source_device_id: Uuid::new_v4(),
-            destination_device_id: Uuid::new_v4(),
-            media_file_id: Uuid::new_v4(),
-            work_id: Uuid::new_v4(),
-            snapshot: json!({"position_ms": 1}),
-            status: "pending".into(),
-            created_ms: 1,
-            expires_ms: 100,
-            completed_ms: None,
-            acked_position_ms: None,
-            failure_reason: None,
-        };
-        repo.insert_handoff(&h).await.unwrap();
-        assert!(repo.commit_handoff(h.id, 3, 50).await.unwrap());
-        assert!(!repo.commit_handoff(h.id, 3, 51).await.unwrap());
-        repo.purge_events(1_000_000).await.unwrap();
     }
 
     #[tokio::test]

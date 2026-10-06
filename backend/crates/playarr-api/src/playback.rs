@@ -3995,7 +3995,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        run_migrations(&pool, false).await.unwrap();
+        run_migrations(&pool).await.unwrap();
 
         let file = media_file();
         // `media_files.work_id` has a real FK to `works(id)` (SQLite

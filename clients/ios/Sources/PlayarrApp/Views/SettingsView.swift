@@ -5,7 +5,7 @@ import UIKit
 
 struct SettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
-        case appearance, avatar, language, player, server, lock, invite, data
+        case appearance, avatar, language, player, server, lock, invite, remote, data
         var id: String { rawValue }
         var number: String { String(format: "%02d", Self.allCases.firstIndex(of: self)! + 1) }
         var title: String {
@@ -14,6 +14,7 @@ struct SettingsView: View {
             case .avatar: "Profile avatar"
             case .language: "Language"
             case .player: "Player"
+            case .remote: "Phone remote"
             case .server: "Server connection"
             case .lock: "Profile lock"
             case .invite: "Invite a friend"
@@ -26,6 +27,7 @@ struct SettingsView: View {
             case .avatar: "Choose how your profile appears on this device."
             case .language: "Follow this device or keep a language fixed."
             case .player: "Choose how Playarr should start quality, subtitles and audio."
+            case .remote: "Control this device from your phone, or control another device."
             case .server: "Combine libraries from multiple servers in one Playarr interface."
             case .lock: "Require a four-digit PIN before switching profiles."
             case .invite: "Ask your Playarr Server admin for one friend-invite QR code."
@@ -38,6 +40,7 @@ struct SettingsView: View {
             case .avatar: "person.crop.circle"
             case .language: "globe"
             case .player: "play.rectangle"
+            case .remote: "av.remote"
             case .server: "server.rack"
             case .lock: "lock"
             case .invite: "person.badge.plus"
@@ -270,6 +273,7 @@ struct SettingsView: View {
             case .avatar: avatarContent
             case .language: languageContent
             case .player: playerContent
+            case .remote: remoteContent
             case .server: serverContent
             case .lock: lockContent
             case .invite: inviteContent
@@ -381,6 +385,12 @@ struct SettingsView: View {
                     .overlay { Rectangle().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
                 Button("Request invitation") { requestInvite() }.buttonStyle(PlayarrPrimaryButtonStyle()).disabled(busy)
             }
+        }
+    }
+
+    private var remoteContent: some View {
+        settingsCard(title: "Phone remote", description: "Control this device from your phone, or control another device.") {
+            RemoteControllerView(apiClient: environment.apiClient)
         }
     }
 

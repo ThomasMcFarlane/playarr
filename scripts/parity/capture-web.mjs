@@ -27,6 +27,16 @@ const layoutIds = opt("layouts", "tv,mobile").split(",");
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const out = resolve(opt("out", join(here, "../../docs/parity/web")));
 const clock = new Date(opt("clock", spec.determinism.clock)).getTime();
+// Platform profile (all optional, off by default): --safe-area top,bottom[,left,right] emulates the native
+// system bars as CSS safe-area insets (CSS px = device dp), --font renders every text run with one font file
+// (the web font stack resolves per host, native clients use their platform font), --color-scheme sets
+// prefers-color-scheme (default light).
+const safeArea = (opt("safe-area", "") ?? "").split(",").filter(Boolean).map(Number);
+const fontFile = opt("font", "");
+const colorScheme = opt("color-scheme", "light");
+const fontCss = fontFile
+  ? `@font-face{font-family:"ParityFont";src:url(data:font/ttf;base64,${readFileSync(fontFile).toString("base64")});font-weight:100 900}:root{--font:"ParityFont",sans-serif!important}*,*::before,*::after{font-family:"ParityFont",sans-serif!important}`
+  : "";
 const PASSWORD = readFileSync(join(here, "../fixtures/catalog.mjs"), "utf8").match(/FIXTURE_PASSWORD = "([^"]+)"/)[1];
 const deviceId = (n) => {
   // Stable, valid UUID-shaped device id per user.
@@ -147,7 +157,7 @@ const STEP_TIMEOUT_MS = 120000;
 async function captureOnce(layoutId, layout, screen) {
   const user = screen.user ?? spec.user;
   const s = await login(user);
-  const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined });
+  const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
   try {
     const context = await browser.newContext({
       viewport: { width: layout.width, height: layout.height },
@@ -155,10 +165,23 @@ async function captureOnce(layoutId, layout, screen) {
       isMobile: layoutId === "mobile",
       hasTouch: layoutId === "mobile",
       reducedMotion: "reduce",
-      colorScheme: "light",
+      colorScheme,
       locale: spec.determinism.locale,
       timezoneId: spec.determinism.timezone,
     });
+    if (fontCss) {
+      await context.addInitScript((css) => {
+        const add = () => {
+          if (document.getElementById("__parity_font")) return;
+          const el = document.createElement("style");
+          el.id = "__parity_font";
+          el.textContent = css;
+          (document.head || document.documentElement).appendChild(el);
+        };
+        if (document.documentElement) add();
+        else new MutationObserver((_, o) => { if (document.documentElement) { o.disconnect(); add(); } }).observe(document, { childList: true });
+      }, fontCss);
+    }
     await context.addInitScript(
       ({ base, s, dev }) => {
         try {
@@ -171,6 +194,10 @@ async function captureOnce(layoutId, layout, screen) {
       { base, s, dev: deviceId(user) }
     );
     const page = await context.newPage();
+    if (safeArea.length) {
+      const [top = 0, bottom = 0, left = 0, right = 0] = safeArea;
+      await (await context.newCDPSession(page)).send("Emulation.setSafeAreaInsetsOverride", { insets: { top, bottom, left, right } });
+    }
     // Freeze Date only after the session is seeded with a real-time expiry (the server checks real time).
     if (screen.freezeClock !== false) await page.clock.setFixedTime(clock);
     const errors = [];
@@ -187,6 +214,8 @@ async function captureOnce(layoutId, layout, screen) {
     for (const step of screen.steps ?? []) {
       await Promise.race([runStep(page, step, layout), new Promise((_, rej) => setTimeout(() => rej(new Error(`step ${step.type} timed out`)), STEP_TIMEOUT_MS))]);
     }
+    // Wait for every <img> to decode so a slow host cannot capture a page before its hero or tile pictures.
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(800);
     await page.screenshot({ path: join(out, layoutId, `${screen.id}.png`), animations: "disabled", caret: "hide" });
     return errors.length;

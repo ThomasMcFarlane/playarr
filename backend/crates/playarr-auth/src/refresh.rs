@@ -835,7 +835,7 @@ mod tests {
         devices.upsert(&d).await.unwrap();
 
         let pool = connect(&url).await.unwrap();
-        run_migrations(&pool, false).await.unwrap();
+        run_migrations(&pool).await.unwrap();
         let jwt_before = Arc::new(JwtIssuer::new(secret, "playarr", Duration::minutes(15)));
         let before = RefreshTokenService::new(
             Arc::new(SqlxRefreshTokenRepo::new(pool.clone())),
@@ -853,7 +853,7 @@ mod tests {
 
         // "Restart".
         let pool = connect(&url).await.unwrap();
-        run_migrations(&pool, false).await.unwrap();
+        run_migrations(&pool).await.unwrap();
         let jwt_after = Arc::new(JwtIssuer::new(secret, "playarr", Duration::minutes(15)));
         jwt_after
             .verify_access_token(&rotated.access_token)

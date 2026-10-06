@@ -72,32 +72,6 @@ pub enum MediaSyncError {
     Sql(#[from] sqlx::Error),
 }
 
-/// Same engine detection `playarr_db::pool::Backend` does internally
-/// (that type is private to that crate) — this module's raw SQL against
-/// `seasons`/`episodes`/`albums`/`tracks`/`books` needs the same
-/// per-backend placeholder split (`?` vs `$1`) every `playarr-db` repo
-/// uses, since `sqlx::Any` doesn't translate placeholder syntax itself.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Backend {
-    Sqlite,
-    Postgres,
-}
-
-impl Backend {
-    fn detect(pool: &DbPool) -> Self {
-        let scheme = pool
-            .connect_options()
-            .database_url
-            .scheme()
-            .to_ascii_lowercase();
-        if scheme.starts_with("postgres") {
-            Backend::Postgres
-        } else {
-            Backend::Sqlite
-        }
-    }
-}
-
 /// Extracts a lowercased file extension as the `MediaFile::container` value
 /// (e.g. `"/tv/Show/S01E01.mkv"` -> `"mkv"`). Falls back to `"unknown"` for a
 /// path with no extension rather than failing the whole sync over one
@@ -195,7 +169,6 @@ fn minutes_to_ms(minutes: Option<u32>) -> Option<u64> {
 
 pub struct MediaSync {
     pool: DbPool,
-    backend: Backend,
     media_file_repo: std::sync::Arc<dyn MediaFileRepo>,
     /// `None` by default (same builder-opt-in shape as `ReconciliationPoller`'s
     /// `status_reporter` -- existing callers/tests that don't care about
@@ -215,10 +188,8 @@ pub struct MediaSync {
 
 impl MediaSync {
     pub fn new(pool: DbPool, media_file_repo: std::sync::Arc<dyn MediaFileRepo>) -> Self {
-        let backend = Backend::detect(&pool);
         Self {
             pool,
-            backend,
             media_file_repo,
             credit_repo: None,
             language_repo: None,
@@ -828,14 +799,7 @@ impl MediaSync {
         series_work_id: Uuid,
         season_number: i32,
     ) -> Result<(Uuid, bool), MediaSyncError> {
-        let select_sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id FROM seasons WHERE series_work_id = ? AND season_number = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id FROM seasons WHERE series_work_id = $1 AND season_number = $2"
-            }
-        };
+        let select_sql = "SELECT id FROM seasons WHERE series_work_id = ? AND season_number = ?";
         if let Some(id) = self
             .select_uuid(select_sql, series_work_id.to_string(), season_number as i64)
             .await?
@@ -844,16 +808,8 @@ impl MediaSync {
         }
 
         let id = Uuid::new_v4();
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO seasons (id, series_work_id, season_number, title, overview, monitored, availability) \
-                 VALUES (?, ?, ?, NULL, NULL, 1, 'unknown')"
-            }
-            Backend::Postgres => {
-                "INSERT INTO seasons (id, series_work_id, season_number, title, overview, monitored, availability) \
-                 VALUES ($1, $2, $3, NULL, NULL, 1, 'unknown')"
-            }
-        };
+        let insert_sql = "INSERT INTO seasons (id, series_work_id, season_number, title, overview, monitored, availability) \
+                 VALUES (?, ?, ?, NULL, NULL, 1, 'unknown')";
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(series_work_id.to_string())
@@ -883,29 +839,14 @@ impl MediaSync {
         monitored: bool,
     ) -> Result<(Uuid, bool), MediaSyncError> {
         let images_json = serde_json::to_string(images).map_err(playarr_db::DbError::from)?;
-        let select_sql = match self.backend {
-            Backend::Sqlite => "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?",
-            Backend::Postgres => {
-                "SELECT id FROM episodes WHERE season_id = $1 AND episode_number = $2"
-            }
-        };
+        let select_sql = "SELECT id FROM episodes WHERE season_id = ? AND episode_number = ?";
         if let Some(id) = self
             .select_uuid(select_sql, season_id.to_string(), episode_number as i64)
             .await?
         {
-            let update_sql = match self.backend {
-                Backend::Sqlite => {
-                    "UPDATE episodes SET title = ?, overview = ?, images = ?, air_date = ?, runtime_minutes = ?, monitored = ?, availability = 'available' WHERE id = ? \
+            let update_sql = "UPDATE episodes SET title = ?, overview = ?, images = ?, air_date = ?, runtime_minutes = ?, monitored = ?, availability = 'available' WHERE id = ? \
                      AND (title IS NOT ? OR overview IS NOT ? OR images IS NOT ? OR air_date IS NOT ? \
-                          OR runtime_minutes IS NOT ? OR monitored IS NOT ? OR availability IS NOT 'available')"
-                }
-                Backend::Postgres => {
-                    "UPDATE episodes SET title = $1, overview = $2, images = $3, air_date = $4, runtime_minutes = $5, monitored = $6, availability = 'available' WHERE id = $7 \
-                     AND (title IS DISTINCT FROM $1 OR overview IS DISTINCT FROM $2 OR images IS DISTINCT FROM $3 \
-                          OR air_date IS DISTINCT FROM $4 OR runtime_minutes IS DISTINCT FROM $5 \
-                          OR monitored IS DISTINCT FROM $6 OR availability IS DISTINCT FROM 'available')"
-                }
-            };
+                          OR runtime_minutes IS NOT ? OR monitored IS NOT ? OR availability IS NOT 'available')";
             let air_date = air_date.map(|date| date.format("%Y-%m-%d").to_string());
             let runtime = runtime_minutes.map(i64::from);
             let mut query = sqlx::query(update_sql)
@@ -916,7 +857,7 @@ impl MediaSync {
                 .bind(runtime)
                 .bind(monitored as i64)
                 .bind(id.to_string());
-            if self.backend == Backend::Sqlite {
+            {
                 // SQLite's `?` placeholders are positional: repeat the values
                 // for the "did anything change" guard.
                 query = query
@@ -932,16 +873,8 @@ impl MediaSync {
         }
 
         let id = Uuid::new_v4();
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available')"
-            }
-            Backend::Postgres => {
-                "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'available')"
-            }
-        };
+        let insert_sql = "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available')";
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(season_id.to_string())
@@ -964,10 +897,7 @@ impl MediaSync {
         title: &str,
         source_instance_id: Uuid,
     ) -> Result<Uuid, MediaSyncError> {
-        let select_sql = match self.backend {
-            Backend::Sqlite => "SELECT id FROM albums WHERE artist_work_id = ? AND title = ?",
-            Backend::Postgres => "SELECT id FROM albums WHERE artist_work_id = $1 AND title = $2",
-        };
+        let select_sql = "SELECT id FROM albums WHERE artist_work_id = ? AND title = ?";
         if let Some(id) = self
             .select_uuid_str(select_sql, artist_work_id.to_string(), title)
             .await?
@@ -981,16 +911,8 @@ impl MediaSync {
         let release_date = lidarr_release_date(album.release_date.as_deref());
         let images_json = serde_json::to_string(&lidarr_album_images(album, source_instance_id))
             .map_err(playarr_db::DbError::from)?;
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'available')"
-            }
-            Backend::Postgres => {
-                "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'available')"
-            }
-        };
+        let insert_sql = "INSERT INTO albums (id, artist_work_id, title, images, album_type, release_date, monitored, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'available')";
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(artist_work_id.to_string())
@@ -1012,16 +934,8 @@ impl MediaSync {
     ) -> Result<(), MediaSyncError> {
         let images_json = serde_json::to_string(&lidarr_album_images(album, source_instance_id))
             .map_err(playarr_db::DbError::from)?;
-        let update_sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE albums SET images = ?, album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
-                 WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE albums SET images = $1, album_type = $2, release_date = $3, monitored = $4, availability = 'available' \
-                 WHERE id = $5"
-            }
-        };
+        let update_sql = "UPDATE albums SET images = ?, album_type = ?, release_date = ?, monitored = ?, availability = 'available' \
+                 WHERE id = ?";
         sqlx::query(update_sql)
             .bind(images_json)
             .bind(lidarr_album_type(album))
@@ -1041,14 +955,8 @@ impl MediaSync {
         title: &str,
         duration_seconds: Option<i64>,
     ) -> Result<Uuid, MediaSyncError> {
-        let select_sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id FROM tracks WHERE album_id = ? AND disc_number = ? AND track_number = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id FROM tracks WHERE album_id = $1 AND disc_number = $2 AND track_number = $3"
-            }
-        };
+        let select_sql =
+            "SELECT id FROM tracks WHERE album_id = ? AND disc_number = ? AND track_number = ?";
         let row = sqlx::query(select_sql)
             .bind(album_id.to_string())
             .bind(disc_number)
@@ -1057,14 +965,7 @@ impl MediaSync {
             .await?;
         if let Some(row) = row {
             let id = uuid_from_row(&row)?;
-            let update_sql = match self.backend {
-                Backend::Sqlite => {
-                    "UPDATE tracks SET title = ?, duration_seconds = ?, availability = 'available' WHERE id = ?"
-                }
-                Backend::Postgres => {
-                    "UPDATE tracks SET title = $1, duration_seconds = $2, availability = 'available' WHERE id = $3"
-                }
-            };
+            let update_sql = "UPDATE tracks SET title = ?, duration_seconds = ?, availability = 'available' WHERE id = ?";
             sqlx::query(update_sql)
                 .bind(title)
                 .bind(duration_seconds)
@@ -1075,16 +976,8 @@ impl MediaSync {
         }
 
         let id = Uuid::new_v4();
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
-                 VALUES (?, ?, ?, ?, ?, ?, 'available')"
-            }
-            Backend::Postgres => {
-                "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
-                 VALUES ($1, $2, $3, $4, $5, $6, 'available')"
-            }
-        };
+        let insert_sql = "INSERT INTO tracks (id, album_id, disc_number, track_number, title, duration_seconds, availability) \
+                 VALUES (?, ?, ?, ?, ?, ?, 'available')";
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(album_id.to_string())
@@ -1102,10 +995,7 @@ impl MediaSync {
         author_work_id: Uuid,
         title: &str,
     ) -> Result<Uuid, MediaSyncError> {
-        let select_sql = match self.backend {
-            Backend::Sqlite => "SELECT id FROM books WHERE author_work_id = ? AND title = ?",
-            Backend::Postgres => "SELECT id FROM books WHERE author_work_id = $1 AND title = $2",
-        };
+        let select_sql = "SELECT id FROM books WHERE author_work_id = ? AND title = ?";
         if let Some(id) = self
             .select_uuid_str(select_sql, author_work_id.to_string(), title)
             .await?
@@ -1114,16 +1004,8 @@ impl MediaSync {
         }
 
         let id = Uuid::new_v4();
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO books (id, author_work_id, title, isbn, release_date, series_name, series_position, monitored, availability) \
-                 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 1, 'available')"
-            }
-            Backend::Postgres => {
-                "INSERT INTO books (id, author_work_id, title, isbn, release_date, series_name, series_position, monitored, availability) \
-                 VALUES ($1, $2, $3, NULL, NULL, NULL, NULL, 1, 'available')"
-            }
-        };
+        let insert_sql = "INSERT INTO books (id, author_work_id, title, isbn, release_date, series_name, series_position, monitored, availability) \
+                 VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 1, 'available')";
         sqlx::query(insert_sql)
             .bind(id.to_string())
             .bind(author_work_id.to_string())
@@ -1198,7 +1080,7 @@ mod tests {
             .connect(&url)
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run real embedded sqlite migrations");
 

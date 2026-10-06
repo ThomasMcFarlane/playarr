@@ -309,9 +309,7 @@ mod tests {
             ))
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
-            .await
-            .expect("migrate");
+        playarr_db::run_migrations(&pool).await.expect("migrate");
         Arc::new(playarr_db::repo::SqlxSourceInstanceRepo::new(pool))
     }
 

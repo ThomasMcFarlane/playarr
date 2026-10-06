@@ -30,11 +30,11 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// One `(peer_node_id, entity)` sync cursor -- column-for-column mirror of
 /// the `peer_sync_state` table
-/// (`backend/migrations/{postgres/0036,sqlite/0033}_peer_sync_state.sql`).
+/// (`backend/migrations/sqlite/0033_peer_sync_state.sql`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PeerSyncState {
     pub peer_node_id: Uuid,
@@ -69,13 +69,11 @@ pub trait PeerSyncStateRepo: Send + Sync {
 
 pub struct SqlxPeerSyncStateRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerSyncStateRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -98,20 +96,10 @@ const COLUMNS: &str = "peer_node_id, entity, cursor, last_synced_at";
 #[async_trait]
 impl PeerSyncStateRepo for SqlxPeerSyncStateRepo {
     async fn upsert(&self, state: &PeerSyncState) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO peer_sync_state (peer_node_id, entity, cursor, last_synced_at) \
+        let sql = "INSERT INTO peer_sync_state (peer_node_id, entity, cursor, last_synced_at) \
                  VALUES (?, ?, ?, ?) \
                  ON CONFLICT (peer_node_id, entity) DO UPDATE SET \
-                 cursor = excluded.cursor, last_synced_at = excluded.last_synced_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO peer_sync_state (peer_node_id, entity, cursor, last_synced_at) \
-                 VALUES ($1, $2, $3, $4) \
-                 ON CONFLICT (peer_node_id, entity) DO UPDATE SET \
-                 cursor = excluded.cursor, last_synced_at = excluded.last_synced_at"
-            }
-        };
+                 cursor = excluded.cursor, last_synced_at = excluded.last_synced_at";
         sqlx::query(sql)
             .bind(state.peer_node_id.to_string())
             .bind(state.entity.as_str())
@@ -127,14 +115,8 @@ impl PeerSyncStateRepo for SqlxPeerSyncStateRepo {
         peer_node_id: Uuid,
         entity: &str,
     ) -> Result<Option<PeerSyncState>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = ? AND entity = ?"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = $1 AND entity = $2"
-            ),
-        };
+        let sql =
+            format!("SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = ? AND entity = ?");
         let row = sqlx::query(&sql)
             .bind(peer_node_id.to_string())
             .bind(entity)
@@ -144,14 +126,8 @@ impl PeerSyncStateRepo for SqlxPeerSyncStateRepo {
     }
 
     async fn list_for_peer(&self, peer_node_id: Uuid) -> Result<Vec<PeerSyncState>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = ? ORDER BY entity"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = $1 ORDER BY entity"
-            ),
-        };
+        let sql =
+            format!("SELECT {COLUMNS} FROM peer_sync_state WHERE peer_node_id = ? ORDER BY entity");
         let rows = sqlx::query(&sql)
             .bind(peer_node_id.to_string())
             .fetch_all(&self.pool)

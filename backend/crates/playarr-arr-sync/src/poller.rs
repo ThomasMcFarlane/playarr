@@ -271,10 +271,8 @@ impl ReconciliationPoller {
     /// `reconcile_all`) and a `RefetchRequest` arriving (drives
     /// `reconcile_one`); each iteration first calls
     /// `ClusterCoordinator::try_lock` on a key scoped to this source
-    /// instance so that in a multi-node deployment only one node ever
-    /// reconciles a given instance concurrently — `SingleNodeCoordinator`
-    /// makes this a no-op contention-wise, `PostgresCoordinator` makes it a
-    /// real distributed lock.
+    /// instance so that only one task ever reconciles a given instance
+    /// concurrently — `SingleNodeCoordinator` provides an in-process lock.
     pub async fn run(mut self) -> Result<(), PollError> {
         let mut interval = tokio::time::interval(self.poll_interval);
         // `tokio::time::interval`'s first tick fires immediately, which is
@@ -1750,7 +1748,7 @@ mod tests {
             .connect(&url)
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run real embedded sqlite migrations");
         pool

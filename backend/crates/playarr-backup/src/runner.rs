@@ -240,7 +240,7 @@ impl BackupService {
             partial,
             files,
             tables: snapshot.tables.clone(),
-            included: inventory_included(&assets, self.config.mode, snapshot.engine),
+            included: inventory_included(&assets, self.config.mode),
             excluded: inventory_excluded(),
             unavailable,
             external_dependencies: self.external_dependencies().await,
@@ -556,14 +556,11 @@ fn copy_assets(source: &Path, stage: &Path) -> Result<Vec<FileEntry>> {
     Ok(entries)
 }
 
-fn inventory_included(assets: &AssetPlan, mode: BackupMode, engine: Engine) -> Vec<InventoryItem> {
+fn inventory_included(assets: &AssetPlan, mode: BackupMode) -> Vec<InventoryItem> {
     let mut items = vec![
         InventoryItem::new(
             "database",
-            match engine {
-                Engine::Sqlite => "consistent SQLite snapshot (catalogue, libraries and source configuration, users, permissions, profiles, history, progress, playlists, preferences, peer identity, settings)",
-                Engine::Postgres => "single-snapshot PostgreSQL row export in foreign-key order (catalogue, libraries and source configuration, users, permissions, profiles, history, progress, playlists, preferences, peer identity, settings)",
-            },
+            "consistent SQLite snapshot (catalogue, libraries and source configuration, users, permissions, profiles, history, progress, playlists, preferences, peer identity, settings)",
         ),
     ];
     if matches!(assets, AssetPlan::Include { .. }) && mode == BackupMode::Full {

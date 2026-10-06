@@ -9,7 +9,7 @@ description = "The Playarr Server Axum HTTP server: OpenAPI-annotated system rou
 playarr-model = { path = "../playarr-model", features = ["openapi"] }
 playarr-config = { path = "../playarr-config" }
 playarr-telemetry = { path = "../playarr-telemetry" }
-playarr-db = { path = "../playarr-db", features = ["sqlite", "postgres"] }
+playarr-db = { path = "../playarr-db" }
 playarr-cache = { path = "../playarr-cache" }
 playarr-catalog = { path = "../playarr-catalog" }
 playarr-artwork = { path = "../playarr-artwork" }

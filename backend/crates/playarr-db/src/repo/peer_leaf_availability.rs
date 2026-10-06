@@ -28,7 +28,7 @@ use crate::codec::{
     provider_from_str, provider_to_str, work_kind_from_str, work_kind_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 // `leaf_selector` round-trips through its own serde-derived JSON form
 // (`LeafSelector`'s `#[serde(rename_all = "snake_case")]`) directly via
@@ -152,13 +152,11 @@ pub trait PeerLeafAvailabilityRepo: Send + Sync {
 
 pub struct SqlxPeerLeafAvailabilityRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerLeafAvailabilityRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -166,9 +164,7 @@ impl SqlxPeerLeafAvailabilityRepo {
 impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
     async fn upsert(&self, availability: &PeerLeafAvailability) -> Result<(), DbError> {
         let leaf_selector = serde_json::to_string(&availability.leaf_selector)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO peer_leaf_availability \
+        let sql = "INSERT INTO peer_leaf_availability \
                  (peer_node_id, media_file_id, source_instance_id, path, \
                  provider, external_id, leaf_selector, group_library_id, \
                  availability, container, codec, bitrate, size_bytes, duration_ms, \
@@ -184,28 +180,7 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
                  size_bytes = excluded.size_bytes, duration_ms = excluded.duration_ms, \
                  local_work_id = excluded.local_work_id, title = excluded.title, \
                  kind = excluded.kind, release_date = excluded.release_date, \
-                 updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO peer_leaf_availability \
-                 (peer_node_id, media_file_id, source_instance_id, path, \
-                 provider, external_id, leaf_selector, group_library_id, \
-                 availability, container, codec, bitrate, size_bytes, duration_ms, \
-                 local_work_id, title, kind, release_date, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) \
-                 ON CONFLICT (peer_node_id, media_file_id) DO UPDATE SET \
-                 source_instance_id = excluded.source_instance_id, path = excluded.path, \
-                 provider = excluded.provider, external_id = excluded.external_id, \
-                 leaf_selector = excluded.leaf_selector, \
-                 group_library_id = excluded.group_library_id, \
-                 availability = excluded.availability, container = excluded.container, \
-                 codec = excluded.codec, bitrate = excluded.bitrate, \
-                 size_bytes = excluded.size_bytes, duration_ms = excluded.duration_ms, \
-                 local_work_id = excluded.local_work_id, title = excluded.title, \
-                 kind = excluded.kind, release_date = excluded.release_date, \
-                 updated_at = excluded.updated_at"
-            }
-        };
+                 updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(availability.peer_node_id.to_string())
             .bind(availability.media_file_id.to_string())
@@ -232,10 +207,7 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
     }
 
     async fn delete_for_peer(&self, peer_node_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM peer_leaf_availability WHERE peer_node_id = ?",
-            Backend::Postgres => "DELETE FROM peer_leaf_availability WHERE peer_node_id = $1",
-        };
+        let sql = "DELETE FROM peer_leaf_availability WHERE peer_node_id = ?";
         sqlx::query(sql)
             .bind(peer_node_id.to_string())
             .execute(&self.pool)
@@ -247,16 +219,10 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         &self,
         peer_node_id: Uuid,
     ) -> Result<Vec<PeerLeafAvailability>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = ? \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = ? \
                  ORDER BY provider, external_id, leaf_selector"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability WHERE peer_node_id = $1 \
-                 ORDER BY provider, external_id, leaf_selector"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(peer_node_id.to_string())
             .fetch_all(&self.pool)
@@ -277,13 +243,7 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         // per backend the same way every other query here already branches
         // on `self.backend` for `?` vs `$n` syntax, just repeated per bound
         // value instead of written out literally.
-        let placeholders = match self.backend {
-            Backend::Sqlite => vec!["?"; local_work_ids.len()].join(", "),
-            Backend::Postgres => (1..=local_work_ids.len())
-                .map(|i| format!("${i}"))
-                .collect::<Vec<_>>()
-                .join(", "),
-        };
+        let placeholders = vec!["?"; local_work_ids.len()].join(", ");
         let sql = format!(
             "SELECT {COLUMNS} FROM peer_leaf_availability \
              WHERE local_work_id IN ({placeholders}) \
@@ -301,18 +261,11 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         &self,
         group_library_id: Uuid,
     ) -> Result<Vec<PeerLeafAvailability>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_leaf_availability \
                  WHERE group_library_id = ? AND local_work_id IS NULL \
                  ORDER BY provider, external_id, peer_node_id"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability \
-                 WHERE group_library_id = $1 AND local_work_id IS NULL \
-                 ORDER BY provider, external_id, peer_node_id"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(group_library_id.to_string())
             .fetch_all(&self.pool)
@@ -327,18 +280,11 @@ impl PeerLeafAvailabilityRepo for SqlxPeerLeafAvailabilityRepo {
         leaf_selector: &playarr_model::LeafSelector,
     ) -> Result<Vec<PeerLeafAvailability>, DbError> {
         let leaf_selector = serde_json::to_string(leaf_selector)?;
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_leaf_availability \
                  WHERE provider = ? AND external_id = ? AND leaf_selector = ? \
                  ORDER BY peer_node_id"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_leaf_availability \
-                 WHERE provider = $1 AND external_id = $2 AND leaf_selector = $3 \
-                 ORDER BY peer_node_id"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(provider_to_str(provider))
             .bind(external_id)

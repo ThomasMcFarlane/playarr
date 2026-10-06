@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::archive::verify_and_extract;
 use crate::error::{BackupError, Result};
 use crate::manifest::{Engine, Manifest};
-use crate::snapshot::{engine_of, max_migration_version, quote_ident, EPHEMERAL_TABLES};
+use crate::snapshot::{engine_of, max_migration_version, quote_ident};
 
 /// How the restored server relates to the one the backup came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +80,7 @@ async fn restore_inner(options: &RestoreOptions, stage: &Path, id: &str) -> Resu
     .await
     .map_err(|error| BackupError::Io(std::io::Error::other(error)))??;
 
-    let target_engine = engine_from_url(&options.database_url);
+    let target_engine = engine_from_url(&options.database_url)?;
     if manifest.engine != target_engine {
         return Err(BackupError::Incompatible(format!(
             "backup was made on {} but the target database is {}; cross-engine restore is not supported",
@@ -88,7 +88,7 @@ async fn restore_inner(options: &RestoreOptions, stage: &Path, id: &str) -> Resu
             target_engine.as_str()
         )));
     }
-    let binary_schema = binary_schema_version(target_engine);
+    let binary_schema = binary_schema_version();
     if manifest.schema_version > binary_schema {
         return Err(BackupError::Incompatible(format!(
             "backup schema version {} is newer than this server's {binary_schema}; use a server at least as new as the one that made the backup",
@@ -109,26 +109,22 @@ async fn restore_inner(options: &RestoreOptions, stage: &Path, id: &str) -> Resu
         ..Default::default()
     };
 
-    match target_engine {
-        Engine::Sqlite => restore_sqlite(options, stage, id, &manifest, &mut report).await?,
-        Engine::Postgres => restore_postgres(options, stage, id, &manifest, &mut report).await?,
-    }
+    restore_sqlite(options, stage, id, &manifest, &mut report).await?;
     Ok(report)
 }
 
-fn engine_from_url(url: &str) -> Engine {
-    if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        Engine::Postgres
+fn engine_from_url(url: &str) -> Result<Engine> {
+    if url.trim_start().to_ascii_lowercase().starts_with("sqlite:") {
+        Ok(Engine::Sqlite)
     } else {
-        Engine::Sqlite
+        Err(BackupError::Incompatible(
+            "the target database is not SQLite; Playarr is SQLite-only (see ADR 0002)".to_string(),
+        ))
     }
 }
 
-fn binary_schema_version(engine: Engine) -> i64 {
-    let migrator = match engine {
-        Engine::Sqlite => &playarr_db::SQLITE_MIGRATIONS,
-        Engine::Postgres => &playarr_db::POSTGRES_MIGRATIONS,
-    };
+fn binary_schema_version() -> i64 {
+    let migrator = &playarr_db::SQLITE_MIGRATIONS;
     migrator
         .iter()
         .map(|migration| migration.version)
@@ -231,7 +227,7 @@ async fn stage_sqlite(
     let pool = playarr_db::connect(&url).await?;
     let result = async {
         let before = max_migration_version(&pool).await?;
-        playarr_db::run_migrations(&pool, false).await?;
+        playarr_db::run_migrations(&pool).await?;
         report.migrations_applied_after_restore = max_migration_version(&pool).await? > before;
 
         let integrity: String =
@@ -271,7 +267,7 @@ async fn stage_sqlite(
         }
         report.tables_restored = manifest.tables.len();
         report.rows_restored = rows_total;
-        apply_policy(&pool, Engine::Sqlite, options, report).await?;
+        apply_policy(&pool, options, report).await?;
         sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&pool)
             .await?;
@@ -286,273 +282,19 @@ async fn stage_sqlite(
     result
 }
 
-// -------------------------------------------------------------- Postgres --
-
-async fn restore_postgres(
-    options: &RestoreOptions,
-    stage: &Path,
-    id: &str,
-    manifest: &Manifest,
-    report: &mut RestoreReport,
-) -> Result<()> {
-    let pool = playarr_db::connect(&options.database_url).await?;
-    let outcome = stage_and_cutover_postgres(&pool, options, stage, id, manifest, report).await;
-    pool.close().await;
-    outcome?;
-    if report.cutover {
-        let stamp = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-        restore_assets(options, stage, &stamp, report)?;
-    }
-    Ok(())
-}
-
-async fn stage_and_cutover_postgres(
-    pool: &DbPool,
-    options: &RestoreOptions,
-    stage: &Path,
-    id: &str,
-    manifest: &Manifest,
-    report: &mut RestoreReport,
-) -> Result<()> {
-    let mut conn = pool.acquire().await?;
-    let live_schema: String = sqlx::query_scalar("SELECT current_schema()::text")
-        .fetch_one(&mut *conn)
-        .await?;
-    let staging_schema = format!("playarr_restore_{id}");
-    sqlx::query(&format!("CREATE SCHEMA {}", quote_ident(&staging_schema)))
-        .execute(&mut *conn)
-        .await?;
-
-    let staged =
-        load_postgres_stage(&mut conn, options, stage, &staging_schema, manifest, report).await;
-    let outcome = match staged {
-        Ok(()) if options.dry_run => Ok(()),
-        Ok(()) => cutover_postgres(&mut conn, &live_schema, &staging_schema, report).await,
-        Err(error) => Err(error),
-    };
-    // Whatever happened, the staging schema must not outlive the attempt
-    // unless it became the live schema.
-    if !report.cutover {
-        sqlx::query(&format!(
-            "DROP SCHEMA IF EXISTS {} CASCADE",
-            quote_ident(&staging_schema)
-        ))
-        .execute(&mut *conn)
-        .await
-        .ok();
-    }
-    sqlx::query(&format!("SET search_path TO {}", quote_ident(&live_schema)))
-        .execute(&mut *conn)
-        .await
-        .ok();
-    outcome
-}
-
-async fn load_postgres_stage(
-    conn: &mut sqlx::AnyConnection,
-    options: &RestoreOptions,
-    stage: &Path,
-    staging_schema: &str,
-    manifest: &Manifest,
-    report: &mut RestoreReport,
-) -> Result<()> {
-    sqlx::query(&format!(
-        "SET search_path TO {}",
-        quote_ident(staging_schema)
-    ))
-    .execute(&mut *conn)
-    .await?;
-    // Build the schema at the archive's version, load, then migrate forward.
-    let up_to_archive = sqlx::migrate::Migrator {
-        migrations: std::borrow::Cow::Owned(
-            playarr_db::POSTGRES_MIGRATIONS
-                .iter()
-                .filter(|migration| migration.version <= manifest.schema_version)
-                .cloned()
-                .collect(),
-        ),
-        ignore_missing: false,
-        locking: true,
-        no_tx: false,
-    };
-    up_to_archive
-        .run(&mut *conn)
-        .await
-        .map_err(|error| BackupError::Database(error.to_string()))?;
-
-    let listing: Vec<serde_json::Value> =
-        serde_json::from_slice(&std::fs::read(stage.join("db/_tables.json"))?)?;
-    let names: Vec<String> = listing
-        .iter()
-        .filter_map(|item| item["name"].as_str().map(str::to_string))
-        .collect();
-    let self_referencing: std::collections::BTreeSet<String> = listing
-        .iter()
-        .filter(|item| item["self_referencing"].as_bool().unwrap_or(false))
-        .filter_map(|item| item["name"].as_str().map(str::to_string))
-        .collect();
-
-    let existing: Vec<String> = sqlx::query_scalar(
-        "SELECT table_name::text FROM information_schema.tables \
-         WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'",
-    )
-    .fetch_all(&mut *conn)
-    .await?;
-    for name in &names {
-        if !existing.contains(name) {
-            return Err(BackupError::Incompatible(format!(
-                "backup contains table {name} which does not exist at schema version {}",
-                manifest.schema_version
-            )));
-        }
-    }
-    // Migrations seed a few rows; the backup is the whole truth.
-    let truncate: Vec<String> = existing
-        .iter()
-        .filter(|name| !EPHEMERAL_TABLES.contains(&name.as_str()))
-        .map(|name| quote_ident(name))
-        .collect();
-    if !truncate.is_empty() {
-        sqlx::query(&format!("TRUNCATE {} CASCADE", truncate.join(", ")))
-            .execute(&mut *conn)
-            .await?;
-    }
-
-    for name in &names {
-        let path = stage.join(format!("db/{name}.ndjson"));
-        load_table(conn, name, &path, self_referencing.contains(name)).await?;
-    }
-    let mut rows_total = 0;
-    for table in &manifest.tables {
-        let rows: i64 = sqlx::query_scalar(&format!(
-            "SELECT COUNT(*) FROM {}",
-            quote_ident(&table.name)
-        ))
-        .fetch_one(&mut *conn)
-        .await?;
-        if rows as u64 != table.rows {
-            return Err(BackupError::Corrupt(format!(
-                "table {} has {rows} rows after restore, manifest says {}",
-                table.name, table.rows
-            )));
-        }
-        rows_total += table.rows;
-    }
-    report.tables_restored = manifest.tables.len();
-    report.rows_restored = rows_total;
-
-    playarr_db::POSTGRES_MIGRATIONS
-        .run(&mut *conn)
-        .await
-        .map_err(|error| BackupError::Database(error.to_string()))?;
-    report.migrations_applied_after_restore =
-        manifest.schema_version < binary_schema_version(Engine::Postgres);
-    apply_policy_conn(conn, Engine::Postgres, options, report).await
-}
-
-const BATCH_BYTES: usize = 8 * 1024 * 1024;
-const BATCH_ROWS: usize = 1000;
-
-async fn load_table(
-    conn: &mut sqlx::AnyConnection,
-    name: &str,
-    path: &Path,
-    whole_table: bool,
-) -> Result<()> {
-    use std::io::BufRead;
-    let table = quote_ident(name);
-    let sql = format!(
-        "INSERT INTO {table} SELECT * FROM json_populate_recordset(NULL::{table}, CAST($1 AS json))"
-    );
-    let reader = std::io::BufReader::new(std::fs::File::open(path)?);
-    let mut batch = String::from("[");
-    let mut rows = 0usize;
-    for line in reader.lines() {
-        let line = line?;
-        if line.is_empty() {
-            continue;
-        }
-        if rows > 0 {
-            batch.push(',');
-        }
-        batch.push_str(&line);
-        rows += 1;
-        // Self-referencing tables load in one statement so parent and child
-        // rows are checked together.
-        if !whole_table && (rows >= BATCH_ROWS || batch.len() >= BATCH_BYTES) {
-            batch.push(']');
-            sqlx::query(&sql).bind(batch).execute(&mut *conn).await?;
-            batch = String::from("[");
-            rows = 0;
-        }
-    }
-    if rows > 0 {
-        batch.push(']');
-        sqlx::query(&sql).bind(batch).execute(&mut *conn).await?;
-    }
-    Ok(())
-}
-
-async fn cutover_postgres(
-    conn: &mut sqlx::AnyConnection,
-    live_schema: &str,
-    staging_schema: &str,
-    report: &mut RestoreReport,
-) -> Result<()> {
-    let stamp = Utc::now().format("%Y%m%d%H%M%S").to_string();
-    let previous = format!("pre_restore_{stamp}");
-    sqlx::query("BEGIN").execute(&mut *conn).await?;
-    let swap = async {
-        sqlx::query(&format!(
-            "ALTER SCHEMA {} RENAME TO {}",
-            quote_ident(live_schema),
-            quote_ident(&previous)
-        ))
-        .execute(&mut *conn)
-        .await?;
-        sqlx::query(&format!(
-            "ALTER SCHEMA {} RENAME TO {}",
-            quote_ident(staging_schema),
-            quote_ident(live_schema)
-        ))
-        .execute(&mut *conn)
-        .await?;
-        Ok::<(), sqlx::Error>(())
-    }
-    .await;
-    match swap {
-        Ok(()) => {
-            sqlx::query("COMMIT").execute(&mut *conn).await?;
-            report.cutover = true;
-            report.previous_installation = Some(format!("schema {previous}"));
-            Ok(())
-        }
-        Err(error) => {
-            sqlx::query("ROLLBACK").execute(&mut *conn).await.ok();
-            Err(error.into())
-        }
-    }
-}
-
 // ----------------------------------------------------- shared policy/media --
 
 async fn apply_policy(
     pool: &DbPool,
-    engine: Engine,
     options: &RestoreOptions,
     report: &mut RestoreReport,
 ) -> Result<()> {
     let mut conn = pool.acquire().await?;
-    apply_policy_conn(&mut conn, engine, options, report).await
+    apply_policy_conn(&mut conn, options, report).await
 }
 
-async fn table_exists(conn: &mut sqlx::AnyConnection, engine: Engine, name: &str) -> Result<bool> {
-    let sql = match engine {
-        Engine::Sqlite => "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
-        Engine::Postgres => {
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $1"
-        }
-    };
+async fn table_exists(conn: &mut sqlx::AnyConnection, name: &str) -> Result<bool> {
+    let sql = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?";
     let count: i64 = sqlx::query_scalar(sql)
         .bind(name)
         .fetch_one(&mut *conn)
@@ -562,11 +304,10 @@ async fn table_exists(conn: &mut sqlx::AnyConnection, engine: Engine, name: &str
 
 async fn clear_table(
     conn: &mut sqlx::AnyConnection,
-    engine: Engine,
     name: &str,
     report: &mut RestoreReport,
 ) -> Result<()> {
-    if table_exists(conn, engine, name).await? {
+    if table_exists(conn, name).await? {
         let done = sqlx::query(&format!("DELETE FROM {}", quote_ident(name)))
             .execute(&mut *conn)
             .await?;
@@ -581,7 +322,6 @@ async fn clear_table(
 
 async fn apply_policy_conn(
     conn: &mut sqlx::AnyConnection,
-    engine: Engine,
     options: &RestoreOptions,
     report: &mut RestoreReport,
 ) -> Result<()> {
@@ -595,7 +335,7 @@ async fn apply_policy_conn(
         "media_file_languages",
         "media_file_language_state",
     ] {
-        clear_table(conn, engine, table, report).await?;
+        clear_table(conn, table, report).await?;
     }
 
     if options.identity_mode == IdentityMode::Clone {
@@ -613,9 +353,9 @@ async fn apply_policy_conn(
             "push_registrations",
             "tdarr_connection",
         ] {
-            clear_table(conn, engine, table, report).await?;
+            clear_table(conn, table, report).await?;
         }
-        if table_exists(conn, engine, "source_instances").await? {
+        if table_exists(conn, "source_instances").await? {
             let done = sqlx::query("UPDATE source_instances SET enabled_for_requests = 0")
                 .execute(&mut *conn)
                 .await?;
@@ -626,9 +366,9 @@ async fn apply_policy_conn(
         }
     }
 
-    remap_paths(conn, engine, &options.remap, report).await?;
+    remap_paths(conn, &options.remap, report).await?;
 
-    let roots: Vec<String> = if table_exists(conn, engine, "source_root_folders").await? {
+    let roots: Vec<String> = if table_exists(conn, "source_root_folders").await? {
         sqlx::query_scalar(
             "SELECT COALESCE(local_path_override, reported_path) FROM source_root_folders ORDER BY 1",
         )
@@ -652,16 +392,12 @@ async fn apply_policy_conn(
     Ok(())
 }
 
-fn placeholder(engine: Engine, n: usize) -> String {
-    match engine {
-        Engine::Sqlite => "?".to_string(),
-        Engine::Postgres => format!("${n}"),
-    }
+fn placeholder(_n: usize) -> String {
+    "?".to_string()
 }
 
 async fn remap_paths(
     conn: &mut sqlx::AnyConnection,
-    engine: Engine,
     remap: &[(String, String)],
     report: &mut RestoreReport,
 ) -> Result<()> {
@@ -672,17 +408,17 @@ async fn remap_paths(
     ];
     for (old, new) in remap {
         for (table, column) in columns {
-            if !table_exists(conn, engine, table).await? {
+            if !table_exists(conn, table).await? {
                 continue;
             }
             let (c, t) = (quote_ident(column), quote_ident(table));
             let sql = format!(
                 "UPDATE {t} SET {c} = CAST({p1} AS TEXT) || substr({c}, length(CAST({p2} AS TEXT)) + 1) \
                  WHERE {c} IS NOT NULL AND substr({c}, 1, length(CAST({p3} AS TEXT))) = CAST({p4} AS TEXT)",
-                p1 = placeholder(engine, 1),
-                p2 = placeholder(engine, 2),
-                p3 = placeholder(engine, 3),
-                p4 = placeholder(engine, 4),
+                p1 = placeholder(1),
+                p2 = placeholder(2),
+                p3 = placeholder(3),
+                p4 = placeholder(4),
             );
             let done = sqlx::query(&sql)
                 .bind(new.clone())

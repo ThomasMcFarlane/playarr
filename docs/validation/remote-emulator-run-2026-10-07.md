@@ -58,3 +58,21 @@ server (row 457) and added network loss, the TV app being backgrounded or restar
 - A genuine Wi-Fi or Ethernet drop on a TV, and a router that blocks long-lived connections.
 - Several physical TVs and moving playback between two of them; a profile switch on a physical TV.
 - Accented text and backspace through a real phone keyboard.
+
+## TV-to-phone handoff latency breakdown (follow-up)
+
+Measured step 5 (create to commit 6.3 s) split into its steps, from the recorded handoff row, the controller
+tap time and the state polls of both devices:
+
+| Step | Time | Where | Avoidable? |
+|------|------|-------|-----------|
+| Tap to `POST /remote/handoffs` accepted (pairing, source and destination lookups, media access check, insert, push wake) | about 0.04 s on the phone's side; the server share is a handful of local database reads and one insert (smoke script: create to commit with an instant destination p50 0.28 s, including both HTTP calls) | phone and server | No |
+| Offer delivered to the destination over the push stream | milliseconds (smoke script push p50 34 ms) | server | No |
+| Destination acknowledges the offer event and starts the handoff in parallel | the event ack is issued after the player start is launched, so it adds no wait | phone | Already parallel |
+| Open the player route, resolve playback, buffer, first frame | about 5 to 6 s on a software-rendered emulator (the destination first reported playing about 4.7 s after the tap) | phone | Not on this path; a real device is expected to be much faster |
+| Start check poll and settle pause before the ack | up to 250 ms poll plus a fixed 300 ms pause, plus another poll when a catch-up seek is needed | phone | Yes: now 100 ms and 150 ms |
+| Ack to commit (`POST .../ack`, one compare-and-set) and the controller's held request returning | tens of milliseconds; the controller holds a long poll, so it learns of the commit at once, with no poll interval | server | No |
+
+Conclusion: the server and network share is well under 0.5 s; the rest is the destination player's start-up. The
+two fixed waits in the destination were trimmed (about 0.3 s saved per handoff). Whether the 5 s LAN target holds
+on real hardware still needs a physical device (row 174).

@@ -7,8 +7,6 @@ pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod manifest;
-#[cfg(test)]
-mod postgres_tests;
 pub mod restore;
 #[cfg(test)]
 mod restore_tests;

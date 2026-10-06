@@ -6407,6 +6407,12 @@ export interface components {
         RegisterTargetRequest: {
             /** @description Advertised capabilities: `navigate`, `text`, `playback`, `input`, `handoff`. */
             capabilities: string[];
+            /**
+             * @description Optional install-independent device fingerprint (for example a hash of the platform's
+             *     per-device identifier). A reinstalled app that presents the same fingerprint on the same
+             *     account reclaims its previous target and pairings instead of adding a duplicate.
+             */
+            fingerprint?: string | null;
             /** @description Human-readable device name shown on controllers. */
             name: string;
             /** @description Client platform wire name, e.g. `android-tv`. */

@@ -126,7 +126,7 @@ pub struct Work {
     /// kinds only; `Artist`/`Author` works have no single release date of
     /// their own (their children -- albums/books -- each carry one already),
     /// so this stays `None` for those kinds. See
-    /// `backend/migrations/{sqlite,postgres}/00{11,14}_work_release_date.sql`.
+    /// `backend/migrations/sqlite/00{11,14}_work_release_date.sql`.
     pub release_date: Option<DateTime<Utc>>,
     /// Whether Playarr Server should actively track/request missing children of
     /// this work (mirrors the *arr "monitored" concept).
