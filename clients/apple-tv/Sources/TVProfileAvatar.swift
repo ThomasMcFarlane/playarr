@@ -6,6 +6,8 @@ import SwiftUI
 struct TVProfileAvatar: View {
     var userID: String
     var size: CGFloat
+    /// The server-backed preset id, which wins over the hash of the user id.
+    var presetName: String? = nil
 
     private enum Element {
         case path(String, fill: Color?, stroke: Color?, width: CGFloat, round: Bool)
@@ -102,7 +104,8 @@ struct TVProfileAvatar: View {
     }
 
     var body: some View {
-        let preset = Self.preset(Self.presetIndex(for: userID))
+        let index = presetName.flatMap { Self.order.firstIndex(of: $0) } ?? Self.presetIndex(for: userID)
+        let preset = Self.preset(index)
         let art = size * 0.84
         let scale = art / 100
         ZStack {

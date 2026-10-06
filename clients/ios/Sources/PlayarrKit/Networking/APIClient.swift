@@ -184,6 +184,8 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag?
     /// `GET /api/v1/household/status`: whether the signed-in profile may watch right now.
     func fetchHouseholdStatus() async throws -> HouseholdStatus?
+    /// `GET /api/v1/users/me/profile-avatar`: the server-backed avatar preset id (`nil` when none is set).
+    func fetchProfileAvatarPreset() async throws -> String?
     /// `GET /api/v1/media/{id}/thumbnail`: a frame of the media file (chapter and episode stills).
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data
     func fetchWork(id: UUID) async throws -> WorkDetail
@@ -421,6 +423,12 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
     public func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data {
         let query = positionMs.map { [URLQueryItem(name: "position_ms", value: String($0))] } ?? []
         return try await authenticatedData(path: "/api/v1/media/\(mediaFileID.uuidString)/thumbnail", query: query)
+    }
+
+    public func fetchProfileAvatarPreset() async throws -> String? {
+        let response: ProfileAvatarSettingResponse = try await get("/api/v1/users/me/profile-avatar")
+        guard let preference = response.preference, preference.kind == "preset" else { return nil }
+        return preference.value
     }
 
     public func fetchHouseholdStatus() async throws -> HouseholdStatus? {
@@ -1136,6 +1144,7 @@ public extension PlayarrAPIClient {
     func fetchHomeRails() async throws -> [HomeRail] { [] }
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
     func fetchHouseholdStatus() async throws -> HouseholdStatus? { nil }
+    func fetchProfileAvatarPreset() async throws -> String? { nil }
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data { Data() }
 }
 
@@ -1152,4 +1161,12 @@ public struct HouseholdStatus: Decodable, Sendable {
     }
 
     public var isBlocked: Bool { state == "outside_schedule" || state == "budget_exhausted" }
+}
+
+struct ProfileAvatarSettingResponse: Decodable, Sendable {
+    struct Preference: Decodable, Sendable {
+        let kind: String
+        let value: String
+    }
+    let preference: Preference?
 }

@@ -99,6 +99,8 @@ final class TVAppEnvironment {
     private(set) var householdBlocked = false
     /// The signed-in user's id (access token subject); picks the profile avatar like the web does.
     private(set) var currentUserID = ""
+    /// The server-backed avatar preset id of the signed-in user, when one is set.
+    private(set) var currentAvatarPreset: String?
     private(set) var pairingState: TVPairingState = .signedOut
     private(set) var serverURL: URL
     /// True when the operator (or a prior successful link) configured a
@@ -212,6 +214,7 @@ final class TVAppEnvironment {
         if currentUserID.isEmpty, let session = await tokenStore.currentSession() {
             currentUserID = Self.subject(ofJWT: session.accessToken.exposeSecret()) ?? ""
         }
+        currentAvatarPreset = (try? await apiClient.fetchProfileAvatarPreset()) ?? nil
         let kinds = (try? await apiClient.listCatalogKinds()) ?? []
         catalogKinds = Set(kinds)
         let status = (try? await apiClient.fetchHouseholdStatus()) ?? nil

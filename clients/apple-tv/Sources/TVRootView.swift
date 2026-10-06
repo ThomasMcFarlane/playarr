@@ -94,6 +94,9 @@ struct TVRootView: View {
             if let live = TVParityLaunch.liveTab {
                 selectedTab = live
             }
+            if let theme = TVParityLaunch.theme {
+                displayPreferences.themePreference = theme == .light ? .light : .dark
+            }
         }
     }
 
@@ -169,7 +172,7 @@ struct TVRootView: View {
                 .zIndex(80)
 
             if TVParityLaunch.isLive {
-                TVWebProfileChip(name: "Viewer", version: "v0.1.0", userID: environment.currentUserID)
+                TVWebProfileChip(name: "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset)
                     .zIndex(50)
             } else {
             VStack {
@@ -719,7 +722,11 @@ struct TVProfilesView: View {
                                     endRadius: size * 0.42
                                 )
                             )
-                        TVProfileAvatar(userID: profile.id.uuidString.lowercased(), size: size)
+                        TVProfileAvatar(
+                            userID: profile.id.uuidString.lowercased(),
+                            size: size,
+                            presetName: profile.isCurrent ? environment.currentAvatarPreset : nil
+                        )
                         if busy {
                             ProgressView().tint(.white)
                         }

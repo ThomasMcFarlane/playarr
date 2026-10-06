@@ -64,7 +64,8 @@ struct TVWorkDetailView: View {
             TVPageHeader(
                 title: detail.work.kind == .series ? "Series" : "Movies",
                 detail: detail.work.title,
-                detailGap: 47
+                detailGap: 47,
+                uppercaseDetail: false
             )
 
             switch detail.children {

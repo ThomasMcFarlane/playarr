@@ -46,6 +46,8 @@ struct TVPageHeader: View {
     /// Gap between the title and the detail text (23 on lists, 47 on detail pages).
     var detailGap: CGFloat = 23
     var showsDivider = true
+    /// List pages upper-case the count ("3 TITLES"); detail pages keep the title's case.
+    var uppercaseDetail = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -80,7 +82,7 @@ struct TVPageHeader: View {
                     } else {
                         Spacer().frame(width: detailGap)
                     }
-                    Text(detail.uppercased())
+                    Text(uppercaseDetail ? detail.uppercased() : detail)
                         .font(TVTheme.font(size: 11.1, weight: .semibold))
                         .tracking(0.5)
                         .foregroundStyle(DesignTokens.Color.textDisabled)
@@ -180,6 +182,7 @@ struct TVWebProfileChip: View {
     var name: String
     var version: String
     var userID: String = ""
+    var presetName: String? = nil
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -187,7 +190,7 @@ struct TVWebProfileChip: View {
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.66))
                 .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
                 .placed(x: 58.5, y: 997.3, w: 104.3, h: 48.2)
-            TVProfileAvatar(userID: userID, size: 34)
+            TVProfileAvatar(userID: userID, size: 34, presetName: presetName)
                 .placed(x: 65.6, y: 1004.4, w: 34, h: 34)
             Text(name)
                 .font(TVTheme.font(size: 11.14, weight: .bold))
