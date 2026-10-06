@@ -21,6 +21,10 @@ use crate::pool::{Backend, DbPool};
 pub trait RefreshTokenRepo: Send + Sync {
     async fn get(&self, device_id: Uuid) -> Result<Option<RefreshTokenRecord>, DbError>;
     async fn put(&self, record: RefreshTokenRecord) -> Result<(), DbError>;
+    /// Marks every token family that belongs to `user_id` revoked and returns how many it changed
+    /// (families that were already revoked are not counted). Used when an administrator deletes the
+    /// account, so no device can refresh its way back in.
+    async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64, DbError>;
 }
 
 /// An in-process, non-durable [`RefreshTokenRepo`] -- fine for tests, and
@@ -47,6 +51,17 @@ impl RefreshTokenRepo for InMemoryRefreshTokenStore {
     async fn put(&self, record: RefreshTokenRecord) -> Result<(), DbError> {
         self.records.insert(record.device_id, record);
         Ok(())
+    }
+
+    async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64, DbError> {
+        let mut changed = 0;
+        for mut entry in self.records.iter_mut() {
+            if entry.user_id == user_id && !entry.revoked {
+                entry.revoked = true;
+                changed += 1;
+            }
+        }
+        Ok(changed)
     }
 }
 
@@ -173,6 +188,22 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
             .await?;
         Ok(())
     }
+
+    async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64, DbError> {
+        let sql = match self.backend {
+            Backend::Sqlite => {
+                "UPDATE refresh_token_families SET revoked = 1 WHERE user_id = ? AND revoked = 0"
+            }
+            Backend::Postgres => {
+                "UPDATE refresh_token_families SET revoked = 1 WHERE user_id = $1 AND revoked = 0"
+            }
+        };
+        let result = sqlx::query(sql)
+            .bind(user_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
 }
 
 #[cfg(test)]
@@ -244,6 +275,28 @@ mod tests {
 
         let fetched = repo.get(device_id).await.unwrap();
         assert_eq!(fetched, Some(record));
+    }
+
+    #[tokio::test]
+    async fn revoke_all_for_user_revokes_only_that_users_live_families() {
+        let pool = test_sqlite_pool().await;
+        let repo = SqlxRefreshTokenRepo::new(pool);
+        let user = Uuid::new_v4();
+        let (a, b, other) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        for device in [a, b] {
+            let mut record = sample_record(device);
+            record.user_id = user;
+            repo.put(record).await.unwrap();
+        }
+        let mut other_record = sample_record(other);
+        other_record.user_id = Uuid::new_v4();
+        repo.put(other_record).await.unwrap();
+
+        assert_eq!(repo.revoke_all_for_user(user).await.unwrap(), 2);
+        assert!(repo.get(a).await.unwrap().unwrap().revoked);
+        assert!(repo.get(b).await.unwrap().unwrap().revoked);
+        assert!(!repo.get(other).await.unwrap().unwrap().revoked);
+        assert_eq!(repo.revoke_all_for_user(user).await.unwrap(), 0);
     }
 
     #[tokio::test]
