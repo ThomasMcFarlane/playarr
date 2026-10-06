@@ -91,4 +91,15 @@ describe("Home layout", () => {
     // Rails stay start-packed: no distributed spacing on the card rows.
     expect(css).not.toMatch(/\.tv-(home-rail|media-track-scroll)\s*\{[^}]*justify-content:\s*space-/s);
   });
+
+  it("does not raise the autofocused card on touch layouts unless remote input is active", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const mobile = css.slice(css.indexOf("--mobile-page-gutter: 16px;"));
+    expect(mobile).toMatch(
+      /body:not\(\[data-input-mode="remote"\]\) \.tv-media-track-scroll:focus-within \.tv-home-card\.is-selected,[^{]*\{\s*transform:\s*none/s
+    );
+    expect(mobile).toMatch(
+      /body:not\(\[data-input-mode="remote"\]\) \.tv-media-track-scroll:focus-within \.tv-home-card\.is-selected:not\(\.is-stacked\) \.tv-home-card-art[^{]*\{[^}]*transform:\s*none/s
+    );
+  });
 });

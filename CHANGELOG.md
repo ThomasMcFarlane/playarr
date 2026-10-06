@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web mobile: the autofocused card on home, library, detail rails and search is no longer scaled and raised on touch layouts; the lift stays for remote input.
 - Web mobile home: the Customise Home button no longer overlaps the profile avatar.
 - Web player: the controls now hide after one auto-hide delay instead of two, because the focus move that auto-hide makes no longer reveals them again.
 - Deleting a user now frees their username for a new account (the tombstone is renamed; migration 0077 does the same for existing ones), and an administrator delete revokes all of the user's refresh-token families and sessions immediately.

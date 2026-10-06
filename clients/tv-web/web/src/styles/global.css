@@ -10359,6 +10359,44 @@ html.is-native-scroll-root .profile-auth-scroll {
     touch-action: pan-x pan-y;
   }
 
+  /* Touch layouts: the programmatically selected card (TV autofocus; Chromium reports it as
+     :focus-visible when nothing was pressed yet) must not look focused. Only the remote/keyboard
+     input mode raises it. */
+  body:not([data-input-mode="remote"]) .tv-home-rail:focus-within .tv-home-card.is-selected,
+  body:not([data-input-mode="remote"]) .tv-media-track-scroll:focus-within .tv-home-card.is-selected,
+  body:not([data-input-mode="remote"]) .tv-title-rail:focus-within .tv-title-card.is-selected,
+  body:not([data-input-mode="remote"]) .tv-title-grid:focus-within .tv-title-card.is-selected,
+  body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-card.is-selected,
+  body:not([data-input-mode="remote"]) .tv-search-results:focus-within .tv-search-result.is-selected {
+    transform: none;
+  }
+
+  body:not([data-input-mode="remote"]) .tv-home-rail:focus-within .tv-home-card.is-selected:not(.is-stacked) .tv-home-card-art,
+  body:not([data-input-mode="remote"]) .tv-media-track-scroll:focus-within .tv-home-card.is-selected:not(.is-stacked) .tv-home-card-art {
+    box-shadow:
+      0 10px 22px rgba(56, 38, 33, 0.16),
+      0 3px 9px rgba(56, 38, 33, 0.1);
+    transform: none;
+  }
+
+  body:not([data-input-mode="remote"]) .tv-home-rail:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art,
+  body:not([data-input-mode="remote"]) .tv-media-track-scroll:focus-within .tv-home-card.is-stacked.is-selected .tv-home-card-art {
+    transform: none;
+  }
+
+  body:not([data-input-mode="remote"]) .tv-title-rail:focus-within .tv-title-card.is-selected .tv-title-card-art,
+  body:not([data-input-mode="remote"]) .tv-title-grid:focus-within .tv-title-card.is-selected .tv-title-card-art,
+  body:not([data-input-mode="remote"]) .tv-episode-rail:focus-within .tv-episode-card.is-selected .tv-episode-art {
+    box-shadow:
+      0 10px 20px rgba(56, 38, 33, 0.14),
+      0 3px 8px rgba(56, 38, 33, 0.1);
+    transform: none;
+  }
+
+  body:not([data-input-mode="remote"]) .tv-search-results:focus-within .tv-search-result.is-selected .tv-search-result-art {
+    transform: none;
+  }
+
   .tv-home-card,
   .tv-media-track-scroll .tv-episode-card {
     flex-basis: min(46vw, 210px);
