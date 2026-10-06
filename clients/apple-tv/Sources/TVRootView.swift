@@ -79,11 +79,6 @@ struct TVRootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
-        .overlay {
-            if case .signedIn = environment.pairingState, TVParityLaunch.requestedScreen == nil {
-                TVHouseholdOverlay(apiClient: environment.apiClient)
-            }
-        }
         .onAppear {
             if let forced = parityForcedTab {
                 selectedTab = forced
