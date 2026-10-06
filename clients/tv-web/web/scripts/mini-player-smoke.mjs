@@ -54,7 +54,11 @@ const browser = await chromium.launch({
   headless: true,
   args: ["--autoplay-policy=no-user-gesture-required", "--no-sandbox"],
 });
-const page = await browser.newPage({ viewport: tv ? { width: 1920, height: 1080 } : { width: 1280, height: 800 } });
+const context = await browser.newContext({
+  viewport: tv ? { width: 1920, height: 1080 } : { width: 1280, height: 800 },
+  hasTouch: true,
+});
+const page = await context.newPage();
 const q = tv ? "?platform=tv-vidaa" : "";
 try {
   await page.goto(`${base}/login${q}`);
@@ -62,16 +66,26 @@ try {
   await page.fill("#login-password", password);
   await page.click("button[type=submit]");
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
-  await page.goto(`${base}/player/${fileId}${q}`);
-  await page.waitForSelector("video.player-video", { timeout: 30000 });
-  await page.waitForFunction(
-    () => {
-      const v = document.querySelector("video.player-video");
-      return v && v.readyState >= 3 && v.currentTime > 0.3 && !v.paused;
-    },
-    null,
-    { timeout: 90000 }
-  );
+  // The fixture clip is only 6 s; a heavily loaded host can hand back a truncated
+  // stream, so retry the load until the stream is long enough to test against.
+  for (let attempt = 1; ; attempt++) {
+    await page.goto(`${base}/player/${fileId}${q}`);
+    await page.waitForSelector("video.player-video", { timeout: 30000 });
+    await page.waitForFunction(
+      () => {
+        const v = document.querySelector("video.player-video");
+        return v && v.readyState >= 3 && v.currentTime > 0.3 && !v.paused;
+      },
+      null,
+      { timeout: 90000 }
+    );
+    const long = await page
+      .waitForFunction(() => document.querySelector("video.player-video").duration > 4.5, null, { timeout: 3000 })
+      .then(() => true, () => false);
+    if (long) break;
+    if (attempt >= 5) throw new Error("stream stayed shorter than 4.5 s after 5 loads");
+    console.log(`note: truncated stream (attempt ${attempt}), reloading`);
+  }
   // Tag the element and count reload-type events from here on.
   await page.evaluate(() => {
     const v = document.querySelector("video.player-video");
@@ -83,8 +97,46 @@ try {
     window.__t0 = v.currentTime;
   });
   check(true, "full player is playing the video");
-  await page.screenshot({ path: join(out, `${tv ? "tv" : "desktop"}-1-full.png`) });
 
+  // Chrome layout: X close at the top right, minimise to its left, no top-left back.
+  const chrome = await page.evaluate(() => {
+    const rect = (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { l: r.left, r: r.right, t: r.top, b: r.bottom };
+    };
+    return {
+      close: rect(".player-close"),
+      minimise: rect(".player-minimise"),
+      back: document.querySelector(".player-back"),
+      closeLabel: document.querySelector(".player-close")?.getAttribute("aria-label"),
+      w: innerWidth,
+      quality: document.querySelector(".player-quality-button")?.textContent,
+    };
+  });
+  console.log(JSON.stringify(chrome));
+  check(chrome.back === null, "no top-left back control");
+  check(chrome.closeLabel === "Close player", "close button is labelled Close player");
+  check(chrome.close && chrome.close.r > chrome.w * 0.9 && chrome.close.t < 120, "X close sits at the top right");
+  check(chrome.minimise && chrome.close && chrome.minimise.r <= chrome.close.l && chrome.minimise.l > chrome.w / 2, "minimise sits to the left of the X, on the right half");
+  check(/^Original/.test((chrome.quality ?? "").trim()) || /Original/.test(chrome.quality ?? ""), `quality label reads Original (${(chrome.quality ?? "").trim()})`);
+
+  // Reveal-only: with the controls hidden a click must not pause.
+  const freshPlayer = async () => {
+    await page.goto(`${base}/player/${fileId}${q}`);
+    await page.waitForFunction(() => {
+      const v = document.querySelector("video.player-video");
+      return v && v.readyState >= 3 && v.currentTime > 0.3 && !v.paused;
+    }, null, { timeout: 90000 });
+    await page.evaluate(() => {
+      const v = document.querySelector("video.player-video");
+      window.__video = v;
+      window.__events = [];
+      for (const e of ["emptied", "loadstart", "abort", "seeking"]) v.addEventListener(e, () => window.__events.push(e));
+      window.__t0 = v.currentTime;
+    });
+  };
   await page.mouse.move(400, 300);
   // Headless Chromium has no PiP window; force the fallback path deterministically.
   await page.evaluate(() => {
@@ -104,6 +156,8 @@ try {
       t: v.currentTime,
       paused: v.paused,
       ready: v.readyState,
+      ended: v.ended,
+      duration: v.duration,
       w: r.width,
       h: r.height,
       onScreen: r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight,
@@ -137,6 +191,40 @@ try {
   await page.screenshot({ path: join(out, `${tv ? "tv" : "desktop"}-3-expanded.png`) });
   check(back.same && !back.minimised, "clicking the mini player expands back with the same <video>");
   check(back.t > mini.t && !back.paused && back.events.length === 0, "playback continued without restart after expanding");
+  // Reveal-only (each case on a fresh load so the short clip is still playing).
+  await freshPlayer();
+  await page.waitForSelector(".player-shell-idle", { timeout: 15000 }).catch(async (e) => {
+    console.log("debug", JSON.stringify(await page.evaluate(() => ({ t: window.__video.currentTime, paused: window.__video.paused, ended: window.__video.ended, d: window.__video.duration, shell: document.querySelector(".player-shell")?.className }))));
+    throw e;
+  });
+  // A tap (no preceding mouse-move that would reveal the controls first).
+  await page.touchscreen.tap(chrome.w / 2, 300);
+  await page.waitForTimeout(300);
+  const afterReveal = await page.evaluate(() => ({
+    paused: window.__video.paused,
+    idle: Boolean(document.querySelector(".player-shell-idle")),
+  }));
+  console.log("afterReveal", JSON.stringify(afterReveal));
+  check(!afterReveal.paused && !afterReveal.idle, "tap with hidden controls only reveals them (still playing)");
+  await freshPlayer();
+  await page.waitForSelector(".player-shell-idle", { timeout: 15000 });
+  await page.evaluate(() => document.querySelector("video.player-video").focus());
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  const afterEnter = await page.evaluate(() => ({
+    paused: window.__video.paused,
+    idle: Boolean(document.querySelector(".player-shell-idle")),
+  }));
+  check(!afterEnter.paused && !afterEnter.idle, "Enter/OK with hidden controls only reveals them (still playing)");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__video.paused), "Enter/OK with visible controls toggles pause");
+  await page.keyboard.press(" ");
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => !window.__video.paused), "Space toggles directly");
+
+  await page.screenshot({ path: join(out, `${tv ? "tv" : "desktop"}-1-full.png`) });
+
 } catch (error) {
   check(false, `script error: ${error.message}`);
   await page.screenshot({ path: join(out, `${tv ? "tv" : "desktop"}-error.png`) }).catch(() => {});

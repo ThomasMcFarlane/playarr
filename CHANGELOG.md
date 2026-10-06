@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web player: the controls now hide after one auto-hide delay instead of two, because the focus move that auto-hide makes no longer reveals them again.
 - Deleting a user now frees their username for a new account (the tombstone is renamed; migration 0077 does the same for existing ones), and an administrator delete revokes all of the user's refresh-token families and sessions immediately.
 - Web mobile home: rails and their headings now start at the page gutter instead of being indented by the TV left-fade inset; cards pack from the left at the normal gap.
 - Android: the app no longer crashes when signing in or switching profiles while the live-event stream is open.
@@ -174,6 +175,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
 - Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
 - Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
 - Web player: the top-left back arrow is replaced by an icon-only "Close player" X at the top right (localised, reachable with D-pad or arrow keys on the TV layout; Escape and Back still close). Clicking, tapping or pressing Enter/OK while the controls are hidden now only reveals them instead of pausing; Space, k and the media keys still toggle directly.
@@ -2247,6 +2249,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- The headless player smoke script now also checks close/minimise placement, the Original label, reveal-only tap and Enter, and runs on the 1920x1080 TV layout; vitest guards the player chrome across the web and legacy TV player.
 - A test now fails if two SQLite migrations share a version number.
 - Fixture environment: `scripts/fixtures/verify-dub-copy.mjs` checks the dub video-copy path (H.264 and HEVC), the transcode fallbacks and that the Dubarr key stays out of ffmpeg's argv; `PLAYARR_FIXTURE_DUB_SECONDS` generates a dub shorter than the film.
 - Added a headless smoke script and vitest guards proving the web in-app mini player (the Picture-in-Picture fallback) shows the same live video element without reloading, on desktop and TV layouts.

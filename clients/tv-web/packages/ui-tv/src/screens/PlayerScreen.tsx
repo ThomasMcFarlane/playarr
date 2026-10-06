@@ -23,6 +23,12 @@ export interface PlayerScreenProps {
  * When playback ends it shows Replay and Back to details (the minimal end
  * state of docs/architecture/end-of-playback.md); this legacy fallback has no
  * queue or catalogue data, so up-next and suggestions are not available here.
+ *
+ * Chrome parity with the web and Android players: the only top-level control
+ * is an X ("Close player") at the top right that stops playback and returns.
+ * There is no top-left back/exit. The controls here never auto-hide, so
+ * click/OK can never pause on a reveal; this screen owns no `<video>` (so it
+ * has no Picture-in-Picture or mini player to offer) and shows no quality label.
  */
 export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: PlayerScreenProps) {
   const [state, setState] = useState<PlaybackEngineState>(engine.getState());
@@ -35,6 +41,7 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
@@ -45,6 +52,20 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
         gap: spacing.md,
       }}
     >
+      {onExit && (
+        <div style={{ position: "absolute", top: spacing.xl, right: spacing.xl }}>
+          <TransportButton
+            id="player-close"
+            label="×"
+            ariaLabel={PLAYER_CLOSE_LABEL}
+            onSelect={() => {
+              // Close stops playback, then returns to the previous screen.
+              void engine.pause().finally(onExit);
+            }}
+          />
+        </div>
+      )}
+
       {title && (
         <h2 style={{ fontSize: typeScale.title.fontSize, margin: 0 }}>{title}</h2>
       )}
@@ -59,8 +80,8 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
 
       <div style={{ display: "flex", alignItems: "center", gap: spacing.md }}>
         <TransportButton
-          id="player-back"
-          label="< Back"
+          id="player-rewind"
+          label={`-${seekStepSeconds}s`}
           onSelect={() => void engine.seek(Math.max(0, state.currentTimeSeconds - seekStepSeconds))}
         />
         <TransportButton
@@ -77,12 +98,12 @@ export function PlayerScreen({ engine, title, onExit, seekStepSeconds = 10 }: Pl
         />
         <TransportButton
           id="player-forward"
-          label="Forward >"
+          label={`+${seekStepSeconds}s`}
           onSelect={() =>
             void engine.seek(Math.min(state.durationSeconds, state.currentTimeSeconds + seekStepSeconds))
           }
         />
-        {onExit && <TransportButton id="player-exit" label={ended ? "Back to details" : "Exit"} onSelect={onExit} />}
+        {ended && onExit && <TransportButton id="player-exit" label="Back to details" onSelect={onExit} />}
       </div>
 
       <p style={{ fontSize: typeScale.caption.fontSize, color: color.text.secondary, margin: 0 }}>
@@ -117,20 +138,25 @@ function ProgressBar({ current, duration }: { current: number; duration: number 
   );
 }
 
+/** Accessible name of the top-right X, shared by every Playarr player chrome. */
+export const PLAYER_CLOSE_LABEL = "Close player";
+
 interface TransportButtonProps {
   id: string;
   label: string;
+  ariaLabel?: string;
   primary?: boolean;
   onSelect: () => void;
 }
 
-function TransportButton({ id, label, primary, onSelect }: TransportButtonProps) {
+function TransportButton({ id, label, ariaLabel, primary, onSelect }: TransportButtonProps) {
   const { ref, isFocused } = useFocusable(id, "player-transport");
 
   return (
     <button
       ref={ref as RefObject<HTMLButtonElement>}
       type="button"
+      aria-label={ariaLabel}
       onClick={onSelect}
       style={{
         padding: `${spacing.sm}px ${spacing.lg}px`,

@@ -552,6 +552,7 @@ export function PlayerSurface({
   // Those inputs only reveal hidden controls; they never toggle playback.
   const controlsVisibleRef = useRef(true);
   controlsVisibleRef.current = showControls;
+  const hideFocusMoveRef = useRef(false);
   const clickGateRef = useRef(createRevealGate());
   const enterGateRef = useRef(createRevealGate());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -647,7 +648,11 @@ export function PlayerSurface({
         activeElement instanceof HTMLElement &&
         activeElement.closest(".player-controls, .player-close, .player-minimise")
       ) {
+        // The video's onFocus reveals the controls for user focus; this move is
+        // the auto-hide itself and must not undo it.
+        hideFocusMoveRef.current = true;
         videoRef.current?.focus({ preventScroll: true });
+        hideFocusMoveRef.current = false;
       }
     }, AUTO_HIDE_MS);
   }, [videoRef]);
@@ -1073,7 +1078,13 @@ export function PlayerSurface({
             ? t("components.player.surface.audioSurfaceAriaLabel")
             : t("components.player.surface.videoSurfaceAriaLabel")
         )}
-        onFocus={minimised ? undefined : handleActivity}
+        onFocus={
+          minimised
+            ? undefined
+            : () => {
+                if (!hideFocusMoveRef.current) handleActivity();
+              }
+        }
       />
 
       {minimised && !inlineMusic && (
