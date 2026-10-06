@@ -1,0 +1,1 @@
+- iOS: new Calendar tab with the shared page header and Filters button, Agenda (master-detail on wide screens), Week and Month views, a Filters sheet and the calendar subscription sheet (QR code, copy, revoke).

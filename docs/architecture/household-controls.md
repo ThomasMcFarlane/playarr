@@ -138,6 +138,11 @@ A blocked request is `403 household_blocked` with
 `unrated`, `tag_blocked` or `folder_blocked`, plus `next_start_at`/`resets_at`
 where relevant. A PIN lockout is `429 pin_locked` with `retry_after_seconds`.
 
+The approval decision route refuses with `403` and a stable code per cause:
+`self_approval_forbidden` (the requester), `not_guardian` (not a guardian of
+the profile) and `guardian_pin_not_set` (the guardian has no profile PIN); a
+restricted guardian stays `forbidden`. Clients match the code, not the message.
+
 ## Known gaps (tracked)
 
 * A stored refresh token for a PIN-locked profile is not itself gated by the

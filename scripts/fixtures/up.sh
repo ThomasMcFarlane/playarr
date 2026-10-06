@@ -8,6 +8,7 @@
 # Env: PLAYARR_FIXTURE_DIR, PLAYARR_FIXTURE_PORT (18484), PLAYARR_FIXTURE_BIND,
 #      PLAYARR_SERVER_BIN (skip the cargo build), PLAYARR_FIXTURE_NO_BUILD=1,
 #      PLAYARR_WEB_ASSETS_DIR (also serve a built web client),
+#      PLAYARR_FIXTURE_CLIP_SECONDS (length of each generated clip, default 6),
 #      FIXTURE_CHILD_WINDOW="start-end" (child schedule, minutes of day UTC).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

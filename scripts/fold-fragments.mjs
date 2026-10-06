@@ -14,6 +14,8 @@
 //                                      `| 330 | ... |`. A row whose number already exists replaces it
 //                                      in place; a new row is appended to the end of that section's
 //                                      table (the section is created at the top if missing).
+//                                      A line `remove: <row-number>` deletes that row from the board
+//                                      (a fragment may hold only remove lines; a missing row is an error).
 //
 // Usage: fold-fragments.mjs [--check] [repo-root]   (--check validates only; writes nothing)
 import fs from 'node:fs';
@@ -52,8 +54,10 @@ for (const f of tkFiles) {
   const lines = fs.readFileSync(path.join(root, 'tasks.d', f), 'utf8').split('\n').map((l) => l.replace(/\s+$/, '')).filter(Boolean);
   let section = null;
   if (lines[0]?.startsWith('section:')) section = lines.shift().slice(8).trim();
+  const removes = lines.filter((l) => /^remove:\s*\d+$/.test(l));
   const rows = lines.filter((l) => l.startsWith('|'));
-  if (!rows.length || rows.length !== lines.length) { err(`tasks.d/${f}: after the optional "section:" line every line must be a table row starting with "|"`); continue; }
+  if ((!rows.length && !removes.length) || rows.length + removes.length !== lines.length) { err(`tasks.d/${f}: after the optional "section:" line every line must be a table row starting with "|" or "remove: <row-number>"`); continue; }
+  for (const r of removes) tkFrags.push({ f, n: r.replace(/\D/g, ''), remove: true });
   for (const r of rows) {
     const n = /^\|\s*(\d+)\s*\|/.exec(r)?.[1];
     if (!n) err(`tasks.d/${f}: row must start with "| <number> |": ${r.slice(0, 40)}`);
@@ -87,8 +91,13 @@ if (clFrags.length) {
 if (tkFrags.length) {
   const p = path.join(root, 'TASKS.md');
   const lines = fs.readFileSync(p, 'utf8').split('\n');
-  for (const { f, n, section, row } of tkFrags) {
+  for (const { f, n, section, row, remove } of tkFrags) {
     const idx = lines.findIndex((l) => new RegExp(`^\\|\\s*${n}\\s*\\|`).test(l));
+    if (remove) {
+      if (idx < 0) { console.error(`tasks.d/${f}: cannot remove row ${n}: no such row`); process.exit(1); }
+      lines.splice(idx, 1);
+      continue;
+    }
     if (idx >= 0) { lines[idx] = row; continue; }
     if (!section) { console.error(`tasks.d/${f}: row ${n} is new, so the fragment needs a "section:" line`); process.exit(1); }
     const h = lines.findIndex((l) => l.replace(/^##\s+/, '') === section && l.startsWith('## '));

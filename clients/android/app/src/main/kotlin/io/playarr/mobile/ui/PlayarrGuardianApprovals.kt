@@ -1,6 +1,7 @@
 package io.playarr.mobile.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -36,6 +40,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.playarr.shared.auth.SavedProfile
+import io.playarr.shared.auth.TokenStore
+import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.DecideHouseholdApprovalRequest
 import io.playarr.shared.data.model.HouseholdApproval
 import io.playarr.shared.data.remote.PlayarrApi
@@ -49,6 +56,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -112,23 +120,52 @@ internal sealed interface GuardianDecisionError {
     data object Failed : GuardianDecisionError
 }
 
+/** Stable server error codes for the refusals on the decision route (older servers send `forbidden` for all three). */
+internal const val CODE_SELF_APPROVAL = "self_approval_forbidden"
+internal const val CODE_GUARDIAN_PIN_NOT_SET = "guardian_pin_not_set"
+internal const val CODE_NOT_GUARDIAN = "not_guardian"
+
+/**
+ * Maps the server's error code to a refusal. Returns null for codes it does not know (including the generic
+ * `forbidden` that older servers use), so the caller falls back to the message text.
+ */
+internal fun guardianForbiddenByCode(code: String?): GuardianDecisionError? = when (code) {
+    CODE_SELF_APPROVAL -> GuardianDecisionError.SelfApproval
+    CODE_GUARDIAN_PIN_NOT_SET -> GuardianDecisionError.NoPin
+    CODE_NOT_GUARDIAN -> GuardianDecisionError.NotAllowed
+    else -> null
+}
+
+/** Message-text fallback for servers that predate the specific 403 codes. */
+internal fun guardianForbiddenByMessage(message: String): GuardianDecisionError {
+    val lower = message.lowercase()
+    return when {
+        "own request" in lower -> GuardianDecisionError.SelfApproval
+        "set a profile pin" in lower -> GuardianDecisionError.NoPin
+        else -> GuardianDecisionError.NotAllowed
+    }
+}
+
 internal fun guardianDecisionError(failure: Throwable): GuardianDecisionError {
     if (failure !is HttpException) return GuardianDecisionError.Failed
     failure.pinLockSeconds()?.let { return GuardianDecisionError.PinLocked(it) }
-    val message = runCatching {
+    val body = runCatching {
         failure.response()?.errorBody()?.source()?.peek()?.readUtf8()
-    }.getOrNull().let(::parseApiErrorBody)?.message.orEmpty().lowercase()
+    }.getOrNull().let(::parseApiErrorBody)
     return when (failure.code()) {
         401 -> GuardianDecisionError.WrongPin
-        403 -> when {
-            "own request" in message -> GuardianDecisionError.SelfApproval
-            "set a profile pin" in message -> GuardianDecisionError.NoPin
-            else -> GuardianDecisionError.NotAllowed
-        }
+        403 -> guardianForbiddenByCode(body?.error) ?: guardianForbiddenByMessage(body?.message.orEmpty())
         404 -> GuardianDecisionError.NotFound
         409 -> GuardianDecisionError.AlreadyDecided
         else -> GuardianDecisionError.Failed
     }
+}
+
+/** The confirmation shown after a decision was recorded, from the status the server returned. */
+internal fun guardianConfirmation(decided: HouseholdApproval): PlayarrString? = when (decided.status) {
+    "approved" -> PlayarrString.GuardianApprovedConfirmation
+    "denied" -> PlayarrString.GuardianDeniedConfirmation
+    else -> null
 }
 
 internal fun guardianDecisionMessage(error: GuardianDecisionError): PlayarrMessage = when (error) {
@@ -152,6 +189,19 @@ internal fun guardianSubjectLabel(approval: HouseholdApproval): PlayarrString = 
     else -> PlayarrString.GuardianSubjectOther
 }
 
+/**
+ * Names for the profiles a guardian looks after. The server's profile list holds only the signed-in
+ * account in full-account mode, so profiles saved on this device (by their display name) fill the rest.
+ */
+internal fun guardianProfileNames(
+    available: List<AvailableProfile>,
+    saved: List<SavedProfile>,
+): Map<String, String> {
+    val fromSaved = saved.mapNotNull { profile -> profile.name?.takeIf(String::isNotBlank)?.let { profile.userId to it } }.toMap()
+    val fromServer = available.associate { it.id to it.displayName.ifBlank { it.username } }.filterValues(String::isNotBlank)
+    return fromSaved + fromServer
+}
+
 internal data class GuardianApprovalsSnapshot(
     val approvals: List<HouseholdApproval>,
     val names: Map<String, String>,
@@ -160,6 +210,7 @@ internal data class GuardianApprovalsSnapshot(
 @HiltViewModel
 internal class GuardianApprovalsViewModel @Inject constructor(
     private val api: PlayarrApi,
+    private val tokenStore: TokenStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<GuardianApprovalsSnapshot>>(ParityLoad.Loading)
     val state: StateFlow<ParityLoad<GuardianApprovalsSnapshot>> = _state.asStateFlow()
@@ -167,6 +218,14 @@ internal class GuardianApprovalsViewModel @Inject constructor(
     val busyId: StateFlow<String?> = _busyId.asStateFlow()
     private val _errors = MutableStateFlow<Map<String, PlayarrMessage>>(emptyMap())
     val errors: StateFlow<Map<String, PlayarrMessage>> = _errors.asStateFlow()
+    private val _confirmation = MutableStateFlow<PlayarrString?>(null)
+
+    /** A one-shot confirmation (snackbar) for the last recorded decision; clear it with [confirmationShown]. */
+    val confirmation: StateFlow<PlayarrString?> = _confirmation.asStateFlow()
+
+    fun confirmationShown() {
+        _confirmation.value = null
+    }
 
     fun load() {
         viewModelScope.launch {
@@ -174,8 +233,10 @@ internal class GuardianApprovalsViewModel @Inject constructor(
             _errors.value = emptyMap()
             _state.value = try {
                 val approvals = api.listHouseholdApprovals()
-                val names = runCatching { api.listAvailableProfiles() }.getOrDefault(emptyList())
-                    .associate { it.id to it.displayName.ifBlank { it.username } }
+                val names = guardianProfileNames(
+                    runCatching { api.listAvailableProfiles() }.getOrDefault(emptyList()),
+                    runCatching { tokenStore.savedProfiles.first() }.getOrDefault(emptyList()),
+                )
                 ParityLoad.Ready(GuardianApprovalsSnapshot(approvals, names))
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -196,6 +257,7 @@ internal class GuardianApprovalsViewModel @Inject constructor(
                     approval.id,
                     guardianDecisionRequest(approval, decision.approve, decision.pin, decision.bonusMinutes),
                 )
+                _confirmation.value = guardianConfirmation(decided)
                 (_state.value as? ParityLoad.Ready)?.let { ready ->
                     _state.value = ParityLoad.Ready(
                         ready.value.copy(approvals = ready.value.approvals.map { if (it.id == decided.id) decided else it }),
@@ -224,47 +286,62 @@ internal fun ExperienceGuardianApprovalsScreen(
     val state by viewModel.state.collectAsState()
     val busyId by viewModel.busyId.collectAsState()
     val errors by viewModel.errors.collectAsState()
+    val confirmation by viewModel.confirmation.collectAsState()
+    val snackbarHost = remember { SnackbarHostState() }
+    val confirmationText = confirmation?.let { playarrString(it) }
     LaunchedEffect(Unit) { viewModel.load() }
-    PlayarrPageScaffold(
-        title = playarrString(PlayarrString.GuardianApprovalsTitle),
-        onBack = onBack,
-        isTelevision = isTelevision,
-    ) {
-        when (val current = state) {
-            ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.GuardianApprovalsLoading))
-            is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
-            is ParityLoad.Ready -> {
-                val pending = pendingGuardianApprovals(
-                    current.value.approvals,
-                    selfId,
-                    guardianFor,
-                    Instant.now(),
-                )
-                if (pending.isEmpty()) {
-                    ExperienceEmpty(
-                        playarrString(PlayarrString.GuardianApprovalsEmptyTitle),
-                        playarrString(PlayarrString.GuardianApprovalsEmptyDescription),
+    LaunchedEffect(confirmationText) {
+        if (confirmationText != null) {
+            snackbarHost.showSnackbar(confirmationText)
+            viewModel.confirmationShown()
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        PlayarrPageScaffold(
+            title = playarrString(PlayarrString.GuardianApprovalsTitle),
+            onBack = onBack,
+            isTelevision = isTelevision,
+        ) {
+            when (val current = state) {
+                ParityLoad.Loading -> ParityLoading(playarrString(PlayarrString.GuardianApprovalsLoading))
+                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                is ParityLoad.Ready -> {
+                    val pending = pendingGuardianApprovals(
+                        current.value.approvals,
+                        selfId,
+                        guardianFor,
+                        Instant.now(),
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(top = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 104.dp),
-                    ) {
-                        items(pending, key = { it.id }) { approval ->
-                            GuardianApprovalCard(
-                                approval = approval,
-                                profileName = current.value.names[approval.profileUserId].orEmpty()
-                                    .ifBlank { playarrString(PlayarrString.ProfileViewerFallback) },
-                                busy = busyId != null,
-                                error = errors[approval.id],
-                                onDecide = { viewModel.decide(approval, it) },
-                            )
+                    if (pending.isEmpty()) {
+                        ExperienceEmpty(
+                            playarrString(PlayarrString.GuardianApprovalsEmptyTitle),
+                            playarrString(PlayarrString.GuardianApprovalsEmptyDescription),
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(top = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 104.dp),
+                        ) {
+                            items(pending, key = { it.id }) { approval ->
+                                GuardianApprovalCard(
+                                    approval = approval,
+                                    profileName = current.value.names[approval.profileUserId].orEmpty()
+                                        .ifBlank { playarrString(PlayarrString.GuardianUnknownProfile) },
+                                    busy = busyId != null,
+                                    error = errors[approval.id],
+                                    onDecide = { viewModel.decide(approval, it) },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHost,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
     }
 }
 

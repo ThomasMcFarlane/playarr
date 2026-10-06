@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HouseholdStatus } from "@playarr-tv/api-client";
-import { approvalSubjectFor, householdBlockFromStatus, remainingMinutes } from "./householdState";
+import { approvalSubjectFor, householdBlockFromStatus, minutesLeft, remainingMinutes } from "./householdState";
 
 const base: HouseholdStatus = {
   restricted: true,
@@ -35,6 +35,14 @@ describe("household state", () => {
     ).toBe(10);
     expect(remainingMinutes({ ...base, state: "unrestricted" }, now)).toBeNull();
     expect(remainingMinutes(base, now)).toBeNull();
+  });
+
+  it("gives the nearer limit at any distance for the household page", () => {
+    const now = new Date("2026-10-03T12:00:00Z");
+    expect(minutesLeft({ ...base, remaining_seconds: 5400 }, now)).toBe(90);
+    expect(minutesLeft({ ...base, remaining_seconds: 5400, window_ends_at: "2026-10-03T12:40:00Z" }, now)).toBe(40);
+    expect(minutesLeft({ ...base, state: "budget_exhausted", remaining_seconds: 0 }, now)).toBeNull();
+    expect(minutesLeft(base, now)).toBeNull();
   });
 
   it("asks for the matching kind of extra time", () => {

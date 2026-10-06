@@ -10308,8 +10308,11 @@ html.is-native-scroll-root .profile-auth-scroll {
     scroll-margin-block: 16px;
   }
 
+  /* The desktop/TV left fade (88px+) is an outward gutter for the focus-scaled
+     card; on phones it indented every rail. Pack cards from the page gutter. */
   .tv-media-track {
-    padding-left: var(--tv-track-left-fade);
+    --tv-track-left-fade: var(--mobile-page-gutter);
+    padding-left: var(--mobile-page-gutter);
   }
 
   .tv-home-rail-section > header,

@@ -22,6 +22,12 @@ export function householdBlockFromStatus(
  * schedule window ending sooner counts as the limit too.
  */
 export function remainingMinutes(status: HouseholdStatus | null, now: Date): number | null {
+  const minutes = minutesLeft(status, now);
+  return minutes !== null && minutes <= 60 ? minutes : null;
+}
+
+/** Whole minutes left at any distance: the nearer of the daily budget and the schedule window. */
+export function minutesLeft(status: HouseholdStatus | null, now: Date): number | null {
   if (!status || status.state !== "allowed") return null;
   const candidates: number[] = [];
   if (status.remaining_seconds != null) candidates.push(status.remaining_seconds / 60);
@@ -29,8 +35,7 @@ export function remainingMinutes(status: HouseholdStatus | null, now: Date): num
     candidates.push((new Date(status.window_ends_at).getTime() - now.getTime()) / 60_000);
   }
   if (candidates.length === 0) return null;
-  const minutes = Math.ceil(Math.min(...candidates));
-  return minutes <= 60 ? Math.max(minutes, 0) : null;
+  return Math.max(Math.ceil(Math.min(...candidates)), 0);
 }
 
 /** Whether a request should be offered to the guardian for this block. */

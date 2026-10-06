@@ -1,0 +1,1 @@
+- Apple clients: Release Calendar kit (models, client for the calendar and subscription endpoints, window/filter/series-grouping logic) with unit tests.

@@ -193,6 +193,12 @@ impl RefreshTokenService {
         }
     }
 
+    /// Revokes every token family of `user_id` (every device's session) at once and returns how many
+    /// live families it ended. Called when an administrator deletes the account.
+    pub async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64, DbError> {
+        self.store.revoke_all_for_user(user_id).await
+    }
+
     /// Returns the user a still-valid refresh token for `device_id` belongs
     /// to, without rotating it. Used by the unlock endpoint to check the
     /// PIN against the right profile before granting a lease.

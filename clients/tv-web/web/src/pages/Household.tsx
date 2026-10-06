@@ -9,6 +9,7 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveSubscription } from "../lib/liveEvents";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { minutesLeft } from "../lib/householdState";
 
 function kindLabelKey(kind: HouseholdApproval["kind"]) {
   switch (kind) {
@@ -99,6 +100,8 @@ export function HouseholdPage() {
   );
   const own = (approvals ?? []).filter((item) => !guarded.has(item.profile_user_id));
 
+  const leftMinutes = minutesLeft(status, new Date());
+
   return (
     <div className="page household-page">
       <h1>{t("household.page.title")}</h1>
@@ -106,9 +109,7 @@ export function HouseholdPage() {
 
       {status?.restricted && (
         <p className="household-page-summary">
-          {status.state === "allowed" && status.remaining_seconds != null
-            ? t("household.remaining", { minutes: String(Math.ceil(status.remaining_seconds / 60)) })
-            : null}
+          {leftMinutes !== null ? t("household.remaining", { minutes: String(leftMinutes) }) : null}
         </p>
       )}
 

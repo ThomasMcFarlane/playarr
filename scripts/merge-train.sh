@@ -57,6 +57,9 @@ SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 TRAIN_NAME="Thomas McFarlane"
 TRAIN_EMAIL="thomas@mcfarlane.email"
 TRAIN_TRAILER="Merge-Train: yes"
+# Trailer naming the board rows a `remove: <row>` task fragment deleted, so landing_guard can tell an
+# intended removal from a lost line. Written on the fold commit and carried onto the key-mode squash.
+REMOVED_TRAILER="Removed-Task-Rows:"
 
 # Owner rule: a Co-authored-by trailer must never appear in a commit; the train neither adds one nor
 # lets one through from a PR title or body into the squash commit message it writes.
@@ -150,6 +153,11 @@ train_squash() {
   git commit -q "$@"
 }
 
+# removed_rows_in_diff: row numbers of tasks.d fragments `remove: <row>` lines staged for deletion.
+removed_rows_in_diff() {
+  git diff --cached -U0 -- tasks.d | sed -n 's/^-remove:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' | sort -un | tr '\n' ' ' | sed 's/ $//'
+}
+
 # landing_guard <main> <head>: succeeds when landing <head> on <main> yields exactly
 # main plus the PR's own diff. Otherwise prints the reasons and fails. Checks:
 #   - the landing changes no file the PR's own diff (merge-base..head) leaves alone;
@@ -191,6 +199,8 @@ landing_guard() {
     if [ "$f" = TASKS.md ] && [ -n "$lost" ]; then
       # A fragment replaces a row in place: a lost row is fine when its number is still on the board.
       local rows; rows=$(git show "$lt:$f" 2>/dev/null | sed -n 's/^| *\([0-9][0-9]*\) *|.*/\1/p' | sort -u)
+      # Rows a `remove: <row>` fragment of this PR deleted (recorded by the train as a trailer).
+      rows+=$'\n'$(git log --format=%B "$m..$h" | sed -n "s/^$REMOVED_TRAILER[[:space:]]*//p" | tr -s ' ,' '\n\n')
       lost=$(while IFS= read -r line; do
         n=$(sed -n 's/^| *\([0-9][0-9]*\) *|.*/\1/p' <<<"$line")
         [ -n "$n" ] && grep -qx "$n" <<<"$rows" && continue
@@ -228,7 +238,7 @@ post_merge_dispatch() { # <merged-sha> <files...>; token mode only
 }
 
 process() { # <pr>
-  local pr="$1" info br title body base cross draft attempt=0
+  local pr="$1" info br title body base cross draft attempt=0 removed_rows=""
   info=$(gh pr view "$pr" --repo "$REPO" --json headRefName,isCrossRepository,isDraft,title,body,baseRefName,state) || {
     log "PR #$pr: cannot read, skipping"; return; }
   [ "$(jq -r .state <<<"$info")" = OPEN ] || { log "PR #$pr not open, skipping"; return; }
@@ -278,6 +288,7 @@ $files"
     fi
     # Fold changelog.d/ and tasks.d/ fragments into CHANGELOG.md and TASKS.md on the branch, so the
     # folded result is what CI validates and what lands (no post-merge commit on main).
+    removed_rows=""
     if [ "$has_fragments" = true ]; then
       if ! node scripts/fold-fragments.mjs >/tmp/train-fold.log 2>&1; then
         git checkout -q -- . 2>/dev/null; git clean -fdq changelog.d tasks.d 2>/dev/null
@@ -289,7 +300,12 @@ $(head -c 1500 /tmp/train-fold.log)
         return
       fi
       git add -A CHANGELOG.md TASKS.md changelog.d tasks.d
-      git commit -q -m "chore(train): fold fragments for #$pr" || true
+      removed_rows=$(removed_rows_in_diff)
+      if [ -n "$removed_rows" ]; then
+        git commit -q -m "chore(train): fold fragments for #$pr" -m "$REMOVED_TRAILER $removed_rows" || true
+      else
+        git commit -q -m "chore(train): fold fragments for #$pr" || true
+      fi
     fi
     if git grep -qE '^(<<<<<<< |>>>>>>> )' -- ':!*.lock' ':!*.snap'; then
       block "$pr" "Conflict markers are present after merging \`main\`:
@@ -313,7 +329,7 @@ $(printf '%s' "$hosted_out" | head -c 1500)
         # Squash to one commit on top of main so main stays linear and the PR
         # head SHA is exactly what CI validates and what lands. HEAD contains
         # main here (merged above); train_squash refuses otherwise.
-        train_squash "$main" -m "$title (#$pr)" -m "$body" -m "$TRAIN_TRAILER" 2>/tmp/train-squash.log \
+        train_squash "$main" -m "$title (#$pr)" -m "$body" -m "$TRAIN_TRAILER" ${removed_rows:+-m "$REMOVED_TRAILER $removed_rows"} 2>/tmp/train-squash.log \
           || { block "$pr" "Squashing failed: $(head -c 300 /tmp/train-squash.log) (or nothing to commit: empty change)."; return; }
       fi
       newhead=$(git rev-parse HEAD)
