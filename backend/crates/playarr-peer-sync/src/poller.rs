@@ -502,7 +502,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        playarr_db::run_migrations(&pool, false).await.unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
         Harness {
             pool: pool.clone(),
             peer_node_repo: Arc::new(playarr_db::repo::SqlxPeerNodeRepo::new(pool.clone())),

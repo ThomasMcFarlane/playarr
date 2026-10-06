@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn from_row(row: &AnyRow) -> Result<PeerGroup, DbError> {
     let id: String = row.try_get("id")?;
@@ -52,25 +52,18 @@ pub trait PeerGroupRepo: Send + Sync {
 
 pub struct SqlxPeerGroupRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerGroupRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
 #[async_trait]
 impl PeerGroupRepo for SqlxPeerGroupRepo {
     async fn create(&self, group: &PeerGroup) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "INSERT INTO peer_groups (id, name, created_at) VALUES (?, ?, ?)",
-            Backend::Postgres => {
-                "INSERT INTO peer_groups (id, name, created_at) VALUES ($1, $2, $3)"
-            }
-        };
+        let sql = "INSERT INTO peer_groups (id, name, created_at) VALUES (?, ?, ?)";
         sqlx::query(sql)
             .bind(group.id.to_string())
             .bind(group.name.as_str())
@@ -81,10 +74,7 @@ impl PeerGroupRepo for SqlxPeerGroupRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<PeerGroup>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM peer_groups WHERE id = ?"),
-            Backend::Postgres => format!("SELECT {COLUMNS} FROM peer_groups WHERE id = $1"),
-        };
+        let sql = format!("SELECT {COLUMNS} FROM peer_groups WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -93,10 +83,7 @@ impl PeerGroupRepo for SqlxPeerGroupRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM peer_groups WHERE id = ?",
-            Backend::Postgres => "DELETE FROM peer_groups WHERE id = $1",
-        };
+        let sql = "DELETE FROM peer_groups WHERE id = ?";
         sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)

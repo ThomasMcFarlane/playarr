@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait ResumeDismissalRepo: Send + Sync {
@@ -38,7 +38,6 @@ pub trait ResumeDismissalRepo: Send + Sync {
 
 pub struct SqlxResumeDismissalRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 fn kind_to_str(kind: ResumeDismissalKind) -> &'static str {
@@ -51,8 +50,7 @@ fn kind_to_str(kind: ResumeDismissalKind) -> &'static str {
 
 impl SqlxResumeDismissalRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<(Uuid, ResumeDismissal), DbError> {
@@ -86,16 +84,10 @@ impl ResumeDismissalRepo for SqlxResumeDismissalRepo {
         user_id: Uuid,
         series_work_id: Uuid,
     ) -> Result<Vec<ResumeDismissal>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLS} FROM resume_dismissals WHERE user_id = ? AND series_work_id = ? \
+        let sql = format!(
+            "SELECT {COLS} FROM resume_dismissals WHERE user_id = ? AND series_work_id = ? \
                  ORDER BY created_at, episode_id"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLS} FROM resume_dismissals WHERE user_id = $1 AND series_work_id = $2 \
-                 ORDER BY created_at, episode_id"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(user_id.to_string())
             .bind(series_work_id.to_string())
@@ -107,14 +99,9 @@ impl ResumeDismissalRepo for SqlxResumeDismissalRepo {
     }
 
     async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<(Uuid, ResumeDismissal)>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
+        let sql = format!(
                 "SELECT {COLS} FROM resume_dismissals WHERE user_id = ? ORDER BY created_at, episode_id"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLS} FROM resume_dismissals WHERE user_id = $1 ORDER BY created_at, episode_id"
-            ),
-        };
+            );
         let rows = sqlx::query(&sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -130,20 +117,10 @@ impl ResumeDismissalRepo for SqlxResumeDismissalRepo {
         episode_id: Uuid,
         at: DateTime<Utc>,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO resume_dismissals (user_id, series_work_id, episode_id, kind, created_at) \
+        let sql = "INSERT INTO resume_dismissals (user_id, series_work_id, episode_id, kind, created_at) \
                  VALUES (?, ?, ?, ?, ?) \
                  ON CONFLICT (user_id, episode_id, kind) DO UPDATE SET \
-                 created_at = excluded.created_at, series_work_id = excluded.series_work_id"
-            }
-            Backend::Postgres => {
-                "INSERT INTO resume_dismissals (user_id, series_work_id, episode_id, kind, created_at) \
-                 VALUES ($1, $2, $3, $4, $5) \
-                 ON CONFLICT (user_id, episode_id, kind) DO UPDATE SET \
-                 created_at = EXCLUDED.created_at, series_work_id = EXCLUDED.series_work_id"
-            }
-        };
+                 created_at = excluded.created_at, series_work_id = excluded.series_work_id";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(series_work_id.to_string())
@@ -156,14 +133,7 @@ impl ResumeDismissalRepo for SqlxResumeDismissalRepo {
     }
 
     async fn clear_for_series(&self, user_id: Uuid, series_work_id: Uuid) -> Result<u64, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "DELETE FROM resume_dismissals WHERE user_id = ? AND series_work_id = ?"
-            }
-            Backend::Postgres => {
-                "DELETE FROM resume_dismissals WHERE user_id = $1 AND series_work_id = $2"
-            }
-        };
+        let sql = "DELETE FROM resume_dismissals WHERE user_id = ? AND series_work_id = ?";
         let res = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(series_work_id.to_string())

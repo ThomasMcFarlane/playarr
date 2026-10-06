@@ -6,7 +6,7 @@
 //! member (including this node itself) is a [`PeerNode`]. Deliberately
 //! **not** named around `node_id`: that token already means "this
 //! ephemeral process's replica identity" elsewhere in the codebase
-//! (`AppState.node_id`, `PostgresCoordinator`'s own `node_id`) -- see the
+//! (`AppState.node_id`) -- see the
 //! design doc's §1.1 for the naming collision this avoids. Every field
 //! here is additive and nullable/absent for a single, ungrouped node.
 

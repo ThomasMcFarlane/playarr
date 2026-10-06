@@ -1,7 +1,7 @@
 //! Storage for playback analytics: raw session/event write path plus the
 //! `stats_daily` rollup, backing the `playback_sessions` / `playback_events`
 //! / `stats_daily` tables created by
-//! `backend/migrations/{sqlite,postgres}/0002_analytics.sql`.
+//! `backend/migrations/sqlite/0002_analytics.sql`.
 //!
 //! This is a separate module (rather than folding into `crate::repo`)
 //! because its write pattern is fundamentally different: analytics writes
@@ -25,7 +25,7 @@ use crate::codec::{
     stop_reason_from_str, stop_reason_to_str, transcode_reason_from_str, transcode_reason_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// One row of the `stats_daily` rollup table: playback volume for a single
 /// (day, client platform, play method) bucket.
@@ -145,13 +145,11 @@ impl SessionStopReasonFilter {
 
 pub struct SqlxAnalyticsStore {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxAnalyticsStore {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     const SESSION_COLUMNS: &'static str = "id, user_id, device_id, media_file_id, rendition_id, \
@@ -212,16 +210,11 @@ impl SqlxAnalyticsStore {
         })
     }
 
-    /// SQLite uses positional `?` placeholders throughout; Postgres needs
-    /// `$1`, `$2`, ... in bind order — [`AnalyticsStore::list_sessions`] is
-    /// the only query in this store whose placeholder count varies at
-    /// runtime (an optional `WHERE` clause), so it's the only one that
-    /// needs this rather than a fixed `match self.backend { ... }` literal.
-    fn placeholder(&self, index: usize) -> String {
-        match self.backend {
-            Backend::Sqlite => "?".to_string(),
-            Backend::Postgres => format!("${index}"),
-        }
+    /// SQLite uses positional `?` placeholders throughout, so the index is
+    /// unused; [`AnalyticsStore::list_sessions`] builds its optional `WHERE`
+    /// clause through this helper.
+    fn placeholder(&self, _index: usize) -> String {
+        "?".to_string()
     }
 
     fn placeholders(&self, count: usize, next_index: &mut usize) -> String {
@@ -239,10 +232,9 @@ impl SqlxAnalyticsStore {
 /// Per-`(client_platform, play_method)` accumulator used by `rollup_day`.
 /// Aggregation happens in Rust rather than in a single SQL `GROUP BY`
 /// because `total_playback_seconds` needs `ended_at - started_at`, and
-/// SQLite/Postgres compute date/time differences with entirely different
-/// syntax (`julianday(...)` vs. interval subtraction) — doing the diff in
-/// Rust keeps the raw-row SELECT (the only part that runs against the
-/// database) identical in shape across both backends, at the cost of
+/// date/time differences need engine-specific syntax (`julianday(...)`) —
+/// doing the diff in Rust keeps the raw-row SELECT (the only part that runs
+/// against the database) plain, at the cost of
 /// pulling a day's raw session rows into memory. Revisit with DB-side
 /// aggregation if `rollup_day` shows up in profiling at scale.
 #[derive(Default)]
@@ -260,25 +252,12 @@ struct Bucket {
 #[async_trait]
 impl AnalyticsStore for SqlxAnalyticsStore {
     async fn record_session_start(&self, session: &PlaybackSession) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO playback_sessions \
+        let sql = "INSERT INTO playback_sessions \
                  (id, user_id, device_id, media_file_id, rendition_id, started_at, ended_at, \
                   play_method, transcode_reason, source_codec, source_container, source_bitrate, \
                   target_codec, target_container, target_bitrate, client_platform, client_version, \
                   ip_address, bytes_streamed, buffering_events, buffering_ms_total, stop_reason) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO playback_sessions \
-                 (id, user_id, device_id, media_file_id, rendition_id, started_at, ended_at, \
-                  play_method, transcode_reason, source_codec, source_container, source_bitrate, \
-                  target_codec, target_container, target_bitrate, client_platform, client_version, \
-                  ip_address, bytes_streamed, buffering_events, buffering_ms_total, stop_reason) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
-                  $17, $18, $19, $20, $21, $22)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(session.id.to_string())
             .bind(session.user_id.to_string())
@@ -313,16 +292,8 @@ impl AnalyticsStore for SqlxAnalyticsStore {
     }
 
     async fn record_event(&self, event: &PlaybackEvent) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
-                 VALUES (?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
-                 VALUES ($1, $2, $3, $4, $5)"
-            }
-        };
+        let sql = "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
+                 VALUES (?, ?, ?, ?, ?)";
         let payload = serde_json::to_string(&event.kind)?;
         sqlx::query(sql)
             .bind(event.id.to_string())
@@ -341,18 +312,9 @@ impl AnalyticsStore for SqlxAnalyticsStore {
         session: &PlaybackSession,
         stop_reason: StopReason,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE playback_sessions \
+        let sql = "UPDATE playback_sessions \
                  SET ended_at = ?, stop_reason = ?, bytes_streamed = ?, buffering_events = ?, \
-                 buffering_ms_total = ? WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE playback_sessions \
-                 SET ended_at = $1, stop_reason = $2, bytes_streamed = $3, buffering_events = $4, \
-                 buffering_ms_total = $5 WHERE id = $6"
-            }
-        };
+                 buffering_ms_total = ? WHERE id = ?";
         // `session.ended_at` should normally already be `Some(..)` by the
         // time a caller closes a session; fall back to "now" rather than
         // erroring so a caller that forgot to set it still gets a
@@ -377,21 +339,11 @@ impl AnalyticsStore for SqlxAnalyticsStore {
         let day_str = format_date(day);
 
         // `substr(col, 1, 10)` pulls the `YYYY-MM-DD` prefix off the
-        // ISO-8601 `started_at` TEXT column; `substr` is standard SQL and
-        // behaves identically on SQLite and Postgres, so only the
-        // placeholder differs here.
-        let select_sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT user_id, device_id, started_at, ended_at, play_method, client_platform, \
+        // ISO-8601 `started_at` TEXT column.
+        let select_sql =
+            "SELECT user_id, device_id, started_at, ended_at, play_method, client_platform, \
                  buffering_events, buffering_ms_total, bytes_streamed \
-                 FROM playback_sessions WHERE substr(started_at, 1, 10) = ?"
-            }
-            Backend::Postgres => {
-                "SELECT user_id, device_id, started_at, ended_at, play_method, client_platform, \
-                 buffering_events, buffering_ms_total, bytes_streamed \
-                 FROM playback_sessions WHERE substr(started_at, 1, 10) = $1"
-            }
-        };
+                 FROM playback_sessions WHERE substr(started_at, 1, 10) = ?";
         let rows = sqlx::query(select_sql)
             .bind(&day_str)
             .fetch_all(&self.pool)
@@ -448,31 +400,17 @@ impl AnalyticsStore for SqlxAnalyticsStore {
 
         let mut tx = self.pool.begin().await?;
 
-        let delete_sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM stats_daily WHERE day = ?",
-            Backend::Postgres => "DELETE FROM stats_daily WHERE day = $1",
-        };
+        let delete_sql = "DELETE FROM stats_daily WHERE day = ?";
         sqlx::query(delete_sql)
             .bind(&day_str)
             .execute(&mut *tx)
             .await?;
 
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO stats_daily \
+        let insert_sql = "INSERT INTO stats_daily \
                  (day, client_platform, play_method, sessions_count, unique_users_count, \
                   unique_devices_count, total_playback_seconds, transcode_sessions_count, \
                   buffering_events_total, buffering_ms_total, bytes_streamed_total) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO stats_daily \
-                 (day, client_platform, play_method, sessions_count, unique_users_count, \
-                  unique_devices_count, total_playback_seconds, transcode_sessions_count, \
-                  buffering_events_total, buffering_ms_total, bytes_streamed_total) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         for ((client_platform, play_method), bucket) in buckets {
             sqlx::query(insert_sql)
                 .bind(&day_str)
@@ -499,22 +437,11 @@ impl AnalyticsStore for SqlxAnalyticsStore {
         from: NaiveDate,
         to: NaiveDate,
     ) -> Result<Vec<DailyStat>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT day, client_platform, play_method, sessions_count, unique_users_count, \
+        let sql = "SELECT day, client_platform, play_method, sessions_count, unique_users_count, \
                  unique_devices_count, total_playback_seconds, transcode_sessions_count, \
                  buffering_events_total, buffering_ms_total, bytes_streamed_total \
                  FROM stats_daily WHERE day BETWEEN ? AND ? \
-                 ORDER BY day, client_platform, play_method"
-            }
-            Backend::Postgres => {
-                "SELECT day, client_platform, play_method, sessions_count, unique_users_count, \
-                 unique_devices_count, total_playback_seconds, transcode_sessions_count, \
-                 buffering_events_total, buffering_ms_total, bytes_streamed_total \
-                 FROM stats_daily WHERE day BETWEEN $1 AND $2 \
-                 ORDER BY day, client_platform, play_method"
-            }
-        };
+                 ORDER BY day, client_platform, play_method";
         let rows = sqlx::query(sql)
             .bind(format_date(from))
             .bind(format_date(to))
@@ -546,16 +473,8 @@ impl AnalyticsStore for SqlxAnalyticsStore {
             return Ok(());
         }
 
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
-                 VALUES (?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
-                 VALUES ($1, $2, $3, $4, $5)"
-            }
-        };
+        let sql = "INSERT INTO playback_events (id, session_id, occurred_at, kind, payload) \
+                 VALUES (?, ?, ?, ?, ?)";
 
         let mut tx = self.pool.begin().await?;
         for event in events {

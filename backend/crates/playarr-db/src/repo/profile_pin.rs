@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::codec::format_datetime;
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Durable profile-PIN hashes, deliberately separate from user passwords.
 #[async_trait]
@@ -18,23 +18,18 @@ pub trait ProfilePinRepo: Send + Sync {
 
 pub struct SqlxProfilePinRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxProfilePinRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
 #[async_trait]
 impl ProfilePinRepo for SqlxProfilePinRepo {
     async fn find_hash(&self, user_id: Uuid) -> Result<Option<String>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "SELECT pin_hash FROM profile_pins WHERE user_id = ?",
-            Backend::Postgres => "SELECT pin_hash FROM profile_pins WHERE user_id = $1",
-        };
+        let sql = "SELECT pin_hash FROM profile_pins WHERE user_id = ?";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_optional(&self.pool)
@@ -45,18 +40,9 @@ impl ProfilePinRepo for SqlxProfilePinRepo {
     }
 
     async fn upsert_hash(&self, user_id: Uuid, pin_hash: &str) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO profile_pins (user_id, pin_hash, updated_at) VALUES (?, ?, ?) \
+        let sql = "INSERT INTO profile_pins (user_id, pin_hash, updated_at) VALUES (?, ?, ?) \
                  ON CONFLICT (user_id) DO UPDATE SET \
-                 pin_hash = excluded.pin_hash, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO profile_pins (user_id, pin_hash, updated_at) VALUES ($1, $2, $3) \
-                 ON CONFLICT (user_id) DO UPDATE SET \
-                 pin_hash = EXCLUDED.pin_hash, updated_at = EXCLUDED.updated_at"
-            }
-        };
+                 pin_hash = excluded.pin_hash, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(pin_hash)
@@ -67,10 +53,7 @@ impl ProfilePinRepo for SqlxProfilePinRepo {
     }
 
     async fn delete(&self, user_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM profile_pins WHERE user_id = ?",
-            Backend::Postgres => "DELETE FROM profile_pins WHERE user_id = $1",
-        };
+        let sql = "DELETE FROM profile_pins WHERE user_id = ?";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .execute(&self.pool)

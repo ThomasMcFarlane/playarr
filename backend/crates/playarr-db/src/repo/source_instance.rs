@@ -10,7 +10,7 @@ use crate::codec::{
     source_kind_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// CRUD surface over [`playarr_model::SourceInstance`] -- the configured
 /// *arr connections Playarr Server syncs its catalog from. Persists what today
@@ -26,7 +26,7 @@ use crate::pool::{Backend, DbPool};
 /// comment); it does not encrypt anything by itself.
 ///
 /// `updated_at`/`deleted_at` (added by
-/// `backend/migrations/{postgres/0036,sqlite/0033}_peer_sync_state.sql`,
+/// `backend/migrations/sqlite/0033_peer_sync_state.sql`,
 /// nullable and additive -- see `docs/architecture/peer-groups.md` §2.2)
 /// exist purely for cross-node sync bookkeeping and are deliberately not
 /// read into [`playarr_model::SourceInstance`] here -- same rationale as
@@ -82,13 +82,11 @@ pub trait SourceInstanceRepo: Send + Sync {
 
 pub struct SqlxSourceInstanceRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxSourceInstanceRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<SourceInstance, DbError> {
@@ -156,20 +154,10 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<SourceInstance>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
+        let sql = "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
                  default_root_folder_id, folder_mappings, default_quality_profile_id, \
                  best_effort, group_library_id FROM source_instances \
-                 WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "SELECT id, kind, name, base_url, api_key_encrypted, priority, \
-                 default_root_folder_id, folder_mappings, default_quality_profile_id, \
-                 best_effort, group_library_id FROM source_instances \
-                 WHERE id = $1 AND deleted_at IS NULL"
-            }
-        };
+                 WHERE id = ? AND deleted_at IS NULL";
         sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -180,7 +168,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     }
 
     // `enabled_for_requests` still exists as a DB column (see
-    // migrations/{sqlite,postgres}/000{6,9}_source_instances.sql) but is
+    // migrations/sqlite/000{6,9}_source_instances.sql) but is
     // deliberately not read/written here anymore -- it backed a request-
     // submission feature Playarr Server no longer has (see
     // playarr_model::SourceInstance's own doc comment). Leaving the
@@ -192,9 +180,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     async fn upsert(&self, instance: &SourceInstance) -> Result<(), DbError> {
         // `updated_at` is bound once below from the server clock, never a
         // caller-supplied value -- see this module's own doc comment.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO source_instances \
+        let sql = "INSERT INTO source_instances \
                  (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
                  folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -205,23 +191,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
                  folder_mappings = excluded.folder_mappings, \
                  default_quality_profile_id = excluded.default_quality_profile_id, \
                  best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, \
-                 updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO source_instances \
-                 (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, \
-                 folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, \
-                 api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, \
-                 default_root_folder_id = excluded.default_root_folder_id, \
-                 folder_mappings = excluded.folder_mappings, \
-                 default_quality_profile_id = excluded.default_quality_profile_id, \
-                 best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, \
-                 updated_at = excluded.updated_at"
-            }
-        };
+                 updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(instance.id.to_string())
             .bind(source_kind_to_str(instance.kind))
@@ -245,16 +215,8 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         // see `SqlxUserRepo::delete`'s doc comment for the full rationale,
         // including why `AND deleted_at IS NULL` keeps a double-delete
         // returning `NotFound` exactly like the hard delete this replaced.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE source_instances SET updated_at = ?, deleted_at = ? \
-                 WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE source_instances SET updated_at = $1, deleted_at = $2 \
-                 WHERE id = $3 AND deleted_at IS NULL"
-            }
-        };
+        let sql = "UPDATE source_instances SET updated_at = ?, deleted_at = ? \
+                 WHERE id = ? AND deleted_at IS NULL";
         let deleted_at = format_datetime(chrono::Utc::now());
         let result = sqlx::query(sql)
             .bind(&deleted_at)
@@ -269,10 +231,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
     }
 
     async fn set_origin_peer_id_if_unset(&self, id: Uuid, peer_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "UPDATE source_instances SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL",
-            Backend::Postgres => "UPDATE source_instances SET origin_peer_id = $1 WHERE id = $2 AND origin_peer_id IS NULL",
-        };
+        let sql = "UPDATE source_instances SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL";
         sqlx::query(sql)
             .bind(peer_id.to_string())
             .bind(id.to_string())
@@ -285,14 +244,8 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         &self,
         id: Uuid,
     ) -> Result<Option<crate::repo::SyncMetadata>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM source_instances WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM source_instances WHERE id = $1"
-            }
-        };
+        let sql =
+            "SELECT updated_at, origin_peer_id, deleted_at FROM source_instances WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -319,10 +272,7 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
         instance: &SourceInstance,
         metadata: crate::repo::SyncMetadata,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, folder_mappings = excluded.folder_mappings, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
-            Backend::Postgres => "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, folder_mappings = excluded.folder_mappings, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at",
-        };
+        let sql = "INSERT INTO source_instances (id, kind, name, base_url, api_key_encrypted, priority, default_root_folder_id, folder_mappings, default_quality_profile_id, best_effort, group_library_id, updated_at, origin_peer_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name, base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, priority = excluded.priority, default_root_folder_id = excluded.default_root_folder_id, folder_mappings = excluded.folder_mappings, default_quality_profile_id = excluded.default_quality_profile_id, best_effort = excluded.best_effort, group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at";
         sqlx::query(sql)
             .bind(instance.id.to_string())
             .bind(source_kind_to_str(instance.kind))
@@ -352,19 +302,12 @@ impl SourceInstanceRepo for SqlxSourceInstanceRepo {
                                group_library_id, updated_at, origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => format!(
+        let sql = match since.is_some() {
+            true => format!(
                 "SELECT {SELECT} FROM source_instances WHERE updated_at > ? \
                  ORDER BY updated_at ASC, id ASC"
             ),
-            (Backend::Sqlite, false) => {
-                format!("SELECT {SELECT} FROM source_instances ORDER BY updated_at ASC, id ASC")
-            }
-            (Backend::Postgres, true) => format!(
-                "SELECT {SELECT} FROM source_instances WHERE updated_at > $1 \
-                 ORDER BY updated_at ASC, id ASC"
-            ),
-            (Backend::Postgres, false) => {
+            false => {
                 format!("SELECT {SELECT} FROM source_instances ORDER BY updated_at ASC, id ASC")
             }
         };

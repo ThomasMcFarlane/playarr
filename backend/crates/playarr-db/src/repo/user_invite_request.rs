@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn status_to_str(status: UserInviteRequestStatus) -> &'static str {
     match status {
@@ -139,13 +139,11 @@ pub trait UserInviteRequestRepo: Send + Sync {
 
 pub struct SqlxUserInviteRequestRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxUserInviteRequestRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -154,14 +152,9 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
     async fn create(&self, request: &UserInviteRequest) -> Result<(), DbError> {
         let library_allow = serde_json::to_string(&request.library_allow)?;
         let group_library_allow = serde_json::to_string(&request.group_library_allow)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                format!("INSERT INTO user_invite_requests ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            }
-            Backend::Postgres => format!(
-                "INSERT INTO user_invite_requests ({COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-            ),
-        };
+        let sql = format!(
+            "INSERT INTO user_invite_requests ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
         sqlx::query(&sql)
             .bind(request.id.to_string())
             .bind(request.user_id.to_string())
@@ -182,9 +175,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
     async fn upsert(&self, request: &UserInviteRequest) -> Result<(), DbError> {
         let library_allow = serde_json::to_string(&request.library_allow)?;
         let group_library_allow = serde_json::to_string(&request.group_library_allow)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO user_invite_requests \
+        let sql = "INSERT INTO user_invite_requests \
                  (id, user_id, message, status, requested_at, reviewed_by, reviewed_at, \
                  generated_at, can_stream, library_allow, group_library_allow) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -193,21 +184,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
                  requested_at = excluded.requested_at, reviewed_by = excluded.reviewed_by, \
                  reviewed_at = excluded.reviewed_at, generated_at = excluded.generated_at, \
                  can_stream = excluded.can_stream, library_allow = excluded.library_allow, \
-                 group_library_allow = excluded.group_library_allow"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_invite_requests \
-                 (id, user_id, message, status, requested_at, reviewed_by, reviewed_at, \
-                 generated_at, can_stream, library_allow, group_library_allow) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 message = excluded.message, status = excluded.status, \
-                 requested_at = excluded.requested_at, reviewed_by = excluded.reviewed_by, \
-                 reviewed_at = excluded.reviewed_at, generated_at = excluded.generated_at, \
-                 can_stream = excluded.can_stream, library_allow = excluded.library_allow, \
-                 group_library_allow = excluded.group_library_allow"
-            }
-        };
+                 group_library_allow = excluded.group_library_allow";
         sqlx::query(sql)
             .bind(request.id.to_string())
             .bind(request.user_id.to_string())
@@ -226,12 +203,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
     }
 
     async fn find_by_id(&self, id: Uuid) -> Result<Option<UserInviteRequest>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM user_invite_requests WHERE id = ?"),
-            Backend::Postgres => {
-                format!("SELECT {COLUMNS} FROM user_invite_requests WHERE id = $1")
-            }
-        };
+        let sql = format!("SELECT {COLUMNS} FROM user_invite_requests WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -243,14 +215,9 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         &self,
         user_id: Uuid,
     ) -> Result<Option<UserInviteRequest>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
+        let sql = format!(
                 "SELECT {COLUMNS} FROM user_invite_requests WHERE user_id = ? ORDER BY requested_at DESC LIMIT 1"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM user_invite_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 1"
-            ),
-        };
+            );
         let row = sqlx::query(&sql)
             .bind(user_id.to_string())
             .fetch_optional(&self.pool)
@@ -281,14 +248,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         ));
         let library_allow = serde_json::to_string(library_allow)?;
         let group_library_allow = serde_json::to_string(group_library_allow)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE user_invite_requests SET status = ?, reviewed_by = ?, reviewed_at = ?, can_stream = ?, library_allow = ?, group_library_allow = ? WHERE id = ? AND status = 'pending'"
-            }
-            Backend::Postgres => {
-                "UPDATE user_invite_requests SET status = $1, reviewed_by = $2, reviewed_at = $3, can_stream = $4, library_allow = $5, group_library_allow = $6 WHERE id = $7 AND status = 'pending'"
-            }
-        };
+        let sql = "UPDATE user_invite_requests SET status = ?, reviewed_by = ?, reviewed_at = ?, can_stream = ?, library_allow = ?, group_library_allow = ? WHERE id = ? AND status = 'pending'";
         let result = sqlx::query(sql)
             .bind(status_to_str(status))
             .bind(reviewer_id.to_string())
@@ -312,14 +272,7 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         let library_allow = serde_json::to_string(&invite.library_allow)?;
         let group_library_allow = serde_json::to_string(&invite.group_library_allow)?;
         let mut transaction = self.pool.begin().await?;
-        let update_sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE user_invite_requests SET status = 'generated', generated_at = ? WHERE id = ? AND user_id = ? AND status = 'approved'"
-            }
-            Backend::Postgres => {
-                "UPDATE user_invite_requests SET status = 'generated', generated_at = $1 WHERE id = $2 AND user_id = $3 AND status = 'approved'"
-            }
-        };
+        let update_sql = "UPDATE user_invite_requests SET status = 'generated', generated_at = ? WHERE id = ? AND user_id = ? AND status = 'approved'";
         let result = sqlx::query(update_sql)
             .bind(format_datetime(generated_at))
             .bind(id.to_string())
@@ -331,20 +284,10 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
             return Ok(false);
         }
 
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO user_invites \
+        let insert_sql = "INSERT INTO user_invites \
                  (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
                  group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_invites \
-                 (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
-                 group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(insert_sql)
             .bind(&invite.token_hash)
             .bind(invite.created_by.to_string())
@@ -369,19 +312,12 @@ impl UserInviteRequestRepo for SqlxUserInviteRequestRepo {
         &self,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<UserInviteRequest>, DbError> {
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => format!(
+        let sql = match since.is_some() {
+            true => format!(
                 "SELECT {COLUMNS} FROM user_invite_requests WHERE requested_at > ? \
                  ORDER BY requested_at ASC, id ASC"
             ),
-            (Backend::Sqlite, false) => format!(
-                "SELECT {COLUMNS} FROM user_invite_requests ORDER BY requested_at ASC, id ASC"
-            ),
-            (Backend::Postgres, true) => format!(
-                "SELECT {COLUMNS} FROM user_invite_requests WHERE requested_at > $1 \
-                 ORDER BY requested_at ASC, id ASC"
-            ),
-            (Backend::Postgres, false) => format!(
+            false => format!(
                 "SELECT {COLUMNS} FROM user_invite_requests ORDER BY requested_at ASC, id ASC"
             ),
         };

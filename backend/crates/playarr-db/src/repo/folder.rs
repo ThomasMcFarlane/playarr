@@ -25,7 +25,7 @@ use crate::codec::{
     work_kind_from_str, work_kind_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 const ROOT_COLUMNS: &str = "id, source_instance_id, source_root_id, reported_path, \
     local_path_override, display_name, work_kind, accessible, free_space_bytes, \
@@ -134,28 +134,6 @@ pub trait FolderRepo: Send + Sync {
 
 pub struct SqlxFolderRepo {
     pool: DbPool,
-    backend: Backend,
-}
-
-/// Rewrites `?` placeholders to `$n` for Postgres.
-fn sql(backend: Backend, text: &str) -> String {
-    match backend {
-        Backend::Sqlite => text.to_string(),
-        Backend::Postgres => {
-            let mut out = String::with_capacity(text.len() + 8);
-            let mut n = 0;
-            for c in text.chars() {
-                if c == '?' {
-                    n += 1;
-                    out.push('$');
-                    out.push_str(&n.to_string());
-                } else {
-                    out.push(c);
-                }
-            }
-            out
-        }
-    }
 }
 
 fn optional_i64(value: Option<u64>) -> Result<Option<i64>, DbError> {
@@ -183,12 +161,11 @@ fn like_prefix(directory: &str) -> String {
 
 impl SqlxFolderRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn q(&self, text: &str) -> String {
-        sql(self.backend, text)
+        text.to_string()
     }
 
     fn root_from_row(row: &AnyRow) -> Result<SourceRootFolder, DbError> {

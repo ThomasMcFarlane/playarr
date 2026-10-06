@@ -11,7 +11,7 @@ use crate::codec::{
     download_status_from_str, download_status_to_str, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait DownloadTicketRepo: Send + Sync {
@@ -60,13 +60,11 @@ pub trait DownloadTicketRepo: Send + Sync {
 
 pub struct SqlxDownloadTicketRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxDownloadTicketRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<DownloadTicket, DbError> {
@@ -105,18 +103,9 @@ impl SqlxDownloadTicketRepo {
 #[async_trait]
 impl DownloadTicketRepo for SqlxDownloadTicketRepo {
     async fn get(&self, id: Uuid) -> Result<Option<DownloadTicket>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
+        let sql = "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
                  output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
-                 output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets WHERE id = $1"
-            }
-        };
+                 FROM download_tickets WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -125,18 +114,9 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
     }
 
     async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<DownloadTicket>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
+        let sql = "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
                  output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets WHERE user_id = ? ORDER BY requested_at DESC"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
-                 output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets WHERE user_id = $1 ORDER BY requested_at DESC"
-            }
-        };
+                 FROM download_tickets WHERE user_id = ? ORDER BY requested_at DESC";
         let rows = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -150,24 +130,12 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
         media_file_id: Uuid,
         quality_id: &str,
     ) -> Result<Option<DownloadTicket>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
+        let sql = "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
                  output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
                  FROM download_tickets \
                  WHERE user_id = ? AND media_file_id = ? AND quality_id = ? \
                  AND status IN ('queued', 'processing', 'ready') \
-                 ORDER BY requested_at DESC LIMIT 1"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
-                 output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets \
-                 WHERE user_id = $1 AND media_file_id = $2 AND quality_id = $3 \
-                 AND status IN ('queued', 'processing', 'ready') \
-                 ORDER BY requested_at DESC LIMIT 1"
-            }
-        };
+                 ORDER BY requested_at DESC LIMIT 1";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(media_file_id.to_string())
@@ -178,20 +146,10 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
     }
 
     async fn insert(&self, ticket: &DownloadTicket) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO download_tickets \
+        let sql = "INSERT INTO download_tickets \
                  (id, user_id, media_file_id, quality_id, profile, container, status, \
                   output_path, size_bytes, error_message, requested_at, ready_at, expires_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO download_tickets \
-                 (id, user_id, media_file_id, quality_id, profile, container, status, \
-                  output_path, size_bytes, error_message, requested_at, ready_at, expires_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(ticket.id.to_string())
             .bind(ticket.user_id.to_string())
@@ -222,14 +180,7 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
         status: DownloadStatus,
         error_message: Option<&str>,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE download_tickets SET status = ?, error_message = ? WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE download_tickets SET status = $1, error_message = $2 WHERE id = $3"
-            }
-        };
+        let sql = "UPDATE download_tickets SET status = ?, error_message = ? WHERE id = ?";
         sqlx::query(sql)
             .bind(download_status_to_str(status))
             .bind(error_message.map(str::to_string))
@@ -247,16 +198,8 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
         ready_at: DateTime<Utc>,
         expires_at: Option<DateTime<Utc>>,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE download_tickets SET status = ?, output_path = ?, size_bytes = ?, \
-                 error_message = NULL, ready_at = ?, expires_at = ? WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE download_tickets SET status = $1, output_path = $2, size_bytes = $3, \
-                 error_message = NULL, ready_at = $4, expires_at = $5 WHERE id = $6"
-            }
-        };
+        let sql = "UPDATE download_tickets SET status = ?, output_path = ?, size_bytes = ?, \
+                 error_message = NULL, ready_at = ?, expires_at = ? WHERE id = ?";
         sqlx::query(sql)
             .bind(download_status_to_str(DownloadStatus::Ready))
             .bind(output_path.map(|path| path.to_string_lossy().to_string()))
@@ -270,10 +213,7 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM download_tickets WHERE id = ?",
-            Backend::Postgres => "DELETE FROM download_tickets WHERE id = $1",
-        };
+        let sql = "DELETE FROM download_tickets WHERE id = ?";
         sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -282,22 +222,11 @@ impl DownloadTicketRepo for SqlxDownloadTicketRepo {
     }
 
     async fn list_expired(&self, now: DateTime<Utc>) -> Result<Vec<DownloadTicket>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
+        let sql = "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
                  output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
                  FROM download_tickets \
                  WHERE status NOT IN ('expired', 'canceled') \
-                 AND expires_at IS NOT NULL AND expires_at <= ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, media_file_id, quality_id, profile, container, status, \
-                 output_path, size_bytes, error_message, requested_at, ready_at, expires_at \
-                 FROM download_tickets \
-                 WHERE status NOT IN ('expired', 'canceled') \
-                 AND expires_at IS NOT NULL AND expires_at <= $1"
-            }
-        };
+                 AND expires_at IS NOT NULL AND expires_at <= ?";
         let rows = sqlx::query(sql)
             .bind(format_datetime(now))
             .fetch_all(&self.pool)

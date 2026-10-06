@@ -26,7 +26,7 @@ use sqlx::Row;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 const NODE_IDENTITY_ID: &str = "00000000-0000-0000-0000-00000000e001";
 
@@ -43,13 +43,11 @@ pub trait NodeIdentityRepo: Send + Sync {
 
 pub struct SqlxNodeIdentityRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxNodeIdentityRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<NodeIdentity, DbError> {
@@ -72,10 +70,7 @@ const COLUMNS: &str = "peer_id, private_key, group_id, created_at";
 #[async_trait]
 impl NodeIdentityRepo for SqlxNodeIdentityRepo {
     async fn get(&self) -> Result<Option<NodeIdentity>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM node_identity WHERE id = ?"),
-            Backend::Postgres => format!("SELECT {COLUMNS} FROM node_identity WHERE id = $1"),
-        };
+        let sql = format!("SELECT {COLUMNS} FROM node_identity WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(NODE_IDENTITY_ID)
             .fetch_optional(&self.pool)
@@ -84,22 +79,11 @@ impl NodeIdentityRepo for SqlxNodeIdentityRepo {
     }
 
     async fn put(&self, identity: &NodeIdentity) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO node_identity (id, peer_id, private_key, group_id, created_at) \
+        let sql = "INSERT INTO node_identity (id, peer_id, private_key, group_id, created_at) \
                  VALUES (?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  peer_id = excluded.peer_id, private_key = excluded.private_key, \
-                 group_id = excluded.group_id, created_at = excluded.created_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO node_identity (id, peer_id, private_key, group_id, created_at) \
-                 VALUES ($1, $2, $3, $4, $5) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 peer_id = excluded.peer_id, private_key = excluded.private_key, \
-                 group_id = excluded.group_id, created_at = excluded.created_at"
-            }
-        };
+                 group_id = excluded.group_id, created_at = excluded.created_at";
         sqlx::query(sql)
             .bind(NODE_IDENTITY_ID)
             .bind(identity.peer_id.to_string())

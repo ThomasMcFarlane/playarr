@@ -398,14 +398,14 @@ pub async fn apply_accounts_response(
 
     // Policies are applied *before* users, deliberately: `users.policy_id`
     // is a real `REFERENCES policies (id)` foreign key (see
-    // `migrations/{postgres,sqlite}/0007_users_policies.sql`'s own
+    // `migrations/sqlite/0007_users_policies.sql`'s own
     // "policies is created first... because a user can't be inserted until
-    // the policy it points at exists" comment), and Postgres enforces that
-    // immediately, not deferred. A single `since=` page commonly carries a
+    // the policy it points at exists" comment), and a connection with
+    // `PRAGMA foreign_keys = ON` enforces that immediately, not deferred. A single `since=` page commonly carries a
     // brand-new user *and* the brand-new policy it was just assigned (an
     // admin creating both together in one session, then one poll interval
     // later syncing both in the same response) -- applying users first
-    // would FK-violate on Postgres, fail the whole page before the cursor
+    // would FK-violate once enforcement is on, fail the whole page before the cursor
     // ever advances, and then fail identically forever on every later
     // retry of that same unadvanced page. SQLite masks this locally (this
     // codebase never sets `PRAGMA foreign_keys = ON`), which is exactly
@@ -1078,7 +1078,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        playarr_db::run_migrations(&pool, false).await.unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
         Harness {
             pool: pool.clone(),
             user_repo: Arc::new(playarr_db::repo::SqlxUserRepo::new(pool.clone())),
@@ -1101,13 +1101,9 @@ mod tests {
     /// codebase's real pool never issues `PRAGMA foreign_keys = ON`
     /// either, see `playarr_db::pool`), which is exactly why an
     /// application-order bug against `users.policy_id REFERENCES policies
-    /// (id)` can hide in every other test in this file: Postgres (the tier
-    /// every real multi-node peer group actually runs on, since a Tier-1
-    /// single node has no peer to sync with in the first place) enforces
-    /// that foreign key immediately, not deferred. Turning the pragma on
-    /// here gives this crate's own test suite an equivalent, fast,
-    /// no-Postgres-required way to catch that class of ordering bug
-    /// locally instead of only in a real multi-node deployment.
+    /// (id)` can hide in every other test in this file. Turning the pragma
+    /// on here gives this crate's own test suite a fast way to catch that
+    /// class of ordering bug.
     async fn harness_with_fk_enforcement() -> Harness {
         let harness = harness().await;
         sqlx::query("PRAGMA foreign_keys = ON")
@@ -1396,8 +1392,8 @@ mod tests {
     /// assigning a new `User` to it, then one poll interval later
     /// syncing both together in the same `since=` response.
     /// `users.policy_id REFERENCES policies (id)` means applying the user
-    /// before its policy exists 404s the whole page on Postgres (enforced
-    /// immediately, not deferred); `sync_accounts` must apply `policies`
+    /// before its policy exists 404s the whole page when foreign keys are
+    /// enforced; `sync_accounts` must apply `policies`
     /// before `users` for exactly this reason.
     #[tokio::test]
     async fn sync_accounts_applies_a_brand_new_policy_and_its_brand_new_user_in_the_same_page() {

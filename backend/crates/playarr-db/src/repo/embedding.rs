@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::codec::parse_uuid;
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait EmbeddingRepo: Send + Sync {
@@ -30,13 +30,11 @@ pub trait EmbeddingRepo: Send + Sync {
 
 pub struct SqlxEmbeddingRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxEmbeddingRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<WorkEmbedding, DbError> {
@@ -59,16 +57,8 @@ impl SqlxEmbeddingRepo {
 #[async_trait]
 impl EmbeddingRepo for SqlxEmbeddingRepo {
     async fn get(&self, work_id: Uuid) -> Result<Option<WorkEmbedding>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT work_id, model_id, source_text, vector, updated_at \
-                 FROM work_embeddings WHERE work_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT work_id, model_id, source_text, vector, updated_at \
-                 FROM work_embeddings WHERE work_id = $1"
-            }
-        };
+        let sql = "SELECT work_id, model_id, source_text, vector, updated_at \
+                 FROM work_embeddings WHERE work_id = ?";
         let row = sqlx::query(sql)
             .bind(work_id.to_string())
             .fetch_optional(&self.pool)
@@ -78,22 +68,12 @@ impl EmbeddingRepo for SqlxEmbeddingRepo {
 
     async fn upsert(&self, embedding: &WorkEmbedding) -> Result<(), DbError> {
         let vector = serde_json::to_string(&embedding.vector)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO work_embeddings (work_id, model_id, source_text, vector, updated_at) \
+        let sql =
+            "INSERT INTO work_embeddings (work_id, model_id, source_text, vector, updated_at) \
                  VALUES (?, ?, ?, ?, ?) \
                  ON CONFLICT (work_id) DO UPDATE SET \
                  model_id = excluded.model_id, source_text = excluded.source_text, \
-                 vector = excluded.vector, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO work_embeddings (work_id, model_id, source_text, vector, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5) \
-                 ON CONFLICT (work_id) DO UPDATE SET \
-                 model_id = excluded.model_id, source_text = excluded.source_text, \
-                 vector = excluded.vector, updated_at = excluded.updated_at"
-            }
-        };
+                 vector = excluded.vector, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(embedding.work_id.to_string())
             .bind(embedding.model_id.as_str())
@@ -112,10 +92,7 @@ impl EmbeddingRepo for SqlxEmbeddingRepo {
     }
 
     async fn delete(&self, work_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM work_embeddings WHERE work_id = ?",
-            Backend::Postgres => "DELETE FROM work_embeddings WHERE work_id = $1",
-        };
+        let sql = "DELETE FROM work_embeddings WHERE work_id = ?";
         sqlx::query(sql)
             .bind(work_id.to_string())
             .execute(&self.pool)

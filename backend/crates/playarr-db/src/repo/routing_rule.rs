@@ -35,7 +35,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn delivery_mode_to_str(mode: DeliveryMode) -> &'static str {
     match mode {
@@ -125,13 +125,11 @@ pub trait RoutingRuleRepo: Send + Sync {
 
 pub struct SqlxRoutingRuleRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRoutingRuleRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -139,20 +137,10 @@ impl SqlxRoutingRuleRepo {
 impl RoutingRuleRepo for SqlxRoutingRuleRepo {
     async fn create(&self, rule: &RoutingRule) -> Result<(), DbError> {
         let preferred_nodes = serde_json::to_string(&rule.preferred_nodes)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO routing_rules \
+        let sql = "INSERT INTO routing_rules \
                  (id, group_id, group_library_id, user_id, priority, preferred_nodes, \
                  delivery_mode, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO routing_rules \
-                 (id, group_id, group_library_id, user_id, priority, preferred_nodes, \
-                 delivery_mode, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(rule.id.to_string())
             .bind(rule.group_id.to_string())
@@ -169,10 +157,7 @@ impl RoutingRuleRepo for SqlxRoutingRuleRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<RoutingRule>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM routing_rules WHERE id = ?"),
-            Backend::Postgres => format!("SELECT {COLUMNS} FROM routing_rules WHERE id = $1"),
-        };
+        let sql = format!("SELECT {COLUMNS} FROM routing_rules WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -182,18 +167,9 @@ impl RoutingRuleRepo for SqlxRoutingRuleRepo {
 
     async fn update(&self, rule: &RoutingRule) -> Result<(), DbError> {
         let preferred_nodes = serde_json::to_string(&rule.preferred_nodes)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE routing_rules SET group_id = ?, group_library_id = ?, user_id = ?, \
+        let sql = "UPDATE routing_rules SET group_id = ?, group_library_id = ?, user_id = ?, \
                  priority = ?, preferred_nodes = ?, delivery_mode = ?, updated_at = ? \
-                 WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE routing_rules SET group_id = $1, group_library_id = $2, user_id = $3, \
-                 priority = $4, preferred_nodes = $5, delivery_mode = $6, updated_at = $7 \
-                 WHERE id = $8"
-            }
-        };
+                 WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(rule.group_id.to_string())
             .bind(rule.group_library_id.map(|id| id.to_string()))
@@ -212,10 +188,7 @@ impl RoutingRuleRepo for SqlxRoutingRuleRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM routing_rules WHERE id = ?",
-            Backend::Postgres => "DELETE FROM routing_rules WHERE id = $1",
-        };
+        let sql = "DELETE FROM routing_rules WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -227,16 +200,10 @@ impl RoutingRuleRepo for SqlxRoutingRuleRepo {
     }
 
     async fn list_for_group(&self, group_id: Uuid) -> Result<Vec<RoutingRule>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM routing_rules WHERE group_id = ? \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM routing_rules WHERE group_id = ? \
                  ORDER BY priority DESC, id ASC"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM routing_rules WHERE group_id = $1 \
-                 ORDER BY priority DESC, id ASC"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
@@ -249,21 +216,13 @@ impl RoutingRuleRepo for SqlxRoutingRuleRepo {
         group_id: Uuid,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<RoutingRule>, DbError> {
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => format!(
+        let sql = match since.is_some() {
+            true => format!(
                 "SELECT {COLUMNS} FROM routing_rules WHERE group_id = ? AND updated_at > ? \
                  ORDER BY updated_at ASC, id ASC"
             ),
-            (Backend::Sqlite, false) => format!(
+            false => format!(
                 "SELECT {COLUMNS} FROM routing_rules WHERE group_id = ? \
-                 ORDER BY updated_at ASC, id ASC"
-            ),
-            (Backend::Postgres, true) => format!(
-                "SELECT {COLUMNS} FROM routing_rules WHERE group_id = $1 AND updated_at > $2 \
-                 ORDER BY updated_at ASC, id ASC"
-            ),
-            (Backend::Postgres, false) => format!(
-                "SELECT {COLUMNS} FROM routing_rules WHERE group_id = $1 \
                  ORDER BY updated_at ASC, id ASC"
             ),
         };

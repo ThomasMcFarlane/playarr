@@ -13,14 +13,12 @@ pub const ARCHIVE_EXTENSION: &str = "parbak";
 #[serde(rename_all = "snake_case")]
 pub enum Engine {
     Sqlite,
-    Postgres,
 }
 
 impl Engine {
     pub fn as_str(self) -> &'static str {
         match self {
             Engine::Sqlite => "sqlite",
-            Engine::Postgres => "postgres",
         }
     }
 }

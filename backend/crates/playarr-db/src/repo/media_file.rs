@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::codec::{leaf_ref_from_str, leaf_ref_to_str, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// CRUD + lookup surface over [`playarr_model::MediaFile`] -- the on-disk
 /// files a source *arr instance has imported. This is the table that
@@ -89,13 +89,11 @@ pub trait MediaFileRepo: Send + Sync {
 
 pub struct SqlxMediaFileRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxMediaFileRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<MediaFile, DbError> {
@@ -138,18 +136,9 @@ impl SqlxMediaFileRepo {
         source_instance_id: Uuid,
         source_file_id: &str,
     ) -> Result<Option<MediaFile>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+        let sql = "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
                  source_instance_id, source_file_id FROM media_files \
-                 WHERE source_instance_id = ? AND source_file_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
-                 source_instance_id, source_file_id FROM media_files \
-                 WHERE source_instance_id = $1 AND source_file_id = $2"
-            }
-        };
+                 WHERE source_instance_id = ? AND source_file_id = ?";
         let row = sqlx::query(sql)
             .bind(source_instance_id.to_string())
             .bind(source_file_id)
@@ -162,18 +151,9 @@ impl SqlxMediaFileRepo {
 #[async_trait]
 impl MediaFileRepo for SqlxMediaFileRepo {
     async fn create(&self, media_file: &MediaFile) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO media_files \
+        let sql = "INSERT INTO media_files \
                  (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO media_files \
-                 (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(media_file.id.to_string())
             .bind(media_file.work_id.to_string())
@@ -192,16 +172,8 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn get_by_id(&self, id: Uuid) -> Result<MediaFile, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
-                 source_instance_id, source_file_id FROM media_files WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
-                 source_instance_id, source_file_id FROM media_files WHERE id = $1"
-            }
-        };
+        let sql = "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+                 source_instance_id, source_file_id FROM media_files WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -211,18 +183,9 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn list_by_work_id(&self, work_id: Uuid) -> Result<Vec<MediaFile>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+        let sql = "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
                  source_instance_id, source_file_id FROM media_files \
-                 WHERE work_id = ? ORDER BY leaf_ref, path"
-            }
-            Backend::Postgres => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
-                 source_instance_id, source_file_id FROM media_files \
-                 WHERE work_id = $1 ORDER BY leaf_ref, path"
-            }
-        };
+                 WHERE work_id = ? ORDER BY leaf_ref, path";
         let rows = sqlx::query(sql)
             .bind(work_id.to_string())
             .fetch_all(&self.pool)
@@ -284,18 +247,9 @@ impl MediaFileRepo for SqlxMediaFileRepo {
         work_id: Uuid,
         leaf_ref: LeafRef,
     ) -> Result<Option<MediaFile>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
+        let sql = "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
                  source_instance_id, source_file_id FROM media_files \
-                 WHERE work_id = ? AND leaf_ref = ? ORDER BY id LIMIT 1"
-            }
-            Backend::Postgres => {
-                "SELECT id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, \
-                 source_instance_id, source_file_id FROM media_files \
-                 WHERE work_id = $1 AND leaf_ref = $2 ORDER BY id LIMIT 1"
-            }
-        };
+                 WHERE work_id = ? AND leaf_ref = ? ORDER BY id LIMIT 1";
         let row = sqlx::query(sql)
             .bind(work_id.to_string())
             .bind(leaf_ref_to_str(&leaf_ref))
@@ -305,10 +259,7 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn set_duration_ms(&self, id: Uuid, duration_ms: u64) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "UPDATE media_files SET duration_ms = ? WHERE id = ?",
-            Backend::Postgres => "UPDATE media_files SET duration_ms = $1 WHERE id = $2",
-        };
+        let sql = "UPDATE media_files SET duration_ms = ? WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(duration_ms as i64)
             .bind(id.to_string())
@@ -321,14 +272,8 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn mark_missing_durations_scanned(&self, work_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE media_files SET duration_ms = 0 WHERE work_id = ? AND duration_ms IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE media_files SET duration_ms = 0 WHERE work_id = $1 AND duration_ms IS NULL"
-            }
-        };
+        let sql =
+            "UPDATE media_files SET duration_ms = 0 WHERE work_id = ? AND duration_ms IS NULL";
         sqlx::query(sql)
             .bind(work_id.to_string())
             .execute(&self.pool)
@@ -337,9 +282,7 @@ impl MediaFileRepo for SqlxMediaFileRepo {
     }
 
     async fn upsert_by_source(&self, media_file: &MediaFile) -> Result<MediaFile, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO media_files \
+        let sql = "INSERT INTO media_files \
                  (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (source_instance_id, source_file_id) DO UPDATE SET \
@@ -349,22 +292,7 @@ impl MediaFileRepo for SqlxMediaFileRepo {
                    WHEN excluded.duration_ms IS NULL OR excluded.duration_ms <= 0 \
                    THEN COALESCE(media_files.duration_ms, excluded.duration_ms) \
                    ELSE excluded.duration_ms \
-                 END, size_bytes = excluded.size_bytes"
-            }
-            Backend::Postgres => {
-                "INSERT INTO media_files \
-                 (id, work_id, leaf_ref, path, container, codec, bitrate, duration_ms, size_bytes, source_instance_id, source_file_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-                 ON CONFLICT (source_instance_id, source_file_id) DO UPDATE SET \
-                 work_id = excluded.work_id, leaf_ref = excluded.leaf_ref, path = excluded.path, \
-                 container = excluded.container, codec = excluded.codec, bitrate = excluded.bitrate, \
-                 duration_ms = CASE \
-                   WHEN excluded.duration_ms IS NULL OR excluded.duration_ms <= 0 \
-                   THEN COALESCE(media_files.duration_ms, excluded.duration_ms) \
-                   ELSE excluded.duration_ms \
-                 END, size_bytes = excluded.size_bytes"
-            }
-        };
+                 END, size_bytes = excluded.size_bytes";
         sqlx::query(sql)
             .bind(media_file.id.to_string())
             .bind(media_file.work_id.to_string())

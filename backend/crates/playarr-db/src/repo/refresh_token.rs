@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Storage boundary for [`RefreshTokenRecord`]s, keyed by `device_id` (a
 /// device has at most one live token family at a time -- a fresh login
@@ -66,7 +66,7 @@ impl RefreshTokenRepo for InMemoryRefreshTokenStore {
 }
 
 /// The real, durable [`RefreshTokenRepo`] -- backs `refresh_token_families`
-/// (see `backend/migrations/{sqlite,postgres}/*_refresh_token_families.sql`).
+/// (see `backend/migrations/sqlite/*_refresh_token_families.sql`).
 /// Closes a real gap `InMemoryRefreshTokenStore` left: since access tokens
 /// are short-lived and nothing else re-issues one without a refresh token
 /// to redeem, an in-memory-only store meant every process restart
@@ -75,13 +75,11 @@ impl RefreshTokenRepo for InMemoryRefreshTokenStore {
 /// longer) `refresh_ttl`.
 pub struct SqlxRefreshTokenRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRefreshTokenRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<RefreshTokenRecord, DbError> {
@@ -121,18 +119,9 @@ impl SqlxRefreshTokenRepo {
 #[async_trait]
 impl RefreshTokenRepo for SqlxRefreshTokenRepo {
     async fn get(&self, device_id: Uuid) -> Result<Option<RefreshTokenRecord>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT device_id, user_id, session_id, family_id, generation, current_hash, \
+        let sql = "SELECT device_id, user_id, session_id, family_id, generation, current_hash, \
                  used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until \
-                 FROM refresh_token_families WHERE device_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until \
-                 FROM refresh_token_families WHERE device_id = $1"
-            }
-        };
+                 FROM refresh_token_families WHERE device_id = ?";
         let row = sqlx::query(sql)
             .bind(device_id.to_string())
             .fetch_optional(&self.pool)
@@ -143,9 +132,7 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
     async fn put(&self, record: RefreshTokenRecord) -> Result<(), DbError> {
         let used_hashes = serde_json::to_string(&record.used_hashes)?;
 
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO refresh_token_families \
+        let sql = "INSERT INTO refresh_token_families \
                  (device_id, user_id, session_id, family_id, generation, current_hash, \
                  used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -155,22 +142,7 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
                  current_hash = excluded.current_hash, used_hashes = excluded.used_hashes, \
                  issued_at = excluded.issued_at, expires_at = excluded.expires_at, \
                  rotated_at = excluded.rotated_at, revoked = excluded.revoked, \
-                 unlock_until = excluded.unlock_until"
-            }
-            Backend::Postgres => {
-                "INSERT INTO refresh_token_families \
-                 (device_id, user_id, session_id, family_id, generation, current_hash, \
-                 used_hashes, issued_at, expires_at, rotated_at, revoked, unlock_until) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
-                 ON CONFLICT (device_id) DO UPDATE SET \
-                 user_id = excluded.user_id, session_id = excluded.session_id, \
-                 family_id = excluded.family_id, generation = excluded.generation, \
-                 current_hash = excluded.current_hash, used_hashes = excluded.used_hashes, \
-                 issued_at = excluded.issued_at, expires_at = excluded.expires_at, \
-                 rotated_at = excluded.rotated_at, revoked = excluded.revoked, \
-                 unlock_until = excluded.unlock_until"
-            }
-        };
+                 unlock_until = excluded.unlock_until";
         sqlx::query(sql)
             .bind(record.device_id.to_string())
             .bind(record.user_id.to_string())
@@ -190,14 +162,7 @@ impl RefreshTokenRepo for SqlxRefreshTokenRepo {
     }
 
     async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE refresh_token_families SET revoked = 1 WHERE user_id = ? AND revoked = 0"
-            }
-            Backend::Postgres => {
-                "UPDATE refresh_token_families SET revoked = 1 WHERE user_id = $1 AND revoked = 0"
-            }
-        };
+        let sql = "UPDATE refresh_token_families SET revoked = 1 WHERE user_id = ? AND revoked = 0";
         let result = sqlx::query(sql)
             .bind(user_id.to_string())
             .execute(&self.pool)
