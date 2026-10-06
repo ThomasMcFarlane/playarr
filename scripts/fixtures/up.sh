@@ -41,6 +41,9 @@ fi
 echo "==> generating fixture media"
 node "${FIX_SCRIPT_DIR}/media.mjs" "${FIX_MEDIA_DIR}"
 
+echo "==> generating placeholder artwork"
+node "${FIX_SCRIPT_DIR}/art.mjs" "${FIX_MEDIA_DIR}/art"
+
 # 3. Stub Sonarr/Radarr/Dubarr.
 if ! alive "${FIX_RUN_DIR}/stub.pid"; then
   echo "==> starting source stub on 127.0.0.1:${FIX_STUB_PORT}"

@@ -2,7 +2,7 @@
 # Apple TV AE0 parity capture — mirrors clients/android/tools/parity_ae0.py
 #
 # 1) Expects Playwright web-ref PNGs already under $WEB_REF_DIR (1920×1080),
-#    captured from https://playarr.app (auth + dark theme).
+#    captured from the local fixture web client (placeholder library, dark theme).
 # 2) Serves them on the Mac at :8765, launches PlayarrTV with
 #    -PlayarrParityScreen <id> -PlayarrParityWebRefBaseURL http://127.0.0.1:8765
 # 3) simctl screenshots → $OUT_DIR/native
@@ -83,7 +83,7 @@ for (const id of screens) {
 }
 const summary = {
   generatedAt: new Date().toISOString(),
-  track: 'web-ref paint vs playarr.app',
+  track: 'web-ref paint vs fixture web client',
   tolerancePct: 0.1,
   results,
   allPass: results.every((r) => r.ok),

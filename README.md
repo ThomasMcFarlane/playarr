@@ -36,7 +36,7 @@
 <td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-series-detail.png" alt="Series detail page listing a season of episodes" width="420"><br><sub><b>Series detail</b><br>Seasons, episodes and one-click resume.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-music-album.png" alt="Music album page with cover art and track list" width="420"><br><sub><b>Music album</b><br>Cover art, track list and now-playing line.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-calendar.png" alt="Calendar page listing an upcoming episode" width="420"><br><sub><b>Calendar</b><br>Upcoming episodes and releases from your source apps.</sub></td>
 <td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-movies-library.png" alt="Movies library grid with alphabet scrubber" width="420"><br><sub><b>Movies library</b><br>Artwork grid with an A to Z scrubber and filters.</sub></td>
 </tr>
 <tr>
@@ -48,7 +48,7 @@
 </tr>
 </table>
 
-<p align="center"><sub>The demo library uses openly licensed films and music; see <a href="#third-party-media">Third-party media</a> for the full attribution.</sub></p>
+<p align="center"><sub>The demo library is a placeholder library with generated artwork; no real titles or artwork are shown.</sub></p>
 
 # Playarr Server / Playarr
 
@@ -270,51 +270,10 @@ Please do not report vulnerabilities in public issues. See [`SECURITY.md`](SECUR
 Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org,
 is licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
 (see <https://peach.blender.org/about/>). It is used only by the Google Play
-review demo server (`clients/tv-web/apps/play-review-server`), in the Android
-Play store screenshots (`clients/android/fastlane/metadata/android/en-US/images/`)
-and in the README screenshots. It is not distributed in the app. The licence does not
-cover Blender or Big Buck Bunny logos or trademarks, and none are used.
-
-The screenshots in this README were taken against a demo library built only from
-openly licensed films and music. These titles appear only in the README screenshots
-and are not distributed in the app. Each is used under the licence shown, with
-credit to the holder.
-
-<details>
-<summary>Films and series (Blender Foundation and Blender Studio)</summary>
-
-| Title | Credit | Licence | Source |
-|---|---|---|---|
-| Big Buck Bunny (2008) | (c) copyright 2008, Blender Foundation, www.bigbuckbunny.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm) |
-| Sintel (2010) | (c) copyright Blender Foundation, www.sintel.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Sintel_movie_4K.webm) |
-| Tears of Steel (2012) | (CC) Blender Foundation, mango.blender.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tears_of_Steel_1080p.webm) |
-| Elephants Dream (2006) | (c) copyright 2006, Blender Foundation / Netherlands Media Art Institute, www.elephantsdream.org; poster by Bassam Kurdali, Andy Goralczyk and the Blender Foundation (CC BY 4.0) | [CC BY 2.5](https://creativecommons.org/licenses/by/2.5/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm) |
-| Spring (2019) | (c) Blender Studio, studio.blender.org; poster by Francesco Siddi | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spring_-_Blender_Open_Movie.webm) |
-| Sprite Fright (2021) | (c) Blender Studio, studio.blender.org | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Sprite_Fright_-_Open_Movie_by_Blender_Studio.webm) |
-| Charge (2022) | (c) Blender Studio, studio.blender.org | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Charge_-_Blender_Open_Movie-full_movie.webm) |
-| Caminandes: Llama Drama, Gran Dillama and Llamigos (series, 2013 onwards) | (c) Blender Foundation, www.caminandes.com (Pablo Vazquez, Beorn Leonard, Francesco Siddi) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Llama Drama](https://commons.wikimedia.org/wiki/File:Caminandes-_Llama_Drama_-_Short_Movie.ogv), [Gran Dillama](https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip), [Llamigos](https://commons.wikimedia.org/wiki/File:Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm) |
-
-Posters and backdrops are the project posters or single frames taken from the films. The
-screenshot library uses small re-encodes, and episode air dates in the demo catalogue are approximate.
-
-</details>
-
-<details>
-<summary>Music (archive.org)</summary>
-
-Only metadata and cover art come from these releases; the audio in the demo library is synthetic.
-
-| Album | Credit | Licence | Source |
-|---|---|---|---|
-| The Black Hole | Chris Zabriskie | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [archive.org](https://archive.org/details/cz-blackhole) |
-| Directionless EP | Broke For Free | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/DirectionlessEP) |
-| Music For Podcasts 2 | Lee Rosevere | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/MusicForPodcasts02) |
-| Music For Podcasts 4 | Lee Rosevere | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [archive.org](https://archive.org/details/MusicForPodcasts04) |
-| Harmony | Gurdonark and Lee Rosevere | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [archive.org](https://archive.org/details/Gurdonark_LeeRosevere_Harmony) |
-
-The cover art sits inside each CC BY item; no item page states a separate cover-art licence.
-
-</details>
+review demo server (`clients/tv-web/apps/play-review-server`). It is not distributed
+in the app. The licence does not cover Blender or Big Buck Bunny logos or trademarks,
+and none are used. Every screenshot in this repository is taken against a placeholder
+library with generated artwork.
 
 ## Licence
 
