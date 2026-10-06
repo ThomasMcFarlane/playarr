@@ -66,40 +66,61 @@
       "web": {
         "path": "/calendar"
       },
-      "native": null,
-      "missing": "The tvOS client has no calendar screen yet."
+      "native": "calendar"
     },
     {
       "id": "profile-switcher",
       "web": {
         "path": "/profiles"
       },
-      "native": null,
-      "missing": "Profile switcher needs a signed-out launch route; not wired yet."
+      "native": "profiles"
     },
     {
       "id": "player-controls",
       "web": {
-        "path": "/__none"
+        "file": {
+          "title": "Test Movie A"
+        },
+        "steps": [
+          {
+            "type": "pauseAt",
+            "seconds": 2
+          },
+          {
+            "type": "revealControls"
+          }
+        ]
       },
-      "native": null,
-      "missing": "Player parity needs a playback route; not wired yet."
+      "native": "player:Test Movie A"
     },
     {
       "id": "player-quality-menu",
       "web": {
-        "path": "/__none"
+        "file": {
+          "title": "Test Movie A"
+        },
+        "steps": [
+          {
+            "type": "pauseAt",
+            "seconds": 2
+          },
+          {
+            "type": "revealControls"
+          },
+          {
+            "type": "openQualityMenu"
+          }
+        ]
       },
-      "native": null,
-      "missing": "The tvOS player has no quality menu yet."
+      "native": "player:Test Movie A:quality"
     },
     {
       "id": "household-blocked",
       "web": {
         "path": "/"
       },
-      "native": null,
-      "missing": "Needs a per-screen user launch route; not wired yet."
+      "native": "household-blocked",
+      "user": "fx-child-locked"
     }
   ]
 }

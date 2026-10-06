@@ -117,6 +117,9 @@ jobs:
           fi
 
       - name: Capture the web reference
+        env:
+          # The runner's Google Chrome plays the H.264 fixture clips the player screens need.
+          PARITY_CHROME_CHANNEL: chrome
         run: |
           node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
             "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/reference"
