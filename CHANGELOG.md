@@ -75,6 +75,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Web title detail: an Add to Playlist pill beside Add to watchlist, and a Download button in each season heading of a series (shown when downloads are allowed); both open the existing playlist picker and download quality drawer.
 - iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
 - iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
 - Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.

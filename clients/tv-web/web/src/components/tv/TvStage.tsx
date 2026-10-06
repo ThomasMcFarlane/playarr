@@ -143,6 +143,7 @@ export function TvMediaTrack({
   className = "",
   onFocusCapture,
   overlay,
+  headingAction,
   children,
 }: {
   title: ReactNode;
@@ -156,6 +157,8 @@ export function TvMediaTrack({
   className?: string;
   onFocusCapture?: FocusEventHandler<HTMLElement>;
   overlay?: ReactNode;
+  /** A button at the right of the heading (for example the season Download action). */
+  headingAction?: ReactNode;
   children: ReactNode;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -175,6 +178,7 @@ export function TvMediaTrack({
           <h2>{title}</h2>
           {meta !== undefined ? <span>{meta}</span> : null}
         </div>
+        {headingAction}
       </header>
       <div
         className={`tv-media-track-window${

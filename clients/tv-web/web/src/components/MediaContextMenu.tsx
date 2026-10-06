@@ -681,6 +681,26 @@ export function useMediaContextMenu({
     }
   }, [activeItem, busyAction, client]);
 
+  /**
+   * Opens the drawer straight on one action, for a visible button instead of a
+   * hold gesture: the Add to Playlist button on a title and the season
+   * Download button. The action runs once the item is active.
+   */
+  const [pendingAction, setPendingAction] = useState<"playlists" | "download" | null>(null);
+  const openAction = useCallback(
+    (action: "playlists" | "download", item: MediaContextItem, origin: HTMLElement) => {
+      open(item, origin, false);
+      setPendingAction(action);
+    },
+    [open]
+  );
+  useEffect(() => {
+    if (!pendingAction || !activeItem) return;
+    setPendingAction(null);
+    if (pendingAction === "playlists") void openPlaylistPicker();
+    else void download();
+  }, [activeItem, download, openPlaylistPicker, pendingAction]);
+
   const addToPlaylist = useCallback(
     async (playlist: PlaylistResponse, keyboardActivation = false) => {
       const target = playlistTarget(activeItem);
@@ -1322,6 +1342,7 @@ export function useMediaContextMenu({
 
   return {
     itemProps,
+    openAction,
     contextMenu: contextMenu ? createPortal(contextMenu, document.body) : null,
     close,
     isOpen: activeItem !== null,
