@@ -1,1 +1,2 @@
 - Web mobile home: rails and their headings now start at the page gutter instead of being indented by the TV left-fade inset; cards pack from the left at the normal gap.
+- Web mobile home: the Customise Home button no longer overlaps the profile avatar.

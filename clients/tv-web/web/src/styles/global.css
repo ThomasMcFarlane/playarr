@@ -10303,7 +10303,7 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   /* Keep the Customise button clear of the 44px profile avatar in the top-right corner. */
-  .tv-home-customise {
+  .tv-home .tv-home-customise {
     top: calc(var(--mobile-top-inset) + 6px);
     right: calc(var(--mobile-page-gutter) + 52px);
   }
