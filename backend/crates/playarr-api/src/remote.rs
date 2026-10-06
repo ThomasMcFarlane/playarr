@@ -58,6 +58,12 @@ const NOTICE_TTL_MS: i64 = 5 * 60_000;
 const HANDOFF_TTL_MS: i64 = 60_000;
 const STATE_MAX_AGE_MS: i64 = 20_000;
 const MAX_PENDING_PER_TARGET: usize = 5;
+/// A target not seen for this long is deleted (with its pairings revoked) when its account
+/// next registers a device.
+const TARGET_PRUNE_MS: i64 = 30 * 24 * 3_600_000;
+/// An offline target that is this stale and has a fresher twin (same name and platform) is
+/// left out of the target list.
+const DUPLICATE_HIDE_MS: i64 = 24 * 3_600_000;
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -97,6 +103,11 @@ pub struct RegisterTargetRequest {
     pub platform: Option<String>,
     /// Advertised capabilities: `navigate`, `text`, `playback`, `input`, `handoff`.
     pub capabilities: Vec<String>,
+    /// Optional install-independent device fingerprint (for example a hash of the platform's
+    /// per-device identifier). A reinstalled app that presents the same fingerprint on the same
+    /// account reclaims its previous target and pairings instead of adding a duplicate.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -377,18 +388,85 @@ pub async fn register_target_handler(
     let capabilities = validate_capabilities(&body.capabilities)?;
     let device_id = caller_device(&user);
     let existing = state.remote_repo.get_target(device_id).await?;
+    let fingerprint = body
+        .fingerprint
+        .as_deref()
+        .map(|f| clean_text(f, 128))
+        .filter(|f| !f.trim().is_empty());
+    let platform = clean_text(body.platform.as_deref().unwrap_or("unknown"), 32);
+    let now = now_ms();
+    if existing.is_none() {
+        let known = state
+            .remote_repo
+            .list_targets_for_user(user.user_id)
+            .await?;
+        for old in known.iter().filter(|t| t.device_id != device_id) {
+            if reclaims(old, &name, &platform, fingerprint.as_deref(), now) {
+                state
+                    .remote_repo
+                    .reclaim_device(user.user_id, old.device_id, device_id, now)
+                    .await?;
+            }
+        }
+    }
     let target = RemoteTarget {
+        fingerprint,
         device_id,
         user_id: user.user_id,
         name,
-        platform: clean_text(body.platform.as_deref().unwrap_or("unknown"), 32),
+        platform,
         capabilities,
         state: existing.as_ref().and_then(|t| t.state.clone()),
         state_at_ms: existing.as_ref().and_then(|t| t.state_at_ms),
-        last_seen_ms: now_ms(),
+        last_seen_ms: now,
     };
     state.remote_repo.upsert_target(&target).await?;
+    state
+        .remote_repo
+        .prune_stale_targets(user.user_id, now - TARGET_PRUNE_MS, now)
+        .await?;
     Ok(Json(target_response(&target, device_id, now_ms())))
+}
+
+/// Whether a fresh registration is the same physical device as the stale target `old`: the same
+/// fingerprint, or (when either side has none) the same name and platform on an offline target.
+/// Two different fingerprints never match, so two live twins are never merged.
+fn reclaims(
+    old: &RemoteTarget,
+    name: &str,
+    platform: &str,
+    fingerprint: Option<&str>,
+    now: i64,
+) -> bool {
+    match (old.fingerprint.as_deref(), fingerprint) {
+        (Some(a), Some(b)) => a == b,
+        _ => {
+            !is_online(old, now)
+                && old.name.eq_ignore_ascii_case(name)
+                && old.platform.eq_ignore_ascii_case(platform)
+        }
+    }
+}
+
+/// Drops long-offline targets that a fresher target with the same name and platform replaces.
+fn hide_stale_duplicates(targets: Vec<RemoteTarget>, now: i64) -> Vec<RemoteTarget> {
+    let keep: Vec<bool> = targets
+        .iter()
+        .map(|t| {
+            now - t.last_seen_ms <= DUPLICATE_HIDE_MS
+                || !targets.iter().any(|o| {
+                    o.device_id != t.device_id
+                        && o.last_seen_ms > t.last_seen_ms
+                        && o.name.eq_ignore_ascii_case(&t.name)
+                        && o.platform.eq_ignore_ascii_case(&t.platform)
+                })
+        })
+        .collect();
+    targets
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(t, k)| k.then_some(t))
+        .collect()
 }
 
 fn target_response(t: &RemoteTarget, caller: Uuid, now: i64) -> RemoteTargetResponse {
@@ -448,6 +526,7 @@ pub async fn list_targets_handler(
         .remote_repo
         .list_targets_for_user(user.user_id)
         .await?;
+    let targets = hide_stale_duplicates(targets, now);
     Ok(Json(
         targets
             .iter()
@@ -1849,6 +1928,152 @@ mod tests {
         register(&router, &tv, "Living room TV", &CAPABILITIES).await;
         register(&router, &phone, "Phone", &["handoff", "playback"]).await;
         (router, state, user, phone, tv)
+    }
+
+    async fn register_with(router: &Router, d: &Dev, name: &str, fingerprint: Option<&str>) {
+        let (s, _) = call(
+            router,
+            "PUT",
+            "/api/v1/remote/target",
+            &d.token,
+            Some(
+                json!({"name": name, "platform": "android-tv", "capabilities": CAPABILITIES,
+                        "fingerprint": fingerprint}),
+            ),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+    }
+
+    async fn target_ids(router: &Router, d: &Dev) -> Vec<String> {
+        let (s, v) = call(router, "GET", "/api/v1/remote/targets", &d.token, None).await;
+        assert_eq!(s, StatusCode::OK);
+        v.as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["device_id"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    async fn age_target(state: &TestState, id: Uuid, ago_ms: i64) {
+        let mut t = state.app.remote_repo.get_target(id).await.unwrap().unwrap();
+        t.last_seen_ms = now_ms() - ago_ms;
+        state.app.remote_repo.upsert_target(&t).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reinstall_with_the_same_fingerprint_reclaims_target_and_pairings() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![LIB]).await;
+        let phone = dev(&state, user);
+        let tv = dev(&state, user);
+        register_with(&router, &tv, "Den TV", Some("fp-den")).await;
+        register(&router, &phone, "Phone", &["handoff", "playback"]).await;
+        let pairing = pair(&router, &phone, &tv, None).await;
+
+        // Reinstall: new device id, same fingerprint, the old TV is still "online".
+        let tv2 = dev(&state, user);
+        register_with(&router, &tv2, "Den TV", Some("fp-den")).await;
+
+        let ids = target_ids(&router, &phone).await;
+        assert!(ids.contains(&tv2.id.to_string()));
+        assert!(
+            !ids.contains(&tv.id.to_string()),
+            "stale target must be gone"
+        );
+        let (s, v) = call(
+            &router,
+            "GET",
+            "/api/v1/remote/pairings",
+            &phone.token,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        let p = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == pairing.as_str())
+            .expect("pairing survives");
+        assert_eq!(p["target_device_id"], tv2.id.to_string());
+        assert_eq!(p["status"], "active");
+    }
+
+    #[tokio::test]
+    async fn different_fingerprints_are_never_merged() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![LIB]).await;
+        let phone = dev(&state, user);
+        let a = dev(&state, user);
+        let b = dev(&state, user);
+        register_with(&router, &a, "Android TV", Some("fp-a")).await;
+        age_target(&state, a.id, 3 * 3_600_000).await;
+        register_with(&router, &b, "Android TV", Some("fp-b")).await;
+        register(&router, &phone, "Phone", &["handoff"]).await;
+        let ids = target_ids(&router, &phone).await;
+        assert!(ids.contains(&a.id.to_string()) && ids.contains(&b.id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn offline_same_name_target_without_fingerprint_is_reclaimed_but_live_twin_is_not() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![LIB]).await;
+        let phone = dev(&state, user);
+        let live = dev(&state, user);
+        let gone = dev(&state, user);
+        register_with(&router, &live, "Android TV", None).await;
+        register_with(&router, &gone, "Kitchen TV", None).await;
+        age_target(&state, gone.id, 10 * 60_000).await;
+
+        // A live twin with the same name is not taken over.
+        let twin = dev(&state, user);
+        register_with(&router, &twin, "Android TV", None).await;
+        // An offline one with the same name is.
+        let reinstalled = dev(&state, user);
+        register_with(&router, &reinstalled, "Kitchen TV", None).await;
+        register(&router, &phone, "Phone", &["handoff"]).await;
+        let ids = target_ids(&router, &phone).await;
+        assert!(ids.contains(&live.id.to_string()) && ids.contains(&twin.id.to_string()));
+        assert!(!ids.contains(&gone.id.to_string()));
+        assert!(ids.contains(&reinstalled.id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn long_offline_targets_are_pruned_and_stale_duplicates_hidden() {
+        let (router, state) = test_state().await;
+        let user = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user, vec![LIB]).await;
+        let phone = dev(&state, user);
+        let old = dev(&state, user);
+        let lone = dev(&state, user);
+        let twin_old = dev(&state, user);
+        register_with(&router, &old, "Attic TV", Some("fp-old")).await;
+        register_with(&router, &lone, "Cellar TV", Some("fp-lone")).await;
+        register_with(&router, &twin_old, "Den TV", Some("fp-1")).await;
+        age_target(&state, old.id, 40 * 24 * 3_600_000).await;
+        age_target(&state, lone.id, 3 * 24 * 3_600_000).await;
+        age_target(&state, twin_old.id, 2 * 24 * 3_600_000).await;
+        let twin_new = dev(&state, user);
+        register_with(&router, &twin_new, "Den TV", Some("fp-2")).await;
+
+        // Registering pruned the 40-day-old target for good.
+        register(&router, &phone, "Phone", &["handoff"]).await;
+        assert!(state
+            .app
+            .remote_repo
+            .get_target(old.id)
+            .await
+            .unwrap()
+            .is_none());
+        let ids = target_ids(&router, &phone).await;
+        // A lone long-offline target stays listed (offline); the stale twin is hidden.
+        assert!(ids.contains(&lone.id.to_string()));
+        assert!(ids.contains(&twin_new.id.to_string()));
+        assert!(!ids.contains(&twin_old.id.to_string()));
     }
 
     #[tokio::test]

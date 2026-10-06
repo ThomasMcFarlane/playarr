@@ -93,6 +93,7 @@ class RemoteController @Inject constructor(
             name = deviceName(),
             platform = if (television) "android-tv" else "android-mobile",
             capabilities = capabilities,
+            fingerprint = installFingerprint(),
         )
         coroutineScope {
             host.start(this)
@@ -103,6 +104,20 @@ class RemoteController @Inject constructor(
             }
         }
     }
+
+    /**
+     * Hash of the per-device Android id, which survives an app reinstall, so the server can hand
+     * the old target and its pairings to the reinstalled app instead of listing a stale twin.
+     */
+    private fun installFingerprint(): String? = runCatching {
+        val id = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        )?.takeIf { it.isNotBlank() } ?: return null
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest("playarr-remote:$id".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }.getOrNull()
 
     fun deviceName(): String = if (television) {
         android.os.Build.MODEL?.takeIf { it.isNotBlank() }?.let { "Android TV ($it)" } ?: "Android TV"
