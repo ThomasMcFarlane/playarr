@@ -29,7 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Devices
@@ -189,8 +189,9 @@ internal fun PlayarrPlayerChrome(
                     if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                     when (playarrPlayerSurfaceAction(event.nativeKeyEvent.keyCode)) {
                         PlayarrPlayerSurfaceAction.TogglePlayback -> {
+                            val wasVisible = visible
                             showControls()
-                            onTogglePlayback()
+                            if (playarrSurfaceSelectTogglesPlayback(wasVisible)) onTogglePlayback()
                             true
                         }
                         PlayarrPlayerSurfaceAction.SeekBackward -> {
@@ -224,8 +225,9 @@ internal fun PlayarrPlayerChrome(
                     interactionSource = interactionSource,
                     indication = null,
                 ) {
+                    val wasVisible = visible
                     showControls()
-                    onTogglePlayback()
+                    if (playarrSurfaceSelectTogglesPlayback(wasVisible)) onTogglePlayback()
                 },
         )
 
@@ -234,21 +236,6 @@ internal fun PlayarrPlayerChrome(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PlayarrPlayerTopButton(
-                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                    label = playarrString(PlayarrString.CommonBack),
-                    accessibilityLabel = playarrString(PlayarrString.PlayerBackToDetails),
-                    isTelevision = isTelevision,
-                    onClick = { showControls(); onBack() },
-                    modifier = Modifier.focusRequester(backFocusRequester),
-                )
-                PlayarrPlayerTopButton(
-                    icon = Icons.Outlined.PictureInPictureAlt,
-                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
-                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
-                    isTelevision = isTelevision,
-                    onClick = { showControls(); onMinimise() },
-                )
                 if (onPlayOnDevice != null) {
                     PlayarrPlayerTopButton(
                         icon = Icons.Outlined.Devices,
@@ -293,6 +280,29 @@ internal fun PlayarrPlayerChrome(
                         },
                     )
                 }
+            }
+        }
+
+        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
+            Row(
+                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlayarrPlayerTopButton(
+                    icon = Icons.Outlined.PictureInPictureAlt,
+                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
+                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
+                    isTelevision = isTelevision,
+                    onClick = { showControls(); onMinimise() },
+                )
+                PlayarrPlayerTopButton(
+                    icon = Icons.Outlined.Close,
+                    label = playarrString(PlayarrString.PlayerCloseLabel),
+                    accessibilityLabel = playarrString(PlayarrString.PlayerClosePlayer),
+                    isTelevision = isTelevision,
+                    onClick = { onBack() },
+                    modifier = Modifier.focusRequester(backFocusRequester),
+                )
             }
         }
 
@@ -879,8 +889,8 @@ private fun PlayarrPlayerOptionsDialog(
                     PlayarrPlayerMenu.Quality -> items(controls.qualityOptions.size) { index ->
                         val option = controls.qualityOptions[index]
                         PlayerDialogOption(
-                            label = option.label,
-                            detail = option.videoBitrateBps?.let { "${it / 1_000_000} Mbps" },
+                            label = playarrQualityLabel(option.label, option.videoBitrateBps, option.id == "original"),
+                            detail = if (option.id == "original") null else playarrQualityBitrateDetail(option.videoBitrateBps),
                             selected = option.id == controls.activeQualityId,
                         ) { onQuality(option.id) }
                     }

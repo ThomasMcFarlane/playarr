@@ -69,8 +69,8 @@ use crate::auth_extractor::{ensure_can_download, OptionalStreamingUser, Streamin
 use crate::error::ApiError;
 use crate::peer_extractor::PeerSignedRequest;
 use crate::playback::{
-    playback_quality_options, playback_subtitle_options, PlaybackAudioTrackOption,
-    PlaybackQualityOption, PlaybackSubtitleTrackOption,
+    playback_quality_options, playback_subtitle_options, source_bitrate_bps,
+    PlaybackAudioTrackOption, PlaybackQualityOption, PlaybackSubtitleTrackOption,
 };
 use crate::AppState;
 
@@ -2401,7 +2401,7 @@ pub async fn media_download_options_handler(
         }
     };
 
-    let options = playback_quality_options(media_file.bitrate)
+    let options = playback_quality_options(source_bitrate_bps(&media_file, duration_ms))
         .into_iter()
         .map(|option| {
             if option.id == "original" {
@@ -2487,7 +2487,10 @@ async fn media_playback_options(
             Vec::new()
         }),
     );
-    let quality_options = playback_quality_options(media_file.bitrate);
+    let quality_options = playback_quality_options(source_bitrate_bps(
+        &media_file,
+        media_file.duration_ms.unwrap_or(0),
+    ));
     let stored = state
         .user_repo
         .get_media_playback_preferences(user_id, media_file_id)

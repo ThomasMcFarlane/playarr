@@ -31,7 +31,8 @@ class PlayarrSidePanelUsageTest {
         val rawDialogs = uiFiles().filter { it.name != "PlayarrPageScaffold.kt" }
             .filter { Regex("""(^|[^A-Za-z.])Dialog\(""").containsMatchIn(it.readText()) }.map { it.name }
         assertEquals("only the shared sheet frame may open a Dialog", emptyList<String>(), rawDialogs)
-        val closes = uiFiles().filter { it.name != "PlayarrPageScaffold.kt" }
+        // The player overlay's own X (close player) is not a pop-out close button.
+        val closes = uiFiles().filter { it.name != "PlayarrPageScaffold.kt" && it.name != "PlayarrPlayerChrome.kt" }
             .filter { closeIcon.containsMatchIn(it.readText()) }.map { it.name }
         assertEquals("close controls come from PlayarrFiltersSheet's shared icon button", emptyList<String>(), closes)
     }

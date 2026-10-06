@@ -858,6 +858,8 @@ internal enum class PlayarrString(
         "プレイリスト: {{count}}話",
     ),
     PlayerBackToDetails("Back to details", "กลับไปที่หน้ารายละเอียด", "詳細に戻る"),
+    PlayerCloseLabel("Close", "ปิด", "閉じる"),
+    PlayerClosePlayer("Close player", "ปิดเครื่องเล่น", "プレーヤーを閉じる"),
     PlayerMinimise("Minimise player", "ย่อเครื่องเล่น", "プレイヤーを最小化"),
     PlayerMinimiseLabel("Minimise", "ย่อ", "最小化"),
     PlayerClosePlaylist("Close playlist", "ปิดเพลย์ลิสต์", "プレイリストを閉じる"),

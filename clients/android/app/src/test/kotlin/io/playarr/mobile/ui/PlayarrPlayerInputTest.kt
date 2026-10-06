@@ -35,4 +35,37 @@ class PlayarrPlayerInputTest {
         assertEquals(63_000L, coalescedSeekTarget(58_000, null, PLAYER_SEEK_STEP_MS, 0))
         assertEquals(true, PLAYER_SEEK_COALESCE_MS in 400L..600L)
     }
+
+    @Test
+    fun `select on a hidden surface only reveals the controls`() {
+        assertEquals(false, playarrSurfaceSelectTogglesPlayback(controlsWereVisible = false))
+        assertEquals(true, playarrSurfaceSelectTogglesPlayback(controlsWereVisible = true))
+    }
+
+    @Test
+    fun `dedicated media keys are not surface actions`() {
+        assertNull(playarrPlayerSurfaceAction(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+        assertNull(playarrPlayerSurfaceAction(KeyEvent.KEYCODE_MEDIA_PLAY))
+        assertNull(playarrPlayerSurfaceAction(KeyEvent.KEYCODE_MEDIA_PAUSE))
+        assertEquals(PlayarrMediaControlAction.TogglePlayback, playarrMediaControlAction(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+    }
+
+    @Test
+    fun `quality bitrate detail never shows zero`() {
+        assertEquals("24.3 Mbps", playarrQualityBitrateDetail(24_300_000L))
+        assertEquals("8 Mbps", playarrQualityBitrateDetail(8_000_000L))
+        assertEquals("0.8 Mbps", playarrQualityBitrateDetail(800_000L))
+        assertNull(playarrQualityBitrateDetail(0L))
+        assertNull(playarrQualityBitrateDetail(-5L))
+        assertNull(playarrQualityBitrateDetail(null))
+        assertNull(playarrQualityBitrateDetail(20_000L))
+    }
+
+    @Test
+    fun `original label carries the bitrate only when known`() {
+        assertEquals("Original · 24.3 Mbps", playarrQualityLabel("Original", 24_300_000L, true))
+        assertEquals("Original", playarrQualityLabel("Original", null, true))
+        assertEquals("Original", playarrQualityLabel("Original", 0L, true))
+        assertEquals("FHD Medium", playarrQualityLabel("FHD Medium", 8_000_000L, false))
+    }
 }

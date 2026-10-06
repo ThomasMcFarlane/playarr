@@ -9,6 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
+- Android player: the top-left back arrow is replaced by an X close button at the top right (with minimise to its left; content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
+- Playback options: the "Original" quality now reports the real source bitrate (`quality_options[0].video_bitrate_bps`); a zero bitrate from the media analysis is ignored and the average is derived from file size and duration, and it is omitted when neither is known. The Android quality menu shows "Original · 24.3 Mbps", or plain "Original" when unknown, instead of "0 Mbps".
 - Replacing a playback (quality or audio switch, or a retry after a failed attempt) no longer fails with `no_transcode_capacity` while the viewer's previous transcode still holds the node's only slot; the earlier transcode is stopped before admission.
 - HarmonyOS client: fix the ArkTS compile errors (API 18 `ColorMode` names, strict typing, builder syntax, renamed component props, the `PlayarrClient` file rename) so `scripts/build.sh release` produces the unsigned HAP and the app bundle.
 - Peer sync now skips a peer record that has no known address instead of failing a cycle on it every minute, and logs one rate-limited "peer has no known address" warning naming the peer.
