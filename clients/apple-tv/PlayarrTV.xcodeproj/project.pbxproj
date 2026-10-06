@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */; };
 		226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */; };
 		31DC9F51BED1EEE01A240A21 /* TVAppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A3F02E31E21A4B6C76F061 /* TVAppEnvironment.swift */; };
 		4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D582C12CA26152EFDEE5953 /* TVRootView.swift */; };
@@ -40,6 +41,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebLayout.swift; sourceTree = "<group>"; };
 		12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDetailView.swift; sourceTree = "<group>"; };
 		12FAD6061A7EC7A3F76D02CF /* TVServerAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVServerAddressTests.swift; sourceTree = "<group>"; };
 		2D582C12CA26152EFDEE5953 /* TVRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVRootView.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
 				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
 				A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */,
 				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
+				9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */,
 				6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */,
 				6A1B2C3D4E5F60718293A4C0 /* PlayarrLogoAsset.swift */,
 				6A1B2C3D4E5F60718293A4D2 /* TVParityArtwork.swift */,
@@ -247,6 +250,7 @@
 				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
 				A1B2C3D4E5F60718293A4F1 /* TVDisplayPreferences.swift in Sources */,
 				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
+				43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */,
 				6A1B2C3D4E5F60718293A4B6 /* TVTheme.swift in Sources */,
 				6A1B2C3D4E5F60718293A4C1 /* PlayarrLogoAsset.swift in Sources */,
 				6A1B2C3D4E5F60718293A4D3 /* TVParityArtwork.swift in Sources */,

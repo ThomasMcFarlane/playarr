@@ -458,18 +458,26 @@ struct TVSecondaryButton: View {
 
 /// Floating left rail matching `.app-nav` on the web shell.
 enum TVNavTab: String, CaseIterable, Identifiable {
+    case downloads
     case search
     case home
     case series
     case movies
     case music
     case playlists
+    case watchlist
+    case requests
+    case calendar
     case settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .downloads: return "Downloads"
+        case .watchlist: return "Watchlist"
+        case .requests: return "Requests"
+        case .calendar: return "Calendar"
         case .search: return "Search"
         case .home: return "Home"
         case .series: return "Series"
@@ -483,6 +491,10 @@ enum TVNavTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         // Prefer SF symbols that mirror the SPA phosphor/icon set silhouette.
         switch self {
+        case .downloads: return "arrow.down.to.line"
+        case .watchlist: return "bookmark"
+        case .requests: return "text.badge.plus"
+        case .calendar: return "calendar"
         case .search: return "magnifyingglass"
         case .home: return "house"
         case .series: return "tv"
@@ -526,13 +538,22 @@ struct TVFloatingNav: View {
     /// When true, the active tab is the preferred default focus target.
     var preferDefaultFocus: Bool = false
 
-    private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
+    /// Same three groups as the web shell (`.app-nav`). Music joins the browse group only when
+    /// the library has music (`showMusic`).
+    private var navGroups: [[TVNavTab]] {
+        [
+            [.downloads, .search],
+            [.home, .series, .movies] + (showMusic ? [.music] : []),
+            [.playlists, .watchlist, .requests, .calendar],
+        ]
+    }
+    var showMusic: Bool = false
 
     var body: some View {
         // Whole nav is one centred column (web: top 50% + translateY(-50%)).
         // Settings sits just under the primary group, not pinned to the footer.
         VStack(spacing: 14) {
-            navGroup(tabs: primaryTabs)
+            ForEach(navGroups, id: \.self) { navGroup(tabs: $0) }
             if showSettings {
                 navGroup(tabs: [.settings])
             }
@@ -641,8 +662,34 @@ struct TVParityFocusChrome: ViewModifier {
 struct TVShellHeader: View {
     /// Frozen clock for parity suite (matches Android mask strategy).
     var frozenClock: Bool = false
+    /// Web places the clock after the page header: x 492.4 on Home, 568.8 elsewhere.
+    var clockLeading: CGFloat? = nil
 
     var body: some View {
+        if let clockLeading {
+            ZStack(alignment: .topLeading) {
+                PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
+                    .placed(x: 60.6, y: 60.2)
+                HStack(spacing: 11.2) {
+                    Text(frozenClock ? "05:59" : Self.liveTimeString())
+                        .font(TVTheme.font(size: 17.28, weight: .bold))
+                        .tracking(-0.52)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text(frozenClock ? "WED 29 JULY" : Self.liveDateString())
+                        .font(TVTheme.font(size: 11.14, weight: .semibold))
+                        .tracking(0.45)
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                }
+                .placed(x: clockLeading, y: 68.2, h: 25.9)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .allowsHitTesting(false)
+        } else {
+            legacyBody
+        }
+    }
+
+    private var legacyBody: some View {
         ZStack {
             // Clock is centred on the live SPA header.
             HStack(spacing: 11) {

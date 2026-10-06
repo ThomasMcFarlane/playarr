@@ -178,6 +178,10 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     ) async throws -> CatalogPage
 
     func searchCatalog(query: String, limit: Int?) async throws -> [Work]
+    /// `GET /api/v1/home/rails`: the server-computed Home shelves (the same rails the web client shows).
+    func fetchHomeRails() async throws -> [HomeRail]
+    /// `GET /api/v1/catalog/{id}/availability-lag` for a series.
+    func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag?
     func fetchWork(id: UUID) async throws -> WorkDetail
     func fetchWorkCredits(id: UUID) async throws -> WorkCredits
     func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work]
@@ -403,6 +407,15 @@ public final class APIClient: PlayarrAPIClient {
         // known matches are listed here.
         let response: CatalogSearchResponse = try await get("/api/v1/catalog/search", query: query)
         return response.items
+    }
+
+    public func fetchHomeRails() async throws -> [HomeRail] {
+        let response: HomeRailsResponse = try await get("/api/v1/home/rails")
+        return response.rails
+    }
+
+    public func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? {
+        try await get("/api/v1/catalog/\(id.uuidString)/availability-lag")
     }
 
     public func fetchWork(id: UUID) async throws -> WorkDetail {
@@ -1072,4 +1085,21 @@ private actor AccessTokenCoordinator {
 /// a peer knows (ignored by the list views).
 struct CatalogSearchResponse: Decodable, Sendable {
     var items: [Work]
+}
+
+/// One server-computed Home shelf.
+public struct HomeRail: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let items: [Work]
+}
+
+struct HomeRailsResponse: Decodable, Sendable {
+    let rails: [HomeRail]
+}
+
+public extension PlayarrAPIClient {
+    /// Defaults for conformers (test doubles) that predate these endpoints.
+    func fetchHomeRails() async throws -> [HomeRail] { [] }
+    func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
 }

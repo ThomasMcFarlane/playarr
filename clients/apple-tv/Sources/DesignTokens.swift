@@ -158,7 +158,7 @@ enum DesignTokens {
         /// First New-movies card art top-left.
         static let homeCardOriginY2: CGFloat = 828
         /// Title block under home card art.
-        static let homeCardTitleBlock: CGFloat = 36
+        static let homeCardTitleBlock: CGFloat = 43
         /// SPA rail heading glyph peak y≈435; card origin y1=489. SwiftUI Text
         /// ascent adds ~9px under frame top, so gap = 489−435+9 ≈ 63.
         static let homeRailHeadingOffsetY: CGFloat = 63
@@ -179,7 +179,7 @@ enum DesignTokens {
         /// SPA detail h2 stacks "10 / Brambleford / Lane". Measured SPA
         /// "Brambleford" glyph run is ~300px at this size; 320 keeps the word
         /// intact while still wrapping "Lane" onto a third line.
-        static let featureTitleMaxWidth: CGFloat = 320
+        static let featureTitleMaxWidth: CGFloat = 455
         // Overview: clamp(0.58rem, 0.67vw, 0.84rem) → ~13.
         static let featureOverviewSize: CGFloat = 13
         /// SPA overview `max-width: 42ch` at small body size ≈ 300.
@@ -299,13 +299,13 @@ enum DesignTokens {
         /// Grid panel width 65% (`.tv-library-grid-panel`)
         static let libraryGridWidthFraction: CGFloat = 0.65
         /// First card art top-left (measured @ 1920×1080 SPA frame).
-        static let libraryCardOriginX: CGFloat = 775
+        static let libraryCardOriginX: CGFloat = 783.5
         static let libraryCardOriginY: CGFloat = 162
         /// Art tile size (16:9) measured from SPA first card.
-        static let libraryCardArtWidth: CGFloat = 330
-        static let libraryCardArtHeight: CGFloat = 186
+        static let libraryCardArtWidth: CGFloat = 327.2
+        static let libraryCardArtHeight: CGFloat = 184
         /// Centre-to-centre pitch of unwatched dots / cards.
-        static let libraryCardPitchX: CGFloat = 348
+        static let libraryCardPitchX: CGFloat = 353
         static let libraryCardPitchY: CGFloat = 240
         /// Title under art.
         static let libraryCardTitleHeight: CGFloat = 28
