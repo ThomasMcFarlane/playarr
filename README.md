@@ -269,11 +269,10 @@ Please do not report vulnerabilities in public issues. See [`SECURITY.md`](SECUR
 
 Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org,
 is licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
-(see <https://peach.blender.org/about/>). It is used only by the Google Play
-review demo server (`clients/tv-web/apps/play-review-server`). It is not distributed
-in the app. The licence does not cover Blender or Big Buck Bunny logos or trademarks,
-and none are used. Every screenshot in this repository is taken against a placeholder
-library with generated artwork.
+(see <https://peach.blender.org/about/>). It is not distributed in the app. The
+licence does not cover Blender or Big Buck Bunny logos or trademarks, and none are
+used. Every screenshot in this repository is taken against a placeholder library
+with generated artwork.
 
 ## Licence
 
