@@ -2289,6 +2289,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Added the 2026-10-07 emulator validation record for the phone remote and playback handoff (`docs/validation/remote-emulator-run-2026-10-07.md`), including what only a real device can prove.
 - Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.
 - Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.
 - README: rebuilt with a banner, a screenshot showcase, light and dark platform and architecture diagrams, collapsible reference sections, and an expanded third-party media attribution for the openly licensed titles shown in the screenshots.
