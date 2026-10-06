@@ -1,0 +1,1 @@
+- Postgres migrations: a second migration shared version 53, so a fresh Postgres database failed part-way through the migration set. The languages migration is renumbered 0078, and a test now fails if any two migrations in a backend share a version.
