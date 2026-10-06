@@ -113,9 +113,11 @@ workloads:
 # Regional standalone servers currently deployed in separate namespaces. The
 # target release places both in one namespace while preserving their distinct
 # node-local state, runtime trees, security identities and public routes.
+# One image shared by every regional instance.
+regionalImage: registry.example.com/playarr-regional:0123abcd
+
 regionalInstances:
   playarr-a:
-    image: registry.example.com/playarr-regional:0123abcd
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: node-a
@@ -219,7 +221,6 @@ regionalInstances:
       cacheDir: /data/acme
 
   playarr-b:
-    image: registry.example.com/playarr-regional:0123abcd
     imagePullPolicy: IfNotPresent
     replicas: 1
     nodeName: node-b

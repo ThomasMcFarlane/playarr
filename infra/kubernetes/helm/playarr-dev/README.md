@@ -49,6 +49,7 @@ this chart manages only the matching Emissary routes.
 | --- | --- | --- |
 | `workloadNodeSelector` | `{}` | Node selector for every development workload. |
 | `workloads` | `{}` | Development workloads, keyed by name. |
+| `regionalImage` | `""` | The single image every regional instance runs, for example `<registry>/playarr-regional:<sha8>`. Required when `regionalInstances` is set. |
 | `regionalInstances` | `{}` | Regional servers, keyed by instance name (also the Deployment, Service and Mapping name). |
 
 ### Regional instance (`regionalInstances.<name>`)
@@ -57,7 +58,6 @@ Required:
 
 | Key | Meaning |
 | --- | --- |
-| `image` | Full image reference, for example `<registry>/playarr-regional:<sha8>`. |
 | `imagePullPolicy` | `IfNotPresent` for immutable SHA tags. |
 | `replicas` | `1` (each instance owns a SQLite database on a local volume). |
 | `nodeName` | Node the instance and its local PV are pinned to. |
@@ -69,7 +69,8 @@ Required:
 | `mediaPath` | Host directory holding the media libraries (mounted read-only). |
 | `routeHost` | Hostname of the Emissary Mapping. |
 
-Optional: `mediaMountPath` (container path for the media mount; defaults to
+Optional: `image` (per-instance override of `regionalImage`; intended to stay
+unused so every instance runs one version), `mediaMountPath` (container path for the media mount; defaults to
 `mediaPath` so the paths reported by the media managers resolve unchanged),
 `peerInternalRoutes`, `sourceInstanceUrls`, `dubarrApiKeySecret`,
 `requestIntegrations`, `ombiApiKeySecret`, `seerrApiKeySecret`, `backup`,
@@ -156,8 +157,11 @@ earlier `streamarr-runtime` image with a `runtimePath` hostPath and a manual
 `ctr images import` is gone. What stays on the node is the state PVC, the media
 hostPath (`mediaPath`, read-only) and the TLS Secret.
 
-The registry is the operator's choice; the image reference (including the tag)
-is a deployment value. `imagePullPolicy: IfNotPresent` suits immutable
+All regional instances share one image, set once as the top-level
+`regionalImage` value; the fleet always runs one version. A per-instance
+`image` still overrides it but is not used in normal operation. The registry is
+the operator's choice; the image reference (including the tag) is a deployment
+value. `imagePullPolicy: IfNotPresent` suits immutable
 commit-SHA tags.
 
 The chart sets `PLAYARR_WEB_ASSETS_DIR=/app/web`, overriding the legacy
@@ -188,8 +192,9 @@ repository, never in this chart:
 
 1. Wait for the `regional-image` workflow to publish the image of the `main`
    commit you want (or build and push it by hand as above).
-2. Set `regionalInstances.<name>.image` to that tag in the deployment values
-   and merge; roll one instance at a time. Never move a pin to an older image.
+2. Set `regionalImage` to that tag in the deployment values and merge; every
+   instance rolls to it, so verify each one in turn. Never move a pin to an
+   older image.
 3. Bump the chart `targetRevision` only when the chart itself changed.
 4. Verify per instance:
 

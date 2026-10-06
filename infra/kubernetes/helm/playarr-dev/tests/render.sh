@@ -52,6 +52,15 @@ grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
 grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 # Regional servers pull a self-contained image from the registry: no hostPath runtime.
 test "$(grep -c 'image: "registry.example.com/playarr-regional:' "$rendered")" -eq 2
+# Both instances take the one shared regionalImage; no per-instance image is set in the example.
+test "$(grep -c '^    image: registry.example.com/playarr-regional' "$chart_dir/values.yaml")" -eq 0
+test "$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalImage=registry.example.com/playarr-regional:feedbeef | grep -c 'image: "registry.example.com/playarr-regional:feedbeef"')" -eq 2
+# A per-instance image remains an optional override.
+override="$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalInstances.playarr-b.image=registry.example.com/playarr-regional:cafe0001)"
+test "$(grep -c 'image: "registry.example.com/playarr-regional:cafe0001"' <<<"$override")" -eq 1
+test "$(grep -c 'image: "registry.example.com/playarr-regional:0123abcd"' <<<"$override")" -eq 1
+# No shared image and no override: the render fails instead of emitting an empty image.
+if helm template playarr-dev "$chart_dir" --namespace playarr --set regionalImage= >/dev/null 2>&1; then echo "render succeeded without any regional image" >&2; exit 1; fi
 if grep -v '^ *#' "$rendered" | grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never'; then echo "forbidden hostPath runtime reference rendered" >&2; exit 1; fi
 # Declarative source-instance URLs reach both regional servers as one env var.
 test "$(grep -c '^            - name: PLAYARR_SOURCE_INSTANCE_URLS$' "$rendered")" -eq 2

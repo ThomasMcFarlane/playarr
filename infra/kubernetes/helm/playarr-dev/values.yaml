@@ -15,6 +15,11 @@ workloadNodeSelector: {}
 # Emissary Mappings. See README.md, "Development workloads".
 workloads: {}
 
+# The one image every regional instance runs, as a single reference such as
+# `<registry>/playarr-regional:<sha8>`. All instances share this value so the
+# whole fleet runs one version. Required whenever `regionalInstances` is set.
+regionalImage: ""
+
 # Self-contained regional Playarr servers, keyed by instance name. Each renders
 # a Deployment, Services, PV/PVC, optional cert-manager Certificate and an
 # Emissary Mapping. See README.md, "Regional instances".

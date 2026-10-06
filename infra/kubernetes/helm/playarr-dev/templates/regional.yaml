@@ -97,7 +97,7 @@ spec:
         {{- toYaml $instance.podSecurityContext | nindent 8 }}
       containers:
         - name: playarr
-          image: {{ $instance.image | quote }}
+          image: {{ required (printf "regionalInstances.%s: set the shared regionalImage (or the optional per-instance image override)" $name) (default $.Values.regionalImage $instance.image) | quote }}
           imagePullPolicy: {{ $instance.imagePullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
