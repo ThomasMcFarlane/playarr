@@ -1,0 +1,1 @@
+- CI: the `parity-apple` workflow gains an `ios` platform that captures the iOS app on an iPhone 14 simulator (390x844 points at 3x) against the web mobile reference; the iOS app gains debug-only launch arguments to sign in and open a screen.

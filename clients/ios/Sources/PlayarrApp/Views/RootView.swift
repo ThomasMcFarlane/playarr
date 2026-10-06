@@ -38,6 +38,16 @@ struct RootView: View {
         .preferredColorScheme(preferredColourScheme)
         .updateGate(updateViewModel)
         .task {
+            #if DEBUG
+            if ParityLaunch.isActive, let server = ParityLaunch.server, let user = ParityLaunch.user {
+                try? await environment.signIn(
+                    serverURL: server,
+                    username: user,
+                    password: ParityLaunch.password ?? ""
+                )
+                return
+            }
+            #endif
             await environment.restoreSessionState()
             await updateViewModel.checkForUpdate()
         }
@@ -126,7 +136,17 @@ private struct AuthenticatedPlayarrShell: View {
             apiClient: environment.apiClient,
             workID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         ))
-        if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
+        if let screen = ParityLaunch.screen {
+            switch screen {
+            case "movies": _selected = State(initialValue: .library(.movie))
+            case "series": _selected = State(initialValue: .library(.series))
+            case "search": _selected = State(initialValue: .search)
+            case "settings": _selected = State(initialValue: .settings)
+            case "profiles": _selected = State(initialValue: .profiles)
+            case "detail-film", "detail-series": _selected = State(initialValue: .detail)
+            default: break
+            }
+        } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
             _selected = State(initialValue: .profiles)
         } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-library") {
             _selected = State(initialValue: .library(.movie))
@@ -153,6 +173,12 @@ private struct AuthenticatedPlayarrShell: View {
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
+            #if DEBUG
+            if let title = ParityLaunch.title,
+               let match = try? await environment.apiClient.searchCatalog(query: title, limit: 5).first {
+                demoDetailViewModel = WorkDetailViewModel(apiClient: environment.apiClient, workID: match.id)
+            }
+            #endif
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
         }
         .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
@@ -171,7 +197,7 @@ private struct AuthenticatedPlayarrShell: View {
             }
         case .search:
             NavigationStack {
-                LibraryView(kind: nil, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository, title: "Search")
+                LibraryView(kind: nil, apiClient: environment.apiClient, downloadRepository: environment.downloadRepository, title: "Search", initialQuery: parityQuery)
             }
         case .library(let kind):
             NavigationStack {
@@ -201,9 +227,18 @@ private struct AuthenticatedPlayarrShell: View {
                     apiClient: environment.apiClient,
                     downloadRepository: environment.downloadRepository
                 )
+                .id(demoDetailViewModel.workID)
             }
         #endif
         }
+    }
+
+    private var parityQuery: String? {
+        #if DEBUG
+        ParityLaunch.query
+        #else
+        nil
+        #endif
     }
 
     private var chrome: some View {

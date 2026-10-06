@@ -9,8 +9,9 @@ struct LibraryView: View {
     @State private var showingFilters = false
     @State private var downloadTarget: Work?
 
-    init(kind: WorkKind?, apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository, title: String? = nil) {
+    init(kind: WorkKind?, apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository, title: String? = nil, initialQuery: String? = nil) {
         let viewModel = LibraryViewModel(apiClient: apiClient)
+        if let initialQuery { viewModel.searchText = initialQuery }
         viewModel.selectedKind = kind
         viewModel.isSearchMode = kind == nil
         _viewModel = State(initialValue: viewModel)
