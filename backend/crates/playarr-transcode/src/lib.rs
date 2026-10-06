@@ -2197,17 +2197,22 @@ mod tests {
             assert_eq!(after_expiry, None);
         }
 
+        #[cfg(unix)]
         #[tokio::test]
         async fn reaper_stops_processes_whose_session_expired_from_the_cache() {
             let counter = ActiveSessionCounter::new();
             let root = unique_tmp_dir();
+            // A process that stays alive: `/usr/bin/true` may already have
+            // exited, in which case the reaper's finished-child pass releases
+            // the slot before the first assertion (a race).
+            let sleeper = sleeping_ffmpeg(&root).await;
             let orchestrator = TranscodeOrchestrator::new(
                 Arc::new(FakeRenditionRepo::default()),
                 Arc::new(InMemory::new()),
                 counter.clone(),
             )
-            .with_ffmpeg_binary("/usr/bin/true")
-            .with_output_root(root)
+            .with_ffmpeg_binary(sleeper.to_string_lossy().into_owned())
+            .with_output_root(root.join("output"))
             .with_session_ttl(Duration::from_millis(500));
             let session = orchestrator
                 .spawn_on_demand_transcode(&sample_media_file(), "h264-720p-4mbps", "node-a")
@@ -2608,6 +2613,202 @@ mod tests {
                 .lock()
                 .await
                 .contains_key(&first.id));
+        }
+
+        #[cfg(unix)]
+        fn slot_orchestrator(
+            ffmpeg: &str,
+            output_root: PathBuf,
+            cache: Arc<InMemory>,
+            counter: ActiveSessionCounter,
+        ) -> TranscodeOrchestrator {
+            TranscodeOrchestrator::new(Arc::new(FakeRenditionRepo::default()), cache, counter)
+                .with_ffmpeg_binary(ffmpeg)
+                .with_output_root(output_root)
+                .with_session_ttl(Duration::from_millis(150))
+                .with_max_concurrent_sessions(1)
+        }
+
+        /// A browser killed mid-playback never sends a stop and never asks for
+        /// another segment. The running idle reaper must hand the slot back
+        /// within the idle TTL plus one reaper interval.
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn abandoned_client_frees_its_slot_within_the_idle_ttl() {
+            let root = unique_tmp_dir();
+            let sleeper = sleeping_ffmpeg(&root).await;
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = Arc::new(slot_orchestrator(
+                &sleeper.to_string_lossy(),
+                root.join("output"),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            ));
+            let media_file = sample_media_file();
+            let session = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .unwrap();
+            let reaper = tokio::spawn(
+                orchestrator
+                    .clone()
+                    .run_idle_reaper(Duration::from_millis(25)),
+            );
+
+            // The client keeps polling for a while: still held.
+            for _ in 0..4 {
+                tokio::time::sleep(Duration::from_millis(60)).await;
+                assert!(orchestrator
+                    .lookup_session(session.id)
+                    .await
+                    .unwrap()
+                    .is_some());
+            }
+            assert!(matches!(
+                orchestrator
+                    .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                    .await,
+                Err(TranscodeError::NoCapacity)
+            ));
+
+            // The client disappears. Capacity must return in well under 2s.
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+            let second = loop {
+                match orchestrator
+                    .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                    .await
+                {
+                    Ok(session) => break session,
+                    Err(TranscodeError::NoCapacity) if tokio::time::Instant::now() < deadline => {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                    Err(error) => panic!("slot never came back: {error}"),
+                }
+            };
+            assert_eq!(counter.get(), 1);
+            assert!(orchestrator
+                .lookup_session(session.id)
+                .await
+                .unwrap()
+                .is_none());
+            reaper.abort();
+            orchestrator.expire_session(second.id).await.unwrap();
+            assert_eq!(counter.get(), 0);
+        }
+
+        /// ffmpeg that fails straight away (bad input, missing codec) must not
+        /// keep the slot while its session record lingers for the TTL.
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn failed_ffmpeg_frees_its_slot_immediately() {
+            let root = unique_tmp_dir();
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = slot_orchestrator(
+                "/usr/bin/false",
+                root.join("output"),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            );
+            let media_file = sample_media_file();
+            orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            for profile in ["profile-b", "profile-c"] {
+                let session = orchestrator
+                    .spawn_on_demand_transcode(&media_file, profile, "node-a")
+                    .await
+                    .expect("a crashed ffmpeg must not hold the only slot");
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                drop(session);
+            }
+            orchestrator.reap_finished_children().await;
+            assert_eq!(counter.get(), 0);
+        }
+
+        /// Slots are node-local and in-memory: a restarted server starts with
+        /// every slot free even though the shared cache still holds the dead
+        /// process's session rows.
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn restart_starts_with_all_slots_free_despite_stale_cache_rows() {
+            let root = unique_tmp_dir();
+            let sleeper = sleeping_ffmpeg(&root).await;
+            let cache = Arc::new(InMemory::new());
+            let before = slot_orchestrator(
+                &sleeper.to_string_lossy(),
+                root.join("output"),
+                cache.clone(),
+                ActiveSessionCounter::new(),
+            );
+            let media_file = sample_media_file();
+            let stale = before
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .unwrap();
+            // Process exit: the orchestrator (and with `kill_on_drop` its
+            // ffmpeg) goes away; the cache row survives.
+            drop(before);
+
+            let counter = ActiveSessionCounter::new();
+            let after = slot_orchestrator(
+                &sleeper.to_string_lossy(),
+                root.join("output"),
+                cache,
+                counter.clone(),
+            );
+            assert_eq!(counter.get(), 0);
+            let fresh = after
+                .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                .await
+                .expect("a restarted node has every slot free");
+            assert_ne!(fresh.id, stale.id);
+            after.expire_session(fresh.id).await.unwrap();
+            assert_eq!(counter.get(), 0);
+        }
+
+        /// Replacing a playback session's transcode hands the slot over.
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn superseded_session_releases_its_slot() {
+            let root = unique_tmp_dir();
+            let sleeper = sleeping_ffmpeg(&root).await;
+            let counter = ActiveSessionCounter::new();
+            let orchestrator = slot_orchestrator(
+                &sleeper.to_string_lossy(),
+                root.join("output"),
+                Arc::new(InMemory::new()),
+                counter.clone(),
+            );
+            let media_file = sample_media_file();
+            let playback = Uuid::new_v4();
+            let first = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-a", "node-a")
+                .await
+                .unwrap();
+            orchestrator
+                .associate_playback_session(playback, first.id)
+                .await
+                .unwrap();
+            orchestrator
+                .expire_playback_session(playback)
+                .await
+                .unwrap();
+            assert_eq!(counter.get(), 0);
+            let second = orchestrator
+                .spawn_on_demand_transcode(&media_file, "profile-b", "node-a")
+                .await
+                .expect("slot returned by the stop");
+            orchestrator
+                .associate_playback_session(playback, second.id)
+                .await
+                .unwrap();
+            orchestrator
+                .expire_playback_session(playback)
+                .await
+                .unwrap();
+            assert_eq!(counter.get(), 0);
         }
 
         #[tokio::test]

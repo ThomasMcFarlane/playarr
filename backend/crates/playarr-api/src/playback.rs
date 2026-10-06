@@ -676,6 +676,35 @@ impl SessionSeed {
 /// `start_analytics_session`'s doc comment for why this exists.
 const DUPLICATE_SESSION_WINDOW: chrono::Duration = chrono::Duration::seconds(10);
 
+/// Stops the on-demand transcodes of the viewer's still-open playback
+/// sessions for the same title on the same device, which a new transcode is
+/// about to replace (see `start_analytics_session`, which closes the
+/// bookkeeping afterwards). Called before admission so the replaced
+/// transcode's node-local slot is available to its own replacement.
+async fn release_replaced_transcodes(state: &AppState, seed: &SessionSeed) {
+    let replaced: Vec<Uuid> = state
+        .session_registry
+        .list_all()
+        .into_iter()
+        .filter(|existing| {
+            existing.user_id == seed.user_id
+                && existing.device_id == seed.device_id
+                && existing.media_file_id == seed.media_file_id
+                && existing.ended_at.is_none()
+        })
+        .map(|existing| existing.id)
+        .collect();
+    for old_id in replaced {
+        if let Err(err) = state.transcode.expire_playback_session(old_id).await {
+            tracing::warn!(
+                session_id = %old_id,
+                error = %err,
+                "failed to stop the transcode being replaced"
+            );
+        }
+    }
+}
+
 /// Writes `session`'s start through `AnalyticsCollector::on_session_start`,
 /// returning the session's id -- unless an open session for the exact same
 /// `(user_id, device_id, media_file_id)` was already recorded within
@@ -1229,6 +1258,13 @@ pub(crate) async fn negotiate_playback(
     }
 
     // Step 3, last resort: spawn a new on-demand transcode.
+    //
+    // The viewer is replacing their own playback (quality/audio switch, or a
+    // retry after a failed attempt). Stop their earlier transcodes for this
+    // title and device *before* admission, otherwise the old one keeps the
+    // node-local slot and the replacement is refused with
+    // `no_transcode_capacity` until the idle reaper catches up.
+    release_replaced_transcodes(state, &seed).await;
     let source_offset_ms = if duration_ms > 0 {
         query.start_position_ms.min(duration_ms.saturating_sub(1))
     } else {
@@ -3177,6 +3213,76 @@ mod tests {
             .unwrap()
             .is_some());
         assert_eq!(state.app.transcode.active_session_count(), 1);
+    }
+
+    /// Writes a stand-in ffmpeg that stays alive, so a transcode keeps its
+    /// admission slot until something stops it.
+    #[cfg(unix)]
+    fn sleeping_ffmpeg_binary() -> String {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("playarr-slot-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ffmpeg-sleeper");
+        std::fs::write(&path, "#!/bin/sh\nexec /usr/bin/sleep 30\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    /// With the default single node-local slot, a viewer who replaces their
+    /// own playback (quality or audio switch, or a retry after a decoder
+    /// failure) must not be refused with `no_transcode_capacity` just because
+    /// their previous transcode still holds the slot: it is superseded, so
+    /// its slot is handed over before admission. Covers both the case inside
+    /// the duplicate-session window and the one after it.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn replacing_playback_hands_the_single_slot_to_the_new_transcode() {
+        for age_seconds in [0, 60] {
+            let (router, state) =
+                crate::test_support::test_state_with_ffmpeg(&sleeping_ffmpeg_binary(), 1).await;
+            let mut file = media_file();
+            file.container = "mp4".to_string();
+            file.codec = "h264".to_string();
+            let id = file.id;
+            let source_instance_id = file.source_instance_id;
+            state.media_files.insert(file);
+            let user_id = Uuid::new_v4();
+            seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+            let token = mint_access_token(&state, user_id);
+            let request = |profile: &str| {
+                get_with_connect_info(
+                    format!(
+                        "/api/v1/playback/{id}?containers=mp4&video_codecs=h264&force_transcode=true&profile={profile}"
+                    ),
+                    &token,
+                )
+            };
+
+            let first = router
+                .clone()
+                .oneshot(request("h264-480p-2mbps"))
+                .await
+                .unwrap();
+            assert_eq!(first.status(), StatusCode::OK);
+            let first: PlaybackInfoResponse = serde_json::from_slice(
+                &axum::body::to_bytes(first.into_body(), usize::MAX)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(state.app.transcode.active_session_count(), 1);
+
+            state.app.session_registry.update(first.session_id, &|s| {
+                s.started_at -= chrono::Duration::seconds(age_seconds);
+            });
+            let second = router.oneshot(request("h264-720p-4mbps")).await.unwrap();
+            assert_eq!(
+                second.status(),
+                StatusCode::OK,
+                "replacement after {age_seconds}s must not hit no_transcode_capacity"
+            );
+            assert_eq!(state.app.transcode.active_session_count(), 1);
+        }
     }
 
     #[tokio::test]

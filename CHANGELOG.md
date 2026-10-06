@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Replacing a playback (quality or audio switch, or a retry after a failed attempt) no longer fails with `no_transcode_capacity` while the viewer's previous transcode still holds the node's only slot; the earlier transcode is stopped before admission.
 - HarmonyOS client: fix the ArkTS compile errors (API 18 `ColorMode` names, strict typing, builder syntax, renamed component props, the `PlayarrClient` file rename) so `scripts/build.sh release` produces the unsigned HAP and the app bundle.
 - Peer sync now skips a peer record that has no known address instead of failing a cycle on it every minute, and logs one rate-limited "peer has no known address" warning naming the peer.
 - Xbox: the package manifest no longer puts a comment first inside `Dependencies`, which made the .NET Native toolchain insert the VCLibs dependency ahead of `TargetDeviceFamily` and fail MakeAppx schema validation.

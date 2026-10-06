@@ -455,6 +455,13 @@ async fn test_pool() -> DbPool {
 }
 
 pub async fn test_state() -> (Router, TestState) {
+    test_state_with_ffmpeg("/usr/bin/true", 1).await
+}
+
+/// Like [`test_state`] but with a chosen stand-in ffmpeg executable and
+/// node-local transcode admission slot count, so a test can hold a slot open
+/// with a long-running process.
+pub async fn test_state_with_ffmpeg(ffmpeg_binary: &str, slots: usize) -> (Router, TestState) {
     let pool = test_pool().await;
 
     let live_events = playarr_db::LiveEventPublisher::from_pool(pool.clone());
@@ -585,7 +592,8 @@ pub async fn test_state() -> (Router, TestState) {
 
     let transcode = Arc::new(
         TranscodeOrchestrator::new(rendition_repo.clone(), cache, ActiveSessionCounter::new())
-            .with_ffmpeg_binary("/usr/bin/true")
+            .with_ffmpeg_binary(ffmpeg_binary)
+            .with_max_concurrent_sessions(slots)
             .with_output_root(
                 std::env::temp_dir().join(format!("playarr-api-test-{}", Uuid::new_v4())),
             ),
