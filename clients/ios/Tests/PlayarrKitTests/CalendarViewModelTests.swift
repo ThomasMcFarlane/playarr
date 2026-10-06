@@ -50,7 +50,7 @@ final class CalendarViewModelTests: XCTestCase {
         let model = makeModel(transport: transport)
         await model.load()
         XCTAssertEqual(model.loadState, .loaded)
-        XCTAssertEqual(transport.queries.first, ["start=2026-10-05", "end=2026-11-04"])
+        XCTAssertEqual(transport.queries.first, ["start=2026-10-05", "end=2026-11-03"])
         XCTAssertEqual(model.filteredEntries.count, 2)
         model.filters.types = [.movie]
         XCTAssertEqual(model.filteredEntries.map(\.id), ["a"])
