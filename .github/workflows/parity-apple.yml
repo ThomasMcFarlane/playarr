@@ -128,11 +128,21 @@ jobs:
             echo "screens=scripts/parity/apple/screens.mobile.json" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Use the committed web reference (iOS)
+      - name: Use the committed web references (iOS)
         if: env.PLATFORM == 'ios'
         run: |
-          mkdir -p "$RUNNER_TEMP/parity/reference"
-          cp docs/parity/web/mobile/*.png "$RUNNER_TEMP/parity/reference/"
+          # Light and dark references live in docs/parity/web/mobile/{light,dark}; until the dark set
+          # exists, the flat directory holds the light ones. A theme without references is skipped.
+          for theme in light dark; do
+            src=docs/parity/web/mobile/$theme
+            if [[ ! -d "$src" && "$theme" == light ]]; then src=docs/parity/web/mobile; fi
+            if [[ -d "$src" ]] && ls "$src"/*.png >/dev/null 2>&1; then
+              mkdir -p "$RUNNER_TEMP/parity/reference-$theme"
+              cp "$src"/*.png "$RUNNER_TEMP/parity/reference-$theme/"
+              echo "$theme" >> "$RUNNER_TEMP/themes.txt"
+            fi
+          done
+          cat "$RUNNER_TEMP/themes.txt"
 
       - name: Capture the web reference
         if: env.PLATFORM == 'tvos'
@@ -207,11 +217,13 @@ jobs:
           bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
-          xcrun simctl ui "$udid" appearance light
           xcrun simctl install "$udid" "$app"
           password=$(node -e 'import("./scripts/fixtures/catalog.mjs").then((m) => console.log(m.FIXTURE_PASSWORD))')
-          scripts/parity/apple/capture-ios.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
-            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$password" "$RUNNER_TEMP/parity/native"
+          while read -r theme; do
+            xcrun simctl ui "$udid" appearance "$theme"
+            scripts/parity/apple/capture-ios.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
+              "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$password" "$RUNNER_TEMP/parity/native-$theme"
+          done < "$RUNNER_TEMP/themes.txt"
           xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
           file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
 
@@ -240,12 +252,21 @@ jobs:
       - name: Diff the captures
         if: always()
         run: |
-          [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
           if [[ "$PLATFORM" == ios ]]; then
-            # Status bar and home indicator are system UI: paint both bands on both sides.
-            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/reference"
-            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/native"
+            [[ -f "$RUNNER_TEMP/themes.txt" ]] || exit 0
+            while read -r theme; do
+              [[ -d "$RUNNER_TEMP/parity/native-$theme" ]] || continue
+              # Status bar and home indicator are system UI: paint both bands on both sides.
+              node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/reference-$theme"
+              node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/native-$theme"
+              echo "### iOS $theme" | tee -a "$GITHUB_STEP_SUMMARY"
+              node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
+                "$RUNNER_TEMP/parity/reference-$theme" "$RUNNER_TEMP/parity/native-$theme" \
+                "$RUNNER_TEMP/parity/diff-$theme" | tee -a "$GITHUB_STEP_SUMMARY"
+            done < "$RUNNER_TEMP/themes.txt"
+            exit 0
           fi
+          [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
           node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
             "$RUNNER_TEMP/parity/reference" "$RUNNER_TEMP/parity/native" "$RUNNER_TEMP/parity/diff" \
             | tee -a "$GITHUB_STEP_SUMMARY"
