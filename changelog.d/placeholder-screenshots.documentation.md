@@ -1,0 +1,1 @@
+- Retook the site and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.

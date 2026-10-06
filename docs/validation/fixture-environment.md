@@ -104,6 +104,10 @@ an HLS manifest for every fixture file).
 
 ## Limits
 
-Artwork is absent (the stub returns no images). The stub does not implement
+Artwork is generated, not real: `art.mjs` renders a poster and a backdrop per title with ffmpeg
+(gradient, shapes and the placeholder title), `up.sh` writes them to `.fixtures/media/art`, and the
+stub serves them as the `remoteUrl` of each poster and fanart image (and as episode screenshots), so
+the server caches them like any other source artwork. There is no music or book library, so music
+screens stay empty. The stub does not implement
 download or request flows. Folder roots (unsorted folders) are not registered;
 add `.fixtures/media` as a folder root through the admin API if row 371 needs it.
