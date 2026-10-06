@@ -57,6 +57,7 @@ await context.clock.setFixedTime(new Date(cfg.frozenTime));
 const page = await context.newPage();
 const results = [];
 for (const s of cfg.screens) {
+  if (s.web.path === "/__none") continue;
   let route = s.web.path;
   if (s.web.work) {
     const id = await workId(s.web.work.kind, s.web.work.title);

@@ -42,6 +42,7 @@ env:
   PLATFORM: ${{ inputs.platform || 'tvos' }}
   PLAYARR_FIXTURE_PORT: "18484"
   CARGO_PROFILE_DEV_DEBUG: "0"
+  PLAYARR_FIXTURE_NO_SCOPE: "1"
 
 jobs:
   parity:
