@@ -174,7 +174,7 @@ struct ProfilesView: View {
                 Button("Dark") { appearance = "dark" }
             }
             dropdown(x: 261, icon: "globe", label: languageLabel) {
-                ForEach(Self.languages, id: \.0) { entry in
+                ForEach(Array(Self.languages.enumerated()), id: \.offset) { _, entry in
                     Button(entry.1) { language = entry.0 }
                 }
             }
