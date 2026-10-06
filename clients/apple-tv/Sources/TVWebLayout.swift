@@ -277,6 +277,9 @@ struct TVKeyArt: View {
             }
             keyArtAfter
         }
+        // The picture is taller than the stage: pin the layout to the stage so nothing shifts.
+        .frame(width: 1920, height: 1080, alignment: .topLeading)
+        .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
