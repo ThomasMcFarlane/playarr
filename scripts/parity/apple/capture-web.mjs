@@ -138,6 +138,8 @@ for (const s of cfg.screens) {
   await page.goto(base + route, { waitUntil: "load" });
   await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
   await page.waitForTimeout(5000);
+  // Artwork loads lazily: wait for every image on the page.
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15000 }).catch(() => {});
   for (const step of s.web.steps ?? []) await runStep(page, step);
   if (s.web.steps?.length) await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
@@ -167,5 +169,10 @@ for (const s of cfg.screens) {
   console.log(`web ${s.id} -> ${page.url()}`);
   await page.close();
 }
-fs.writeFileSync(path.join(outDir, "web-routes.json"), JSON.stringify(results, null, 2));
+const presetOf = (id) => {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"][h % 6];
+};
+fs.writeFileSync(path.join(outDir, "web-routes.json"), JSON.stringify({ userId: tok.user_id, avatarPreset: presetOf(tok.user_id), screens: results }, null, 2));
 await browser.close();

@@ -54,6 +54,7 @@ struct TVWorkDetailView: View {
     // MARK: Layout
 
     private func detailContent(_ detail: WorkDetail) -> some View {
+        GeometryReader { _ in
         ZStack(alignment: .topLeading) {
             DesignTokens.Color.backgroundElevated
             keyArt(detail.work)
@@ -76,6 +77,7 @@ struct TVWorkDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
     }
