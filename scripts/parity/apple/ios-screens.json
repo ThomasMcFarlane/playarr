@@ -1,17 +1,17 @@
 {
-  "note": "Launch arguments used to open each parity screen in the iOS app (see ParityLaunch.swift). Ids follow scripts/parity/screens.json. A null args value means the iOS app has no such screen yet; it is captured as the home screen and reported as missing.",
+  "note": "Launch arguments that open each parity screen (ids from scripts/parity/screens.json) in the iOS app; see ParityLaunch.swift. A null entry means the iOS app has no such screen yet: it is captured as the home screen so the diff still reports it.",
   "screens": {
     "home": { "screen": "home" },
     "movies": { "screen": "movies" },
     "series": { "screen": "series" },
-    "detail-film": { "screen": "detail-film", "title": "Test Movie A" },
-    "detail-series": { "screen": "detail-series", "title": "Sample Series 1" },
-    "search": { "screen": "search", "query": "Test" },
-    "settings": { "screen": "settings" },
-    "profiles": { "screen": "profiles" },
+    "film-detail": { "screen": "detail-film", "title": "Test Movie A" },
+    "series-detail": { "screen": "detail-series", "title": "Sample Series 1" },
+    "search": { "screen": "search", "query": "Sample" },
     "calendar": null,
-    "player": null,
-    "player-quality": null,
-    "blocked": null
+    "settings": { "screen": "settings" },
+    "player-controls": null,
+    "player-quality-menu": null,
+    "profile-switcher": { "screen": "profiles" },
+    "household-blocked": { "screen": "home", "user": "fx-child-locked" }
   }
 }

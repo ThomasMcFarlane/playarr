@@ -21,11 +21,13 @@ for id in "${screens[@]}"; do
     const a=["--playarr-parity-screen",s.screen];
     if(s.title)a.push("--playarr-parity-title",s.title);
     if(s.query)a.push("--playarr-parity-query",s.query);
+    if(s.user)a.push("--playarr-parity-user",s.user);
     console.log(a.join("\t"));' "$here/ios-screens.json" "$id")"
   xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1 || true
   # A missing screen is captured as the home screen so the diff still reports it.
   if [[ "$spec" == MISSING ]]; then spec=$'--playarr-parity-screen\thome'; echo "note: $id has no iOS screen yet"; fi
   IFS=$'\t' read -r -a extra <<<"$spec"
+  # Later flags win, so a per-screen user overrides the default.
   xcrun simctl launch "$udid" "$bundle" \
     --playarr-parity-server "$server" --playarr-parity-user "$user" \
     --playarr-parity-password "${PARITY_PASSWORD:?}" "${extra[@]}" >/dev/null

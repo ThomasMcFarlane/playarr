@@ -12,7 +12,7 @@ import Foundation
 enum ParityLaunch {
     private static func value(_ flag: String) -> String? {
         let args = ProcessInfo.processInfo.arguments
-        guard let index = args.firstIndex(of: flag), index + 1 < args.count else { return nil }
+        guard let index = args.lastIndex(of: flag), index + 1 < args.count else { return nil }
         return args[index + 1]
     }
 
