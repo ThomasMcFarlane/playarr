@@ -58,7 +58,6 @@ struct TVWorkDetailView: View {
         ZStack(alignment: .topLeading) {
             DesignTokens.Color.backgroundElevated
             keyArt(detail.work)
-            keyArtAfterOverlay
             TVStageWash()
 
             TVPageHeader(
@@ -87,32 +86,6 @@ struct TVWorkDetailView: View {
 
     private func keyArt(_ work: Work) -> some View {
         TVKeyArt(url: backdropURL(for: work))
-    }
-
-    /// SPA `.tv-key-art::after`.
-    private var keyArtAfterOverlay: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 0.82),
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 1),
-                ],
-                startPoint: .bottom,
-                endPoint: .top
-            )
-        }
-        .allowsHitTesting(false)
     }
 
     // MARK: Copy column

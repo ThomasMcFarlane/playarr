@@ -243,37 +243,66 @@ struct TVWebProfileChip: View {
     }
 }
 
-/// Web `.tv-key-art img`: 1038 x 1190 at (-20, -23), filtered, fading out to the right.
+/// Web `.tv-key-art`: the 1038 x 1190 picture at (-20, -23), filtered, fading out to the right,
+/// plus its `::after` wash (surface from the left and bottom edges).
 struct TVKeyArt: View {
     var url: URL?
 
     var body: some View {
-        if let url {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    Color.clear
+        ZStack(alignment: .topLeading) {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Color.clear
+                    }
                 }
-            }
-            .frame(width: 1038.3, height: 1190.6)
-            .clipped()
-            .modifier(TVKeyArtFilter())
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+                .frame(width: 1038.3, height: 1190.6)
+                .clipped()
+                .modifier(TVKeyArtFilter())
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
-            .offset(x: -20, y: -22.9)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .offset(x: -20, y: -22.9)
+            }
+            keyArtAfter
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var keyArtAfter: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 0.82),
+                    .init(color: DesignTokens.Color.backgroundElevated, location: 1),
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+        }
+        .allowsHitTesting(false)
     }
 }
 
