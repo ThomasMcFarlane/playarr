@@ -616,17 +616,21 @@ public struct Episode: Codable, Identifiable, Hashable, Sendable {
 public struct EpisodeDetail: Codable, Identifiable, Hashable, Sendable {
     public var episode: Episode
     public var mediaFileID: UUID?
+    /// Runtime of the episode's file, when the server knows it.
+    public var runtimeMS: Int64?
 
     public var id: UUID { episode.id }
 
     enum CodingKeys: String, CodingKey {
         case episode
         case mediaFileID = "media_file_id"
+        case runtimeMS = "runtime_ms"
     }
 
-    public init(episode: Episode, mediaFileID: UUID? = nil) {
+    public init(episode: Episode, mediaFileID: UUID? = nil, runtimeMS: Int64? = nil) {
         self.episode = episode
         self.mediaFileID = mediaFileID
+        self.runtimeMS = runtimeMS
     }
 }
 
@@ -887,17 +891,21 @@ public struct WorkDetail: Codable, Sendable {
     /// `BookDetail.mediaFileID`), and `nil` for a movie too until a file
     /// has synced for it.
     public var mediaFileID: UUID?
+    /// Runtime of the movie's own file, when the server knows it.
+    public var runtimeMS: Int64?
 
     enum CodingKeys: String, CodingKey {
         case work
         case children
         case mediaFileID = "media_file_id"
+        case runtimeMS = "runtime_ms"
     }
 
-    public init(work: Work, children: WorkChildren, mediaFileID: UUID? = nil) {
+    public init(work: Work, children: WorkChildren, mediaFileID: UUID? = nil, runtimeMS: Int64? = nil) {
         self.work = work
         self.children = children
         self.mediaFileID = mediaFileID
+        self.runtimeMS = runtimeMS
     }
 }
 
@@ -1357,6 +1365,13 @@ public struct MediaChapter: Codable, Hashable, Sendable, Identifiable {
         case index, title
         case startMS = "start_ms"
         case endMS = "end_ms"
+    }
+
+    public init(index: Int32, startMS: Int64, endMS: Int64? = nil, title: String? = nil) {
+        self.index = index
+        self.startMS = startMS
+        self.endMS = endMS
+        self.title = title
     }
 }
 

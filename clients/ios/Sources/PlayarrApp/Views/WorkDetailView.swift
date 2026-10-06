@@ -1,5 +1,6 @@
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 struct WorkDetailView: View {
     @State private var viewModel: WorkDetailViewModel
@@ -57,20 +58,28 @@ struct WorkDetailView: View {
         )) { Button("OK") { playlistMessage = nil } } message: { Text(playlistMessage ?? "") }
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        .playarrChromeHidden()
+        .playarrChromeHidden(!(viewModel.detail.map(usesWebLayout) ?? false))
     }
 
     private func detailContent(_ detail: WorkDetail) -> some View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack(alignment: .topLeading) {
-                if phone {
+                if phone && usesWebLayout(detail) {
+                    WMDetailPage(
+                        detail: detail,
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository,
+                        similar: viewModel.similarWorks,
+                        onBack: { dismiss() }
+                    )
+                } else if phone {
                     phoneDetail(detail, proxy: proxy)
                 } else {
                     tabletDetail(detail, proxy: proxy)
                 }
 
-                Button { dismiss() } label: {
+                if !(phone && usesWebLayout(detail)) { Button { dismiss() } label: {
                     Image(systemName: "arrow.left")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(PlayarrStyle.inkSoft)
@@ -81,10 +90,16 @@ struct WorkDetailView: View {
                 .buttonStyle(.plain)
                 .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))
                 .padding(.top, phone ? max(56, proxy.safeAreaInsets.top + 6) : min(76, max(38, proxy.size.height * 0.062)))
+                }
             }
         }
         .background(PlayarrStyle.surface)
         .ignoresSafeArea()
+    }
+
+    /// Films and series on a phone use the web mobile title page.
+    private func usesWebLayout(_ detail: WorkDetail) -> Bool {
+        UIDevice.current.userInterfaceIdiom == .phone && (detail.work.kind == .movie || detail.work.kind == .series)
     }
 
     private func phoneDetail(_ detail: WorkDetail, proxy: GeometryProxy) -> some View {
