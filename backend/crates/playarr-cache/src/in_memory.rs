@@ -1,5 +1,5 @@
 //! [`InMemory`] — the [`crate::CacheAndPubSub`] implementation for
-//! [`playarr_config::DeploymentTier::SingleNode`]. Fully functional (not
+//! single-process deployment. Fully functional (not
 //! a stub): a [`moka`] cache for get/set/delete, and a registry of
 //! [`tokio::sync::broadcast`] channels for publish/subscribe. Correct by
 //! construction for single-node deployments, since every subscriber lives

@@ -3616,7 +3616,7 @@ mod tests {
             Some(PathBuf::from("/Users/example/playarr-data"))
         );
         assert_eq!(
-            sqlite_database_parent("postgres://playarr@example/playarr"),
+            sqlite_database_parent("mysql://playarr@example/playarr"),
             None
         );
         assert_eq!(sqlite_database_parent("sqlite::memory:"), None);

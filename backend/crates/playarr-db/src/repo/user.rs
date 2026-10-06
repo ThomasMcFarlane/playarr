@@ -7,11 +7,11 @@ use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Marks a soft-deleted row's username. `users.username` is `UNIQUE`, so a tombstone that kept its name
 /// would reserve it forever; a deleted row is renamed `<name>~deleted~<id>` (unique by id) so the
-/// name can be registered again. Migrations 0077 (sqlite) / 0077 (postgres) rename tombstones that
+/// name can be registered again. Migration 0077 renames tombstones that
 /// predate this.
 const TOMBSTONE_MARK: &str = "~deleted~";
 
@@ -51,7 +51,7 @@ pub struct SyncMetadata {
 /// every boot. This trait is that directory's real backing store.
 ///
 /// `updated_at`/`deleted_at`/`origin_peer_id` (added by
-/// `backend/migrations/{postgres/0036,sqlite/0033}_peer_sync_state.sql`,
+/// `backend/migrations/sqlite/0033_peer_sync_state.sql`,
 /// nullable and additive -- see `docs/architecture/peer-groups.md` §2.2)
 /// exist purely for cross-node sync bookkeeping and are deliberately not
 /// read into [`playarr_model::User`] here: nothing in this crate's public
@@ -164,13 +164,11 @@ pub trait UserRepo: Send + Sync {
 
 pub struct SqlxUserRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxUserRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<User, DbError> {
@@ -239,18 +237,9 @@ impl UserRepo for SqlxUserRepo {
     }
 
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, username, display_name, email, password_hash, policy_id, \
+        let sql = "SELECT id, username, display_name, email, password_hash, policy_id, \
                  created_at, disabled, preferred_audio_language FROM users \
-                 WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "SELECT id, username, display_name, email, password_hash, policy_id, \
-                 created_at, disabled, preferred_audio_language FROM users \
-                 WHERE id = $1 AND deleted_at IS NULL"
-            }
-        };
+                 WHERE id = ? AND deleted_at IS NULL";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -259,18 +248,9 @@ impl UserRepo for SqlxUserRepo {
     }
 
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, username, display_name, email, password_hash, policy_id, \
+        let sql = "SELECT id, username, display_name, email, password_hash, policy_id, \
                  created_at, disabled, preferred_audio_language FROM users \
-                 WHERE username = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "SELECT id, username, display_name, email, password_hash, policy_id, \
-                 created_at, disabled, preferred_audio_language FROM users \
-                 WHERE username = $1 AND deleted_at IS NULL"
-            }
-        };
+                 WHERE username = ? AND deleted_at IS NULL";
         let row = sqlx::query(sql)
             .bind(username)
             .fetch_optional(&self.pool)
@@ -288,9 +268,7 @@ impl UserRepo for SqlxUserRepo {
         // unset`), and omitting it from `DO UPDATE SET` means an update
         // through this method can never clobber an existing row's origin
         // claim.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO users \
+        let sql = "INSERT INTO users \
                  (id, username, display_name, email, password_hash, policy_id, created_at, disabled, preferred_audio_language, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
@@ -299,21 +277,7 @@ impl UserRepo for SqlxUserRepo {
                  policy_id = excluded.policy_id, created_at = excluded.created_at, \
                  disabled = excluded.disabled, \
                  preferred_audio_language = excluded.preferred_audio_language, \
-                 updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO users \
-                 (id, username, display_name, email, password_hash, policy_id, created_at, disabled, preferred_audio_language, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 username = excluded.username, display_name = excluded.display_name, \
-                 email = excluded.email, password_hash = excluded.password_hash, \
-                 policy_id = excluded.policy_id, created_at = excluded.created_at, \
-                 disabled = excluded.disabled, \
-                 preferred_audio_language = excluded.preferred_audio_language, \
-                 updated_at = excluded.updated_at"
-            }
-        };
+                 updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(user.id.to_string())
             .bind(user.username.as_str())
@@ -336,14 +300,7 @@ impl UserRepo for SqlxUserRepo {
         // `AND deleted_at IS NULL` makes a double-delete behave exactly
         // like the hard delete this replaced (`NotFound` the second time),
         // rather than silently re-stamping `deleted_at` with a later time.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE users SET deleted_at = ?, username = username || ? WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE users SET deleted_at = $1, username = username || $2 WHERE id = $3 AND deleted_at IS NULL"
-            }
-        };
+        let sql = "UPDATE users SET deleted_at = ?, username = username || ? WHERE id = ? AND deleted_at IS NULL";
         let result = sqlx::query(sql)
             .bind(format_datetime(chrono::Utc::now()))
             .bind(tombstone_suffix(id))
@@ -357,14 +314,7 @@ impl UserRepo for SqlxUserRepo {
     }
 
     async fn set_origin_peer_id_if_unset(&self, id: Uuid, peer_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE users SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE users SET origin_peer_id = $1 WHERE id = $2 AND origin_peer_id IS NULL"
-            }
-        };
+        let sql = "UPDATE users SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL";
         sqlx::query(sql)
             .bind(peer_id.to_string())
             .bind(id.to_string())
@@ -374,14 +324,7 @@ impl UserRepo for SqlxUserRepo {
     }
 
     async fn get_sync_metadata(&self, id: Uuid) -> Result<Option<SyncMetadata>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM users WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM users WHERE id = $1"
-            }
-        };
+        let sql = "SELECT updated_at, origin_peer_id, deleted_at FROM users WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -416,9 +359,7 @@ impl UserRepo for SqlxUserRepo {
         } else {
             user.username.clone()
         };
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO users \
+        let sql = "INSERT INTO users \
                  (id, username, display_name, email, password_hash, policy_id, created_at, disabled, \
                  preferred_audio_language, updated_at, origin_peer_id, deleted_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -429,23 +370,7 @@ impl UserRepo for SqlxUserRepo {
                  disabled = excluded.disabled, \
                  preferred_audio_language = excluded.preferred_audio_language, \
                  updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, \
-                 deleted_at = excluded.deleted_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO users \
-                 (id, username, display_name, email, password_hash, policy_id, created_at, disabled, \
-                 preferred_audio_language, updated_at, origin_peer_id, deleted_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 username = excluded.username, display_name = excluded.display_name, \
-                 email = excluded.email, password_hash = excluded.password_hash, \
-                 policy_id = excluded.policy_id, created_at = excluded.created_at, \
-                 disabled = excluded.disabled, \
-                 preferred_audio_language = excluded.preferred_audio_language, \
-                 updated_at = excluded.updated_at, origin_peer_id = excluded.origin_peer_id, \
-                 deleted_at = excluded.deleted_at"
-            }
-        };
+                 deleted_at = excluded.deleted_at";
         sqlx::query(sql)
             .bind(user.id.to_string())
             .bind(username)
@@ -473,17 +398,11 @@ impl UserRepo for SqlxUserRepo {
                                origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => {
+        let sql = match since.is_some() {
+            true => {
                 format!("SELECT {SELECT} FROM users WHERE updated_at > ? ORDER BY updated_at ASC, id ASC")
             }
-            (Backend::Sqlite, false) => {
-                format!("SELECT {SELECT} FROM users ORDER BY updated_at ASC, id ASC")
-            }
-            (Backend::Postgres, true) => {
-                format!("SELECT {SELECT} FROM users WHERE updated_at > $1 ORDER BY updated_at ASC, id ASC")
-            }
-            (Backend::Postgres, false) => {
+            false => {
                 format!("SELECT {SELECT} FROM users ORDER BY updated_at ASC, id ASC")
             }
         };
@@ -500,18 +419,9 @@ impl UserRepo for SqlxUserRepo {
         user_id: Uuid,
         media_file_id: Uuid,
     ) -> Result<Option<MediaPlaybackPreferences>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
+        let sql = "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
                  FROM user_media_playback_preferences \
-                 WHERE user_id = ? AND media_file_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
-                 FROM user_media_playback_preferences \
-                 WHERE user_id = $1 AND media_file_id = $2"
-            }
-        };
+                 WHERE user_id = ? AND media_file_id = ?";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(media_file_id.to_string())
@@ -533,16 +443,8 @@ impl UserRepo for SqlxUserRepo {
         &self,
         user_id: Uuid,
     ) -> Result<Vec<MediaPlaybackPreferences>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
-                 FROM user_media_playback_preferences WHERE user_id = ? ORDER BY media_file_id"
-            }
-            Backend::Postgres => {
-                "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
-                 FROM user_media_playback_preferences WHERE user_id = $1 ORDER BY media_file_id"
-            }
-        };
+        let sql = "SELECT media_file_id, quality_id, audio_track_id, subtitle_track_id \
+                 FROM user_media_playback_preferences WHERE user_id = ? ORDER BY media_file_id";
         let rows = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -565,24 +467,12 @@ impl UserRepo for SqlxUserRepo {
         user_id: Uuid,
         preferences: &MediaPlaybackPreferences,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO user_media_playback_preferences \
+        let sql = "INSERT INTO user_media_playback_preferences \
                  (user_id, media_file_id, quality_id, audio_track_id, subtitle_track_id, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
                  quality_id = excluded.quality_id, audio_track_id = excluded.audio_track_id, \
-                 subtitle_track_id = excluded.subtitle_track_id, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_media_playback_preferences \
-                 (user_id, media_file_id, quality_id, audio_track_id, subtitle_track_id, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6) \
-                 ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
-                 quality_id = EXCLUDED.quality_id, audio_track_id = EXCLUDED.audio_track_id, \
-                 subtitle_track_id = EXCLUDED.subtitle_track_id, updated_at = EXCLUDED.updated_at"
-            }
-        };
+                 subtitle_track_id = excluded.subtitle_track_id, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(preferences.media_file_id.to_string())
@@ -599,10 +489,7 @@ impl UserRepo for SqlxUserRepo {
         &self,
         user_id: Uuid,
     ) -> Result<Option<ProfileAvatarPreference>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "SELECT preference FROM user_profile_avatars WHERE user_id = ?",
-            Backend::Postgres => "SELECT preference FROM user_profile_avatars WHERE user_id = $1",
-        };
+        let sql = "SELECT preference FROM user_profile_avatars WHERE user_id = ?";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_optional(&self.pool)
@@ -619,20 +506,10 @@ impl UserRepo for SqlxUserRepo {
         user_id: Uuid,
         preference: &ProfileAvatarPreference,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO user_profile_avatars (user_id, preference, updated_at) \
+        let sql = "INSERT INTO user_profile_avatars (user_id, preference, updated_at) \
                  VALUES (?, ?, ?) \
                  ON CONFLICT (user_id) DO UPDATE SET \
-                 preference = excluded.preference, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_profile_avatars (user_id, preference, updated_at) \
-                 VALUES ($1, $2, $3) \
-                 ON CONFLICT (user_id) DO UPDATE SET \
-                 preference = EXCLUDED.preference, updated_at = EXCLUDED.updated_at"
-            }
-        };
+                 preference = excluded.preference, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(serde_json::to_string(preference)?)

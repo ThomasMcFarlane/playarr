@@ -106,6 +106,20 @@ interface RemotePlayerControls {
     fun setSubtitleLanguage(language: String?): Boolean
 }
 
+/**
+ * Whether a handoff destination has genuinely started the offered media. [ownsSession] is true only once
+ * this player has begun the new request (a playback session exists for the offered file): a player that
+ * merely still holds an earlier, stopped or paused playback of the same file is ready and idle, and
+ * would otherwise be acknowledged at once with its stale position while the real start is still pending.
+ */
+fun handoffDestinationStarted(
+    ready: Boolean,
+    buffering: Boolean,
+    playing: Boolean,
+    playWhenReady: Boolean,
+    ownsSession: Boolean,
+): Boolean = ownsSession && ready && !buffering && (playing || !playWhenReady)
+
 fun executePlaybackCommand(player: RemotePlayerControls?, args: JsonObject): RemoteOutcome {
     if (player == null) return RemoteOutcome.Failed("nothing is playing")
     return when (args.string("action")) {

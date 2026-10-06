@@ -22,7 +22,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Role {
     /// Everything in one process. The default, and the only sane choice
-    /// for [`DeploymentTier::SingleNode`].
+    /// for single-process deployments.
     All,
     Api,
     Worker,
@@ -61,51 +61,14 @@ impl fmt::Display for Role {
     }
 }
 
-/// How many nodes' worth of shared state this deployment needs to
-/// coordinate across. Not read from its own env var — it's *derived* from
-/// which of `DATABASE_URL` / `REDIS_URL` are configured, so it can't drift
-/// out of sync with the actual connection settings. `playarr-coordination`
-/// and `playarr-cache` use this to pick which trait implementation
-/// (`SingleNodeCoordinator`/`PostgresCoordinator`, `InMemory`/`Redis`/
-/// `PostgresListenNotify`) to wire up at startup.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DeploymentTier {
-    /// SQLite `DATABASE_URL`, no Redis: single process, in-memory
-    /// coordination and cache are always correct because there is no other
-    /// node to coordinate with.
-    SingleNode,
-    /// Postgres `DATABASE_URL`, no `REDIS_URL`: multiple nodes coordinate
-    /// via `pg_advisory_lock`/a heartbeat table and pub/sub via
-    /// `LISTEN`/`NOTIFY` instead of a dedicated cache tier.
-    MultiNodePostgres,
-    /// Postgres `DATABASE_URL` and `REDIS_URL` both set: the full
-    /// horizontally-scaled deployment, Redis used for caching and pub/sub.
-    MultiNodePostgresRedis,
-}
-
-impl DeploymentTier {
-    pub fn resolve(database_url: &str, redis_url: Option<&str>) -> Self {
-        let is_postgres =
-            database_url.starts_with("postgres://") || database_url.starts_with("postgresql://");
-        match (is_postgres, redis_url.is_some()) {
-            (true, true) => DeploymentTier::MultiNodePostgresRedis,
-            (true, false) => DeploymentTier::MultiNodePostgres,
-            (false, _) => DeploymentTier::SingleNode,
-        }
-    }
-}
-
 /// Fully resolved process configuration. Construct with [`Config::from_env`]
 /// at process startup, before initializing telemetry or opening the DB
 /// pool — both of those take a `&Config`.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// `DATABASE_URL` — required. `sqlite:...` for [`DeploymentTier::SingleNode`],
-    /// `postgres://...`/`postgresql://...` otherwise.
+    /// `DATABASE_URL` — required, and must be a `sqlite:` URL: SQLite is the
+    /// only supported storage engine (ADR 0002).
     pub database_url: String,
-    /// `REDIS_URL` — optional; presence is one of the two signals that
-    /// determine [`Config::deployment_tier`].
-    pub redis_url: Option<String>,
     /// `PLAYARR_ROLE` — defaults to [`Role::All`].
     pub role: Role,
     /// `PLAYARR_LOG` — a `tracing-subscriber` `EnvFilter` directive
@@ -133,7 +96,6 @@ pub struct Config {
     /// `PLAYARR_OTLP_ENDPOINT` — optional OTLP collector endpoint; when
     /// unset, `playarr-telemetry::otel` is a no-op layer.
     pub otlp_endpoint: Option<String>,
-    pub deployment_tier: DeploymentTier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,7 +175,7 @@ pub enum ConfigError {
 /// Signature matches `std::env::var` closely enough that `Config::from_env`
 /// can pass it directly, but takes the lookup as a parameter
 /// (`from_env_source`) so tests can exercise every branch (missing var,
-/// bad role, bad socket addr, tier derivation) without mutating real
+/// bad role, bad socket addr) without mutating real
 /// process environment state, which is inherently racy across parallel
 /// `#[test]` threads.
 type EnvLookup<'a> = dyn Fn(&str) -> Result<String, VarError> + 'a;
@@ -225,7 +187,7 @@ impl Config {
 
     pub fn from_env_source(lookup: &EnvLookup<'_>) -> Result<Self, ConfigError> {
         let database_url = required(lookup, "DATABASE_URL")?;
-        let redis_url = optional(lookup, "REDIS_URL");
+        validate_database_url(&database_url)?;
         let role = match optional(lookup, "PLAYARR_ROLE") {
             Some(raw) => Role::parse(&raw)?,
             None => Role::All,
@@ -382,11 +344,8 @@ impl Config {
         }
         let otlp_endpoint = optional(lookup, "PLAYARR_OTLP_ENDPOINT");
 
-        let deployment_tier = DeploymentTier::resolve(&database_url, redis_url.as_deref());
-
         Ok(Config {
             database_url,
-            redis_url,
             role,
             log_filter,
             metrics_bind_addr,
@@ -395,9 +354,29 @@ impl Config {
             acme,
             relay,
             otlp_endpoint,
-            deployment_tier,
         })
     }
+}
+
+/// Playarr is SQLite-only (ADR 0002). Fail fast, with an actionable message,
+/// on anything that is not a `sqlite:` URL; a Postgres URL gets a specific
+/// explanation. The URL itself is never echoed (it may carry a password).
+fn validate_database_url(database_url: &str) -> Result<(), ConfigError> {
+    let lower = database_url.trim_start().to_ascii_lowercase();
+    if lower.starts_with("sqlite:") {
+        return Ok(());
+    }
+    let reason = if lower.starts_with("postgres://") || lower.starts_with("postgresql://") {
+        "Postgres is no longer supported: Playarr is SQLite-only (see ADR 0002). \
+         Use a `sqlite:` URL such as `sqlite:///data/playarr.db`"
+    } else {
+        "only `sqlite:` URLs are supported (see ADR 0002), for example `sqlite:///data/playarr.db`"
+    };
+    Err(ConfigError::InvalidValue {
+        var: "DATABASE_URL".to_string(),
+        value: "<redacted>".to_string(),
+        reason: reason.to_string(),
+    })
 }
 
 fn parse_relay(lookup: &EnvLookup<'_>) -> Result<Option<RelayConfig>, ConfigError> {
@@ -546,10 +525,9 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_url_resolves_single_node() {
+    fn sqlite_url_is_accepted_with_defaults() {
         let lookup = lookup_from(HashMap::from([("DATABASE_URL", "sqlite://playarr.db")]));
         let config = Config::from_env_source(&lookup).unwrap();
-        assert_eq!(config.deployment_tier, DeploymentTier::SingleNode);
         assert_eq!(config.role, Role::All);
         assert_eq!(config.log_filter, "info");
         assert_eq!(config.http_bind_addr, "0.0.0.0:8484".parse().unwrap());
@@ -878,26 +856,35 @@ mod tests {
     }
 
     #[test]
-    fn postgres_without_redis_resolves_multi_node_postgres() {
-        let lookup = lookup_from(HashMap::from([(
-            "DATABASE_URL",
-            "postgres://user:pass@localhost/playarr",
-        )]));
-        let config = Config::from_env_source(&lookup).unwrap();
-        assert_eq!(config.deployment_tier, DeploymentTier::MultiNodePostgres);
+    fn postgres_urls_are_rejected_with_a_clear_error() {
+        for url in [
+            "postgres://user:secret@localhost/playarr",
+            "postgresql://user:secret@localhost/playarr",
+            "POSTGRES://user:secret@localhost/playarr",
+        ] {
+            let lookup = lookup_from(HashMap::from([("DATABASE_URL", url)]));
+            let err = Config::from_env_source(&lookup).unwrap_err();
+            let message = err.to_string();
+            assert!(
+                matches!(&err, ConfigError::InvalidValue { var, .. } if var == "DATABASE_URL"),
+                "{message}"
+            );
+            assert!(message.contains("SQLite-only"), "{message}");
+            assert!(
+                !message.contains("secret"),
+                "must not echo the URL: {message}"
+            );
+        }
     }
 
     #[test]
-    fn postgres_with_redis_resolves_multi_node_postgres_redis() {
-        let lookup = lookup_from(HashMap::from([
-            ("DATABASE_URL", "postgresql://user:pass@localhost/playarr"),
-            ("REDIS_URL", "redis://localhost:6379"),
-        ]));
-        let config = Config::from_env_source(&lookup).unwrap();
-        assert_eq!(
-            config.deployment_tier,
-            DeploymentTier::MultiNodePostgresRedis
-        );
+    fn non_sqlite_urls_are_rejected() {
+        let lookup = lookup_from(HashMap::from([(
+            "DATABASE_URL",
+            "mysql://localhost/playarr",
+        )]));
+        let err = Config::from_env_source(&lookup).unwrap_err();
+        assert!(err.to_string().contains("only `sqlite:` URLs"));
     }
 
     #[test]

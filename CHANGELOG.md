@@ -13,6 +13,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV search: pressing Up from Filters now lands on the search field instead of the Back button, matching the web TV search page. Tests pin the focus order on both clients and the first-Enter/OK activation of web TV cards.
+- Phone remote: a press that cannot be delivered now says why, beside the pad instead of below the pairing lists: "No connection" when this phone has no network, "The device did not respond" when the command is not acknowledged within about 4 s (for example the TV app is in the background or its connection dropped), instead of silently doing nothing or blaming the device.
+- Android TV: the pairing approval prompt now keeps retrying to take D-pad focus until it has it, so a slow first composition no longer leaves the remote's keys falling through to the screen behind.
+- Playback handoff: a destination that still held an earlier, stopped or paused playback of the same file acknowledged the handoff at once with that stale position, so the source stopped before the destination had really started. The destination now confirms only once it has begun the offered request (a playback session exists for it). Measured on an Android TV emulator: acknowledgement within 0.5 s with a position 64 s off before, 2.3 s with 0.4 s drift after.
+- Android TV: pressing Select (or OK on the phone remote) on a Home rail card or library grid card now opens it on the first press. A redundant extra focus target in front of the clickable meant the first press only moved focus and a second press was needed. A source test keeps a bare `focusable()` out of the front of clickables.
 - iOS: catalogue search read the server's `{items, remote_only}` answer as a bare list and always failed with "Couldn't load search"; it now decodes the envelope. A regression test covers it.
 - Web mobile: the autofocused card on home, library, detail rails and search is no longer scaled and raised on touch layouts; the lift stays for remote input.
 - Web mobile home: the Customise Home button no longer overlaps the profile avatar.
@@ -68,6 +73,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
+- iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
+- Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.
 - Apple parity workflow (`parity-apple.yml`) and tooling under `scripts/parity/apple/`: web reference versus tvOS Simulator captures on the fixture environment, with a pixel diff report; the tvOS app gains a live `-PlayarrParityRoute` launch argument.
 - The older `appletv-parity.yml` fixture-capture workflow is folded into `parity-apple.yml` (the fixture-art workaround for `ffmpeg` builds without `drawtext` is part of the fixtures now).
 - Apple clients: Release Calendar kit (models, client for the calendar and subscription endpoints, window/filter/series-grouping logic) with unit tests.
@@ -183,6 +191,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.
+- The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
 - Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
 - Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
@@ -531,6 +541,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the Postgres backend: the `postgres` cargo features and `sqlx` Postgres driver, `backend/migrations/postgres`, the Postgres coordinator, `LISTEN`/`NOTIFY` cache and Postgres backup/restore paths, the Redis cache (only reachable on the shared-database tier), the `DeploymentTier` and `REDIS_URL` configuration, and the per-backend SQL variants in `playarr-db`. Playarr is SQLite-only (ADR 0002).
+- A `postgres://` or `postgresql://` `DATABASE_URL` now fails startup with a clear error instead of connecting, and `playarr_db::run_migrations` no longer takes an `is_postgres` argument.
 - Removed the retired Google Play review demo server (`clients/tv-web/apps/play-review-server`), which was shut down on 2026-08-30 and is not deployed, together with its `just` recipes, workspace lockfile entry and README attribution.
 - Removed Postgres and Redis from the Docker Compose files, the Kubernetes base and overlays and the Helm chart: compose runs one server with a SQLite data volume, and the chart deploys a single-replica StatefulSet with a persistent volume (the api/worker split sharing one database is gone). Multi-node deployments use peer sync between SQLite nodes (ADR 0002).
 - Rewrote the README, architecture documents, deployment guides, backup guide and site copy for SQLite-only storage.
@@ -1544,6 +1556,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Android handoff destination: check for playback start every 100 ms instead of 250 ms and settle for 150 ms instead of 300 ms before acknowledging, saving about 0.3 s per phone or TV handoff. The latency breakdown is recorded in the 2026-10-07 emulator validation notes.
 - Per-file language indexing no longer rewrites unchanged rows. A reconciliation pass used to run a `DELETE FROM media_file_languages` plus inserts and a state upsert for every file, each in its own write transaction, which queued behind other sync writers and logged "slow statement" warnings (about 23 ms per file and up to 1.7 s for one file on a 30,000-file benchmark with a competing writer). The repository now compares the stored rows first and writes only the kinds that changed; an unchanged re-sync of 5,000 files dropped from 117 s to 1.5 s. The delete already used the primary-key index, so no migration is needed.
 - CI: pull requests run only the affected Android modules plus the sideload debug app (`scripts/ci/android-scope.sh`); the full `build` stays on main and nightly. Gradle and Rust caches are written by main only and read by pull requests.
 - CI: backend tests run under cargo-nextest, and the Argon2 crates are optimised in dev/test builds (the playarr-api suite dropped from about 4.5 minutes to under one on two cores).
@@ -2281,6 +2294,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Added the 2026-10-07 emulator validation record for the phone remote and playback handoff (`docs/validation/remote-emulator-run-2026-10-07.md`), including what only a real device can prove.
+- Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.
 - Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.
 - README: rebuilt with a banner, a screenshot showcase, light and dark platform and architecture diagrams, collapsible reference sections, and an expanded third-party media attribution for the openly licensed titles shown in the screenshots.
 - Add `SECURITY.md` (private vulnerability reporting) and stop naming the deployment configuration in `AGENTS.md`, as part of the public-readiness audit.

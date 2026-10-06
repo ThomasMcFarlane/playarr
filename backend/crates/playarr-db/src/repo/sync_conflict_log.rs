@@ -29,11 +29,11 @@ use uuid::Uuid;
 
 use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// One losing write from an LWW conflict resolution -- column-for-column
 /// mirror of the `sync_conflict_log` table
-/// (`backend/migrations/{postgres/0036,sqlite/0033}_peer_sync_state.sql`).
+/// (`backend/migrations/sqlite/0033_peer_sync_state.sql`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyncConflictLog {
     pub id: Uuid,
@@ -86,13 +86,11 @@ pub trait SyncConflictLogRepo: Send + Sync {
 
 pub struct SqlxSyncConflictLogRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxSyncConflictLogRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -124,15 +122,8 @@ const COLUMNS: &str = "id, entity_type, entity_id, winning_peer_id, losing_peer_
 #[async_trait]
 impl SyncConflictLogRepo for SqlxSyncConflictLogRepo {
     async fn create(&self, conflict: &SyncConflictLog) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                format!("INSERT INTO sync_conflict_log ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-            }
-            Backend::Postgres => format!(
-                "INSERT INTO sync_conflict_log ({COLUMNS}) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
-            ),
-        };
+        let sql =
+            format!("INSERT INTO sync_conflict_log ({COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         sqlx::query(&sql)
             .bind(conflict.id.to_string())
             .bind(conflict.entity_type.as_str())
@@ -159,14 +150,7 @@ impl SyncConflictLogRepo for SqlxSyncConflictLogRepo {
     }
 
     async fn mark_reviewed(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE sync_conflict_log SET requires_admin_review = 0 WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE sync_conflict_log SET requires_admin_review = 0 WHERE id = $1"
-            }
-        };
+        let sql = "UPDATE sync_conflict_log SET requires_admin_review = 0 WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)

@@ -2,8 +2,7 @@
 //! (`docs/architecture/remote-control.md`): registered remote targets,
 //! pairings, the per-target event queue and handoff records.
 //!
-//! Every query is written once with `?` placeholders and rewritten to `$n`
-//! for Postgres. Times are Unix epoch milliseconds. Status columns are plain
+//! Every query is written with `?` placeholders. Times are Unix epoch milliseconds. Status columns are plain
 //! strings; the API layer owns the vocabulary and the transition rules, this
 //! layer only offers compare-and-set updates so concurrent callers cannot
 //! both win a transition.
@@ -22,7 +21,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// In-process wake-ups for the push transports (SSE and long poll). The
 /// database queue stays the source of truth; a wake only cuts the latency of
@@ -210,33 +209,15 @@ pub trait RemoteRepo: Send + Sync {
 
 pub struct SqlxRemoteRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRemoteRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn sql(&self, q: &str) -> String {
-        match self.backend {
-            Backend::Sqlite => q.to_string(),
-            Backend::Postgres => {
-                let mut out = String::with_capacity(q.len() + 8);
-                let mut n = 0;
-                for c in q.chars() {
-                    if c == '?' {
-                        n += 1;
-                        out.push('$');
-                        out.push_str(&n.to_string());
-                    } else {
-                        out.push(c);
-                    }
-                }
-                out
-            }
-        }
+        q.to_string()
     }
 }
 
@@ -795,101 +776,6 @@ mod tests {
             created_ms: 10,
             expires_ms: 10_000,
         }
-    }
-
-    /// Runs the same scenarios against a real Postgres when
-    /// `PLAYARR_TEST_POSTGRES_URL` points at an empty database.
-    #[tokio::test]
-    async fn repo_behaves_the_same_on_postgres() {
-        let Ok(url) = std::env::var("PLAYARR_TEST_POSTGRES_URL") else {
-            return;
-        };
-        sqlx::any::install_default_drivers();
-        let pool = crate::pool::connect(&url).await.unwrap();
-        crate::pool::run_migrations(&pool, true).await.unwrap();
-        let repo = SqlxRemoteRepo::new(pool);
-        let target = Uuid::new_v4();
-        let a = repo
-            .enqueue_event(event(target, json!({"text": "a"})))
-            .await
-            .unwrap();
-        let b = repo
-            .enqueue_event(event(target, json!({"text": "b"})))
-            .await
-            .unwrap();
-        assert_eq!((a.seq, b.seq), (1, 2));
-        let got = repo.deliver_events(target, 0, 100, 10).await.unwrap();
-        assert_eq!(got.len(), 2);
-        assert!(repo
-            .ack_event(a.id, target, "ok", Some(&json!({"detail": "x"})))
-            .await
-            .unwrap());
-        assert!(repo
-            .get_event(a.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .payload
-            .is_none());
-        let p = pairing(Uuid::new_v4(), Uuid::new_v4(), target);
-        repo.insert_pairing(&p).await.unwrap();
-        assert!(repo
-            .set_pairing_scopes(p.id, &["text".to_string()])
-            .await
-            .unwrap());
-        assert!(repo
-            .transition_pairing(p.id, &["pending"], "active", 5, Some(9000), None)
-            .await
-            .unwrap());
-        let who = Uuid::new_v4();
-        assert!(repo
-            .transition_pairing(p.id, &["pending", "active"], "revoked", 7, None, Some(who))
-            .await
-            .unwrap());
-        let got = repo.get_pairing(p.id).await.unwrap().unwrap();
-        assert_eq!(
-            (got.status.as_str(), got.revoked_by, got.scopes),
-            ("revoked", Some(who), vec!["text".to_string()])
-        );
-        let t = RemoteTarget {
-            device_id: target,
-            user_id: Uuid::new_v4(),
-            name: "TV".into(),
-            platform: "android-tv".into(),
-            capabilities: vec!["navigate".into()],
-            state: None,
-            state_at_ms: None,
-            last_seen_ms: 1,
-        };
-        repo.upsert_target(&t).await.unwrap();
-        repo.set_target_state(target, &json!({"position_ms": 5}), 9)
-            .await
-            .unwrap();
-        assert_eq!(
-            repo.get_target(target).await.unwrap().unwrap().state_at_ms,
-            Some(9)
-        );
-        let h = RemoteHandoff {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            initiator_device_id: Uuid::new_v4(),
-            request_key: "k".into(),
-            source_device_id: Uuid::new_v4(),
-            destination_device_id: Uuid::new_v4(),
-            media_file_id: Uuid::new_v4(),
-            work_id: Uuid::new_v4(),
-            snapshot: json!({"position_ms": 1}),
-            status: "pending".into(),
-            created_ms: 1,
-            expires_ms: 100,
-            completed_ms: None,
-            acked_position_ms: None,
-            failure_reason: None,
-        };
-        repo.insert_handoff(&h).await.unwrap();
-        assert!(repo.commit_handoff(h.id, 3, 50).await.unwrap());
-        assert!(!repo.commit_handoff(h.id, 3, 51).await.unwrap());
-        repo.purge_events(1_000_000).await.unwrap();
     }
 
     #[tokio::test]

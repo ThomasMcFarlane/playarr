@@ -9,21 +9,6 @@ use std::time::Duration;
 use chrono::{NaiveDate, Utc};
 use playarr_db::{DbError, DbPool};
 
-/// Classifies `pool`'s backend from its connect URL scheme -- the same
-/// technique `playarr_db::pool::Backend::detect` uses internally, kept as
-/// a local free function here rather than depending on that type: `Backend`
-/// is `pub(crate)` to `playarr-db` (an intentionally private
-/// SQL-placeholder-syntax detail), and this module's need ("which cutoff
-/// comparison syntax to emit") is simple enough not to justify widening
-/// that crate's public surface.
-fn is_postgres(pool: &DbPool) -> bool {
-    pool.connect_options()
-        .database_url
-        .scheme()
-        .to_ascii_lowercase()
-        .starts_with("postgres")
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct RetentionPolicy {
     /// How many days of raw session/event rows to keep before pruning.
@@ -75,12 +60,9 @@ impl RetentionSweeper {
     /// (`playback_events.session_id` has a foreign key onto
     /// `playback_sessions.id` — see `0002_analytics.sql`).
     async fn sweep_once(&self) -> Result<(), DbError> {
-        let postgres = is_postgres(&self.pool);
         // Same `YYYY-MM-DD` TEXT form `playarr_db::codec::format_date`
         // uses internally -- duplicated here as a one-line `strftime` call
-        // rather than depending on that `pub(crate)` helper (see
-        // `is_postgres`'s doc comment for the same "small, private detail,
-        // not worth widening playarr-db's public surface for" reasoning).
+        // rather than depending on that `pub(crate)` helper.
         let cutoff = self.cutoff_date().format("%Y-%m-%d").to_string();
 
         // `occurred_at`/`started_at` are ISO-8601 TEXT columns (see
@@ -89,21 +71,13 @@ impl RetentionSweeper {
         // every stored value shares that same `YYYY-MM-DD...` prefix
         // shape, the same property `rollup_day`'s own `substr(..., 1, 10)`
         // comparison already relies on.
-        let events_sql = if postgres {
-            "DELETE FROM playback_events WHERE occurred_at < $1"
-        } else {
-            "DELETE FROM playback_events WHERE occurred_at < ?"
-        };
+        let events_sql = "DELETE FROM playback_events WHERE occurred_at < ?";
         sqlx::query(events_sql)
             .bind(&cutoff)
             .execute(&self.pool)
             .await?;
 
-        let sessions_sql = if postgres {
-            "DELETE FROM playback_sessions WHERE started_at < $1"
-        } else {
-            "DELETE FROM playback_sessions WHERE started_at < ?"
-        };
+        let sessions_sql = "DELETE FROM playback_sessions WHERE started_at < ?";
         sqlx::query(sessions_sql)
             .bind(&cutoff)
             .execute(&self.pool)
@@ -152,7 +126,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .expect("connect in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run sqlite migrations");
         pool

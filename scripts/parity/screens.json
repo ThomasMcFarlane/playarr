@@ -1,0 +1,30 @@
+{
+  "$comment": "Canonical parity screen list. Web (capture-web.mjs) is the reference; native clients reach the same screen with the same fixture data. Placeholders in route: {movie:<title>} and {series:<title>} resolve to a catalogue work id, {file:<title>} to the first media file id of that work.",
+  "layouts": {
+    "tv": { "width": 1920, "height": 1080, "dpr": 1, "device": "Android TV, tvOS", "deviceWidthPx": 1920, "deviceHeightPx": 1080 },
+    "mobile": { "width": 390, "height": 844, "dpr": 3, "device": "iOS, Android phone", "deviceWidthPx": 1170, "deviceHeightPx": 2532 }
+  },
+  "user": "fx-viewer",
+  "tolerance": { "pixelmatchThreshold": 0.1, "maxMismatchPercent": 1 },
+  "screens": [
+    { "id": "home", "title": "Home", "route": "/", "state": "Signed in as fx-viewer; rails Start watching and Recently Added." },
+    { "id": "movies", "title": "Movies library", "route": "/movies", "state": "Library grid of the three films." },
+    { "id": "series", "title": "Series library", "route": "/series", "state": "Library grid of the two series." },
+    { "id": "film-detail", "title": "Title detail (film)", "route": "/movies/{movie:Test Movie A}", "state": "Detail page of a film with audio and subtitle choices." },
+    { "id": "series-detail", "title": "Title detail (series with seasons)", "route": "/series/{series:Sample Series 1}", "state": "Detail page of the three-season series, first season selected." },
+    { "id": "search", "title": "Search with results", "route": "/search", "steps": [{ "type": "text", "selector": "input[type=search], input[type=text]", "value": "Sample" }], "state": "Query 'Sample' typed; results shown." },
+    { "id": "calendar", "title": "Calendar", "route": "/calendar", "state": "Release calendar with the clock frozen (see clock)." },
+    { "id": "settings", "title": "Settings", "route": "/settings", "state": "Settings index." },
+    { "id": "player-controls", "freezeClock": false, "title": "Player with controls visible", "route": "/player/{file:Test Movie A}", "steps": [{ "type": "pauseAt", "seconds": 2 }, { "type": "revealControls" }, { "type": "pauseAt", "seconds": 2 }], "state": "Playback paused at 2.0 s (fixture clips are 60 s: PLAYARR_FIXTURE_CLIP_SECONDS=60) with the control bar shown." },
+    { "id": "player-quality-menu", "freezeClock": false, "title": "Player quality menu open", "route": "/player/{file:Test Movie A}", "steps": [{ "type": "pauseAt", "seconds": 2 }, { "type": "revealControls" }, { "type": "pauseAt", "seconds": 2 }, { "type": "openQualityMenu" }], "state": "Paused at 2.0 s, controls visible, quality menu open." },
+    { "id": "profile-switcher", "title": "Profile switcher", "route": "/profiles", "steps": [{ "type": "waitGone", "text": "Loading profiles" }], "state": "Profile picker listing the signed-in profile." },
+    { "id": "household-blocked", "title": "Household blocked", "route": "/", "user": "fx-child-locked", "state": "fx-child-locked: empty schedule, so the household blocked (outside schedule) screen." }
+  ],
+  "determinism": {
+    "clock": "2026-10-07T12:00:00Z",
+    "timezone": "UTC",
+    "locale": "en-GB",
+    "animations": "disabled (reduced motion plus zero-duration transitions)",
+    "artwork": "procedural placeholder artwork from scripts/fixtures/art.mjs; profile avatars pinned to the astronaut preset by seed.mjs"
+  }
+}

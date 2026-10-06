@@ -451,7 +451,7 @@ async fn test_pool() -> DbPool {
         .connect(&url)
         .await
         .expect("open in-memory sqlite pool");
-    playarr_db::run_migrations(&pool, false)
+    playarr_db::run_migrations(&pool)
         .await
         .expect("run real embedded sqlite migrations");
     pool

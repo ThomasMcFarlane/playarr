@@ -52,6 +52,8 @@ data class PlaybackAudioTrackOption(
     val label: String,
     val language: String? = null,
     val codec: String? = null,
+    /** Server's profile-refined codec name (`DTS-HD MA`, `TrueHD Atmos`); preferred over [codec] for display. */
+    val codecLabel: String? = null,
     val channels: Int? = null,
     val isDefault: Boolean = false,
 )

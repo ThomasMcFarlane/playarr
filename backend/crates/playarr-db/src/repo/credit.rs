@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::codec::parse_uuid;
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait CreditRepo: Send + Sync {
@@ -61,13 +61,11 @@ fn role_kind_of(role: &CreditRole) -> &'static str {
 
 pub struct SqlxCreditRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxCreditRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn person_from_row(row: &AnyRow) -> Result<Person, DbError> {
@@ -117,10 +115,7 @@ impl SqlxCreditRepo {
 #[async_trait]
 impl CreditRepo for SqlxCreditRepo {
     async fn get_person(&self, id: Uuid) -> Result<Person, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "SELECT id, name, tmdb_id, headshot_url FROM people WHERE id = ?",
-            Backend::Postgres => "SELECT id, name, tmdb_id, headshot_url FROM people WHERE id = $1",
-        };
+        let sql = "SELECT id, name, tmdb_id, headshot_url FROM people WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -130,14 +125,7 @@ impl CreditRepo for SqlxCreditRepo {
     }
 
     async fn find_person_by_tmdb_id(&self, tmdb_id: i64) -> Result<Option<Person>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, name, tmdb_id, headshot_url FROM people WHERE tmdb_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, name, tmdb_id, headshot_url FROM people WHERE tmdb_id = $1"
-            }
-        };
+        let sql = "SELECT id, name, tmdb_id, headshot_url FROM people WHERE tmdb_id = ?";
         let row = sqlx::query(sql)
             .bind(tmdb_id)
             .fetch_optional(&self.pool)
@@ -146,18 +134,9 @@ impl CreditRepo for SqlxCreditRepo {
     }
 
     async fn upsert_person(&self, person: &Person) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO people (id, name, tmdb_id, headshot_url) VALUES (?, ?, ?, ?) \
+        let sql = "INSERT INTO people (id, name, tmdb_id, headshot_url) VALUES (?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, tmdb_id = excluded.tmdb_id, headshot_url = excluded.headshot_url"
-            }
-            Backend::Postgres => {
-                "INSERT INTO people (id, name, tmdb_id, headshot_url) VALUES ($1, $2, $3, $4) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, tmdb_id = excluded.tmdb_id, headshot_url = excluded.headshot_url"
-            }
-        };
+                 name = excluded.name, tmdb_id = excluded.tmdb_id, headshot_url = excluded.headshot_url";
         sqlx::query(sql)
             .bind(person.id.to_string())
             .bind(person.name.as_str())
@@ -169,16 +148,9 @@ impl CreditRepo for SqlxCreditRepo {
     }
 
     async fn list_for_work(&self, work_id: Uuid) -> Result<Vec<Credit>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, work_id, person_id, role_kind, character, department, job, sort_order \
-                 FROM credits WHERE work_id = ? ORDER BY sort_order ASC"
-            }
-            Backend::Postgres => {
-                "SELECT id, work_id, person_id, role_kind, character, department, job, sort_order \
-                 FROM credits WHERE work_id = $1 ORDER BY sort_order ASC"
-            }
-        };
+        let sql =
+            "SELECT id, work_id, person_id, role_kind, character, department, job, sort_order \
+                 FROM credits WHERE work_id = ? ORDER BY sort_order ASC";
         let rows = sqlx::query(sql)
             .bind(work_id.to_string())
             .fetch_all(&self.pool)
@@ -187,10 +159,7 @@ impl CreditRepo for SqlxCreditRepo {
     }
 
     async fn list_work_ids_for_person(&self, person_id: Uuid) -> Result<Vec<Uuid>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "SELECT DISTINCT work_id FROM credits WHERE person_id = ?",
-            Backend::Postgres => "SELECT DISTINCT work_id FROM credits WHERE person_id = $1",
-        };
+        let sql = "SELECT DISTINCT work_id FROM credits WHERE person_id = ?";
         let rows = sqlx::query(sql)
             .bind(person_id.to_string())
             .fetch_all(&self.pool)
@@ -210,25 +179,14 @@ impl CreditRepo for SqlxCreditRepo {
     ) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
 
-        let delete_sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM credits WHERE work_id = ?",
-            Backend::Postgres => "DELETE FROM credits WHERE work_id = $1",
-        };
+        let delete_sql = "DELETE FROM credits WHERE work_id = ?";
         sqlx::query(delete_sql)
             .bind(work_id.to_string())
             .execute(&mut *tx)
             .await?;
 
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO credits (id, work_id, person_id, role_kind, character, department, job, sort_order) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO credits (id, work_id, person_id, role_kind, character, department, job, sort_order) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
-            }
-        };
+        let insert_sql = "INSERT INTO credits (id, work_id, person_id, role_kind, character, department, job, sort_order) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         for credit in credits {
             let (character, department, job) = match &credit.role {
                 CreditRole::Cast { character } => (Some(character.as_str()), None, None),

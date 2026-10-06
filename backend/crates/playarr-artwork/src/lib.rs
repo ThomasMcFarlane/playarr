@@ -205,7 +205,7 @@ fn same_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool {
 /// Resolves and (on first use) creates the local artwork cache root --
 /// `PLAYARR_ARTWORK_CACHE_DIR` if set, else co-located with the SQLite
 /// database file (`.../cache/artwork`), else a `/tmp` fallback for
-/// Postgres/multi-node deployments that haven't set the env var.
+/// deployments whose database has no usable parent directory.
 pub fn artwork_cache_root() -> PathBuf {
     if let Some(root) = std::env::var_os("PLAYARR_ARTWORK_CACHE_DIR") {
         return PathBuf::from(root);

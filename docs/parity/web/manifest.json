@@ -1,0 +1,210 @@
+{
+  "base": "<fixture>",
+  "clock": "2026-10-07T12:00:00.000Z",
+  "layouts": {
+    "tv": {
+      "width": 1920,
+      "height": 1080,
+      "dpr": 1
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "dpr": 3
+    }
+  },
+  "screens": [
+    {
+      "layout": "tv",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "tv/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "tv/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "tv/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "tv/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "tv/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "tv/search.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "tv/calendar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "settings",
+      "route": "/settings",
+      "user": "fx-viewer",
+      "file": "tv/settings.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "player-controls",
+      "route": "/player/{file:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "tv/player-controls.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "player-quality-menu",
+      "route": "/player/{file:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "tv/player-quality-menu.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "profile-switcher",
+      "route": "/profiles",
+      "user": "fx-viewer",
+      "file": "tv/profile-switcher.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "id": "household-blocked",
+      "route": "/",
+      "user": "fx-child-locked",
+      "file": "tv/household-blocked.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "home",
+      "route": "/",
+      "user": "fx-viewer",
+      "file": "mobile/home.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "movies",
+      "route": "/movies",
+      "user": "fx-viewer",
+      "file": "mobile/movies.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "series",
+      "route": "/series",
+      "user": "fx-viewer",
+      "file": "mobile/series.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "film-detail",
+      "route": "/movies/{movie:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "mobile/film-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "series-detail",
+      "route": "/series/{series:Sample Series 1}",
+      "user": "fx-viewer",
+      "file": "mobile/series-detail.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "search",
+      "route": "/search",
+      "user": "fx-viewer",
+      "file": "mobile/search.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "mobile/calendar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "settings",
+      "route": "/settings",
+      "user": "fx-viewer",
+      "file": "mobile/settings.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "player-controls",
+      "route": "/player/{file:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "mobile/player-controls.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "player-quality-menu",
+      "route": "/player/{file:Test Movie A}",
+      "user": "fx-viewer",
+      "file": "mobile/player-quality-menu.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "profile-switcher",
+      "route": "/profiles",
+      "user": "fx-viewer",
+      "file": "mobile/profile-switcher.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "id": "household-blocked",
+      "route": "/",
+      "user": "fx-child-locked",
+      "file": "mobile/household-blocked.png",
+      "pageErrors": 0
+    }
+  ]
+}

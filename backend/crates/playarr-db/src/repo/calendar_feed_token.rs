@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CalendarFeedTokenInfo {
@@ -45,20 +45,11 @@ pub trait CalendarFeedTokenRepo: Send + Sync {
 
 pub struct SqlxCalendarFeedTokenRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxCalendarFeedTokenRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
-    }
-
-    fn q(&self, sqlite: &'static str, postgres: &'static str) -> &'static str {
-        match self.backend {
-            Backend::Sqlite => sqlite,
-            Backend::Postgres => postgres,
-        }
+        Self { pool }
     }
 }
 
@@ -72,18 +63,12 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         now: DateTime<Utc>,
     ) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query(self.q(
-            "UPDATE calendar_feed_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
-            "UPDATE calendar_feed_tokens SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL",
-        ))
+        sqlx::query("UPDATE calendar_feed_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
         .bind(format_datetime(now))
         .bind(user_id.to_string())
         .execute(&mut *tx)
         .await?;
-        sqlx::query(self.q(
-            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at, token_encrypted) VALUES (?, ?, ?, ?)",
-            "INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at, token_encrypted) VALUES ($1, $2, $3, $4)",
-        ))
+        sqlx::query("INSERT INTO calendar_feed_tokens (token_hash, user_id, created_at, token_encrypted) VALUES (?, ?, ?, ?)")
         .bind(token_hash)
         .bind(user_id.to_string())
         .bind(format_datetime(now))
@@ -95,10 +80,7 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
     }
 
     async fn revoke(&self, user_id: Uuid, now: DateTime<Utc>) -> Result<bool, DbError> {
-        let result = sqlx::query(self.q(
-            "UPDATE calendar_feed_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
-            "UPDATE calendar_feed_tokens SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL",
-        ))
+        let result = sqlx::query("UPDATE calendar_feed_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
         .bind(format_datetime(now))
         .bind(user_id.to_string())
         .execute(&self.pool)
@@ -110,10 +92,7 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
         &self,
         user_id: Uuid,
     ) -> Result<Option<CalendarFeedTokenInfo>, DbError> {
-        let row = sqlx::query(self.q(
-            "SELECT created_at, last_used_at, token_encrypted FROM calendar_feed_tokens WHERE user_id = ? AND revoked_at IS NULL",
-            "SELECT created_at, last_used_at, token_encrypted FROM calendar_feed_tokens WHERE user_id = $1 AND revoked_at IS NULL",
-        ))
+        let row = sqlx::query("SELECT created_at, last_used_at, token_encrypted FROM calendar_feed_tokens WHERE user_id = ? AND revoked_at IS NULL")
         .bind(user_id.to_string())
         .fetch_optional(&self.pool)
         .await?;
@@ -131,23 +110,19 @@ impl CalendarFeedTokenRepo for SqlxCalendarFeedTokenRepo {
     }
 
     async fn resolve(&self, token_hash: &str, now: DateTime<Utc>) -> Result<Option<Uuid>, DbError> {
-        let row = sqlx::query(self.q(
+        let row = sqlx::query(
             "SELECT user_id FROM calendar_feed_tokens WHERE token_hash = ? AND revoked_at IS NULL",
-            "SELECT user_id FROM calendar_feed_tokens WHERE token_hash = $1 AND revoked_at IS NULL",
-        ))
+        )
         .bind(token_hash)
         .fetch_optional(&self.pool)
         .await?;
         let Some(row) = row else { return Ok(None) };
         let user_id: String = row.try_get("user_id")?;
-        sqlx::query(self.q(
-            "UPDATE calendar_feed_tokens SET last_used_at = ? WHERE token_hash = ?",
-            "UPDATE calendar_feed_tokens SET last_used_at = $1 WHERE token_hash = $2",
-        ))
-        .bind(format_datetime(now))
-        .bind(token_hash)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE calendar_feed_tokens SET last_used_at = ? WHERE token_hash = ?")
+            .bind(format_datetime(now))
+            .bind(token_hash)
+            .execute(&self.pool)
+            .await?;
         Ok(Some(parse_uuid(&user_id)?))
     }
 }

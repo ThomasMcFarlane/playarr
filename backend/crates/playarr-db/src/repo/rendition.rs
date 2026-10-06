@@ -11,7 +11,7 @@ use crate::codec::{
     rendition_status_from_str, rendition_status_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// CRUD surface over [`playarr_model::Rendition`] — the derived,
 /// playback-ready encodes of a [`playarr_model::MediaFile`]. This is the
@@ -43,13 +43,11 @@ pub trait RenditionRepo: Send + Sync {
 
 pub struct SqlxRenditionRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRenditionRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<Rendition, DbError> {
@@ -85,16 +83,8 @@ impl SqlxRenditionRepo {
 #[async_trait]
 impl RenditionRepo for SqlxRenditionRepo {
     async fn get(&self, id: Uuid) -> Result<Rendition, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
-                 produced_by, produced_at, status FROM renditions WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
-                 produced_by, produced_at, status FROM renditions WHERE id = $1"
-            }
-        };
+        let sql = "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
+                 produced_by, produced_at, status FROM renditions WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -104,18 +94,9 @@ impl RenditionRepo for SqlxRenditionRepo {
     }
 
     async fn list_for_media_file(&self, media_file_id: Uuid) -> Result<Vec<Rendition>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
+        let sql = "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
                  produced_by, produced_at, status FROM renditions \
-                 WHERE media_file_id = ? ORDER BY produced_at DESC"
-            }
-            Backend::Postgres => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
-                 produced_by, produced_at, status FROM renditions \
-                 WHERE media_file_id = $1 ORDER BY produced_at DESC"
-            }
-        };
+                 WHERE media_file_id = ? ORDER BY produced_at DESC";
         let rows = sqlx::query(sql)
             .bind(media_file_id.to_string())
             .fetch_all(&self.pool)
@@ -128,20 +109,10 @@ impl RenditionRepo for SqlxRenditionRepo {
         media_file_id: Uuid,
         profile: &str,
     ) -> Result<Option<Rendition>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
+        let sql = "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
                  produced_by, produced_at, status FROM renditions \
                  WHERE media_file_id = ? AND profile = ? AND status = 'ready' \
-                 ORDER BY produced_at DESC LIMIT 1"
-            }
-            Backend::Postgres => {
-                "SELECT id, media_file_id, profile, container, codec, bitrate, output_path, \
-                 produced_by, produced_at, status FROM renditions \
-                 WHERE media_file_id = $1 AND profile = $2 AND status = 'ready' \
-                 ORDER BY produced_at DESC LIMIT 1"
-            }
-        };
+                 ORDER BY produced_at DESC LIMIT 1";
         let row = sqlx::query(sql)
             .bind(media_file_id.to_string())
             .bind(profile)
@@ -151,28 +122,14 @@ impl RenditionRepo for SqlxRenditionRepo {
     }
 
     async fn upsert(&self, rendition: &Rendition) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO renditions \
+        let sql = "INSERT INTO renditions \
                  (id, media_file_id, profile, container, codec, bitrate, output_path, produced_by, produced_at, status) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  media_file_id = excluded.media_file_id, profile = excluded.profile, \
                  container = excluded.container, codec = excluded.codec, bitrate = excluded.bitrate, \
                  output_path = excluded.output_path, produced_by = excluded.produced_by, \
-                 produced_at = excluded.produced_at, status = excluded.status"
-            }
-            Backend::Postgres => {
-                "INSERT INTO renditions \
-                 (id, media_file_id, profile, container, codec, bitrate, output_path, produced_by, produced_at, status) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 media_file_id = excluded.media_file_id, profile = excluded.profile, \
-                 container = excluded.container, codec = excluded.codec, bitrate = excluded.bitrate, \
-                 output_path = excluded.output_path, produced_by = excluded.produced_by, \
-                 produced_at = excluded.produced_at, status = excluded.status"
-            }
-        };
+                 produced_at = excluded.produced_at, status = excluded.status";
         sqlx::query(sql)
             .bind(rendition.id.to_string())
             .bind(rendition.media_file_id.to_string())
@@ -190,10 +147,7 @@ impl RenditionRepo for SqlxRenditionRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM renditions WHERE id = ?",
-            Backend::Postgres => "DELETE FROM renditions WHERE id = $1",
-        };
+        let sql = "DELETE FROM renditions WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -205,10 +159,7 @@ impl RenditionRepo for SqlxRenditionRepo {
     }
 
     async fn mark_status(&self, id: Uuid, status: RenditionStatus) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "UPDATE renditions SET status = ? WHERE id = ?",
-            Backend::Postgres => "UPDATE renditions SET status = $1 WHERE id = $2",
-        };
+        let sql = "UPDATE renditions SET status = ? WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(rendition_status_to_str(status))
             .bind(id.to_string())

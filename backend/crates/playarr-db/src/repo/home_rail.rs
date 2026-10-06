@@ -13,7 +13,7 @@ use crate::codec::{
     bool_from_i64, bool_to_i64, decode_err, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait HomeRailRepo: Send + Sync {
@@ -35,7 +35,6 @@ pub trait HomeRailRepo: Send + Sync {
 
 pub struct SqlxHomeRailRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 const COLUMNS: &str =
@@ -66,15 +65,11 @@ fn library_from_str(raw: &str) -> Option<WorkKind> {
 
 impl SqlxHomeRailRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
-    fn ph(&self, n: usize) -> String {
-        match self.backend {
-            Backend::Sqlite => "?".to_string(),
-            Backend::Postgres => format!("${n}"),
-        }
+    fn ph(&self, _n: usize) -> String {
+        "?".to_string()
     }
 
     fn from_row(row: &AnyRow) -> Result<HomeRail, DbError> {

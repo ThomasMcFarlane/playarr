@@ -27,7 +27,7 @@ pub async fn open_sqlite(path: &Path) -> DbPool {
     let pool = playarr_db::connect(&format!("sqlite://{}", path.display()))
         .await
         .unwrap();
-    playarr_db::run_migrations(&pool, false).await.unwrap();
+    playarr_db::run_migrations(&pool).await.unwrap();
     pool
 }
 
@@ -307,7 +307,7 @@ async fn snapshot_is_consistent_while_writers_continue() {
 }
 
 // ------------------------------------------------------------------------
-// Shared helpers for restore tests (SQLite here, PostgreSQL in postgres_tests)
+// Shared helpers for restore tests (SQLite)
 // ------------------------------------------------------------------------
 
 /// A representative multi-user, multi-library dataset using only literal SQL

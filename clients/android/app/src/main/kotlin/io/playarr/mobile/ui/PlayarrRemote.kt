@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,7 @@ import io.playarr.mobile.remote.RemoteController
 import io.playarr.mobile.remote.RemoteHandoffApi
 import io.playarr.mobile.remote.RemotePairingRequest
 import io.playarr.mobile.remote.RemotePlayerControls
+import io.playarr.mobile.remote.handoffDestinationStarted
 import io.playarr.mobile.remote.RemoteUiBridge
 import io.playarr.mobile.remote.apiErrorCode
 import io.playarr.mobile.remote.handOffPlayback
@@ -70,6 +73,16 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+
+private const val COMMAND_STATUS_POLLS = 16
+private const val COMMAND_STATUS_INTERVAL_MS = 250L
+
+/** Which message a failed command POST deserves: no network here, device offline, or a failure on the device. */
+internal fun remoteSendFailure(error: Throwable): PlayarrString = when {
+    error.apiErrorCode() == "target_offline" -> PlayarrString.RemoteDeviceOffline
+    error is java.io.IOException -> PlayarrString.RemoteNoConnection
+    else -> PlayarrString.RemoteFailed
+}
 
 /** Controller side of the phone remote and the source side of "Play on another device". */
 @HiltViewModel
@@ -187,14 +200,14 @@ internal class RemoteViewModel @Inject constructor(
         }
     }
 
-    /** Sends one command and surfaces a failed execution on the target. */
+    /** Sends one command and surfaces a failed, unreachable or unacknowledged execution on the target. */
     fun send(pairing: RemotePairing, kind: String, payload: JsonObject) {
         viewModelScope.launch {
             _error.value = null
             try {
                 val accepted = api.sendCommand(pairing.id, RemoteCommandRequest(kind, payload))
-                repeat(6) {
-                    delay(250L)
+                repeat(COMMAND_STATUS_POLLS) {
+                    delay(COMMAND_STATUS_INTERVAL_MS)
                     val status = api.commandStatus(accepted.commandId).status
                     if (status == "ok") return@launch
                     if (status in setOf("failed", "unsupported", "revoked", "expired")) {
@@ -202,10 +215,13 @@ internal class RemoteViewModel @Inject constructor(
                         return@launch
                     }
                 }
+                // Still queued or only delivered: the device is not running Playarr in the foreground,
+                // or has lost its connection. Say so rather than appearing to succeed.
+                _error.value = PlayarrString.RemoteNoResponse
             } catch (cancel: kotlinx.coroutines.CancellationException) {
                 throw cancel
             } catch (error: Exception) {
-                _error.value = if (error.apiErrorCode() == "target_offline") PlayarrString.RemoteDeviceOffline else PlayarrString.RemoteFailed
+                _error.value = remoteSendFailure(error)
             }
         }
     }
@@ -310,6 +326,8 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
             targetName = nameOf(controlPairing.targetDeviceId) ?: unknown,
             onSend = { kind, payload -> viewModel.send(controlPairing, kind, payload) },
         )
+        // Beside the pad, where the person is looking, not below the pairing lists.
+        error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }
         val source = targets.firstOrNull { it.deviceId == controlPairing.targetDeviceId }
         val playing = source?.state?.let { (it as? JsonObject)?.get("media_file_id") } != null
         if (source != null && playing && RemoteCapability.Handoff in controlPairing.scopes) {
@@ -370,7 +388,7 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
             color = WebPink,
         )
     }
-    error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }
+    if (controlPairing == null) error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }
 
     Text(playarrString(PlayarrString.RemotePairingsTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
     val live = pairings.filter { it.status == "active" || it.status == "pending" }
@@ -513,6 +531,29 @@ private fun PadButton(
     }
 }
 
+/**
+ * Requests focus for this node as soon as it is attached, retrying until it has focus. A one-shot
+ * `requestFocus()` fired from a parent effect can run before a Dialog's content is attached (slow TV
+ * hardware, first composition) and is then lost, leaving the D-pad with nothing to act on.
+ */
+@Composable
+internal fun Modifier.focusWhenAttached(key: Any? = Unit): Modifier {
+    val requester = remember(key) { androidx.compose.ui.focus.FocusRequester() }
+    var focused by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        var tries = 0
+        while (!focused && tries < 50) {
+            runCatching { requester.requestFocus() }
+            if (focused) break
+            delay(100L)
+            tries++
+        }
+    }
+    return this
+        .focusRequester(requester)
+        .onFocusChanged { focused = it.isFocused }
+}
+
 /** On-device approval of a phone-remote pairing request; pairing alone grants nothing. */
 @Composable
 internal fun RemotePairingPrompt(controller: RemoteController) {
@@ -520,13 +561,27 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
     val request: RemotePairingRequest = pending.firstOrNull() ?: return
     val scope = rememberCoroutineScope()
     var busy by remember(request.pairingId) { mutableStateOf(false) }
-    // A TV remote needs a focused control inside the dialog or its key presses
-    // fall through to the screen behind it.
-    val allowFocus = remember(request.pairingId) { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(request.pairingId) {
-        delay(150L)
-        runCatching { allowFocus.requestFocus() }
-    }
+    RemotePairingPromptContent(
+        request = request,
+        busy = busy,
+        onAllow = {
+            busy = true
+            scope.launch { runCatching { controller.approve(request) }; busy = false }
+        },
+        onDeny = {
+            busy = true
+            scope.launch { controller.deny(request); busy = false }
+        },
+    )
+}
+
+@Composable
+internal fun RemotePairingPromptContent(
+    request: RemotePairingRequest,
+    busy: Boolean,
+    onAllow: () -> Unit,
+    onDeny: () -> Unit,
+) {
     PlayarrPanel(
         onDismissRequest = {},
         dismissible = false,
@@ -545,24 +600,21 @@ internal fun RemotePairingPrompt(controller: RemoteController) {
             }
         },
         confirmButton = {
+            // A TV remote needs a focused control inside the dialog or its key presses
+            // fall through to the screen behind it.
             PlayarrButton(
                 enabled = !busy,
-                modifier = Modifier.focusRequester(allowFocus),
-                onClick = {
-                    busy = true
-                    scope.launch { runCatching { controller.approve(request) }; busy = false }
-                },
+                modifier = Modifier.focusWhenAttached(request.pairingId).testTag("remote-pairing-allow"),
+                onClick = onAllow,
             ) { Text(playarrString(PlayarrString.RemotePromptAllow)) }
         },
         dismissButton = {
             PlayarrButton(
                 enabled = !busy,
-                onClick = {
-                busy = true
-                scope.launch { controller.deny(request); busy = false }
-            },
+                modifier = Modifier.testTag("remote-pairing-deny"),
+                onClick = onDeny,
                 variant = PlayarrButtonVariant.Secondary,
-) { Text(playarrString(PlayarrString.RemotePromptDeny)) }
+            ) { Text(playarrString(PlayarrString.RemotePromptDeny)) }
         },
     )
 }
@@ -718,7 +770,13 @@ internal class ExperienceRemotePlayerControls(
 
     override fun hasStarted(): Boolean {
         val state = player.state.value
-        return isReady() && !state.isBuffering && (state.isPlaying || !state.playWhenReady)
+        return handoffDestinationStarted(
+            ready = isReady(),
+            buffering = state.isBuffering,
+            playing = state.isPlaying,
+            playWhenReady = state.playWhenReady,
+            ownsSession = playerViewModel.hasActiveSessionFor(mediaFileId),
+        )
     }
 
     override fun play() = player.play()

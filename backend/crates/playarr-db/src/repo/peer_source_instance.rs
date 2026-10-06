@@ -12,7 +12,7 @@ use crate::codec::{
     format_datetime, parse_datetime, parse_uuid, source_kind_from_str, source_kind_to_str,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn from_row(row: &AnyRow) -> Result<SourceInstanceIdentity, DbError> {
     let id: String = row.try_get("source_instance_id")?;
@@ -62,13 +62,11 @@ pub trait PeerSourceInstanceRepo: Send + Sync {
 
 pub struct SqlxPeerSourceInstanceRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerSourceInstanceRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -79,26 +77,13 @@ impl PeerSourceInstanceRepo for SqlxPeerSourceInstanceRepo {
         peer_node_id: Uuid,
         instance: &SourceInstanceIdentity,
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO peer_source_instances \
+        let sql = "INSERT INTO peer_source_instances \
                  (peer_node_id, source_instance_id, kind, name, priority, group_library_id, \
                   updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (peer_node_id, source_instance_id) DO UPDATE SET \
                  kind = excluded.kind, name = excluded.name, priority = excluded.priority, \
                  group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, \
-                 deleted_at = excluded.deleted_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO peer_source_instances \
-                 (peer_node_id, source_instance_id, kind, name, priority, group_library_id, \
-                  updated_at, deleted_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-                 ON CONFLICT (peer_node_id, source_instance_id) DO UPDATE SET \
-                 kind = excluded.kind, name = excluded.name, priority = excluded.priority, \
-                 group_library_id = excluded.group_library_id, updated_at = excluded.updated_at, \
-                 deleted_at = excluded.deleted_at"
-            }
-        };
+                 deleted_at = excluded.deleted_at";
         sqlx::query(sql)
             .bind(peer_node_id.to_string())
             .bind(instance.id.to_string())
@@ -118,16 +103,10 @@ impl PeerSourceInstanceRepo for SqlxPeerSourceInstanceRepo {
         peer_node_id: Uuid,
         source_instance_id: Uuid,
     ) -> Result<Option<SourceInstanceIdentity>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_source_instances \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_source_instances \
                  WHERE peer_node_id = ? AND source_instance_id = ?"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_source_instances \
-                 WHERE peer_node_id = $1 AND source_instance_id = $2"
-            ),
-        };
+        );
         let row = sqlx::query(&sql)
             .bind(peer_node_id.to_string())
             .bind(source_instance_id.to_string())
@@ -140,16 +119,10 @@ impl PeerSourceInstanceRepo for SqlxPeerSourceInstanceRepo {
         &self,
         peer_node_id: Uuid,
     ) -> Result<Vec<SourceInstanceIdentity>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_source_instances \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_source_instances \
                  WHERE peer_node_id = ? AND deleted_at IS NULL ORDER BY priority, name"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_source_instances \
-                 WHERE peer_node_id = $1 AND deleted_at IS NULL ORDER BY priority, name"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(peer_node_id.to_string())
             .fetch_all(&self.pool)

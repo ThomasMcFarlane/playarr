@@ -508,7 +508,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        playarr_db::run_migrations(&pool, false).await.unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
         Arc::new(playarr_db::repo::SqlxPeerLeafAvailabilityRepo::new(pool))
     }
 
@@ -534,7 +534,7 @@ mod tests {
                 .connect("sqlite::memory:")
                 .await
                 .unwrap();
-            playarr_db::run_migrations(&pool, false).await.unwrap();
+            playarr_db::run_migrations(&pool).await.unwrap();
             Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool))
         };
 
@@ -593,7 +593,7 @@ mod tests {
                 .connect("sqlite::memory:")
                 .await
                 .unwrap();
-            playarr_db::run_migrations(&pool, false).await.unwrap();
+            playarr_db::run_migrations(&pool).await.unwrap();
             Arc::new(playarr_db::repo::SqlxPeerSyncStateRepo::new(pool))
         };
 

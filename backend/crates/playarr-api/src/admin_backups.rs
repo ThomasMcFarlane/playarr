@@ -413,7 +413,7 @@ mod tests {
             ))
             .await
             .unwrap();
-            playarr_db::run_migrations(&pool, false).await.unwrap();
+            playarr_db::run_migrations(&pool).await.unwrap();
             app.backup = Some(Arc::new(playarr_backup::BackupService::new(
                 config, pool, "test",
             )));
