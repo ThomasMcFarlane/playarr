@@ -51,7 +51,9 @@ struct TVRootView: View {
         ZStack {
             TVStageBackground()
 
-            if TVParityLaunch.isLive {
+            if TVParityLaunch.livePlayer != nil {
+                TVParityLivePlayerView()
+            } else if TVParityLaunch.isLive {
                 signedInShell
             } else if TVParityLaunch.requestedScreen == .deviceCodePairing {
                 // Fixture device-code chrome (do not hit live ATS / network).

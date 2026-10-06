@@ -110,6 +110,10 @@ async function runStep(page, step) {
     case "wait":
       await page.waitForTimeout(step.ms ?? 500);
       break;
+    case "hideVideo":
+      // The video picture is a codec and scaler difference, not UI: compare the chrome on black.
+      await page.addStyleTag({ content: "video{visibility:hidden!important}" });
+      break;
     default:
       throw new Error(`unknown step ${step.type}`);
   }

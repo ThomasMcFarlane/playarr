@@ -81,6 +81,18 @@ extension TVParityLaunch {
         return (kind, parts[2])
     }
 
+    /// `(title, menuOpen)` for `player:<title>` and `player:<title>:quality`.
+    static var livePlayer: (title: String, menuOpen: Bool)? {
+        guard let route, route.hasPrefix("player:") else { return nil }
+        var rest = String(route.dropFirst("player:".count))
+        var menu = false
+        if rest.hasSuffix(":quality") {
+            menu = true
+            rest = String(rest.dropLast(":quality".count))
+        }
+        return (rest, menu)
+    }
+
     static var liveQuery: String? {
         guard let route, route.hasPrefix("search:") else { return nil }
         return String(route.dropFirst("search:".count))
@@ -107,6 +119,37 @@ struct TVParityLiveDetailView: View {
                 kind: want.kind, genre: nil, tag: nil, sort: "title", limit: 100, offset: 0
             ) {
                 work = page.items.first { $0.title == want.title }
+            }
+        }
+    }
+}
+
+/// Resolves `player:<title>` to the film's media file and shows the player chrome at the frozen
+/// position (2.0 s of 6 s) over a black stage, as the web reference does with the video hidden.
+struct TVParityLivePlayerView: View {
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var mediaFileID: UUID?
+
+    var body: some View {
+        Group {
+            if let mediaFileID, let target = TVParityLaunch.livePlayer {
+                TVPlayerView(
+                    mediaFileID: mediaFileID,
+                    title: target.title,
+                    apiClient: environment.apiClient,
+                    parity: (position: 2, duration: 6, menuOpen: target.menuOpen)
+                )
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+        }
+        .task {
+            guard let target = TVParityLaunch.livePlayer else { return }
+            if let page = try? await environment.apiClient.browseCatalog(
+                kind: .movie, genre: nil, tag: nil, sort: "title", limit: 100, offset: 0
+            ), let work = page.items.first(where: { $0.title == target.title }),
+               let detail = try? await environment.apiClient.fetchWork(id: work.id) {
+                mediaFileID = detail.mediaFileID
             }
         }
     }

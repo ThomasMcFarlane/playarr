@@ -87,6 +87,9 @@
             "seconds": 2
           },
           {
+            "type": "hideVideo"
+          },
+          {
             "type": "revealControls"
           }
         ]
@@ -103,6 +106,9 @@
           {
             "type": "pauseAt",
             "seconds": 2
+          },
+          {
+            "type": "hideVideo"
           },
           {
             "type": "revealControls"

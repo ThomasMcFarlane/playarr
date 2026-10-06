@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF9CAF96E70B19E3D37E3D2A /* TVPlayerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */; };
 		8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */; };
 		4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */; };
 		23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */; };
@@ -44,6 +45,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerChrome.swift; sourceTree = "<group>"; };
 		D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVProfileAvatar.swift; sourceTree = "<group>"; };
 		7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVHouseholdView.swift; sourceTree = "<group>"; };
 		FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVCalendarView.swift; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
 				A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */,
 				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
+				2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */,
 				D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */,
 				7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */,
 				FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */,
@@ -259,6 +262,7 @@
 				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
 				A1B2C3D4E5F60718293A4F1 /* TVDisplayPreferences.swift in Sources */,
 				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
+				BF9CAF96E70B19E3D37E3D2A /* TVPlayerChrome.swift in Sources */,
 				8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */,
 				4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */,
 				23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */,
