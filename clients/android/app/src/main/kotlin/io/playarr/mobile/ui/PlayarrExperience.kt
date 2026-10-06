@@ -107,6 +107,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.BlendMode
@@ -3495,6 +3496,8 @@ private fun ExperienceSearchScreen(
     var mediaFilter by remember { mutableStateOf(PlayarrSearchMediaType.All) }
     var libraryId by remember { mutableStateOf<String?>(null) }
     var filtersOpen by remember { mutableStateOf(false) }
+    // Up from Filters must land on the search field, not the page Back button (same as the web TV page).
+    val searchFieldFocus = remember { FocusRequester() }
     var contextWork by remember { mutableStateOf<Work?>(null) }
     var selectedResultKey by remember { mutableStateOf<String?>(null) }
     val visibleMediaTypes = remember(availableKinds) {
@@ -3633,6 +3636,7 @@ private fun ExperienceSearchScreen(
             modifier = Modifier
                 .fillMaxWidth(if (isTelevision) 0.58f else 1f)
                 .padding(top = 18.dp)
+                .focusRequester(searchFieldFocus)
                 .playarrSingleLineArrowNavigation(),
             placeholder = { Text(playarrString(PlayarrString.SearchPlaceholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
@@ -3658,7 +3662,9 @@ private fun ExperienceSearchScreen(
         )
         PlayarrButton(
             onClick = { filtersOpen = !filtersOpen },
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .focusProperties { up = searchFieldFocus },
             variant = PlayarrButtonVariant.Secondary,
         ) {
             Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
