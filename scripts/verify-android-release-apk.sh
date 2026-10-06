@@ -31,12 +31,13 @@ verification="$("$apksigner" verify --verbose --print-certs "$apk")"
 printf '%s\n' "$verification"
 
 signer_count="$(sed -n 's/^Number of signers: //p' <<< "$verification")"
-signer_dn="$(sed -n 's/^Signer #1 certificate DN: //p' <<< "$verification")"
-actual_certificate_sha256="$(
-  sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$verification" |
-    tr '[:upper:]' '[:lower:]' |
-    tr -d ':[:space:]'
-)"
+# apksigner prints "Signer #1 certificate ..." when the APK has a v1 (JAR) signature and only
+# "V3.0 Signer: certificate ..." (or V2) lines when it does not (minSdk 24+ drops v1).
+signer_field() {
+  sed -nE "s/^(Signer #1|V[0-9.]+ Signer:) certificate $1: //p" <<< "$verification" | head -n 1
+}
+signer_dn="$(signer_field DN)"
+actual_certificate_sha256="$(signer_field 'SHA-256 digest' | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
 
 if [[ "$signer_count" != "1" ]]; then
   echo "Android release APK must have exactly one signer" >&2

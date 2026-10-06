@@ -355,7 +355,7 @@ namespace Playarr.Xbox.ViewModels
 
             try
             {
-                _playbackItem.AudioTracks.SelectedIndex = (uint)index;
+                _playbackItem.AudioTracks.SelectedIndex = index;
                 _selectedAudioTrackId = trackId;
                 OnPropertyChanged(nameof(SelectedAudioTrackId));
             }
@@ -376,10 +376,8 @@ namespace Playarr.Xbox.ViewModels
         /// <strong>Verification needed:</strong> same position-correlation
         /// caveat as <see cref="SelectAudioTrack"/>, plus one more: making a
         /// text track actually render (rather than just being "selected")
-        /// needs its <c>TrackDisplayMode</c> set to <c>PlaybackEnabled</c> in
-        /// addition to <c>SelectedIndex</c> -- that two-step shape is
-        /// recalled from the WinRT subtitle-track API, not confirmed against
-        /// a live SDK from this environment. Whether an on-demand HLS
+        /// uses <c>MediaPlaybackTimedMetadataTrackList.SetPresentationMode</c>
+        /// with <c>PlatformPresented</c> (every other track <c>Disabled</c>). Whether an on-demand HLS
         /// transcode's playlist ever actually carries more than one
         /// <c>#EXT-X-MEDIA</c> subtitle/audio rendition (as opposed to the
         /// server having already baked in one selected track before this
@@ -396,34 +394,31 @@ namespace Playarr.Xbox.ViewModels
 
             try
             {
-                var textTracks = _playbackItem.TextTracks;
+                // MediaPlaybackTimedMetadataTrackList: a text track renders when its presentation
+                // mode is PlatformPresented; every other track is disabled.
+                var textTracks = _playbackItem.TimedMetadataTracks;
+                var index = trackId is null || PlaybackInfo is null
+                    ? -1
+                    : IndexOf(PlaybackInfo.SubtitleTracks, trackId);
+                if (trackId is not null && (index < 0 || index >= textTracks.Count))
+                {
+                    return;
+                }
 
                 for (var i = 0; i < textTracks.Count; i++)
                 {
-                    if (textTracks[i] is TimedMetadataTrack track)
-                    {
-                        track.TrackDisplayMode = TimedMetadataTrackDisplayMode.Hidden;
-                    }
+                    textTracks.SetPresentationMode(
+                        (uint)i,
+                        i == index
+                            ? TimedMetadataTrackPresentationMode.PlatformPresented
+                            : TimedMetadataTrackPresentationMode.Disabled);
                 }
 
-                if (trackId is null || PlaybackInfo is null)
+                if (index < 0)
                 {
-                    textTracks.SelectedIndex = null;
                     _selectedSubtitleTrackId = null;
                     OnPropertyChanged(nameof(SelectedSubtitleTrackId));
                     return;
-                }
-
-                var index = IndexOf(PlaybackInfo.SubtitleTracks, trackId);
-                if (index < 0 || index >= textTracks.Count)
-                {
-                    return;
-                }
-
-                textTracks.SelectedIndex = (uint)index;
-                if (textTracks[index] is TimedMetadataTrack selected)
-                {
-                    selected.TrackDisplayMode = TimedMetadataTrackDisplayMode.PlaybackEnabled;
                 }
 
                 _selectedSubtitleTrackId = trackId;
