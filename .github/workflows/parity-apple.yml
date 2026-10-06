@@ -206,7 +206,7 @@ jobs:
           bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
-          xcrun simctl ui "$udid" appearance dark
+          xcrun simctl ui "$udid" appearance light
           xcrun simctl install "$udid" "$app"
           password=$(node -e 'import("./scripts/fixtures/catalog.mjs").then((m) => console.log(m.FIXTURE_PASSWORD))')
           scripts/parity/apple/capture-ios.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \

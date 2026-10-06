@@ -17,7 +17,7 @@ struct RootView: View {
     let environment: AppEnvironment
     @State private var updateViewModel: UpdateViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("com.playarr.ios.appearance") private var appearance = "dark"
+    @AppStorage("com.playarr.ios.appearance") private var appearance = "system"
 
     init(environment: AppEnvironment) {
         self.environment = environment

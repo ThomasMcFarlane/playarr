@@ -7,15 +7,23 @@ import UIKit
 /// computed layout (see `scripts/parity/apple/capture-web.mjs`, which dumps
 /// every element's box and styles next to each reference capture).
 enum WM {
-    static let shell = Color(red: 21 / 255, green: 19 / 255, blue: 21 / 255)
-    static let page = Color(red: 27 / 255, green: 24 / 255, blue: 27 / 255)
-    static let ink = Color(red: 244 / 255, green: 240 / 255, blue: 241 / 255)
-    static let inkSoft = Color(red: 197 / 255, green: 184 / 255, blue: 189 / 255)
-    static let muted = Color(red: 136 / 255, green: 122 / 255, blue: 130 / 255)
-    static let pink = Color(red: 207 / 255, green: 49 / 255, blue: 87 / 255)
-    static let artFill = Color(red: 49 / 255, green: 42 / 255, blue: 48 / 255)
-    static let chip = Color(red: 33 / 255, green: 29 / 255, blue: 33 / 255)
-    static let line = Color(red: 223 / 255, green: 220 / 255, blue: 221 / 255)
+    // Theme-adaptive tokens: the same values as the web's light and dark themes.
+    static let shell = PlayarrStyle.background
+    static let page = PlayarrStyle.surface
+    static let ink = PlayarrStyle.ink
+    static let inkSoft = PlayarrStyle.inkSoft
+    static let muted = PlayarrStyle.muted
+    static let pink = PlayarrStyle.pink
+    static let artFill = adaptive(light: (232, 228, 229), dark: (49, 42, 48))
+    static let chip = PlayarrStyle.surfaceStrong
+    static let line = adaptive(light: (56, 38, 33), dark: (223, 220, 221))
+
+    static func adaptive(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) -> Color {
+        Color(uiColor: UIColor { traits in
+            let value = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: value.0 / 255, green: value.1 / 255, blue: value.2 / 255, alpha: 1)
+        })
+    }
 
     /// CSS font weight to the nearest Avenir Next face, using the CSS font
     /// matching order (above 500 look upwards first).

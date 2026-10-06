@@ -164,16 +164,7 @@ struct PlayarrProfileAvatar: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Circle().fill(
-                    LinearGradient(
-                        colors: colours(for: presetID),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                Image(systemName: symbol(for: presetID))
-                    .font(.system(size: size * 0.4, weight: .ultraLight))
-                    .foregroundStyle(.white.opacity(0.96))
+                WMAvatarPresetView(presetID: presetID, size: size)
             }
         }
         .frame(width: size, height: size)
