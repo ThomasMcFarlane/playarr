@@ -149,6 +149,15 @@ export function BackIcon({ className }: IconProps) {
   );
 }
 
+export function CloseIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_PROPS} className={className}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
 export function MinimiseIcon({ className }: IconProps) {
   return (
     <svg {...ICON_PROPS} className={className}>

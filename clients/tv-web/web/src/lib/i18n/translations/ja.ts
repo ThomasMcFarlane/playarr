@@ -183,6 +183,7 @@ export const ja: Translations = {
   "components.player.controls.bitrateMbps": "{{bitrate}} Mbps",
   "components.player.controls.qualityButtonLabel": "画質: {{label}}",
   "components.player.controls.original": "オリジナル",
+  "components.player.controls.originalWithBitrate": "オリジナル · {{bitrate}} Mbps",
   "components.player.controls.hdBadge": "HD",
   "components.player.controls.changingQuality": "変更しています…",
   "components.player.controls.exitFullscreen": "フルスクリーンを終了",
@@ -198,8 +199,7 @@ export const ja: Translations = {
   "components.player.cast.error":
     "キャストが予期せず停止しました。もう一度お試しいただくか、このデバイスで視聴を続けてください。",
 
-  "components.player.surface.backButtonAriaLabel": "詳細に戻る",
-  "components.player.surface.backButtonLabel": "戻る",
+  "components.player.surface.closeButtonAriaLabel": "プレイヤーを閉じる",
   "components.player.surface.minimiseButtonAriaLabel": "プレイヤーを最小化",
   "components.player.surface.minimiseButtonLabel": "最小化",
   "components.player.surface.openCoverFlowAriaLabel": "{{title}}のCover Flowを開く",

@@ -103,6 +103,7 @@ export const en = {
   "components.player.controls.noSubtitles": "No subtitles",
   "components.player.controls.off": "Off",
   "components.player.controls.original": "Original",
+  "components.player.controls.originalWithBitrate": "Original · {{bitrate}} Mbps",
   "components.player.controls.pause": "Pause",
   "components.player.controls.play": "Play",
   "components.player.controls.playlistLabelPlural": "Playlist: {{count}} episodes",
@@ -163,8 +164,7 @@ export const en = {
   "components.player.cast.unavailableInsecureServer":
     "This server isn’t using a secure (HTTPS) address. Chromecast can only play from secure servers.",
   "components.player.surface.audioSurfaceAriaLabel": "Audio playback surface",
-  "components.player.surface.backButtonAriaLabel": "Back to details",
-  "components.player.surface.backButtonLabel": "Back",
+  "components.player.surface.closeButtonAriaLabel": "Close player",
   "components.player.surface.closePlaylistAriaLabel": "Close playlist",
   "components.player.surface.errorCode": "Error {{code}}",
   "components.player.surface.errorCodec":

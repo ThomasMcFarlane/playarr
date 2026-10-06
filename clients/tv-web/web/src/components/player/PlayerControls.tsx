@@ -12,6 +12,11 @@ import type { PlaybackEngineState } from "@playarr-tv/player-core";
 import { QualityMatrix } from "../QualityMatrix";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import { qualityDefinitionForId } from "../../lib/qualityMatrix";
+import {
+  formatMbps,
+  isOriginalQuality,
+  qualityDisplayLabel,
+} from "../../lib/playerQualityLabel";
 import { CastButton } from "./CastButton";
 import {
   AudioTrackIcon,
@@ -361,15 +366,18 @@ export function PlayerControls({
     () =>
       qualityOptions
         .filter((quality) => qualityDefinitionForId(quality.id) === undefined)
-        .map((quality) => ({
-          id: quality.id,
-          label: quality.label,
-          detail: quality.video_bitrate_bps
-            ? t("components.player.controls.bitrateMbps", {
-                bitrate: Math.round(quality.video_bitrate_bps / 1_000_000),
-              })
-            : t("components.player.controls.sourceQuality"),
-        })),
+        .map((quality) => {
+          const mbps = formatMbps(quality.video_bitrate_bps);
+          return {
+            id: quality.id,
+            label: qualityDisplayLabel(quality, t),
+            // Original already carries its bitrate in the label.
+            detail:
+              mbps && !isOriginalQuality(quality)
+                ? t("components.player.controls.bitrateMbps", { bitrate: mbps })
+                : t("components.player.controls.sourceQuality"),
+          };
+        }),
     [qualityOptions, t]
   );
   const activeAudio =
@@ -649,7 +657,7 @@ export function PlayerControls({
             event.preventDefault();
             event.stopPropagation();
             if (onNavigateAbove) onNavigateAbove();
-            else document.querySelector<HTMLButtonElement>(".player-back")?.focus();
+            else document.querySelector<HTMLButtonElement>(".player-close")?.focus();
             return;
           case "ArrowDown":
             event.preventDefault();
@@ -1121,7 +1129,7 @@ export function PlayerControls({
             type="button"
             className="player-quality-button"
             aria-label={t("components.player.controls.qualityButtonLabel", {
-              label: activeQuality?.label ?? t("components.player.controls.original"),
+              label: qualityDisplayLabel(activeQuality, t),
             })}
             aria-haspopup="menu"
             aria-expanded={qualityMenuOpen}
@@ -1152,7 +1160,7 @@ export function PlayerControls({
             <span>
               {qualitySwitching
                 ? t("components.player.controls.changingQuality")
-                : activeQuality?.label ?? t("components.player.controls.original")}
+                : qualityDisplayLabel(activeQuality, t)}
             </span>
           </button>
         </div>

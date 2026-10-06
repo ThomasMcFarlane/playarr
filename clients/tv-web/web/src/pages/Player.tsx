@@ -44,7 +44,7 @@ import {
 } from "../lib/cast/castMessages";
 import {
   InlineMusicMiniPlayer,
-  PlayerBackButton,
+  PlayerCloseButton,
   PlayerSurface,
   type PlayerMusicContext,
   type PlayerPlaylistItem,
@@ -767,7 +767,7 @@ function PlayerPageInner({
     return (
       <div className="player-page">
         <div className="player-shell player-shell-placeholder">
-          <PlayerBackButton onBack={handleBack} />
+          <PlayerCloseButton onClose={handleBack} />
           <div className="player-overlay player-overlay-status">
             <div className="player-status-card" role="status">
               <SpinnerIcon className="player-spinner" />
@@ -796,7 +796,7 @@ function PlayerPageInner({
     return (
       <div className="player-page">
         <div className="player-shell player-shell-placeholder">
-          <PlayerBackButton onBack={handleBack} />
+          <PlayerCloseButton onClose={handleBack} />
           <div className="player-overlay player-overlay-status" role="alert" aria-live="assertive">
             <div className="player-status-card player-status-card-error">
               {negotiation.forbidden ? (

@@ -22,11 +22,17 @@ import {
 } from "../../lib/playerControlVisibility";
 import { MediaThumbnailArtwork } from "../MediaThumbnailArtwork";
 import { useMediaContextMenu } from "../MediaContextMenu";
+import { createRevealGate } from "../../lib/playerReveal";
+import {
+  enterPictureInPicture,
+  exitPictureInPicture,
+  isInPictureInPicture,
+} from "../../lib/pictureInPicture";
 import { PlayerControls } from "./PlayerControls";
 import { PlaybackHealthPanel } from "./PlaybackHealthPanel";
 import { WEB_PLAYBACK_CAPABILITIES } from "../../lib/playbackCapabilities";
 import {
-  BackIcon,
+  CloseIcon,
   ErrorIcon,
   MaximiseIcon,
   MinimiseIcon,
@@ -106,7 +112,7 @@ function isPlayerControlTarget(target: EventTarget | null): boolean {
     target instanceof Element &&
     Boolean(
       target.closest(
-        ".player-controls, .player-back, .player-minimise, .mini-player-hit-target, .player-overlay-status, .player-playlist-panel, .media-context-drawer"
+        ".player-controls, .player-close, .player-minimise, .mini-player-hit-target, .player-overlay-status, .player-playlist-panel, .media-context-drawer"
       )
     )
   );
@@ -120,16 +126,16 @@ function isPlayerControlTarget(target: EventTarget | null): boolean {
  * owns the negotiation loading/error states, since those happen before
  * there's any source to attach a video surface to.
  */
-export function PlayerBackButton({
-  onBack,
+export function PlayerCloseButton({
+  onClose,
   onNavigateToControls,
-  onNavigateRight,
+  onNavigateLeft,
   onFocus,
   onBlur,
 }: {
-  onBack: () => void;
+  onClose: () => void;
   onNavigateToControls?: () => void;
-  onNavigateRight?: () => void;
+  onNavigateLeft?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
@@ -137,15 +143,15 @@ export function PlayerBackButton({
   return (
     <button
       type="button"
-      className="player-back"
-      onClick={onBack}
+      className="player-close"
+      onClick={onClose}
       onFocus={onFocus}
       onBlur={onBlur}
       onKeyDown={(event) => {
-        if (onNavigateRight && event.key === "ArrowRight") {
+        if (onNavigateLeft && event.key === "ArrowLeft") {
           event.preventDefault();
           event.stopPropagation();
-          onNavigateRight();
+          onNavigateLeft();
           return;
         }
         if (onNavigateToControls && event.key === "ArrowDown") {
@@ -154,23 +160,22 @@ export function PlayerBackButton({
           onNavigateToControls();
         }
       }}
-      aria-label={t("components.player.surface.backButtonAriaLabel")}
+      aria-label={t("components.player.surface.closeButtonAriaLabel")}
     >
-      <BackIcon />
-      <span>{t("components.player.surface.backButtonLabel")}</span>
+      <CloseIcon />
     </button>
   );
 }
 
 function PlayerMinimiseButton({
   onMinimise,
-  onNavigateToBack,
+  onNavigateToClose,
   onNavigateToControls,
   onFocus,
   onBlur,
 }: {
   onMinimise: () => void;
-  onNavigateToBack: () => void;
+  onNavigateToClose: () => void;
   onNavigateToControls: () => void;
   onFocus: () => void;
   onBlur?: () => void;
@@ -184,14 +189,19 @@ function PlayerMinimiseButton({
       onFocus={onFocus}
       onBlur={onBlur}
       onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") {
+        if (event.key === "ArrowRight") {
           event.preventDefault();
           event.stopPropagation();
-          onNavigateToBack();
-        } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+          onNavigateToClose();
+        } else if (event.key === "ArrowDown") {
           event.preventDefault();
           event.stopPropagation();
           onNavigateToControls();
+        } else if (event.key === "ArrowLeft") {
+          // Nothing sits to the left; keep focus here rather than letting
+          // spatial navigation jump out of the player.
+          event.preventDefault();
+          event.stopPropagation();
         }
       }}
       aria-label={t("components.player.surface.minimiseButtonAriaLabel")}
@@ -538,6 +548,12 @@ export function PlayerSurface({
   const hideTimerRef = useRef<number | undefined>(undefined);
   const initialFocusPendingRef = useRef(true);
   const [showControls, setShowControls] = useState(true);
+  // Whether the controls were visible when the current click/tap/Enter began.
+  // Those inputs only reveal hidden controls; they never toggle playback.
+  const controlsVisibleRef = useRef(true);
+  controlsVisibleRef.current = showControls;
+  const clickGateRef = useRef(createRevealGate());
+  const enterGateRef = useRef(createRevealGate());
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsPinned, setControlsPinned] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
@@ -624,11 +640,12 @@ export function PlayerSurface({
   const scheduleHide = useCallback(() => {
     window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => {
+      controlsVisibleRef.current = false;
       setShowControls(false);
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLElement &&
-        activeElement.closest(".player-controls, .player-back, .player-minimise")
+        activeElement.closest(".player-controls, .player-close, .player-minimise")
       ) {
         videoRef.current?.focus({ preventScroll: true });
       }
@@ -636,6 +653,7 @@ export function PlayerSurface({
   }, [videoRef]);
 
   const handleActivity = useCallback(() => {
+    controlsVisibleRef.current = true;
     setShowControls(true);
     if (
       shouldAutoHidePlayerControls({
@@ -826,6 +844,7 @@ export function PlayerSurface({
   useEffect(() => {
     if (minimised) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      const enterMayToggle = enterGateRef.current.finish(controlsVisibleRef.current);
       if (
         event.defaultPrevented ||
         isTypingTarget(event.target) ||
@@ -849,7 +868,11 @@ export function PlayerSurface({
       switch (event.key) {
         case "Enter":
           event.preventDefault();
-          togglePlayback();
+          // OK/Enter on hidden controls only reveals them (handleActivity
+          // below); Space, k and media keys still toggle directly.
+          if (enterMayToggle) {
+            togglePlayback();
+          }
           break;
         case "ArrowLeft":
           event.preventDefault();
@@ -862,7 +885,7 @@ export function PlayerSurface({
         case "ArrowUp":
           event.preventDefault();
           shellRef.current
-            ?.querySelector<HTMLButtonElement>(".player-back")
+            ?.querySelector<HTMLButtonElement>(".player-close")
             ?.focus({ preventScroll: true });
           break;
         case "ArrowDown":
@@ -930,10 +953,33 @@ export function PlayerSurface({
     durationSeconds > 0
       ? Math.min(100, Math.max(0, (positionSeconds / durationSeconds) * 100))
       : 0;
+  // Picture-in-Picture is the minimise surface where the browser supports it;
+  // otherwise (or for audio-only playback) the in-app mini player remains.
+  const [inPictureInPicture, setInPictureInPicture] = useState(false);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const sync = () => setInPictureInPicture(isInPictureInPicture(video));
+    video.addEventListener("enterpictureinpicture", sync);
+    video.addEventListener("leavepictureinpicture", sync);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", sync);
+      video.removeEventListener("leavepictureinpicture", sync);
+      void exitPictureInPicture(video);
+    };
+  }, [videoRef]);
+  // Maximising (or a route back to the player) always leaves Picture-in-Picture.
+  useEffect(() => {
+    if (!minimised) void exitPictureInPicture(videoRef.current);
+  }, [minimised, videoRef]);
   const minimisePlayer = useCallback(async () => {
-    if (isFullscreen) await toggleFullscreen();
+    // Must start while the click's user activation is still live, so request
+    // Picture-in-Picture before awaiting anything else.
+    const video = videoRef.current;
+    const enteredPip = musicContext ? false : await enterPictureInPicture(video);
+    if (!enteredPip && isFullscreen) await toggleFullscreen();
     onMinimise();
-  }, [isFullscreen, onMinimise, toggleFullscreen]);
+  }, [isFullscreen, musicContext, onMinimise, toggleFullscreen, videoRef]);
   return (
     <div
       ref={shellRef}
@@ -941,13 +987,14 @@ export function PlayerSurface({
         minimised ? " player-shell-minimised" : ""
       }${musicContext ? " player-shell-music" : ""}${
         inlineMusic ? " player-shell-inline-music" : ""
-      }`}
+      }${minimised && inPictureInPicture ? " player-shell-pip" : ""}`}
       onMouseEnter={minimised ? undefined : handleActivity}
       onMouseMove={minimised ? undefined : handleActivity}
       onPointerDownCapture={
         minimised && !inlineMusic
           ? undefined
           : () => {
+              clickGateRef.current.begin(controlsVisibleRef.current);
               handleActivity();
               void activateMusicVisualiser();
             }
@@ -956,6 +1003,9 @@ export function PlayerSurface({
         minimised && !inlineMusic
           ? undefined
           : (event) => {
+              if (event.key === "Enter") {
+                enterGateRef.current.begin(controlsVisibleRef.current);
+              }
               handleActivity();
               if (
                 event.key === "Enter" ||
@@ -969,33 +1019,39 @@ export function PlayerSurface({
       }
       onClick={(event) => {
         if (minimised) return;
+        const clickMayToggle = clickGateRef.current.finish(controlsVisibleRef.current);
         handleActivity();
         // Clicking anywhere on the video surface itself (not the control
         // bar, which stops propagation on its own interactive elements)
-        // toggles play/pause -- the standard click-to-toggle pattern.
-        if (event.target === event.currentTarget || (event.target as HTMLElement).tagName === "VIDEO") {
+        // toggles play/pause, but only when the controls were already
+        // visible; with them hidden the click just reveals them.
+        if (
+          clickMayToggle &&
+          (event.target === event.currentTarget ||
+            (event.target as HTMLElement).tagName === "VIDEO")
+        ) {
           togglePlayback();
         }
       }}
     >
       {!minimised && (
         <>
-          <PlayerBackButton
-            onBack={onBack}
+          <PlayerMinimiseButton
+            onMinimise={() => void minimisePlayer()}
+            onNavigateToClose={() =>
+              shellRef.current?.querySelector<HTMLButtonElement>(".player-close")?.focus()
+            }
             onNavigateToControls={focusSeekControl}
-            onNavigateRight={() =>
+            onFocus={handleActivity}
+          />
+          <PlayerCloseButton
+            onClose={onBack}
+            onNavigateToControls={focusSeekControl}
+            onNavigateLeft={() =>
               shellRef.current
                 ?.querySelector<HTMLButtonElement>(".player-minimise")
                 ?.focus()
             }
-            onFocus={handleActivity}
-          />
-          <PlayerMinimiseButton
-            onMinimise={() => void minimisePlayer()}
-            onNavigateToBack={() =>
-              shellRef.current?.querySelector<HTMLButtonElement>(".player-back")?.focus()
-            }
-            onNavigateToControls={focusSeekControl}
             onFocus={handleActivity}
           />
         </>

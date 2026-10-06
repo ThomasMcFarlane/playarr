@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { LanguageProvider } from "../../lib/i18n/LanguageProvider";
 import {
+  PlayerCloseButton,
   MUSIC_VISUALISER_BAR_COUNT,
   MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT,
   musicVisualiserBarCount,
@@ -42,5 +44,20 @@ describe("musicVisualiserBarCount", () => {
     expect(musicVisualiserBarCount("android-tv")).toBe(
       MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT
     );
+  });
+});
+
+describe("PlayerCloseButton", () => {
+  const markup = renderToStaticMarkup(
+    <LanguageProvider>
+      <PlayerCloseButton onClose={() => undefined} />
+    </LanguageProvider>
+  );
+
+  it("is an icon-only X with the localised Close player label", () => {
+    expect(markup).toContain('aria-label="Close player"');
+    expect(markup).toContain('class="player-close"');
+    expect(markup).not.toContain("Back to details");
+    expect(markup).not.toContain("<span");
   });
 });

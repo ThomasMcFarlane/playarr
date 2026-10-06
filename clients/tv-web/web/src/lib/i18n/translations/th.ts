@@ -183,6 +183,7 @@ export const th: Translations = {
   "components.player.controls.bitrateMbps": "{{bitrate}} Mbps",
   "components.player.controls.qualityButtonLabel": "คุณภาพ: {{label}}",
   "components.player.controls.original": "ต้นฉบับ",
+  "components.player.controls.originalWithBitrate": "ต้นฉบับ · {{bitrate}} Mbps",
   "components.player.controls.hdBadge": "HD",
   "components.player.controls.changingQuality": "กำลังเปลี่ยน…",
   "components.player.controls.exitFullscreen": "ออกจากโหมดเต็มจอ",
@@ -198,8 +199,7 @@ export const th: Translations = {
   "components.player.cast.error":
     "การแคสต์หยุดทำงานกะทันหัน กรุณาลองอีกครั้ง หรือดูต่อบนอุปกรณ์นี้",
 
-  "components.player.surface.backButtonAriaLabel": "กลับไปที่หน้ารายละเอียด",
-  "components.player.surface.backButtonLabel": "ย้อนกลับ",
+  "components.player.surface.closeButtonAriaLabel": "ปิดเครื่องเล่น",
   "components.player.surface.minimiseButtonAriaLabel": "ย่อเครื่องเล่น",
   "components.player.surface.minimiseButtonLabel": "ย่อ",
   "components.player.surface.openCoverFlowAriaLabel": "เปิด Cover Flow สำหรับ {{title}}",

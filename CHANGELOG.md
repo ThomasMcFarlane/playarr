@@ -154,6 +154,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web player: the top-left back arrow is replaced by an icon-only "Close player" X at the top right (localised, reachable with D-pad or arrow keys on the TV layout; Escape and Back still close). Clicking, tapping or pressing Enter/OK while the controls are hidden now only reveals them instead of pausing; Space, k and the media keys still toggle directly.
+- Web player: the Original quality now shows the source bitrate, for example "Original · 24.3 Mbps", or plain "Original" when the bitrate is unknown (never "0 Mbps").
+- Web player: Minimise uses the browser Picture-in-Picture window where supported, falling back to the in-app mini player otherwise.
 - The regional image workflow now pushes its commit SHA tag only when run on `main`, so a manual run on another branch cannot publish a tag that deployment tooling would follow.
 - Web: the Release Calendar now shows Play, Open, Request and Watchlist from the actions the server computes for the signed-in user, and posts the server's title snapshot unchanged; a disabled action shows the server's reason.
 - Web: the calendar link panel shows the existing link with one call and only replaces it when you press Reset.
@@ -2220,6 +2223,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Added vitest coverage for the web player's Original bitrate label, reveal-only input gate, Picture-in-Picture helper and close button.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.

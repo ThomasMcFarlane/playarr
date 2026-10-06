@@ -3099,12 +3099,13 @@ code {
   aspect-ratio: auto;
 }
 
-.player-back {
+.player-close {
   position: absolute;
   z-index: 40;
   top: clamp(20px, calc(3.5 * var(--viewport-unit)), 46px);
-  left: clamp(20px, 3.5vw, 58px);
-  min-width: 108px;
+  right: clamp(20px, 3.5vw, 58px);
+  width: 48px;
+  min-width: 48px;
   height: 48px;
   display: inline-flex;
   align-items: center;
@@ -3128,7 +3129,7 @@ code {
   position: absolute;
   z-index: 40;
   top: clamp(20px, calc(3.5 * var(--viewport-unit)), 46px);
-  left: calc(clamp(20px, 3.5vw, 58px) + 120px);
+  right: calc(clamp(20px, 3.5vw, 58px) + 60px);
   min-width: 124px;
   height: 48px;
   display: inline-flex;
@@ -3149,7 +3150,7 @@ code {
     background-color 180ms ease;
 }
 
-.player-shell-idle .player-back {
+.player-shell-idle .player-close {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-10px);
@@ -3161,8 +3162,8 @@ code {
   transform: translateY(-10px);
 }
 
-.player-back:hover,
-.player-back:focus-visible,
+.player-close:hover,
+.player-close:focus-visible,
 .player-minimise:hover,
 .player-minimise:focus-visible {
   outline: 0;
@@ -3171,7 +3172,7 @@ code {
   transform: scale(1.06);
 }
 
-.player-back svg {
+.player-close svg {
   display: block;
   flex: 0 0 auto;
   width: 22px;
@@ -3183,16 +3184,6 @@ code {
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-}
-
-.player-back span {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
 }
 
 .player-minimise span {
@@ -11052,7 +11043,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     font-size: 0.82rem;
   }
 
-  .player-back,
+  .player-close,
   .player-minimise {
     top: var(--mobile-top-inset);
     width: 44px;
@@ -11061,15 +11052,14 @@ html.is-native-scroll-root .profile-auth-scroll {
     padding: 0;
   }
 
-  .player-back {
-    left: var(--mobile-page-gutter);
+  .player-close {
+    right: var(--mobile-page-gutter);
   }
 
   .player-minimise {
-    left: 68px;
+    right: calc(var(--mobile-page-gutter) + 52px);
   }
 
-  .player-back span,
   .player-minimise span {
     display: none;
   }
@@ -11283,7 +11273,7 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-primary-ac
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-filter-launcher,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-back,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-back,
+html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-close,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-minimise,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-btn-primary,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-quality-menu {
@@ -12564,4 +12554,11 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 .tv-home-customise-actions {
   display: flex;
   justify-content: flex-start;
+}
+
+/* Picture-in-Picture owns the picture, so the in-app mini player is hidden
+   (kept mounted and inert-looking so the browser keeps the PiP window). */
+.player-page.is-minimised:has(.player-shell-pip) {
+  opacity: 0;
+  pointer-events: none;
 }
