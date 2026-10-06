@@ -103,6 +103,8 @@ public final class PlayerViewModel {
     @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
     @ObservationIgnored private var activeMediaFileID: UUID?
     @ObservationIgnored private var activeSessionID: UUID?
+    /// The server playback session, for the Playback health screen (nil offline).
+    public var healthSessionID: UUID? { isPlayingLocalFile ? nil : activeSessionID }
     @ObservationIgnored private var activeTitle = ""
     /// Survives `completeActiveSession()` (which clears `activeMediaFileID`)
     /// so Replay knows what to restart.

@@ -11,6 +11,7 @@ struct TVPlayerView: View {
     let suggestionsWorkID: UUID?
     @State private var viewModel: TVPlayerViewModel
     @State private var suggestions: [Work] = []
+    @State private var showingHealth = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -68,6 +69,9 @@ struct TVPlayerView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.endOfPlayback.phase)
+        .fullScreenCover(isPresented: $showingHealth) {
+            TVPlaybackHealthView(transport: apiClient, sessionID: viewModel.sessionID, player: viewModel.player)
+        }
         .task {
             viewModel.onExit = { dismiss() }
             // Returning from a suggestion must not restart a finished item.
@@ -114,6 +118,11 @@ struct TVPlayerView: View {
                     .background(
                         Capsule().fill(DesignTokens.Color.backgroundRaised.opacity(0.9))
                     )
+            }
+            if viewModel.sessionID != nil {
+                Button("Playback health") { showingHealth = true }
+                    .font(TVTheme.captionFont())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
             }
         }
         .padding(DesignTokens.Spacing.xl)

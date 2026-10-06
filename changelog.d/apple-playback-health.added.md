@@ -1,0 +1,1 @@
+- iOS and Apple TV: Playback health screen in the player (findings, technical detail, connection test, redacted diagnostic export).

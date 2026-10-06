@@ -30,6 +30,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var controlsVisible = true
+    @State private var showingHealth = false
     private let castCoordinator = CastSessionCoordinator.shared
 
     init(
@@ -113,6 +114,13 @@ struct PlayerView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel?.endOfPlayback.phase)
+        .sheet(isPresented: $showingHealth) {
+            PlaybackHealthSheet(
+                transport: apiClient,
+                sessionID: viewModel?.healthSessionID,
+                player: viewModel?.avPlayer
+            )
+        }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
@@ -311,6 +319,10 @@ struct PlayerView: View {
                                     }
                                 }
                             } label: { controlChip("Chapters", icon: "list.bullet") }
+                        }
+
+                        if viewModel.healthSessionID != nil {
+                            Button { showingHealth = true } label: { controlChip("Health", icon: "waveform.path.ecg") }
                         }
                     }
                 }

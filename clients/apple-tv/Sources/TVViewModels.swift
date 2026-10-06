@@ -183,6 +183,8 @@ final class TVPlayerViewModel {
     private(set) var playbackMode: PlaybackMode?
     private(set) var currentTitle = ""
     private(set) var currentSubtitle: String?
+    /// Server playback session of the current item, for Playback health.
+    private(set) var sessionID: UUID?
     let engine: PlayerEngine
     /// End card / up-next countdown; see `EndOfPlaybackMachine`.
     let endOfPlayback = EndOfPlaybackController()
@@ -256,6 +258,7 @@ final class TVPlayerViewModel {
             }
 
             playbackMode = info.mode
+            sessionID = info.sessionID
             try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title))
             engine.play()
             state = .ready
