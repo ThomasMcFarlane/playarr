@@ -21,6 +21,15 @@ const PALETTE = [
 
 const ffmpeg = process.env.PLAYARR_FFMPEG_BINARY ?? "ffmpeg";
 
+// Some ffmpeg builds (for example the macOS runner's) have no drawtext filter: the art is then
+// rendered without the title text, which is still a valid placeholder.
+// Only probed where the unscoped path is used (CI runners); a scoped host build has drawtext.
+const hasDrawtext = (() => {
+  if (!process.env.PLAYARR_FIXTURE_NO_SCOPE) return true;
+  const r = spawnSync(ffmpeg, ["-hide_banner", "-filters"], { encoding: "utf8", timeout: 20000 });
+  return r.status === 0 && /\bdrawtext\b/.test(r.stdout);
+})();
+
 function run(args) {
   const base = ["-v", "error", "-y", "-threads", "2", ...args];
   const [cmd, cmdArgs] = process.env.PLAYARR_FIXTURE_NO_SCOPE
@@ -40,7 +49,7 @@ function render(out, w, h, [c0, c1], title, caption, seed) {
     `drawbox=x=0:y=${Math.round(h * 0.7)}:w=${w}:h=${Math.round(h * 0.3)}:color=black@0.45:t=fill`,
     `drawtext=font='Sans':text='${title.toUpperCase()}':fontcolor=white:fontsize=${fs}:x=(w-text_w)/2:y=${Math.round(h * 0.76)}`,
     `drawtext=font='Sans':text='${caption}':fontcolor=white@0.6:fontsize=${Math.round(fs / 2.8)}:x=(w-text_w)/2:y=${Math.round(h * 0.76 + fs * 1.5)}`,
-  ].join(",");
+  ].filter((f) => hasDrawtext || !f.startsWith("drawtext")).join(",");
   run(["-f", "lavfi", "-i", `gradients=s=${w}x${h}:c0=${c0}:c1=${c1}:x0=0:y0=0:x1=${w}:y1=${h}:d=1:n=2`, "-frames:v", "1", "-vf", vf, out]);
 }
 

@@ -51,7 +51,9 @@ struct TVRootView: View {
         ZStack {
             TVStageBackground()
 
-            if TVParityLaunch.requestedScreen == .deviceCodePairing {
+            if TVParityLaunch.isLive {
+                signedInShell
+            } else if TVParityLaunch.requestedScreen == .deviceCodePairing {
                 // Fixture device-code chrome (do not hit live ATS / network).
                 TVParityPairingFixtureView()
             } else if TVParityLaunch.requestedScreen == .player {
@@ -80,6 +82,9 @@ struct TVRootView: View {
         .onAppear {
             if let forced = parityForcedTab {
                 selectedTab = forced
+            }
+            if let live = TVParityLaunch.liveTab {
+                selectedTab = live
             }
         }
     }
@@ -166,7 +171,9 @@ struct TVRootView: View {
 
     @ViewBuilder
     private func stageContent(tab: TVNavTab, detailWork: Work?) -> some View {
-        if let detailWork {
+        if TVParityLaunch.liveDetail != nil {
+            TVParityLiveDetailView()
+        } else if let detailWork {
             TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
         } else {
             switch tab {
@@ -274,7 +281,7 @@ private struct TVProductionShell<Stage: View>: View {
                 }
             }
 
-            TVShellHeader(frozenClock: false)
+            TVShellHeader(frozenClock: TVParityLaunch.isLive)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .allowsHitTesting(false)
                 .zIndex(80)

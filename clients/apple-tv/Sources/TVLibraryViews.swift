@@ -804,7 +804,12 @@ struct TVSearchView: View {
             .ignoresSafeArea()
         }
         .task(id: environment.serverURL) {
-            viewModel = TVSearchViewModel(apiClient: environment.apiClient)
+            let model = TVSearchViewModel(apiClient: environment.apiClient)
+            viewModel = model
+            if let query = TVParityLaunch.liveQuery {
+                model.query = query
+                await model.search()
+            }
         }
     }
 

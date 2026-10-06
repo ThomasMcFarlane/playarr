@@ -1,0 +1,198 @@
+name: Apple parity
+
+# Pixel parity of the Apple clients against the web client, on the fixture environment
+# (scripts/fixtures). One GitHub-hosted macOS job builds the fixture server and the web
+# client, captures the web reference, drives the simulator app to every screen in
+# scripts/parity/apple/screens.<layout>.json, diffs the captures and uploads the lot.
+#
+# `platform` selects the client: tvos (1920x1080 TV layout) or ios (mobile layout; the
+# iOS parity work extends the `ios` branch of the steps below).
+# Also runs on pull requests that touch the parity tooling so an edit is exercised
+# before this file exists on the default branch (workflow_dispatch needs it there).
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/parity-apple.yml
+      - scripts/parity/apple/**
+      - clients/apple-tv/**
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Apple client to capture
+        required: true
+        type: choice
+        options:
+          - tvos
+          - ios
+        default: tvos
+      source_sha:
+        description: Optional full commit SHA to capture (default - the selected ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'tvos' }}
+  cancel-in-progress: true
+
+env:
+  PLATFORM: ${{ inputs.platform || 'tvos' }}
+  PLAYARR_FIXTURE_PORT: "18484"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  PLAYARR_FIXTURE_NO_SCOPE: "1"
+
+jobs:
+  parity:
+    name: Parity captures (${{ inputs.platform || 'tvos' }})
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Record the toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          sw_vers
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+          cache-on-failure: true
+          cache-directories: ~/.cache/ort.pyke.io
+          prefix-key: v1-parity-apple
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.13.0
+          run_install: false
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - name: Build the fixture server
+        working-directory: backend
+        run: cargo build --bin playarr-server
+
+      - name: Build the web client
+        working-directory: clients/tv-web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @playarr-tv/web... run build
+
+      - name: Install the parity tools
+        working-directory: scripts/parity/apple
+        run: npm install --no-audit --no-fund && npx playwright-core install chromium
+
+      - name: Start the fixture environment
+        env:
+          PLAYARR_SERVER_BIN: ${{ github.workspace }}/backend/target/debug/playarr-server
+          PLAYARR_FIXTURE_NO_BUILD: "1"
+          PLAYARR_WEB_ASSETS_DIR: ${{ github.workspace }}/clients/tv-web/web/dist
+          PLAYARR_FIXTURE_DIR: ${{ runner.temp }}/fixtures
+        run: |
+          scripts/fixtures/up.sh --fresh
+          node scripts/fixtures/verify.mjs
+
+      - name: Pick the layout
+        id: layout
+        run: |
+          if [[ "$PLATFORM" == tvos ]]; then
+            echo "screens=scripts/parity/apple/screens.tv.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::the ios platform is not wired into this workflow yet"
+            exit 1
+          fi
+
+      - name: Capture the web reference
+        run: |
+          node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
+            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/reference"
+
+      - name: Create the simulator (Apple TV at 1080p)
+        id: simulator
+        run: |
+          set -euo pipefail
+          types=$(xcrun simctl list devicetypes -j)
+          type=$(node -e '
+            const t = JSON.parse(process.argv[1]).devicetypes.filter((d) => d.identifier.includes("Apple-TV"));
+            const hd = t.find((d) => /1080p/i.test(d.name)) ?? t.find((d) => d.name === "Apple TV") ?? t[0];
+            console.log(hd.identifier);
+          ' "$types")
+          runtime=$(xcrun simctl list runtimes -j | node -e '
+            let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+              const r = JSON.parse(s).runtimes.filter((x) => x.isAvailable && x.identifier.includes("tvOS"));
+              console.log(r.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))[0].identifier);
+            });')
+          echo "device type: $type  runtime: $runtime"
+          udid=$(xcrun simctl create "Playarr parity" "$type" "$runtime")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Build the tvOS app
+        if: env.PLATFORM == 'tvos'
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project clients/apple-tv/PlayarrTV.xcodeproj -scheme PlayarrTV -configuration Debug \
+            -destination "platform=tvOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 40
+
+      - name: Capture the native screens
+        if: env.PLATFORM == 'tvos'
+        run: |
+          set -euo pipefail
+          udid="${{ steps.simulator.outputs.udid }}"
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name 'PlayarrTV.app' | head -1)
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" "$app"
+          token=$(node -e '
+            import("./scripts/fixtures/catalog.mjs").then(async (m) => {
+              const r = await fetch(process.argv[1] + "/api/v1/auth/login", { method: "POST", headers: { "content-type": "application/json" },
+                body: JSON.stringify({ username: "fx-viewer", password: m.FIXTURE_PASSWORD, device_id: "22222222-2222-4222-8222-222222222222",
+                  device_name: "parity-tvos", client_platform: "ios", client_version: "parity" }) });
+              console.log((await r.json()).access_token);
+            });' "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}")
+          scripts/parity/apple/capture-tvos.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
+            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$token" "$RUNNER_TEMP/parity/native"
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
+          file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
+
+      - name: Diff the captures
+        if: always()
+        run: |
+          [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
+          node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
+            "$RUNNER_TEMP/parity/reference" "$RUNNER_TEMP/parity/native" "$RUNNER_TEMP/parity/diff" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop the fixture environment and delete the simulator
+        if: always()
+        run: |
+          scripts/fixtures/down.sh || true
+          [[ -z "${{ steps.simulator.outputs.udid }}" ]] || xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
+
+      - name: Upload the parity run
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parity-apple-${{ inputs.platform || 'tvos' }}-attempt-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/parity
+            ${{ runner.temp }}/build.txt
+            ${{ runner.temp }}/fixtures/logs
+          if-no-files-found: warn
+          retention-days: 14
