@@ -464,7 +464,6 @@ enum TVNavTab: String, CaseIterable, Identifiable {
     case movies
     case music
     case playlists
-    case calendar
     case settings
 
     var id: String { rawValue }
@@ -477,7 +476,6 @@ enum TVNavTab: String, CaseIterable, Identifiable {
         case .movies: return "Movies"
         case .music: return "Music"
         case .playlists: return "Playlists"
-        case .calendar: return "Calendar"
         case .settings: return "Settings"
         }
     }
@@ -491,7 +489,6 @@ enum TVNavTab: String, CaseIterable, Identifiable {
         case .movies: return "film"
         case .music: return "music.note"
         case .playlists: return "list.bullet"
-        case .calendar: return "calendar"
         case .settings: return "gearshape"
         }
     }
@@ -529,7 +526,7 @@ struct TVFloatingNav: View {
     /// When true, the active tab is the preferred default focus target.
     var preferDefaultFocus: Bool = false
 
-    private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists, .calendar]
+    private let primaryTabs: [TVNavTab] = [.search, .home, .series, .movies, .music, .playlists]
 
     var body: some View {
         // Whole nav is one centred column (web: top 50% + translateY(-50%)).
