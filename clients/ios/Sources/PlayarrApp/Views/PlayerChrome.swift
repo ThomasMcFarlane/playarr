@@ -311,10 +311,11 @@ struct PlayerQualityMatrix: View {
                 }
                 ForEach(PlayerQuality.tiers) { tier in
                     HStack(spacing: gap) {
-                        VStack(alignment: .leading, spacing: 1.92) {
+                        VStack(alignment: .leading, spacing: 0.92) {
                             WMText(tier.name, 8.96, 650, color: .white, lh: 13.44)
                             WMText(tier.resolution, 7.04, 400, color: .white.opacity(0.54), lh: 10.56)
                         }
+                        .offset(y: -0.3)
                         .padding(.horizontal, 4)
                         .frame(width: headingColumn, height: 48, alignment: .leading)
                         ForEach(tier.choices) { item in
@@ -341,17 +342,20 @@ struct PlayerQualityMatrix: View {
         let selected = id == selectedID
         return Button { onSelect(id) } label: {
             HStack(spacing: 5.6) {
-                VStack(alignment: .leading, spacing: 1.92) {
+                // Offsets measured against the web capture (Chromium line boxes).
+                VStack(alignment: .leading, spacing: 1.5) {
                     WMText(label, 9.28, 650, color: .white, lh: 13.92)
                     WMText(detail, 7.04, 400, color: .white.opacity(0.54), lh: 10.56)
                 }
+                .offset(y: -1.2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(selected ? "✓" : "")
                     .font(WM.font(11.84))
                     .foregroundStyle(WM.pink)
                     .frame(width: 16)
             }
-            .padding(.horizontal, 9.92)
+            .padding(.leading, 10.92)
+            .padding(.trailing, 9.92)
             .frame(width: width, height: 48)
             .background(
                 selected ? WM.pink.opacity(0.22) : Color.white.opacity(0.055),
