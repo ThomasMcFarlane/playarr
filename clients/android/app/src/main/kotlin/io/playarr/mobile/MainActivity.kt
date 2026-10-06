@@ -177,12 +177,20 @@ class MainActivity : ComponentActivity() {
                 navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             )
         }
+        io.playarr.mobile.ui.parityNoInsets = !isTelevision &&
+            (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 &&
+            intent.getBooleanExtra("parity_no_insets", false)
         setContent {
             val display = rememberPlayarrDisplayPreferences(this)
             setPlayarrWebPalette(display.darkTheme)
+            io.playarr.mobile.ui.setPlayarrWebFont(!isTelevision)
             PlayarrTheme(darkTheme = display.darkTheme) {
                 CompositionLocalProvider(LocalPlayarrDisplayPreferences provides display.value) {
-                    PlayarrApp(isTelevision = isTelevision)
+                    androidx.compose.material3.ProvideTextStyle(
+                        androidx.compose.ui.text.TextStyle(fontFamily = io.playarr.mobile.ui.webFontFamily),
+                    ) {
+                        PlayarrApp(isTelevision = isTelevision)
+                    }
                     if (!isTelevision) AppUpdateEffect()
                 }
             }

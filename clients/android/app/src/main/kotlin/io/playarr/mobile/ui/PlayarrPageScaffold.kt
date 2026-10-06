@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
@@ -117,12 +119,14 @@ internal fun PlayarrPageScaffold(
     backActive: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+    // The web page body does not follow the top inset; it starts where a 24 dp status bar leaves it.
+    val bodyInsetGap = if (isTelevision || !padBody) 0.dp else (24.dp - webPhoneInsets().asPaddingValues().calculateTopPadding()).coerceAtLeast(0.dp)
+    val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(webPhoneInsets())
     Box(
         modifier
             .fillMaxSize()
             .background(WebSurface)
-            .then(if (isTelevision || !padBody) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)),
+            .then(if (isTelevision || !padBody) Modifier else Modifier.windowInsetsPadding(webPhoneInsets())),
     ) {
         Column(
             if (padBody) {
@@ -131,7 +135,7 @@ internal fun PlayarrPageScaffold(
                     .padding(
                         start = playarrPageStart(isTelevision),
                         end = playarrPageEnd(isTelevision),
-                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp),
+                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp) + bodyInsetGap,
                         bottom = playarrPageSafeBottom(isTelevision),
                     )
             } else {
@@ -649,3 +653,22 @@ internal val WebEllipseShape = object : androidx.compose.ui.graphics.Shape {
     override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: LayoutDirection, density: androidx.compose.ui.unit.Density) =
         androidx.compose.ui.graphics.Outline.Generic(androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height)) })
 }
+
+/**
+ * Web phone top inset: `--mobile-top-inset: max(14px, env(safe-area-inset-top))`. A device with a 24 dp status bar keeps its
+ * inset; a window with none (parity captures that mask the system bars) still gets the web's 14 dp.
+ */
+@androidx.compose.runtime.Composable
+internal fun webPhoneInsets(): WindowInsets =
+    if (parityNoInsets) WindowInsets(top = 14.dp) else WindowInsets.safeDrawing.union(WindowInsets(top = 14.dp))
+
+/**
+ * Parity captures only: a debuggable build started with the `parity_no_insets` extra lays out with no system-bar insets,
+ * as the web reference does, and the diff masks the bars. Never set on a release build or on a real device.
+ */
+internal var parityNoInsets: Boolean = false
+
+/** The web page body does not follow the top inset: it starts where a 24 dp status bar leaves it. */
+@androidx.compose.runtime.Composable
+internal fun webPhoneBodyInsets(): WindowInsets =
+    if (parityNoInsets) WindowInsets(top = 24.dp) else WindowInsets.safeDrawing.union(WindowInsets(top = 24.dp))
