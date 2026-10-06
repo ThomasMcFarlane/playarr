@@ -19,32 +19,17 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # docker-compose.ci.yml: single `playarr` service (STANDALONE role).
-  # docker-compose.prod.yml: role-split `playarr-api`/`playarr-worker`
-  # (plus their `-2` --profile ha counterparts).
+  # Every compose stack runs a single `playarr` service (role `all`);
+  # Playarr is SQLite-only (ADR 0002).
   - job_name: playarr
     metrics_path: /metrics
     static_configs:
       - targets: ["playarr:9090"]
         labels:
-          role: standalone
-      - targets: ["playarr-api:9090"]
-        labels:
-          role: api
-      - targets: ["playarr-api-2:9090"]
-        labels:
-          role: api
-      - targets: ["playarr-worker:9090"]
-        labels:
-          role: worker
-      - targets: ["playarr-worker-2:9090"]
-        labels:
-          role: worker
+          role: all
 
   # --------------------------------------------------------------------
-  # For a longer-lived deployment (especially docker-compose.prod.yml with
-  # --profile ha, where replica *count* -- not just the fixed `-2` node --
-  # can change), Docker Swarm/service discovery is a better fit than a
+  # For a longer-lived deployment (especially a longer-lived stack, Docker Swarm/service discovery is a better fit than a
   # hand-maintained static list. Once this stack runs under Swarm (or with
   # a discovery-capable runtime), replace the `playarr` job above with:
   #

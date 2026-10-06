@@ -149,18 +149,17 @@ audio, so a bad name degrades to something playable rather than failing the whol
 
 ### Session lifecycle and configuration
 
-A transcode session is ephemeral, node-scoped state. It lives in whatever cache backend the tier
-resolved (in-memory `moka` on single-node, Postgres `LISTEN`/`NOTIFY` or Redis on multi-node), never
+A transcode session is ephemeral, node-scoped state. It lives in the in-memory cache (`moka`), never
 as a durable database row.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS` | `60` | Idle deadline for a live session. Every manifest and segment request slides it forward, so this is not a cap on playback length, it is how long a session survives after a viewer closes the tab or loses connection before the FFmpeg process and its capacity slot are freed. A non-positive or unparseable value logs a warning and falls back to 60. |
 
-Set it in the usual place for your deployment tier:
+Set it in the usual place for your deployment:
 
 ```bash
-# Tier 1, systemd, /etc/playarr/playarr.env
+# systemd, /etc/playarr/playarr.env
 PLAYARR_TRANSCODE_SESSION_IDLE_TTL_SECS=60
 ```
 
@@ -322,9 +321,9 @@ On-demand HLS output is written to a per-session directory under a fixed root:
 `std::env::temp_dir().join("playarr-transcode")`, so on Linux the only lever is the standard
 `TMPDIR` environment variable, which Rust's `temp_dir()` honours (falling back to `/tmp`).
 
-What that means per tier:
+What that means per deployment shape:
 
-| Tier | Where segments land by default | Notes |
+| Deployment | Where segments land by default | Notes |
 | --- | --- | --- |
 | systemd | The unit's private `/tmp` (`PrivateTmp=true`) | If `/tmp` is a tmpfs on your host, segments consume RAM. |
 | Docker Compose (prod) | `tmpfs: /tmp` on a read-only root filesystem | A RAM disk sized by Docker's default. |

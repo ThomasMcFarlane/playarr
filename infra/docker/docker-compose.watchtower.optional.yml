@@ -13,21 +13,20 @@
 # instead of the running process patching itself).
 #
 # HOW TO LAYER THIS IN (it does nothing on its own -- `-f` it alongside a
-# base file that already defines the `playarr-api`/`playarr-worker`
-# services, i.e. docker-compose.prod.yml):
+# base file that already defines the `playarr`
+# service, i.e. docker-compose.prod.yml):
 #
 #   docker compose \
 #     -f infra/docker/docker-compose.prod.yml \
 #     -f infra/docker/docker-compose.watchtower.optional.yml \
-#     --profile standard up -d
+#     up -d
 #
 # What this overlay does, precisely:
-#   1. Adds `com.centurylinklabs.watchtower.enable=true` to every
-#      `playarr-*` service. Watchtower is started with `--label-enable`,
-#      so it polls/updates ONLY containers carrying this label -- Postgres,
-#      Redis, and Caddy are never touched, even though they're in the same
-#      compose project.
-#   2. Repins each `playarr-*` service's `image:` from the exact
+#   1. Adds `com.centurylinklabs.watchtower.enable=true` to the
+#      `playarr` service. Watchtower is started with `--label-enable`,
+#      so it polls/updates ONLY containers carrying this label -- Caddy
+#      is never touched, even though it's in the same compose project.
+#   2. Repins the `playarr` service's `image:` from the exact
 #      `MAJOR.MINOR.PATCH` tag the base file defaults to (matching
 #      infra/kubernetes/helm/playarr/Chart.yaml's appVersion pinning
 #      policy) to a floating `MAJOR.MINOR` tag instead. Watchtower re-pulls
@@ -55,16 +54,7 @@ x-watchtower-pin: &watchtower-pin
     com.centurylinklabs.watchtower.enable: "true"
 
 services:
-  playarr-api:
-    <<: *watchtower-pin
-
-  playarr-api-2:
-    <<: *watchtower-pin
-
-  playarr-worker:
-    <<: *watchtower-pin
-
-  playarr-worker-2:
+  playarr:
     <<: *watchtower-pin
 
   watchtower:

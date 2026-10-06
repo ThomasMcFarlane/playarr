@@ -1,10 +1,10 @@
 # ==============================================================================
-# Playarr Server -- local dev stack (Tier 2: docker-compose, per
-# docs/architecture/adr/0001-storage-engine.md's tier table).
+# Playarr Server -- local dev stack (docker-compose). Playarr is SQLite-only
+# (docs/architecture/adr/0002-sqlite-only-storage.md): the database is a file
+# on the `playarr` service's data volume.
 #
-# Now that backend/ builds a real `playarr` binary, this file runs it too
-# (service `playarr`, built from backend.Dockerfile), alongside Postgres +
-# the *arr apps + Tdarr as supervised sibling containers. `PLAYARR_ROLE`
+# This file runs the real `playarr` binary (service `playarr`, built from
+# backend.Dockerfile), alongside the *arr apps + Tdarr as supervised sibling containers. `PLAYARR_ROLE`
 # is set to `all` (API + worker in one process) -- the right default for a
 # single-node dev stack; see backend/crates/playarr-config's docs for the
 # full `all`/`api`/`worker` role contract.
@@ -27,31 +27,6 @@ x-linuxserver-env: &linuxserver-env
   TZ: ${TZ:-Etc/UTC}
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: playarr-dev-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-playarr}
-      POSTGRES_USER: ${POSTGRES_USER:-playarr}
-      # Dev-only default password for a Postgres instance that is not
-      # reachable outside this compose network unless you also publish
-      # the port to a non-loopback interface. Override via a .env file
-      # for anything beyond a throwaway local checkout.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-playarr_dev_only}
-    ports:
-      - "127.0.0.1:5432:5432"
-    volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-playarr} -d ${POSTGRES_DB:-playarr}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - playarr-net
-
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: playarr-dev-sonarr
@@ -179,10 +154,8 @@ services:
     environment:
       PLAYARR_ROLE: all
       # Real env vars playarr-config::Config::from_env reads -- see that
-      # crate's docs for the full list/defaults. Matches the postgres
-      # service's own credentials above rather than hardcoding a second
-      # copy of them.
-      DATABASE_URL: postgres://${POSTGRES_USER:-playarr}:${POSTGRES_PASSWORD:-playarr_dev_only}@postgres:5432/${POSTGRES_DB:-playarr}
+      # crate's docs for the full list/defaults.
+      DATABASE_URL: sqlite:///data/playarr.db
       PLAYARR_ARTWORK_CACHE_DIR: /data/playarr-cache/artwork
       PLAYARR_LOG: ${PLAYARR_LOG:-info,playarr_api=debug}
       PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
@@ -212,8 +185,6 @@ services:
       PROWLARR_URL: http://prowlarr:9696
       READARR_URL: http://readarr:8787
     depends_on:
-      postgres:
-        condition: service_healthy
       sonarr:
         condition: service_started
       radarr:
@@ -232,7 +203,7 @@ services:
       - "8484:8484"
       - "9090:9090"
     volumes:
-      - playarr_dev_artwork_cache:/data/playarr-cache/artwork
+      - playarr_dev_data:/data
     networks:
       - playarr-net
 
@@ -241,7 +212,6 @@ networks:
     name: playarr-net
 
 volumes:
-  postgres_dev_data:
   sonarr_dev_config:
   radarr_dev_config:
   lidarr_dev_config:
@@ -252,4 +222,4 @@ volumes:
   tdarr_dev_configs:
   tdarr_dev_logs:
   media_dev:
-  playarr_dev_artwork_cache:
+  playarr_dev_data:

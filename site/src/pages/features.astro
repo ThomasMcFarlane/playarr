@@ -60,11 +60,11 @@ const areas = [
   },
   {
     name: 'Running it',
-    lede: 'One binary, three tiers, no migration story between them.',
+    lede: 'One binary, three deployment shapes, one embedded database.',
     items: [
-      ['Single binary, role-gated', 'The same executable runs as the API, as a worker, or as a coordinator. Splitting roles is a configuration change.'],
-      ['SQLite or Postgres', 'Start on SQLite on one machine; move to Postgres when it earns its keep.'],
-      ['Three deployment tiers', 'A systemd unit, a Docker Compose stack, or Kubernetes with a Helm chart and overlays, all shipped in the repository.'],
+      ['Single binary, role-gated', 'The same executable runs as the API, as a worker, or as both in one process. Choosing a role is a configuration change.'],
+      ['Embedded SQLite', 'One database file per server, no database service to run. Extra servers join through peer sync.'],
+      ['Three deployment shapes', 'A systemd unit, a Docker Compose stack, or Kubernetes with a Helm chart and overlays, all shipped in the repository.'],
       ['HTTPS without a reverse proxy', 'Built-in ACME with an HTTP-01 listener, for home servers that would rather not run another moving part in front.'],
       ['Admin console', 'Live sessions and playback history, with the ability to stop a session.'],
       ['A published API contract', 'The OpenAPI description is generated from the handlers, drift-tested in CI and served by the running server. The TypeScript client is generated from it.'],
@@ -156,7 +156,7 @@ const notBuilt = [
     </div>
     <p class="after">
       There is no 1.0 release, and the deployment manifests have not yet been proven end to end
-      on every tier. Progress is tracked in the open in the
+      on every deployment shape. Progress is tracked in the open in the
       <a href={LINKS.repo} rel="noopener">repository</a>.
     </p>
   </Section>

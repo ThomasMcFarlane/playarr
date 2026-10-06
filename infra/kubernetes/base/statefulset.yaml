@@ -1,44 +1,40 @@
+# One Playarr server (role `all`) with its SQLite database on a
+# PersistentVolumeClaim. Playarr is SQLite-only (ADR 0002): a single replica
+# per database. Multi-node deployments run several independent copies of this
+# tree (one namespace each) and synchronise through peer sync.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: playarr-worker
+  name: playarr
   labels:
     app.kubernetes.io/name: playarr
-    app.kubernetes.io/component: worker
 spec:
-  replicas: 2
+  replicas: 1
+  serviceName: playarr
   selector:
     matchLabels:
       app.kubernetes.io/name: playarr
-      app.kubernetes.io/component: worker
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   template:
     metadata:
       labels:
         app.kubernetes.io/name: playarr
-        app.kubernetes.io/component: worker
     spec:
       terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
-        - name: playarr-worker
+        - name: playarr
           image: ghcr.io/playarr/playarr:0.1.0
           env:
             - name: PLAYARR_ROLE
-              value: worker
+              value: all
             - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: playarr-secrets
-                  key: DATABASE_URL
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: playarr-secrets
-                  key: REDIS_URL
+              value: sqlite:///data/playarr.db
+            - name: PLAYARR_ARTWORK_CACHE_DIR
+              value: /data/cache/artwork
           envFrom:
             - configMapRef:
                 name: playarr-config
@@ -70,3 +66,15 @@ spec:
             limits:
               cpu: 2000m
               memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

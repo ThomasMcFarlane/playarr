@@ -470,8 +470,8 @@ curl -fsS --max-time 5 http://<YOUR-SERVER-HOSTNAME>:9090/metrics
 If the third command returns a `verification_uri` of `http://localhost/link`, your proxy is not
 sending `X-Forwarded-Proto` and `X-Forwarded-Host`.
 
-> The repository ships a reference Caddy configuration for the Docker Compose tier at
-> `infra/docker/prod/Caddyfile`, and no reverse-proxy example at all for the systemd tier or the
-> Kubernetes tier, the Helm chart and kustomize manifests contain no Ingress or Gateway resource,
+> The repository ships a reference Caddy configuration for the Docker Compose stack at
+> `infra/docker/prod/Caddyfile`, and no reverse-proxy example at all for the systemd install or the
+> Kubernetes install, the Helm chart and kustomize manifests contain no Ingress or Gateway resource,
 > because ingress class, certificate issuer and hostname are all cluster-specific. The nginx
 > configuration above is written for this documentation rather than copied from the repository.

@@ -31,7 +31,7 @@ k6 run -e BASE_URL=http://localhost:8484 infra/k6/transcode-stress.js
 - **Base URL / port**: defaults to `http://localhost:8484`, matching
   `HTTP_PORT` in `infra/kubernetes/helm/playarr/values.yaml`.
 - **`/healthz` and `/readyz`**: confirmed against
-  `infra/kubernetes/base/deployment-api.yaml` and the Helm chart's
+  `infra/kubernetes/base/statefulset.yaml` and the Helm chart's
   `probes.livenessPath`/`probes.readinessPath` -- not a guess.
 - **`/api/system/version`, `/api/playback/sessions`, `/api/transcode/jobs`**:
   not yet confirmed against any route table (`playarr-api` has no routes

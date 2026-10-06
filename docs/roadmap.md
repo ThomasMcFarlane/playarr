@@ -29,20 +29,19 @@ on this codebase should be scoped and handed out.
   crate or `RoleSet` bitflag. Domain types live in `playarr-model`
   (`Work`, `User`, `Session`, `Device`, `MediaFile`, `Rendition`, ...);
   role-gating is `playarr-config::Role` (`All` / `Api` / `Worker`, read
-  from `PLAYARR_ROLE`) plus `DeploymentTier`; the single binary is
+  from `PLAYARR_ROLE`); the single binary is
   `playarr-bin` (package name), producing the `playarr` binary from
   `backend/src/main.rs`, a real `clap` CLI with subcommands. Functionally
   equivalent to the planned design (one binary, gated by role at startup),
   just simpler than a bitflag.
-- **The dual-backend storage engine.** **Built.** `playarr-db` genuinely
-  supports both SQLite and Postgres via `sqlx`, auto-detecting the backend
-  from the connection URL scheme (`Backend::from_database_url`), with
-  separate embedded migration sets under `backend/migrations/sqlite/` and
-  `backend/migrations/postgres/` (currently 5 and 8 migrations
-  respectively — Postgres has extra migrations for cluster-leader and cache
-  tables that SQLite's single-node deployments don't need). Real
+- **The storage engine.** **Built, now SQLite-only.** `playarr-db` uses
+  `sqlx` with the SQLite driver and one embedded migration set under
+  `backend/migrations/sqlite/`. The original dual SQLite/Postgres design
+  was removed by owner decision on 7 October 2026
+  ([ADR 0002](architecture/adr/0002-sqlite-only-storage.md), superseding
+  [ADR 0001](architecture/adr/0001-storage-engine.md)). Real
   `WorkRepo`, `DeviceRepo`, `RenditionRepo`, and `MediaFileRepo` traits with
-  Sqlx-backed implementations, per [ADR 0001](architecture/adr/0001-storage-engine.md).
+  Sqlx-backed implementations.
 - **The OpenAPI spec.** **Built**, and further along than "skeleton": it
   is not hand-maintained at all. `backend/openapi/playarr.yaml` is
   generated from `#[utoipa::path]` annotations on every real handler
@@ -79,17 +78,13 @@ on this codebase should be scoped and handed out.
   comment in `login.rs` explicitly scopes user provisioning as
   "out-of-scope" for that module. Both are deferred because they need a
   real persistence/admin-tooling design decision, not because they're hard.
-- **`ClusterCoordinator`.** **Built** for the two shipped implementations,
+- **`ClusterCoordinator`.** **Built** (single implementation),
   **Deferred** for gossip. `playarr-coordination` (not `playarr-cluster`)
-  has a real `ClusterCoordinator` trait with two real implementations:
-  `SingleNodeCoordinator` (correct-by-construction, no contention) and
-  `PostgresCoordinator` (genuine `pg_try_advisory_lock`/`pg_advisory_unlock`
-  mutual exclusion plus a `cluster_leader` heartbeat table for leader
-  election, per `backend/migrations/postgres/0003_cluster_leader.sql`).
+  has a real `ClusterCoordinator` trait with one implementation,
+  `SingleNodeCoordinator`. The Postgres-backed coordinator was removed with
+  Postgres support (ADR 0002); multiple nodes cooperate through peer sync.
   **Deferred:** gossip-based membership as an opt-in additive layer was
-  never started — there is no gossip code anywhere in the workspace. Not
-  needed yet: nothing currently deployed exceeds a Postgres-coordinated
-  cluster's needs.
+  never started — there is no gossip code anywhere in the workspace.
 - **arr-ecosystem adapters.** **Built**, and broader than planned:
   `playarr-arr-client` (not `playarr-arr`) has one real adapter each
   for Sonarr, Radarr, Prowlarr, Bazarr, **and** Lidarr and Readarr (music
@@ -116,8 +111,7 @@ on this codebase should be scoped and handed out.
   decision order (direct-play → existing rendition → spawn on-demand
   transcode), real ffmpeg HLS argument construction
   (`build_ffmpeg_hls_args`), and session state in whatever
-  `playarr-cache::CacheAndPubSub` backend is configured (in-memory or
-  Redis). **Deferred: DRM license endpoints (Widevine, FairPlay, PlayReady)
+  `playarr-cache::CacheAndPubSub` backend (in-memory). **Deferred: DRM license endpoints (Widevine, FairPlay, PlayReady)
   do not exist** — there is no license-serving code anywhere in the
   transcode crate or the OpenAPI spec, despite being named explicitly in
   the original plan. **Deferred: session-to-node affinity routing** for
@@ -136,18 +130,18 @@ on this codebase should be scoped and handed out.
 
 ## Wave 4 — Deployment Infra
 
-All three tiers are **Built** as real, checked-in files (not just
+All three deployment options are **Built** as real, checked-in files (not just
 scaffolding), with paths shifted from the original plan's `infra/`
 sketch to what's actually there:
 
-- **systemd tier.** `infra/systemd/playarr.service`, `install.sh`,
+- **systemd.** `infra/systemd/playarr.service`, `install.sh`,
   `playarr.env.example`, and an update-check timer/service pair
   (`playarr-update-check.timer`/`.service`) — the opt-in update timer
   from the plan is real.
-- **docker-compose tier.** `infra/docker/docker-compose.{dev,prod,ci,mock}.yml`
+- **docker-compose.** `infra/docker/docker-compose.{dev,prod,ci,mock}.yml`
   plus `docker-compose.watchtower.optional.yml` for the opt-in
   auto-update overlay, and a real `backend.Dockerfile`.
-- **Kubernetes tier.** `infra/kubernetes/` has both a real Helm chart
+- **Kubernetes.** `infra/kubernetes/` has both a real Helm chart
   (`helm/playarr/Chart.yaml`+`values.yaml`) and a plain Kustomize
   `base/`+`overlays/{dev,staging,prod}` set, plus an example Flux
   image-automation manifest — narrower than the plan's implied full
@@ -155,7 +149,7 @@ sketch to what's actually there:
   directory), but the base/overlay/chart structure itself is real.
 
 **Deferred (explicitly, not a gap in this pass): no live docker-compose
-end-to-end proof.** All three tiers' files exist and are internally
+end-to-end proof.** All three options' files exist and are internally
 consistent, but nothing in this environment has actually run
 `docker compose up` against them to confirm a real boot — that requires
 starting real services, which this pass deliberately did not do. Treat the
@@ -382,7 +376,7 @@ deferred work or close the biggest real gap:
    auth engine that's an actual functional gap rather than a nice-to-have.
 3. **A real docker-compose boot, run against the actual services.** Cheap
    to do, high-confidence payoff — turns "should work" into "confirmed
-   works" for the deployment tier most people will actually try first.
+   works" for the deployment option most people will actually try first.
 4. **DRM license endpoints**, once a concrete deployment needs protected
    playback — not urgent in the abstract, but currently the single largest
    named gap against the original media-pipeline scope.

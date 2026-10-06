@@ -30,7 +30,7 @@ and a Playarr client only exists in service of some Playarr Server.
 ## The single-role-gated-binary principle
 
 Playarr Server ships as **one compiled binary**, `playarr`, regardless of
-deployment tier. There is no separate `playarr-api`, `playarr-worker`,
+deployment option. There is no separate `playarr-api`, `playarr-worker`,
 and `playarr-coordinator` executable to build, version, and keep in sync.
 Instead, the binary (default subcommand `serve`; a separate `update`
 subcommand checks/applies binary updates out-of-band) reads a
@@ -41,7 +41,7 @@ registers HTTP routes or spawns background tasks checks it before doing so:
 ```rust
 pub enum Role {
     /// Everything in one process. The default, and the only sane choice
-    /// for DeploymentTier::SingleNode.
+    /// for a single-process deployment.
     All,
     Api,
     Worker,
@@ -53,20 +53,17 @@ impl Role {
 }
 ```
 
-A single-node install (systemd tier) runs one process with `PLAYARR_ROLE`
+A single-node install (for example under systemd) runs one process with `PLAYARR_ROLE`
 unset (which defaults to `all`) — the Axum API, the arr-sync reconciliation
 pollers, and the Tdarr background dispatcher all run as tasks in the same
-process. A Kubernetes deployment can instead run several processes from the
-*identical* binary: some started with `PLAYARR_ROLE=api` (serving the
-Axum router) and others with `PLAYARR_ROLE=worker` (running the pollers
-and dispatcher plus a minimal `/healthz` listener, no public API router).
-There is no separate "coordinator" or "edge" role — cluster coordination
-isn't something a process opts into via role, it's a trait
-(`playarr_coordination::ClusterCoordinator`) every `api`/`worker` process
-constructs the same way at boot, picking `SingleNodeCoordinator` or
-`PostgresCoordinator` based on `playarr_config::DeploymentTier` (itself
-*derived* from whether `DATABASE_URL`/`REDIS_URL` point at Postgres/Redis,
-not a separately configured tier flag) — see
+process. The roles `PLAYARR_ROLE=api` (serving the Axum router) and
+`PLAYARR_ROLE=worker` (running the pollers and dispatcher plus a minimal
+`/healthz` listener, no public API router) exist for processes that share
+one SQLite database file. There is no separate "coordinator" or "edge"
+role; coordination is the `playarr_coordination::ClusterCoordinator` trait,
+always wired to `SingleNodeCoordinator` because Playarr is SQLite-only
+([ADR 0002](adr/0002-sqlite-only-storage.md)). Several servers cooperate
+through peer sync, each keeping its own database — see
 [`distributed-design.md`](distributed-design.md).
 
 This buys three things deliberately:
@@ -75,10 +72,10 @@ This buys three things deliberately:
    one `aarch64` binary, one container image. There is no risk of an API
    node and a worker node drifting to different git SHAs because someone
    forgot to rebuild one of several images.
-2. **Tier upgrades are a config change, not a rewrite.** Growing from a
-   single NAS to a three-node cluster means changing how the *same* binary
-   is invoked and pointing it at Postgres instead of SQLite — not swapping
-   in different software.
+2. **Growing is a configuration change, not a rewrite.** Going from a
+   single NAS to several cooperating servers means running the *same*
+   binary on each and joining them with peer sync — not swapping in
+   different software.
 3. **Role gating is a compile-time-visible runtime check, not a build
    feature.** The composition root (`backend/src/main.rs`'s `serve`
    function) checks `Role::runs_api()`/`Role::runs_worker()` before spawning
@@ -88,30 +85,28 @@ This buys three things deliberately:
 
 Role gating is a runtime concern; it does not fork the binary's feature
 flags. Cargo features are reserved for genuinely optional *build-time*
-concerns (e.g. compiling in the SQLite driver, the Postgres driver, or both).
+concerns (for example optional media tooling).
 
-## The three deployment tiers
+## Deployment
 
-Playarr Server is designed against three explicit deployment tiers, in increasing
-order of scale and operational complexity. Every architecture decision in
-this repository is checked against all three — a design that only works at
-Kubernetes scale, or only works as a single binary on a Raspberry Pi, is
-rejected.
+Playarr Server is SQLite-only ([ADR 0002](adr/0002-sqlite-only-storage.md),
+superseding [ADR 0001](adr/0001-storage-engine.md)): one server process per
+SQLite database file. Every architecture decision is checked against both
+ends of that range — a design that only works at cluster scale, or only works
+as a single binary on a Raspberry Pi, is rejected.
 
-| Tier | Typical hardware | Node count | DB backend | Coordinator | Doc |
-|---|---|---|---|---|---|
-| 1 — systemd | NAS, mini-PC, Raspberry Pi 4/5, home server | 1 | SQLite | `SingleNodeCoordinator` (no-op) | [`deployment/systemd.md`](deployment/systemd.md) |
-| 2 — docker-compose | Small VPS or home server, fixed handful of containers | 1–3 | Postgres | `PostgresCoordinator` (advisory locks) | [`deployment/docker-compose.md`](deployment/docker-compose.md) |
-| 3 — Kubernetes | Managed or self-hosted cluster, autoscaled | 3+ | Postgres | `PostgresCoordinator` | [`deployment/kubernetes.md`](deployment/kubernetes.md) |
+| Deployment | Typical hardware | Storage | Doc |
+|---|---|---|---|
+| systemd | NAS, mini-PC, Raspberry Pi 4/5, home server | SQLite file in the data directory | [`deployment/systemd.md`](deployment/systemd.md) |
+| Docker Compose | Small VPS or home server | One container, SQLite file on a data volume | [`deployment/docker-compose.md`](deployment/docker-compose.md) |
+| Kubernetes | Managed or self-hosted cluster | One pod per node, SQLite file on a persistent volume | [`deployment/kubernetes.md`](deployment/kubernetes.md) |
 
-Tier 1 is the default and the one the majority of users will run: it must
-work with zero external dependencies, survive an unattended reboot, and not
-require the owner to understand clustering at all. Tiers 2 and 3 exist for
-people who outgrow a single box or who are running Playarr Server as shared
-infrastructure for multiple households. See
-[`docs/architecture/distributed-design.md`](distributed-design.md) for the
-statelessness requirements and coordinator design that make moving between
-tiers possible without a data migration story beyond "point at Postgres."
+All three run the same binary and must work with zero external
+dependencies, survive an unattended reboot, and not require the owner to
+understand clustering. Multiple servers (for example one per region) join a
+peer group and replicate through peer sync, each with its own database. See
+[`docs/architecture/distributed-design.md`](distributed-design.md) and
+[`peer-groups.md`](peer-groups.md).
 
 ## Crate layout
 
@@ -126,10 +121,10 @@ into a peer's internals:
 | Crate | Responsibility |
 |---|---|
 | `playarr-model` | Domain types shared across the backend (library items, `User`, `Session`, `Policy`, `Device`, ...) with no I/O. Everything else depends on this; it depends on nothing in-workspace. |
-| `playarr-config` | Env-driven configuration (`Config::from_env`), hand-rolled on `std::env` rather than a config framework — loaded before telemetry exists, so config errors must be reportable with nothing fancier than `Display`. Also owns `Role` (`all`/`api`/`worker`) and `DeploymentTier` (derived from whether `DATABASE_URL`/`REDIS_URL` point at Postgres/Redis). |
-| `playarr-db` | The `sqlx`-based dual-backend storage engine (SQLite + Postgres, via `sqlx::AnyPool`). See [ADR 0001](adr/0001-storage-engine.md). Owns migrations and the repository traits (`WorkRepo`, `DeviceRepo`, `RenditionRepo`, `MediaFileRepo`). |
-| `playarr-coordination` | The `ClusterCoordinator` trait and its `SingleNodeCoordinator` / `PostgresCoordinator` implementations. See [`distributed-design.md`](distributed-design.md). |
-| `playarr-cache` | Cache + pub/sub abstraction (`CacheAndPubSub`): in-memory (moka) for single-node, Redis or Postgres `LISTEN`/`NOTIFY` for multi-node. |
+| `playarr-config` | Env-driven configuration (`Config::from_env`), hand-rolled on `std::env` rather than a config framework — loaded before telemetry exists, so config errors must be reportable with nothing fancier than `Display`. Also owns `Role` (`all`/`api`/`worker`). `DATABASE_URL` must be a `sqlite:` URL; anything else, including `postgres://`, fails startup. |
+| `playarr-db` | The `sqlx`-based SQLite storage engine (`sqlx::AnyPool` with the SQLite driver). See [ADR 0002](adr/0002-sqlite-only-storage.md). Owns migrations and the repository traits (`WorkRepo`, `DeviceRepo`, `RenditionRepo`, `MediaFileRepo`). |
+| `playarr-coordination` | The `ClusterCoordinator` trait and its in-process `SingleNodeCoordinator`. See [`distributed-design.md`](distributed-design.md). |
+| `playarr-cache` | Cache + pub/sub abstraction (`CacheAndPubSub`): in-memory (moka). |
 | `playarr-arr-client` | Typed HTTP clients for the wrapped *arr apps: Sonarr, Radarr, Lidarr, Prowlarr, Bazarr, Readarr. |
 | `playarr-arr-sync` | Webhook-as-signal, poll-as-truth reconciliation between Playarr Server's catalog and the configured *arr source instances — see "The arr-wrapping approach" below. |
 | `playarr-catalog` | Read-optimised catalog query API: browse/search/get-by-id over the `Work` aggregate, cache-fronted. |
@@ -288,7 +283,7 @@ can't update on demand (store review delays, no-OTA platforms).
 ## Why this is a monorepo
 
 The server, every client (see "The client strategy" above), and the infra
-manifests for all three deployment tiers live in one repository. This is a
+manifests for every deployment option live in one repository. This is a
 deliberate choice, not incidental:
 
 1. **The API contract is the coupling point, and the monorepo makes that
@@ -304,7 +299,7 @@ deliberate choice, not incidental:
    across repos with independent release cadences.
 3. **It matches how the project is actually built.** This project is built
    by dispatching many parallel, narrowly-scoped agents against clearly
-   bounded subdirectories (a crate, an infra tier, a client platform, a docs
+   bounded subdirectories (a crate, an infra directory, a client platform, a docs
    subtree) at the same time — see [`docs/roadmap.md`](../roadmap.md). A
    monorepo with disciplined directory ownership gives every agent a stable,
    conflict-free slice of one tree instead of needing cross-repo
@@ -358,7 +353,7 @@ pointing at what should replace it.
 - Implementing or reviewing auth? Read [`auth-modes.md`](auth-modes.md).
 - Working on clustering, node affinity, or the coordinator? Read
   [`distributed-design.md`](distributed-design.md).
-- Deploying or writing infra for a specific tier? Read the matching doc
+- Deploying or writing infra for a specific platform? Read the matching doc
   under `deployment/`.
 - Building a specific client? Read the matching doc under `clients/`.
 - Wondering what to build next, or how work is sequenced? Read

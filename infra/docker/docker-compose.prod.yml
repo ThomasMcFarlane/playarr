@@ -1,46 +1,27 @@
 # ==============================================================================
-# Playarr Server -- reference multi-node production stack (docker-compose native).
+# Playarr Server -- reference production stack (docker-compose native).
 #
-# This is a REFERENCE topology for operators who want more headroom than a
-# single systemd install (Tier 1) but don't want to run Kubernetes (Tier 3,
-# see ../kubernetes/helm/playarr/). It deliberately mirrors the Helm
-# chart's contract (env var names, /healthz + /readyz, non-root uid 10001,
-# read-only root filesystem) so operating knowledge transfers between the
-# two -- see infra/docker/README.md for the full mapping.
-#
-# `docker compose up --scale` also works for ad-hoc capacity changes, but
-# this file uses named services + profiles for TIER SELECTION instead of
-# raw replica counts, so `docker compose config --services` tells you
-# exactly what a tier contains:
+# One Playarr server (API and background workers in one process, SQLite on a
+# named volume) behind a Caddy reverse proxy. Playarr is SQLite-only (ADR
+# 0002): there is no database server and no shared cache to run, and a
+# multi-node deployment is several independent nodes, each with its own
+# SQLite database, that synchronise through peer sync (see
+# docs/architecture/distributed-design.md), not several replicas against one
+# database. It mirrors the Helm chart's contract (env var names, /healthz +
+# /readyz, non-root uid 10001, read-only root filesystem) so operating
+# knowledge transfers between the two -- see infra/docker/README.md.
 #
 #   docker compose -f docker-compose.prod.yml up -d
-#     -> postgres, caddy, playarr-api (2 replicas). API/browse traffic
-#        only -- no worker means no on-demand/background transcode
-#        capacity. The smallest useful tier.
+#     -> playarr (role all) + caddy.
 #
-#   docker compose -f docker-compose.prod.yml --profile standard up -d
-#     -> adds playarr-worker (2 replicas): transcode + library-scan
-#        capacity. The tier most single-VPS/home-server operators want.
-#
-#   docker compose -f docker-compose.prod.yml --profile ha up -d
-#     -> adds Redis (shared cache/session store) plus one extra,
-#        independently-placed playarr-api-2 / playarr-worker-2 node
-#        each, on top of whatever --profile standard already added ('ha'
-#        implies wanting worker capacity too, so playarr-worker carries
-#        both profiles -- see its `profiles:` list below). Pass both flags
-#        together for the full tier: `--profile standard --profile ha`.
-#
-# Secrets (DB password, etc.) are NEVER defaulted to a real value below --
-# every `${VAR:?...}` fails loudly if unset rather than silently starting
-# with a weak/blank credential. Provide them via a `.env` file (untracked;
-# see .gitignore) or your orchestrator's secret injection. Redis, when the
-# `ha` profile is active, is expected at `redis://redis:6379/0` -- set
-# PLAYARR_REDIS_URL to that (or leave unset; REDIS_URL is optional, see
-# infra/kubernetes/helm/playarr/values.yaml's secret.data.redisUrl).
+# The JWT secret is never defaulted to a real value below: `${VAR:?...}`
+# fails loudly if unset rather than silently starting with a weak or blank
+# credential. Provide it via a `.env` file (untracked; see .gitignore) or
+# your orchestrator's secret injection.
 #
 # Usage:
 #   docker compose -f infra/docker/docker-compose.prod.yml build
-#   docker compose -f infra/docker/docker-compose.prod.yml --profile standard --profile ha up -d
+#   docker compose -f infra/docker/docker-compose.prod.yml up -d
 # ==============================================================================
 
 x-playarr-image: &playarr-image
@@ -50,179 +31,32 @@ x-playarr-image: &playarr-image
   image: ${PLAYARR_IMAGE:-ghcr.io/playarr/playarr}:${PLAYARR_IMAGE_TAG:-0.1.0}
   pull_policy: build
 
-x-playarr-env: &playarr-env
-  # The real env vars playarr-config::Config::from_env reads (see
-  # backend/crates/playarr-config/src/lib.rs) -- not APP_ENV/LOG_LEVEL/
-  # LOG_FORMAT/METRICS_ENABLED/METRICS_PORT/HTTP_PORT, none of which the
-  # binary actually reads (a prior pass invented those against a
-  # docs-described-but-never-implemented config surface).
-  PLAYARR_LOG: ${PLAYARR_LOG_LEVEL:-info}
-  PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
-  PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
-  DATABASE_URL: postgres://playarr:${PLAYARR_DB_PASSWORD:?Set PLAYARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}@postgres:5432/playarr
-  PLAYARR_ARTWORK_CACHE_DIR: /data/playarr-cache/artwork
-  # Optional. Only meaningfully reachable when --profile ha has started the
-  # `redis` service; left blank otherwise (REDIS_URL is treated as
-  # optional throughout this repo's Playarr Server contract -- see
-  # infra/kubernetes/helm/playarr/values.yaml's secret.data.redisUrl).
-  REDIS_URL: ${PLAYARR_REDIS_URL:-}
-
-x-playarr-hardening: &playarr-hardening
-  # Mirrors the Helm chart's podSecurityContext/securityContext as closely
-  # as a single-host container runtime allows: non-root (the image already
-  # runs as uid/gid 10001 -- see backend.Dockerfile), read-only root
-  # filesystem with only /tmp writable, no new privileges.
-  read_only: true
-  security_opt:
-    - "no-new-privileges:true"
-  tmpfs:
-    - /tmp
-  restart: unless-stopped
-
 services:
-  postgres:
-    image: postgres:16-alpine
+  playarr:
+    <<: *playarr-image
+    # `serve` takes no CLI arguments (see backend/src/main.rs); this matches
+    # the image's own default CMD.
+    command: ["serve"]
     environment:
-      POSTGRES_DB: playarr
-      POSTGRES_USER: playarr
-      POSTGRES_PASSWORD: ${PLAYARR_DB_PASSWORD:?Set PLAYARR_DB_PASSWORD (e.g. in a .env file) before starting the prod stack}
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U playarr -d playarr"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      # The real env vars playarr-config::Config::from_env reads (see
+      # backend/crates/playarr-config/src/lib.rs).
+      PLAYARR_ROLE: all
+      PLAYARR_LOG: ${PLAYARR_LOG_LEVEL:-info}
+      PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
+      PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
+      DATABASE_URL: sqlite:///data/playarr.db
+      PLAYARR_ARTWORK_CACHE_DIR: /data/playarr-cache/artwork
+      PLAYARR_JWT_SECRET: ${PLAYARR_JWT_SECRET:?Set PLAYARR_JWT_SECRET (e.g. in a .env file) before starting the prod stack}
+    # Mirrors the Helm chart's podSecurityContext/securityContext as closely
+    # as a single-host container runtime allows: non-root (the image already
+    # runs as uid/gid 10001 -- see backend.Dockerfile), read-only root
+    # filesystem with only /tmp and /data writable, no new privileges.
+    read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp
     restart: unless-stopped
-    networks:
-      - playarr-net
-
-  # Optional shared cache / session store. Only started with --profile ha.
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    profiles: ["ha"]
-    volumes:
-      - redis_prod_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - playarr-net
-
-  playarr-api:
-    <<: [*playarr-image, *playarr-hardening]
-    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the PLAYARR_ROLE environment variable set
-    # below. This matches the image's own default CMD; kept explicit here
-    # for clarity, not because it differs from it.
-    command: ["serve"]
-    environment:
-      <<: *playarr-env
-      PLAYARR_ROLE: api
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "8484"
-      - "9090"
-    volumes:
-      - playarr_prod_artwork_cache:/data/playarr-cache/artwork
-    networks:
-      - playarr-net
-
-  # Second, independently-scheduled API node for the `ha` tier -- pin
-  # `deploy.placement.constraints` here (Swarm) or run it on a different
-  # Docker context/host entirely for real node-level redundancy; Compose
-  # alone can't schedule across hosts, so this service mostly documents
-  # the intended topology for a Swarm/Nomad-managed deployment of this
-  # same image.
-  playarr-api-2:
-    <<: [*playarr-image, *playarr-hardening]
-    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the PLAYARR_ROLE environment variable set
-    # below. This matches the image's own default CMD; kept explicit here
-    # for clarity, not because it differs from it.
-    command: ["serve"]
-    profiles: ["ha"]
-    environment:
-      <<: *playarr-env
-      PLAYARR_ROLE: api
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "8484"
-      - "9090"
-    volumes:
-      - playarr_prod_artwork_cache:/data/playarr-cache/artwork
-    networks:
-      - playarr-net
-
-  playarr-worker:
-    <<: [*playarr-image, *playarr-hardening]
-    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the PLAYARR_ROLE environment variable set
-    # below. This matches the image's own default CMD; kept explicit here
-    # for clarity, not because it differs from it.
-    command: ["serve"]
-    # Worker capacity is opted into by either the `standard` or `ha`
-    # profile, so `--profile ha` alone still gets a functioning stack
-    # without also having to remember `--profile standard`.
-    profiles: ["standard", "ha"]
-    environment:
-      <<: *playarr-env
-      PLAYARR_ROLE: worker
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 1024M
-        reservations:
-          cpus: "0.2"
-          memory: 256M
-    depends_on:
-      postgres:
-        condition: service_healthy
-    expose:
-      - "8484"
-      - "9090"
-    networks:
-      - playarr-net
-
-  playarr-worker-2:
-    <<: [*playarr-image, *playarr-hardening]
-    # `serve` takes no CLI arguments (see backend/src/main.rs) -- role
-    # selection is entirely via the PLAYARR_ROLE environment variable set
-    # below. This matches the image's own default CMD; kept explicit here
-    # for clarity, not because it differs from it.
-    command: ["serve"]
-    profiles: ["ha"]
-    environment:
-      <<: *playarr-env
-      PLAYARR_ROLE: worker
     deploy:
       resources:
         limits:
@@ -231,18 +65,17 @@ services:
         reservations:
           cpus: "0.2"
           memory: 256M
-    depends_on:
-      postgres:
-        condition: service_healthy
     expose:
       - "8484"
       - "9090"
+    volumes:
+      # The SQLite database file and the artwork cache.
+      - playarr_prod_data:/data
     networks:
       - playarr-net
 
   # Reverse proxy / public edge. Only this service publishes host ports;
-  # everything else is internal-network-only. See ./prod/Caddyfile for the
-  # load-balancing + healthcheck config (real Caddy, not a placeholder).
+  # everything else is internal-network-only. See ./prod/Caddyfile.
   caddy:
     image: caddy:2-alpine
     environment:
@@ -256,7 +89,7 @@ services:
       - "443:443"
       - "443:443/udp"
     depends_on:
-      - playarr-api
+      - playarr
     restart: unless-stopped
     networks:
       - playarr-net
@@ -265,22 +98,19 @@ services:
 networks:
   # Shared with docker-compose.dev.yml / docker-compose.ci.yml's network
   # name on purpose: ../observability/docker-compose.yml joins this exact
-  # network (as `external: true`) to scrape playarr-api/worker:9090
-  # regardless of which base stack is running.
+  # network (as `external: true`) to scrape playarr:9090 regardless of which
+  # base stack is running.
   playarr-net:
     name: playarr-net
   # Only Caddy sits on this one; it's what actually gets a published host
   # port. Kept separate from playarr-net so a compromised edge container
-  # doesn't get network-level visibility into Postgres/Redis beyond what
-  # playarr-net already grants it (defense in depth, not a hard
-  # boundary -- Caddy IS on both networks because it must reach
-  # playarr-api).
+  # gets no more network visibility than it needs (defence in depth, not a
+  # hard boundary -- Caddy is on both networks because it must reach
+  # playarr).
   playarr-edge:
     name: playarr-edge
 
 volumes:
-  postgres_prod_data:
-  redis_prod_data:
   caddy_data:
   caddy_config:
-  playarr_prod_artwork_cache:
+  playarr_prod_data:

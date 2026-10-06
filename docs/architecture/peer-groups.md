@@ -23,36 +23,29 @@ violate it, and is the final checklist item before any phase ships.
 
 ### 1.1 The naming collision this design has to avoid
 
-`docs/architecture/distributed-design.md` already uses "node" for something
-else: an interchangeable, **stateless** process sharing one Postgres
-database with other processes of the same deployment (`PLAYARR_ROLE=api`/
-`worker`/`all`, `DeploymentTier::MultiNodePostgres{,Redis}`). Concretely,
-that's `AppState.node_id`, which `backend/src/main.rs:1076` mints fresh
-with `Uuid::new_v4()` on every process boot, and
-`playarr_coordination::PostgresCoordinator`'s own `node_id` concept, used
-as the leaseholder identity in `cluster_leader` (`docs/architecture/
-distributed-design.md`'s coordinator section). This document introduces a
+`docs/architecture/distributed-design.md` uses "node" for a process
+(`AppState.node_id`, which `backend/src/main.rs` mints fresh with
+`Uuid::new_v4()` on every process boot). This document introduces a
 genuinely different thing: an independently-addressed, independently
-databased Playarr Server **installation**, which may itself internally be a
-Tier-1 single process or a Tier-2/3 multi-process deployment.
+databased Playarr Server **installation**, each with its own SQLite
+database. (Playarr is SQLite-only, [ADR 0002](adr/0002-sqlite-only-storage.md):
+peer sync is how several servers cooperate; there is no shared-database
+tier.)
 
 This document uses:
 
 | Term | Meaning | Existing code |
 |---|---|---|
-| **replica** | The *existing* concept above: one stateless process within one installation's own deployment | `AppState.node_id`, `PostgresCoordinator`, `DeploymentTier` |
+| **replica** | The *existing* concept above: one process within one installation | `AppState.node_id` |
 | **peer node** (or **peer**, or just **node** in prose once the term is established) | *New*: one independently-run, independently-databased Playarr Server installation, with its own name, address(es), and its own copy (full or partial) of the media | This document |
 | **group** | *New*: the set of peer nodes that have agreed to sync with each other | This document |
 
 **No existing code is renamed.** `AppState.node_id` keeps meaning exactly
-what it means today; nothing in this design reads or writes it. The two
-axes compose freely: a single peer node can itself be a Tier-2/3 multi-replica
-deployment sharing one Postgres database, and every "guard against two
-processes doing the same work" mechanism this design needs (the
+what it means today; nothing in this design reads or writes it. Every "guard
+against two tasks doing the same work" mechanism this design needs (the
 peer-sync poller, background availability rollups) reuses
 `playarr_coordination::ClusterCoordinator` exactly the way
-`playarr-arr-sync` already does, for exactly that reason: it is already
-the right tool for "only one replica of *this* peer should do X."
+`playarr-arr-sync` already does.
 
 **Correction folded into this design, not deferred:** `distributed-design.md`
 currently states "there is no `UserRepo`/`PolicyRepo` in `playarr-db`, and
@@ -60,7 +53,7 @@ no `users`/`sessions`/`refresh_tokens`/`policies` table in either migration
 set," and describes `InMemoryUserDirectory`/`InMemoryRefreshTokenStore` as
 the live implementation. That is stale: `playarr-db/src/repo/{user,policy,
 refresh_token}.rs` are real, `users`/`policies` have existed since
-`backend/migrations/postgres/0010_users_policies.sql`, and
+`backend/migrations/sqlite/0007_users_policies.sql`, and
 `backend/src/main.rs:919-920` wires `SqlxRefreshTokenRepo` (durable), not
 the in-memory store. The **one** part of that paragraph still accurate today
 is `InMemoryDeviceAuthorizationStore`/`DashMapDeviceFlowHandler`
@@ -107,26 +100,21 @@ call this document makes. Full rationale is in the referenced section.
 ## 2. Data model
 
 All new tables follow the two conventions already established across every
-existing migration pair (confirmed against `backend/migrations/postgres/
-0010_users_policies.sql`'s own file-level note): `id`/foreign-key columns
-are `TEXT` (stringified UUIDs) on **both** engines, booleans are `INTEGER`
-0/1 via `playarr_db::codec::bool_to_i64`/`bool_from_i64` on **both**
-engines (not a native Postgres `boolean`), and list/optional-list fields are
+existing migration pair (confirmed against `backend/migrations/sqlite/0007_users_policies.sql`'s own file-level note): `id`/foreign-key columns
+are `TEXT` (stringified UUIDs), booleans are `INTEGER`
+0/1 via `playarr_db::codec::bool_to_i64`/`bool_from_i64`, and list/optional-list fields are
 JSON-encoded into a single `TEXT` column rather than a normalized child
 table, when nothing needs to filter or sort on them at the SQL level. This
-keeps one Rust row-mapping implementation working unmodified against both
-`DbPool` backends, exactly as `works.genres`/`policies.library_allow`
+keeps one Rust row-mapping implementation, exactly as `works.genres`/`policies.library_allow`
 already do.
 
-Current tips: `backend/migrations/postgres/0034_can_download_least_privilege.sql`,
-`backend/migrations/sqlite/0031_can_download_least_privilege.sql`. New
-migrations below take the next free numbers on each side, keeping the
-existing offset-by-3 convention between the two independent `Migrator`s
-(`SQLITE_MIGRATIONS`/`POSTGRES_MIGRATIONS` in `playarr-db::pool`).
+Current tip at the time of writing: `backend/migrations/sqlite/0031_can_download_least_privilege.sql`. New
+migrations below take the next free number in `SQLITE_MIGRATIONS`
+(`playarr-db::pool`).
 
 ### 2.1 Node & group identity (Phase 1)
 
-`backend/migrations/postgres/0035_node_identity.sql` /
+`backend/migrations/sqlite/0032_node_identity.sql` /
 `backend/migrations/sqlite/0032_node_identity.sql`:
 
 ```sql
@@ -140,7 +128,7 @@ CREATE TABLE IF NOT EXISTS node_identity (
     peer_id TEXT NOT NULL,             -- generated once, first boot, never regenerated.
     -- Deliberately NOT named node_id: that token already means "this
     -- ephemeral process's replica identity" elsewhere in the codebase
-    -- (AppState.node_id, PostgresCoordinator's node_id, see §1.1). peer_id
+    -- (AppState.node_id, see §1.1). peer_id
     -- is a distinct, durable, per-installation identity and needs a
     -- distinct name so a `grep node_id` never returns both concepts.
     -- Ed25519 seed, base64. Plain TEXT: no encryption-at-rest exists
@@ -259,7 +247,7 @@ active row: the fan-out target list every later section reads),
 
 ### 2.2 Sync bookkeeping (Phase 2)
 
-`backend/migrations/postgres/0036_peer_sync_state.sql` /
+`backend/migrations/sqlite/0033_peer_sync_state.sql` /
 `backend/migrations/sqlite/0033_peer_sync_state.sql`:
 
 ```sql
@@ -288,7 +276,7 @@ CREATE TABLE IF NOT EXISTS sync_conflict_log (
 CREATE INDEX IF NOT EXISTS idx_sync_conflict_log_review ON sync_conflict_log (requires_admin_review);
 
 -- users/policies/source_instances have no updated_at/deleted_at today
--- (confirmed against postgres/0010_users_policies.sql -- neither column
+-- (confirmed against sqlite/0007_users_policies.sql -- neither column
 -- exists). Both are required for LWW conflict resolution (§3.5) and for
 -- soft-delete to propagate as a tombstone instead of a peer merely
 -- lagging on sync looking like a delete.
@@ -321,7 +309,7 @@ not something the migration alone provides.
 
 ### 2.3 Group libraries & availability (Phase 2)
 
-`backend/migrations/postgres/0037_group_libraries.sql` /
+`backend/migrations/sqlite/0034_group_libraries.sql` /
 `backend/migrations/sqlite/0034_group_libraries.sql`:
 
 ```sql
@@ -348,7 +336,7 @@ ALTER TABLE source_instances ADD COLUMN group_library_id TEXT;
 ALTER TABLE policies ADD COLUMN group_library_allow TEXT NOT NULL DEFAULT '[]';
 ```
 
-`backend/migrations/postgres/0038_peer_leaf_availability.sql` /
+`backend/migrations/sqlite/0035_peer_leaf_availability.sql` /
 `backend/migrations/sqlite/0035_peer_leaf_availability.sql`:
 
 ```sql
@@ -384,7 +372,7 @@ CREATE INDEX IF NOT EXISTS idx_peer_leaf_availability_local_work ON peer_leaf_av
 
 ### 2.4 Routing rules (Phase 3)
 
-`backend/migrations/postgres/0039_routing_rules.sql` /
+`backend/migrations/sqlite/0036_routing_rules.sql` /
 `backend/migrations/sqlite/0036_routing_rules.sql`:
 
 ```sql
@@ -471,7 +459,7 @@ New `playarr-db` repos: `group_library.rs` (`GroupLibraryRepo`),
 
 ### 2.5 Invite portability (Phase 4)
 
-`backend/migrations/postgres/0040_invite_group_fields.sql` /
+`backend/migrations/sqlite/0037_invite_group_fields.sql` /
 `backend/migrations/sqlite/0037_invite_group_fields.sql`:
 
 ```sql
@@ -535,7 +523,7 @@ Added to the workspace `Cargo.toml` members list alongside the other
 | the managed-profile PIN table backing `ProfilePinRepo` (so PIN login works from any node) | RFC 8628 `DeviceAuthorization` pending state: explicitly not synced, §3.8/§6.3 |
 | `group_libraries`, `routing_rules` | `Work`, `MediaFile`, `Rendition` rows themselves: explicitly not synced, §4.1 |
 | complete `source_instances` rows, including connection configuration and tombstones | `MediaFile.path` (filesystem path, meaningless/sensitive off-node) |
-| `peer_leaf_availability` (derived, read-only per peer) | `WatchProgress`, playback analytics, `TranscodeSession`/`cluster_leader` (Tier-2/3-local coordination, unrelated axis) |
+| `peer_leaf_availability` (derived, read-only per peer) | `WatchProgress`, playback analytics, `TranscodeSession` (node-local) |
 
 ### 3.2 Why a new crate, not a module in `playarr-arr-sync`
 
@@ -687,8 +675,8 @@ One `PeerSyncPoller` instance per non-self row in `peer_nodes`, default
 interval `PLAYARR_PEER_SYNC_INTERVAL_SECS=60` (new, optional config var,
 `playarr-config`), spawned from `backend/src/main.rs`. Each poller wraps
 its pass in `coordinator.try_lock(&format!("peer-sync:{peer_id}"), ttl)`: exact reuse of the pattern `playarr-arr-sync` already uses for
-`"arr-sync:<source_instance_id>"`: so a peer node that is itself internally
-Tier-2/3-scaled never double-polls the same remote peer. On failure, the
+`"arr-sync:<source_instance_id>"`: so a peer node running several
+processes never double-polls the same remote peer. On failure, the
 poller tries the next address in that peer's `addresses` list before giving
 up the cycle; after `PLAYARR_PEER_UNREACHABLE_THRESHOLD` (default 3)
 consecutive full-cycle failures, that peer's `status` flips to
@@ -1302,7 +1290,7 @@ never puts an ungrouped, single-node install at risk.
 
 ### Phase 1: Node identity + registry + group join
 
-**Adds:** `backend/migrations/{postgres/0035,sqlite/0032}_node_identity.sql`;
+**Adds:** `backend/migrations/sqlite/0032_node_identity.sql`;
 `playarr-model/src/peer.rs`; `playarr-db/src/repo/{node_identity,
 peer_group,peer_node,peer_join_token}.rs`; `playarr-api/src/
 {admin_peer.rs (self/group/join-token endpoints), peer.rs (enroll only for
@@ -1322,14 +1310,13 @@ limitation, not a bug.
 
 ### Phase 2: Sync protocol + content aggregation
 
-**Adds:** new crate `playarr-peer-sync` (full); migrations `{postgres/
-0036,sqlite/0033}` (`peer_sync_state`, `sync_conflict_log`, `users`/
+**Adds:** new crate `playarr-peer-sync` (full); migrations `{sqlite/0033}` (`peer_sync_state`, `sync_conflict_log`, `users`/
 `policies`/`source_instances` additive columns), `{0037,0034}`
 (`group_libraries`, `source_instances.group_library_id`, `policies.
 group_library_allow`), `{0038,0035}` (`peer_leaf_availability`);
 `playarr-model/src/group_library.rs`; `playarr-db/src/repo/
 {peer_sync_state,group_library,peer_leaf_availability,sync_conflict_log}.rs`;
-follow-up migrations `{postgres/0042,sqlite/0039}` add
+follow-up migrations `sqlite/0039` add
 `source_instances.origin_peer_id` and reset library/push cursors once so
 identity-only rows from older releases are replayed as complete sources.
 **Touches:** `playarr-api/src/peer.rs` (real sync endpoints, now
@@ -1348,7 +1335,7 @@ peers.
 
 ### Phase 3: Routing rules + redirect/proxy streaming
 
-**Adds:** migration `{postgres/0039,sqlite/0036}` (`routing_rules`);
+**Adds:** migration `sqlite/0036` (`routing_rules`);
 `playarr-model/src/routing.rs`; `playarr-db/src/repo/routing_rule.rs`;
 `playarr-api/src/routing.rs`.
 **Touches:** `playarr-api/src/playback.rs` (routing step + full-
@@ -1365,7 +1352,7 @@ fallback rather than a hard failure.
 
 ### Phase 4: Invite + pairing multi-address
 
-**Adds:** migration `{postgres/0040,sqlite/0037}` (`user_invites`/
+**Adds:** migration `sqlite/0037` (`user_invites`/
 `user_invite_requests` additive columns); `GET /api/v1/admin/peer-groups/
 self/address-bundle` in `admin_peer.rs`.
 **Touches:** wherever `UserInvite`/`UserInviteRequest` rows are constructed
@@ -1433,7 +1420,7 @@ path (`PLAYARR_ROLE=api` or `all`) already hydrates the registry from
 `AppState.source_instance_repo` in `playarr-api/src/lib.rs` describing
 this as "the actual fix for registered `*arr` connections not surviving a
 restart"). The **remaining, narrower** gap: `boot_worker`, in a split
-`api`/`worker` (Postgres Tier 2/3) deployment, runs in a *different
+`api`/`worker` deployment, runs in a *different
 process* than the one serving admin endpoints, with its own empty
 registry, and does **not** hydrate it from the repo at all: confirmed by
 the explicit comment at `backend/src/main.rs:1420-1432` ("unlike
@@ -1456,7 +1443,7 @@ land in the *same* change that wires `PeerSyncPoller` spawning, not after.
 
 ### 9.2 `users`/`policies` have no `updated_at`/`deleted_at` today
 
-Confirmed against `backend/migrations/postgres/0010_users_policies.sql`:
+Confirmed against `backend/migrations/sqlite/0007_users_policies.sql`:
 neither column exists on either table. §2.2/§8 Phase 2 already schedule
 adding them; restated here as a hard prerequisite because Phase 3's LWW
 conflict resolution (§3.5) is unsound without every existing write path

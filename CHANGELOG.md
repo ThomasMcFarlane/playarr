@@ -524,6 +524,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed Postgres and Redis from the Docker Compose files, the Kubernetes base and overlays and the Helm chart: compose runs one server with a SQLite data volume, and the chart deploys a single-replica StatefulSet with a persistent volume (the api/worker split sharing one database is gone). Multi-node deployments use peer sync between SQLite nodes (ADR 0002).
+- Rewrote the README, architecture documents, deployment guides, backup guide and site copy for SQLite-only storage.
 - Postgres storage support is being removed from the server, Helm chart and compose files; a `postgres://` database URL will be rejected at startup. See ADR 0002.
 - Task board: fragments can now remove a row (`remove: <row-number>`); work belonging to other repositories such as Dubarr is no longer tracked on the board.
 - Smoke scripts (`live-events-smoke.sh`, `remote-control-smoke.sh`) no longer read `~/.playarr-test.env`; export `TEST_SERVER`, `TEST_USERNAME` and `TEST_PASSWORD` explicitly. Shared test-account references were removed from the docs.

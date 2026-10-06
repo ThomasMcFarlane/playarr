@@ -38,15 +38,15 @@ const groups = [
     items: [
       {
         q: 'What do I need to run the server?',
-        a: 'A machine that stays on, your media on storage it can reach, and FFmpeg available for transcoding. It runs on a single binary against SQLite at the small end, and scales up to Postgres and Kubernetes without changing software.',
+        a: 'A machine that stays on, your media on storage it can reach, and FFmpeg available for transcoding. It runs as a single binary against an embedded SQLite database, on a bare machine, in Docker or on Kubernetes.',
       },
       {
         q: 'Will it run on a Raspberry Pi or a NAS?',
-        a: 'The single-binary tier is designed for exactly that. Be aware there is no hardware-accelerated transcoding yet, so anything that cannot direct play will be encoded in software, which low-power hardware feels sharply. Direct play is unaffected.',
+        a: 'The single-binary install is designed for exactly that. Be aware there is no hardware-accelerated transcoding yet, so anything that cannot direct play will be encoded in software, which low-power hardware feels sharply. Direct play is unaffected.',
       },
       {
-        q: 'SQLite or Postgres?',
-        a: 'Start with SQLite. Move to Postgres when you actually need multiple processes or independent scaling. The same binary handles both and there is no separate product to migrate to.',
+        q: 'Which database does it use?',
+        a: 'SQLite, embedded in the binary, with no database server to run. Playarr does not support Postgres. If you run more than one server, each keeps its own SQLite database and they exchange state through peer sync.',
       },
       {
         q: 'Can I reach it from outside my house?',

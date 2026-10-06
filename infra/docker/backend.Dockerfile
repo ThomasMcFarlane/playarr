@@ -34,7 +34,7 @@
 # without updating every compose file that references it.
 #
 # Env contract is the real one playarr-config::Config::from_env reads
-# (see backend/crates/playarr-config/src/lib.rs): DATABASE_URL, REDIS_URL,
+# (see backend/crates/playarr-config/src/lib.rs): DATABASE_URL (a `sqlite:` URL),
 # PLAYARR_ROLE, PLAYARR_LOG, PLAYARR_HTTP_BIND_ADDR,
 # PLAYARR_METRICS_BIND_ADDR, PLAYARR_OTLP_ENDPOINT -- the same names
 # whether started by `docker run`, docker-compose, or a Kubernetes Pod. See
@@ -121,11 +121,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ------------------------------------------------------------------------
 # Stage 3: builder -- cook (build + cache) dependencies from the recipe,
 # then copy the real sources and compile the workspace in release mode.
-# `playarr-db` compiles in both the `sqlite` (libsqlite3-sys, needs a C
-# toolchain -- see build-essential above) and `postgres` (pure-Rust wire
-# protocol) drivers into every binary per ADR 0001 -- backend selection is
-# a runtime config value, not a build feature, so there is exactly one
-# release artifact regardless of which backend a deployment tier uses.
+# `playarr-db` compiles in the SQLite driver (libsqlite3-sys, needs a C
+# toolchain -- see build-essential above). Playarr is SQLite-only (ADR 0002),
+# so there is exactly one release artifact.
 # ------------------------------------------------------------------------
 FROM chef AS builder
 WORKDIR /build/backend
@@ -186,10 +184,10 @@ FROM ${ARTIFACTS} AS artifacts
 # ------------------------------------------------------------------------
 # Stage 4: runtime -- minimal Debian base, non-root, read-only-root-
 # filesystem friendly. /data is writable (owned by the playarr user) for
-# the SQLite tier (DATABASE_URL=sqlite:///data/playarr.db) -- mount a
-# named volume there for a genuinely containerized Tier 1 experience (see
-# docker-compose.standalone.yml). Postgres/Redis-backed Tier 2/3
-# deployments don't need it and can leave the mount point empty.
+# SQLite (DATABASE_URL=sqlite:///data/playarr.db) -- mount a named volume
+# there so the database survives container restarts (see
+# docker-compose.standalone.yml). Multi-node deployments run one such
+# container per node and use peer sync.
 # ------------------------------------------------------------------------
 FROM debian:${DEBIAN_CODENAME}-slim AS runtime
 
@@ -237,9 +235,9 @@ USER playarr:playarr
 # Non-secret runtime config. These are the actual env vars
 # playarr-config::Config::from_env reads (verified against
 # backend/crates/playarr-config/src/lib.rs) -- not a set of
-# conveniently-named vars the binary silently ignores. DATABASE_URL and
-# (optionally) REDIS_URL are intentionally NOT set here -- they are
-# secret-shaped and always supplied by the caller (docker-compose
+# conveniently-named vars the binary silently ignores. DATABASE_URL is
+# intentionally NOT set here -- it is
+# deployment-specific and always supplied by the caller (docker-compose
 # environment/.env, a Kubernetes Secret, etc.), never baked into the image.
 #
 # HTTP_PORT/METRICS_PORT below are a Dockerfile-local convenience only (used

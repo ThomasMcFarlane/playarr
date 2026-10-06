@@ -6,9 +6,9 @@ order: 2
 badge: Preview
 ---
 
-This is the smallest way to run Playarr: one compiled binary, one SQLite file, one machine. It suits a Raspberry Pi 4/5, a Synology or QNAP NAS, a mini-PC or any always-on Linux box you administer directly. There are no external services to stand up, no Postgres, no Redis, no message broker, and the whole thing survives an unattended reboot because systemd owns it.
+This is the smallest way to run Playarr: one compiled binary, one SQLite file, one machine. It suits a Raspberry Pi 4/5, a Synology or QNAP NAS, a mini-PC or any always-on Linux box you administer directly. There are no external services to stand up, no database server, no cache, no message broker, and the whole thing survives an unattended reboot because systemd owns it.
 
-Playarr never picks a deployment tier from a flag. It derives one from the scheme of `DATABASE_URL`: a `sqlite:` URL means single-node, so the coordinator is a no-op and the cache is in-process. Pointing the same binary at `postgres://` later is all it takes to graduate to a bigger tier.
+Playarr is SQLite-only: `DATABASE_URL` must be a `sqlite:` URL, and a `postgres://` URL is rejected at startup. The coordinator is in-process and the cache is in-memory. To run more than one server, give each its own database and connect them with peer sync.
 
 > Playarr reads a library you already have on disk and reconciles metadata from *arr apps you already run. It plays what is there; it does not put anything there.
 
@@ -60,7 +60,7 @@ cd playarr/backend
 cargo build --release --bin playarr
 ```
 
-`backend/Cargo.toml` is both the Cargo workspace root and the `playarr-bin` package, so the binary lands at `backend/target/release/playarr`. Both the SQLite and Postgres database drivers are compiled into every build, the backend is a runtime configuration value, never a build feature, so this one artefact serves every tier.
+`backend/Cargo.toml` is both the Cargo workspace root and the `playarr-bin` package, so the binary lands at `backend/target/release/playarr`. SQLite is compiled into every build, so this one artefact serves every deployment shape.
 
 ### Or unpack a release tarball, once one exists
 
@@ -103,7 +103,7 @@ Re-running the installer is safe: it never overwrites an existing `/etc/playarr/
 
 It finishes with `systemctl daemon-reload` and prints the remaining steps.
 
-> **Ignore one line of the installer's own output.** Its printed summary says "at minimum DATABASE_URL and REDIS_URL are required". `REDIS_URL` is not required, and is ignored outright on this tier, see [the corrections below](#three-corrections-to-the-shipped-example-file).
+> **`REDIS_URL` is not used.** If your installer's printed summary or your copy of the example file still mentions `REDIS_URL`, ignore it: it is not read, and nothing needs it.
 
 > Playarr's logging layer writes JSON to stdout, so in practice everything goes to the journal rather than to `/var/log/playarr`. The directory exists and is writable because the sandbox allowlists it.
 
@@ -135,13 +135,11 @@ PLAYARR_METRICS_BIND_ADDR=0.0.0.0:9090
 
 `PLAYARR_JWT_SECRET` must be at least 32 bytes; anything shorter is ignored with a warning. If it is unset, Playarr mints a random secret for the lifetime of that boot, which means every restart signs out every signed-in device.
 
-### Three corrections to the shipped example file
+### Corrections to the shipped example file
 
-The seeded `/etc/playarr/playarr.env` is a copy of `infra/systemd/playarr.env.example`, which was written against a Postgres deployment. Fix these before you start the service.
+The seeded `/etc/playarr/playarr.env` is a copy of `infra/systemd/playarr.env.example`, which may still carry leftovers from the removed Postgres support. Fix these before you start the service.
 
-> **`DATABASE_URL` is blank and commented for Postgres.** Replace it with the `sqlite:` URL above. SQLite is the single-server default.
-
-> **`REDIS_URL` is listed under a `# --- Required ---` heading. It is not required.** The code models it as an `Option`, an empty value is treated as unset, and it is ignored entirely when `DATABASE_URL` is a `sqlite:` URL. Leave it blank.
+> **`DATABASE_URL` may be blank.** Set it to the `sqlite:` URL above. A `postgres://` value is rejected at startup.
 
 > **`GOOGLE_APPLICATION_CREDENTIALS` and `PLAYARR_FIREBASE_WEB_CONFIG` are uncommented and will stop the service booting.** The first points at `/etc/playarr/firebase-service-account.json`, a file the installer does not create; the server reads it eagerly and fails startup if it is missing. The second is set to an empty string, which is parsed as JSON and fails. **Comment out both lines** unless you are actually configuring Firebase messaging, which is entirely optional and not needed for a first install.
 
@@ -151,7 +149,7 @@ These are the variables that matter on a single server. Every one is read at sta
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | *(none, startup fails)* | `sqlite:///var/lib/playarr/playarr.db` for this tier. |
+| `DATABASE_URL` | *(none, startup fails)* | `sqlite:///var/lib/playarr/playarr.db` for this install. |
 | `PLAYARR_ROLE` | `all` | Pinned to `all` by the unit file; anything you set here is overridden. |
 | `PLAYARR_JWT_SECRET` | random per boot | Minimum 32 bytes. Set it. |
 | `PLAYARR_LOG` | `info` | A `tracing` `EnvFilter` directive, e.g. `info,playarr_api=debug`. |
@@ -246,7 +244,7 @@ What each of the load-bearing directives is doing:
 | `ReadWritePaths=/var/lib/playarr /var/log/playarr` | The only two writable paths. If you relocate the database, artwork cache or ACME directory outside these, add the new path here or the service cannot write to it. |
 | `AmbientCapabilities=CAP_NET_BIND_SERVICE` | The single privilege granted, needed only if you enable the optional ACME listener on port 80 or the optional DNS listener on port 53. Nothing binds a low port by default. |
 
-The unit's header also carries a commented-out `After=postgresql.service redis.service` pair. Leave it commented for a SQLite install.
+If your copy of the unit's header carries a commented-out `After=` line naming a database or cache service, leave it commented.
 
 > The commit that added these units notes they were authored on a machine without systemd and have not been checked with `systemd-analyze verify`. Run `systemd-analyze verify playarr.service` after installing if you want that confirmation on your own host.
 
@@ -292,7 +290,7 @@ Metrics are served on their own port, by every role, unconditionally:
 curl -fsS http://127.0.0.1:9090/metrics | head
 ```
 
-A healthy first boot emits, roughly in this order: `starting playarr` carrying the resolved `role` and derived `deployment_tier`; `metrics listener listening` on the metrics address; the bootstrap admin `WARN` (first boot only); and finally `http server listening`, or `https server listening with static certificate`, on the application address. Migrations, and the creation of the two default library views ("Newly Added" and "Newly Released"), are both silent when they succeed and only log if they fail, so their absence from the journal is the expected case rather than a problem.
+A healthy first boot emits, roughly in this order: `starting playarr` carrying the resolved `role`; `metrics listener listening` on the metrics address; the bootstrap admin `WARN` (first boot only); and finally `http server listening`, or `https server listening with static certificate`, on the application address. Migrations, and the creation of the two default library views ("Newly Added" and "Newly Released"), are both silent when they succeed and only log if they fail, so their absence from the journal is the expected case rather than a problem.
 
 ## Logs
 
@@ -406,7 +404,7 @@ sudo systemctl start playarr.service
 
 Stopping the service first is the simple way to get a consistent copy of a WAL-mode SQLite database along with its `-wal` and `-shm` companions. Keep `/etc/playarr/playarr.env` somewhere safe too, losing `PLAYARR_JWT_SECRET` signs out every device.
 
-**Growing to a bigger tier.** Point `DATABASE_URL` at a Postgres instance and the binary switches coordinator and cache backends by itself. There is no built-in tool to move existing SQLite data into Postgres; that is on you today.
+**More than one server.** Run a second server with its own SQLite database and connect the two with peer sync. There is no shared database to scale out to.
 
 ## Next
 

@@ -47,8 +47,7 @@ securityContext:
 # two in sync manually, nothing derives one from the other).
 metricsPort: 9090
 
-# -- Probe configuration shared by both the api and worker Deployments. The
-# playarr binary exposes these endpoints regardless of PLAYARR_ROLE.
+# -- Probe configuration. The playarr binary exposes these endpoints.
 # `port` has the same manual-sync caveat as metricsPort above, against
 # config.PLAYARR_HTTP_BIND_ADDR.
 probes:
@@ -68,7 +67,7 @@ terminationGracePeriodSeconds: 30
 preStopSleepSeconds: 15
 
 # -- Non-secret application configuration, rendered into a ConfigMap and
-# consumed via envFrom by both Deployments. Keys are the real env vars
+# consumed via envFrom by the StatefulSet. Keys are the real env vars
 # playarr-config::Config::from_env reads (see
 # backend/crates/playarr-config/src/lib.rs) -- not a set of
 # conveniently-named vars the binary silently ignores. `probes.port` above
@@ -79,97 +78,37 @@ config:
   PLAYARR_HTTP_BIND_ADDR: "0.0.0.0:8484"
   PLAYARR_METRICS_BIND_ADDR: "0.0.0.0:9090"
 
-# -- DATABASE_URL / REDIS_URL are secret-shaped values. This chart never
-# accepts them as plaintext values.yaml entries. Instead it renders an
-# (opt-in) Secret placeholder, and both Deployments always read the two
-# vars via secretKeyRef against `secret.name`.
-#
-# In real environments prefer create: false and manage `secret.name`
-# out-of-band with something like External Secrets Operator, Sealed
-# Secrets, or a manually-applied `kubectl create secret` - so DATABASE_URL
-# / REDIS_URL never round-trip through `helm template`/`helm get values`
-# or land in this git repo.
-secret:
-  # -- If true, render a Secret template from secret.data below. Intended
-  # for local/dev use only (e.g. `--set secret.create=true --set
-  # secret.data.databaseUrl=...`). Leave false and pre-provision
-  # `secret.name` out-of-band for staging/prod.
-  create: false
-  # -- Name of the Secret consumed by both Deployments. Defaults to
-  # "<fullname>-secrets" when empty.
-  name: ""
-  data:
-    databaseUrl: ""
-    redisUrl: ""
+# -- Playarr is SQLite-only (ADR 0002): DATABASE_URL is derived from
+# persistence.mountPath (sqlite://<mountPath>/playarr.db) and is not a
+# value. The chart renders a single-replica StatefulSet; SQLite does not
+# support several pods writing one database. For several nodes, install
+# several releases (each with its own volume) and join them with peer sync.
+persistence:
+  # -- Mount path of the PersistentVolumeClaim holding the SQLite database
+  # and the artwork cache.
+  mountPath: /data
+  size: 10Gi
+  # -- Empty uses the cluster default StorageClass.
+  storageClassName: ""
 
-api:
-  role: api
-  replicaCount: 2
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8484
 
-  service:
-    type: ClusterIP
-    port: 80
-    targetPort: 8484
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
 
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 1000m
-      memory: 512Mi
-
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 6
-    targetCPUUtilizationPercentage: 70
-    targetMemoryUtilizationPercentage: ""
-
-  podAnnotations: {}
-  podLabels: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-
-worker:
-  role: worker
-  replicaCount: 2
-
-  # -- Workers don't serve external traffic, but the binary still exposes
-  # /healthz, /readyz and /metrics on the same port, so a headless-style
-  # ClusterIP Service is still created for probes/Prometheus scraping.
-  service:
-    port: 8484
-    targetPort: 8484
-
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 2000m
-      memory: 1Gi
-
-  autoscaling:
-    enabled: true
-    minReplicas: 1
-    maxReplicas: 8
-    targetCPUUtilizationPercentage: 75
-    targetMemoryUtilizationPercentage: ""
-
-  podDisruptionBudget:
-    enabled: true
-    # -- Exactly one of minAvailable / maxUnavailable should be set; the
-    # other must be left null.
-    minAvailable: 1
-    maxUnavailable: null
-
-  podAnnotations: {}
-  podLabels: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
 
 # -- Optional ServiceMonitor for kube-prometheus-stack users. Requires the
 # monitoring.coreos.com/v1 CRDs to already be installed in-cluster.

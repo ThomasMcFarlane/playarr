@@ -6,30 +6,12 @@ namespace: playarr-staging
 resources:
   - ../../base
 
-patches:
-  - target:
-      kind: Deployment
-      name: playarr-api
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-  - target:
-      kind: Deployment
-      name: playarr-worker
-    patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 2
-
 configMapGenerator:
   - name: playarr-config
     behavior: merge
     literals:
       - PLAYARR_LOG=info
 
-# As in overlays/dev: DATABASE_URL / REDIS_URL should be supplied by a
-# secretGenerator pointed at an untracked env file, or base/secret.yaml
-# should be dropped from `resources` (via a patch removing it, or by
-# forking base/kustomization.yaml's resource list) in favour of a
-# cluster-managed Secret from Sealed Secrets / External Secrets Operator.
+# Playarr is SQLite-only (ADR 0002): there is no database secret to manage.
+# The StatefulSet is always a single replica; run one overlay per node and
+# join nodes with peer sync.

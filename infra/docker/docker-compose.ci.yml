@@ -1,8 +1,7 @@
 # ==============================================================================
 # Playarr Server -- CI dependency stack.
 #
-# Same service set as docker-compose.dev.yml (Postgres 16 + the *arr apps +
-# Tdarr), tuned for a CI runner rather than a human's laptop:
+# Same service set as docker-compose.dev.yml (the *arr apps + Tdarr), tuned for a CI runner rather than a human's laptop:
 #
 #   - No persistent named volumes: everything lives in tmpfs or an
 #     anonymous/ephemeral filesystem scoped to the container's own
@@ -33,26 +32,6 @@ x-ci-healthcheck-defaults: &ci-healthcheck-defaults
   start_period: 5s
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: playarr-ci-postgres
-    environment:
-      POSTGRES_DB: playarr
-      POSTGRES_USER: playarr
-      POSTGRES_PASSWORD: playarr_ci_only
-      # Speeds up fsync in a throwaway CI container; never do this outside
-      # a stack that is destroyed at the end of every run.
-      POSTGRES_INITDB_ARGS: "--no-sync"
-      PGDATA: /var/lib/postgresql/data/pgdata
-    command: ["postgres", "-c", "fsync=off", "-c", "full_page_writes=off"]
-    tmpfs:
-      - /var/lib/postgresql/data:uid=999,gid=999
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U playarr -d playarr"]
-      <<: *ci-healthcheck-defaults
-    networks:
-      - playarr-net
-
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: playarr-ci-sonarr
@@ -188,13 +167,8 @@ services:
       PLAYARR_HTTP_BIND_ADDR: 0.0.0.0:8484
       PLAYARR_METRICS_BIND_ADDR: 0.0.0.0:9090
       PLAYARR_ROLE: all
-      DATABASE_URL: postgres://playarr:playarr_ci_only@postgres:5432/playarr
-      # Redis is optional per infra/kubernetes/helm/playarr/values.yaml
-      # (REDIS_URL is wired unconditionally in the Deployment templates but
-      # defaults to an empty secret value there too); this dependency
-      # stack doesn't run one. Add a `redis:7-alpine` service here if/when
-      # the backend makes REDIS_URL a hard startup requirement.
-      REDIS_URL: ""
+      # SQLite on a throwaway tmpfs (Playarr is SQLite-only, ADR 0002).
+      DATABASE_URL: sqlite:///data/playarr.db
       # NOTE: playarr-arr-client's actual config schema isn't implemented
       # yet (backend/crates/playarr-arr-client is still a placeholder at
       # the time this file was written) -- these *_BASE_URL names are a
@@ -210,8 +184,6 @@ services:
       READARR_BASE_URL: http://readarr:8787
       TDARR_BASE_URL: http://tdarr:8265
     depends_on:
-      postgres:
-        condition: service_healthy
       sonarr:
         condition: service_healthy
       radarr:
@@ -228,6 +200,7 @@ services:
         condition: service_healthy
     tmpfs:
       - /tmp
+      - /data:uid=10001,gid=10001
     ports:
       - "8484:8484"
       - "9090:9090"

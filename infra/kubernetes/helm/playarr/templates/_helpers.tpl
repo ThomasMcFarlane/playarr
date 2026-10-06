@@ -52,24 +52,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
-Component-specific selector labels (adds api|worker on top of the base
-selector labels). Expects a dict with "context" (the root .) and
-"component" (e.g. "api" or "worker").
-*/}}
-{{- define "playarr.componentSelectorLabels" -}}
-{{ include "playarr.selectorLabels" .context }}
-app.kubernetes.io/component: {{ .component }}
-{{- end -}}
-
-{{/*
-Component-specific full labels.
-*/}}
-{{- define "playarr.componentLabels" -}}
-{{ include "playarr.labels" .context }}
-app.kubernetes.io/component: {{ .component }}
-{{- end -}}
-
-{{/*
 Name of the ServiceAccount to use.
 */}}
 {{- define "playarr.serviceAccountName" -}}
@@ -78,13 +60,6 @@ Name of the ServiceAccount to use.
 {{- else -}}
 {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
-{{- end -}}
-
-{{/*
-Name of the Secret holding DATABASE_URL / REDIS_URL.
-*/}}
-{{- define "playarr.secretName" -}}
-{{- default (printf "%s-secrets" (include "playarr.fullname" .)) .Values.secret.name -}}
 {{- end -}}
 
 {{/*

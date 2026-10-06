@@ -12,7 +12,7 @@ than splitting API and worker into separate processes/Deployments.
 | `playarr.service` | Main unit. `ExecStart=/usr/local/bin/playarr-server` with `PLAYARR_ROLE=all`, `Restart=on-failure`, runs as the unprivileged `playarr` user/group, loads `/etc/playarr/playarr.env`. |
 | `playarr-update-check.service` | Oneshot, check-only version check. Logs to the journal; never installs, downloads, or restarts anything. |
 | `playarr-update-check.timer` | Triggers the above daily. **Shipped present but disabled by default** - see the comment block at the top of the file. Operators opt in explicitly with `systemctl enable --now playarr-update-check.timer`. |
-| `playarr.env.example` | Template for `/etc/playarr/playarr.env` (`DATABASE_URL`, `REDIS_URL`, plus the same optional config keys as the Kubernetes ConfigMap, for parity). Not loaded directly - `install.sh` copies it to `/etc/playarr/playarr.env` on first install only. |
+| `playarr.env.example` | Template for `/etc/playarr/playarr.env` (`DATABASE_URL` as a `sqlite:` URL, plus the same optional config keys as the Kubernetes ConfigMap, for parity). Not loaded directly - `install.sh` copies it to `/etc/playarr/playarr.env` on first install only. |
 | `install.sh` | Installs the binary + unit files + env template and runs `systemctl daemon-reload`. Does **not** enable or start anything - see below. |
 
 ## Installing
@@ -35,7 +35,7 @@ clobbers a live env file), copies the three unit files into
 It then prints, but does not run, the remaining steps:
 
 ```sh
-sudoedit /etc/playarr/playarr.env      # fill in DATABASE_URL, REDIS_URL
+sudoedit /etc/playarr/playarr.env      # check DATABASE_URL
 sudo systemctl enable --now playarr.service
 systemctl status playarr.service
 journalctl -u playarr.service -f

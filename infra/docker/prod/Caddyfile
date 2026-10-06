@@ -7,15 +7,12 @@
 # serves plain HTTP on :80 and a locally-trusted cert on :443 without any
 # external ACME call.
 #
-# Load-balances across every `playarr-api*` container Docker Compose has
-# resolved on the internal network. With only the base `playarr-api`
-# service running (no `ha` profile), Caddy simply has one healthy upstream;
-# enabling `--profile ha` adds `playarr-api-2` as a second upstream with
-# zero config changes here, because `reverse_proxy` re-resolves its
-# upstream list per dial rather than at config-load time.
+# Proxies to the single `playarr` container (Playarr is SQLite-only, ADR
+# 0002, so there is one server per database; nodes in a multi-node
+# deployment are independent stacks that use peer sync).
 #
 # The metrics port (9090) is deliberately NOT proxied here -- Prometheus
-# (see ../observability/docker-compose.yml) scrapes playarr-api/worker
+# (see ../observability/docker-compose.yml) scrapes playarr:9090
 # directly over the internal Docker network, and /metrics should never be
 # reachable from the public edge.
 # ==============================================================================
@@ -28,11 +25,7 @@
 		format json
 	}
 
-	reverse_proxy playarr-api:8484 playarr-api-2:8484 {
-		lb_policy round_robin
-		lb_try_duration 5s
-		lb_try_interval 250ms
-
+	reverse_proxy playarr:8484 {
 		health_uri /healthz
 		health_interval 10s
 		health_timeout 3s

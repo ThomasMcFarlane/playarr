@@ -1,18 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "playarr.fullname" . }}-api
+  name: {{ include "playarr.fullname" . }}
   labels:
-    {{- include "playarr.componentLabels" (dict "context" . "component" "api") | nindent 4 }}
+    {{- include "playarr.labels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.api.service.type }}
+  type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.api.service.port }}
-      targetPort: {{ .Values.api.service.targetPort }}
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
       protocol: TCP
       name: http
     - port: {{ .Values.metricsPort }}
@@ -20,33 +20,4 @@ spec:
       protocol: TCP
       name: metrics
   selector:
-    {{- include "playarr.componentSelectorLabels" (dict "context" . "component" "api") | nindent 4 }}
----
-# Workers don't take Ingress/Service traffic for the application itself,
-# but they still need a stable ClusterIP so kube-proxy can route probe
-# traffic sanely and so the optional ServiceMonitor below has something to
-# select for /metrics scraping.
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "playarr.fullname" . }}-worker
-  labels:
-    {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
-  {{- with .Values.commonAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-spec:
-  type: ClusterIP
-  clusterIP: None
-  ports:
-    - port: {{ .Values.worker.service.port }}
-      targetPort: {{ .Values.worker.service.targetPort }}
-      protocol: TCP
-      name: http
-    - port: {{ .Values.metricsPort }}
-      targetPort: metrics
-      protocol: TCP
-      name: metrics
-  selector:
-    {{- include "playarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 4 }}
+    {{- include "playarr.selectorLabels" . | nindent 4 }}

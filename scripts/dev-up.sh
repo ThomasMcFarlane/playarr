@@ -4,7 +4,7 @@
 #
 # Brings up the Playarr Server local dev stack:
 #   1. The dependency containers declared in infra/docker/docker-compose.dev.yml
-#      (Postgres, the *arr suite, wiremock stand-ins, observability, etc.)
+#      (the *arr suite, wiremock stand-ins, observability, etc.)
 #   2. The backend itself, run *natively* via `cargo run` (not containerised)
 #      so you get fast incremental rebuilds and a normal debugger attach.
 #

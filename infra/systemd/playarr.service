@@ -5,10 +5,6 @@ After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=300
 StartLimitBurst=5
-# If Postgres/Redis run on this same host, uncomment so playarr starts
-# after them (remove if DATABASE_URL/REDIS_URL point at remote hosts):
-# After=postgresql.service redis.service
-# Wants=postgresql.service redis.service
 
 [Service]
 Type=simple
@@ -18,16 +14,14 @@ Group=playarr
 # EnvironmentFile is prefixed with "-" so a missing file doesn't block
 # startup, but playarr will fail its own config validation (and this
 # unit will then just keep restarting - see Restart= below) without a real
-# DATABASE_URL / REDIS_URL in it. install.sh seeds this path from
+# DATABASE_URL (a sqlite: URL) in it. install.sh seeds this path from
 # playarr.env.example if it doesn't already exist.
 EnvironmentFile=-/etc/playarr/playarr.env
 
 # This unit always runs the single-binary "all-in-one" role (API + worker
-# in one process) - that's the systemd deployment model. The split
-# api/worker Deployments are a Kubernetes-only pattern; see
-# ../kubernetes/README.md if you need that separation on bare metal too
-# (run two copies of this unit under different names with
-# PLAYARR_ROLE=api / PLAYARR_ROLE=worker instead).
+# in one process) - that's the systemd deployment model. Playarr is
+# SQLite-only (ADR 0002), so there is one process per database; several
+# nodes cooperate through peer sync.
 Environment=PLAYARR_ROLE=all
 
 ExecStart=/usr/local/bin/playarr-server

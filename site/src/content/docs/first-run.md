@@ -369,9 +369,8 @@ Artwork specifically:
   locator and resolves it server-side. **Your source instance's host and API key never reach a Playarr
   client.**
 - Episode stills are extracted lazily from the media file itself with ffmpeg and cached on the node.
-- Cache locations default sensibly for SQLite deployments (beside the database file) but fall back to
-  the process temp directory on Postgres, so set `PLAYARR_ARTWORK_CACHE_DIR` explicitly for anything
-  other than a single-node SQLite install.
+- Cache locations default to directories beside the database file; set
+  `PLAYARR_ARTWORK_CACHE_DIR` explicitly if the database has no usable parent directory.
 
 Cast and crew come from Radarr only, it is the one app in this family that exposes credits. An empty
 credits list on a series, album or book is the normal case, not an error.

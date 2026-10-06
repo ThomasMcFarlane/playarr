@@ -125,19 +125,15 @@ the log or older than the oldest retained row yields `resync`.
   database, users and sequence. A client only ever holds a cursor for the server
   it is signed in to; a cursor from one server is meaningless on another and is
   answered with `resync`.
-- **API and worker roles in separate processes, or several replicas sharing one
-  Postgres,** work without extra wiring because the table is the source of
-  truth: the worker writes rows, API replicas see them within the two-second
+- **API and worker roles in separate processes, sharing one SQLite file,** work without extra wiring because the table is the source of
+  truth: the worker writes rows, the API process sees them within the two-second
   timer. Only latency differs from the in-process wake.
 - **Peer groups** (`peer-groups.md`): peer sync writes through the same
   decorated repositories on the node that applies the change, so the receiving
   node's clients are updated; there is no cross-node event forwarding.
-- **Postgres ordering caveat:** `seq` comes from a sequence, so two concurrent
-  writers can commit out of order and a stream may read a higher seq first and
-  skip the lower one. Rows are tiny and clients also refetch on reconnect and on
-  the fallback poll, so the exposure is one missed invalidation until the next
-  refetch. A stricter ordering would need a serialised writer, which is not
-  worth the contention for a hint stream.
+- **Ordering:** `seq` is assigned inside the SQLite write, and SQLite permits one
+  writer at a time, so rows commit in sequence order. Clients also refetch on
+  reconnect and on the fallback poll.
 
 ## Client behaviour (all clients)
 

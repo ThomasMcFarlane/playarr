@@ -1,9 +1,9 @@
 # Playarr Server Docker infra
 
-This directory holds every Docker artifact for Playarr Server's Tier 2
-(docker-compose) deployment target — see
-[`docs/architecture/adr/0001-storage-engine.md`](../../docs/architecture/adr/0001-storage-engine.md)
-for the three-tier model this fits into, and
+This directory holds every Docker artifact for Playarr Server's
+docker-compose deployment target. Playarr is SQLite-only — see
+[`docs/architecture/adr/0002-sqlite-only-storage.md`](../../docs/architecture/adr/0002-sqlite-only-storage.md);
+multi-node deployments run one container per node and use peer sync. See
 [`docs/architecture/overview.md`](../../docs/architecture/overview.md) for
 the single-binary/role-gating design `backend.Dockerfile` and every
 compose file here assume.
@@ -13,10 +13,10 @@ compose file here assume.
 | File | Purpose |
 |---|---|
 | `backend.Dockerfile` | Multi-stage Rust build (`cargo-chef` for layer caching) of the `playarr` binary from `backend/Cargo.toml`'s workspace, into a slim non-root runtime image. Cross-compiles for `linux/arm64` on an x86-64 builder (no QEMU compile); `--target binary` / `--target web` export just the stripped binary or the Admin UI, which the release workflow packs into tarballs. Released as `ghcr.io/thomasmcfarlane/playarr` (see [`docs/deployment/server-releases.md`](../../docs/deployment/server-releases.md)). |
-| `docker-compose.dev.yml` | Local dev stack: Postgres 16 + Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr, plus a real `playarr` service (`PLAYARR_ROLE=all`) built from `backend.Dockerfile`. |
+| `docker-compose.dev.yml` | Local dev stack: Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr, plus a real `playarr` service (`PLAYARR_ROLE=all`) built from `backend.Dockerfile`. |
 | `docker-compose.ci.yml` | Same dependency stack, tuned for CI (tmpfs instead of named volumes, fast healthchecks), plus a `playarr` service built from `backend.Dockerfile`. |
 | `docker-compose.mock.yml` | WireMock stand-ins for the six *arr APIs (`mocks/wiremock/<app>/mappings/*.json`), same service names/ports as `docker-compose.dev.yml`, for fast tests of code that consumes those APIs without booting six real .NET apps. |
-| `docker-compose.prod.yml` | Reference multi-node stack: role-split `playarr-api`/`playarr-worker` behind Caddy (`prod/Caddyfile`), Postgres, optional Redis, profile-gated tiers. |
+| `docker-compose.prod.yml` | Reference production stack: one `playarr` server (`PLAYARR_ROLE=all`, SQLite on a named volume) behind Caddy (`prod/Caddyfile`). |
 | `docker-compose.watchtower.optional.yml` | Opt-in overlay: label-scoped automatic image updates for `playarr-*` services only. Layer with `-f`; does nothing standalone. |
 | `observability/docker-compose.yml` | Optional Prometheus + Grafana overlay. Its own compose project; joins the base stack's `playarr-net` network. |
 
@@ -43,7 +43,7 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   the binary) are kept in sync with these by hand -- there's no single
   source of truth deriving one from the other, so if either changes,
   update both.
-- **Env var names**: the binary reads `DATABASE_URL`, `REDIS_URL`,
+- **Env var names**: the binary reads `DATABASE_URL` (a `sqlite:` URL),
   `PLAYARR_ROLE`, `PLAYARR_LOG`, `PLAYARR_HTTP_BIND_ADDR`,
   `PLAYARR_METRICS_BIND_ADDR`, `PLAYARR_OTLP_ENDPOINT` -- nothing else.
   `PLAYARR_HTTP_BIND_ADDR`/`PLAYARR_METRICS_BIND_ADDR` are full socket
@@ -59,12 +59,8 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   [--check] [--yes] [--channel <stable|beta|nightly>]`, confirmed against
   `backend/src/main.rs`. There is no `--role` flag anywhere.
 - **Non-root UID/GID `10001`** and **read-only-root-filesystem-compatible**
-  (only `/tmp` is writable; no `/config`/`/data` volume declared) match the
-  Helm chart's `podSecurityContext`/`securityContext` and the fact that its
-  Deployment templates mount nothing but a `tmp` `emptyDir`. This also
-  matches ADR 0001: Tier 2/3 (docker-compose/Kubernetes) use Postgres, so
-  there's no local SQLite file requiring a persistent data directory for
-  the `playarr` container itself.
+  (only `/tmp` and the `/data` volume holding the SQLite file are writable)
+  match the Helm chart's `podSecurityContext`/`securityContext`.
 - **`*_BASE_URL` env vars** wiring `playarr` to the *arr services in
   `docker-compose.ci.yml` are an outright guess (`playarr-arr-client`'s
   real config schema doesn't exist yet) — flagged inline in that file.
@@ -75,7 +71,6 @@ are valid) -- the container would have refused to boot as shipped (fixed to
 
 ## Third-party image choices
 
-- **Postgres**: official `postgres:16-alpine` (Docker Hub).
 - **Sonarr/Radarr/Lidarr/Bazarr/Prowlarr**: `lscr.io/linuxserver/<app>:latest`
   (LinuxServer.io's actively maintained images).
 - **Readarr**: `lscr.io/linuxserver/readarr:develop`. Readarr has no LSIO
@@ -89,8 +84,6 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   containers instead.
 - **WireMock** (`docker-compose.mock.yml`): official `wiremock/wiremock:3.9.1`.
 - **Caddy** (`docker-compose.prod.yml`): official `caddy:2-alpine`.
-- **Redis** (`docker-compose.prod.yml`, `--profile ha` only): official
-  `redis:7-alpine`.
 - **Watchtower** (`docker-compose.watchtower.optional.yml`):
   `containrrr/watchtower:latest` — the long-established, widely-published
   image for this tool. Flagged in that file's header: confirm which

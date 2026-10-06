@@ -15,8 +15,8 @@ logic exists and is tested" and "this is enforced on a live request path."
 
 ## Why a spectrum, not one model
 
-Playarr Server runs across all three deployment tiers in
-[`overview.md`](overview.md), and the right amount of auth ceremony is
+Playarr Server runs in several kinds of deployment (see
+[`overview.md`](overview.md)), and the right amount of auth ceremony is
 different at each end: a household running a single NAS on their own LAN
 should not be forced through account creation and password policies just to
 watch something in their own living room, but a server operator sharing

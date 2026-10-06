@@ -63,7 +63,7 @@ the whole thing on anything from a Raspberry Pi to a Kubernetes cluster.
 - **Native clients everywhere.** Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, Web and Xbox, with full product parity and native-class performance wherever the platform allows.
 - **Built on the *arr stack.** Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr keep doing acquisition; Playarr Server owns the library and the playing.
 - **Two kinds of transcoding.** Latency-sensitive transcode-on-play, and library-wide background re-encoding through [Tdarr](https://github.com/HaveAGitGat/Tdarr).
-- **Three deployment tiers, one codebase.** systemd and SQLite, Docker Compose and Postgres, or Kubernetes with role-split workloads of the same binary.
+- **SQLite everywhere, one codebase.** One server per SQLite database, run under systemd, Docker Compose or Kubernetes; multiple servers cooperate through peer sync.
 
 ## What this is
 
@@ -80,11 +80,11 @@ Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, a
 browser-based Web client, and a native Xbox client, all speaking the same
 versioned API contract.
 
-Playarr Server is designed to run at three tiers without a different codebase or a
-data-migration story at each step: a single systemd-managed binary against
-SQLite on a home server, a small Docker Compose stack against Postgres, or a
-Kubernetes deployment with independently scaled API/worker/coordinator roles
-of the *same* binary. See
+Playarr Server is SQLite-only: one server process per SQLite database file,
+whether it runs as a systemd service on a home server, as a single Docker
+Compose container with a data volume, or as a Kubernetes pod with a
+persistent volume. Several servers (for example two regions) cooperate
+through peer sync, with each node keeping its own database. See
 [`docs/architecture/overview.md`](docs/architecture/overview.md) for why it's
 built this way.
 
@@ -127,7 +127,7 @@ release.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/architecture-light.svg">
-    <img src="docs/assets/readme/architecture-light.svg" alt="Architecture: Playarr clients talk to Playarr Server over a versioned HTTP/JSON API; the server fronts the *arr apps, Tdarr and SQLite or Postgres" width="100%">
+    <img src="docs/assets/readme/architecture-light.svg" alt="Architecture: Playarr clients talk to Playarr Server over a versioned HTTP/JSON API; the server fronts the *arr apps, Tdarr and SQLite" width="100%">
   </picture>
 </p>
 
@@ -145,7 +145,7 @@ release.
                     ┌───────────────────▼─────────────────────────┐
                     │                 Playarr Server                   │
                     │  (single Rust binary, role-gated: API /     │
-                    │   worker / coordinator)                     │
+                    │   worker)                                   │
                     │                                             │
                     │  library · auth · on-demand transcode ·     │
                     │  background transcode dispatch (Tdarr) ·    │
@@ -154,8 +154,8 @@ release.
                         │                   │               │
                 ┌───────▼──────┐   ┌────────▼───────┐   ┌───▼────┐
                 │ Sonarr/Radarr │   │      Tdarr      │   │ SQLite │
-                │ Lidarr/Bazarr │   │ (worker pool)   │   │   or   │
-                │Prowlarr/Readarr│   │                 │   │Postgres│
+                │ Lidarr/Bazarr │   │ (worker pool)   │   │        │
+                │Prowlarr/Readarr│   │                 │   │        │
                 └───────────────┘   └─────────────────┘   └────────┘
 ```
 
@@ -166,7 +166,7 @@ than reimplementing indexing/acquisition/subtitles itself, and splits
 transcoding into two independent problems: latency-sensitive on-demand
 transcode-on-play, and low-priority library-wide background re-encoding
 dispatched to a Tdarr worker pool. The full reasoning, the crate layout, the
-deployment-tier matrix, and the client code-sharing strategy are documented
+deployment options, and the client code-sharing strategy are documented
 in depth in [`docs/architecture/overview.md`](docs/architecture/overview.md),
 so read that before making non-trivial changes anywhere in the tree.
 
@@ -222,11 +222,11 @@ for how the system fits together before you dive into a specific component.
 │   └── shared/                     Cross-client tooling, e.g. OpenAPI-
 │                                    generated SDK codegen consumed by every
 │                                    client above.
-├── infra/                Deployment for all three tiers.
-│   ├── systemd/            Tier 1: unit files for a single-node install.
-│   ├── docker/              Tier 2: Docker Compose stacks (dev + prod),
+├── infra/                Deployment (SQLite, one server per database).
+│   ├── systemd/            Unit files for a single-node install.
+│   ├── docker/              Docker Compose stacks (dev + prod),
 │   │                          plus local observability/mocks for dev.
-│   ├── kubernetes/           Tier 3: base manifests, Helm chart, and
+│   ├── kubernetes/           Base manifests, Helm chart, and
 │   │                          per-environment overlays.
 │   ├── k6/                    Load-test harness.
 │   └── vidaa-gateway/         Expiring DNS and fixed Playarr launcher portal.
@@ -244,7 +244,7 @@ for how the system fits together before you dive into a specific component.
 └── CONTRIBUTING.md        How to build/run each component locally.
 ```
 
-Every directory above is independently ownable: a crate, an infra tier, a
+Every directory above is independently ownable: a crate, an infra directory, a
 client platform, or a docs subtree. That's deliberate, see the "Why this is
 a monorepo" section of the architecture overview for the reasoning.
 

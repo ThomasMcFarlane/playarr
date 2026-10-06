@@ -1,35 +1,35 @@
+# One Playarr server (API and background workers in one process, role `all`)
+# with its SQLite database on a PersistentVolumeClaim. Playarr is SQLite-only
+# (ADR 0002), so this is deliberately a single replica: SQLite does not
+# support several pods writing one database. Multi-node deployments run
+# several independent releases, each with its own database, that synchronise
+# through peer sync.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: {{ include "playarr.fullname" . }}-worker
+  name: {{ include "playarr.fullname" . }}
   labels:
-    {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 4 }}
+    {{- include "playarr.labels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.worker.autoscaling.enabled }}
-  replicas: {{ .Values.worker.replicaCount }}
-  {{- end }}
+  replicas: 1
+  serviceName: {{ include "playarr.fullname" . }}
   selector:
     matchLabels:
-      {{- include "playarr.componentSelectorLabels" (dict "context" . "component" "worker") | nindent 6 }}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      {{- include "playarr.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "playarr.componentLabels" (dict "context" . "component" "worker") | nindent 8 }}
-        {{- with .Values.worker.podLabels }}
+        {{- include "playarr.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- with .Values.worker.podAnnotations }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
@@ -40,29 +40,20 @@ spec:
       serviceAccountName: {{ include "playarr.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      # Workers finish in-flight jobs (transcodes, imports, scans) before
-      # exiting, so this grace period is deliberately generous; tune it to
-      # your longest expected job duration.
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       containers:
-        - name: playarr-worker
+        - name: playarr
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: PLAYARR_ROLE
-              value: {{ .Values.worker.role | quote }}
+              value: "all"
             - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "playarr.secretName" . }}
-                  key: DATABASE_URL
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "playarr.secretName" . }}
-                  key: REDIS_URL
+              value: "sqlite://{{ .Values.persistence.mountPath }}/playarr.db"
+            - name: PLAYARR_ARTWORK_CACHE_DIR
+              value: "{{ .Values.persistence.mountPath }}/cache/artwork"
           envFrom:
             - configMapRef:
                 name: {{ include "playarr.configMapName" . }}
@@ -93,26 +84,41 @@ spec:
           lifecycle:
             preStop:
               exec:
-                # Stop pulling new jobs off the queue and let any in-flight
-                # job finish (up to preStopSleepSeconds) before SIGTERM.
+                # Give the load balancer / kube-proxy / Endpoints controller
+                # time to observe this pod is terminating and stop sending it
+                # new traffic before the process receives SIGTERM.
                 command: ["/bin/sh", "-c", "sleep {{ .Values.preStopSleepSeconds }}"]
           resources:
-            {{- toYaml .Values.worker.resources | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
       volumes:
         - name: tmp
           emptyDir: {}
-      {{- with .Values.worker.nodeSelector }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.worker.affinity }}
+      {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.worker.tolerations }}
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- with .Values.persistence.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

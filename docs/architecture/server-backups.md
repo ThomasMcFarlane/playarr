@@ -33,29 +33,24 @@ and the cache it depends on. `mode=full` is the default.
 recipients, ChaCha20-Poly1305 streaming) gzip-compressed tar. Entries, in order:
 
 1. `manifest.json`: `format_version`, `backup_id`, `created_at`, server version,
-   `engine` (`sqlite` or `postgres`), `schema_version` (highest applied migration),
+   `engine` (always `sqlite`), `schema_version` (highest applied migration),
    `mode` (`full` or `database`, plus `partial: bool`), per-file `sha256` and size,
    per-table row counts, `included` / `excluded` / `unavailable` lists with
    reasons, `external_dependencies` (library root paths, secret names) and the
    node identity (peer id, name).
-2. `db/playarr.sqlite` (SQLite engine) or `db/<table>.ndjson` plus
-   `db/_tables.json` (PostgreSQL engine; one JSON object per row, tables in
-   foreign-key order).
+2. `db/playarr.sqlite`.
 3. `assets/artwork/...` (full mode only).
 
 Next to each archive the server writes `<name>.json`: the manifest summary with
 the archive's own SHA-256 and size, written last. The sidecar is the commit
 marker. An archive without a sidecar is incomplete by definition.
 
-Engines are never converted. A SQLite backup restores to SQLite, a PostgreSQL
-backup to PostgreSQL; restore refuses a mismatch with an explicit message.
+Playarr is SQLite-only ([ADR 0002](adr/0002-sqlite-only-storage.md)). Restore refuses a non-SQLite target with an explicit message, and an archive whose manifest names another engine is rejected.
 
 ## 3. Creation and safety (task 64)
 
-- **Consistency.** SQLite: `VACUUM INTO` produces a transactionally consistent
-  copy while writers continue (WAL). PostgreSQL: one `REPEATABLE READ, READ ONLY`
-  transaction streams every table, so all tables share one snapshot. Both are
-  taken first; the artwork files are referenced by nothing transactionally and
+- **Consistency.** `VACUUM INTO` produces a transactionally consistent
+  copy while writers continue (WAL). It is taken first; the artwork files are referenced by nothing transactionally and
   are copied after, so an artwork file added mid-run is simply absent or extra,
   never a dangling database reference.
 - **Atomic publish.** Work happens in `.staging-<id>/`. The archive is written
@@ -103,12 +98,9 @@ under a running server is unsafe. The Admin page shows the exact command.
    against the manifest checksums, check `format_version`, engine and that the
    archive's `schema_version` is not newer than the binary's. Nothing is
    written to the target yet. `backup verify` stops here.
-2. **Stage.** SQLite: restore to a new file beside the target, run
+2. **Stage.** Restore to a new file beside the target, run
    `PRAGMA integrity_check` and `foreign_key_check`, then apply remaining
-   migrations if the archive is older. PostgreSQL: create a staging schema,
-   build the schema at the archive's version, load rows in foreign-key order
-   inside one transaction, verify row counts against the manifest, then apply
-   remaining migrations.
+   migrations if the archive is older.
 3. **Policy.** Refresh-token families, download tickets and renditions are cleared. Library paths can be
    remapped with `--remap-path OLD=NEW` (rewrites source root overrides and
    media paths). Every library root is checked on the replacement; a missing
@@ -120,22 +112,21 @@ under a running server is unsafe. The Admin page shows the exact command.
    Tdarr connection so a restored copy cannot act as, or on behalf of, the
    original. Source connections otherwise stay configured; start a clone with
    `PLAYARR_ROLE=api` to keep every background poller off.
-4. **Cutover.** Only when all checks pass. SQLite: the existing database is
+4. **Cutover.** Only when all checks pass. The existing database is
    renamed to `<name>.pre-restore-<timestamp>` and the staged file is renamed
-   into place. PostgreSQL: in one transaction the live schema is renamed to
-   `pre_restore_<timestamp>` and the staged schema becomes `public`. A failure
+   into place. A failure
    before this step leaves the current installation untouched and removes the
    staging objects. A failure at this step is a rename, so rollback is renaming
    back.
-5. A cross-engine restore is refused, not converted.
+5. A restore into a non-SQLite target is refused.
 
 ## 5. Verification (task 66)
 
 Restore tests run against scratch databases only: in-process SQLite files in
-temp directories and a throwaway PostgreSQL container with a memory limit.
+temp directories.
 Live servers only get backup creation. The suite covers:
 
-- round trip on both engines comparing catalogue, users and permissions,
+- round trip comparing catalogue, users and permissions,
   history, playlist order, settings and library configuration;
 - wrong key, truncated or bit-flipped archive, missing manifest entry, wrong
   engine, newer schema, incompatible format version, missing library root,
@@ -186,13 +177,8 @@ info endpoint pointing at a test library directory.
   instance, backs it up through the API, restores into an empty location and
   starts a second instance from it, checking users, permissions, passwords,
   playlists, settings and session invalidation, plus wrong-key, damaged,
-  truncated and cross-engine refusals. The Rust suites cover both engines
-  (PostgreSQL tests run when `PLAYARR_TEST_POSTGRES_URL` points at a scratch
-  server and are skipped otherwise).
-- **PostgreSQL parity.** PostgreSQL migration 53 mirrors SQLite migration 42
-  (`source_root_folders`, `folder_media_entries`), so library-root checks and
-  `--remap-path` work on PostgreSQL restores too; the PostgreSQL suite seeds a
-  root and a folder entry and covers the missing-root refusal and the remap.
+  truncated and non-SQLite-target refusals. The Rust suites cover the SQLite
+  round trip, library-root checks and `--remap-path`.
 - **Not provable yet.** Recording schedules and server-owned recordings do not
   exist, so there is nothing to retain; and playback of restored media depends on
   the library mounts of the replacement, which restore checks but cannot create.

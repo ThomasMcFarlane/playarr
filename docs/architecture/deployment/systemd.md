@@ -1,15 +1,14 @@
-# Deploying Playarr Server: systemd (Tier 1 — single node)
+# Deploying Playarr Server: systemd (single node)
 
 This is the default, recommended way to run Playarr Server on a NAS, a
 Raspberry Pi, a mini-PC, or any always-on Linux box you administer
 directly. It runs one `playarr` process with `PLAYARR_ROLE=all` (API
 and worker loops in the same process — see
 [`../overview.md`](../overview.md#the-single-role-gated-binary-principle)),
-typically backed by SQLite (see [ADR 0001](../adr/0001-storage-engine.md)
-for why SQLite is the Tier 1 default). Nothing about the binary itself
-forces that choice, though: `playarr` derives its deployment tier from
-`DATABASE_URL`'s URL scheme, not a separate flag, so a Tier 1 host can
-just as validly point at a Postgres instance it already runs.
+backed by SQLite, the only supported storage engine
+([ADR 0002](../adr/0002-sqlite-only-storage.md), superseding
+[ADR 0001](../adr/0001-storage-engine.md)). A `postgres://` `DATABASE_URL`
+fails startup with a clear error.
 
 ## What you need
 
@@ -26,7 +25,7 @@ just as validly point at a Postgres instance it already runs.
 
 ## Installing
 
-The infra tier ships an installer script and three unit files under
+The `infra/systemd/` directory ships an installer script and three unit files under
 `infra/systemd/`:
 
 - `infra/systemd/install.sh` — creates the `playarr` system user/group;
@@ -55,7 +54,7 @@ The infra tier ships an installer script and three unit files under
 
 ```bash
 sudo ./infra/systemd/install.sh /path/to/playarr    # or place ./playarr next to install.sh and omit the arg
-sudoedit /etc/playarr/playarr.env                 # fill in DATABASE_URL (and REDIS_URL if you use one)
+sudoedit /etc/playarr/playarr.env                 # check DATABASE_URL (a sqlite: URL)
 sudo systemctl enable --now playarr.service
 systemctl status playarr.service
 journalctl -u playarr.service -f
@@ -69,8 +68,7 @@ There is no `config.toml` or any file-based configuration format —
 
 ```bash
 # --- Required ---
-DATABASE_URL=            # postgres://<user>:<password>@<host>:5432/<db>
-REDIS_URL=                # redis://<host>:6379/0
+DATABASE_URL=sqlite:///var/lib/playarr/playarr.db?mode=rwc
 
 # --- Optional (defaults shown match values.yaml's Kubernetes ConfigMap;
 #     these are the real names playarr-config::Config::from_env reads) ---
@@ -102,26 +100,12 @@ persisted system setting managed in Playarr Server Admin under **System >
 Settings**. Playarr reads that setting when labelling a connected server and
 when presenting the server attached to an invitation link.
 
-One thing worth knowing before copying that file verbatim:
-
-- **`playarr.env.example` documents a Postgres `DATABASE_URL`, not a
-  SQLite one**, even though SQLite is Tier 1's zero-dependency default per
-  ADR 0001. Use a `sqlite:` URL (e.g.
-  `sqlite:///var/lib/playarr/playarr.db`) if that's the deployment you
-  actually want. `REDIS_URL` is genuinely optional in the code
-  (`playarr-config::Config::redis_url: Option<String>`) despite being
-  listed under "Required" in the example file — it only changes anything
-  when `DATABASE_URL` is already a Postgres URL (see
-  `DeploymentTier::resolve`); it's ignored under a `sqlite:` URL.
-
-(An earlier pass of this file and `playarr.env.example` used
-`APP_ENV`/`LOG_LEVEL`/`LOG_FORMAT`/`METRICS_ENABLED`/`METRICS_PORT`/
-`HTTP_PORT` instead — none of which `Config::from_env` reads. Fixed to the
-real `PLAYARR_*` names above.)
+`DATABASE_URL` must be a `sqlite:` URL; the database is a single file
+under the data directory.
 
 `PLAYARR_ROLE` is intentionally **not** set in `playarr.env` —
 `playarr.service` pins it to `all` directly (see above), and there is no
-`--role` (or any other) command-line flag on `serve` at this or any tier:
+`--role` (or any other) command-line flag on `serve`:
 `backend/src/main.rs`'s `Command::Serve` takes zero arguments. Role
 selection happens purely through the `PLAYARR_ROLE` environment
 variable, which accepts `all`, `api`, or `worker` (case-insensitively) and
@@ -164,17 +148,15 @@ port 80. See `docs/deployment/playarr-relay.md`.
   everything `Config::from_env` resolves is read once, at process startup.
 - Data lives under `/var/lib/playarr` (the unit's `WorkingDirectory`,
   and — together with `/var/log/playarr` — the only path the sandboxed
-  unit's `ReadWritePaths=` allows it to write to). Back that up if you're
-  running SQLite; the database is a single file there.
-- Growing beyond one node: point `DATABASE_URL` at a real Postgres
-  instance. That alone flips `playarr-config::DeploymentTier` from
-  `SingleNode` to a multi-node tier and switches coordination from the
-  no-op `SingleNodeCoordinator` to `PostgresCoordinator` — then move to
-  [`docker-compose.md`](docker-compose.md) or
-  [`kubernetes.md`](kubernetes.md) for the multi-process orchestration
-  around it. There is no built-in data-migration tool in the current CLI
-  (`playarr`'s only subcommands are `serve` and `update`) — copying a
-  SQLite database's contents into Postgres is on the operator today.
+  unit's `ReadWritePaths=` allows it to write to). Back that up (or use the
+  server's own backup feature, [`../server-backups.md`](../server-backups.md));
+  the database is a single file there.
+- Growing beyond one node: run another Playarr Server (its own SQLite
+  database) and join the two into a peer group; peer sync replicates
+  accounts and availability between nodes
+  ([`../peer-groups.md`](../peer-groups.md),
+  [`../distributed-design.md`](../distributed-design.md)). There is no shared
+  database tier.
 
 ## Self-update story: opt-in, check-only, and today largely stubbed
 

@@ -7,13 +7,13 @@ other.
 1. **`helm/playarr-standalone/`** - one `PLAYARR_ROLE=all` Pod for adopting an
    existing SQLite instance in place. It supports a retained local volume,
    fixed-node scheduling and optional Emissary routing without moving data.
-2. **`helm/playarr/`** - a real Helm chart. This is the more complete,
-   more opinionated path (autoscaling, PDB, optional Prometheus
-   ServiceMonitor) and is the recommended default for new multi-node installs.
+2. **`helm/playarr/`** - a real Helm chart: a single-replica StatefulSet with a
+   PersistentVolumeClaim for the SQLite database, a Service and an optional
+   Prometheus ServiceMonitor. The recommended default for new installs.
 3. **`base/` + `overlays/{dev,staging,prod}/`** - a plain kustomize
    skeleton, for teams that don't want a Helm release object in-cluster or
    that already standardise on kustomize elsewhere. Deliberately kept
-   minimal (no HPA/PDB/ServiceMonitor yet) - see "kustomize skeleton" below
+   minimal (no ServiceMonitor yet) - see "kustomize skeleton" below
    for what's out of scope today.
 
 The separate **`helm/vidaa-installer/`** chart is an optional companion, not a
@@ -22,20 +22,22 @@ Emissary route needed for an experimental VIDAA launcher installation on a
 cluster that already runs the permanent LAN resolver. It is inert by default;
 see its [operator guide](./helm/vidaa-installer/README.md).
 
-The multi-node Helm and Kustomize paths deploy the same two workloads:
+Playarr is SQLite-only ([ADR 0002](../../docs/architecture/adr/0002-sqlite-only-storage.md)).
+The Helm and Kustomize paths deploy one workload:
 
-- **`playarr-api`** - a Deployment running the `playarr` binary with
-  `PLAYARR_ROLE=api`, fronted by a ClusterIP Service.
-- **`playarr-worker`** - a separate Deployment running the same binary
-  with `PLAYARR_ROLE=worker`, with its own PodDisruptionBudget (Helm
-  path) so voluntary disruptions (node drains, cluster upgrades) never take
-  every worker offline at once.
+- **`playarr`** - a StatefulSet with one replica running the `playarr` binary
+  with `PLAYARR_ROLE=all` (API and background workers in one process), its
+  SQLite database on a PersistentVolumeClaim mounted at `/data`, fronted by a
+  ClusterIP Service. SQLite does not support several pods writing one
+  database, so the replica count is fixed at 1. A multi-node deployment is
+  several independent installs (one per node or cluster), each with its own
+  database, that synchronise through peer sync.
 
-Both roles expose the same two ports from the same binary:
+The binary exposes two ports:
 
 | Port | Purpose |
 |------|---------|
-| `8484` (`http`) | Application traffic (api) / probe-only (worker) - see `probes.port` |
+| `8484` (`http`) | Application traffic and probes - see `probes.port` |
 | `9090` (`metrics`) | Prometheus `/metrics` |
 
 And the same two probe paths:
@@ -47,7 +49,7 @@ And the same two probe paths:
 
 These four values (ports + paths) are assumptions made while scaffolding
 this chart, not something read from the actual `playarr` binary's source.
-If the real API/worker binary uses different ports or probe paths, update
+If the real binary uses different ports or probe paths, update
 `values.yaml`'s `probes.*` / `config.*` (Helm) or the hardcoded values in
 `base/*.yaml` (kustomize) - both paths were built to make that a small,
 localized edit.
@@ -61,17 +63,9 @@ helm/playarr/
                           # never "latest"; see "Image tags" below
   templates/
     _helpers.tpl          # name/label/selector helpers
-    deployment-api.yaml    # PLAYARR_ROLE=api
-    deployment-worker.yaml # PLAYARR_ROLE=worker
-    hpa-api.yaml            # HorizontalPodAutoscaler for the api Deployment
-    hpa-worker.yaml         # HorizontalPodAutoscaler for the worker Deployment
-    service.yaml             # ClusterIP Service for api + a headless
-                              # ClusterIP Service for worker (metrics/probe
-                              # routing only - worker takes no ingress traffic)
-    pdb-worker.yaml          # PodDisruptionBudget for the worker Deployment
+    statefulset.yaml        # PLAYARR_ROLE=all, SQLite on a PVC, 1 replica
+    service.yaml             # ClusterIP Service (http + metrics)
     configmap.yaml            # non-secret config (values.config)
-    secret.yaml                # opt-in Secret placeholder for
-                                # DATABASE_URL/REDIS_URL (see below)
     serviceaccount.yaml         # ServiceAccount (values.serviceAccount.create)
     servicemonitor.yaml          # optional, values.serviceMonitor.enabled
     NOTES.txt                     # `helm install` post-install summary
@@ -80,55 +74,35 @@ helm/playarr/
 ### Image tags
 
 `values.yaml`'s `image.tag` is set to the same value as `Chart.yaml`'s
-`appVersion` (`0.1.0` in this scaffold) and the Deployment templates render
+`appVersion` (`0.1.0` in this scaffold) and the StatefulSet template renders
 it as `image.tag | default .Chart.AppVersion` - so even an empty
 `image.tag` falls back to a real pinned version, never to `latest`. Bumping
 the deployed version means bumping both `Chart.yaml appVersion` and
 `values.yaml image.tag` together (in a PR, or automated - see
 [`flux-image-automation.example.yaml`](./flux-image-automation.example.yaml)).
 
-### Secrets: DATABASE_URL / REDIS_URL
+### Storage
 
-Both Deployments read `DATABASE_URL` and `REDIS_URL` from a Secret named by
-`secret.name` (defaults to `<release-fullname>-secrets`) via
-`secretKeyRef` - they are never accepted as plain env vars or ConfigMap
-entries.
+`DATABASE_URL` is not a value: the chart sets `sqlite://<persistence.mountPath>/playarr.db`
+and mounts a PersistentVolumeClaim (`persistence.size`,
+`persistence.storageClassName`) there. A `postgres://` URL is rejected by the
+server at startup. Back up the volume with the server's own backup feature
+(see `docs/architecture/server-backups.md`) rather than copying a live
+database file.
 
-- `secret.create: false` (the default) - the chart assumes that Secret
-  already exists in the target namespace, provisioned out-of-band (External
-  Secrets Operator, Sealed Secrets, Vault, or a manually-run
-  `kubectl create secret generic <name> --from-literal=DATABASE_URL=... \
-  --from-literal=REDIS_URL=...`). Pods will sit in `CreateContainerConfigError`
-  until that Secret exists - `helm install --wait` will time out, which is
-  intentional (fail loud, not silently start with an empty DB URL).
-- `secret.create: true` - the chart renders the Secret itself from
-  `secret.data.databaseUrl` / `secret.data.redisUrl`. Intended for local/dev
-  use only (e.g. `helm install --set secret.create=true --set
-  secret.data.databaseUrl=... --set secret.data.redisUrl=...`); do not put
-  real credentials in a values file that lands in git.
+### ServiceMonitor
 
-### Autoscaling, PDB, ServiceMonitor
-
-- `api.autoscaling` / `worker.autoscaling` (both `enabled: true` by
-  default) render a `HorizontalPodAutoscaler` each, targeting CPU
-  utilization by default. `worker`'s HPA carries a commented example of
-  wiring in an `External` queue-depth metric (KEDA / Prometheus Adapter)
-  once one is installed - CPU-only autoscaling is a reasonable default but
-  not ideal for a job-queue worker.
-- `worker.podDisruptionBudget.enabled: true` renders a PDB with
-  `minAvailable: 1` by default.
-- `serviceMonitor.enabled: false` by default. Set to `true` on clusters
-  running kube-prometheus-stack (or any Prometheus Operator install) to get
-  a `ServiceMonitor` scraping both the api and worker `metrics` Service
-  ports. Requires the `monitoring.coreos.com/v1` CRDs to already be
-  installed - the template does not check for them, so enabling this on a
-  cluster without the Operator will fail `helm install`/`upgrade`.
+`serviceMonitor.enabled: false` by default. Set to `true` on clusters
+running kube-prometheus-stack (or any Prometheus Operator install) to get a
+`ServiceMonitor` scraping the `metrics` Service port. Requires the
+`monitoring.coreos.com/v1` CRDs to already be installed - the template does
+not check for them, so enabling this on a cluster without the Operator will
+fail `helm install`/`upgrade`.
 
 ### Validating locally
 
 This was validated with `helm lint` and `helm template` (multiple value
-combinations - defaults, autoscaling disabled, `secret.create=true` +
-`serviceMonitor.enabled=true`) during scaffolding. It was **not** validated
+combinations - defaults and `serviceMonitor.enabled=true`) during scaffolding. It was **not** validated
 against a live cluster (`helm install`, `kubectl apply --dry-run=server`)
 as part of this scaffold - do that before trusting it in a real
 environment:
@@ -144,29 +118,18 @@ helm install playarr helm/playarr --dry-run --debug
 ```
 base/
   kustomization.yaml
-  deployment-api.yaml
-  deployment-worker.yaml
+  statefulset.yaml      # PLAYARR_ROLE=all, SQLite on a PVC, 1 replica
   service.yaml
   configmap.yaml
-  secret.yaml           # placeholder, empty stringData - see comments in-file
 overlays/
-  dev/kustomization.yaml       # namespace=playarr-dev, replicas=1
-  staging/kustomization.yaml   # namespace=playarr-staging, replicas=2
-  prod/kustomization.yaml      # namespace=playarr-prod, replicas=3
+  dev/kustomization.yaml       # namespace=playarr-dev, PLAYARR_LOG=debug
+  staging/kustomization.yaml   # namespace=playarr-staging, PLAYARR_LOG=info
+  prod/kustomization.yaml      # namespace=playarr-prod, PLAYARR_LOG=warn
 ```
 
-Deliberately minimal, per the brief: no HorizontalPodAutoscaler,
-PodDisruptionBudget, or ServiceMonitor equivalents yet (the Helm chart is
-the fuller-featured path). If this path becomes the primary one, port
-those three templates over as either static manifests in `base/` or a
-`components/autoscaling` kustomize component overlays opt into.
-
-`base/secret.yaml` ships with empty `stringData` purely so `kustomize
-build` produces a complete, applyable manifest set out of the box. Every
-overlay has a comment block explaining how to replace it for real use
-(`secretGenerator` from an untracked env file, or delegate the Secret
-entirely to Sealed Secrets / External Secrets Operator) - **do not** apply
-`base/secret.yaml`'s placeholder as-is against staging/prod.
+Deliberately minimal: no ServiceMonitor equivalent (the Helm chart is the
+fuller-featured path). There is no database Secret: the database is a SQLite
+file on the StatefulSet's PVC.
 
 Validated locally with `kustomize build` against `base` and all three
 overlays during scaffolding; not validated against a live cluster.
@@ -203,11 +166,11 @@ other change.
   assumptions, not read from the real `playarr` binary - see the table
   above.
 - **Image repository** (`ghcr.io/playarr/playarr`) is a placeholder;
-  update `values.yaml` / `base/deployment-*.yaml` /
+  update `values.yaml` / `base/statefulset.yaml` /
   `base/kustomization.yaml`'s `images.name` together if the real registry
   differs.
 - No `Ingress`/`Gateway API` resource is included in either path - fronting
-  the api Service with an ingress controller / gateway is left to the
+  the Service with an ingress controller / gateway is left to the
   cluster operator, since ingress class, TLS issuer, and hostname are all
   cluster-specific.
 - No live-cluster validation was performed (no `helm install`, no

@@ -6,9 +6,9 @@
 # Bazarr/Prowlarr/Readarr) and Tdarr you already run elsewhere -- on your
 # LAN, on another host, wherever -- rather than spinning up a second,
 # redundant *arr suite just to exercise this one service. This is a
-# genuinely containerized version of Tier 1 (SQLite, single node, zero
-# other services) rather than the Tier 2 (Postgres, multi-service)
-# docker-compose.dev.yml represents -- see ADR 0001 for the tier model.
+# minimal containerized install (SQLite, single node, zero other services)
+# rather than the multi-service docker-compose.dev.yml. Playarr is SQLite-only
+# (ADR 0002); multi-node deployments use peer sync.
 #
 # SQLite state persists in the named volume below across restarts.
 # Registering your existing *arr instances is done through the running
@@ -31,10 +31,8 @@ services:
     container_name: playarr-standalone
     environment:
       PLAYARR_ROLE: all
-      # SQLite, not Postgres -- this is a single-node stack with no
-      # multi-replica coordination to exercise, so Postgres would only add
-      # a second container for no benefit here. Persisted via the named
-      # volume below, not /tmp, so it survives `docker compose restart`.
+      # SQLite, persisted via the named volume below, not /tmp, so it
+      # survives `docker compose restart`.
       DATABASE_URL: sqlite:///data/playarr.db
       PLAYARR_ARTWORK_CACHE_DIR: /data/cache/artwork
       PLAYARR_LOG: ${PLAYARR_LOG:-info,playarr_api=debug}
@@ -59,8 +57,7 @@ services:
       # Deliberately NOT set: TDARR_URL/TDARR_API_KEY (no Tdarr in this
       # stack -- background dispatch simply has nothing to dispatch to,
       # which is fine; on-demand transcode doesn't depend on Tdarr at all,
-      # see playarr-transcode's own docs), REDIS_URL (SQLite tier has no
-      # use for it).
+      # see playarr-transcode's own docs).
     ports:
       - "8484:8484"
       - "9090:9090"

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: playarr
-description: Helm chart for deploying Playarr Server (API and worker) to Kubernetes
+description: Helm chart for deploying Playarr Server (single SQLite-backed server) to Kubernetes
 type: application
 
 # Chart version: bump on every change to templates/values in this chart.
@@ -15,8 +15,7 @@ appVersion: "0.1.0"
 keywords:
   - playarr
   - media
-  - api
-  - worker
+  - sqlite
 
 home: https://github.com/ThomasMcFarlane/playarr
 sources:
