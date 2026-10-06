@@ -198,7 +198,7 @@ export const ja: Translations = {
   "components.player.cast.unavailableBrowser":
     "このブラウザはキャストに対応していません。デスクトップまたはAndroidのChromeかMicrosoft Edgeをお試しください。",
   "components.player.cast.unavailableInsecureServer":
-    "このサーバーはセキュアな接続(HTTPS)を使用していないため、Chromecastでは再生できません。",
+    "このChromecastはhttp://経由でこのサーバーに接続できませんでした。必要な対応は1つだけです。サーバーにhttps://アドレスを設定し(PLAYARR_RELAY_REGISTER=trueとPLAYARR_ACME_CHALLENGE=relay-dns-01を設定するか、TLSリバースプロキシを使用)、そのアドレスで再度サインインしてからキャストし直してください。このデバイスでの再生は引き続き利用できます。",
   "components.player.cast.error":
     "キャストが予期せず停止しました。もう一度お試しいただくか、このデバイスで視聴を続けてください。",
 

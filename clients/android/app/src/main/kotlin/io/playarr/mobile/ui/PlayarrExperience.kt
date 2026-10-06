@@ -160,6 +160,7 @@ import io.playarr.mobile.cast.PlayarrCastAuthRotatedMessage
 import io.playarr.mobile.cast.PlayarrCastConnectionState
 import io.playarr.mobile.cast.PlayarrCastCredentials
 import io.playarr.mobile.cast.PlayarrCastEndSessionMessage
+import io.playarr.mobile.cast.PlayarrCastErrorMessage
 import io.playarr.mobile.cast.PlayarrCastItem
 import io.playarr.mobile.cast.PlayarrCastItemKind
 import io.playarr.mobile.cast.PlayarrCastLoadRequest
@@ -6619,6 +6620,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     val castConnection: StateFlow<PlayarrCastConnectionState> = castSession.connectionState
     val castRoutes: StateFlow<List<PlayarrCastRoute>> = castSession.routes
     private val castReceiverState: StateFlow<PlayarrCastStateMessage?> = castSession.receiverState
+    private val _castError = MutableStateFlow<String?>(null)
+
+    /** The receiver's last error (for example `insecure_server`, with its one-step remedy), shown in the cast dialog so a failed cast is never silent. */
+    val castError: StateFlow<String?> = _castError.asStateFlow()
+    fun clearCastError() { _castError.value = null }
     private val _castingMediaFileId = MutableStateFlow<String?>(null)
     val castingMediaFileId: StateFlow<String?> = _castingMediaFileId.asStateFlow()
 
@@ -6747,6 +6753,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 if (message is PlayarrCastAuthRotatedMessage) {
                     delegatedDeviceAuth.onCredentialsRotated(message.credentials)
                 }
+                if (message is PlayarrCastErrorMessage) {
+                    _castError.value = message.message
+                }
             }
         }
         viewModelScope.launch {
@@ -6795,6 +6804,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 .getOrDefault(activeServerUrl)
             stopPlayback()
             val credentials = runCatching { delegatedDeviceAuth.obtainCredentials() }.getOrNull() ?: return@launch
+            _castError.value = null
             val loaded = castSession.loadMedia(
                 PlayarrCastLoadRequest(
                     server = PlayarrCastServer(baseUrl = serverUrlForItem),
@@ -7456,6 +7466,7 @@ private fun ExperiencePlayerScreen(
     val controls by viewModel.effectiveControls.collectAsState()
     val playbackState by viewModel.player.state.collectAsState()
     val castConnection by viewModel.castConnection.collectAsState()
+    val castError by viewModel.castError.collectAsState()
     val castRoutes by viewModel.castRoutes.collectAsState()
     var showPlayOnDevice by remember { mutableStateOf(false) }
     val castingMediaFileId by viewModel.castingMediaFileId.collectAsState()
@@ -7656,9 +7667,10 @@ private fun ExperiencePlayerScreen(
                         isTelevision = isTelevision,
                         playServicesAvailable = viewModel.castAvailable,
                         receiverAppIdConfigured = BuildConfig.CAST_RECEIVER_APP_ID.isNotBlank(),
-                        serverIsHttps = serverUrl.startsWith("https", ignoreCase = true),
                     ),
                     connectionState = castConnection,
+                    error = castError,
+                    onDismissError = viewModel::clearCastError,
                     routes = castRoutes,
                     onStartDiscovery = { viewModel.startCastDiscovery(BuildConfig.CAST_RECEIVER_APP_ID) },
                     onStopDiscovery = viewModel::stopCastDiscovery,

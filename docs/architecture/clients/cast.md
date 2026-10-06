@@ -179,11 +179,27 @@ limitations below.
   iOS SDK shapes, but several call sites (`GCKMediaLoadRequestDataBuilder`,
   error-code bridging, `GCKDevice`/`GCKCastSession` API surface) are flagged
   in-code as needing confirmation against real vendored SDK headers.
-- **Plain `http://` self-hosted servers cannot be cast to from the
-  `https://playarr.app` receiver.** The receiver page is always served over
-  HTTPS; a browser/Cast device refuses mixed-content requests from an HTTPS
-  page to an HTTP origin. Casting only works today against an HTTPS Playarr Server
-  server.
+- **Plain `http://` self-hosted servers are never refused up front, but may
+  be blocked by the Cast device.** The receiver page is always served over
+  HTTPS (the Google Cast Developer Console requires an HTTPS receiver URL),
+  and an HTTPS page loading `http://` content is mixed content. Google's Cast
+  documentation does not say whether a Cast device allows it. The one
+  verifiable source is Chromium's Chromecast code, which has a device-level
+  `kRestrictInsecureContent` feature under which only apps holding
+  `ALLOW_INSECURE_CONTENT` may load insecure content (that is a device
+  configuration Playarr does not control). Playarr therefore does not guess:
+  every sender offers Cast for an `http://` server, the receiver tries the
+  server, and if the attempt fails (negotiation `fetch` failure, or a CAF
+  playback `ERROR` after negotiation) it reports `insecure_server` with a
+  one-step remedy, which the sender shows (web: the Cast button message;
+  Android: the cast dialog). The remedy is to give the server an `https://`
+  address: a server with a public IPv4 address gets a browser-trusted name by
+  setting `PLAYARR_RELAY_REGISTER=true` and `PLAYARR_ACME_CHALLENGE=relay-dns-01`
+  (see `docs/deployment/playarr-relay.md`), otherwise a TLS reverse proxy.
+  The relay is DNS-only (no traffic passes through it), so it cannot give a
+  LAN-only server an HTTPS name, and the Default Media Receiver is also an
+  HTTPS page, so it has the same constraint and is not used. **Not verified on
+  a real device**: no Cast App ID is registered (see above).
 - **No DRM.** Same as every other Playarr client: the playback-negotiation
   API returns no DRM configuration or license endpoint today, so this only
   ever plays unencrypted direct/HLS sources.

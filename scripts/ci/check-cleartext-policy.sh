@@ -34,6 +34,15 @@ for cap in ('internetClient', 'privateNetworkClientServer'):
 if not re.search(r'<access\s+origin="\*"', read('clients/tv-web/apps/tv-tizen/tizen-manifest.xml')):
     errors.append('Tizen manifest: <access origin="*"> is required')
 
+# Chromecast: the receiver and senders must never refuse an http:// server up front.
+# (A failed attempt is explained with the remedy instead; see docs/architecture/clients/cast.md.)
+if 'Refusing to load an insecure' in read('clients/tv-web/apps/cast-receiver/src/main.ts'):
+    errors.append('cast receiver must not refuse an http:// server up front')
+if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobile/cast/PlayarrCastAvailability.kt'):
+    errors.append('Android cast availability must not depend on the server being https')
+if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobile/ui/PlayarrExperience.kt'):
+    errors.append('Android cast button must be offered for http:// servers')
+
 if errors:
     print('\n'.join(errors)); sys.exit(1)
 print('cleartext policy ok')

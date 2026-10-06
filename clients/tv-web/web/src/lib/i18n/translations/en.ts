@@ -165,7 +165,7 @@ export const en = {
   "components.player.cast.unavailableBrowser":
     "This browser doesn’t support casting. Try Chrome or Microsoft Edge on desktop or Android instead.",
   "components.player.cast.unavailableInsecureServer":
-    "This server isn’t using a secure (HTTPS) address. Chromecast can only play from secure servers.",
+    "Your Chromecast could not reach this server over http://. One step: give the server an https:// address (set PLAYARR_RELAY_REGISTER=true and PLAYARR_ACME_CHALLENGE=relay-dns-01, or use a TLS reverse proxy), sign in again with that address, then cast again. Playing on this device keeps working.",
   "components.player.surface.audioSurfaceAriaLabel": "Audio playback surface",
   "components.player.surface.closeButtonAriaLabel": "Close player",
   "components.player.surface.closePlaylistAriaLabel": "Close playlist",

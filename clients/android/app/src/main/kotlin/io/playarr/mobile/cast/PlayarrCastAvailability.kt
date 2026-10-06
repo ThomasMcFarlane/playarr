@@ -17,14 +17,12 @@ package io.playarr.mobile.cast
  *   `ModuleUnavailableException` all collapse to `false` there).
  * - [receiverAppIdConfigured]: `BuildConfig.CAST_RECEIVER_APP_ID` is
  *   non-blank -- an unconfigured build has nowhere to cast to.
- * - [serverIsHttps]: the Cast receiver is served from a Google-hosted,
- *   HTTPS origin; a plain-HTTP Playarr Server would only ever fail with
- *   `insecure_server` once a cast was attempted, so it's not worth
- *   offering the button at all in that case.
+ * - A plain `http://` Playarr Server is never a reason to hide the button: Playarr never
+ *   blocks a user's http server. If the Chromecast cannot reach it the receiver reports
+ *   `insecure_server` with the one-step remedy, which the sender surfaces.
  */
 fun shouldOfferPlayarrCast(
     isTelevision: Boolean,
     playServicesAvailable: Boolean,
     receiverAppIdConfigured: Boolean,
-    serverIsHttps: Boolean,
-): Boolean = !isTelevision && playServicesAvailable && receiverAppIdConfigured && serverIsHttps
+): Boolean = !isTelevision && playServicesAvailable && receiverAppIdConfigured

@@ -198,7 +198,7 @@ export const th: Translations = {
   "components.player.cast.unavailableBrowser":
     "เบราว์เซอร์นี้ไม่รองรับการแคสต์ กรุณาใช้ Chrome หรือ Microsoft Edge บนคอมพิวเตอร์หรือ Android แทน",
   "components.player.cast.unavailableInsecureServer":
-    "เซิร์ฟเวอร์นี้ไม่ได้ใช้การเชื่อมต่อที่ปลอดภัย (HTTPS) จึงไม่สามารถแคสต์ไปยัง Chromecast ได้",
+    "Chromecast เชื่อมต่อกับเซิร์ฟเวอร์นี้ผ่าน http:// ไม่ได้ ขั้นตอนเดียว: ตั้งที่อยู่ https:// ให้เซิร์ฟเวอร์ (ตั้งค่า PLAYARR_RELAY_REGISTER=true และ PLAYARR_ACME_CHALLENGE=relay-dns-01 หรือใช้ TLS reverse proxy) เข้าสู่ระบบใหม่ด้วยที่อยู่นั้น แล้วแคสต์อีกครั้ง การเล่นบนอุปกรณ์นี้ยังใช้งานได้ตามปกติ",
   "components.player.cast.error":
     "การแคสต์หยุดทำงานกะทันหัน กรุณาลองอีกครั้ง หรือดูต่อบนอุปกรณ์นี้",
 
