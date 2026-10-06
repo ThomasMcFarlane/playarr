@@ -150,6 +150,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI passes the optional `GRADLE_ENCRYPTION_KEY` secret to setup-gradle so the Gradle configuration cache can be persisted once the owner creates it.
 - Use the canonical `playarr` container image name for server releases and regional commit images.
 - The GitHub Release body is now a short generated summary (highlights and artefact list) with the full changelog attached, so it stays within GitHub's size limit; the Xbox package is named correctly as an unsigned `.appx`.
 - Helm chart: all regional instances now share one top-level `regionalImage` value, so the fleet runs a single version. The per-instance `image` is an optional override that is not used in normal operation.

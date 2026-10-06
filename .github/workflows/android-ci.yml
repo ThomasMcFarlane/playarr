@@ -55,6 +55,9 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          # Empty when the secret does not exist: the configuration cache is then not persisted.
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - uses: actions/setup-node@v4
         with:

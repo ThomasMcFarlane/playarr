@@ -264,6 +264,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          # Persists the (encrypted) configuration cache. Without the secret (not yet created, or a
+          # fork PR) the input is empty and setup-gradle simply skips the configuration cache entry;
+          # the build still runs, only without that warm start.
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # `build` on main/nightly; on PRs only the affected modules plus the sideload debug app
       # (scripts/ci/android-scope.sh). Build cache and configuration cache are on in gradle.properties.
