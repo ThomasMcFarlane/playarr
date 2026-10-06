@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iOS: catalogue search read the server's `{items, remote_only}` answer as a bare list and always failed with "Couldn't load search"; it now decodes the envelope. A regression test covers it.
 - Web mobile: the autofocused card on home, library, detail rails and search is no longer scaled and raised on touch layouts; the lift stays for remote input.
 - Web mobile home: the Customise Home button no longer overlaps the profile avatar.
 - Web player: the controls now hide after one auto-hide delay instead of two, because the focus move that auto-hide makes no longer reveals them again.
@@ -2253,6 +2254,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - The headless player smoke script now also checks close/minimise placement, the Original label, reveal-only tap and Enter, and runs on the 1920x1080 TV layout; vitest guards the player chrome across the web and legacy TV player.
 - A test now fails if two SQLite migrations share a version number.
 - Fixture environment: `scripts/fixtures/verify-dub-copy.mjs` checks the dub video-copy path (H.264 and HEVC), the transcode fallbacks and that the Dubarr key stays out of ffmpeg's argv; `PLAYARR_FIXTURE_DUB_SECONDS` generates a dub shorter than the film.

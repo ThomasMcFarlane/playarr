@@ -238,6 +238,35 @@ final class APIClientAuthenticationTests: XCTestCase {
         XCTAssertEqual(saved.preference?.value, "robot")
     }
 
+    func testSearchCatalogReadsItemsFromTheItemsAndRemoteOnlyEnvelope() async throws {
+        let store = TestTokenStore(
+            session: StoredAuthSession(
+                accessToken: "access",
+                refreshToken: "refresh",
+                tokenType: "Bearer",
+                expiresAt: .distantFuture
+            )
+        )
+        URLProtocolStub.handler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/catalog/search")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let query = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+            XCTAssertEqual(query["q"], "sample")
+            XCTAssertEqual(query["limit"], "5")
+            return Self.response(
+                request,
+                json: #"""
+                {"items":[{"id":"00000000-0000-0000-0000-000000000040","kind":"series","external_refs":[],"title":"Sample Series","sort_title":"sample series","images":[],"genres":[],"tags":[],"added_at":"2026-01-01T00:00:00Z","monitored":true,"availability":"available"}],"remote_only":[]}
+                """#
+            )
+        }
+
+        let works = try await makeClient(store: store).searchCatalog(query: "sample", limit: 5)
+
+        XCTAssertEqual(works.map(\.title), ["Sample Series"])
+        XCTAssertEqual(works.first?.kind, .series)
+    }
+
     // MARK: - Peer-group refresh/login scoping
     //
     // `docs/architecture/peer-groups.md` §3.7/§6.4, this bug fix: a refresh
