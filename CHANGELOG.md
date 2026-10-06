@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web player: playback no longer stalls on an endless spinner after the manifest and first segment load. The playback engine was torn down and rebuilt whenever the access-token provider changed identity (every token fetch re-created the stored profile session list), and the rebuilt engine never loaded the source.
 - Server: `GET /api/v1/calendar` offers `play` (and `resume`) only when the exact episode or film has its own file in the library, and the action carries that file; an unaired or file-less entry gets Open, Watchlist or Request instead. Grouped (`group=series_day`) entries follow the same rule.
 - Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
 - Android player: the top-left back arrow is replaced by an X close button at the top right (with minimise to its left; content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
@@ -2228,6 +2229,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Fixture-based web playback test (`pnpm --filter @playarr-tv/web run test:playback-e2e`): signs in as a fixture user, plays a fixture film, asserts `currentTime` advances, and kills and restarts the fixture server mid-playback to check the reconnect card and recovery. Fixture clip length is configurable with `PLAYARR_FIXTURE_CLIP_SECONDS`.
 - Added vitest coverage for the web player's Original bitrate label, reveal-only input gate, Picture-in-Picture helper and close button.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
