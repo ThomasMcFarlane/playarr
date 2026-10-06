@@ -1,3 +1,4 @@
+import PlayarrKit
 import SwiftUI
 import UIKit
 
