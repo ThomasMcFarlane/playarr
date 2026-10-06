@@ -386,7 +386,8 @@ export const en = {
     "Your browser connects directly to this server. Playarr does not proxy your login.",
   "pages.login.errorGeneric": "Sign-in failed. Check your username and password and try again.",
   "pages.login.errorInsecureContentBlocked":
-    "The browser blocked this direct HTTP connection. Open the site settings for playarr.app, set Insecure content to Allow, reload Playarr, then try again.",
+    "The browser blocked this http:// connection from the secure playarr.app page. One step: open Playarr from your own server using the link below (http://your-server/tv/), then sign in there.",
+  "pages.login.openFromServer": "Open Playarr from your server instead (no browser setting needed)",
   "pages.login.errorLanUnreachable":
     "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.",
   "pages.login.errorMissingCredentials": "This server requires a username and password to sign in.",

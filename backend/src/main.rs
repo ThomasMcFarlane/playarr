@@ -947,6 +947,26 @@ fn web_assets_dir_from_env() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Resolves the directory holding the Playarr Web client built for server
+/// hosting (`pnpm --filter @playarr-tv/web run build:server`), served at
+/// `/tv/` by the server itself so a TV that can only reach an `http://`
+/// server (VIDAA) loads the app over the same scheme -- no mixed content.
+///
+/// `PLAYARR_TV_ASSETS_DIR` wins if set; otherwise `web/tv/` next to the
+/// executable (where the image and release tarball ship it, inside the web
+/// dir). `None` (nothing mounted) when there is no `index.html`.
+fn tv_assets_dir_from_env() -> Option<std::path::PathBuf> {
+    let candidate = match std::env::var("PLAYARR_TV_ASSETS_DIR") {
+        Ok(raw) => std::path::PathBuf::from(raw),
+        Err(_) => std::env::current_exe()
+            .ok()?
+            .parent()?
+            .join("web")
+            .join("tv"),
+    };
+    candidate.join("index.html").is_file().then_some(candidate)
+}
+
 /// Resolves the operator's configured login trust tier
 /// (`PLAYARR_AUTH_MODE` -- `full-account` (the default as of this pass)
 /// or `trusted-network`, opt-in only) for `POST /api/v1/auth/login`.
@@ -1272,8 +1292,8 @@ async fn boot_api(
 ) -> anyhow::Result<()> {
     use playarr_api::user_directory::RepoBackedUserDirectory;
     use playarr_api::{
-        admin_peer, build_router, AppState, ClientCompatibilityTable, ReadinessState,
-        RepoBackedMediaFileLookup, VersionGateLayer, VersionState,
+        admin_peer, AppState, ClientCompatibilityTable, ReadinessState, RepoBackedMediaFileLookup,
+        VersionGateLayer, VersionState,
     };
     use playarr_auth::{
         DashMapDeviceFlowHandler, DeviceFlowConfig, DeviceFlowHandler, InMemoryAdminRegistry,
@@ -1826,7 +1846,12 @@ async fn boot_api(
     // (the API role); a per-root in-flight guard keeps overlapping scans out.
     tokio::spawn(playarr_api::folder_scan::run_folder_scanner(state.clone()));
 
-    let (router, _openapi) = build_router(state, version_gate, web_assets_dir_from_env());
+    let (router, _openapi) = playarr_api::build_router_with_tv(
+        state,
+        version_gate,
+        web_assets_dir_from_env(),
+        tv_assets_dir_from_env(),
+    );
 
     let relay_runtime = match &config.relay {
         Some(settings) => {

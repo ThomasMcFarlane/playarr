@@ -21,6 +21,18 @@ Playarr remains a hosted Web App at `playarr.app`, not an APK, `.ipk`, `.wgt`,
 or USB-installable binary. Opening Playarr in the TV Browser receives the latest
 hosted bundle independently of the selected Playarr Server.
 
+**`http://` servers.** The hosted `https://` page cannot call an `http://`
+server (mixed content, and a TV browser has no override). Playarr Server
+therefore serves the same web client itself at `/tv/` (built with
+`pnpm --filter @playarr-tv/web run build:server`, Vite `--mode server`,
+`base: "/tv/"`, no service worker; mounted by `playarr_api::build_router_with_tv`
+from `PLAYARR_TV_ASSETS_DIR`, default `web/tv/` beside the binary, shipped
+inside the image's and tarball's web directory). The page and the API then share
+one origin and scheme. The hosted sign-in shows a link to `http://<server>/tv/`
+whenever the page is HTTPS and the entered server is `http://`
+(`serverHostedEntryUrl`). Verified with the real server binary over plain
+`http://` in headless Chromium; not verified on a VIDAA television.
+
 An experimental fixed-purpose gateway under `infra/vidaa-gateway/` can give an
 activated household temporary DNS access and serve a launcher portal at the
 intercepted `vidaahub.com` hostname. It can install only the hosted Playarr URL;

@@ -8,7 +8,8 @@ import { ApiError } from "@playarr-tv/api-client";
 import { useApiBaseUrl, useAuth } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { DeviceLogin } from "../components/DeviceLogin";
-import { IS_TV } from "../lib/clientPlatform";
+import { IS_TV, PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import { serverHostedEntryUrl } from "../lib/serverHostedEntry";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { initialLoginServerUrl, publicIpv4RelayUrl } from "../lib/loginServerUrl";
@@ -57,6 +58,10 @@ export function LoginPage() {
   const needsInsecureContentPermission =
     window.location.protocol === "https:" && isPublicHttpUrl(publicIpv4RelayUrl(serverUrl));
 
+  // An HTTPS page cannot reach an http:// server; the server serves this same
+  // client at /tv/ over http, so offer that one-step route (never a dead end).
+  const serverHostedUrl = serverHostedEntryUrl(serverUrl, window.location.protocol, PLAYARR_CLIENT_PLATFORM);
+
   function finishLogin() {
     const destination = state?.from ?? "/";
     const destinationState =
@@ -82,7 +87,7 @@ export function LoginPage() {
       await login({ serverUrl, username, password });
       finishLogin();
     } catch (err) {
-      setError(loginErrorMessage(err, needsInsecureContentPermission, t));
+      setError(loginErrorMessage(err, needsInsecureContentPermission, serverHostedUrl !== null, t));
       setSubmitting(false);
     }
   }
@@ -122,6 +127,11 @@ export function LoginPage() {
             ? t("pages.login.insecureHint")
             : t("pages.login.directConnectionHint")}
         </p>
+        {serverHostedUrl ? (
+          <p className="hint auth-server-hint">
+            <a href={serverHostedUrl}>{t("pages.login.openFromServer")}</a>
+          </p>
+        ) : null}
 
         <label className="auth-label" htmlFor="login-username">
           {t("pages.login.usernameLabel")}
@@ -277,6 +287,7 @@ function loginDestinationPath(from: Location | string | undefined): string | und
 function loginErrorMessage(
   err: unknown,
   needsInsecureContentPermission: boolean,
+  mixedContent: boolean,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string
 ): string {
   if (err instanceof ApiError) {
@@ -290,7 +301,7 @@ function loginErrorMessage(
     return t("pages.login.errorGeneric");
   }
   if (err instanceof TypeError) {
-    if (needsInsecureContentPermission) {
+    if (needsInsecureContentPermission || mixedContent) {
       return t("pages.login.errorInsecureContentBlocked");
     }
     return t("pages.login.errorLanUnreachable");

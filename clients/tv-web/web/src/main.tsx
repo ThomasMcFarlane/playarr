@@ -55,7 +55,7 @@ const isPublicLegalRoute =
 
 createRoot(container).render(
   <StrictMode>
-    <Router>
+    <Router basename={IS_PACKAGED_TV ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "")}>
       <LanguageProvider>
         <ThemeProvider>
           {isPublicLegalRoute ? (

@@ -14,10 +14,32 @@ Playarr APK or USB package for VIDAA.
    you can connect to your Playarr Server and sign in.
 
 Use HTTPS if the server already has a certificate trusted by the television.
-Plain HTTP may work in the Browser on a trusted, isolated home LAN, but it must
-not be exposed directly to the internet.
+Plain HTTP works too, on a trusted, isolated home LAN, but it must not be
+exposed directly to the internet. A TV browser cannot load `http://` content
+from the HTTPS `playarr.app` page (mixed content) and has no setting to allow
+it, so with an `http://` server open Playarr from your own server instead (next
+section).
 
-## Open Playarr on the TV
+## Open Playarr on the TV from your own server (works with `http://`)
+
+Playarr Server serves the same web client at `/tv/` over whichever scheme you
+chose, so nothing is mixed. This is the route for a plain `http://` server.
+
+1. Open the **Browser** application on the TV.
+2. Enter `http://<your-server>:<port>/tv/?platform=tv-vidaa` (use `https://` if
+   your server has a certificate).
+3. Save it as a Browser favourite, then choose **Sign in manually** on the
+   sign-in screen and sign in. (The QR sign-in goes through `playarr.app`, which
+   cannot reach an `http://` server from the phone's browser either; manual
+   sign-in on the TV works.)
+
+If you open `https://playarr.app` and enter an `http://` server address, the
+sign-in page now shows an **Open Playarr from your server instead** link to
+that `/tv/` address, and a blocked connection explains this one step instead of
+failing silently. Servers built before this feature (or from a build without the
+web client) answer 404 at `/tv/`: update the server image.
+
+## Open the hosted Playarr on the TV (HTTPS servers)
 
 1. Open the **Browser** application on the TV.
 2. Enter `https://playarr.app/?platform=tv-vidaa`.

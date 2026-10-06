@@ -395,7 +395,8 @@ export const th: Translations = {
   "pages.login.errorGeneric":
     "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบชื่อผู้ใช้และรหัสผ่านแล้วลองอีกครั้ง",
   "pages.login.errorInsecureContentBlocked":
-    "เบราว์เซอร์บล็อกการเชื่อมต่อ HTTP โดยตรงนี้ กรุณาเปิดการตั้งค่าไซต์สำหรับ playarr.app ตั้งค่า Insecure content เป็น Allow โหลด Playarr ใหม่ แล้วลองอีกครั้ง",
+    "เบราว์เซอร์บล็อกการเชื่อมต่อ http:// นี้จากหน้า playarr.app ที่ปลอดภัย ขั้นตอนเดียว: เปิด Playarr จากเซิร์ฟเวอร์ของคุณเองผ่านลิงก์ด้านล่าง (http://your-server/tv/) แล้วเข้าสู่ระบบที่นั่น",
+  "pages.login.openFromServer": "เปิด Playarr จากเซิร์ฟเวอร์ของคุณแทน (ไม่ต้องตั้งค่าเบราว์เซอร์)",
   "pages.login.errorLanUnreachable":
     "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ LAN นี้ได้ กรุณาตรวจสอบ URL และอนุญาต Local Network Access เมื่อเบราว์เซอร์ของคุณถาม",
   "pages.login.qrDescription":
