@@ -182,6 +182,8 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     func fetchHomeRails() async throws -> [HomeRail]
     /// `GET /api/v1/catalog/{id}/availability-lag` for a series.
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag?
+    /// `GET /api/v1/media/{id}/thumbnail`: a frame of the media file (chapter and episode stills).
+    func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data
     func fetchWork(id: UUID) async throws -> WorkDetail
     func fetchWorkCredits(id: UUID) async throws -> WorkCredits
     func fetchSimilarWorks(id: UUID, limit: Int) async throws -> [Work]
@@ -412,6 +414,11 @@ public final class APIClient: PlayarrAPIClient {
     public func fetchHomeRails() async throws -> [HomeRail] {
         let response: HomeRailsResponse = try await get("/api/v1/home/rails")
         return response.rails
+    }
+
+    public func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data {
+        let query = positionMs.map { [URLQueryItem(name: "position_ms", value: String($0))] } ?? []
+        return try await authenticatedData(path: "/api/v1/media/\(mediaFileID.uuidString)/thumbnail", query: query)
     }
 
     public func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? {
@@ -677,8 +684,8 @@ public final class APIClient: PlayarrAPIClient {
         }
     }
 
-    private func authenticatedData(path: String) async throws -> Data {
-        var request = try makeRequest(path: path, method: "GET", query: [])
+    private func authenticatedData(path: String, query: [URLQueryItem] = []) async throws -> Data {
+        var request = try makeRequest(path: path, method: "GET", query: query)
         try await attachAuthorization(to: &request)
         do {
             return try await sendRaw(request, expectedStatuses: [200])
@@ -1102,4 +1109,5 @@ public extension PlayarrAPIClient {
     /// Defaults for conformers (test doubles) that predate these endpoints.
     func fetchHomeRails() async throws -> [HomeRail] { [] }
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
+    func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data { Data() }
 }

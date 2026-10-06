@@ -92,3 +92,85 @@ struct TVPageHeader: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
+
+/// Loads artwork that needs the signed-in session (chapter and episode stills) and shows it
+/// `scaledToFill`; `placeholder` shows while loading or when the server has no frame.
+struct TVAuthedImage<Placeholder: View>: View {
+    let load: () async throws -> Data
+    @ViewBuilder var placeholder: () -> Placeholder
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                placeholder()
+            }
+        }
+        .task {
+            if let data = try? await load(), let decoded = UIImage(data: data) {
+                image = decoded
+            }
+        }
+    }
+}
+
+/// Greedy word wrap using the real font metrics, so multi-line titles break where the web's do.
+enum TVTextWrap {
+    static func lines(_ text: String, fontName: String, size: CGFloat, kern: CGFloat, width: CGFloat) -> [String] {
+        guard let font = UIFont(name: fontName, size: size) else { return [text] }
+        func measure(_ value: String) -> CGFloat {
+            (value as NSString).size(withAttributes: [.font: font, .kern: kern]).width
+        }
+        var lines: [String] = []
+        var current = ""
+        for word in text.split(separator: " ").map(String.init) {
+            let candidate = current.isEmpty ? word : current + " " + word
+            if measure(candidate) > width, !current.isEmpty {
+                lines.append(current)
+                current = word
+            } else {
+                current = candidate
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines.isEmpty ? [text] : lines
+    }
+}
+
+/// Date and runtime strings as the web client shows them (en-GB, `1 Jun 2020`, `1 min`, `1h 44m`).
+enum TVWebFormat {
+    static func date(_ iso: String?) -> String? {
+        guard let iso, iso.count >= 10 else { return nil }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_GB")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: String(iso.prefix(10))) else { return nil }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "en_GB")
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.dateFormat = "d MMM yyyy"
+        return out.string(from: date)
+    }
+
+    static func year(_ iso: String?) -> String? {
+        guard let iso, iso.count >= 4 else { return nil }
+        return String(iso.prefix(4))
+    }
+
+    static func runtime(ms: Int64?) -> String? {
+        guard let ms, ms > 0 else { return nil }
+        let minutes = max(1, Int((Double(ms) / 60_000).rounded()))
+        let hours = minutes / 60
+        let rest = minutes % 60
+        if hours <= 0 { return "\(minutes) min" }
+        return rest > 0 ? "\(hours)h \(rest)m" : "\(hours)h"
+    }
+
+    static func clock(ms: Int64) -> String {
+        let total = Int(ms / 1000)
+        return "\(total / 60):" + String(format: "%02d", total % 60)
+    }
+}

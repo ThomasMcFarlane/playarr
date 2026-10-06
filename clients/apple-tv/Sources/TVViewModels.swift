@@ -129,6 +129,10 @@ final class TVWorkDetailViewModel {
 
     private(set) var state: State = .idle
     private(set) var detail: WorkDetail?
+    /// Titles similar to this one (`/similar`), shown under a movie's chapters.
+    private(set) var similar: [Work] = []
+    /// How long a series usually takes to appear after release.
+    private(set) var availabilityLag: AvailabilityLag?
     private let workID: UUID
     private let seedWork: Work?
     private let apiClient: PlayarrAPIClient
@@ -164,8 +168,13 @@ final class TVWorkDetailViewModel {
             return
         }
         do {
-            detail = try await apiClient.fetchWork(id: workID)
+            let loaded = try await apiClient.fetchWork(id: workID)
+            detail = loaded
             state = .loaded
+            similar = (try? await apiClient.fetchSimilarWorks(id: workID, limit: 12)) ?? []
+            if loaded.work.kind == .series {
+                availabilityLag = (try? await apiClient.fetchAvailabilityLag(id: workID)) ?? nil
+            }
         } catch let error as APIError {
             state = .failed(error.displayMessage)
         } catch {
