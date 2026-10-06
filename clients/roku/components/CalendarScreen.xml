@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  CalendarScreen: the Release Calendar agenda (TASKS 212, 74.3), matching
+  web's Calendar page in its TV layout: shared PageHeader with period actions,
+  a source-failure banner, a master-detail agenda (details left, day-grouped
+  list right) and the shared FiltersPanel. Data: GET /api/v1/calendar. The
+  pure logic lives in CalendarLogic.brs (covered by tests/brs).
+-->
+<component name="CalendarScreen" extends="FeatureScreen">
+  <children>
+    <Rectangle width="1920" height="1080" color="0x151315FF" />
+    <PageHeader id="header" translation="[200,60]" bandWidth="1520" />
+    <Rectangle id="bannerBg" translation="[200,170]" width="1520" height="64" color="0x3A1E22FF" visible="false" />
+    <Label id="bannerText" translation="[216,174]" width="2900" height="110" scale="[0.5,0.5]" wrap="true" maxLines="2" color="0xEE9297FF" visible="false" />
+
+    <Group id="detailPane" translation="[200,260]">
+      <Label id="detailKicker" translation="[0,0]" width="1100" height="30" scale="[0.45,0.45]" color="0xCF3157FF" />
+      <Label id="detailTitle" translation="[0,36]" width="520" height="150" scale="[0.95,0.95]" wrap="true" maxLines="3" color="0xF4F0F1FF" />
+      <Label id="detailSubtitle" translation="[0,190]" width="1000" height="60" scale="[0.52,0.52]" wrap="true" maxLines="2" color="0xC5B8BDFF" />
+      <Label id="detailBody" translation="[0,270]" width="1060" height="420" scale="[0.5,0.5]" wrap="true" vertAlign="top" lineSpacing="6" color="0xA9B7C9FF" />
+      <Label id="detailAction" translation="[0,720]" width="1060" height="60" scale="[0.5,0.5]" wrap="true" color="0xF4F0F1FF" />
+    </Group>
+
+    <MarkupList id="agenda" translation="[820,250]" itemComponentName="ListRow" itemSize="[1000,88]" numRows="8"
+      focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="stateTitle" translation="[820,420]" width="1000" height="60" scale="[0.9,0.9]" horizAlign="center" color="0xF4F0F1FF" visible="false" />
+    <Label id="stateMessage" translation="[820,490]" width="1900" height="120" scale="[0.5,0.5]" wrap="true" horizAlign="center" color="0x887A82FF" visible="false" />
+    <BusySpinner id="spinner" translation="[1280,400]" control="stop" visible="false" />
+    <Label id="hint" translation="[200,1010]" width="3600" height="30" scale="[0.4,0.4]" color="0x887A82FF"
+      text="OK open title    * filters    REW / FF previous / next period    Play today    Back" />
+
+    <FiltersPanel id="filters" visible="false" heading="Calendar filters" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/FeatureCommon.brs" />
+  <script type="text/brightscript" uri="pkg:/components/ListLogic.brs" />
+  <script type="text/brightscript" uri="pkg:/components/CalendarLogic.brs" />
+  <script type="text/brightscript" uri="pkg:/components/CalendarScreen.brs" />
+</component>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  FiltersPanel: the shared right-hand Filters drawer (web FiltersDrawer).
+  `sections` is [{ id, title, options: [{ id, label }] }]; `selection` maps a
+  section id to an assocarray of the chosen option ids. OK toggles an option
+  (`changed` fires with the whole selection), the last row clears everything,
+  Back closes (`closed`). Section headings are skipped by focus.
+-->
+<component name="FiltersPanel" extends="Group">
+  <interface>
+    <field id="heading" type="string" value="Filters" onChange="renderPanel" />
+    <field id="sections" type="array" onChange="renderPanel" />
+    <field id="selection" type="assocarray" onChange="renderPanel" />
+    <field id="changed" type="assocarray" alwaysNotify="true" />
+    <field id="closed" type="boolean" alwaysNotify="true" />
+  </interface>
+  <children>
+    <Rectangle id="panelBg" translation="[1340,0]" width="580" height="1080" color="0x151315F8" />
+    <Rectangle translation="[1340,0]" width="2" height="1080" color="0x312A30FF" />
+    <Label id="panelKicker" translation="[1380,70]" width="500" height="30" text="NARROW THE LIST" scale="[0.38,0.38]" color="0x887A82FF" />
+    <Label id="panelTitle" translation="[1380,100]" width="500" height="60" text="Filters" scale="[1.2,1.2]" color="0xF4F0F1FF" />
+    <MarkupList id="panelList" translation="[1380,190]" itemComponentName="ListRow" itemSize="[520,64]" numRows="12"
+      focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="floatingFocus" />
+    <Label id="panelHint" translation="[1380,1010]" width="900" height="30" text="OK to choose   Back to close" scale="[0.4,0.4]" color="0x887A82FF" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/ListLogic.brs" />
+  <script type="text/brightscript" uri="pkg:/components/FiltersPanel.brs" />
+</component>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  FeatureScreen: base component for full-screen features that live outside
+  MainScene's monolithic state (release calendar, playback health, remote,
+  portability, household states, resume chooser ...). A feature screen:
+
+    - never talks to the network itself: it sets `apiRequest` and MainScene
+      runs it through the single-flight ApiTask queue (sendApi), then hands the
+      outcome back through `apiResult`;
+    - owns its focus and key handling (Group.onKeyEvent);
+    - asks MainScene to do navigation through `closeRequested`, `openWork` and
+      `playRequest`, so it never reaches into MainScene's nodes.
+
+  The shared plumbing lives in FeatureCommon.brs, which each child includes
+  (a script of the base component is not visible to the bsc scope check, and
+  the hooks below are defined by the child).
+
+  The action name a feature uses must start with "feature:" so MainScene
+  routes the reply here instead of into its own dispatch chain.
+-->
+<component name="FeatureScreen" extends="Group">
+  <interface>
+    <!-- Parameters handed over when the screen opens (profile, work id ...). -->
+    <field id="params" type="assocarray" />
+    <!-- Feature -> scene: { action, method, path, body }. -->
+    <field id="apiRequest" type="assocarray" alwaysNotify="true" />
+    <!-- Scene -> feature: { action, ok, status, data, error }. -->
+    <field id="apiResult" type="assocarray" alwaysNotify="true" onChange="onFeatureApiResult" />
+    <!-- Feature -> scene: true asks MainScene to leave this screen. -->
+    <field id="closeRequested" type="boolean" alwaysNotify="true" />
+    <!-- Feature -> scene: a catalog Work (at least { id, title, kind }). -->
+    <field id="openWork" type="assocarray" alwaysNotify="true" />
+    <!-- Feature -> scene: { mediaFileId } starts playback. -->
+    <field id="playRequest" type="assocarray" alwaysNotify="true" />
+    <!-- Scene -> feature: called once, after params are set and focus is given. -->
+    <function name="activate" />
+  </interface>
+</component>

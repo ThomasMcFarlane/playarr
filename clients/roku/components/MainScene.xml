@@ -582,6 +582,10 @@
       shows here is deliberately deferred (lower-impact than the structural
       nav-shape fix this pass targets).
     -->
+    <!-- Host for FeatureScreen components (calendar, playback health, ...):
+         created on demand by openFeatureScreen() in MainScene.brs. -->
+    <Group id="featureHost" visible="false" />
+
     <Group id="persistentHeader">
       <!-- Logo centred over the dock (.app-logo over - -tv-nav-centre-x).
            Dock left edge ~32, item centre ~32+8+32 = 72; logo 40x40 → x=52. -->

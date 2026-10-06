@@ -136,6 +136,27 @@ def validate_source_contract() -> None:
         fail("playback must use the native Video node")
 
 
+def validate_feature_screens() -> None:
+    """Every component extending FeatureScreen must implement its two hooks."""
+    for path in sorted((ROOT / "components").glob("*.xml")):
+        root = ET.parse(path).getroot()
+        if root.attrib.get("extends") != "FeatureScreen":
+            continue
+        if not any(
+            s.attrib.get("uri") == "pkg:/components/FeatureCommon.brs" for s in root.findall("script")
+        ):
+            fail(f"{path.name}: FeatureScreen child must include FeatureCommon.brs")
+        scripts = [
+            ROOT / s.attrib["uri"].removeprefix("pkg:/")
+            for s in root.findall("script")
+            if s.attrib.get("uri", "").startswith("pkg:/components/")
+        ]
+        text = "\n".join(p.read_text(encoding="utf-8") for p in scripts)
+        for routine in ("featureActivate", "onFeatureResult"):
+            if not re.search(rf"(?im)^\s*(?:sub|function)\s+{routine}\s*\(", text):
+                fail(f"{path.name}: FeatureScreen child must define {routine}()")
+
+
 def main() -> int:
     checks = (
         validate_manifest,
@@ -143,6 +164,7 @@ def main() -> int:
         validate_brightscript,
         validate_package_contents,
         validate_source_contract,
+        validate_feature_screens,
     )
     for check in checks:
         check()

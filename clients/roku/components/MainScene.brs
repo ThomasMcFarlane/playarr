@@ -160,6 +160,9 @@ sub init()
     m.detailContent.AppendChild(m.detailEpisodes)
     m.detailContent.AppendChild(m.detailChapters)
     m.detailContent.AppendChild(m.detailSimilar)
+    m.featureHost = m.top.findNode("featureHost")
+    m.featureNode = invalid
+    m.featureReturnState = "home"
     m.profileLabel = m.top.findNode("profileLabel")
     m.persistentHeader = m.top.findNode("persistentHeader")
     m.video = m.top.findNode("video")
@@ -602,6 +605,11 @@ sub onApiResult(event as Object)
             refreshSession()
             return
         end if
+        if Left(action, 8) = "feature:"
+            deliverFeatureResult(action, result)
+            flushPendingApiRequests()
+            return
+        end if
         if action = "version"
             if tryNextServerAddress() then return
         end if
@@ -707,6 +715,8 @@ sub onApiResult(event as Object)
         queued = m.queuedPlaybackEvent
         m.queuedPlaybackEvent = invalid
         sendPlaybackEvent(queued)
+    else if Left(action, 8) = "feature:"
+        deliverFeatureResult(action, result)
     end if
     ' After any completed request, start a queued Play if the viewer hit
     ' Play while chapters/similar still held the single-flight slot.
@@ -5316,6 +5326,82 @@ function onEndScreenKey(key as String) as Boolean
     return true
 end function
 
+' ---------------------------------------------------------------------------
+' Feature screens (components extending FeatureScreen). The scene only hosts
+' them: requests go through sendApi, results come back with the same action
+' name ("feature:..."), and navigation requests arrive as field changes.
+' ---------------------------------------------------------------------------
+
+sub openFeatureScreen(componentName as String, params as Object)
+    removeFeatureScreen()
+    if m.top.screenState <> "feature" then m.featureReturnState = m.top.screenState
+    node = CreateObject("roSGNode", componentName)
+    if node = invalid then return
+    node.ObserveField("apiRequest", "onFeatureApiRequest")
+    node.ObserveField("closeRequested", "onFeatureCloseRequested")
+    node.ObserveField("openWork", "onFeatureOpenWork")
+    node.ObserveField("playRequest", "onFeaturePlayRequest")
+    node.params = params
+    m.featureHost.AppendChild(node)
+    m.featureNode = node
+    showOnly("feature")
+    m.top.screenState = "feature"
+    node.SetFocus(true)
+    node.callFunc("activate")
+end sub
+
+sub removeFeatureScreen()
+    if m.featureNode = invalid then return
+    node = m.featureNode
+    m.featureNode = invalid
+    node.UnobserveField("apiRequest")
+    node.UnobserveField("closeRequested")
+    node.UnobserveField("openWork")
+    node.UnobserveField("playRequest")
+    m.featureHost.RemoveChild(node)
+end sub
+
+sub closeFeatureScreen()
+    back = m.featureReturnState
+    if back = invalid or back = "" or back = "feature" then back = "home"
+    showOnly(back)
+    m.top.screenState = back
+    if back = "home"
+        focusCurrentHomeRail()
+    else if back = "settings"
+        m.settingsSectionList.SetFocus(true)
+    else if back = "detail"
+        m.detailActions.SetFocus(true)
+    end if
+end sub
+
+sub deliverFeatureResult(action as String, result as Object)
+    if m.featureNode = invalid then return
+    m.featureNode.apiResult = { action: action, ok: result.ok, status: result.status, data: result.data, error: result.error }
+end sub
+
+sub onFeatureApiRequest(event as Object)
+    request = event.GetData()
+    if request = invalid then return
+    sendApi(request.action, request.method, request.path, request.body, true)
+end sub
+
+sub onFeatureCloseRequested(event as Object)
+    closeFeatureScreen()
+end sub
+
+sub onFeatureOpenWork(event as Object)
+    work = event.GetData()
+    if work = invalid or work.id = invalid then return
+    openWorkDetail(work, m.featureReturnState)
+end sub
+
+sub onFeaturePlayRequest(event as Object)
+    request = event.GetData()
+    if request = invalid or request.mediaFileId = invalid then return
+    requestPlayback(request.mediaFileId)
+end sub
+
 sub setListContent(list as Object, labels as Object)
     content = CreateObject("roSGNode", "ContentNode")
     for each label in labels
@@ -5361,6 +5447,8 @@ sub showOnly(name as String)
     m.searchGroup.visible = name = "search"
     m.playlistsGroup.visible = name = "playlists"
     m.detailGroup.visible = name = "detail"
+    m.featureHost.visible = name = "feature"
+    if name <> "feature" then removeFeatureScreen()
     m.navDockMode = false
     renderNavDockFocus()
     m.searchFilterMode = false
@@ -5376,7 +5464,15 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
     state = m.top.screenState
-    if state = "endscreen"
+    if state = "feature"
+        ' The focused FeatureScreen handles its own keys; anything it lets
+        ' through (Back on a screen with nothing to close) leaves the feature.
+        if key = "back"
+            closeFeatureScreen()
+            return true
+        end if
+        return false
+    else if state = "endscreen"
         return onEndScreenKey(key)
     else if state = "playback"
         ' Custom control-bar key handling (phase 5) -- see the "Custom

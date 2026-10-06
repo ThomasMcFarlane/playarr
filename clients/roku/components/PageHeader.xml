@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  PageHeader: the shared page header every Roku feature page uses (title,
+  one muted detail line and a row of focusable action pills on the right),
+  matching web's PageHeader/PageShell. Left/Right move between actions, OK
+  selects (actionSelected carries the index); Up/Down/Back are left to the
+  owning screen.
+-->
+<component name="PageHeader" extends="Group">
+  <interface>
+    <field id="title" type="string" onChange="renderHeader" />
+    <field id="detail" type="string" onChange="renderHeader" />
+    <!-- Action labels, left to right. -->
+    <field id="actions" type="array" onChange="renderHeader" />
+    <field id="actionIndex" type="integer" value="0" onChange="renderHeader" />
+    <!-- Width of the header band; actions are right-aligned inside it. -->
+    <field id="bandWidth" type="integer" value="1520" onChange="renderHeader" />
+    <field id="actionSelected" type="integer" alwaysNotify="true" />
+  </interface>
+  <children>
+    <Label id="headerTitle" translation="[0,0]" width="900" height="56" scale="[1.2,1.2]" color="0xF4F0F1FF" />
+    <Label id="headerDetail" translation="[0,58]" width="1500" height="40" scale="[0.5,0.5]" color="0x887A82FF" />
+    <Group id="headerActions" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/components/PageHeader.brs" />
+</component>
