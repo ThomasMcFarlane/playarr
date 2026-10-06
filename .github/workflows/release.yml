@@ -81,7 +81,9 @@ jobs:
         run: |
           set -euo pipefail
           fail() { echo "::error::$*" >&2; exit 1; }
-          [[ "$GITHUB_REF" == refs/heads/main ]] || fail "Run the release from main (the signing environments only admit main)"
+          if [[ "$GITHUB_REF" != refs/heads/main && "$DRY_RUN" != "true" ]]; then
+            fail "Run the release from main (the signing environments only admit main); a dry run may use any branch"
+          fi
           version="${VERSION_INPUT#v}"
           [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || fail "Version '$version' must be X.Y.Z"
           major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"
@@ -123,8 +125,10 @@ jobs:
     name: Server
     needs: prepare
     uses: ./.github/workflows/backend-release.yml
+    # Its standalone `publish` job (skipped here) declares contents: write, and a caller must grant
+    # every permission a called job declares, or the run fails to start.
     permissions:
-      contents: read
+      contents: write
       packages: write
     with:
       version: ${{ needs.prepare.outputs.version }}

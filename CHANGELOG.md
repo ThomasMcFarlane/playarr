@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- CI: the Release workflow starts (the server call now grants the permissions its jobs declare), a dry run may run from any branch, and the Roku package step no longer fails on a stale validator check (pairing uses the hosted device-link broker, not the server's device-code endpoint).
 - Unsorted folders: root discovery no longer fails with a UNIQUE constraint error when a root already exists for the source under another id (older rows, replicated rows or two overlapping discoveries). Discovery now upserts on the source and root key and keeps the existing row, and one source failing no longer stops the others.
 - CI: the Google Play closed-testing publish no longer fails a main push when an earlier release is still in review or the same version code is already on the track; it skips the upload with a warning (tag and manual runs still fail on an in-review release).
 - The downloads Worker falls back to the downloads bucket when no matching GitHub Release or asset exists, restoring the stable Android and server download URLs (including the Android self-update manifest) until a release is published.
