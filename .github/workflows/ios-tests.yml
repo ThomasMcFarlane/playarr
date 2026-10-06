@@ -1,0 +1,71 @@
+name: iOS tests
+
+# Compiles the iOS app and runs its unit tests on a hosted macOS simulator whenever a pull
+# request touches clients/ios. The tvOS leg and manual runs stay in simulator-tests.yml.
+on:
+  pull_request:
+    paths:
+      - clients/ios/**
+      - .github/workflows/ios-tests.yml
+      - .github/scripts/apple-test-simulator/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-tests:
+    name: Test Playarr iOS on iPhone Simulator
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare the CocoaPods workspace
+        shell: bash
+        timeout-minutes: 20
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Create an isolated test simulator
+        id: simulator
+        shell: bash
+        timeout-minutes: 5
+        env:
+          INPUT_DESTINATION: platform=iOS Simulator,name=iPhone 17
+        run: node .github/scripts/apple-test-simulator/main.js
+
+      - name: Run the Xcode tests
+        shell: bash
+        working-directory: clients/ios
+        timeout-minutes: 45
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          [[ "$SIMULATOR_UDID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          xcodebuild test -scheme PlayarrApp -configuration Debug \
+            -resultBundlePath "$RUNNER_TEMP/ios.xcresult" \
+            -workspace "$GITHUB_WORKSPACE/clients/ios/Playarr.xcworkspace" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" 2>&1 | tee "$RUNNER_TEMP/ios-log.txt"
+
+      - name: Delete the test simulator
+        if: ${{ always() && steps.simulator.outputs.udid != '' }}
+        shell: bash
+        timeout-minutes: 5
+        env:
+          STATE_simulator_udid: ${{ steps.simulator.outputs.udid }}
+        run: node .github/scripts/apple-test-simulator/cleanup.js
+
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-log-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-log.txt
+          if-no-files-found: ignore
+          retention-days: 7
