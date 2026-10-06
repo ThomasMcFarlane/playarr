@@ -13,6 +13,7 @@ struct TVPlayerView: View {
     @State private var suggestions: [Work] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.tvRemoteTarget) private var remoteTarget
 
     init(
         mediaFileID: UUID,
@@ -70,6 +71,7 @@ struct TVPlayerView: View {
         .animation(.easeInOut(duration: 0.25), value: viewModel.endOfPlayback.phase)
         .task {
             viewModel.onExit = { dismiss() }
+            remoteTarget?.attach(engine: viewModel.engine)
             // Returning from a suggestion must not restart a finished item.
             if viewModel.state == .idle, viewModel.endOfPlayback.phase == .playing {
                 await viewModel.play(mediaFileID: mediaFileID, title: title)
@@ -95,6 +97,7 @@ struct TVPlayerView: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
+            remoteTarget?.detach(engine: viewModel.engine)
             viewModel.stop()
         }
     }

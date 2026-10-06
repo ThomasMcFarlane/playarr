@@ -7,6 +7,7 @@ import UIKit
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var selectedTab: TVNavTab = .home
+    @State private var remoteTarget = TVRemoteTarget()
     /// Shared focus so the shell can move between nav and stage with arrows.
     @FocusState private var shellFocus: TVShellFocus?
 

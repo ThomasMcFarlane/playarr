@@ -1,0 +1,1 @@
+- iOS phone remote (pair with a TV, D-pad, playback, text) and Apple TV remote target (pairing approval, playback commands), backed by a shared PlayarrKit remote client.
