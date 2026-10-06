@@ -78,6 +78,28 @@ for (const s of cfg.screens) {
   await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
   await page.waitForTimeout(5000);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
+  // Layout dump for the native port: every visible element with its box and key computed styles.
+  const dump = await page.evaluate(() => {
+    const out = [];
+    for (const el of document.body.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight * 1.5) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") continue;
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 60);
+      const hasBg = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.backgroundImage !== "none";
+      if (!own && !hasBg && !el.matches("svg,img,input,button")) continue;
+      out.push({
+        tag: el.tagName.toLowerCase(), cls: String(el.className?.baseVal ?? el.className).slice(0, 80), text: own,
+        x: +r.x.toFixed(1), y: +r.y.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1),
+        font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily.slice(0, 60)} ls=${cs.letterSpacing}`,
+        color: cs.color, bg: cs.backgroundColor, bgi: cs.backgroundImage.slice(0, 120), radius: cs.borderRadius,
+        border: cs.borderTopWidth + " " + cs.borderTopColor, shadow: cs.boxShadow.slice(0, 120), opacity: cs.opacity,
+      });
+    }
+    return out;
+  });
+  fs.writeFileSync(path.join(outDir, `${s.id}.layout.json`), JSON.stringify(dump, null, 1));
   results.push({ id: s.id, route, url: page.url() });
   console.log(`web ${s.id} -> ${page.url()}`);
   await page.close();
