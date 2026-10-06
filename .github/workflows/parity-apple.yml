@@ -16,6 +16,7 @@ on:
       - .github/workflows/parity-apple.yml
       - scripts/parity/apple/**
       - clients/apple-tv/**
+      - clients/ios/**
   workflow_dispatch:
     inputs:
       platform:
@@ -111,8 +112,7 @@ jobs:
           if [[ "$PLATFORM" == tvos ]]; then
             echo "screens=scripts/parity/apple/screens.tv.json" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::the ios platform is not wired into this workflow yet"
-            exit 1
+            echo "screens=scripts/parity/apple/screens.mobile.json" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Capture the web reference
@@ -120,10 +120,25 @@ jobs:
           node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
             "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/reference"
 
-      - name: Create the simulator (Apple TV at 1080p)
+      - name: Create the simulator (iPhone 14 at 390x844 points, or Apple TV at 1080p)
         id: simulator
         run: |
           set -euo pipefail
+          if [[ "$PLATFORM" == ios ]]; then
+            # Only the iPhone 12 to 14 family is 390x844 points (1170x2532 at 3x).
+            type=$(xcrun simctl list devicetypes -j | node -e '
+              let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+                console.log(JSON.parse(s).devicetypes.find((d) => d.name === "iPhone 14").identifier);
+              });')
+            runtime=$(xcrun simctl list runtimes -j | node -e '
+              let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+                const r = JSON.parse(s).runtimes.filter((x) => x.isAvailable && x.identifier.includes(".iOS-"));
+                console.log(r.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }))[0].identifier);
+              });')
+            udid=$(xcrun simctl create "Playarr parity" "$type" "$runtime")
+            echo "udid=$udid" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           types=$(xcrun simctl list devicetypes -j)
           type=$(node -e '
             const t = JSON.parse(process.argv[1]).devicetypes.filter((d) => d.identifier.includes("Apple-TV"));
@@ -147,6 +162,38 @@ jobs:
             -project clients/apple-tv/PlayarrTV.xcodeproj -scheme PlayarrTV -configuration Debug \
             -destination "platform=tvOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 40
+
+      - name: Prepare the iOS workspace
+        if: env.PLATFORM == 'ios'
+        timeout-minutes: 20
+        run: bash clients/ios/scripts/prepare.sh
+
+      - name: Build the iOS app
+        if: env.PLATFORM == 'ios'
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -workspace clients/ios/Playarr.xcworkspace -scheme PlayarrApp -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.txt" | tail -n 40
+
+      - name: Capture the iOS screens
+        if: env.PLATFORM == 'ios'
+        run: |
+          set -euo pipefail
+          udid="${{ steps.simulator.outputs.udid }}"
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name '*.app' | head -1)
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl ui "$udid" appearance dark
+          xcrun simctl install "$udid" "$app"
+          password=$(node -e 'import("./scripts/fixtures/catalog.mjs").then((m) => console.log(m.FIXTURE_PASSWORD))')
+          scripts/parity/apple/capture-ios.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
+            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$password" "$RUNNER_TEMP/parity/native"
+          xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
+          file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
 
       - name: Capture the native screens
         if: env.PLATFORM == 'tvos'
@@ -174,6 +221,11 @@ jobs:
         if: always()
         run: |
           [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
+          if [[ "$PLATFORM" == ios ]]; then
+            # Status bar and home indicator are system UI: paint both bands on both sides.
+            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/reference"
+            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/native"
+          fi
           node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
             "$RUNNER_TEMP/parity/reference" "$RUNNER_TEMP/parity/native" "$RUNNER_TEMP/parity/diff" \
             | tee -a "$GITHUB_STEP_SUMMARY"

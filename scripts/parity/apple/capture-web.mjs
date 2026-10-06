@@ -14,16 +14,19 @@ const { FIXTURE_PASSWORD: password } = await import(path.join(here, "../../fixtu
 fs.mkdirSync(outDir, { recursive: true });
 
 const deviceId = "11111111-1111-4111-8111-111111111111";
-const loginRes = await fetch(`${base}/api/v1/auth/login`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    username: cfg.user, password, device_id: deviceId, device_name: "parity-web",
-    client_platform: "web", client_version: "parity",
-  }),
-});
-if (!loginRes.ok) throw new Error(`login failed: ${loginRes.status}`);
-const tok = await loginRes.json();
+async function login(username) {
+  const res = await fetch(`${base}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      username, password, device_id: deviceId, device_name: "parity-web",
+      client_platform: "web", client_version: "parity",
+    }),
+  });
+  if (!res.ok) throw new Error(`login failed for ${username}: ${res.status}`);
+  return res.json();
+}
+const tok = await login(cfg.user);
 const auth = { authorization: `Bearer ${tok.access_token}` };
 
 async function workId(kind, title) {
@@ -35,28 +38,36 @@ async function workId(kind, title) {
 }
 
 const browser = await chromium.launch();
-const context = await browser.newContext({
-  viewport: cfg.viewport, deviceScaleFactor: 1, reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB",
-});
-await context.addInitScript(({ base, tok, deviceId, user }) => {
-  try {
-    localStorage.setItem("playarr:apiBaseUrl", base);
-    const session = {
-      accessToken: tok.access_token, refreshToken: tok.refresh_token, tokenType: "Bearer",
-      expiresAt: Date.now() + tok.expires_in * 1000,
-    };
-    localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{
-      profileKey: "fx", apiBaseUrl: base, userId: tok.user_id, name: user, deviceId, session,
-    }]));
-    localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "fx", apiBaseUrl: base, userId: tok.user_id }));
-    localStorage.setItem("playarr-theme", "dark");
-  } catch { /* storage unavailable */ }
-}, { base, tok, deviceId, user: cfg.user });
-await context.clock.setFixedTime(new Date(cfg.frozenTime));
-
-const page = await context.newPage();
+// One context per user. A layout may ask for a device-like context (dpr, touch, mobile viewport).
+async function contextFor(user) {
+  const t = user === cfg.user ? tok : await login(user);
+  const context = await browser.newContext({
+    viewport: cfg.viewport, deviceScaleFactor: cfg.dpr ?? 1, isMobile: !!cfg.mobile, hasTouch: !!cfg.mobile,
+    reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB",
+  });
+  await context.addInitScript(({ base, tok, deviceId, user }) => {
+    try {
+      localStorage.setItem("playarr:apiBaseUrl", base);
+      const session = {
+        accessToken: tok.access_token, refreshToken: tok.refresh_token, tokenType: "Bearer",
+        expiresAt: Date.now() + tok.expires_in * 1000,
+      };
+      localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{
+        profileKey: "fx", apiBaseUrl: base, userId: tok.user_id, name: user, deviceId, session,
+      }]));
+      localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "fx", apiBaseUrl: base, userId: tok.user_id }));
+      localStorage.setItem("playarr-theme", "dark");
+    } catch { /* storage unavailable */ }
+  }, { base, tok: t, deviceId, user });
+  await context.clock.setFixedTime(new Date(cfg.frozenTime));
+  return context;
+}
+const contexts = new Map();
 const results = [];
 for (const s of cfg.screens) {
+  const user = s.user ?? cfg.user;
+  if (!contexts.has(user)) contexts.set(user, await contextFor(user));
+  const page = await contexts.get(user).newPage();
   let route = s.web.path;
   if (s.web.work) {
     const id = await workId(s.web.work.kind, s.web.work.title);
@@ -68,6 +79,7 @@ for (const s of cfg.screens) {
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
   results.push({ id: s.id, route, url: page.url() });
   console.log(`web ${s.id} -> ${page.url()}`);
+  await page.close();
 }
 fs.writeFileSync(path.join(outDir, "web-routes.json"), JSON.stringify(results, null, 2));
 await browser.close();
