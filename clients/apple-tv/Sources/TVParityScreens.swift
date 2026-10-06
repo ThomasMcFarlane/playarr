@@ -78,7 +78,7 @@ extension TVParityLaunch {
         case "settings": return .settings
         case "search": return .search
         case "calendar": return .calendar
-        case "detail": return .movies
+        case "detail": return liveDetail?.kind == .series ? .series : .movies
         default: return nil
         }
     }
