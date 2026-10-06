@@ -9,6 +9,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the Household page shows the same time left as the "min left" chip, counting the schedule window as well as the daily budget.
+- Web: the language filter drawer sends the sign-in token with its facet request, so audio and subtitle language counts show instead of "No languages indexed yet".
 - Web player: playback no longer stalls on an endless spinner after the manifest and first segment load. The playback engine was torn down and rebuilt whenever the access-token provider changed identity (every token fetch re-created the stored profile session list), and the rebuilt engine never loaded the source.
 - Server: `GET /api/v1/calendar` offers `play` (and `resume`) only when the exact episode or film has its own file in the library, and the action carries that file; an unaired or file-less entry gets Open, Watchlist or Request instead. Grouped (`group=series_day`) entries follow the same rule.
 - Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
@@ -159,6 +161,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
 - Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
 - Web player: the top-left back arrow is replaced by an icon-only "Close player" X at the top right (localised, reachable with D-pad or arrow keys on the TV layout; Escape and Back still close). Clicking, tapping or pressing Enter/OK while the controls are hidden now only reveals them instead of pausing; Space, k and the media keys still toggle directly.
 - Web player: the Original quality now shows the source bitrate, for example "Original · 24.3 Mbps", or plain "Original" when the bitrate is unknown (never "0 Mbps").

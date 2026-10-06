@@ -924,6 +924,7 @@ const PROTECTED_OPERATIONS: ReadonlyArray<{ schemaPath: string; method: string }
   { schemaPath: "/api/v1/catalog/{id}/credits", method: "GET" },
   { schemaPath: "/api/v1/catalog/{id}/similar", method: "GET" },
   { schemaPath: "/api/v1/catalog/search", method: "GET" },
+  { schemaPath: "/api/v1/catalog/languages", method: "GET" },
   {
     schemaPath: "/api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}",
     method: "GET",

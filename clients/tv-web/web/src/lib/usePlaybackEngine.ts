@@ -1,4 +1,5 @@
 import { shouldKeepEngineAttached } from "./playerMounting";
+import { sourceAudioTracksFromInfo } from "./sourceAudioTracks";
 import {
   useCallback,
   useEffect,
@@ -113,17 +114,6 @@ function sourceTimeToEngineTime(
   return isOnDemandHlsUrl(negotiation.url)
     ? Math.max(0, positionSeconds - negotiation.sourceOffsetSeconds)
     : positionSeconds;
-}
-
-function sourceAudioTracksFromInfo(info: PlaybackInfo): PlaybackAudioTrack[] {
-  return info.audio_tracks.map((track) => ({
-    id: track.id,
-    label: track.label,
-    language: track.language ?? undefined,
-    roles: [],
-    channelsCount: track.channels ?? undefined,
-    selected: track.id === info.selected_audio_track_id,
-  }));
 }
 
 function sourceSubtitleTracksFromInfo(info: PlaybackInfo): PlaybackSubtitleTrack[] {
