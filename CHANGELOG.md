@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: the minimised player no longer shows an empty or black surface for video. The mini player previously had no video surface (artwork only); it now binds a video view to the shared player, and the full-screen video view re-binds on every recomposition.
 - Web: the Household page shows the same time left as the "min left" chip, counting the schedule window as well as the daily budget.
 - Web: the language filter drawer sends the sign-in token with its facet request, so audio and subtitle language counts show instead of "No languages indexed yet".
 - Web player: playback no longer stalls on an endless spinner after the manifest and first segment load. The playback engine was torn down and rebuilt whenever the access-token provider changed identity (every token fetch re-created the stored profile session list), and the rebuilt engine never loaded the source.
@@ -52,6 +53,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android: minimising a video uses system Picture-in-Picture (entered automatically when leaving the app during playback: API 31+ auto-enter, older versions via the user-leave hint). The window takes its aspect ratio from the video, offers play/pause and 10 second skip actions, hides all controls, and closing it stops playback and records progress. On devices without PiP (including most TVs) minimise falls back to the in-app mini player, which now shows the live video from the same player (no restart or re-buffer); tapping it, or pressing OK on TV, expands back to full screen.
 - Add a fixture-based local verification environment (`scripts/fixtures/up.sh`, `down.sh`, `verify.mjs`): a local server seeded with an admin, a viewer, a guardian with a PIN and two child profiles with household policies, generated placeholder media (H.264, HEVC, several audio and subtitle languages), a Sonarr, Radarr and Dubarr stub including a dub track, and documentation in `docs/validation/fixture-environment.md`.
 - Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.
 - CI: one Release workflow (`.github/workflows/release.yml`) releases every app from a single `version` dispatch on `main`: server tarballs and the `playarr-server` and `playarr-regional` images, the signed Android APK, webOS, Tizen, Roku, Xbox and HarmonyOS packages in one GitHub Release with a combined `SHA256SUMS` and generated notes, then Google Play closed testing and TestFlight, with a per-platform summary. The per-platform workflows are reusable and keep their own tags.
