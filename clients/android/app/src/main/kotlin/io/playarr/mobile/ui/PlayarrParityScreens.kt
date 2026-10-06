@@ -47,6 +47,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -1414,6 +1417,14 @@ internal class ProfilesViewModel @Inject constructor(
     private val _switchingProfileId = MutableStateFlow<String?>(null)
     val switchingProfileId = _switchingProfileId.asStateFlow()
 
+    /** The web client list, `<server>/clients`, for the phone profile page's Clients link. */
+    fun openClients(open: (String) -> Unit) {
+        viewModelScope.launch {
+            val base = serverConfigStore.baseUrl.first().trimEnd('/')
+            if (base.isNotBlank()) open("$base/clients")
+        }
+    }
+
     fun load() = viewModelScope.launch {
         _state.value = ParityLoad.Loading
         val saved = tokenStore.savedProfiles.first()
@@ -1597,6 +1608,7 @@ internal fun ExperienceProfilesScreen(
     viewModel: ProfilesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val switchingProfileId by viewModel.switchingProfileId.collectAsState()
     val updateControl = rememberProfilesUpdateControl(isTelevision)
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -1739,6 +1751,7 @@ internal fun ExperienceProfilesScreen(
                         onSettings = { requestAction(it, ProfileAction.Settings) },
                         onSignOut = { viewModel.signOut(it) },
                         onAddProfile = onAddProfile,
+                        onClients = { viewModel.openClients { uriHandler.openUri(it) } },
                     )
                 }
             }
@@ -1757,19 +1770,7 @@ internal fun ExperienceProfilesScreen(
         if (isTelevision) {
             ProfilesStageChrome()
         } else {
-            PlayarrLogo(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 18.dp, top = 14.dp),
-                iconSize = 30.dp,
-            )
-            PlayarrLanguageDropdown(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(end = 14.dp, top = 6.dp),
-            )
+            PhoneProfilesChrome()
         }
     }
     pinProfile?.let { profile ->
@@ -2052,90 +2053,51 @@ private fun MobileProfilesStage(
     onSettings: (AvailableProfile) -> Unit,
     onSignOut: (String) -> Unit,
     onAddProfile: () -> Unit,
+    onClients: () -> Unit,
 ) {
-    val language = LocalPlayarrLanguage.current
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(bottom = 36.dp),
-    ) {
-        item {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    playarrString(PlayarrString.ProfilesTitle).uppercase(language.locale),
-                    color = ProfilesBrandRose,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.4.sp,
-                    modifier = Modifier.padding(top = 78.dp),
-                )
-                Text(
-                    playarrString(PlayarrString.ProfilesHeading),
-                    color = WebInk,
-                    fontSize = 38.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = (-2).sp,
-                )
-            }
-        }
-        item {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(top = 42.dp),
+    val topInset = webPhoneInsets().asPaddingValues().calculateTopPadding()
+    Box(Modifier.fillMaxSize()) {
+        PhoneProfilesHeading(playarrString(PlayarrString.ProfilesTitle), playarrString(PlayarrString.ProfilesHeading))
+        // `.profiles-row`: from inset + 150 px down, scrolls sideways and clips what grows past its top edge.
+        Box(Modifier.fillMaxSize().padding(top = topInset + 150.dp).clipToBounds()) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(22.dp),
-                contentPadding = PaddingValues(horizontal = 34.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                items(profiles, key = AvailableProfile::id) { profile ->
-                    ProfileChoice(
+                profiles.forEach { profile ->
+                    PhoneProfileChoice(
                         profile = profile,
                         serverLabel = serverLabels[profile.id],
-                        avatar = if (profile.id == currentUserId) {
-                            currentAvatar ?: avatars[profile.id]
-                        } else {
-                            avatars[profile.id]
-                        },
+                        avatar = if (profile.id == currentUserId) currentAvatar ?: avatars[profile.id] else avatars[profile.id],
                         selected = selectedId == profile.id,
-                        isTelevision = false,
                         switching = switchingProfileId == profile.id,
                         enabled = switchingProfileId == null,
                         onFocus = { onSelectId(profile.id) },
                         onClick = { onSelect(profile) },
                         onSettings = { onSettings(profile) },
-                        onSignOut = if (profile.id in savedProfileIds || profile.isCurrent) {
-                            ({ onSignOut(profile.id) })
-                        } else {
-                            null
-                        },
+                        onSignOut = if (profile.id in savedProfileIds || profile.isCurrent) ({ onSignOut(profile.id) }) else null,
                     )
                 }
-                item(AddProfileId) {
-                    AddProfileChoice(
-                        selected = selectedId == AddProfileId,
-                        isTelevision = false,
-                        enabled = switchingProfileId == null,
-                        onFocus = { onSelectId(AddProfileId) },
-                        onClick = onAddProfile,
-                    )
-                }
-            }
-        }
-        actionError?.let { error ->
-            item {
-                Text(playarrText(error), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(18.dp))
-            }
-        }
-        loadWarning?.let { warning ->
-            item {
-                Text(
-                    playarrString(
-                        PlayarrString.ProfilesErrorShowingSaved,
-                        "message" to playarrText(warning),
-                    ),
-                    color = WebInkMuted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(18.dp),
+                PhoneAddProfileChoice(
+                    selected = selectedId == AddProfileId,
+                    enabled = switchingProfileId == null,
+                    onFocus = { onSelectId(AddProfileId) },
+                    onClick = onAddProfile,
                 )
             }
         }
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = 96.dp)) {
+            actionError?.let { error -> Text(playarrText(error), color = MaterialTheme.colorScheme.error) }
+            loadWarning?.let { warning ->
+                Text(
+                    playarrString(PlayarrString.ProfilesErrorShowingSaved, "message" to playarrText(warning)),
+                    color = WebInkMuted,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+        PhoneProfilesClientsLink(onClients)
     }
 }
 
@@ -2167,7 +2129,7 @@ private fun BoxScope.ProfilesStageChrome() {
 }
 
 @Composable
-private fun ProfilesChromeThemeDropdown(display: PlayarrDisplayPreferences) {
+internal fun ProfilesChromeThemeDropdown(display: PlayarrDisplayPreferences, webPhone: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val label = when (display.theme) {
         PlayarrThemePreference.System -> playarrString(PlayarrString.SettingsThemeSystem)
@@ -2181,6 +2143,7 @@ private fun ProfilesChromeThemeDropdown(display: PlayarrDisplayPreferences) {
             minWidth = 144.dp,
             leading = { ProfilesThemeIcon(WebInkMuted) },
             onClick = { expanded = !expanded },
+            webPhone = webPhone,
         )
         androidx.compose.material3.DropdownMenu(
             expanded = expanded,
@@ -2210,7 +2173,7 @@ private fun ProfilesChromeThemeDropdown(display: PlayarrDisplayPreferences) {
 }
 
 @Composable
-private fun ProfilesChromeLanguageDropdown(display: PlayarrDisplayPreferences) {
+internal fun ProfilesChromeLanguageDropdown(display: PlayarrDisplayPreferences, webPhone: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val selected = playarrUiLanguageOptions.firstOrNull { it.preference == display.language }
         ?: playarrUiLanguageOptions.first()
@@ -2221,6 +2184,7 @@ private fun ProfilesChromeLanguageDropdown(display: PlayarrDisplayPreferences) {
             minWidth = 168.dp,
             leading = { ProfilesGlobeIcon(WebInkMuted) },
             onClick = { expanded = !expanded },
+            webPhone = webPhone,
         )
         androidx.compose.material3.DropdownMenu(
             expanded = expanded,
@@ -2251,6 +2215,7 @@ private fun ProfilesChromeTrigger(
     minWidth: Dp,
     leading: @Composable () -> Unit,
     onClick: () -> Unit,
+    webPhone: Boolean = false,
 ) {
     Surface(
         onClick = onClick,
@@ -2258,7 +2223,7 @@ private fun ProfilesChromeTrigger(
         color = if (expanded) WebSurfaceStrong else WebBackground,
         border = BorderStroke(1.dp, if (expanded) WebInkSoft else WebInkMuted.copy(alpha = 0.45f)),
         modifier = Modifier
-            .widthIn(min = minWidth)
+            .then(if (webPhone) Modifier else Modifier.widthIn(min = minWidth))
             .height(48.dp)
             .scale(if (expanded) 1.02f else 1f),
     ) {
@@ -2271,8 +2236,10 @@ private fun ProfilesChromeTrigger(
             Text(
                 label,
                 color = WebInk,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = if (webPhone) 11.52.sp else 11.5.sp,
+                lineHeight = if (webPhone) 17.28.sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+                fontWeight = if (webPhone) FontWeight(720) else FontWeight.Bold,
+                style = if (webPhone) WebTextStyle else androidx.compose.ui.text.TextStyle.Default,
                 maxLines = 1,
                 modifier = Modifier.weight(1f, fill = false),
             )
@@ -2597,7 +2564,7 @@ private fun AddProfileChoice(
 
 /** Web `SettingsIcon` stroke gear. */
 @Composable
-private fun ProfilesSettingsIcon(color: Color) {
+internal fun ProfilesSettingsIcon(color: Color) {
     Canvas(Modifier.size(18.dp)) {
         val stroke = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         val s = size.width / 24f
@@ -2651,7 +2618,7 @@ private fun ProfilesSettingsIcon(color: Color) {
 
 /** Web `SignOutIcon` door + arrow. */
 @Composable
-private fun ProfilesSignOutIcon(color: Color) {
+internal fun ProfilesSignOutIcon(color: Color) {
     Canvas(Modifier.size(18.dp)) {
         val stroke = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         val s = size.width / 24f
