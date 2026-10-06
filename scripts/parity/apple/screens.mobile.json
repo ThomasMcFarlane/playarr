@@ -86,7 +86,24 @@
       },
       "native": "player:movie:Test Movie A",
       "settle": 30,
-      "mask": false
+      "mask": {
+        "bands": false,
+        "rects": [
+          [
+            0,
+            936,
+            1170,
+            657
+          ],
+          [
+            72,
+            2127,
+            1062,
+            18
+          ]
+        ],
+        "why": "Justified platform difference: the simulator's video decode path drops the blue channel, so the decoded picture is masked on both sides; the buffered seek segment is real network data (the runner buffers the whole clip) and is masked too. All player chrome is still diffed."
+      }
     },
     {
       "id": "player-quality-menu",
@@ -95,7 +112,30 @@
       },
       "native": "player-quality:movie:Test Movie A",
       "settle": 30,
-      "mask": false
+      "mask": {
+        "bands": false,
+        "rects": [
+          [
+            0,
+            936,
+            1170,
+            276
+          ],
+          [
+            0,
+            1212,
+            36,
+            381
+          ],
+          [
+            1134,
+            1212,
+            36,
+            381
+          ]
+        ],
+        "why": "Justified platform difference: the decoded video picture around the quality panel (simulator decode path drops blue). The panel and all chrome are still diffed."
+      }
     },
     {
       "id": "household-blocked",

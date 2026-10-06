@@ -464,7 +464,7 @@ struct PlayerView: View {
                     PlayerQualityMatrix(
                         options: viewModel.qualityOptions,
                         selectedID: viewModel.selectedQualityID,
-                        innerWidth: panelWidth - 2 - 17.6
+                        innerWidth: panelWidth - 19.6
                     ) { id in
                         activeMenu = nil
                         Task { await viewModel.selectQuality(id) }

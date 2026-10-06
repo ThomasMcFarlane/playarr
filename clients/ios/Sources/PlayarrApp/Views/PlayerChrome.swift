@@ -229,7 +229,8 @@ struct PlayerPanel<Content: View>: View {
                 .padding(.leading, 11.2)
             content
         }
-        .padding(8.8)
+        // CSS border-box: 1pt border plus 0.55rem padding.
+        .padding(9.8)
         .background(panelFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 35, y: 24)
