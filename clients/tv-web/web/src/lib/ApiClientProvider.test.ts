@@ -4,7 +4,9 @@ import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@playarr-t
 import {
   createManagedApiClient,
   resolveInitialApiBaseUrl,
+  sameStoredProfileSessions,
   selectRestorableProfileSession,
+  upsertProfileSession,
   type ActiveProfileMarker,
   type StoredProfileSession,
 } from "./ApiClientProvider";
@@ -364,5 +366,41 @@ describe("createManagedApiClient -- self-healing", () => {
     await client.refresh({ device_id: "d1", refresh_token: "rt-old" });
 
     expect(readKnownServers()?.groupId).toBe("22222222-2222-4222-8222-222222222222");
+  });
+});
+
+describe("profile session persistence keeps React state stable", () => {
+  const entry = (overrides: Partial<StoredProfileSession> = {}): StoredProfileSession => ({
+    profileKey: "profile-a",
+    apiBaseUrl: "http://server.example",
+    userId: "user-1",
+    name: "Viewer",
+    deviceId: "device-1",
+    session: { accessToken: "a", refreshToken: "r", tokenType: "Bearer", expiresAt: 100 },
+    ...overrides,
+  });
+
+  it("returns the same array when the stored entry is unchanged", () => {
+    const sessions = [entry()];
+    expect(upsertProfileSession(sessions, entry())).toBe(sessions);
+  });
+
+  it("replaces the entry when the token changed", () => {
+    const sessions = [entry()];
+    const next = upsertProfileSession(sessions, entry({ session: { ...entry().session, accessToken: "b" } }));
+    expect(next).not.toBe(sessions);
+    expect(next[0]?.session.accessToken).toBe("b");
+  });
+
+  it("appends an entry for a new profile", () => {
+    const sessions = [entry()];
+    const next = upsertProfileSession(sessions, entry({ profileKey: "profile-b", userId: "user-2" }));
+    expect(next).toHaveLength(2);
+  });
+
+  it("treats a re-read, equal list as the same list", () => {
+    expect(sameStoredProfileSessions([entry()], [entry()])).toBe(true);
+    expect(sameStoredProfileSessions([entry()], [entry({ name: "Other" })])).toBe(false);
+    expect(sameStoredProfileSessions([entry()], [])).toBe(false);
   });
 });

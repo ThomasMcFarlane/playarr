@@ -21,6 +21,7 @@ State lives in `.fixtures/` (git-ignored; override with `PLAYARR_FIXTURE_DIR`).
 | --- | --- | --- |
 | Server | `http://127.0.0.1:18484` | `PLAYARR_FIXTURE_PORT`, `PLAYARR_FIXTURE_BIND` |
 | Source stub (Sonarr, Radarr, Dubarr) | `127.0.0.1:18490` | `PLAYARR_FIXTURE_STUB_PORT` |
+| Dub length in seconds (default: the clip length; set before the media is first generated) | clip length | `PLAYARR_FIXTURE_DUB_SECONDS` |
 | Child schedule window (UTC minutes of day) | `0-1440` | `FIXTURE_CHILD_WINDOW=360-1260` then re-run `up.sh` |
 
 ## What is seeded
@@ -71,10 +72,30 @@ config allows cleartext) and sign in with a fixture user. A physical
 device needs `PLAYARR_FIXTURE_BIND=0.0.0.0` and the host's LAN address; only do
 that on a trusted network.
 
+## Automated web playback test (rows 456, 256, 371)
+
+```sh
+cd clients/tv-web && pnpm install --frozen-lockfile && pnpm --filter "@playarr-tv/web..." run build   # once
+cd web
+PLAYARR_FIXTURE_PORT=18484 PLAYARR_SERVER_BIN=<built playarr-server> PLAYARR_FIXTURE_NO_BUILD=1 \
+  systemd-run --user --scope -p MemoryHigh=8G -p MemoryMax=12G -- pnpm run test:playback-e2e
+```
+
+It builds the web client (`--no-build` skips that), brings up a fresh fixture
+environment with 60 second clips, signs in as `fx-viewer` through the login form,
+plays Test Movie A and asserts `currentTime` advances and that the stream is set up
+once. It then SIGKILLs the fixture server mid-playback, waits for the inline
+"Reconnecting" card (not the error card), restarts the server and asserts playback
+resumes past the stall point. Options: `--no-up` (use an already running server),
+`--keep` (leave it running), `--headed`. Environment: `PLAYARR_FIXTURE_DIR`,
+`PLAYARR_FIXTURE_PORT`, `PLAYARR_E2E_CHROMIUM` (Chromium or Chrome executable; default
+is Playwright's own, which plays H.264/AAC), `PLAYARR_E2E_CLIP_SECONDS`,
+`PLAYARR_E2E_ARTIFACTS` (screenshots). Run one browser at a time.
+
 ## Which rows it serves
 
 57/114 household controls (`fx-child`, `fx-child-locked`, `fx-guardian`);
-196 dub audio picker (Test Movie A); 110 Android PIN switching (guardian and
+196 dub audio picker (Test Movie A); 197/198 dub video copy and transcode hardening (`node scripts/fixtures/verify-dub-copy.mjs`, run on the server's host with `PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS=4`); 110 Android PIN switching (guardian and
 child PINs, `/auth/lock` and `/auth/unlock`); 185 language filters
 (`/api/v1/catalog/languages`); 223 calendar actions (`/api/v1/calendar`);
 256 reconnect (`down.sh` then `up.sh` keeps data and sessions); 371 folders

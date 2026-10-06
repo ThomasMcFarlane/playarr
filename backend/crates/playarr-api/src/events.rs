@@ -523,7 +523,13 @@ mod tests {
         (router, state, user, token)
     }
 
-    const WAIT: Duration = Duration::from_millis(2_500);
+    /// Upper bound for a frame that must arrive. Waits return as soon as the
+    /// frame is seen, so the bound costs nothing when healthy; it is generous
+    /// so a starved host (full parallel suite on busy cores) cannot trip it.
+    /// Absence is never asserted by waiting: tests publish a later sentinel
+    /// event and check that nothing forbidden arrived before it (frames are
+    /// ordered by `seq`).
+    const WAIT: Duration = Duration::from_secs(60);
     const QUIET: Duration = Duration::from_millis(600);
 
     #[tokio::test]
@@ -582,16 +588,23 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let seen = drain(&mut stream, Duration::from_millis(900)).await;
-        assert_eq!(seen.matches("event: change").count(), 1, "{seen}");
+        // The watched transition is never throttled, and frames arrive in
+        // `seq` order, so once it has been read every frame the four ticks
+        // produced has been read too: no timing window is involved.
         state
             .app
             .watch_progress
             .upsert(user, &progress(work, file, 995_000, true))
             .await
             .unwrap();
-        let done = read_until(&mut stream, "watched", WAIT).await;
-        assert!(done.contains("\"changed\":[\"watched\"]"), "{done}");
+        let seen = read_until(&mut stream, "\"changed\":[\"watched\"]", WAIT).await;
+        assert!(seen.contains("\"changed\":[\"watched\"]"), "{seen}");
+        assert_eq!(
+            seen.matches("\"changed\":[\"progress\"]").count(),
+            1,
+            "four ticks inside the throttle gap publish exactly one: {seen}"
+        );
+        assert_eq!(seen.matches("event: change").count(), 2, "{seen}");
     }
 
     async fn seed_media_file_for(state: &TestState, work: Uuid) -> Uuid {
@@ -633,17 +646,20 @@ mod tests {
         assert!(seen_o.contains(&work_b.to_string()), "{seen_o}");
         assert!(seen_o.contains("\"changed\":[\"files\"]"), "{seen_o}");
         assert!(seen_o.contains("\"type\":\"calendar\""), "{seen_o}");
-        let seen_r = drain(&mut r, QUIET).await;
-        assert!(
-            !seen_r.contains(&work_b.to_string()),
-            "restricted viewer leaked: {seen_r}"
-        );
 
-        // The same import into library A reaches the restricted viewer.
+        // The same import into library A reaches the restricted viewer. It is
+        // published after the library B import and frames are ordered by
+        // `seq`, so once it has arrived the stream has already decided about B:
+        // anything the viewer was going to leak would be in `seen_r` by now.
         let work_a = seed_movie(&state, "In A").await;
         let _ = seed_downloadable_media_file(&state, work_a, lib_a).await;
         let seen_r = read_until(&mut r, "\"changed\":[\"files\"]", WAIT).await;
         assert!(seen_r.contains(&work_a.to_string()), "{seen_r}");
+        assert!(seen_r.contains("\"changed\":[\"files\"]"), "{seen_r}");
+        assert!(
+            !seen_r.contains(&work_b.to_string()),
+            "restricted viewer leaked: {seen_r}"
+        );
     }
 
     #[tokio::test]

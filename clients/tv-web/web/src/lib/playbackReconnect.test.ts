@@ -3,6 +3,8 @@ import {
   MAX_RECONNECT_ATTEMPTS,
   canReconnect,
   isRecoverableConnectionError,
+  isUnhandledEngineError,
+  sessionCloseForEngineState,
   reconnectDelayMs,
 } from "./playbackReconnect";
 
@@ -28,5 +30,38 @@ describe("playback reconnect rules", () => {
     expect([0, 1, 2, 3, 4, 9].map(reconnectDelayMs)).toEqual([1000, 2000, 4000, 8000, 10000, 10000]);
     expect(canReconnect(MAX_RECONNECT_ATTEMPTS - 1)).toBe(true);
     expect(canReconnect(MAX_RECONNECT_ATTEMPTS)).toBe(false);
+  });
+});
+
+describe("handled engine errors", () => {
+  it("ignores the error a reconnect was already started for", () => {
+    const error = { code: "1001", httpStatus: 404 };
+    expect(isUnhandledEngineError(error, error)).toBe(false);
+  });
+
+  it("handles a new error, including one with identical content", () => {
+    expect(isUnhandledEngineError({ code: "1001" }, { code: "1001" })).toBe(true);
+    expect(isUnhandledEngineError({ code: "1001" }, undefined)).toBe(true);
+  });
+
+  it("has nothing to handle without an error", () => {
+    expect(isUnhandledEngineError(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("session close on terminal engine state", () => {
+  it("closes the session once when the engine ends or fails", () => {
+    expect(sessionCloseForEngineState("playing", "ended")).toBe("completed");
+    expect(sessionCloseForEngineState("buffering", "error")).toBe("error");
+  });
+
+  it("does not close a replacement session while the old terminal state is still shown", () => {
+    expect(sessionCloseForEngineState("error", "error")).toBeNull();
+    expect(sessionCloseForEngineState("ended", "ended")).toBeNull();
+  });
+
+  it("ignores non-terminal states", () => {
+    expect(sessionCloseForEngineState("loading", "playing")).toBeNull();
+    expect(sessionCloseForEngineState("error", "loading")).toBeNull();
   });
 });

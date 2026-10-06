@@ -9,6 +9,17 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Deleting a user now frees their username for a new account (the tombstone is renamed; migration 0077 does the same for existing ones), and an administrator delete revokes all of the user's refresh-token families and sessions immediately.
+- Web mobile home: rails and their headings now start at the page gutter instead of being indented by the TV left-fade inset; cards pack from the left at the normal gap.
+- Android: the app no longer crashes when signing in or switching profiles while the live-event stream is open.
+- Android: the release calendar header fits phones, and Watchlist shows beside Open when the server offers both.
+- Android: the guardian approval card names the child (from profiles saved on the device) and reads correctly for out-of-hours requests.
+- Android: a session with no refresh token is dropped instead of failing every request.
+- Server: refreshing a token for a deleted account, or using a live access token of one, now answers 401 instead of minting a token or answering 403, so clients ask for a sign-in.
+- Android: the minimised player no longer shows an empty or black surface for video. The mini player previously had no video surface (artwork only); it now binds a video view to the shared player, and the full-screen video view re-binds on every recomposition.
+- Web: the Household page shows the same time left as the "min left" chip, counting the schedule window as well as the daily budget.
+- Web: the language filter drawer sends the sign-in token with its facet request, so audio and subtitle language counts show instead of "No languages indexed yet".
+- Web player: playback no longer stalls on an endless spinner after the manifest and first segment load. The playback engine was torn down and rebuilt whenever the access-token provider changed identity (every token fetch re-created the stored profile session list), and the rebuilt engine never loaded the source.
 - Server: `GET /api/v1/calendar` offers `play` (and `resume`) only when the exact episode or film has its own file in the library, and the action carries that file; an unaired or file-less entry gets Open, Watchlist or Request instead. Grouped (`group=series_day`) entries follow the same rule.
 - Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
 - Android player: the top-left back arrow is replaced by an X close button at the top right (with minimise to its left; content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
@@ -49,6 +60,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Android: minimising a video uses system Picture-in-Picture (entered automatically when leaving the app during playback: API 31+ auto-enter, older versions via the user-leave hint). The window takes its aspect ratio from the video, offers play/pause and 10 second skip actions, hides all controls, and closing it stops playback and records progress. On devices without PiP (including most TVs) minimise falls back to the in-app mini player, which now shows the live video from the same player (no restart or re-buffer); tapping it, or pressing OK on TV, expands back to full screen.
 - Add a fixture-based local verification environment (`scripts/fixtures/up.sh`, `down.sh`, `verify.mjs`): a local server seeded with an admin, a viewer, a guardian with a PIN and two child profiles with household policies, generated placeholder media (H.264, HEVC, several audio and subtitle languages), a Sonarr, Radarr and Dubarr stub including a dub track, and documentation in `docs/validation/fixture-environment.md`.
 - Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.
 - CI: one Release workflow (`.github/workflows/release.yml`) releases every app from a single `version` dispatch on `main`: server tarballs and the `playarr-server` and `playarr-regional` images, the signed Android APK, webOS, Tizen, Roku, Xbox and HarmonyOS packages in one GitHub Release with a combined `SHA256SUMS` and generated notes, then Google Play closed testing and TestFlight, with a per-platform summary. The per-platform workflows are reusable and keep their own tags.
@@ -158,6 +170,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
+- Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
 - Web player: the top-left back arrow is replaced by an icon-only "Close player" X at the top right (localised, reachable with D-pad or arrow keys on the TV layout; Escape and Back still close). Clicking, tapping or pressing Enter/OK while the controls are hidden now only reveals them instead of pausing; Space, k and the media keys still toggle directly.
 - Web player: the Original quality now shows the source bitrate, for example "Original · 24.3 Mbps", or plain "Original" when the bitrate is unknown (never "0 Mbps").
 - Web player: Minimise uses the browser Picture-in-Picture window where supported, falling back to the in-app mini player otherwise.
@@ -503,6 +517,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Task board: fragments can now remove a row (`remove: <row-number>`); work belonging to other repositories such as Dubarr is no longer tracked on the board.
 - Smoke scripts (`live-events-smoke.sh`, `remote-control-smoke.sh`) no longer read `~/.playarr-test.env`; export `TEST_SERVER`, `TEST_USERNAME` and `TEST_PASSWORD` explicitly. Shared test-account references were removed from the docs.
 - The in-process authoritative relay DNS server and `PLAYARR_RELAY_DNS_BIND_ADDR` /
   `PLAYARR_RELAY_DNS_ACME_CHALLENGE`. The Worker now publishes the relay records and answers
@@ -2227,6 +2242,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Fixture environment: `scripts/fixtures/verify-dub-copy.mjs` checks the dub video-copy path (H.264 and HEVC), the transcode fallbacks and that the Dubarr key stays out of ffmpeg's argv; `PLAYARR_FIXTURE_DUB_SECONDS` generates a dub shorter than the film.
+- Added a headless smoke script and vitest guards proving the web in-app mini player (the Picture-in-Picture fallback) shows the same live video element without reloading, on desktop and TV layouts.
+- Made the live-events stream tests deterministic: absence is now asserted by reading up to a later sentinel frame (ordered by `seq`) instead of draining for a fixed time window, positive waits use a generous bound, and the API test database pool waits longer for its single connection. Removes failures seen when the full parallel suite ran on saturated cores.
+- Fixture-based web playback test (`pnpm --filter @playarr-tv/web run test:playback-e2e`): signs in as a fixture user, plays a fixture film, asserts `currentTime` advances, and kills and restarts the fixture server mid-playback to check the reconnect card and recovery. Fixture clip length is configurable with `PLAYARR_FIXTURE_CLIP_SECONDS`.
 - Added vitest coverage for the web player's Original bitrate label, reveal-only input gate, Picture-in-Picture helper and close button.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
@@ -2239,6 +2258,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- README: rebuilt with a banner, a screenshot showcase, light and dark platform and architecture diagrams, collapsible reference sections, and an expanded third-party media attribution for the openly licensed titles shown in the screenshots.
 - Add `SECURITY.md` (private vulnerability reporting) and stop naming the deployment configuration in `AGENTS.md`, as part of the public-readiness audit.
 - Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.

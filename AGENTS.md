@@ -136,6 +136,8 @@ on a personal account do not get.
   row; an existing row number replaces that row in place). The merge train folds them into
   `TASKS.md` when the PR lands. See `tasks.d/README.md`. Validate with
   `node scripts/fold-fragments.mjs --check`.
+- Work in other repositories (for example Dubarr) is not tracked on this board; remove such rows
+  with a `remove: <row-number>` fragment.
 - Add every newly discovered unit of work as a task row (fragment) immediately, using the numbered
   MC3-style table pattern. Do not leave blockers, follow-up work, or acceptance gaps only in chat,
   logs, or hand-off notes.

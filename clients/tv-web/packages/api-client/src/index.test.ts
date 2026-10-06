@@ -350,6 +350,16 @@ describe("ApiClient", () => {
     expect(facets.subtitle[0]?.count).toBe(2);
   });
 
+  it("sends the bearer token with the language facet request", async () => {
+    const fetchImpl = mockFetch((request) => {
+      expect(new URL(request.url).pathname).toBe("/api/v1/catalog/languages");
+      expect(request.headers.get("Authorization")).toBe("Bearer viewer-token");
+      return jsonResponse(200, { audio: [], subtitle: [] });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl, getAccessToken: () => "viewer-token" });
+    await client.catalogLanguages({ kind: "movie" });
+  });
+
   it("lists authenticated catalog kinds visible to the caller", async () => {
     const fetchImpl = mockFetch((request) => {
       expect(new URL(request.url).pathname).toBe("/api/v1/catalog/kinds");

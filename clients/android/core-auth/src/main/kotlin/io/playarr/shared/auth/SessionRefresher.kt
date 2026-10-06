@@ -122,7 +122,12 @@ class SessionRefresher @Inject constructor(
         }
 
         val refreshToken = tokenStore.refreshToken.first()?.takeIf { it.isNotBlank() }
-            ?: return@withLock null
+        if (refreshToken == null) {
+            // A session with an access token but nothing to renew it with can never recover: every request
+            // would 401 forever with no refresh attempt. Drop it so the person is asked to sign in again.
+            if (!currentAccessToken.isNullOrBlank()) tokenStore.clear()
+            return@withLock null
+        }
         val request = RefreshRequest(
             deviceId = tokenStore.getOrCreateDeviceId(),
             refreshToken = refreshToken,

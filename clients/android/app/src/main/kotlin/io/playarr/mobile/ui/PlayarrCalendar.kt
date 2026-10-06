@@ -128,17 +128,7 @@ internal fun ExperienceCalendarScreen(
     val detailItem = if (state.mode == CalendarViewMode.Agenda) selectedItem ?: items.firstOrNull() else selectedItem
     val filtersLabel = playarrString(PlayarrString.LibraryFilters)
     var jumpOpen by rememberSaveable { mutableStateOf(false) }
-    PlayarrPageScaffold(
-        title = playarrString(PlayarrString.CalendarTitle),
-        onBack = onBack,
-        isTelevision = isTelevision,
-        filters = PlayarrFilterAction(
-            label = filtersLabel,
-            active = state.panel == CalendarPanel.Filters,
-            badge = state.filters.activeCount,
-            onClick = { holder.openPanel(CalendarPanel.Filters) },
-        ),
-        panelActions = {
+    val panelActions: @Composable RowScope.() -> Unit = {
             PlayarrHeaderButton(
                 label = playarrString(PlayarrString.CalendarLinkTitle),
                 icon = Icons.Outlined.Link,
@@ -146,8 +136,8 @@ internal fun ExperienceCalendarScreen(
                 active = state.panel == CalendarPanel.Subscription,
                 onClick = { holder.openPanel(CalendarPanel.Subscription) },
             )
-        },
-        trailingNav = {
+    }
+    val navigation: @Composable RowScope.() -> Unit = {
             PlayarrIconButton(
                 onClick = holder::previous,
                 contentDescription = playarrString(PlayarrString.CalendarPrevious),
@@ -161,8 +151,28 @@ internal fun ExperienceCalendarScreen(
                 contentDescription = playarrString(PlayarrString.CalendarNext),
                 variant = PlayarrButtonVariant.Secondary,
             ) { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = WebInk) }
-        },
+    }
+    PlayarrPageScaffold(
+        title = playarrString(PlayarrString.CalendarTitle),
+        onBack = onBack,
+        isTelevision = isTelevision,
+        filters = PlayarrFilterAction(
+            label = filtersLabel,
+            active = state.panel == CalendarPanel.Filters,
+            badge = state.filters.activeCount,
+            onClick = { holder.openPanel(CalendarPanel.Filters) },
+        ),
+        panelActions = if (isTelevision) panelActions else null,
+        // Phones are too narrow for five header actions beside the back button and title: the period
+        // navigation moves into the period row below the header there.
+        trailingNav = if (isTelevision) navigation else null,
     ) {
+        if (!isTelevision) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                navigation()
+                panelActions()
+            }
+        }
         CalendarPeriodLabel(state, isTelevision, language.locale) { jumpOpen = true }
         when (val load = state.load) {
             is CalendarLoad.Failed -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -674,7 +684,7 @@ private fun CalendarItemRow(
 
 /** Details of the selected release: facts plus Open when it exists in the library. */
 @Composable
-private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId, onOpenWork: (String) -> Unit, actions: CalendarActionsHolder) {
+internal fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId, onOpenWork: (String) -> Unit, actions: CalendarActionsHolder) {
     val entry = item.first
     val time = remember(entry.releaseAt, locale) { entry.localReleaseTime(zone, locale) }
     val workId = entry.openWorkId
@@ -718,6 +728,9 @@ private fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneId
             PlayarrButton(onClick = { onOpenWork(workId) }) {
                 Text(playarrString(if (item is CalendarItem.Series) PlayarrString.CalendarOpenSeries else PlayarrString.CalendarOpen))
             }
+            // The server may offer Watchlist (or Request) beside Open, for example for an unaired episode of a
+            // series already in the library; show exactly what it enabled.
+            CalendarEntryActions(entry, actions)
         } else {
             Text(playarrString(PlayarrString.CalendarNotInCatalogue), color = WebInkMuted, fontSize = 12.sp)
             CalendarEntryActions(entry, actions)

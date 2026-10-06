@@ -759,7 +759,7 @@ pub struct DecideApprovalRequest {
     responses(
         (status = 200, description = "Decision recorded", body = Approval),
         (status = 401, description = "Missing or invalid access token, or wrong guardian PIN"),
-        (status = 403, description = "Caller is not a guardian of this profile, is restricted, has no PIN, or is the requester"),
+        (status = 403, description = "Caller is the requester (`self_approval_forbidden`), is not a guardian of this profile (`not_guardian`), has no profile PIN (`guardian_pin_not_set`), or is a restricted profile (`forbidden`)"),
         (status = 404, description = "Unknown approval"),
         (status = 409, description = "Already decided or expired"),
         (status = 429, description = "PIN locked out")
@@ -780,7 +780,11 @@ pub async fn decide_approval_handler(
 
     // A profile can never decide its own request, whatever its policy says.
     if approval.profile_user_id == guardian.user_id {
-        return Err(forbidden("a profile cannot approve its own request"));
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "self_approval_forbidden",
+            "a profile cannot approve its own request",
+        ));
     }
     let profile_policy = resolve_policy(
         &state,
@@ -794,7 +798,11 @@ pub async fn decide_approval_handler(
         .guardian_user_ids
         .contains(&guardian.user_id)
     {
-        return Err(forbidden("caller is not a guardian of this profile"));
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "not_guardian",
+            "caller is not a guardian of this profile",
+        ));
     }
     if is_restricted(&guardian.policy) && !guardian.policy.is_admin {
         // A restricted profile (a sibling) cannot be a guardian even if
@@ -828,7 +836,13 @@ pub async fn decide_approval_handler(
         .profile_pin_repo
         .find_hash(guardian.user_id)
         .await?
-        .ok_or_else(|| forbidden("set a profile PIN before approving requests"))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::FORBIDDEN,
+                "guardian_pin_not_set",
+                "set a profile PIN before approving requests",
+            )
+        })?;
     state
         .household
         .ensure_pin_not_locked(guardian.user_id, guardian.user_id)

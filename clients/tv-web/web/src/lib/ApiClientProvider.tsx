@@ -276,6 +276,56 @@ function storedSessionsEqual(left: StoredSession, right: StoredSession): boolean
   );
 }
 
+/**
+ * Inserts or updates `entry` in `sessions`. Returns the very same array
+ * (identity) when the entry is already stored with equal content.
+ */
+export function upsertProfileSession(
+  sessions: StoredProfileSession[],
+  entry: StoredProfileSession
+): StoredProfileSession[] {
+  const currentIndex = sessions.findIndex(
+    (profile) =>
+      profile.profileKey === entry.profileKey &&
+      profile.apiBaseUrl === entry.apiBaseUrl &&
+      profile.userId === entry.userId
+  );
+  const current = currentIndex >= 0 ? sessions[currentIndex] : undefined;
+  if (
+    current &&
+    current.name === entry.name &&
+    current.deviceId === entry.deviceId &&
+    storedSessionsEqual(current.session, entry.session)
+  ) {
+    return sessions;
+  }
+  return currentIndex >= 0
+    ? sessions.map((profile, index) => (index === currentIndex ? entry : profile))
+    : [...sessions, entry];
+}
+
+/** Element-wise equality of two stored profile session lists. */
+export function sameStoredProfileSessions(
+  left: StoredProfileSession[],
+  right: StoredProfileSession[]
+): boolean {
+  return (
+    left === right ||
+    (left.length === right.length &&
+      left.every((profile, index) => {
+        const other = right[index] as StoredProfileSession;
+        return (
+          profile.profileKey === other.profileKey &&
+          profile.apiBaseUrl === other.apiBaseUrl &&
+          profile.userId === other.userId &&
+          profile.name === other.name &&
+          profile.deviceId === other.deviceId &&
+          storedSessionsEqual(profile.session, other.session)
+        );
+      }))
+  );
+}
+
 class ScopedTokenStore extends TokenStore {
   constructor(
     private session: StoredSession | undefined,
@@ -808,33 +858,21 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     ) => {
       setStoredProfileSessions((stale) => {
         const existing = freshStoredProfileSessions(stale, sessionApiBaseUrl);
-        const currentIndex = existing.findIndex(
-          (profile) =>
-            profile.profileKey === profileKey &&
-            profile.apiBaseUrl === sessionApiBaseUrl &&
-            profile.userId === userId
-        );
-        const current = currentIndex >= 0 ? existing[currentIndex] : undefined;
-        if (
-          current &&
-          current.profileKey === profileKey &&
-          current.name === name &&
-          current.deviceId === deviceId &&
-          storedSessionsEqual(current.session, session)
-        ) {
-          return existing;
+        const next = upsertProfileSession(existing, {
+          profileKey,
+          apiBaseUrl: sessionApiBaseUrl,
+          userId,
+          name,
+          deviceId,
+          session,
+        });
+        // Nothing changed: keep the identity React already holds. Every
+        // access-token fetch lands here (including each segment request
+        // the player makes), and a fresh-but-equal array used to rebuild
+        // `serverClients` and every callback derived from it.
+        if (next === existing) {
+          return sameStoredProfileSessions(stale, existing) ? stale : existing;
         }
-        const next =
-          currentIndex >= 0
-            ? existing.map((profile, index) =>
-                index === currentIndex
-                  ? { profileKey, apiBaseUrl: sessionApiBaseUrl, userId, name, deviceId, session }
-                  : profile
-              )
-            : [
-                ...existing,
-                { profileKey, apiBaseUrl: sessionApiBaseUrl, userId, name, deviceId, session },
-              ];
         writeStoredProfileSessions(next);
         return next;
       });

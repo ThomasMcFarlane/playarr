@@ -54,6 +54,8 @@ export interface PlaybackAudioTrack {
   id: string;
   label: string;
   language?: string;
+  /** Upper-case codec name when the server reports it (for example `AAC`). */
+  codec?: string;
   roles: string[];
   channelsCount?: number;
   selected: boolean;

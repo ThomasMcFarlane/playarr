@@ -170,6 +170,25 @@ class SessionRefresherTest {
     }
 
     @Test
+    fun `a session with no refresh token is dropped instead of 401ing forever`() = runBlocking {
+        val store = TokenStore(RefreshFakeDataStore()).also {
+            it.save(TokenResponse("old-access", "", "Bearer", 900))
+        }
+        val refresher = SessionRefresher(
+            refreshApi = object : RefreshApi {
+                override suspend fun unlock(body: UnlockRequest): RefreshResponse = throw UnsupportedOperationException()
+                override suspend fun refresh(body: RefreshRequest): RefreshResponse = error("no refresh token to redeem")
+            },
+            tokenStore = store,
+            knownServerGroupStore = emptyKnownServerGroupStore(),
+            refreshApiForUrl = { error("no known group -- should not be called") },
+        )
+
+        assertNull(refresher.refreshAccessToken("old-access"))
+        assertNull(store.accessToken.first())
+    }
+
+    @Test
     fun `retries the same refresh token against another address of the SAME peer node when the default address is unreachable`() =
         runBlocking {
             val accessToken = fakeAccessToken(issuingPeerNodeId = NODE_A_ID)

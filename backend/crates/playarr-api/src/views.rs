@@ -600,7 +600,10 @@ mod tests {
     #[tokio::test]
     async fn create_requires_admin() {
         let (router, state) = test_state().await;
-        let token = mint_access_token(&state, Uuid::new_v4());
+        // A real account without the admin grant (an account that no longer exists is a 401 instead).
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
 
         let body = serde_json::json!({
             "name": "My View",
