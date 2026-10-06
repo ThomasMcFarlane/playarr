@@ -21,6 +21,7 @@ State lives in `.fixtures/` (git-ignored; override with `PLAYARR_FIXTURE_DIR`).
 | --- | --- | --- |
 | Server | `http://127.0.0.1:18484` | `PLAYARR_FIXTURE_PORT`, `PLAYARR_FIXTURE_BIND` |
 | Source stub (Sonarr, Radarr, Dubarr) | `127.0.0.1:18490` | `PLAYARR_FIXTURE_STUB_PORT` |
+| Dub length in seconds (default: the clip length; set before the media is first generated) | clip length | `PLAYARR_FIXTURE_DUB_SECONDS` |
 | Child schedule window (UTC minutes of day) | `0-1440` | `FIXTURE_CHILD_WINDOW=360-1260` then re-run `up.sh` |
 
 ## What is seeded
@@ -94,7 +95,7 @@ is Playwright's own, which plays H.264/AAC), `PLAYARR_E2E_CLIP_SECONDS`,
 ## Which rows it serves
 
 57/114 household controls (`fx-child`, `fx-child-locked`, `fx-guardian`);
-196 dub audio picker (Test Movie A); 110 Android PIN switching (guardian and
+196 dub audio picker (Test Movie A); 197/198 dub video copy and transcode hardening (`node scripts/fixtures/verify-dub-copy.mjs`, run on the server's host with `PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS=4`); 110 Android PIN switching (guardian and
 child PINs, `/auth/lock` and `/auth/unlock`); 185 language filters
 (`/api/v1/catalog/languages`); 223 calendar actions (`/api/v1/calendar`);
 256 reconnect (`down.sh` then `up.sh` keeps data and sessions); 371 folders

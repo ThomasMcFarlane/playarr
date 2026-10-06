@@ -19,6 +19,8 @@ const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * 86400000).toIS
 
 // Must match the generated clip length (media.mjs).
 const CLIP_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_CLIP_SECONDS) || 6));
+// Dub length; defaults to the clip length (see media.mjs).
+const DUB_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_DUB_SECONDS) || CLIP_SECONDS));
 const runTime = () => `${Math.floor(CLIP_SECONDS / 3600)}:${String(Math.floor(CLIP_SECONDS / 60) % 60).padStart(2, "0")}:${String(CLIP_SECONDS % 60).padStart(2, "0")}`;
 
 function mediaInfo(codec, audio, subs) {
@@ -78,7 +80,7 @@ const radarr = MOVIES.map((m) => {
 const dubTracks = MOVIES.filter((m) => m.dub).map((m) => {
   const abs = join(root, dubRelPath(m));
   return {
-    id: m.dub.id, language: m.dub.language, vendor: "fixture", codec: "aac", channels: 1, bitrateKbps: 48, durationMs: CLIP_SECONDS * 1000,
+    id: m.dub.id, language: m.dub.language, vendor: "fixture", codec: "aac", channels: 1, bitrateKbps: 48, durationMs: DUB_SECONDS * 1000,
     sizeBytes: statSync(abs).size, title: m.dub.title, mediaPath: join(root, movieRelPath(m)), checksum: "",
     downloadUrl: `/api/v1/tracks/${m.dub.id}/download`, _file: abs,
   };

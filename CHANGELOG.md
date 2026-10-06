@@ -2241,6 +2241,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Fixture environment: `scripts/fixtures/verify-dub-copy.mjs` checks the dub video-copy path (H.264 and HEVC), the transcode fallbacks and that the Dubarr key stays out of ffmpeg's argv; `PLAYARR_FIXTURE_DUB_SECONDS` generates a dub shorter than the film.
 - Added a headless smoke script and vitest guards proving the web in-app mini player (the Picture-in-Picture fallback) shows the same live video element without reloading, on desktop and TV layouts.
 - Made the live-events stream tests deterministic: absence is now asserted by reading up to a later sentinel frame (ordered by `seq`) instead of draining for a fixed time window, positive waits use a generous bound, and the API test database pool waits longer for its single connection. Removes failures seen when the full parallel suite ran on saturated cores.
 - Fixture-based web playback test (`pnpm --filter @playarr-tv/web run test:playback-e2e`): signs in as a fixture user, plays a fixture film, asserts `currentTime` advances, and kills and restarts the fixture server mid-playback to check the reconnect card and recovery. Fixture clip length is configurable with `PLAYARR_FIXTURE_CLIP_SECONDS`.

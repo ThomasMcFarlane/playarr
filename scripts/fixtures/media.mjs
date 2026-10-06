@@ -16,6 +16,8 @@ const ffmpeg = process.env.PLAYARR_FFMPEG_BINARY ?? "ffmpeg";
 // Clip length. Playback tests that must outlive the player's read-ahead buffer set
 // PLAYARR_FIXTURE_CLIP_SECONDS (an existing media directory keeps its old files).
 const SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_CLIP_SECONDS) || 6));
+// PLAYARR_FIXTURE_DUB_SECONDS makes the Dubarr dub shorter or longer than the film.
+const DUB_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_DUB_SECONDS) || SECONDS));
 
 function run(args) {
   // Every encode runs in its own memory-capped scope and with bounded threads
@@ -75,7 +77,7 @@ function makeDub(movie) {
   if (existsSync(out)) return false;
   mkdirSync(dirname(out), { recursive: true });
   const lang = movie.dub.language;
-  run(["-f", "lavfi", "-i", `sine=frequency=${TONE_HZ[lang]}:duration=${SECONDS}`, "-t", String(SECONDS), "-c:a", "aac", "-b:a", "48k", "-metadata:s:a:0", `language=${lang}`, out]);
+  run(["-f", "lavfi", "-i", `sine=frequency=${TONE_HZ[lang]}:duration=${DUB_SECONDS}`, "-t", String(DUB_SECONDS), "-c:a", "aac", "-b:a", "48k", "-metadata:s:a:0", `language=${lang}`, out]);
   return true;
 }
 
