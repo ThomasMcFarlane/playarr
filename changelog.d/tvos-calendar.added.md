@@ -1,0 +1,1 @@
+- Apple TV: new Calendar tab with the shared header and Filters button, Agenda master-detail, Week and Month, a Filters panel and the calendar-link panel with a QR code.

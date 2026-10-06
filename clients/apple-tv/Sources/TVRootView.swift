@@ -204,6 +204,8 @@ struct TVRootView: View {
                     workKind: nil,
                     collectionNoun: "PLAYLISTS"
                 )
+            case .calendar:
+                TVCalendarView()
             }
         }
     }
