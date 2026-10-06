@@ -140,6 +140,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: the Apple signed release workflow has a `dry_run` dispatch input that signs, archives and exports the IPAs on a hosted macOS runner but stops before the TestFlight upload.
 - `POST /api/v1/calendar/feed` returns the existing calendar subscription link (`200`) or creates one (`201`); the token is stored sealed so it can be shown again, and `?rotate=true` replaces it. Links created before this change are replaced the first time they are requested.
 - CI now rejects pull requests with any commit carrying a `Co-authored-by:` trailer, and the merge train strips such lines from the title and body it uses for its squash commit.
 - CI: the merge train no longer comments on a pull request when it lands successfully; it comments only when it blocks the pull request or fails.

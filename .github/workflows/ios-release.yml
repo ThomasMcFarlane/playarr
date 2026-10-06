@@ -29,6 +29,11 @@ on:
           - ios
           - tvos
         default: both
+      dry_run:
+        description: Sign, archive and export the IPA but stop before the TestFlight upload (validates signing without publishing)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -123,6 +128,7 @@ jobs:
 
       - name: Sign, export IPA and upload once
         env:
+          RELEASE_MODE: ${{ inputs.dry_run && 'export' || 'testflight' }}
           APPLE_DISTRIBUTION_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
           APPLE_DISTRIBUTION_P12_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
           APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
@@ -134,8 +140,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == ios ]]; then
-            ARCHIVE_PATH="$IOS_ARCHIVE_PATH" EXPORT_PATH="$IOS_EXPORT_PATH" bash clients/ios/scripts/release.sh testflight ios
+            ARCHIVE_PATH="$IOS_ARCHIVE_PATH" EXPORT_PATH="$IOS_EXPORT_PATH" bash clients/ios/scripts/release.sh "$RELEASE_MODE" ios
           fi
           if [[ "$RELEASE_PLATFORM" == both || "$RELEASE_PLATFORM" == tvos ]]; then
-            ARCHIVE_PATH="$TVOS_ARCHIVE_PATH" EXPORT_PATH="$TVOS_EXPORT_PATH" bash clients/ios/scripts/release.sh testflight tvos
+            ARCHIVE_PATH="$TVOS_ARCHIVE_PATH" EXPORT_PATH="$TVOS_EXPORT_PATH" bash clients/ios/scripts/release.sh "$RELEASE_MODE" tvos
           fi
