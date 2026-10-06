@@ -38,7 +38,6 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
 - Web: a Folders view (`/folders`) browses the folders an administrator enabled, with a breadcrumb path, grid or list, size, sort, order, search and show filters in the shared Filters drawer, and play or resume of files. Directory, view, sort and filter state lives in the URL (`root`, `path`, `view`, `size`, `sort`, `order`, `q`, `type`), cards are D-pad friendly, and the sidebar shows Folders once a folder is available. The admin app gains a Folders page to choose which folders are scanned, set local paths, add folders and scan on demand.
 - Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
-- Web: a Folders view (`/folders`) browses the folders an administrator enabled, with a breadcrumb path, grid or list, size, sort, order, search and show filters in the shared Filters drawer, and play or resume of files. Directory, view, sort and filter state lives in the URL (`root`, `path`, `view`, `size`, `sort`, `order`, `q`, `type`), cards are D-pad friendly, and the sidebar shows Folders once a folder is available. The admin app gains a Folders page to choose which folders are scanned, set local paths, add folders and scan on demand.
 - Calendar entries now carry server-computed actions (open, play, resume, request, watchlist) and a title snapshot for the current user, honouring library access, household limits and the request permission, and `GET /api/v1/calendar` accepts `group=series_day` to fold same-day episodes of a series into one entry.
 - Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
 - CI: a weekly workflow lists remote branches whose commits are not on `main` and that have no open pull request and no task-board reference, and fails until each is given a PR, a row or deleted.
@@ -49,7 +48,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Web: Home On Deck and Continue Watching now always apply resume-plan, progress and detail results that arrive after the first-paint wait, so the stacked "N ways to continue" card appears on high-latency links; keyboard focus is kept when the rail fills in late (TASKS 302).
 - Home rails: verified on regional server B (API, web, the emulator host Android emulator); Android server rails merged in PR 177 (task 244, 246).
 - Operations: pin both regional servers to verified image `<image>` (TASK 292); deployment rollout and authenticated peer sync remain pending.
-- CI: push regional server image builds through the image registry while keeping public image names and tags unchanged (TASK 296).
+- CI: regional server image builds are published under unchanged public image names and tags (TASK 296).
 - Server: cap node-local on-demand FFmpeg jobs with an atomic child-lifetime permit and positive-value configuration; default to one job and two decoder, encoder and filter threads per job (TASK 295).
 - Server: proxy delegated HLS rendition/session playlists and segments through the entry peer, preserving playback capabilities, owner-side policy checks, HEAD/range responses and rewritten playlist child URLs (TASK 297).
 - Server: retry unreachable known peers after restart, and route configured server-to-server peer traffic through in-cluster Services while validating the existing public certificate identity; public client relay addresses remain unchanged (TASK 292).
@@ -63,12 +62,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - iOS: the Apple release pipeline retains immutable source SHA handoff, signing preflight for profile bundle ID/team/expiry/certificate match, and temporary keychain/profile cleanup. XcodeGen 2.45.4 and Google Cast SDK 4.8.6 remain pinned; CocoaPods setup selects Ruby 3+ and uses `--project-directory=<path>` (TASKS 279-283).
 - iOS: handle Google Cast SDK 4.8.6's nonthrowing `sendTextMessage(_:error:)` result and preserve its reported error in the sender's existing error state (TASKS 280, 284).
 - iOS: make `PlayerViewModel`'s initializer app-internal so its internal `CastSessionCoordinator` parameter and `.shared` default do not violate Swift access control (TASK 284).
-- iOS and tvOS: historical private Mac run <id> passed both full simulator app builds and unsigned archive tooling. Signed TestFlight acceptance evidence is recorded in run <id> (TASKS 280, 284).
 - iOS and tvOS: document the signed-only TestFlight workflow, owner token setup, verified internal build state, and separate public-release gates; correct stale bundle, signing and Cast build statements (TASKS 279, 280, 284-290).
 - iOS and tvOS: private run <id> signed, exported and uploaded both platforms from source as build 1.2; App Store Connect reports both builds `VALID` and internally `IN_BETA_TESTING` (TASK 284).
 - Android: the button, pop-out and page-frame ratchets are now at 100% with no allow-lists. Every remaining raw Material button (about 150 call sites in 12 files) is `PlayarrButton`/`PlayarrIconButton` (new colour, padding and interaction-source options for hero and auth screens, labelLarge text style); every dialog, picker and the download-quality sheet renders in the shared right-hand sheet through `PlayarrPanel` (non-dismissible mode for the pairing approval); Settings, playlist detail, Library and the detail screens render through `PlayarrPageScaffold` (new `padBody = false` for full-bleed hero pages), and Playlists uses the shared Filters and Create header slots. Library view, artwork size and sort now live in the route/SavedStateHandle with the web query names (`?view=list|screen|cover|cover-flow&size=small|medium|large&sort=title|date_added&order=asc|desc`), so rotation, process death, the restored route and `playarr://app/series?...` deep links agree; `calendar?query=` is a navigation deep link. On phones the header action cluster stops short of the profile chip.
 
-- iOS and tvOS: historical private Mac run <id> passed both full simulator app builds and unsigned archive tooling. This is not signed TestFlight acceptance evidence; signed exports, upload and invitation remain pending (TASKS 280, 284-285).
 - Playarr web: the Library view, card size, sort and order now live in the URL (`?view=list&size=large&sort=date_added&order=desc`), so refresh, back/forward and shared links restore them; the last choice only seeds a fresh URL.
 - Playarr web: the Customise Home page and the Home 'Customise' link now use the shared Button family instead of the bespoke `tv-button`/pill styling, and `pnpm smoke:header` also asserts the Calendar's subscription header button matches Playlists' Create (same component, height, vertical position and right edge).
 - Playarr web: every raw `btn` call site now uses the shared Button family and the Playback health panel and the title/playlist context sheets use the shared Drawer; the button and drawer audits no longer have allow-lists.
@@ -146,21 +143,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI now rejects pull requests with any commit carrying a `Co-authored-by:` trailer, and the merge train strips such lines from the title and body it uses for its squash commit.
 - CI: the merge train no longer comments on a pull request when it lands successfully; it comments only when it blocks the pull request or fails.
 - Android APK and Playarr Server downloads are published to GitHub Releases only. The release workflows no longer upload to object storage, and `playarr.app/downloads/android/...` and `playarr.app/downloads/server/...` now redirect (latest and versioned) to the matching GitHub Release assets.
-- CI: every workflow now runs on GitHub-hosted runners (Linux, Windows for the Xbox UWP build, macOS for iOS and tvOS Simulator tests and the signed TestFlight release); the self-hosted-runner guard is replaced by a check that requires hosted runners, and the regional image is published to GitHub Container Registry.
+- CI moved to GitHub-hosted runners (Linux, Windows for the Xbox UWP build, macOS for iOS and tvOS Simulator tests and the signed TestFlight release); a check requires hosted runners, and the regional image is published to GitHub Container Registry.
 - Selecting a Dubarr dub (or another source audio track) at original quality no longer re-encodes the video when the client can play the source codec (H.264 or HEVC) within its bitrate cap: the server copies the video into fragmented-MP4 HLS and encodes only the audio, so a 4K HEVC remux starts quickly without a CPU transcode. Other cases still transcode as before.
 - Repository hygiene ahead of making the repository public: real media titles in tests, fixtures, docs and history notes are replaced with neutral placeholders, and real artwork and screenshots (Apple TV parity fixtures, site screenshots, social card, Play feature graphic) are replaced with generated placeholder images. The Apple TV parity suite now generates its artwork procedurally. `AGENTS.md` and the pull request template forbid media titles and real artwork.
-- Deployment data no longer lives in this repository: the `playarr-dev` chart ships neutral (empty) defaults and documents its values, a worked example with placeholder data backs its tests, and the real instances, hostnames, addresses, hostPaths and image pins live in the private deployment repository. Regional image rollouts are now a deployment values change, not a Playarr PR.
-- The regional image workflow pushes to the registry named by the `REGIONAL_IMAGE_REGISTRY` repository variable, and the iOS dispatch reads its Apple release pipeline from `APPLE_BUILDS_REPOSITORY`.
+- Deployment data no longer lives in this repository: the `playarr-dev` chart ships neutral (empty) defaults and documents its values, a worked example with placeholder data backs its tests, and the real instances, hostnames, addresses, hostPaths and image pins live in separate deployment configuration. Regional image rollouts are now a deployment values change, not a Playarr PR.
+- The iOS dispatch reads its Apple release pipeline from the `APPLE_BUILDS_REPOSITORY` repository variable.
 - Tests, docs and scripts use placeholders (`example.com`, RFC 5737 addresses, `/srv` paths); `scripts/mac-build.sh` and `scripts/appletv-parity-ae0.sh` now require `MAC_HOST`, and the marketing dev server takes extra hostnames from `SITE_ALLOWED_HOSTS`.
-- CI: every workflow job now runs on the self-hosted `playarr-runners` pool; GitHub-hosted runners are no longer used. The Windows UWP placeholder job in `xbox-ci.yml` is disabled until a Windows runner serves this repository. `scripts/ci/check-no-hosted-runners.sh` (run by `ci-required`) fails any workflow that targets a hosted label.
-- The merge train blocks any PR whose merged tree targets a GitHub-hosted runner, and `no-hosted-runners.yml` re-checks `main` after every push and opens a `ready` revert PR if a hosted label slips through.
 - Fixed `clients/harmony/scripts/fetch-sdk.sh` exiting 1 on newer bash (its EXIT trap clobbered the exit status).
 - Pin regional server A and regional server B regional deployments to image `<image>` after verifying the build for source SHA and its published digest.
 - Server: add authenticated admin endpoints to manage peer-group libraries, map local source instances to group libraries, and create/update peer routing rules (TASK 299). Deletion is omitted because group sync has no tombstones; disable routing with an empty `preferred_nodes` list, then unmap the source when rolling back.
 - CI: task board evidence for the merge train, fragments and affected-only work (TASKS 330 to 332).
 - Backups are local and encrypted by default; any off-node S3-compatible destination is optional, administrator-configured and provider-neutral. Removed the R2 bucket provisioning script and the chart's R2 endpoint defaults, and documented that Cloudflare hosts only the playarr.app client and never receives server data (backups, media, databases, logs) (TASKS 140).
 - Regional servers regional server A and regional server B now run image `<image>`, which fixes the calendar subscription URL behind HTTP/2 (tasks 75-77).
-- Regional regional server B now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after regional server A was rolled to the same image.
+- Regional server B now runs image `<image>`, which carries the audio and subtitle language index, catalogue language filters and the language facet endpoint (tasks 181-185), after regional server A was rolled to the same image.
 - Regional servers regional server A and regional server B now run image `<image>`, which carries the release calendar, iCal
   subscription and availability-lag endpoints (tasks 75-77).
 - Rolled the regional server A and regional server B regional servers to image `<image>`, which adds self-service portable user data export and import (tasks 67-71) on top of encrypted server backups, discovery/watchlist and the phone remote.
@@ -200,11 +195,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   30 days after release are reported as backfills and excluded, and items with no release time are
   counted as unknown. Episode calendar entries carry `average_lag_seconds`.
 - `scripts/remote-control-smoke.sh`: black-box check of the phone remote and handoff API against a live server.
-- Regional regional server B now runs image `<image>` as well (phone remote and playback handoff API; discovery and
+- Regional server B now runs image `<image>` as well (phone remote and playback handoff API; discovery and
   watchlist API), after regional server A was verified.
-- Regional regional server A now runs image `<image>`, which adds the phone remote and playback handoff API
+- Regional server A now runs image `<image>`, which adds the phone remote and playback handoff API
   (tasks 50-53; regional server B follows after verification).
-- Regional regional server A now runs image `<image>`, which adds the discovery and watchlist API (regional server B follows after
+- Regional server A now runs image `<image>`, which adds the discovery and watchlist API (regional server B follows after
   regional server A is verified).
 - Playback info and playback options now list sidecar subtitles
   (`<video>.<lang>[.forced|.sdh].srt/.ass/.ssa/.vtt` next to the media file) in
@@ -429,9 +424,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playarr Admin has a System > Server capabilities page showing that report. Missing required
   software appears in a prominent alert with its impact and install hint, and the status filter
   is kept in the URL (`?show=attention|present`).
-- The regional servers run a self-contained image, `the regional image registry<sha>`
+- The regional servers run a self-contained image, `ghcr.io/<owner>/playarr-regional:<sha8>`
   (server binary, Admin UI, ffmpeg and ffprobe), built by `.github/workflows/regional-image.yml`
-  and pulled from the cluster registry. The `streamarr-runtime` image, its `runtimePath` hostPath
+  and published to GitHub Container Registry. The `streamarr-runtime` image, its `runtimePath` hostPath
   and the manual node import are removed.
 
 - Android direct play fetches large progressive streams over eight concurrent
@@ -583,16 +578,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - The Xbox core CI job installs the .NET SDK under the job temp directory so
-  the self-hosted runner no longer fails writing to `/usr/share/dotnet`.
-- the build host development workloads now mount the canonical Storage-backed Playarr
-  main checkout instead of the retired Projects filesystem.
-- Self-hosted Play run `<id>` committed the bounded Android TV pairing
+  the CI runner no longer fails writing to `/usr/share/dotnet`.
+- Play run `<id>` committed the bounded Android TV pairing
   fix as `0.2.18-main.715`, versionCode, to private `alpha`; Google
   Play currently reports the release lifecycle as `IN_REVIEW`.
 - Live Cloudflare analytics confirm the retired Google Play review Worker stopped
   receiving requests at `2026-08-30T13:09:10Z`; subsequent account-wide usage
   belongs to other active Workers, primarily the hosted `playarr-web` client.
-- Self-hosted Play run `<id>` accepted the R8-hardened Android bundle as
+- Play run `<id>` accepted the R8-hardened Android bundle as
   versionCode and reported it `IN_REVIEW`; the authoritative track
   lifecycle now reports the preceding replay-storm fix,, as
   `PUBLISHED` to private testers.
@@ -609,7 +602,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reconstructed.
 - Relevant Android changes merged to `main` now automatically build, sign,
   test and publish to the private Google Play closed-testing track on the
-  self-hosted `playarr-runners` pool. Each build receives a monotonic Play
+  GitHub-hosted runners. Each build receives a monotonic Play
   version code, source-controlled localised release notes, and Publisher API
   read-back verification after commit.
 - The temporary Google Play review Worker is retired after unexpected usage,
@@ -665,7 +658,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An isolated Google Play review Worker implements the native Android client's
   authentication, catalogue and direct-play contract using one CC BY 3.0 sample
   video, with secret-backed credentials, no registration or downloads, focused
-  isolation tests and direct Cloudflare API deployment from self-hosted CI once
+  isolation tests and direct Cloudflare API deployment from CI once
   its protected GitHub environment has been bootstrapped.
 
 - A public Google Play policy-review video demonstrates the Android app's
@@ -674,23 +667,21 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Android release `0.2.17` (versionCode 2017) was built, signed, and published
   to the completed private Google Play internal track through the Android
-  Publisher API by the self-hosted `playarr-runners` CI pool.
+  Publisher API by CI.
 
 - The same Android release is staged on the private closed-testing track for
   first-app review; Google Play requires the one-time dashboard preview and
   confirmation because Publisher API validation cannot activate a draft app.
 
 - Android release `0.2.16` (versionCode 2016) was built and published to the
-  private Google Play internal track by the self-hosted `playarr-runners` CI
-  pool, with icons and listing artwork verified in every configured language.
+  private Google Play internal track by CI, with icons and listing artwork verified in every configured language.
 
 - Public privacy, terms, acceptable-use, and licence pages now live directly
   on `playarr.app` outside the sign-in guard, using the signed-out auth-stage
   design without any profile, library, account, or other user content.
 
 - Android release `0.2.15` (versionCode 2015) was built and published to
-  private Google Play internal testing by the self-hosted `playarr-runners`
-  CI pool, including the committed phone and television store listing assets.
+  private Google Play internal testing by CI, including the committed phone and television store listing assets.
 
 - A dedicated Google Play upload certificate keeps Play App Signing separate
   from the existing sideload APK certificate and update chain.
@@ -812,14 +803,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the sideload build retains LAN HTTP support and signed APK updates.
 
 - Web CI now builds every shared workspace package before the recursive
-  typecheck, so clean self-hosted runners can resolve generated package types
+  typecheck, so clean CI runners can resolve generated package types
   and unblock production legal-page deployments.
 
 - Cloudflare deployment uses the scoped Workers REST API directly, including
   static-asset sessions and Worker uploads, without browser or Wrangler state.
 
-- Android APK and private Google Play publishing now use the repository-scoped
-  `playarr-runners` pool on the self-hosted ARC cluster and install the pinned
+- Android APK and private Google Play publishing now run on CI runners and install the pinned
   Android SDK 37.0 packages on each ephemeral runner. Google Play publishing
   uses the Publisher API directly, without requiring Ruby on the runner.
 
@@ -870,17 +860,16 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the global `navigator` object.
 
 - Repository-wide web CI now builds internal workspace packages before its
-  recursive typecheck on a clean self-hosted runner.
+  recursive typecheck on a clean CI runner.
 
 - Public legal routes now mount without the signed-in API and download providers,
   accurately disclose browser and notification processing, include account-deletion
   guidance, and run through the Worker before the SPA asset fallback.
 - The production web deployment now builds workspace dependencies before running
-  the web test suite on a clean self-hosted runner.
+  the web test suite on a clean CI runner.
 
 - Repository-wide Linux CI and the production `playarr.app` deployment now
-  use the dedicated self-hosted `playarr-runners` pool, avoiding hosted-runner
-  billing failures before jobs can start.
+  run on dedicated CI runners.
 
 - Google Play publishing now applies the icon and other visual listing assets
   to every configured language, including the app's default `en-GB` listing,
@@ -2214,7 +2203,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
-- Add `SECURITY.md` (private vulnerability reporting) and stop naming the private deployment repository in `AGENTS.md`, as part of the public-readiness audit.
+- Add `SECURITY.md` (private vulnerability reporting) and stop naming the deployment configuration in `AGENTS.md`, as part of the public-readiness audit.
 - Restructured `TASKS.md` for the public repository: open work first in workstream sections, finished work collapsed under "Completed work", duplicate row numbers fixed (rows 280-287 smart Start/Resume and request sync, 279, 210, 180, 103-106, 300, 294, 49), stale in-progress rows closed against merged pull requests, and environment data and media titles removed from the board text.
 - Added Big Buck Bunny (CC BY 3.0) third-party media attribution to the README files; the media is used only for the Play review demo and store screenshots, not in the app.
 - Document VIDAA's invite-only partner registration and App Store release gates,
