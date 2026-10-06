@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -1590,6 +1591,8 @@ internal fun ExperienceProfilesScreen(
     onHome: () -> Unit,
     onSettings: () -> Unit,
     onAddProfile: () -> Unit,
+    canApproveRequests: Boolean = false,
+    onApproveRequests: () -> Unit = {},
     viewModel: ProfilesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -1738,6 +1741,16 @@ internal fun ExperienceProfilesScreen(
                     )
                 }
             }
+        }
+        if (canApproveRequests) {
+            PlayarrButton(
+                onClick = onApproveRequests,
+                variant = PlayarrButtonVariant.Secondary,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 24.dp),
+            ) { Text(playarrString(PlayarrString.GuardianApprovalsEntry)) }
         }
         // Web `TvStageChrome` — logo left, theme + language right.
         if (isTelevision) {

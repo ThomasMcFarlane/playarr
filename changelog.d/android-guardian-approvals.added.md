@@ -1,0 +1,1 @@
+- Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.

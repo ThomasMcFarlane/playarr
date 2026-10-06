@@ -33,7 +33,10 @@ data class HouseholdApproval(
     val note: String? = null,
     val status: String,
     @SerialName("requested_at") val requestedAt: String = "",
+    @SerialName("request_expires_at") val requestExpiresAt: String? = null,
+    @SerialName("decided_by") val decidedBy: String? = null,
     @SerialName("grant_expires_at") val grantExpiresAt: String? = null,
+    @SerialName("bonus_seconds") val bonusSeconds: Long = 0,
 )
 
 @Serializable
@@ -47,4 +50,6 @@ data class CreateHouseholdApprovalRequest(
 data class DecideHouseholdApprovalRequest(
     val approve: Boolean,
     val pin: String? = null,
+    @SerialName("duration_minutes") val durationMinutes: Int? = null,
+    @SerialName("bonus_minutes") val bonusMinutes: Int? = null,
 )
