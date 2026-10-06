@@ -15,6 +15,7 @@ struct TVSettingsView: View {
         ("06", "Profile lock", "PIN gate for this profile."),
         ("07", "Invite a friend", "Share access to this server."),
         ("08", "Request latency", "Diagnostics for API round-trips."),
+        ("09", "Your data", "Export or import your progress, playlists and preferences."),
     ]
 
     var body: some View {
@@ -195,6 +196,8 @@ struct TVSettingsView: View {
                     .foregroundStyle(DesignTokens.Color.stateError)
             }
             pairingContent
+        case 8:
+            TVYourDataView(transport: environment.apiClient)
         default:
             Text(sections[selectedSection].title)
                 .font(.system(size: 22, weight: .semibold))

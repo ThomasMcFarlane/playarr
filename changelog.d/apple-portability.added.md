@@ -1,0 +1,1 @@
+- iOS and Apple TV: Settings, Your data (portable export and import of your own progress, playlists and preferences); Apple TV moves the package through a QR transfer link.
