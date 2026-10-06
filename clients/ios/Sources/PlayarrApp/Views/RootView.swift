@@ -144,6 +144,7 @@ private struct AuthenticatedPlayarrShell: View {
             case "movies": _selected = State(initialValue: .library(.movie))
             case "series": _selected = State(initialValue: .library(.series))
             case "search": _selected = State(initialValue: .search)
+            case "calendar": _selected = State(initialValue: .calendar)
             case "settings": _selected = State(initialValue: .settings)
             case "profiles": _selected = State(initialValue: .profiles)
             case "detail-film", "detail-series": _selected = State(initialValue: .detail)

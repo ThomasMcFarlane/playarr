@@ -13,7 +13,7 @@
     { "id": "detail-film", "web": { "work": { "kind": "movie", "title": "Test Movie A" } }, "native": "detail:movie:Test Movie A" },
     { "id": "detail-series", "web": { "work": { "kind": "series", "title": "Sample Series 1" } }, "native": "detail:series:Sample Series 1" },
     { "id": "search", "web": { "path": "/search?q=Sample" }, "native": "search:Sample" },
-    { "id": "calendar", "web": { "path": "/calendar" }, "native": null, "missing": "The iOS client has no calendar screen yet." },
+    { "id": "calendar", "web": { "path": "/calendar" }, "native": "calendar" },
     { "id": "settings", "web": { "path": "/settings" }, "native": "settings" },
     { "id": "profile-switcher", "web": { "path": "/profiles" }, "native": "profiles" },
     { "id": "household-blocked", "user": "fx-child-locked", "web": { "path": "/" }, "native": "home", "nativeUser": "fx-child-locked" }
