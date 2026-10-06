@@ -174,3 +174,6 @@ secrets/
 # nav-perf harness outputs
 clients/tv-web/web/nav-perf-results/
 clients/tv-web/web/dist-*/
+
+# Local fixture environment (scripts/fixtures)
+/.fixtures/

@@ -43,6 +43,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add a fixture-based local verification environment (`scripts/fixtures/up.sh`, `down.sh`, `verify.mjs`): a local server seeded with an admin, a viewer, a guardian with a PIN and two child profiles with household policies, generated placeholder media (H.264, HEVC, several audio and subtitle languages), a Sonarr, Radarr and Dubarr stub including a dub track, and documentation in `docs/validation/fixture-environment.md`.
 - Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.
 - CI: one Release workflow (`.github/workflows/release.yml`) releases every app from a single `version` dispatch on `main`: server tarballs and the `playarr-server` and `playarr-regional` images, the signed Android APK, webOS, Tizen, Roku, Xbox and HarmonyOS packages in one GitHub Release with a combined `SHA256SUMS` and generated notes, then Google Play closed testing and TestFlight, with a per-platform summary. The per-platform workflows are reusable and keep their own tags.
 - The downloads Worker serves the Android and server downloads from the all-platform `v*` releases as well as `android-v*` and `backend-v*` ones.

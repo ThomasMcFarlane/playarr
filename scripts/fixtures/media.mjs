@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+// Generates the placeholder fixture media with ffmpeg (small, procedural,
+// deterministic in content). Usage: node media.mjs <media-dir>
+// Idempotent: a file that already exists is left alone.
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { allVideoFiles, MOVIES, dubRelPath, TONE_HZ, LANG_NAME } from "./catalog.mjs";
+
+const root = process.argv[2];
+if (!root) {
+  console.error("usage: media.mjs <media-dir>");
+  process.exit(2);
+}
+const ffmpeg = process.env.PLAYARR_FFMPEG_BINARY ?? "ffmpeg";
+const SECONDS = 6;
+
+function run(args) {
+  // Every encode runs in its own memory-capped scope and with bounded threads
+  // and duration: a tiny clip must never be able to balloon. Set
+  // PLAYARR_FIXTURE_NO_SCOPE=1 only where systemd-run is unavailable.
+  const base = ["-v", "error", "-y", "-threads", "2", ...args];
+  const [cmd, cmdArgs] = process.env.PLAYARR_FIXTURE_NO_SCOPE
+    ? [ffmpeg, base]
+    : ["systemd-run", ["--user", "--scope", "--quiet", "-p", "MemoryHigh=2G", "-p", "MemoryMax=4G", "-p", "MemorySwapMax=0", "--", ffmpeg, ...base]];
+  const r = spawnSync(cmd, cmdArgs, { stdio: ["ignore", "inherit", "inherit"], timeout: 120000 });
+  if (r.status !== 0) throw new Error(`ffmpeg failed: ${args.join(" ")}`);
+}
+
+function srt(lang, name) {
+  return [1, 2, 3]
+    .map((n) => `${n}\n00:00:0${(n - 1) * 2},000 --> 00:00:0${(n - 1) * 2 + 1},500\n[${name}] placeholder cue ${n}\n`)
+    .join("\n");
+}
+
+function videoCodecArgs(codec) {
+  return codec === "hevc"
+    ? ["-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error:pools=2:frame-threads=1", "-tag:v", "hvc1"]
+    : ["-c:v", "libx264", "-preset", "ultrafast", "-threads", "2"];
+}
+
+function makeVideo(file, tmp) {
+  const out = join(root, file.rel);
+  if (existsSync(out)) return false;
+  mkdirSync(dirname(out), { recursive: true });
+  const args = ["-f", "lavfi", "-i", `testsrc2=size=320x180:rate=15:duration=${SECONDS}`];
+  file.audio.forEach((lang) => args.push("-f", "lavfi", "-i", `sine=frequency=${TONE_HZ[lang] + file.seed}:duration=${SECONDS}`));
+  const subs = file.subtitles.map((lang) => {
+    const p = join(tmp, `${file.seed}.${lang}.srt`);
+    writeFileSync(p, srt(lang, LANG_NAME[lang]));
+    return { lang, p };
+  });
+  subs.forEach((s) => args.push("-i", s.p));
+  args.push("-map", "0:v");
+  file.audio.forEach((_, i) => args.push("-map", `${i + 1}:a`));
+  subs.forEach((_, i) => args.push("-map", `${file.audio.length + 1 + i}:s`));
+  args.push("-t", String(SECONDS), "-shortest", ...videoCodecArgs(file.codec), "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-b:a", "48k", "-c:s", "srt");
+  file.audio.forEach((lang, i) => {
+    args.push(`-metadata:s:a:${i}`, `language=${lang}`, `-metadata:s:a:${i}`, `title=${LANG_NAME[lang]}`);
+    if (i === 0) args.push("-disposition:a:0", "default");
+  });
+  subs.forEach((s, i) => args.push(`-metadata:s:s:${i}`, `language=${s.lang}`, `-metadata:s:s:${i}`, `title=${LANG_NAME[s.lang]}`));
+  args.push(out);
+  run(args);
+  for (const lang of file.sidecar) {
+    writeFileSync(out.replace(/\.mkv$/, `.${lang}.srt`), srt(lang, LANG_NAME[lang]));
+  }
+  return true;
+}
+
+function makeDub(movie) {
+  const out = join(root, dubRelPath(movie));
+  if (existsSync(out)) return false;
+  mkdirSync(dirname(out), { recursive: true });
+  const lang = movie.dub.language;
+  run(["-f", "lavfi", "-i", `sine=frequency=${TONE_HZ[lang]}:duration=${SECONDS}`, "-t", String(SECONDS), "-c:a", "aac", "-b:a", "48k", "-metadata:s:a:0", `language=${lang}`, out]);
+  return true;
+}
+
+const tmp = join(root, ".tmp-subs");
+mkdirSync(tmp, { recursive: true });
+let made = 0;
+for (const f of allVideoFiles()) if (makeVideo(f, tmp)) made++;
+for (const m of MOVIES) if (m.dub && makeDub(m)) made++;
+rmSync(tmp, { recursive: true, force: true });
+console.log(`fixture media: ${made} generated, ${allVideoFiles().length + MOVIES.filter((m) => m.dub).length - made} already present, under ${root}`);
