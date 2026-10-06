@@ -13,6 +13,7 @@ const cfg = JSON.parse(fs.readFileSync(screensFile, "utf8"));
 const { FIXTURE_PASSWORD: password } = await import(path.join(here, "../../fixtures/catalog.mjs"));
 fs.mkdirSync(outDir, { recursive: true });
 
+const THEME = process.env.PARITY_THEME === "light" ? "light" : "dark";
 const deviceId = "11111111-1111-4111-8111-111111111111";
 async function login(username) {
   const res = await fetch(`${base}/api/v1/auth/login`, {
@@ -43,9 +44,9 @@ async function contextFor(user) {
   const t = user === cfg.user ? tok : await login(user);
   const context = await browser.newContext({
     viewport: cfg.viewport, deviceScaleFactor: cfg.dpr ?? 1, isMobile: !!cfg.mobile, hasTouch: !!cfg.mobile,
-    reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB",
+    reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB", colorScheme: THEME,
   });
-  await context.addInitScript(({ base, tok, deviceId, user }) => {
+  await context.addInitScript(({ base, tok, deviceId, user, theme }) => {
     try {
       localStorage.setItem("playarr:apiBaseUrl", base);
       const session = {
@@ -56,9 +57,9 @@ async function contextFor(user) {
         profileKey: "fx", apiBaseUrl: base, userId: tok.user_id, name: user, deviceId, session,
       }]));
       localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "fx", apiBaseUrl: base, userId: tok.user_id }));
-      localStorage.setItem("playarr-theme", "dark");
+      localStorage.setItem("playarr-theme", theme);
     } catch { /* storage unavailable */ }
-  }, { base, tok: t, deviceId, user });
+  }, { base, tok: t, deviceId, user, theme: THEME });
   await context.clock.setFixedTime(new Date(cfg.frozenTime));
   return context;
 }

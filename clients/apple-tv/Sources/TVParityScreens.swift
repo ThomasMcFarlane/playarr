@@ -50,6 +50,17 @@ extension TVParityLaunch {
 
     static var isLive: Bool { route != nil }
 
+    /// `-PlayarrTheme light|dark`: forces the appearance for parity captures.
+    static var theme: ColorScheme? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "-PlayarrTheme"), args.indices.contains(idx + 1) else { return nil }
+        switch args[idx + 1] {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
     /// The instant the web reference freezes its clock at (2026-07-29 05:59 UTC).
     static var frozenNow: Date { Date(timeIntervalSince1970: 1_785_304_740) }
 

@@ -6,6 +6,7 @@ import UIKit
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var selectedTab: TVNavTab = .home
     /// Shared focus so the shell can move between nav and stage with arrows.
     @FocusState private var shellFocus: TVShellFocus?
@@ -81,7 +82,7 @@ struct TVRootView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(TVParityLaunch.theme ?? displayPreferences.colorScheme)
         .tint(DesignTokens.Color.brandPrimary)
         .task(id: isSignedIn) {
             if isSignedIn { await environment.refreshShellState() }

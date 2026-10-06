@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Design tokens for Apple TV.
 ///
@@ -11,17 +12,32 @@ import SwiftUI
 enum DesignTokens {
     /// Live SPA dark stage (Gleb Kuznetsov TV surface).
     enum Stage {
-        static let bg = SwiftUI.Color(red: 0x15 / 255, green: 0x13 / 255, blue: 0x15 / 255) // #151315
-        static let surface = SwiftUI.Color(red: 0x1b / 255, green: 0x18 / 255, blue: 0x1b / 255) // #1b181b
-        static let surfaceStrong = SwiftUI.Color(red: 0x21 / 255, green: 0x1d / 255, blue: 0x21 / 255) // #211d21
-        static let surfaceSoft = SwiftUI.Color(red: 0x31 / 255, green: 0x2a / 255, blue: 0x30 / 255) // #312a30
-        static let ink = SwiftUI.Color(red: 0xf4 / 255, green: 0xf0 / 255, blue: 0xf1 / 255) // #f4f0f1
-        static let inkSoft = SwiftUI.Color(red: 0xc5 / 255, green: 0xb8 / 255, blue: 0xbd / 255) // #c5b8bd
-        static let inkMuted = SwiftUI.Color(red: 0x88 / 255, green: 0x7a / 255, blue: 0x82 / 255) // #887a82
-        static let accentSoft = SwiftUI.Color(red: 0x67 / 255, green: 0x59 / 255, blue: 0x61 / 255) // #675961
+        /// A colour that follows the interface style: web `:root` (light) and `:root[data-theme="dark"]`.
+        private static func adaptive(light: UInt32, dark: UInt32) -> SwiftUI.Color {
+            func ui(_ hex: UInt32) -> UIColor {
+                UIColor(
+                    red: CGFloat((hex >> 16) & 0xff) / 255,
+                    green: CGFloat((hex >> 8) & 0xff) / 255,
+                    blue: CGFloat(hex & 0xff) / 255,
+                    alpha: 1
+                )
+            }
+            return SwiftUI.Color(UIColor { traits in
+                traits.userInterfaceStyle == .light ? ui(light) : ui(dark)
+            })
+        }
+
+        static let bg = adaptive(light: 0xf5f3f2, dark: 0x151315)
+        static let surface = adaptive(light: 0xfbfaf9, dark: 0x1b181b)
+        static let surfaceStrong = adaptive(light: 0xffffff, dark: 0x211d21)
+        static let surfaceSoft = adaptive(light: 0xdfdcdd, dark: 0x312a30)
+        static let ink = adaptive(light: 0x382621, dark: 0xf4f0f1)
+        static let inkSoft = adaptive(light: 0x675961, dark: 0xc5b8bd)
+        static let inkMuted = adaptive(light: 0xa5969e, dark: 0x887a82)
+        static let accentSoft = adaptive(light: 0xc5b8bd, dark: 0x675961)
         static let brandPink = SwiftUI.Color(red: 0xcf / 255, green: 0x31 / 255, blue: 0x57 / 255) // #cf3157
-        static let danger = SwiftUI.Color(red: 0xee / 255, green: 0x92 / 255, blue: 0x97 / 255)
-        static let success = SwiftUI.Color(red: 0x7f / 255, green: 0xc0 / 255, blue: 0x9d / 255)
+        static let danger = adaptive(light: 0xa8464c, dark: 0xee9297)
+        static let success = adaptive(light: 0x347559, dark: 0x7fc09d)
     }
 
     /// *arr design-tokens package (ui-tv shells).

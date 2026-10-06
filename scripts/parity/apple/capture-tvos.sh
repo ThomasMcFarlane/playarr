@@ -24,7 +24,7 @@ node -e '
   echo "token subject: $(echo "$tok" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"([^"]*)".*/\1/' | head -c 40)"
   xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl launch "$udid" "$bundle" \
-    -PlayarrServerURL "$server" -PlayarrAccessToken "$tok" -PlayarrParityRoute "$route" >/dev/null
+    -PlayarrServerURL "$server" -PlayarrAccessToken "$tok" -PlayarrParityRoute "$route" -PlayarrTheme "${PARITY_THEME:-dark}" >/dev/null
   sleep "${PARITY_SETTLE_SECONDS:-10}"
   xcrun simctl io "$udid" screenshot "$out/$id.png"
   echo "captured $id ($route)"
