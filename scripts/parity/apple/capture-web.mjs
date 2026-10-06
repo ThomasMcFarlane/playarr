@@ -64,7 +64,14 @@ async function contextFor(user) {
 }
 const contexts = new Map();
 const results = [];
+const repoRoot = path.join(here, "../../..");
 for (const s of cfg.screens) {
+  // Screens the web capture cannot drive (the player) use a committed reference PNG.
+  if (s.web.reference) {
+    fs.copyFileSync(path.join(repoRoot, s.web.reference), path.join(outDir, `${s.id}.png`));
+    console.log(`web ${s.id} -> committed reference ${s.web.reference}`);
+    continue;
+  }
   const user = s.user ?? cfg.user;
   if (!contexts.has(user)) contexts.set(user, await contextFor(user));
   if (s.web.path === "/__none") continue;

@@ -230,8 +230,8 @@ jobs:
           [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
           if [[ "$PLATFORM" == ios ]]; then
             # Status bar and home indicator are system UI: paint both bands on both sides.
-            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/reference"
-            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/native"
+            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/reference" 141 102 "${{ steps.layout.outputs.screens }}"
+            node scripts/parity/apple/mask.mjs "$RUNNER_TEMP/parity/native" 141 102 "${{ steps.layout.outputs.screens }}"
           fi
           node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
             "$RUNNER_TEMP/parity/reference" "$RUNNER_TEMP/parity/native" "$RUNNER_TEMP/parity/diff" \

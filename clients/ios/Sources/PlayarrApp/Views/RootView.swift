@@ -83,6 +83,7 @@ private struct AuthenticatedPlayarrShell: View {
         case settings
         #if DEBUG
         case detail
+        case player
         #endif
 
         var title: String {
@@ -97,6 +98,7 @@ private struct AuthenticatedPlayarrShell: View {
             case .settings: "Profile"
             #if DEBUG
             case .detail: "Title"
+            case .player: "Player"
             #endif
             }
         }
@@ -118,6 +120,7 @@ private struct AuthenticatedPlayarrShell: View {
             case .profiles, .settings: .home
             #if DEBUG
             case .detail: .movies
+            case .player: .movies
             #endif
             }
         }
@@ -134,6 +137,7 @@ private struct AuthenticatedPlayarrShell: View {
             case .settings: "person.crop.circle"
             #if DEBUG
             case .detail: "play.rectangle"
+            case .player: "play.rectangle"
             #endif
             }
         }
@@ -172,6 +176,7 @@ private struct AuthenticatedPlayarrShell: View {
             case "settings": _selected = State(initialValue: .settings)
             case "profiles": _selected = State(initialValue: .profiles)
             case "detail-film", "detail-series": _selected = State(initialValue: .detail)
+            case "player", "player-quality": _selected = State(initialValue: .player)
             default: break
             }
         } else if ProcessInfo.processInfo.arguments.contains("--playarr-demo-profiles") {
@@ -301,6 +306,8 @@ private struct AuthenticatedPlayarrShell: View {
                 )
                 .id(demoDetailViewModel.workID)
             }
+        case .player:
+            ParityPlayerHost(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
         #endif
         }
     }

@@ -1,4 +1,6 @@
 import Foundation
+import PlayarrKit
+import SwiftUI
 
 #if DEBUG
 /// Launch-argument hooks used only by the pixel-parity workflow
@@ -10,7 +12,8 @@ import Foundation
 ///     --playarr-parity-password <password> --playarr-parity-route <route>
 ///
 /// Routes: `home`, `movies`, `series`, `settings`, `profiles`, `search:<text>`,
-/// `detail:<movie|series>:<title>`.
+/// `detail:<movie|series>:<title>`, `player:movie:<title>` (the film paused at 2.0 s with the
+/// controls up) and `player-quality:movie:<title>` (the same with the quality menu open).
 enum ParityLaunch {
     private static func value(_ flag: String) -> String? {
         let args = ProcessInfo.processInfo.arguments
@@ -32,8 +35,42 @@ enum ParityLaunch {
         default: return head
         }
     }
-    static var title: String? { parts.first == "detail" && parts.count > 2 ? parts[2] : nil }
+    static var isPlayerRoute: Bool { parts.first == "player" || parts.first == "player-quality" }
+    static var title: String? {
+        ["detail", "player", "player-quality"].contains(parts.first ?? "") && parts.count > 2 ? parts[2] : nil
+    }
     static var query: String? { parts.first == "search" && parts.count > 1 ? parts[1] : nil }
     static var isActive: Bool { server != nil && user != nil }
+}
+
+/// Resolves the fixture film named in the launch route to its media file through the catalogue,
+/// then shows the player on it.
+struct ParityPlayerHost: View {
+    let apiClient: PlayarrAPIClient
+    let downloadRepository: DownloadRepository
+    @State private var target: (id: UUID, title: String)?
+
+    var body: some View {
+        NavigationStack {
+            if let target {
+                PlayerView(
+                    apiClient: apiClient,
+                    downloadRepository: downloadRepository,
+                    initialMediaFileID: target.id.uuidString,
+                    initialTitle: target.title
+                )
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+        }
+        .task {
+            guard target == nil, let title = ParityLaunch.title else { return }
+            let page = try? await apiClient.browseCatalog(kind: .movie, genre: nil, tag: nil, sort: nil, limit: 100, offset: nil)
+            guard let work = page?.items.first(where: { $0.title == title }),
+                  let detail = try? await apiClient.fetchWork(id: work.id),
+                  let mediaFileID = detail.mediaFileID else { return }
+            target = (mediaFileID, title)
+        }
+    }
 }
 #endif

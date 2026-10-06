@@ -16,6 +16,8 @@
     { "id": "calendar", "web": { "path": "/calendar" }, "native": "calendar" },
     { "id": "settings", "web": { "path": "/settings" }, "native": "settings" },
     { "id": "profile-switcher", "web": { "path": "/profiles" }, "native": "profiles" },
+    { "id": "player-controls", "web": { "reference": "docs/parity/web/mobile/player-controls.png" }, "native": "player:movie:Test Movie A", "settle": 30, "mask": false },
+    { "id": "player-quality-menu", "web": { "reference": "docs/parity/web/mobile/player-quality-menu.png" }, "native": "player-quality:movie:Test Movie A", "settle": 30, "mask": false },
     { "id": "household-blocked", "user": "fx-child-locked", "web": { "path": "/" }, "native": "home", "nativeUser": "fx-child-locked" }
   ]
 }
