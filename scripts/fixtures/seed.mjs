@@ -71,6 +71,15 @@ await admin.put(`/api/v1/admin/users/${ids.childLocked}/household`, {
 });
 console.log(`household: fx-child PG, daily window ${win.start}-${win.end} UTC, 90 min budget; fx-child-locked has an empty schedule`);
 
+// 3b. Pin every profile avatar to one preset: the default is derived from the user id, which is random
+// per database, and pixel parity captures must not differ between fixture instances.
+for (const who of Object.keys(USERS)) {
+  const l = await login(base, USERS[who].username, FIXTURE_PASSWORD);
+  if (!l.api) throw new Error(`${who} login failed: ${l.status} ${l.text}`);
+  await l.api.put("/api/v1/users/me/profile-avatar", { preference: { kind: "preset", value: "astronaut" } });
+}
+console.log("profile avatars pinned to the astronaut preset");
+
 // 4. Profile PINs (set by each profile for itself).
 for (const [who, pin] of [["guardian", GUARDIAN_PIN], ["child", CHILD_PIN]]) {
   const l = await login(base, USERS[who].username, FIXTURE_PASSWORD);
