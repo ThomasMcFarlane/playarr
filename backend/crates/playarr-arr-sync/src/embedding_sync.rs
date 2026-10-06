@@ -99,7 +99,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run real embedded sqlite migrations");
         sqlx::query(

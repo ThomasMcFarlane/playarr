@@ -8,7 +8,7 @@ description = "Logging, correlation, metrics, optional OpenTelemetry export, pla
 [dependencies]
 playarr-model = { path = "../playarr-model" }
 playarr-config = { path = "../playarr-config" }
-playarr-db = { path = "../playarr-db", features = ["sqlite"] }
+playarr-db = { path = "../playarr-db" }
 sqlx = { workspace = true, features = ["any"] }
 tokio = { workspace = true }
 async-trait = { workspace = true }

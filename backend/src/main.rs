@@ -33,7 +33,7 @@ use std::time::Duration;
 use std::{env, io::Read};
 
 use clap::{Parser, Subcommand, ValueEnum};
-use playarr_config::{Config, DeploymentTier};
+use playarr_config::Config;
 use playarr_db::DbPool;
 
 mod acme_cache;
@@ -537,7 +537,6 @@ async fn serve() -> anyhow::Result<()> {
 
     tracing::info!(
         role = %config.role,
-        deployment_tier = ?config.deployment_tier,
         "starting playarr"
     );
 
@@ -696,60 +695,26 @@ async fn serve() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Opens the connection pool for `config.database_url` (SQLite or Postgres,
-/// auto-detected by `playarr_db::connect`) and applies the matching
-/// embedded migration set.
+/// Opens the SQLite connection pool for `config.database_url` and applies
+/// the embedded migrations. A non-SQLite URL (including `postgres://`) is
+/// rejected by `Config::from_env` and again by `playarr_db::connect`.
 async fn connect_and_migrate(config: &Config) -> anyhow::Result<DbPool> {
     let pool = playarr_db::connect(&config.database_url).await?;
-    let is_postgres = !matches!(config.deployment_tier, DeploymentTier::SingleNode);
-    playarr_db::run_migrations(&pool, is_postgres).await?;
+    playarr_db::run_migrations(&pool).await?;
     Ok(pool)
 }
 
-/// Cache + pub/sub backend selection, mirroring
-/// `playarr_config::DeploymentTier`'s own three-way split: in-process for
-/// single-node, Postgres `LISTEN`/`NOTIFY` for multi-node-without-Redis,
-/// real Redis for the fully horizontally-scaled tier.
-async fn build_cache(config: &Config) -> anyhow::Result<Arc<dyn playarr_cache::CacheAndPubSub>> {
-    match config.deployment_tier {
-        DeploymentTier::SingleNode => Ok(Arc::new(playarr_cache::InMemory::new())),
-        DeploymentTier::MultiNodePostgresRedis => {
-            let redis_url = config
-                .redis_url
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("REDIS_URL is required for this deployment tier"))?;
-            Ok(Arc::new(playarr_cache::Redis::new(redis_url)))
-        }
-        DeploymentTier::MultiNodePostgres => {
-            let pg_pool = sqlx::postgres::PgPoolOptions::new()
-                .connect(&config.database_url)
-                .await?;
-            Ok(Arc::new(playarr_cache::PostgresListenNotify::new(pg_pool)))
-        }
-    }
+/// Cache + pub/sub backend: in-process (Playarr is SQLite-only, one process
+/// per database).
+async fn build_cache(_config: &Config) -> anyhow::Result<Arc<dyn playarr_cache::CacheAndPubSub>> {
+    Ok(Arc::new(playarr_cache::InMemory::new()))
 }
 
-/// Coordination backend selection: trivially-always-leader/uncontended
-/// locks for single-node, real Postgres advisory locks + a leader heartbeat
-/// table for both multi-node tiers (coordination has no Redis path — see
-/// `playarr_coordination`'s own docs).
+/// Coordination backend: always-leader, in-process locks.
 async fn build_coordinator(
-    config: &Config,
+    _config: &Config,
 ) -> anyhow::Result<Arc<dyn playarr_coordination::ClusterCoordinator>> {
-    match config.deployment_tier {
-        DeploymentTier::SingleNode => {
-            Ok(Arc::new(playarr_coordination::SingleNodeCoordinator::new()))
-        }
-        DeploymentTier::MultiNodePostgres | DeploymentTier::MultiNodePostgresRedis => {
-            let pg_pool = sqlx::postgres::PgPoolOptions::new()
-                .connect(&config.database_url)
-                .await?;
-            Ok(Arc::new(playarr_coordination::PostgresCoordinator::new(
-                pg_pool,
-                uuid::Uuid::new_v4(),
-            )))
-        }
-    }
+    Ok(Arc::new(playarr_coordination::SingleNodeCoordinator::new()))
 }
 
 /// Resolves the HS256 secret [`playarr_auth::JwtIssuer`] signs access
@@ -2784,7 +2749,7 @@ async fn boot_worker(
     // registration already gets.
     //
     // §9.1: this closes the gap that used to exist for split `api`/`worker`
-    // deployments (Postgres tiers 2/3), which run this function in a
+    // deployments, which run this function in a
     // *different* process than the one serving the admin endpoints, each
     // with its own empty `SourceInstanceRegistry` and (for peer-sync) no
     // in-memory registry at all. The first tick below hydrates straight
@@ -3170,11 +3135,10 @@ fn spawn_tdarr_dispatcher(
 /// `task` completes. `SingleNodeCoordinator` (the systemd/single-node tier)
 /// makes the campaign step trivially and permanently succeed, so `task`
 /// starts immediately there — this is the "gate the reconciliation/dispatch
-/// loops so only one node runs them" mechanism the multi-node
-/// `PostgresCoordinator` tier depends on for real.
+/// loops so only one node runs them" mechanism.
 ///
 /// TODO(graceful-handoff): if renewal ever reports leadership lost mid-run
-/// (a real possibility only under `PostgresCoordinator`, e.g. this node
+/// (not possible with `SingleNodeCoordinator`; kept for a future coordinator, e.g. if this node
 /// stalled past the lease TTL and another node's campaign won), this only
 /// logs loudly — it does not abort/hand off `task`, since neither
 /// `TdarrDispatcher` nor `ReconciliationPoller` currently accept an
@@ -3384,7 +3348,7 @@ mod bootstrap_tests {
             .connect(&url)
             .await
             .expect("open in-memory sqlite pool");
-        playarr_db::run_migrations(&pool, false)
+        playarr_db::run_migrations(&pool)
             .await
             .expect("run real embedded sqlite migrations");
         pool

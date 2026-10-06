@@ -17,7 +17,7 @@ use crate::codec::{
     bool_from_i64, bool_to_i64, decode_err, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn status_to_str(status: PeerNodeStatus) -> &'static str {
     match status {
@@ -87,13 +87,11 @@ pub trait PeerNodeRepo: Send + Sync {
 
 pub struct SqlxPeerNodeRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerNodeRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -101,9 +99,7 @@ impl SqlxPeerNodeRepo {
 impl PeerNodeRepo for SqlxPeerNodeRepo {
     async fn upsert(&self, node: &PeerNode) -> Result<(), DbError> {
         let addresses = serde_json::to_string(&node.addresses)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO peer_nodes \
+        let sql = "INSERT INTO peer_nodes \
                  (id, group_id, name, addresses, public_key, is_self, status, \
                  last_seen_at, last_sync_error, joined_at, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -112,21 +108,7 @@ impl PeerNodeRepo for SqlxPeerNodeRepo {
                  addresses = excluded.addresses, public_key = excluded.public_key, \
                  is_self = excluded.is_self, status = excluded.status, \
                  last_seen_at = excluded.last_seen_at, last_sync_error = excluded.last_sync_error, \
-                 joined_at = excluded.joined_at, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO peer_nodes \
-                 (id, group_id, name, addresses, public_key, is_self, status, \
-                 last_seen_at, last_sync_error, joined_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 group_id = excluded.group_id, name = excluded.name, \
-                 addresses = excluded.addresses, public_key = excluded.public_key, \
-                 is_self = excluded.is_self, status = excluded.status, \
-                 last_seen_at = excluded.last_seen_at, last_sync_error = excluded.last_sync_error, \
-                 joined_at = excluded.joined_at, updated_at = excluded.updated_at"
-            }
-        };
+                 joined_at = excluded.joined_at, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(node.id.to_string())
             .bind(node.group_id.to_string())
@@ -145,10 +127,7 @@ impl PeerNodeRepo for SqlxPeerNodeRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<PeerNode>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM peer_nodes WHERE id = ?"),
-            Backend::Postgres => format!("SELECT {COLUMNS} FROM peer_nodes WHERE id = $1"),
-        };
+        let sql = format!("SELECT {COLUMNS} FROM peer_nodes WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)

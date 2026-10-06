@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Watch seconds served per profile per local day.
 #[async_trait]
@@ -88,20 +88,11 @@ pub trait PinAttemptRepo: Send + Sync {
 
 pub struct SqlxHouseholdRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxHouseholdRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
-    }
-
-    fn q(&self, sqlite: &'static str, postgres: &'static str) -> &'static str {
-        match self.backend {
-            Backend::Sqlite => sqlite,
-            Backend::Postgres => postgres,
-        }
+        Self { pool }
     }
 }
 
@@ -146,10 +137,7 @@ fn approval_from_row(row: &AnyRow) -> Result<Approval, DbError> {
 #[async_trait]
 impl HouseholdUsageRepo for SqlxHouseholdRepo {
     async fn seconds_for_day(&self, user_id: Uuid, day: &str) -> Result<i64, DbError> {
-        let sql = self.q(
-            "SELECT seconds FROM household_usage WHERE user_id = ? AND day = ?",
-            "SELECT seconds FROM household_usage WHERE user_id = $1 AND day = $2",
-        );
+        let sql = "SELECT seconds FROM household_usage WHERE user_id = ? AND day = ?";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(day)
@@ -159,14 +147,9 @@ impl HouseholdUsageRepo for SqlxHouseholdRepo {
     }
 
     async fn add_seconds(&self, user_id: Uuid, day: &str, seconds: i64) -> Result<(), DbError> {
-        let sql = self.q(
-            "INSERT INTO household_usage (user_id, day, seconds, updated_at) VALUES (?, ?, ?, ?) \
+        let sql = "INSERT INTO household_usage (user_id, day, seconds, updated_at) VALUES (?, ?, ?, ?) \
              ON CONFLICT (user_id, day) DO UPDATE SET \
-             seconds = household_usage.seconds + excluded.seconds, updated_at = excluded.updated_at",
-            "INSERT INTO household_usage (user_id, day, seconds, updated_at) VALUES ($1, $2, $3, $4) \
-             ON CONFLICT (user_id, day) DO UPDATE SET \
-             seconds = household_usage.seconds + excluded.seconds, updated_at = excluded.updated_at",
-        );
+             seconds = household_usage.seconds + excluded.seconds, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(day)
@@ -181,15 +164,10 @@ impl HouseholdUsageRepo for SqlxHouseholdRepo {
 #[async_trait]
 impl ApprovalRepo for SqlxHouseholdRepo {
     async fn insert(&self, a: &Approval) -> Result<(), DbError> {
-        let sql = self.q(
+        let sql =
             "INSERT INTO household_approvals (id, profile_user_id, kind, subject, note, status, \
              requested_at, request_expires_at, decided_by, decided_at, grant_expires_at, \
-             max_uses, uses, bonus_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            "INSERT INTO household_approvals (id, profile_user_id, kind, subject, note, status, \
-             requested_at, request_expires_at, decided_by, decided_at, grant_expires_at, \
-             max_uses, uses, bonus_seconds) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, \
-             $11, $12, $13, $14)",
-        );
+             max_uses, uses, bonus_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(a.id.to_string())
             .bind(a.profile_user_id.to_string())
@@ -211,14 +189,7 @@ impl ApprovalRepo for SqlxHouseholdRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<Approval>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                format!("SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE id = ?")
-            }
-            Backend::Postgres => {
-                format!("SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE id = $1")
-            }
-        };
+        let sql = format!("SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -234,16 +205,10 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         // Few profiles per household: one query each, merged.
         let mut all = Vec::new();
         for id in profile_user_ids {
-            let sql = match self.backend {
-                Backend::Sqlite => format!(
-                    "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = ? \
+            let sql = format!(
+                "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = ? \
                      ORDER BY requested_at DESC LIMIT ?"
-                ),
-                Backend::Postgres => format!(
-                    "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = $1 \
-                     ORDER BY requested_at DESC LIMIT $2"
-                ),
-            };
+            );
             let rows = sqlx::query(&sql)
                 .bind(id.to_string())
                 .bind(limit)
@@ -268,14 +233,9 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         max_uses: Option<u32>,
         bonus_seconds: i64,
     ) -> Result<bool, DbError> {
-        let sql = self.q(
-            "UPDATE household_approvals SET status = ?, decided_by = ?, decided_at = ?, \
+        let sql = "UPDATE household_approvals SET status = ?, decided_by = ?, decided_at = ?, \
              grant_expires_at = ?, max_uses = ?, bonus_seconds = ? \
-             WHERE id = ? AND status = 'pending' AND request_expires_at > ?",
-            "UPDATE household_approvals SET status = $1, decided_by = $2, decided_at = $3, \
-             grant_expires_at = $4, max_uses = $5, bonus_seconds = $6 \
-             WHERE id = $7 AND status = 'pending' AND request_expires_at > $8",
-        );
+             WHERE id = ? AND status = 'pending' AND request_expires_at > ?";
         let result = sqlx::query(sql)
             .bind(status.as_str())
             .bind(decided_by.to_string())
@@ -296,14 +256,9 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         profile_user_id: Uuid,
         now: DateTime<Utc>,
     ) -> Result<bool, DbError> {
-        let sql = self.q(
-            "UPDATE household_approvals SET uses = uses + 1 \
+        let sql = "UPDATE household_approvals SET uses = uses + 1 \
              WHERE id = ? AND profile_user_id = ? AND status = 'approved' \
-             AND grant_expires_at > ? AND (max_uses IS NULL OR uses < max_uses)",
-            "UPDATE household_approvals SET uses = uses + 1 \
-             WHERE id = $1 AND profile_user_id = $2 AND status = 'approved' \
-             AND grant_expires_at > $3 AND (max_uses IS NULL OR uses < max_uses)",
-        );
+             AND grant_expires_at > ? AND (max_uses IS NULL OR uses < max_uses)";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .bind(profile_user_id.to_string())
@@ -319,18 +274,11 @@ impl ApprovalRepo for SqlxHouseholdRepo {
         kind: ApprovalKind,
         now: DateTime<Utc>,
     ) -> Result<Vec<Approval>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = ? \
+        let sql = format!(
+            "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = ? \
                  AND kind = ? AND status = 'approved' AND grant_expires_at > ? \
                  AND (max_uses IS NULL OR uses < max_uses)"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {APPROVAL_COLUMNS} FROM household_approvals WHERE profile_user_id = $1 \
-                 AND kind = $2 AND status = 'approved' AND grant_expires_at > $3 \
-                 AND (max_uses IS NULL OR uses < max_uses)"
-            ),
-        };
+        );
         let rows = sqlx::query(&sql)
             .bind(profile_user_id.to_string())
             .bind(kind.as_str())
@@ -344,10 +292,7 @@ impl ApprovalRepo for SqlxHouseholdRepo {
 #[async_trait]
 impl PinAttemptRepo for SqlxHouseholdRepo {
     async fn find(&self, caller: Uuid, target: Uuid) -> Result<Option<PinAttemptState>, DbError> {
-        let sql = self.q(
-            "SELECT failures, locked_until FROM pin_attempts WHERE caller_user_id = ? AND target_user_id = ?",
-            "SELECT failures, locked_until FROM pin_attempts WHERE caller_user_id = $1 AND target_user_id = $2",
-        );
+        let sql = "SELECT failures, locked_until FROM pin_attempts WHERE caller_user_id = ? AND target_user_id = ?";
         let row = sqlx::query(sql)
             .bind(caller.to_string())
             .bind(target.to_string())
@@ -373,14 +318,10 @@ impl PinAttemptRepo for SqlxHouseholdRepo {
     ) -> Result<PinAttemptState, DbError> {
         // Increment atomically first, then derive the lock from the count
         // this call produced.
-        let bump = self.q(
+        let bump =
             "INSERT INTO pin_attempts (caller_user_id, target_user_id, failures, updated_at) \
              VALUES (?, ?, 1, ?) ON CONFLICT (caller_user_id, target_user_id) DO UPDATE SET \
-             failures = pin_attempts.failures + 1, updated_at = excluded.updated_at",
-            "INSERT INTO pin_attempts (caller_user_id, target_user_id, failures, updated_at) \
-             VALUES ($1, $2, 1, $3) ON CONFLICT (caller_user_id, target_user_id) DO UPDATE SET \
-             failures = pin_attempts.failures + 1, updated_at = excluded.updated_at",
-        );
+             failures = pin_attempts.failures + 1, updated_at = excluded.updated_at";
         sqlx::query(bump)
             .bind(caller.to_string())
             .bind(target.to_string())
@@ -395,10 +336,7 @@ impl PinAttemptRepo for SqlxHouseholdRepo {
             });
         let lock = locked_until(state.failures);
         if lock.is_some() {
-            let set = self.q(
-                "UPDATE pin_attempts SET locked_until = ? WHERE caller_user_id = ? AND target_user_id = ?",
-                "UPDATE pin_attempts SET locked_until = $1 WHERE caller_user_id = $2 AND target_user_id = $3",
-            );
+            let set = "UPDATE pin_attempts SET locked_until = ? WHERE caller_user_id = ? AND target_user_id = ?";
             sqlx::query(set)
                 .bind(lock.map(format_datetime))
                 .bind(caller.to_string())
@@ -413,10 +351,7 @@ impl PinAttemptRepo for SqlxHouseholdRepo {
     }
 
     async fn reset(&self, caller: Uuid, target: Uuid) -> Result<(), DbError> {
-        let sql = self.q(
-            "DELETE FROM pin_attempts WHERE caller_user_id = ? AND target_user_id = ?",
-            "DELETE FROM pin_attempts WHERE caller_user_id = $1 AND target_user_id = $2",
-        );
+        let sql = "DELETE FROM pin_attempts WHERE caller_user_id = ? AND target_user_id = ?";
         sqlx::query(sql)
             .bind(caller.to_string())
             .bind(target.to_string())

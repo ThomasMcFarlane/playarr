@@ -19,27 +19,7 @@ use crate::codec::{
     bool_from_i64, bool_to_i64, decode_err, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
-
-/// Rewrites `?` placeholders to `$1..` for Postgres.
-fn sql(backend: Backend, text: &str) -> String {
-    match backend {
-        Backend::Sqlite => text.to_string(),
-        Backend::Postgres => {
-            let mut n = 0;
-            let mut out = String::with_capacity(text.len() + 8);
-            for ch in text.chars() {
-                if ch == '?' {
-                    n += 1;
-                    out.push_str(&format!("${n}"));
-                } else {
-                    out.push(ch);
-                }
-            }
-            out
-        }
-    }
-}
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait MediaRequestRepo: Send + Sync {
@@ -84,17 +64,15 @@ pub trait RequestIntegrationRepo: Send + Sync {
 
 pub struct SqlxMediaRequestRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxMediaRequestRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn q(&self, text: &str) -> String {
-        sql(self.backend, text)
+        text.to_string()
     }
 
     async fn fetch(
@@ -298,17 +276,15 @@ impl MediaRequestRepo for SqlxMediaRequestRepo {
 
 pub struct SqlxRequestIntegrationRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxRequestIntegrationRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn q(&self, text: &str) -> String {
-        sql(self.backend, text)
+        text.to_string()
     }
 }
 

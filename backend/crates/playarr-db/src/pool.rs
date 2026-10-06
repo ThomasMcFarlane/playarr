@@ -1,12 +1,9 @@
 //! Connection pool and embedded migrations.
 //!
-//! [`DbPool`] is `sqlx::AnyPool`: one concrete pool type that dispatches at
-//! runtime to either the SQLite or Postgres driver based on the connection
-//! URL's scheme, so the rest of the backend (repositories,
-//! `crate::analytics::AnalyticsStore`) can depend on a single pool type
-//! regardless of `playarr_config::DeploymentTier`. This only dispatches
-//! among drivers actually compiled in via this crate's `sqlite`/`postgres`
-//! feature flags — enabling `AnyPool` doesn't make an absent driver appear.
+//! [`DbPool`] is `sqlx::AnyPool` backed by the SQLite driver only: Playarr is
+//! SQLite-only (ADR 0002). `AnyPool` is kept as the one concrete pool type so
+//! the rest of the backend (repositories, `crate::analytics::AnalyticsStore`)
+//! does not depend on a driver-specific row type.
 
 use sqlx::any::AnyPoolOptions;
 use std::time::Duration;
@@ -23,40 +20,36 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 /// `.sql` file there and rebuilding is enough — no separate "embed" step.
 pub static SQLITE_MIGRATIONS: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations/sqlite");
 
-/// Embedded Postgres migrations, from `backend/migrations/postgres`.
-pub static POSTGRES_MIGRATIONS: sqlx::migrate::Migrator =
-    sqlx::migrate!("../../migrations/postgres");
-
-/// Opens a pool against `database_url`, auto-detecting SQLite vs Postgres
-/// from the URL scheme via `sqlx::Any`. Call once at process startup and
-/// share the resulting `DbPool` (it's cheaply `Clone`).
+/// Opens a SQLite pool against `database_url` (a `sqlite:` URL). Any other
+/// scheme, including `postgres://`, is rejected before a connection is
+/// attempted. Call once at process startup and share the resulting `DbPool`
+/// (it's cheaply `Clone`).
 pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
-    // `AnyPool` dispatches among whichever drivers this crate compiled in
-    // (see the `sqlite`/`postgres` features); this call registers them with
-    // sqlx's internal `Any` driver registry so `AnyPoolOptions::connect`
-    // can pick the right one from the URL scheme.
+    ensure_sqlite_url(database_url)?;
+
+    // Registers the compiled-in SQLite driver with sqlx's `Any` registry so
+    // `AnyPoolOptions::connect` can open the connection.
     sqlx::any::install_default_drivers();
 
     let database_url = ensure_sqlite_create_mode(database_url);
-    let is_sqlite = database_url.starts_with("sqlite:");
-    let use_wal = is_sqlite
-        && !database_url.contains(":memory:")
+    let use_wal = !database_url.contains(":memory:")
         && !database_url.contains("mode=memory")
         && !database_url.contains("mode=ro");
 
-    let mut options = AnyPoolOptions::new().max_connections(10);
-    if is_sqlite {
-        // SQLite permits one writer at a time. Without a busy timeout on
-        // every pooled connection, routine background writes can turn a
-        // short collision into SQLITE_BUSY failures across unrelated reads.
-        options = options.after_connect(|connection, _metadata| {
-            let statement = format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
-            Box::pin(async move {
-                sqlx::query(&statement).execute(&mut *connection).await?;
-                Ok(())
-            })
-        });
-    }
+    // SQLite permits one writer at a time. Without a busy timeout on every
+    // pooled connection, routine background writes can turn a short
+    // collision into SQLITE_BUSY failures across unrelated reads.
+    let options =
+        AnyPoolOptions::new()
+            .max_connections(10)
+            .after_connect(|connection, _metadata| {
+                let statement =
+                    format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT.as_millis());
+                Box::pin(async move {
+                    sqlx::query(&statement).execute(&mut *connection).await?;
+                    Ok(())
+                })
+            });
 
     let pool = options.connect(&database_url).await?;
     if use_wal {
@@ -75,20 +68,35 @@ pub async fn connect(database_url: &str) -> Result<DbPool, DbError> {
     Ok(pool)
 }
 
+/// Rejects every URL that is not a `sqlite:` URL. The URL is never echoed
+/// into the error: it may carry credentials.
+fn ensure_sqlite_url(database_url: &str) -> Result<(), DbError> {
+    let lower = database_url.trim_start().to_ascii_lowercase();
+    if lower.starts_with("sqlite:") {
+        return Ok(());
+    }
+    let message = if lower.starts_with("postgres://") || lower.starts_with("postgresql://") {
+        "Postgres is no longer supported: Playarr is SQLite-only (see ADR 0002); use a `sqlite:` DATABASE_URL"
+    } else {
+        "unsupported database URL: only `sqlite:` URLs are supported (see ADR 0002)"
+    };
+    Err(DbError::Backend(sqlx::Error::Configuration(message.into())))
+}
+
 /// `sqlx`'s SQLite driver does **not** create the database file on first
 /// connect unless the connection string explicitly opts in
 /// (`?mode=rwc` -- "read-write-create") -- without it, connecting to a
 /// `sqlite://` URL whose file doesn't exist yet fails outright
 /// (`SQLITE_CANTOPEN`, "unable to open database file"). That's a real
 /// first-boot bug for the exact zero-dependency single-node deployment
-/// SQLite exists to serve (ADR 0001's Tier 1): an operator's very first
+/// SQLite exists to serve: an operator's very first
 /// `docker run`/`systemctl start` against a fresh volume/disk would
 /// otherwise crash-loop before ever reaching a migration, with no
 /// actionable error beyond a low-level SQLite error code. This function is
 /// the fix: every `sqlite:` URL passed to [`connect`] gets `mode=rwc`
 /// appended (only if the caller hasn't already set a `mode=` param
 /// themselves, so an explicit `?mode=ro` for a read-only replica-style
-/// connection is still respected). Postgres URLs pass through unchanged.
+/// connection is still respected).
 /// `sqlite::memory:` also gets `mode=rwc` appended -- harmless (an
 /// in-memory database is always freshly created regardless) but simpler
 /// than special-casing it, and confirmed not to break sqlx's parsing by
@@ -113,20 +121,12 @@ fn ensure_sqlite_create_mode(database_url: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// Runs the migration set matching `is_postgres` against an already-open
-/// pool. Split from [`connect`] so callers (tests, the CLI's `playarr
-/// update` path, the main boot sequence) can control exactly when schema
-/// changes are applied.
-pub async fn run_migrations(pool: &DbPool, is_postgres: bool) -> Result<(), DbError> {
-    let migrator = if is_postgres {
-        &POSTGRES_MIGRATIONS
-    } else {
-        &SQLITE_MIGRATIONS
-    };
-    if !is_postgres {
-        reconcile_reworded_migrations(pool, migrator).await?;
-    }
-    migrator.run(pool).await?;
+/// Runs the embedded SQLite migrations against an already-open pool. Split
+/// from [`connect`] so callers (tests, the CLI's `playarr update` path, the
+/// main boot sequence) can control exactly when schema changes are applied.
+pub async fn run_migrations(pool: &DbPool) -> Result<(), DbError> {
+    reconcile_reworded_migrations(pool, &SQLITE_MIGRATIONS).await?;
+    SQLITE_MIGRATIONS.run(pool).await?;
     Ok(())
 }
 
@@ -195,42 +195,6 @@ async fn reconcile_reworded_migrations(
     Ok(())
 }
 
-/// Which concrete engine a [`DbPool`] is actually talking to.
-///
-/// `DbPool` is `sqlx::AnyPool` so every crate outside `playarr-db` can
-/// depend on one pool type — but `sqlx::Any`'s query layer does *not*
-/// translate placeholder syntax between engines (unlike, say, an ORM query
-/// builder): text bound for `Any` is passed straight through to whichever
-/// concrete driver is behind the connection, so it must already be in that
-/// driver's native placeholder style (`?` for SQLite, `$1, $2, ...` for
-/// Postgres). Repositories detect the backend once at construction time
-/// (see `Backend::detect`) and pick the matching SQL text per query.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Backend {
-    Sqlite,
-    Postgres,
-}
-
-impl Backend {
-    /// Reads the scheme off the pool's connect URL — available synchronously
-    /// via `Pool::connect_options()` without acquiring a live connection —
-    /// and classifies it. Defaults to `Sqlite` for anything that isn't
-    /// recognizably Postgres, matching `run_migrations`'s own
-    /// `is_postgres`-else-sqlite convention.
-    pub(crate) fn detect(pool: &DbPool) -> Self {
-        let scheme = pool
-            .connect_options()
-            .database_url
-            .scheme()
-            .to_ascii_lowercase();
-        if scheme.starts_with("postgres") {
-            Backend::Postgres
-        } else {
-            Backend::Sqlite
-        }
-    }
-}
-
 /// Test-only helper shared by `crate::repo`/`crate::analytics` unit tests: a
 /// migrated, in-memory SQLite-backed [`DbPool`].
 ///
@@ -246,9 +210,7 @@ pub(crate) async fn test_sqlite_pool() -> DbPool {
         .connect("sqlite::memory:")
         .await
         .expect("connect in-memory sqlite pool");
-    run_migrations(&pool, false)
-        .await
-        .expect("run sqlite migrations");
+    run_migrations(&pool).await.expect("run sqlite migrations");
     pool
 }
 
@@ -302,7 +264,7 @@ mod tests {
                 .execute(&pool)
                 .await
                 .unwrap();
-            run_migrations(&pool, false)
+            run_migrations(&pool)
                 .await
                 .expect("a known earlier checksum is reconciled");
             let stored: Vec<u8> =
@@ -341,7 +303,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        assert!(run_migrations(&pool, false).await.is_err());
+        assert!(run_migrations(&pool).await.is_err());
     }
 
     #[test]
@@ -376,12 +338,23 @@ mod tests {
         );
     }
 
-    #[test]
-    fn leaves_postgres_urls_unchanged() {
-        assert_eq!(
-            ensure_sqlite_create_mode("postgres://user:pass@host/db"),
-            "postgres://user:pass@host/db"
-        );
+    #[tokio::test]
+    async fn connect_rejects_postgres_urls_without_echoing_them() {
+        for url in [
+            "postgres://user:secret@host/db",
+            "postgresql://user:secret@host/db",
+        ] {
+            let err = connect(url).await.expect_err("postgres must be rejected");
+            let message = err.to_string();
+            assert!(message.contains("SQLite-only"), "{message}");
+            assert!(!message.contains("secret"), "{message}");
+        }
+    }
+
+    #[tokio::test]
+    async fn connect_rejects_other_non_sqlite_urls() {
+        let err = connect("mysql://host/db").await.expect_err("must reject");
+        assert!(err.to_string().contains("only `sqlite:` URLs"));
     }
 
     /// Reproduces the exact bug this fix closes: connecting to a `sqlite:`
@@ -409,7 +382,7 @@ mod tests {
             .expect("read busy timeout");
         assert_eq!(journal_mode.to_ascii_lowercase(), "wal");
         assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT.as_millis() as i64);
-        run_migrations(&pool, false)
+        run_migrations(&pool)
             .await
             .expect("migrations must run against the freshly created file");
         pool.close().await;

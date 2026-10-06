@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn from_row(row: &AnyRow) -> Result<GroupLibrary, DbError> {
     let id: String = row.try_get("id")?;
@@ -84,35 +84,22 @@ pub trait GroupLibraryRepo: Send + Sync {
 
 pub struct SqlxGroupLibraryRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxGroupLibraryRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
 #[async_trait]
 impl GroupLibraryRepo for SqlxGroupLibraryRepo {
     async fn upsert(&self, library: &GroupLibrary) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO group_libraries (id, group_id, name, created_at, updated_at) \
+        let sql = "INSERT INTO group_libraries (id, group_id, name, created_at, updated_at) \
                  VALUES (?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  group_id = excluded.group_id, name = excluded.name, \
-                 updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO group_libraries (id, group_id, name, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 group_id = excluded.group_id, name = excluded.name, \
-                 updated_at = excluded.updated_at"
-            }
-        };
+                 updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(library.id.to_string())
             .bind(library.group_id.to_string())
@@ -125,10 +112,7 @@ impl GroupLibraryRepo for SqlxGroupLibraryRepo {
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<GroupLibrary>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!("SELECT {COLUMNS} FROM group_libraries WHERE id = ?"),
-            Backend::Postgres => format!("SELECT {COLUMNS} FROM group_libraries WHERE id = $1"),
-        };
+        let sql = format!("SELECT {COLUMNS} FROM group_libraries WHERE id = ?");
         let row = sqlx::query(&sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -137,14 +121,7 @@ impl GroupLibraryRepo for SqlxGroupLibraryRepo {
     }
 
     async fn list_for_group(&self, group_id: Uuid) -> Result<Vec<GroupLibrary>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                format!("SELECT {COLUMNS} FROM group_libraries WHERE group_id = ? ORDER BY name")
-            }
-            Backend::Postgres => {
-                format!("SELECT {COLUMNS} FROM group_libraries WHERE group_id = $1 ORDER BY name")
-            }
-        };
+        let sql = format!("SELECT {COLUMNS} FROM group_libraries WHERE group_id = ? ORDER BY name");
         let rows = sqlx::query(&sql)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
@@ -157,21 +134,13 @@ impl GroupLibraryRepo for SqlxGroupLibraryRepo {
         group_id: Uuid,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<GroupLibrary>, DbError> {
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => format!(
+        let sql = match since.is_some() {
+            true => format!(
                 "SELECT {COLUMNS} FROM group_libraries WHERE group_id = ? AND updated_at > ? \
                  ORDER BY updated_at ASC, id ASC"
             ),
-            (Backend::Sqlite, false) => format!(
+            false => format!(
                 "SELECT {COLUMNS} FROM group_libraries WHERE group_id = ? \
-                 ORDER BY updated_at ASC, id ASC"
-            ),
-            (Backend::Postgres, true) => format!(
-                "SELECT {COLUMNS} FROM group_libraries WHERE group_id = $1 AND updated_at > $2 \
-                 ORDER BY updated_at ASC, id ASC"
-            ),
-            (Backend::Postgres, false) => format!(
-                "SELECT {COLUMNS} FROM group_libraries WHERE group_id = $1 \
                  ORDER BY updated_at ASC, id ASC"
             ),
         };

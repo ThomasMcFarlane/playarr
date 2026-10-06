@@ -14,16 +14,11 @@
 #      start instance B (API role only, so no background jobs run) from it;
 #   4. check the users, permissions, passwords and playlists match, that the
 #      old refresh tokens no longer work, and that wrong keys, damaged
-#      archives and cross-engine restores are refused.
+#      archives and non-SQLite (Postgres) restore targets are refused.
 #
 # Usage: scripts/verify-backup-recovery.sh [path/to/playarr-server]
 # Needs: curl, jq.
 #
-# PostgreSQL: set E2E_PG_CONTAINER to a throwaway postgres container (for
-# example one started with a memory limit and a tmpfs data directory) and
-# E2E_PG_URL to its base URL (postgres://user:pass@127.0.0.1:port). The script
-# creates and drops its own two databases there. Without them it runs on SQLite.
-
 set -euo pipefail
 
 BIN="${1:-backend/target/debug/playarr-server}"
@@ -32,26 +27,14 @@ SCRATCH="$(mktemp -d)"
 PORT_A=18484
 PORT_B=18485
 PIDS=()
-RUN_ID="e2e_$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-PG_CONTAINER="${E2E_PG_CONTAINER:-}"
-PG_URL="${E2E_PG_URL:-}"
 cleanup() {
   for pid in "${PIDS[@]:-}"; do kill "$pid" 2>/dev/null || true; done
-  if [ -n "$PG_CONTAINER" ]; then
-    for db in "${RUN_ID}_a" "${RUN_ID}_b"; do
-      docker exec "$PG_CONTAINER" psql -U postgres -qc "DROP DATABASE IF EXISTS $db WITH (FORCE)" >/dev/null 2>&1 || true
-    done
-  fi
   rm -rf "$SCRATCH"
 }
 
 # database_url NAME (a or b): the scratch database for an instance.
 database_url() {
-  if [ -n "$PG_CONTAINER" ]; then
-    echo "${PG_URL}/${RUN_ID}_$1"
-  else
-    echo "sqlite://$SCRATCH/$1/playarr.db"
-  fi
+  echo "sqlite://$SCRATCH/$1/playarr.db"
 }
 trap cleanup EXIT
 
@@ -104,12 +87,6 @@ login() { # port username password [device id] [platform] -> prints JSON
 }
 
 mkdir -p "$SCRATCH/a" "$SCRATCH/b"
-if [ -n "$PG_CONTAINER" ]; then
-  for db in "${RUN_ID}_a" "${RUN_ID}_b"; do
-    docker exec "$PG_CONTAINER" psql -U postgres -qc "CREATE DATABASE $db" >/dev/null
-  done
-  pass "using scratch PostgreSQL databases ${RUN_ID}_a and ${RUN_ID}_b"
-fi
 start_server a "$PORT_A" "$(database_url a)" all \
   PLAYARR_BACKUP_DIR="$SCRATCH/a/backups" PLAYARR_BACKUP_RECIPIENTS="$RECIPIENT" \
   PLAYARR_BACKUP_INTERVAL_HOURS=0
@@ -171,12 +148,12 @@ if "$BIN" backup verify --archive "$SCRATCH/truncated.parbak" --identity-file "$
   fail "a truncated archive was accepted"
 fi
 pass "truncated archive is refused"
-if [ -n "$PG_CONTAINER" ]; then OTHER_ENGINE="sqlite://$SCRATCH/other-engine.db"; else OTHER_ENGINE="postgres://nobody@127.0.0.1:1/none"; fi
+OTHER_ENGINE="postgres://nobody@127.0.0.1:1/none"
 if DATABASE_URL="$OTHER_ENGINE" "$BIN" backup restore \
   --archive "$SCRATCH/downloaded.parbak" --identity-file "$SCRATCH/recovery.key" >/dev/null 2>&1; then
-  fail "cross-engine restore was attempted"
+  fail "restore into a non-SQLite target was attempted"
 fi
-pass "cross-engine restore is refused"
+pass "restore into a non-SQLite target is refused"
 
 # --- restore into a replacement location and start it ---
 kill "${PIDS[0]}"; wait "${PIDS[0]}" 2>/dev/null || true

@@ -8,7 +8,7 @@ use crate::codec::{
     bool_from_i64, bool_to_i64, decode_err, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 fn view_sort_key_to_str(sort: ViewSort) -> &'static str {
     match sort {
@@ -79,13 +79,11 @@ pub trait LibraryViewRepo: Send + Sync {
 
 pub struct SqlxLibraryViewRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxLibraryViewRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<LibraryView, DbError> {
@@ -117,16 +115,9 @@ impl SqlxLibraryViewRepo {
 #[async_trait]
 impl LibraryViewRepo for SqlxLibraryViewRepo {
     async fn get(&self, id: Uuid) -> Result<LibraryView, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, name, criteria, sort, is_default, default_order, created_at, updated_at \
-                 FROM library_views WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, name, criteria, sort, is_default, default_order, created_at, updated_at \
-                 FROM library_views WHERE id = $1"
-            }
-        };
+        let sql =
+            "SELECT id, name, criteria, sort, is_default, default_order, created_at, updated_at \
+                 FROM library_views WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -147,26 +138,13 @@ impl LibraryViewRepo for SqlxLibraryViewRepo {
         let criteria = serde_json::to_string(&view.criteria)
             .map_err(|e| decode_err(format!("failed to encode view criteria: {e}")))?;
 
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO library_views \
+        let sql = "INSERT INTO library_views \
                  (id, name, criteria, sort, is_default, default_order, created_at, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, criteria = excluded.criteria, sort = excluded.sort, \
                  is_default = excluded.is_default, default_order = excluded.default_order, \
-                 created_at = excluded.created_at, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO library_views \
-                 (id, name, criteria, sort, is_default, default_order, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, criteria = excluded.criteria, sort = excluded.sort, \
-                 is_default = excluded.is_default, default_order = excluded.default_order, \
-                 created_at = excluded.created_at, updated_at = excluded.updated_at"
-            }
-        };
+                 created_at = excluded.created_at, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(view.id.to_string())
             .bind(view.name.as_str())
@@ -182,10 +160,7 @@ impl LibraryViewRepo for SqlxLibraryViewRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM library_views WHERE id = ?",
-            Backend::Postgres => "DELETE FROM library_views WHERE id = $1",
-        };
+        let sql = "DELETE FROM library_views WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
