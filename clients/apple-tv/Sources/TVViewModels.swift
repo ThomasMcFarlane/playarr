@@ -16,10 +16,43 @@ final class TVHomeViewModel {
 
     private(set) var state: State = .idle
     private(set) var works: [Work] = []
+    /// Smart Start/Resume plans by series work id; a stacked plan turns the
+    /// Home card into a stack card that asks which episode to play.
+    private(set) var resumePlansByWorkID: [UUID: ResumePlan] = [:]
     private let apiClient: PlayarrAPIClient
 
     init(apiClient: PlayarrAPIClient) {
         self.apiClient = apiClient
+    }
+
+    /// Reports the picked option and builds the player request.
+    func resumeRequest(plan: ResumePlan, option: ResumeOption, seriesTitle: String) async -> TVResumePlayRequest {
+        _ = try? await ResumePlanClient(transport: apiClient).recordChoice(seriesID: plan.seriesWorkID, option: option)
+        let detail = try? await apiClient.fetchWork(id: plan.seriesWorkID)
+        return TVResumePlayRequest.make(
+            option: option,
+            detail: detail,
+            workID: plan.seriesWorkID,
+            seriesTitle: seriesTitle
+        )
+    }
+
+    /// Series with a resumable plan lead the Start rail, newest first.
+    private func applyResumePlans() async {
+        let plans = (try? await ResumePlanClient(transport: apiClient).plans()) ?? []
+        resumePlansByWorkID = Dictionary(plans.map { ($0.seriesWorkID, $0) }, uniquingKeysWith: { first, _ in first })
+        var known = Dictionary(works.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var lead: [Work] = []
+        for plan in plans.prefix(8) where plan.action == .resume || plan.isStacked {
+            if known[plan.seriesWorkID] == nil,
+               let fetched = try? await apiClient.fetchWork(id: plan.seriesWorkID) {
+                known[plan.seriesWorkID] = fetched.work
+            }
+            if let work = known[plan.seriesWorkID] { lead.append(work) }
+        }
+        guard !lead.isEmpty else { return }
+        let leadIDs = Set(lead.map(\.id))
+        works = lead + works.filter { !leadIDs.contains($0.id) }
     }
 
     func load() async {
@@ -55,6 +88,7 @@ final class TVHomeViewModel {
             // De-dupe while preserving order.
             var seen = Set<UUID>()
             works = works.filter { seen.insert($0.id).inserted }
+            await applyResumePlans()
             state = .loaded
         } catch {
             // Parity suite must still paint production rails when the tunnel
@@ -124,6 +158,9 @@ final class TVWorkDetailViewModel {
 
     private(set) var state: State = .idle
     private(set) var detail: WorkDetail?
+    /// Smart Start/Resume plan for a series (nil for other kinds, or when the
+    /// server has no resume-plan contract).
+    private(set) var resumePlan: ResumePlan?
     private let workID: UUID
     private let seedWork: Work?
     private let apiClient: PlayarrAPIClient
@@ -166,6 +203,17 @@ final class TVWorkDetailViewModel {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+}
+
+extension TVWorkDetailViewModel {
+    func loadResumePlan() async {
+        guard TVParityLaunch.requestedScreen == nil, detail?.work.kind == .series else { return }
+        resumePlan = try? await ResumePlanClient(transport: apiClient).plan(seriesID: workID)
+    }
+
+    func recordResumeChoice(_ option: ResumeOption) async {
+        _ = try? await ResumePlanClient(transport: apiClient).recordChoice(seriesID: workID, option: option)
     }
 }
 

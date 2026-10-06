@@ -43,6 +43,9 @@ public final class HomeViewModel {
     public private(set) var continueWatching: [ProgressItem] = []
     public private(set) var rails: [Rail] = []
     public private(set) var progressByWorkID: [UUID: WatchProgress] = [:]
+    /// Smart Start/Resume plans keyed by series work id. A stacked plan
+    /// (`needs_choice`) turns the Continue Watching card into a stack card.
+    public private(set) var resumePlansByWorkID: [UUID: ResumePlan] = [:]
 
     public var featuredWork: Work? { rails.first?.works.first ?? recentlyAdded.first }
 
@@ -68,6 +71,8 @@ public final class HomeViewModel {
             rails = Self.makeRails(movies: movies, series: series, sites: sites, onDeck: [])
             loadState = .loaded
 
+            let plans = (try? await ResumePlanClient(transport: apiClient).plans()) ?? []
+            resumePlansByWorkID = Dictionary(plans.map { ($0.seriesWorkID, $0) }, uniquingKeysWith: { first, _ in first })
             let progress = (try? await progressRequest) ?? []
             progressByWorkID = Self.indexLatestProgress(progress)
 
@@ -79,7 +84,19 @@ public final class HomeViewModel {
                 .filter { seenWorkIDs.insert($0.workID).inserted }
                 .prefix(10)
 
-            let missingIDs = resumable.map(\.workID).filter { workByID[$0] == nil }
+            // Series with a resumable plan lead the on-deck rail (server order,
+            // newest first), then the remaining part-watched works.
+            var onDeckIDs: [UUID] = []
+            var seenDeck = Set<UUID>()
+            for plan in plans where plan.action == .resume || plan.isStacked {
+                if seenDeck.insert(plan.seriesWorkID).inserted { onDeckIDs.append(plan.seriesWorkID) }
+            }
+            for item in resumable where seenDeck.insert(item.workID).inserted {
+                onDeckIDs.append(item.workID)
+            }
+            onDeckIDs = Array(onDeckIDs.prefix(10))
+
+            let missingIDs = onDeckIDs.filter { workByID[$0] == nil }
             let fetched = await withTaskGroup(of: (UUID, Work?).self, returning: [UUID: Work].self) { group in
                 for workID in missingIDs {
                     group.addTask { (workID, try? await self.apiClient.fetchWork(id: workID).work) }
@@ -99,7 +116,7 @@ public final class HomeViewModel {
                 movies: movies,
                 series: series,
                 sites: sites,
-                onDeck: continueWatching.map(\.work)
+                onDeck: onDeckIDs.compactMap { workByID[$0] }
             )
             loadState = .loaded
         } catch let error as APIError {
@@ -157,5 +174,18 @@ public final class HomeViewModel {
                 result[item.workID] = item
             }
         }
+    }
+
+    /// Reports the picked option and builds the player request, including the
+    /// queue of following episodes when the series detail is reachable.
+    func resumeRequest(plan: ResumePlan, option: ResumeOption, seriesTitle: String) async -> ResumePlayRequest {
+        _ = try? await ResumePlanClient(transport: apiClient).recordChoice(seriesID: plan.seriesWorkID, option: option)
+        let detail = try? await apiClient.fetchWork(id: plan.seriesWorkID)
+        return ResumePlayRequest.make(
+            option: option,
+            detail: detail,
+            workID: plan.seriesWorkID,
+            seriesTitle: seriesTitle
+        )
     }
 }

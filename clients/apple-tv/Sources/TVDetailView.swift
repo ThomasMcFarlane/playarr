@@ -7,6 +7,8 @@ struct TVWorkDetailView: View {
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVWorkDetailViewModel
     @FocusState private var focusedEpisodeID: UUID?
+    @State private var showResumeChooser = false
+    @State private var resumePlay: TVResumePlayRequest?
 
     init(work: Work, apiClient: PlayarrAPIClient) {
         self.work = work
@@ -44,7 +46,36 @@ struct TVWorkDetailView: View {
         }
         .task {
             if viewModel.state == .idle { await viewModel.load() }
+            await viewModel.loadResumePlan()
         }
+        .sheet(isPresented: $showResumeChooser) {
+            if let plan = viewModel.resumePlan, let detail = viewModel.detail {
+                TVResumeChooserView(seriesTitle: detail.work.title, plan: plan) { option in
+                    showResumeChooser = false
+                    startResume(option, detail: detail, record: true)
+                }
+            }
+        }
+        .navigationDestination(item: $resumePlay) { request in
+            TVPlayerView(
+                mediaFileID: request.mediaFileID,
+                title: request.title,
+                apiClient: apiClient,
+                suggestionsWorkID: request.workID,
+                queue: request.queue,
+                subtitle: request.subtitle
+            )
+        }
+    }
+
+    private func startResume(_ option: ResumeOption, detail: WorkDetail, record: Bool) {
+        if record { Task { await viewModel.recordResumeChoice(option) } }
+        resumePlay = TVResumePlayRequest.make(
+            option: option,
+            detail: detail,
+            workID: detail.work.id,
+            seriesTitle: detail.work.title
+        )
     }
 
     private func detailContent(_ detail: WorkDetail) -> some View {
@@ -159,6 +190,18 @@ struct TVWorkDetailView: View {
                                 )
                             } label: {
                                 detailChromeLabel("Play", primary: true)
+                            }
+                            .buttonStyle(.plain)
+                        } else if detail.work.kind == .series, let plan = viewModel.resumePlan, plan.playableTarget != nil {
+                            detailChromeLabel("Playback", primary: false)
+                            Button {
+                                if plan.isStacked {
+                                    showResumeChooser = true
+                                } else if let target = plan.playableTarget {
+                                    startResume(target, detail: detail, record: false)
+                                }
+                            } label: {
+                                detailChromeLabel(plan.buttonLabel, primary: true)
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -756,5 +799,76 @@ private struct TVKeyArtFilterModifier: ViewModifier {
                 .colorMultiply(Color(white: 0.6))
                 .opacity(DesignTokens.Shell.keyArtOpacity)
         }
+    }
+}
+
+/// What the player should open for one resume choice.
+struct TVResumePlayRequest: Identifiable, Hashable {
+    let mediaFileID: UUID
+    let title: String
+    let subtitle: String
+    let workID: UUID
+    let queue: [PlaybackQueueEntry]
+
+    var id: UUID { mediaFileID }
+
+    static func make(option: ResumeOption, detail: WorkDetail?, workID: UUID, seriesTitle: String) -> TVResumePlayRequest {
+        var queue: [PlaybackQueueEntry] = []
+        if let detail, case .series(let seasons) = detail.children {
+            queue = PlaybackQueueBuilder.episodes(after: option.episodeID, seriesTitle: seriesTitle, seasons: seasons)
+        }
+        return TVResumePlayRequest(
+            mediaFileID: option.mediaFileID,
+            title: option.title ?? "Episode \(option.episodeNumber)",
+            subtitle: "\(seriesTitle) \u{00B7} \(option.label)",
+            workID: workID,
+            queue: queue
+        )
+    }
+}
+
+/// Chooser shown only when the server says the history is ambiguous
+/// (`needs_choice`). Menu/back closes it without recording anything.
+struct TVResumeChooserView: View {
+    let seriesTitle: String
+    let plan: ResumePlan
+    let onPick: (ResumeOption) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Text("Choose what to watch next in \(seriesTitle)")
+                .font(TVTheme.font(size: 22, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(plan.options) { option in
+                        Button {
+                            onPick(option)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(option.kind.caption.uppercased())
+                                    .font(TVTheme.font(size: 12, weight: .heavy))
+                                    .foregroundStyle(DesignTokens.Color.brandPrimary)
+                                Text(option.title.map { "\(option.label) \u{00B7} \($0)" } ?? option.label)
+                                    .font(TVTheme.font(size: 18, weight: .semibold))
+                                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                                if option.progressPercent > 0 {
+                                    Text("\(option.progressPercent)% watched")
+                                        .font(TVTheme.font(size: 13, weight: .regular))
+                                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(20)
+                        }
+                        .buttonStyle(.card)
+                    }
+                }
+                .padding(.vertical, 12)
+            }
+        }
+        .padding(60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(DesignTokens.Color.backgroundElevated)
     }
 }

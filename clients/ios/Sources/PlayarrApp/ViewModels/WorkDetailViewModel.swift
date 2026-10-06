@@ -32,6 +32,9 @@ public final class WorkDetailViewModel {
     public private(set) var detail: WorkDetail?
     public private(set) var credits = WorkCredits(cast: [], crew: [])
     public private(set) var similarWorks: [Work] = []
+    /// Smart Start/Resume plan for a series (`nil` for other kinds or when
+    /// the server has no resume-plan contract).
+    public private(set) var resumePlan: ResumePlan?
 
     private let apiClient: PlayarrAPIClient
     public let workID: UUID
@@ -56,5 +59,15 @@ public final class WorkDetailViewModel {
         } catch {
             loadState = .failed(error.localizedDescription)
         }
+    }
+
+    public func loadResumePlan() async {
+        guard detail?.work.kind == .series else { return }
+        resumePlan = try? await ResumePlanClient(transport: apiClient).plan(seriesID: workID)
+    }
+
+    /// Reports the viewer's chosen option; failures never block playback.
+    public func recordResumeChoice(_ option: ResumeOption) async {
+        _ = try? await ResumePlanClient(transport: apiClient).recordChoice(seriesID: workID, option: option)
     }
 }

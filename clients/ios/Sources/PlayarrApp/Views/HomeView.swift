@@ -27,6 +27,8 @@ struct HomeView: View {
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
     @State private var downloadTarget: Work?
+    @State private var chooserWork: Work?
+    @State private var resumePlay: ResumePlayRequest?
 
     var body: some View {
         Group {
@@ -43,6 +45,25 @@ struct HomeView: View {
         }
         .sheet(item: $downloadTarget) { work in
             WorkDownloadSheet(work: work, apiClient: apiClient, downloadRepository: downloadRepository)
+        }
+        .sheet(item: $chooserWork) { work in
+            if let plan = viewModel.resumePlansByWorkID[work.id] {
+                ResumeChooserView(seriesTitle: work.title, plan: plan) { option in
+                    chooserWork = nil
+                    Task { resumePlay = await viewModel.resumeRequest(plan: plan, option: option, seriesTitle: work.title) }
+                }
+            }
+        }
+        .navigationDestination(item: $resumePlay) { request in
+            PlayerView(
+                apiClient: apiClient,
+                downloadRepository: downloadRepository,
+                initialMediaFileID: request.mediaFileID.uuidString,
+                initialTitle: request.title,
+                suggestionsWorkID: request.workID,
+                queue: request.queue,
+                subtitle: request.subtitle
+            )
         }
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
@@ -230,7 +251,40 @@ struct HomeView: View {
         .frame(width: railWidth, alignment: .leading)
     }
 
+    private func stackedPlan(for work: Work) -> ResumePlan? {
+        guard work.kind == .series, let plan = viewModel.resumePlansByWorkID[work.id], plan.isStacked else { return nil }
+        return plan
+    }
+
+    @ViewBuilder
     private func workLink<Content: View>(_ work: Work, @ViewBuilder content: () -> Content) -> some View {
+        if let plan = stackedPlan(for: work) {
+            // Several resume options apply: a stack card that asks right here.
+            Button {
+                chooserWork = work
+            } label: {
+                content()
+                    .overlay(alignment: .topTrailing) {
+                        Text("\(plan.options.count) options")
+                            .font(.caption2.weight(.heavy))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .foregroundStyle(PlayarrStyle.onAccent)
+                            .background(PlayarrStyle.pink, in: Capsule())
+                            .padding(6)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Choose what to watch next")
+            .contextMenu {
+                Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+            }
+        } else {
+            plainWorkLink(work, content: content)
+        }
+    }
+
+    private func plainWorkLink<Content: View>(_ work: Work, @ViewBuilder content: () -> Content) -> some View {
         NavigationLink {
             WorkDetailView(
                 viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),

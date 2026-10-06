@@ -9,6 +9,8 @@ struct WorkDetailView: View {
     @State private var playlists: [Playlist] = []
     @State private var playlistMessage: String?
     @State private var selectedAlbumID: UUID?
+    @State private var showResumeChooser = false
+    @State private var resumePlay: ResumePlayRequest?
 
     init(viewModel: WorkDetailViewModel, apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository) {
         _viewModel = State(initialValue: viewModel)
@@ -45,11 +47,31 @@ struct WorkDetailView: View {
         }
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
+            await viewModel.loadResumePlan()
             playlists = (try? await apiClient.listPlaylists()) ?? []
             if selectedAlbumID == nil,
                case .artist(let albums) = viewModel.detail?.children {
                 selectedAlbumID = albums.first?.album.id
             }
+        }
+        .sheet(isPresented: $showResumeChooser) {
+            if let plan = viewModel.resumePlan, let detail = viewModel.detail {
+                ResumeChooserView(seriesTitle: detail.work.title, plan: plan) { option in
+                    showResumeChooser = false
+                    startResume(option, detail: detail, record: true)
+                }
+            }
+        }
+        .navigationDestination(item: $resumePlay) { request in
+            PlayerView(
+                apiClient: apiClient,
+                downloadRepository: downloadRepository,
+                initialMediaFileID: request.mediaFileID.uuidString,
+                initialTitle: request.title,
+                suggestionsWorkID: request.workID,
+                queue: request.queue,
+                subtitle: request.subtitle
+            )
         }
         .alert("Playlists", isPresented: Binding(
             get: { playlistMessage != nil },
@@ -262,6 +284,21 @@ struct WorkDetailView: View {
                     .padding(.top, phone ? 12 : 18)
             }
 
+            if detail.work.kind == .series, let plan = viewModel.resumePlan, plan.playableTarget != nil {
+                Button {
+                    if plan.isStacked {
+                        showResumeChooser = true
+                    } else if let target = plan.playableTarget {
+                        startResume(target, detail: detail, record: false)
+                    }
+                } label: {
+                    Label(plan.buttonLabel, systemImage: "play.fill").frame(minWidth: 112)
+                }
+                .buttonStyle(PlayarrPrimaryButtonStyle())
+                .accessibilityLabel(plan.isStacked ? "\(plan.buttonLabel), choose an episode" : plan.buttonLabel)
+                .padding(.top, phone ? 24 : 30)
+            }
+
             if let mediaFileID = detail.mediaFileID {
                 HStack(spacing: 12) {
                     NavigationLink {
@@ -304,6 +341,16 @@ struct WorkDetailView: View {
                 .padding(.top, phone ? 24 : 30)
             }
         }
+    }
+
+    private func startResume(_ option: ResumeOption, detail: WorkDetail, record: Bool) {
+        if record { Task { await viewModel.recordResumeChoice(option) } }
+        resumePlay = ResumePlayRequest.make(
+            option: option,
+            detail: detail,
+            workID: detail.work.id,
+            seriesTitle: detail.work.title
+        )
     }
 
     private func writablePlaylists(for work: Work) -> [Playlist] {

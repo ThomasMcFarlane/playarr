@@ -1,0 +1,1 @@
+- iOS and Apple TV: series Start/Resume button driven by the server resume plan, a chooser when the history is ambiguous, and a Continue Watching stack card on Home (rows 415, 416).

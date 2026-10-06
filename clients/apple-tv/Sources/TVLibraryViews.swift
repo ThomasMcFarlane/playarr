@@ -9,6 +9,8 @@ struct TVHomeView: View {
     @FocusState private var focusedCard: HomeRailCardFocus?
     /// Leading work ids per rail — Left on these hands focus to the dock.
     @State private var leadingWorkIDs: Set<UUID> = []
+    @State private var chooserWork: Work?
+    @State private var resumePlay: TVResumePlayRequest?
 
     var body: some View {
         Group {
@@ -20,6 +22,24 @@ struct TVHomeView: View {
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .sheet(item: $chooserWork) { work in
+            if let viewModel, let plan = viewModel.resumePlansByWorkID[work.id] {
+                TVResumeChooserView(seriesTitle: work.title, plan: plan) { option in
+                    chooserWork = nil
+                    Task { resumePlay = await viewModel.resumeRequest(plan: plan, option: option, seriesTitle: work.title) }
+                }
+            }
+        }
+        .navigationDestination(item: $resumePlay) { request in
+            TVPlayerView(
+                mediaFileID: request.mediaFileID,
+                title: request.title,
+                apiClient: environment.apiClient,
+                suggestionsWorkID: request.workID,
+                queue: request.queue,
+                subtitle: request.subtitle
+            )
         }
         .task(id: environment.serverURL) {
             let model = TVHomeViewModel(apiClient: environment.apiClient)
@@ -372,21 +392,7 @@ struct TVHomeView: View {
                 HStack(alignment: .top, spacing: gap) {
                     ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
                         let focus = HomeRailCardFocus(rail: railID, workID: work.id)
-                        NavigationLink {
-                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                        } label: {
-                            TVHomeCard(
-                                work: work,
-                                apiClient: environment.apiClient,
-                                isSelected: focusedCard == focus
-                            )
-                            .frame(
-                                width: artW,
-                                height: artH + titleBlock,
-                                alignment: .topLeading
-                            )
-                        }
-                        .buttonStyle(.card)
+                        railCardLink(work: work, focus: focus, artW: artW, artH: artH, titleBlock: titleBlock)
                         .focused($focusedCard, equals: focus)
                         .onMoveCommand { direction in
                             // Per-card Left at the rail head → dock.
@@ -400,6 +406,48 @@ struct TVHomeView: View {
                 .padding(.vertical, 12)
                 .padding(.trailing, 40)
             }
+        }
+    }
+
+    /// One interactive rail card. A series with several resume options is a
+    /// stack card that asks here; everything else opens the detail page.
+    @ViewBuilder
+    private func railCardLink(work: Work, focus: HomeRailCardFocus, artW: CGFloat, artH: CGFloat, titleBlock: CGFloat) -> some View {
+        if work.kind == .series,
+           let plan = viewModel?.resumePlansByWorkID[work.id],
+           plan.isStacked {
+            Button {
+                chooserWork = work
+            } label: {
+                TVHomeCard(
+                    work: work,
+                    apiClient: environment.apiClient,
+                    isSelected: focusedCard == focus
+                )
+                .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
+                .overlay(alignment: .topTrailing) {
+                    Text("\(plan.options.count) options")
+                        .font(TVTheme.font(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(DesignTokens.Color.brandPrimary))
+                        .padding(10)
+                }
+            }
+            .buttonStyle(.card)
+        } else {
+            NavigationLink {
+                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+            } label: {
+                TVHomeCard(
+                    work: work,
+                    apiClient: environment.apiClient,
+                    isSelected: focusedCard == focus
+                )
+                .frame(width: artW, height: artH + titleBlock, alignment: .topLeading)
+            }
+            .buttonStyle(.card)
         }
     }
 
