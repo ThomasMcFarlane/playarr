@@ -333,7 +333,6 @@ struct WMDetailPage: View {
                 .tracking(-2.808)
                 .foregroundStyle(WM.ink)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
                 .frame(width: 358, height: 36.66, alignment: .leading)
                 .padding(.top, 10.16)
             if isSeries, let episode = selectedEpisode?.detail.episode {
@@ -456,7 +455,7 @@ struct WMDetailPage: View {
                 )
             } label: {
                 pill(
-                    width: 126, height: 47, fill: WM.pink, glyph: "▶", glyphSize: 9.52,
+                    width: 126, height: 47, fill: WM.pink, glyph: "▶\u{FE0E}", glyphSize: 9.52,
                     glyphColor: .white, label: "Play", labelSize: 11.2, labelColor: .white, gap: 11
                 )
             }
@@ -483,14 +482,14 @@ struct WMDetailPage: View {
                 )
             } label: {
                 pill(
-                    width: 240, fill: WM.ink, glyph: "▶", glyphSize: 9.52,
+                    width: 240, fill: WM.ink, glyph: "▶\u{FE0E}", glyphSize: 9.52,
                     glyphColor: WM.shell, label: "Start", labelSize: 11.2, labelColor: WM.shell, gap: 10
                 )
             }
             .buttonStyle(.plain)
         } else {
             pill(
-                width: 240, fill: WM.ink.opacity(0.4), glyph: "▶", glyphSize: 9.52,
+                width: 240, fill: WM.ink.opacity(0.4), glyph: "▶\u{FE0E}", glyphSize: 9.52,
                 glyphColor: WM.shell, label: "Start", labelSize: 11.2, labelColor: WM.shell, gap: 10
             )
         }
@@ -528,7 +527,17 @@ struct WMDetailPage: View {
             }
             if !similar.isEmpty { similarTrack }
         }
-        .padding(.top, isSeries ? 28 : 28)
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: WM.page, location: 0),
+                    .init(color: Color(red: 40 / 255, green: 35 / 255, blue: 40 / 255), location: 0.35),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+        .padding(.top, 28)
     }
 
     private func seasonTrack(_ season: SeasonDetail, first: Bool) -> some View {
@@ -614,7 +623,7 @@ struct WMDetailPage: View {
         VStack(alignment: .leading, spacing: 0) {
             heading(
                 "Chapters",
-                model.chaptersFromServer ? "\(model.chapters.count) scene markers" : "\(model.chapters.count) chapters"
+                model.chaptersFromServer ? "\(model.chapters.count) chapters" : "\(model.chapters.count) scene markers"
             )
             .padding(.top, 24)
             ScrollView(.horizontal) {

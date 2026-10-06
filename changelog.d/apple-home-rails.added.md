@@ -1,0 +1,1 @@
+- iOS and Apple TV Home now render the server-computed, localised `/api/v1/home/rails` shelves, falling back to the previous client-built rails on older servers.

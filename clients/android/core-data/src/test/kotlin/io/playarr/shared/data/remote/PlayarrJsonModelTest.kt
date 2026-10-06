@@ -164,7 +164,7 @@ class PlayarrJsonModelTest {
               "source_offset_ms": 1200000,
               "audio_tracks": [{
                 "id": "source-audio-2", "stream_index": 2, "label": "English 5.1",
-                "language": "eng", "codec": "ac3", "channels": 6, "is_default": true
+                "language": "eng", "codec": "ac3", "codec_label": "AC3", "channels": 6, "is_default": true
               }],
               "selected_audio_track_id": "source-audio-2",
               "subtitle_tracks": [{
@@ -189,6 +189,7 @@ class PlayarrJsonModelTest {
         assertEquals("h264-1080p-8mbps", playback.qualityOptions.last().profile)
         assertEquals(8_000_000L, playback.qualityOptions.last().videoBitrateBps)
         assertEquals("eng", playback.audioTracks.single().language)
+        assertEquals("AC3", playback.audioTracks.single().codecLabel)
         assertTrue(playback.subtitleTracks.single().forced)
         assertEquals("/api/v1/media/mf-1/subtitles/3?source_offset_ms=0", playback.subtitleTracks.single().url)
     }

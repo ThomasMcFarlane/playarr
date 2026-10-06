@@ -20,7 +20,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -69,7 +68,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.MusicNote
@@ -1154,10 +1153,10 @@ internal val experienceDestinations = listOf(
     ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
     ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
     ExperienceDestination("folders", PlayarrString.NavFolders, Icons.Outlined.Folder, requiresFolders = true),
-    ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
     ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
-    ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.Bookmark),
-    ExperienceDestination("requests", PlayarrString.NavRequests, Icons.Outlined.Inbox),
+    ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.BookmarkAdd),
+    ExperienceDestination("requests", PlayarrString.NavRequests, Icons.Outlined.BookmarkAdd),
+    ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
 )
 
 internal fun visibleExperienceDestinations(
@@ -1178,9 +1177,13 @@ internal fun televisionDestinationGroups(
     destinations: List<ExperienceDestination>,
 ): List<List<ExperienceDestination>> = listOf(
     destinations.filter { it.route in setOf("downloads", "search") },
-    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "folders", "calendar") },
-    destinations.filter { it.route == "playlists" || it.route == "watchlist" || it.route == "requests" },
+    destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "folders") },
+    destinations.filter { it.route in setOf("playlists", "watchlist", "requests", "calendar") },
 ).filter(List<ExperienceDestination>::isNotEmpty)
+
+/** Active letter chip in the library A-Z rail (web `.tv-alphabet .is-active`). */
+private val WebAlphabetActive = Color(0xFFC6C2C4)
+private val WebAlphabetActiveInk = Color(0xFF151315)
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
 private const val CAPABILITIES_POLL_MS = 60_000L
@@ -1522,7 +1525,8 @@ internal fun PlayarrExperience(
                     PlayarrLogo(
                         modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 60.dp),
                     )
-                    ExperienceClock(Modifier.align(Alignment.TopStart).padding(start = 486.dp, top = 68.dp))
+                    // Web `.app-clock` is right-aligned to x = 710.4 (its left edge moves with the text width).
+                    Box(Modifier.align(Alignment.TopStart).padding(top = 68.2.dp).width(710.4.dp), contentAlignment = Alignment.TopEnd) { ExperienceClock() }
                 }
             }
 
@@ -1763,8 +1767,8 @@ private fun TelevisionNavigation(
 ) {
     val groups = televisionDestinationGroups(destinations)
     Column(
-        modifier = modifier.padding(start = 42.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp),
+        modifier = modifier.padding(start = 42.2.dp),
+        verticalArrangement = Arrangement.spacedBy(13.6.dp),
     ) {
         groups.forEach { group ->
             val groupShape = RoundedCornerShape(22.dp)
@@ -1773,7 +1777,7 @@ private fun TelevisionNavigation(
                 color = Color.Transparent,
                 shape = groupShape,
             ) {
-                Column(Modifier.padding(horizontal = 6.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(Modifier.padding(horizontal = 6.75.dp, vertical = 7.68.dp), verticalArrangement = Arrangement.spacedBy(9.6.dp)) {
                     group.forEach { destination ->
                         val selected = currentRoute == destination.route
                         val label = playarrString(destination.label)
@@ -1790,7 +1794,7 @@ private fun TelevisionNavigation(
                             contentColor = if (selected || focused) WebInk else WebInkMuted,
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
-                                .size(67.dp)
+                                .size(64.dp)
                                 .scale(navScale)
                                 .onFocusChanged { focused = it.isFocused },
                         ) {
@@ -1798,10 +1802,10 @@ private fun TelevisionNavigation(
                                 Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Text(
                                     label,
-                                    fontSize = 9.sp,
+                                    fontSize = 8.832.sp,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight(680),
-                                    letterSpacing = 0.3.sp,
-                                    modifier = Modifier.padding(top = 5.dp),
+                                    letterSpacing = 0.309.sp,
+                                    modifier = Modifier.padding(top = 4.8.dp),
                                 )
                             }
                         }
@@ -1823,14 +1827,20 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
             now = LocalDateTime.now()
         }
     }
-    Row(modifier, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), color = WebInk, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.2.dp)) {
+        Text(
+            now.format(DateTimeFormatter.ofPattern("HH:mm")),
+            color = WebInk,
+            fontSize = 17.28.sp,
+            fontWeight = FontWeight(760),
+            letterSpacing = (-0.518).sp,
+        )
         Text(
             now.format(dateFormatter).uppercase(locale),
             color = WebInkMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
+            fontSize = 11.136.sp,
+            fontWeight = FontWeight(640),
+            letterSpacing = 0.445.sp,
         )
     }
 }
@@ -1860,13 +1870,13 @@ private fun ProfileControl(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
             .then(
-                if (isTelevision) Modifier.padding(start = 59.dp, bottom = 22.dp) else Modifier.padding(16.dp),
+                if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 15.dp) else Modifier.padding(16.dp),
             ),
         horizontalAlignment = Alignment.Start,
     ) {
         Surface(
             onClick = onClick,
-            modifier = (if (isTelevision) Modifier.height(46.dp) else Modifier.size(42.dp))
+            modifier = (if (isTelevision) Modifier.height(48.2.dp) else Modifier.size(42.dp))
                 .scale(focusScale)
                 .glass(CircleShape, WebGlass.Identity)
                 .onFocusChanged { focused = it.isFocused }
@@ -1878,36 +1888,37 @@ private fun ProfileControl(
             border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, WebPink) else null,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = if (isTelevision) 7.dp else 0.dp),
+                modifier = Modifier.padding(start = if (isTelevision) 7.1.dp else 0.dp, end = if (isTelevision) 13.dp else 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
                 PlayarrProfileAvatar(
                     userId = userId,
                     preference = avatar,
-                    modifier = Modifier.size(if (isTelevision) 32.dp else 42.dp),
-                    glyphSize = if (isTelevision) 17.sp else 20.sp,
+                    modifier = Modifier.size(if (isTelevision) 34.dp else 42.dp),
+                    glyphSize = if (isTelevision) 18.sp else 20.sp,
                 )
                 if (isTelevision) {
                     Text(
                         userName ?: playarrString(PlayarrString.ProfileViewerFallback),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 9.dp),
+                        fontSize = 11.136.sp,
+                        fontWeight = FontWeight(690),
+                        letterSpacing = 0.223.sp,
+                        modifier = Modifier.padding(start = 10.4.dp),
                     )
                 }
             }
         }
         Box(
-            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = 5.dp),
-            contentAlignment = Alignment.Center,
+            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = 5.dp, start = if (isTelevision) 7.8.dp else 0.dp),
+            contentAlignment = if (isTelevision) Alignment.CenterStart else Alignment.Center,
         ) {
             Text(
                 profileVersionLabel(BuildConfig.VERSION_NAME),
                 color = WebInkMuted,
-                fontSize = if (isTelevision) 7.sp else 8.sp,
+                fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.3.sp,
+                letterSpacing = 0.32.sp,
                 modifier = Modifier.clearAndSetSemantics { },
             )
         }
@@ -2759,7 +2770,6 @@ private fun ExperienceLandscapeCard(
             .width(width)
             .scale(scale)
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
-            .focusable()
             .combinedClickable(
                 onClick = { onSelected(); onClick() },
                 onLongClick = onContext,
@@ -2970,7 +2980,7 @@ private fun LibraryCoverCard(
     )
     Column(
         (if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
-            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }.focusable()
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
         Box {
@@ -3267,19 +3277,29 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     }
                 }
                 if (isTelevision && sortMode == "title") {
-                    LazyColumn(
-                        modifier = Modifier.align(Alignment.CenterEnd).width(28.dp).fillMaxHeight(0.72f),
-                        verticalArrangement = Arrangement.SpaceEvenly,
+                    // Web `.tv-alphabet`: 62 x 690 at (1845.5, 270), 27 buttons of 24, spread evenly.
+                    Column(
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = 270.dp, end = 12.5.dp).width(62.dp).height(690.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        items(listOf("#") + ('A'..'Z').map(Char::toString)) { letter ->
-                            Text(
-                                letter,
-                                color = if (activeLetter == letter) WebInk else WebInkMuted,
-                                fontSize = 9.sp,
-                                fontWeight = if (activeLetter == letter) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.fillMaxWidth().clickable { activeLetter = letter },
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            )
+                        (listOf("#") + ('A'..'Z').map(Char::toString)).forEach { letter ->
+                            val active = activeLetter == letter
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .then(if (active) Modifier.background(WebAlphabetActive) else Modifier)
+                                    .clickable { activeLetter = letter },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    letter,
+                                    color = if (active) WebAlphabetActiveInk else WebInkMuted,
+                                    fontSize = 9.216.sp,
+                                    fontWeight = FontWeight.Normal,
+                                )
+                            }
                         }
                     }
                 }
@@ -4830,13 +4850,26 @@ private fun MoviePlaybackOptionsDialog(
                 )
                 MoviePlaybackChoiceGroup(
                     title = playarrString(PlayarrString.DetailAudio),
-                    choices = listOf("" to playarrString(PlayarrString.DetailAutomatic)) + options.audioTracks.map { it.id to it.label },
+                    choices = listOf("" to playarrString(PlayarrString.DetailAutomatic)) + options.audioTracks.map {
+                        it.id to playarrAudioTrackLabel(
+                            it,
+                            LocalPlayarrLanguage.current.locale,
+                            playarrString(PlayarrString.PlayerChannelsMono),
+                            playarrString(PlayarrString.PlayerChannelsStereo),
+                        )
+                    },
                     selected = audioTrackId.orEmpty(),
                     onSelected = { audioTrackId = it.ifBlank { null } },
                 )
                 MoviePlaybackChoiceGroup(
                     title = playarrString(PlayarrString.DetailSubtitles),
-                    choices = listOf("" to playarrString(PlayarrString.DetailSubtitlesOff)) + options.subtitleTracks.map { it.id to it.label },
+                    choices = listOf("" to playarrString(PlayarrString.DetailSubtitlesOff)) + options.subtitleTracks.map {
+                        it.id to playarrSubtitleTrackLabel(
+                            it,
+                            LocalPlayarrLanguage.current.locale,
+                            playarrString(PlayarrString.PlayerSubtitleForced),
+                        )
+                    },
                     selected = subtitleTrackId.orEmpty(),
                     onSelected = { subtitleTrackId = it.ifBlank { null } },
                 )
@@ -6482,6 +6515,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         val sessionId = activeSessionId ?: return
         recordEvent(sessionId, PlaybackEventRequest.heartbeat(currentSourcePositionMs()))
     }
+
+    /** True once this player has begun [mediaFileId] (a playback session exists), not merely still holds it. */
+    fun hasActiveSessionFor(mediaFileId: String): Boolean = activeMediaFileId == mediaFileId && activeSessionId != null
 
     fun stopPlayback() {
         discardPrewarm()

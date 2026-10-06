@@ -137,4 +137,19 @@ class RemoteProtocolTest {
         readSseFrames(java.io.BufferedReader(java.io.StringReader(text))) { e, d -> frames += e to d }
         assertEquals(listOf("ready" to "{}", "inbox" to "{\"seq\":3}"), frames)
     }
+
+    @Test
+    fun `a destination still holding an earlier playback has not started the handoff`() {
+        // Ready and idle from a previous stopped playback of the same file, but no session for the new request.
+        assertEquals(false, handoffDestinationStarted(ready = true, buffering = false, playing = false, playWhenReady = false, ownsSession = false))
+        assertEquals(false, handoffDestinationStarted(ready = true, buffering = false, playing = true, playWhenReady = true, ownsSession = false))
+    }
+
+    @Test
+    fun `a destination that owns the new session starts once playing or deliberately paused`() {
+        assertEquals(true, handoffDestinationStarted(ready = true, buffering = false, playing = true, playWhenReady = true, ownsSession = true))
+        assertEquals(true, handoffDestinationStarted(ready = true, buffering = false, playing = false, playWhenReady = false, ownsSession = true))
+        assertEquals(false, handoffDestinationStarted(ready = true, buffering = true, playing = false, playWhenReady = true, ownsSession = true))
+        assertEquals(false, handoffDestinationStarted(ready = false, buffering = false, playing = false, playWhenReady = true, ownsSession = true))
+    }
 }

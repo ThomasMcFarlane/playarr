@@ -899,7 +899,12 @@ private fun PlayarrPlayerOptionsDialog(
                     PlayarrPlayerMenu.Audio -> items(controls.audioTracks.size) { index ->
                         val track = controls.audioTracks[index]
                         PlayerDialogOption(
-                            label = playarrAudioTrackLabel(track, locale),
+                            label = playarrAudioTrackLabel(
+                                track,
+                                locale,
+                                playarrString(PlayarrString.PlayerChannelsMono),
+                                playarrString(PlayarrString.PlayerChannelsStereo),
+                            ),
                             detail = null,
                             selected = track.id == (controls.selectedAudioTrackId ?: controls.audioTracks.firstOrNull()?.id),
                         ) { onAudio(track.id) }

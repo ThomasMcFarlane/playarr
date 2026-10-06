@@ -1,0 +1,1 @@
+- iOS: Watchlist and Requests screens in the web mobile layout, with their nav destinations on the phone pill and the iPad rail, backed by a PlayarrKit requests client and watchlist presentation helpers (with unit tests).

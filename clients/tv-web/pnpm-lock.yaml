@@ -125,8 +125,6 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@24.13.3)
 
-  apps/play-review-server: {}
-
   apps/tv-tizen:
     dependencies:
       '@playarr-tv/player-avplay':

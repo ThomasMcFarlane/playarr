@@ -147,8 +147,13 @@ struct PlayerView: View {
         .task(id: viewModel?.loadState) { @MainActor in
             guard ParityLaunch.isPlayerRoute, let viewModel, case .playing = viewModel.loadState else { return }
             // Parity capture: the fixture clip paused at 2.0 s, controls up.
-            await viewModel.seek(to: 2.0)
+            // The engine state reaches the view model asynchronously: wait for
+            // playing, pause, then seek so the frame stays at exactly 2.0 s.
+            for _ in 0..<100 where viewModel.engineState != .playing {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             if viewModel.engineState == .playing { viewModel.togglePlayPause() }
+            await viewModel.seek(to: 2.0)
             controlsVisible = true
             activeMenu = ParityLaunch.screen == "player-quality" ? .quality : nil
         }

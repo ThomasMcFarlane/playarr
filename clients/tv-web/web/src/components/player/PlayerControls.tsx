@@ -17,7 +17,7 @@ import {
   isOriginalQuality,
   qualityDisplayLabel,
 } from "../../lib/playerQualityLabel";
-import { audioTrackDetail } from "../../lib/sourceAudioTracks";
+import { audioTrackLabel, subtitleTrackLabel } from "../../lib/trackLabels";
 import { CastButton } from "./CastButton";
 import {
   AudioTrackIcon,
@@ -39,6 +39,8 @@ export interface PlayerTrackOption {
   label: string;
   language?: string;
   codec?: string;
+  channelsCount?: number;
+  forced?: boolean;
 }
 
 const SEEK_COMMIT_DEBOUNCE_MS = 300;
@@ -155,7 +157,18 @@ export function PlayerControls({
   onToggleCast,
   onOpenHealth,
 }: PlayerControlsProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const trackWords = useMemo(
+    () => ({
+      mono: t("components.player.controls.channelsMono"),
+      stereo: t("components.player.controls.channelsStereo"),
+      forced: t("components.player.controls.subtitleForced"),
+    }),
+    [t]
+  );
+  const audioLabel = (track: PlayerTrackOption) => audioTrackLabel(track, language, trackWords);
+  const subtitleLabel = (track: PlayerTrackOption) =>
+    subtitleTrackLabel(track, language, trackWords);
   const trackRef = useRef<HTMLDivElement>(null);
   const previousButtonRef = useRef<HTMLButtonElement>(null);
   const playButtonRef = useRef<HTMLButtonElement>(null);
@@ -899,8 +912,7 @@ export function PlayerControls({
                     }}
                   >
                     <span>
-                      <strong>{track.label}</strong>
-                      {audioTrackDetail(track) ? <small>{audioTrackDetail(track)}</small> : null}
+                      <strong>{audioLabel(track)}</strong>
                     </span>
                     <span className="player-quality-check" aria-hidden="true">
                       {selected ? "✓" : ""}
@@ -915,7 +927,7 @@ export function PlayerControls({
             type="button"
             className="player-btn player-tool-button"
             aria-label={t("components.player.controls.audioButtonLabel", {
-              label: activeAudio?.label ?? t("components.player.controls.unavailable"),
+              label: (activeAudio ? audioLabel(activeAudio) : undefined) ?? t("components.player.controls.unavailable"),
             })}
             aria-haspopup="menu"
             aria-expanded={audioMenuOpen}
@@ -1013,8 +1025,7 @@ export function PlayerControls({
                     }}
                   >
                     <span>
-                      <strong>{track.label}</strong>
-                      {track.language ? <small>{track.language}</small> : null}
+                      <strong>{subtitleLabel(track)}</strong>
                     </span>
                     <span className="player-quality-check" aria-hidden="true">
                       {selected ? "✓" : ""}
@@ -1036,7 +1047,7 @@ export function PlayerControls({
                 : subtitleError
                   ? t("components.player.controls.subtitlesError", { error: subtitleError })
                   : t("components.player.controls.subtitlesButtonLabel", {
-                      label: activeSubtitle?.label ?? t("components.player.controls.off"),
+                      label: (activeSubtitle ? subtitleLabel(activeSubtitle) : undefined) ?? t("components.player.controls.off"),
                     })
             }
             aria-haspopup="menu"

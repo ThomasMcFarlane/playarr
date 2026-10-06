@@ -111,8 +111,8 @@ public struct CalendarWindow: Sendable, Equatable {
     public var days: [String] { CalendarDays.days(from: start, to: end) }
 }
 
-/// The server default is today through today plus 30 days; the agenda requests the same 31 days.
-public let calendarAgendaSpanDays = 31
+/// The agenda covers 30 days from the anchor, like Web (`AGENDA_DAYS`).
+public let calendarAgendaSpanDays = 30
 
 public func calendarWindow(mode: CalendarViewMode, anchor: String, firstWeekday: Int = 2) -> CalendarWindow {
     switch mode {
