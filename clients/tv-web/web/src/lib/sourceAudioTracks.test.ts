@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PlaybackInfo } from "@playarr-tv/api-client";
-import { audioTrackDetail, sourceAudioTracksFromInfo } from "./sourceAudioTracks";
+import { sourceAudioTracksFromInfo } from "./sourceAudioTracks";
+import { audioTrackLabel } from "./trackLabels";
 
 const info = {
   selected_audio_track_id: "source-audio-1",
@@ -19,10 +20,11 @@ describe("source audio tracks", () => {
     expect(tracks[0]?.selected).toBe(true);
   });
 
-  it("describes a track as language and codec", () => {
+  it("labels a dub like the Android client: language name, codec, channel layout", () => {
     const [eng, dub, bare] = sourceAudioTracksFromInfo(info);
-    expect(audioTrackDetail(eng!)).toBe("eng · AAC");
-    expect(audioTrackDetail(dub!)).toBe("deu · AC3");
-    expect(audioTrackDetail(bare!)).toBe("");
+    const words = { mono: "Mono", stereo: "Stereo" };
+    expect(audioTrackLabel(eng!, "en", words)).toBe("English · AAC · Stereo");
+    expect(audioTrackLabel(dub!, "en", words)).toBe("German · AC3 · Mono");
+    expect(audioTrackLabel(bare!, "en", words)).toBe("Unknown");
   });
 });

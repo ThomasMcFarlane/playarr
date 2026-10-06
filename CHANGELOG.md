@@ -68,6 +68,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.
+- Apple parity workflow (`parity-apple.yml`) and tooling under `scripts/parity/apple/`: web reference versus tvOS Simulator captures on the fixture environment, with a pixel diff report; the tvOS app gains a live `-PlayarrParityRoute` launch argument.
+- The older `appletv-parity.yml` fixture-capture workflow is folded into `parity-apple.yml` (the fixture-art workaround for `ffmpeg` builds without `drawtext` is part of the fixtures now).
 - Apple clients: Release Calendar kit (models, client for the calendar and subscription endpoints, window/filter/series-grouping logic) with unit tests.
 - Apple clients: a shared authenticated JSON transport (`PlayarrRequestTransport`) in PlayarrKit for the upcoming parity features, with tests.
 - iOS: new Calendar tab with the shared page header and Filters button, Agenda (master-detail on wide screens), Week and Month views, a Filters sheet and the calendar subscription sheet (QR code, copy, revoke).
@@ -181,6 +184,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
 - Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
 - Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
@@ -529,6 +533,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the retired Google Play review demo server (`clients/tv-web/apps/play-review-server`), which was shut down on 2026-08-30 and is not deployed, together with its `just` recipes, workspace lockfile entry and README attribution.
 - Removed Postgres and Redis from the Docker Compose files, the Kubernetes base and overlays and the Helm chart: compose runs one server with a SQLite data volume, and the chart deploys a single-replica StatefulSet with a persistent volume (the api/worker split sharing one database is gone). Multi-node deployments use peer sync between SQLite nodes (ADR 0002).
 - Rewrote the README, architecture documents, deployment guides, backup guide and site copy for SQLite-only storage.
 - Postgres storage support is being removed from the server, Helm chart and compose files; a `postgres://` database URL will be rejected at startup. See ADR 0002.
@@ -1541,6 +1546,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Per-file language indexing no longer rewrites unchanged rows. A reconciliation pass used to run a `DELETE FROM media_file_languages` plus inserts and a state upsert for every file, each in its own write transaction, which queued behind other sync writers and logged "slow statement" warnings (about 23 ms per file and up to 1.7 s for one file on a 30,000-file benchmark with a competing writer). The repository now compares the stored rows first and writes only the kinds that changed; an unchanged re-sync of 5,000 files dropped from 117 s to 1.5 s. The delete already used the primary-key index, so no migration is needed.
 - CI: pull requests run only the affected Android modules plus the sideload debug app (`scripts/ci/android-scope.sh`); the full `build` stays on main and nightly. Gradle and Rust caches are written by main only and read by pull requests.
 - CI: backend tests run under cargo-nextest, and the Argon2 crates are optimised in dev/test builds (the playarr-api suite dropped from about 4.5 minutes to under one on two cores).
 - Cut Vidaa / limited-TV library lag further: expand-only grid mount (initial

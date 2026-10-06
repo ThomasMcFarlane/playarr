@@ -8,16 +8,22 @@ import java.util.Locale
  * Human labels for the player's audio and subtitle menus. The server's `label` is the
  * container title or, failing that, the bare language code, so two English tracks both read
  * "eng". These helpers combine the language name, a distinguishing title (commentary, SDH...),
- * the codec and the channel layout, e.g. "English · DTS 5.1" or "English · Commentary · AC3 2.0".
+ * the codec label and the channel layout as separate parts, e.g. "German · AAC · Stereo" or
+ * "English · Commentary · AC3 · 5.1". The Web client builds the same labels
+ * (`clients/tv-web/web/src/lib/trackLabels.ts`); keep the two in step.
  */
-internal fun playarrAudioTrackLabel(track: PlaybackAudioTrackOption, displayLocale: Locale = Locale.getDefault()): String {
+internal fun playarrAudioTrackLabel(
+    track: PlaybackAudioTrackOption,
+    displayLocale: Locale = Locale.getDefault(),
+    monoLabel: String = "Mono",
+    stereoLabel: String = "Stereo",
+): String {
     val language = playarrLanguageName(track.language, displayLocale)
     val parts = buildList {
         language?.let(::add)
         playarrTrackTitle(track.label, track.language, language)?.let(::add)
-        val format = listOfNotNull(playarrAudioCodecName(track.codec), playarrChannelLayout(track.channels))
-            .joinToString(" ")
-        if (format.isNotEmpty()) add(format)
+        (track.codecLabel?.trim()?.takeIf { it.isNotEmpty() } ?: playarrAudioCodecName(track.codec))?.let(::add)
+        playarrChannelLayout(track.channels, monoLabel, stereoLabel)?.let(::add)
     }
     return parts.joinToString(" · ").ifBlank { track.label }
 }
@@ -89,10 +95,14 @@ internal fun playarrAudioCodecName(codec: String?): String? {
     }
 }
 
-internal fun playarrChannelLayout(channels: Int?): String? = when (channels) {
+internal fun playarrChannelLayout(
+    channels: Int?,
+    monoLabel: String = "Mono",
+    stereoLabel: String = "Stereo",
+): String? = when (channels) {
     null, 0 -> null
-    1 -> "1.0"
-    2 -> "2.0"
+    1 -> monoLabel
+    2 -> stereoLabel
     3 -> "2.1"
     4 -> "4.0"
     5 -> "5.0"
