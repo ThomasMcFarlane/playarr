@@ -86,8 +86,13 @@ jobs:
           version: 11.13.0
           run_install: false
 
-      - name: Install ffmpeg
-        run: brew install ffmpeg
+      # The fixture artwork needs ffmpeg's drawtext filter, which the plain formula lacks.
+      - name: Install ffmpeg (with drawtext)
+        run: |
+          brew install ffmpeg-full
+          bin="$(brew --prefix ffmpeg-full)/bin"
+          "$bin/ffmpeg" -hide_banner -filters | grep -q drawtext
+          echo "$bin" >> "$GITHUB_PATH"
 
       - name: Build the fixture server
         working-directory: backend
