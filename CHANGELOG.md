@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Xbox: the default resource qualifier is `Language=en-US`, so MSIX packaging no longer fails in `CreatePriConfigXmlForFullIndex` ("Index was outside the bounds of the array").
 - CI: the Android APK verification reads the signer certificate from current `apksigner` output (`V3.0 Signer:` lines when the APK has no v1 signature), so a correctly signed release APK no longer fails as a certificate mismatch.
 - Xbox: subtitle and audio track selection uses the real UWP APIs (`TimedMetadataTracks.SetPresentationMode`, an `int` audio `SelectedIndex`), so the UWP head compiles.
 - CI: the Release workflow starts (the server call now grants the permissions its jobs declare), a dry run may run from any branch, and the Roku package step no longer fails on a stale validator check (pairing uses the hosted device-link broker, not the server's device-code endpoint).
