@@ -33,6 +33,78 @@ enum TVParityLaunch {
     }
 }
 
+extension TVParityLaunch {
+    static let routeArgument = "-PlayarrParityRoute"
+
+    /// Live parity route (`home`, `movies`, `series`, `music`, `playlists`, `settings`,
+    /// `search:<query>`, `detail:<kind>:<title>`). Unlike `-PlayarrParityScreen`
+    /// this uses the real server catalogue and artwork (the fixture environment), so
+    /// it never injects fixture data; it only picks the screen to show.
+    static var route: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: routeArgument), args.indices.contains(idx + 1) else {
+            return nil
+        }
+        return args[idx + 1]
+    }
+
+    static var isLive: Bool { route != nil }
+
+    static var liveTab: TVNavTab? {
+        guard let route else { return nil }
+        switch route.split(separator: ":", maxSplits: 1).first.map(String.init) ?? route {
+        case "home": return .home
+        case "movies": return .movies
+        case "series": return .series
+        case "music": return .music
+        case "playlists": return .playlists
+        case "settings": return .settings
+        case "search": return .search
+        case "detail": return .movies
+        default: return nil
+        }
+    }
+
+    /// `(kind, title)` for `detail:<kind>:<title>`.
+    static var liveDetail: (kind: WorkKind, title: String)? {
+        guard let route, route.hasPrefix("detail:") else { return nil }
+        let parts = route.split(separator: ":", maxSplits: 2).map(String.init)
+        guard parts.count == 3 else { return nil }
+        let kind: WorkKind = parts[1] == "series" ? .series : .movie
+        return (kind, parts[2])
+    }
+
+    static var liveQuery: String? {
+        guard let route, route.hasPrefix("search:") else { return nil }
+        return String(route.dropFirst("search:".count))
+    }
+}
+
+/// Resolves `detail:<kind>:<title>` against the live catalogue, then shows the
+/// production detail screen for it.
+struct TVParityLiveDetailView: View {
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var work: Work?
+
+    var body: some View {
+        Group {
+            if let work {
+                TVWorkDetailView(work: work, apiClient: environment.apiClient)
+            } else {
+                TVStageBackground()
+            }
+        }
+        .task {
+            guard let want = TVParityLaunch.liveDetail else { return }
+            if let page = try? await environment.apiClient.browseCatalog(
+                kind: want.kind, genre: nil, tag: nil, sort: "title", limit: 100, offset: 0
+            ) {
+                work = page.items.first { $0.title == want.title }
+            }
+        }
+    }
+}
+
 /// Static fixture data so pixel diffs are not poisoned by live catalogue churn.
 enum TVParityFixtures {
     static let movieTitle = "Parity Movie"
