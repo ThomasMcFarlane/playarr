@@ -53,6 +53,8 @@ struct TVRootView: View {
 
             if TVParityLaunch.livePlayer != nil {
                 TVParityLivePlayerView()
+            } else if TVParityLaunch.route == "profiles" {
+                TVProfilesView(onLinkTV: {}, onManual: {})
             } else if TVParityLaunch.isLive {
                 signedInShell
             } else if TVParityLaunch.requestedScreen == .deviceCodePairing {
@@ -568,21 +570,24 @@ struct TVProfilesView: View {
                     Color.clear.frame(height: 162 * s)
 
                     Text("PROFILES")
-                        .font(.system(size: 11 * s, weight: .heavy))
-                        .tracking(1.6 * s)
+                        .font(TVTheme.font(size: 10.37 * s, weight: .heavy))
+                        .tracking(1.35 * s)
                         .foregroundStyle(palette.brandPink)
+                        .frame(height: 15.6 * s)
 
-                    Text("Who's watching?")
-                        .font(.system(size: 54 * s, weight: .medium))
-                        .tracking(-2.2 * s)
+                    Text("Who\u{2019}s watching?")
+                        .font(TVTheme.font(size: 80.64 * s, weight: .medium))
+                        .tracking(-5.8 * s)
                         .foregroundStyle(palette.ink)
-                        .padding(.top, 8 * s)
+                        .lineLimit(1)
+                        .frame(height: 76.6 * s)
+                        .padding(.top, 7.2 * s)
 
                     // Always paint the track (including the dashed + add tile).
                     // Never gate the empty household on isLoading — a spinner
                     // over the plate looked like a broken focus ornament.
                     profileRow(scale: s, avatarSize: size)
-                        .padding(.top, 88 * s)
+                        .padding(.top, 120 * s)
                         .opacity(isLoading && profiles.isEmpty ? 0.92 : 1)
 
                     if let loadError {
@@ -712,9 +717,7 @@ struct TVProfilesView: View {
                                     endRadius: size * 0.42
                                 )
                             )
-                        Text(profileInitials(profile))
-                            .font(.system(size: size * 0.28, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
+                        TVProfileAvatar(userID: profile.id.uuidString.lowercased(), size: size)
                         if busy {
                             ProgressView().tint(.white)
                         }
@@ -728,11 +731,16 @@ struct TVProfilesView: View {
                         }
                     }
                     .frame(width: size, height: size)
+                    // Web: the selected avatar grows to 1.1 and lifts.
+                    .scaleEffect(active ? 1.1 : 1)
+                    .offset(y: active ? -8 : 0)
                     .overlay(
                         Circle().stroke(
                             palette.lineStrong.opacity(0.66),
                             lineWidth: 1
                         )
+                        .scaleEffect(active ? 1.1 : 1)
+                        .offset(y: active ? -8 : 0)
                     )
                     .overlay {
                         if active {
@@ -750,16 +758,18 @@ struct TVProfilesView: View {
                     )
 
                     Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
-                        .font(.system(size: 16 * s, weight: .semibold))
+                        .font(TVTheme.font(size: 17.28 * s, weight: .semibold))
                         .foregroundStyle(active ? palette.ink : palette.inkSoft)
                         .lineLimit(1)
+                        .offset(y: active ? -3.4 : 0)
 
                     Text(statusLabel(for: profile, busy: busy))
-                        .font(.system(size: 9 * s, weight: .bold))
-                        .tracking(0.6 * s)
+                        .font(TVTheme.font(size: 9.41 * s, weight: .bold))
+                        .tracking(0.42 * s)
                         .textCase(.uppercase)
                         .foregroundStyle(palette.inkMuted)
                         .frame(minHeight: 12 * s)
+                        .offset(y: active ? -3.4 : 0)
                 }
                 .frame(width: size)
             }
