@@ -28,6 +28,10 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- Self-hosted Playarr Server: user-entered http:// addresses (LAN, VPN or
+		     WAN, including AVPlayer media loads) must connect. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Playarr connects to the Playarr Server you configure on your local network.</string>

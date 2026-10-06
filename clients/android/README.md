@@ -64,9 +64,9 @@ normally with push registration disabled.
   form factor. Do not reintroduce `PlayarrTvWebShell` or SPA AE freeze gates
   for television "parity" (see `clients/android/AGENTS.md`).
 
-Google Play builds reject cleartext HTTP server connections. The sideload flavour
-continues to permit HTTP because self-hosted Playarr Server instances commonly run
-on a private LAN without TLS.
+Every flavour, including Google Play, allows cleartext HTTP to the server the user
+enters, because Playarr Server is self-hosted and commonly runs without TLS. HTTPS
+remains supported and preferred where the server offers it.
 
 ## Publishing
 

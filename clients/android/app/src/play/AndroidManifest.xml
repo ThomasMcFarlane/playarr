@@ -6,6 +6,6 @@
         android:name="android.permission.REQUEST_INSTALL_PACKAGES"
         tools:node="remove" />
 
-    <application android:usesCleartextTraffic="false" />
+    <application android:usesCleartextTraffic="true" />
 
 </manifest>

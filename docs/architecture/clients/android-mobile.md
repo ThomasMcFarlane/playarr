@@ -68,5 +68,5 @@ channels replace the same package and use the same version code.
 The release artefact is one Android App Bundle for Google Play and one signed
 APK for direct installation across every supported Android form factor. The
 manifest exposes both standard and Leanback launcher categories. Cleartext HTTP
-remains permitted for private LAN deployments; HTTPS is recommended for remote
-access.
+is permitted in every flavour, Google Play included, to the server the user
+enters; HTTPS is supported and preferred where the server offers it.

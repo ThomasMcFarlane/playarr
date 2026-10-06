@@ -94,6 +94,9 @@ jobs:
       - name: Require GitHub-hosted runner labels
         run: scripts/ci/check-hosted-runners.sh
 
+      - name: Require cleartext HTTP to user-entered servers
+        run: scripts/ci/check-cleartext-policy.sh
+
       # Owner rule: no Co-authored-by trailers on any commit of a PR.
       - name: Reject Co-authored-by trailers
         if: github.event_name == 'pull_request'

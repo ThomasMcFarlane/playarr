@@ -89,6 +89,8 @@
 
   <Capabilities>
     <Capability Name="internetClient" />
+    <!-- Home-LAN servers: UWP blocks private-network access without this. -->
+    <Capability Name="privateNetworkClientServer" />
     <!--
       rescap:hevcPlayback is a *restricted* capability: Microsoft Store
       submission requires written justification for declaring it (Partner

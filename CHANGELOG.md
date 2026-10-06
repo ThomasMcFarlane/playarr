@@ -192,6 +192,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Every client now allows cleartext `http://` connections to the self-hosted Playarr Server the user enters: the Android Google Play flavour no longer denies cleartext, iOS sets `NSAllowsArbitraryLoads`, and the Xbox package declares `privateNetworkClientServer` for home-network servers. HTTPS remains supported and preferred.
 - Android phone: header, navigation, home rails, library grid, search, settings index, title detail pages and calendar follow the web mobile layout in light and dark themes.
 - Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.
 - The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
@@ -2276,6 +2277,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- `PlayDistributionPolicyTest` now asserts the Play flavour allows cleartext, and `scripts/ci/check-cleartext-policy.sh` (run in CI) checks the Android, iOS, tvOS, Xbox and Tizen configuration.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - The headless player smoke script now also checks close/minimise placement, the Original label, reveal-only tap and Enter, and runs on the 1920x1080 TV layout; vitest guards the player chrome across the web and legacy TV player.

@@ -15,7 +15,7 @@ class PlayDistributionPolicyTest {
     }
 
     @Test
-    fun `Play manifest removes installer access and rejects cleartext`() {
+    fun `Play manifest removes installer access and allows cleartext to user-entered servers`() {
         val appDirectory = androidAppDirectory()
         val commonManifest = File(appDirectory, "src/main/AndroidManifest.xml").readText()
         val playManifest = File(appDirectory, "src/play/AndroidManifest.xml").readText()
@@ -28,8 +28,8 @@ class PlayDistributionPolicyTest {
         assertTrue(commonManifest.contains("android.permission.FOREGROUND_SERVICE\""))
         assertTrue(commonManifest.contains("android.permission.FOREGROUND_SERVICE_DATA_SYNC"))
         assertTrue(playManifest.contains("tools:node=\"remove\""))
-        assertTrue(playManifest.contains("android:usesCleartextTraffic=\"false\""))
-        assertTrue(networkPolicy.contains("cleartextTrafficPermitted=\"false\""))
+        assertTrue(playManifest.contains("android:usesCleartextTraffic=\"true\""))
+        assertTrue(networkPolicy.contains("cleartextTrafficPermitted=\"true\""))
     }
 
     private fun androidAppDirectory(): File = generateSequence(File(System.getProperty("user.dir") ?: ".")) {
