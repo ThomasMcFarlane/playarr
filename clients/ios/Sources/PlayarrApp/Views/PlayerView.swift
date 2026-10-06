@@ -90,6 +90,8 @@ struct PlayerView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .playarrChromeHidden()
+        // The player is always dark, whatever the app theme.
+        .environment(\.colorScheme, .dark)
         .task {
             if viewModel == nil {
                 let model = PlayerViewModel(engine: AVPlayerEngine(), apiClient: apiClient, downloadRepository: downloadRepository, castCoordinator: castCoordinator)
@@ -381,11 +383,11 @@ struct PlayerView: View {
         return Button { toggle(.quality) } label: {
             // The web button is 42pt wide on phones, so its label wraps and overflows evenly.
             HStack(spacing: 8.8) {
-                WMText(PlayerQuality.badge(option), 7.68, 650, lh: 20, ls: 0.3072)
+                WMText(PlayerQuality.badge(option), 7.68, 650, color: .white, lh: 20, ls: 0.3072)
                     .frame(minWidth: 22)
                 VStack(spacing: 0) {
                     ForEach(Array(PlayerQuality.lines(PlayerQuality.displayLabel(option)).enumerated()), id: \.offset) { _, line in
-                        WMText(line, 10.56, 650, lh: 15.84, ls: 0.1056)
+                        WMText(line, 10.56, 650, color: .white, lh: 15.84, ls: 0.1056)
                     }
                 }
             }
@@ -406,15 +408,17 @@ struct PlayerView: View {
         let position = scrubTime ?? viewModel.currentTime
         let playedFraction = duration > 0 ? min(1, max(0, position / duration)) : 0
         return ZStack(alignment: .leading) {
-            Rectangle().fill(.white.opacity(0.2))
+            Rectangle().fill(.white.opacity(0.2)).frame(width: width, height: 6)
             ForEach(Array(buffered.enumerated()), id: \.offset) { _, range in
                 if duration > 0 {
                     Rectangle().fill(.white.opacity(0.34))
-                        .frame(width: width * (range.upperBound - range.lowerBound) / duration)
+                        .frame(width: max(0, width * (min(range.upperBound, duration) - range.lowerBound) / duration), height: 6)
                         .offset(x: width * range.lowerBound / duration)
                 }
             }
-            Rectangle().fill(WM.pink).frame(width: width * playedFraction)
+            Rectangle().fill(WM.pink).frame(width: width * playedFraction, height: 6)
+        }
+        .overlay(alignment: .leading) {
             Circle().fill(WM.pink)
                 .frame(width: 15, height: 15)
                 .overlay(Circle().stroke(WM.pink.opacity(0.2), lineWidth: 4))
