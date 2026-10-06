@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::codec::parse_uuid;
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 pub const KIND_AUDIO: &str = "audio";
 pub const KIND_SUBTITLE: &str = "subtitle";
@@ -73,21 +73,16 @@ pub trait MediaLanguageRepo: Send + Sync {
 
 pub struct SqlxMediaLanguageRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxMediaLanguageRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
-    /// `?` or `$n` for the n-th (1-based) bind parameter.
-    fn p(&self, n: usize) -> String {
-        match self.backend {
-            Backend::Sqlite => "?".to_string(),
-            Backend::Postgres => format!("${n}"),
-        }
+    /// The placeholder for the n-th (1-based) bind parameter (`?` on SQLite).
+    fn p(&self, _n: usize) -> String {
+        "?".to_string()
     }
 
     fn rows_to_files(rows: &[sqlx::any::AnyRow]) -> Result<Vec<(Uuid, PathBuf)>, DbError> {
@@ -194,10 +189,7 @@ impl MediaLanguageRepo for SqlxMediaLanguageRepo {
             self.p(1),
             self.p(2),
             self.p(3),
-            match self.backend {
-                Backend::Sqlite => "excluded.scanned_ms",
-                Backend::Postgres => "EXCLUDED.scanned_ms",
-            }
+            "excluded.scanned_ms"
         );
         sqlx::query(&state)
             .bind(&id)
@@ -590,7 +582,7 @@ mod tests {
         let pool = crate::pool::connect(&format!("sqlite://{}", path.display()))
             .await
             .unwrap();
-        crate::pool::run_migrations(&pool, false).await.unwrap();
+        crate::pool::run_migrations(&pool).await.unwrap();
         let repo = SqlxMediaLanguageRepo::new(pool.clone());
         let files: Vec<Uuid> = (0..30_000).map(|_| Uuid::new_v4()).collect();
         let (audio, subs) = (langs(&["en", "ja"]), langs(&["en", "fr"]));

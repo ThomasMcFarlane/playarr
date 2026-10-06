@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait WatchlistRepo: Send + Sync {
@@ -23,13 +23,11 @@ pub trait WatchlistRepo: Send + Sync {
 
 pub struct SqlxWatchlistRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxWatchlistRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<WatchlistItem, DbError> {
@@ -57,14 +55,9 @@ const COLS: &str = "title_key, kind, title, year, work_id, external_refs, poster
 #[async_trait]
 impl WatchlistRepo for SqlxWatchlistRepo {
     async fn list(&self, user_id: Uuid) -> Result<Vec<WatchlistItem>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
+        let sql = format!(
                 "SELECT {COLS} FROM watchlist_items WHERE user_id = ? ORDER BY added_at DESC, title_key"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLS} FROM watchlist_items WHERE user_id = $1 ORDER BY added_at DESC, title_key"
-            ),
-        };
+            );
         let rows = sqlx::query(&sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -73,14 +66,7 @@ impl WatchlistRepo for SqlxWatchlistRepo {
     }
 
     async fn get(&self, user_id: Uuid, title_key: &str) -> Result<Option<WatchlistItem>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                format!("SELECT {COLS} FROM watchlist_items WHERE user_id = ? AND title_key = ?")
-            }
-            Backend::Postgres => {
-                format!("SELECT {COLS} FROM watchlist_items WHERE user_id = $1 AND title_key = $2")
-            }
-        };
+        let sql = format!("SELECT {COLS} FROM watchlist_items WHERE user_id = ? AND title_key = ?");
         let row = sqlx::query(&sql)
             .bind(user_id.to_string())
             .bind(title_key)
@@ -90,26 +76,13 @@ impl WatchlistRepo for SqlxWatchlistRepo {
     }
 
     async fn add(&self, user_id: Uuid, item: &WatchlistItem) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO watchlist_items \
+        let sql = "INSERT INTO watchlist_items \
                  (user_id, title_key, kind, title, year, work_id, external_refs, poster_url, added_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (user_id, title_key) DO UPDATE SET \
                  kind = excluded.kind, title = excluded.title, year = excluded.year, \
                  work_id = excluded.work_id, external_refs = excluded.external_refs, \
-                 poster_url = excluded.poster_url"
-            }
-            Backend::Postgres => {
-                "INSERT INTO watchlist_items \
-                 (user_id, title_key, kind, title, year, work_id, external_refs, poster_url, added_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
-                 ON CONFLICT (user_id, title_key) DO UPDATE SET \
-                 kind = EXCLUDED.kind, title = EXCLUDED.title, year = EXCLUDED.year, \
-                 work_id = EXCLUDED.work_id, external_refs = EXCLUDED.external_refs, \
-                 poster_url = EXCLUDED.poster_url"
-            }
-        };
+                 poster_url = excluded.poster_url";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(&item.title_key)
@@ -126,12 +99,7 @@ impl WatchlistRepo for SqlxWatchlistRepo {
     }
 
     async fn remove(&self, user_id: Uuid, title_key: &str) -> Result<bool, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM watchlist_items WHERE user_id = ? AND title_key = ?",
-            Backend::Postgres => {
-                "DELETE FROM watchlist_items WHERE user_id = $1 AND title_key = $2"
-            }
-        };
+        let sql = "DELETE FROM watchlist_items WHERE user_id = ? AND title_key = ?";
         let res = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(title_key)

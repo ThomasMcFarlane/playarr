@@ -93,6 +93,7 @@ class RemoteController @Inject constructor(
             name = deviceName(),
             platform = if (television) "android-tv" else "android-mobile",
             capabilities = capabilities,
+            fingerprint = installFingerprint(),
         )
         coroutineScope {
             host.start(this)
@@ -103,6 +104,20 @@ class RemoteController @Inject constructor(
             }
         }
     }
+
+    /**
+     * Hash of the per-device Android id, which survives an app reinstall, so the server can hand
+     * the old target and its pairings to the reinstalled app instead of listing a stale twin.
+     */
+    private fun installFingerprint(): String? = runCatching {
+        val id = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID,
+        )?.takeIf { it.isNotBlank() } ?: return null
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest("playarr-remote:$id".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+    }.getOrNull()
 
     fun deviceName(): String = if (television) {
         android.os.Build.MODEL?.takeIf { it.isNotBlank() }?.let { "Android TV ($it)" } ?: "Android TV"
@@ -210,10 +225,10 @@ class RemoteController @Inject constructor(
                 }
                 if (started != null) {
                     // Give the engine a beat so the acknowledged position is the started one.
-                    delay(300L)
+                    delay(HANDOFF_START_SETTLE_MS)
                     return RemoteHandoffResult.Playing(withContext(Dispatchers.Main) { started.positionMs() })
                 }
-                delay(250L)
+                delay(HANDOFF_START_POLL_MS)
             }
             return RemoteHandoffResult.Failed("playback did not start in time")
         }
@@ -283,6 +298,10 @@ class RemoteController @Inject constructor(
     private companion object {
         const val KEY_HOST_ENABLED = "host_enabled"
         const val HANDOFF_START_TIMEOUT_MS = 40_000L
+        /** How often a handoff destination checks whether playback has started (each tick costs up to this much latency). */
+        const val HANDOFF_START_POLL_MS = 100L
+        /** Pause after playback starts so the acknowledged position is the started one. */
+        const val HANDOFF_START_SETTLE_MS = 150L
         const val CATCH_UP_THRESHOLD_MS = 1_500L
     }
 }

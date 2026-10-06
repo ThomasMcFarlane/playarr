@@ -6,11 +6,10 @@
 //! (`sqlx_core::any::types`) only has `Encode`/`Decode` impls for
 //! `bool`/`i16`/`i32`/`i64`/`f32`/`f64`/`String`/`&str`/`Vec<u8>`/`&[u8]` —
 //! there is no `Uuid` or `chrono` support at the `Any` layer (those only
-//! exist for the concrete `Postgres`/`Sqlite`/`MySql` types), and obviously
+//! exist for the concrete driver types), and obviously
 //! no support for this crate's own domain enums. Every repository/store maps
 //! its domain type to one of those primitives here, in one place, so the
-//! mapping can't drift between the `sqlite`/`postgres` query bodies that use
-//! it.
+//! mapping can't drift between the query bodies that use it.
 
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 // `LeafRef` isn't re-exported at the `playarr_model` crate root (unlike
@@ -45,10 +44,7 @@ pub(crate) fn parse_uuid(raw: &str) -> Result<Uuid, DbError> {
 /// AnyDriverError("Any driver does not support the SQLite type
 /// SqliteTypeInfo(Bool)")`) — it fails converting *every* row that touches
 /// such a column, not just when a caller asks to decode that column as
-/// `bool`. Postgres's own bridge does support native `boolean`, but keeping
-/// one representation for both engines (rather than branching per backend)
-/// keeps this file — and every row-mapping function that uses it — backend
-/// agnostic.
+/// `bool`, so booleans are always stored as `0`/`1` integers.
 pub(crate) fn bool_to_i64(value: bool) -> i64 {
     value as i64
 }

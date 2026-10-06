@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait PlaylistRepo: Send + Sync {
@@ -88,13 +88,11 @@ pub trait PlaylistRepo: Send + Sync {
 
 pub struct SqlxPlaylistRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPlaylistRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn playlist_from_row(row: &AnyRow) -> Result<Playlist, DbError> {
@@ -143,16 +141,8 @@ impl SqlxPlaylistRepo {
 #[async_trait]
 impl PlaylistRepo for SqlxPlaylistRepo {
     async fn get(&self, id: Uuid) -> Result<Playlist, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
-                 FROM playlists WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
-                 FROM playlists WHERE id = $1"
-            }
-        };
+        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
+                 FROM playlists WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -162,18 +152,9 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn list_visible_to_user(&self, user_id: Uuid) -> Result<Vec<Playlist>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
+        let sql = "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
                  FROM playlists WHERE owner_user_id = ? OR owner_user_id IS NULL \
-                 ORDER BY created_at ASC"
-            }
-            Backend::Postgres => {
-                "SELECT id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at \
-                 FROM playlists WHERE owner_user_id = $1 OR owner_user_id IS NULL \
-                 ORDER BY created_at ASC"
-            }
-        };
+                 ORDER BY created_at ASC";
         let rows = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -196,26 +177,13 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn upsert(&self, playlist: &Playlist) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO playlists \
+        let sql = "INSERT INTO playlists \
                  (id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  name = excluded.name, owner_user_id = excluded.owner_user_id, \
                  parent_playlist_id = excluded.parent_playlist_id, media_type = excluded.media_type, \
-                 created_at = excluded.created_at, updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO playlists \
-                 (id, name, owner_user_id, parent_playlist_id, media_type, created_at, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, owner_user_id = excluded.owner_user_id, \
-                 parent_playlist_id = excluded.parent_playlist_id, media_type = excluded.media_type, \
-                 created_at = excluded.created_at, updated_at = excluded.updated_at"
-            }
-        };
+                 created_at = excluded.created_at, updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(playlist.id.to_string())
             .bind(playlist.name.as_str())
@@ -233,10 +201,7 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM playlists WHERE id = ?",
-            Backend::Postgres => "DELETE FROM playlists WHERE id = $1",
-        };
+        let sql = "DELETE FROM playlists WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -248,16 +213,9 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn list_items(&self, playlist_id: Uuid) -> Result<Vec<PlaylistItem>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, playlist_id, work_id, track_id, position, added_at FROM playlist_items \
-                 WHERE playlist_id = ? ORDER BY position ASC"
-            }
-            Backend::Postgres => {
-                "SELECT id, playlist_id, work_id, track_id, position, added_at FROM playlist_items \
-                 WHERE playlist_id = $1 ORDER BY position ASC"
-            }
-        };
+        let sql =
+            "SELECT id, playlist_id, work_id, track_id, position, added_at FROM playlist_items \
+                 WHERE playlist_id = ? ORDER BY position ASC";
         let rows = sqlx::query(sql)
             .bind(playlist_id.to_string())
             .fetch_all(&self.pool)
@@ -271,10 +229,7 @@ impl PlaylistRepo for SqlxPlaylistRepo {
         work_id: Uuid,
         track_id: Option<Uuid>,
     ) -> Result<PlaylistItem, DbError> {
-        let max_position_sql = match self.backend {
-            Backend::Sqlite => "SELECT MAX(position) FROM playlist_items WHERE playlist_id = ?",
-            Backend::Postgres => "SELECT MAX(position) FROM playlist_items WHERE playlist_id = $1",
-        };
+        let max_position_sql = "SELECT MAX(position) FROM playlist_items WHERE playlist_id = ?";
         let current_max: Option<i32> = sqlx::query(max_position_sql)
             .bind(playlist_id.to_string())
             .fetch_one(&self.pool)
@@ -291,16 +246,9 @@ impl PlaylistRepo for SqlxPlaylistRepo {
             added_at: chrono::Utc::now(),
         };
 
-        let insert_sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO playlist_items (id, playlist_id, work_id, track_id, position, added_at) \
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO playlist_items (id, playlist_id, work_id, track_id, position, added_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6)"
-            }
-        };
+        let insert_sql =
+            "INSERT INTO playlist_items (id, playlist_id, work_id, track_id, position, added_at) \
+                 VALUES (?, ?, ?, ?, ?, ?)";
         sqlx::query(insert_sql)
             .bind(item.id.to_string())
             .bind(item.playlist_id.to_string())
@@ -315,10 +263,7 @@ impl PlaylistRepo for SqlxPlaylistRepo {
     }
 
     async fn remove_item(&self, playlist_id: Uuid, item_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM playlist_items WHERE playlist_id = ? AND id = ?",
-            Backend::Postgres => "DELETE FROM playlist_items WHERE playlist_id = $1 AND id = $2",
-        };
+        let sql = "DELETE FROM playlist_items WHERE playlist_id = ? AND id = ?";
         let result = sqlx::query(sql)
             .bind(playlist_id.to_string())
             .bind(item_id.to_string())
@@ -335,14 +280,7 @@ impl PlaylistRepo for SqlxPlaylistRepo {
         playlist_id: Uuid,
         item_ids_in_order: &[Uuid],
     ) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE playlist_items SET position = ? WHERE playlist_id = ? AND id = ?"
-            }
-            Backend::Postgres => {
-                "UPDATE playlist_items SET position = $1 WHERE playlist_id = $2 AND id = $3"
-            }
-        };
+        let sql = "UPDATE playlist_items SET position = ? WHERE playlist_id = ? AND id = ?";
         // Two passes through negative positions first: `playlist_items`
         // has a UNIQUE(playlist_id, position) index, so writing final
         // positions directly, one row at a time, can collide with a row

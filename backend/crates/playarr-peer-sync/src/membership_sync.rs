@@ -125,7 +125,7 @@ mod tests {
             .connect("sqlite::memory:")
             .await
             .unwrap();
-        playarr_db::run_migrations(&pool, false).await.unwrap();
+        playarr_db::run_migrations(&pool).await.unwrap();
         (
             Arc::new(playarr_db::repo::SqlxPeerNodeRepo::new(pool.clone())),
             pool,

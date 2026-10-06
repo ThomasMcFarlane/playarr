@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Durable, one-use storage for administrator-issued account invitations.
 #[async_trait]
@@ -96,13 +96,11 @@ pub trait UserInviteRepo: Send + Sync {
 
 pub struct SqlxUserInviteRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxUserInviteRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -139,20 +137,10 @@ impl UserInviteRepo for SqlxUserInviteRepo {
     async fn create(&self, invite: &UserInvite) -> Result<(), DbError> {
         let library_allow = serde_json::to_string(&invite.library_allow)?;
         let group_library_allow = serde_json::to_string(&invite.group_library_allow)?;
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO user_invites \
+        let sql = "INSERT INTO user_invites \
                  (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
                  group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_invites \
-                 (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
-                 group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(&invite.token_hash)
             .bind(invite.created_by.to_string())
@@ -182,17 +170,7 @@ impl UserInviteRepo for SqlxUserInviteRepo {
         // is a purely local cursor concern, not a cross-peer timestamp
         // comparison.
         let received_at = format_datetime(Utc::now());
-        let sql = match self.backend {
-            // The trailing `WHERE` guard is the consumption ratchet this
-            // method's trait doc comment describes: on a pre-existing row,
-            // only adopt the incoming consumption fields when this node's
-            // own copy isn't already consumed. `ON CONFLICT ... DO UPDATE
-            // ... WHERE` is a real no-op (not an error) in both SQLite and
-            // Postgres when the predicate fails -- same convention
-            // `WatchProgressRepo::upsert` already uses for its own
-            // conditional upsert.
-            Backend::Sqlite => {
-                "INSERT INTO user_invites \
+        let sql = "INSERT INTO user_invites \
                  (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
                  group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
@@ -201,21 +179,7 @@ impl UserInviteRepo for SqlxUserInviteRepo {
                  consumed_by_user_id = excluded.consumed_by_user_id, \
                  consumed_by_peer_id = excluded.consumed_by_peer_id, \
                  updated_at = excluded.updated_at \
-                 WHERE user_invites.consumed_at IS NULL AND excluded.consumed_at IS NOT NULL"
-            }
-            Backend::Postgres => {
-                "INSERT INTO user_invites \
-                 (token_hash, created_by, created_at, expires_at, can_stream, library_allow, \
-                 group_library_allow, updated_at, consumed_at, consumed_by_user_id, consumed_by_peer_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-                 ON CONFLICT (token_hash) DO UPDATE SET \
-                 consumed_at = excluded.consumed_at, \
-                 consumed_by_user_id = excluded.consumed_by_user_id, \
-                 consumed_by_peer_id = excluded.consumed_by_peer_id, \
-                 updated_at = excluded.updated_at \
-                 WHERE user_invites.consumed_at IS NULL AND excluded.consumed_at IS NOT NULL"
-            }
-        };
+                 WHERE user_invites.consumed_at IS NULL AND excluded.consumed_at IS NOT NULL";
         sqlx::query(sql)
             .bind(&invite.token_hash)
             .bind(invite.created_by.to_string())
@@ -238,16 +202,10 @@ impl UserInviteRepo for SqlxUserInviteRepo {
         token_hash: &str,
         now: DateTime<Utc>,
     ) -> Result<Option<UserInvite>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM user_invites \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM user_invites \
                  WHERE token_hash = ? AND expires_at > ? AND consumed_at IS NULL"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM user_invites \
-                 WHERE token_hash = $1 AND expires_at > $2 AND consumed_at IS NULL"
-            ),
-        };
+        );
         let row = sqlx::query(&sql)
             .bind(token_hash)
             .bind(format_datetime(now))
@@ -263,18 +221,9 @@ impl UserInviteRepo for SqlxUserInviteRepo {
         consumed_by_user_id: Uuid,
         consumed_by_peer_id: Option<Uuid>,
     ) -> Result<bool, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE user_invites SET consumed_at = ?, consumed_by_user_id = ?, \
+        let sql = "UPDATE user_invites SET consumed_at = ?, consumed_by_user_id = ?, \
                  consumed_by_peer_id = ?, updated_at = ? \
-                 WHERE token_hash = ? AND expires_at > ? AND consumed_at IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE user_invites SET consumed_at = $1, consumed_by_user_id = $2, \
-                 consumed_by_peer_id = $3, updated_at = $4 \
-                 WHERE token_hash = $5 AND expires_at > $6 AND consumed_at IS NULL"
-            }
-        };
+                 WHERE token_hash = ? AND expires_at > ? AND consumed_at IS NULL";
         let result = sqlx::query(sql)
             .bind(format_datetime(now))
             .bind(consumed_by_user_id.to_string())
@@ -291,21 +240,12 @@ impl UserInviteRepo for SqlxUserInviteRepo {
         &self,
         since: Option<DateTime<Utc>>,
     ) -> Result<Vec<UserInvite>, DbError> {
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => format!(
+        let sql = match since.is_some() {
+            true => format!(
                 "SELECT {COLUMNS} FROM user_invites WHERE updated_at > ? \
                  ORDER BY updated_at ASC, token_hash ASC"
             ),
-            (Backend::Sqlite, false) => {
-                format!(
-                    "SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC"
-                )
-            }
-            (Backend::Postgres, true) => format!(
-                "SELECT {COLUMNS} FROM user_invites WHERE updated_at > $1 \
-                 ORDER BY updated_at ASC, token_hash ASC"
-            ),
-            (Backend::Postgres, false) => {
+            false => {
                 format!(
                     "SELECT {COLUMNS} FROM user_invites ORDER BY updated_at ASC, token_hash ASC"
                 )

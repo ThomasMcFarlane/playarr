@@ -6,7 +6,7 @@ use sqlx::Row;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait AvailabilityEventRepo: Send + Sync {
@@ -22,13 +22,11 @@ pub trait AvailabilityEventRepo: Send + Sync {
 
 pub struct SqlxAvailabilityEventRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxAvailabilityEventRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -42,14 +40,7 @@ fn type_str(t: AvailabilityEventType) -> &'static str {
 #[async_trait]
 impl AvailabilityEventRepo for SqlxAvailabilityEventRepo {
     async fn record(&self, e: &AvailabilityEvent) -> Result<bool, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO availability_events (source_instance_id, provider, external_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
-            }
-            Backend::Postgres => {
-                "INSERT INTO availability_events (source_instance_id, provider, external_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING"
-            }
-        };
+        let sql = "INSERT INTO availability_events (source_instance_id, provider, external_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING";
         let result = sqlx::query(sql)
             .bind(e.source_instance_id.to_string())
             .bind(&e.provider)
@@ -71,14 +62,7 @@ impl AvailabilityEventRepo for SqlxAvailabilityEventRepo {
         provider: &str,
         external_id: &str,
     ) -> Result<Vec<AvailabilityEvent>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT source_instance_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade FROM availability_events WHERE provider = ? AND external_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT source_instance_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade FROM availability_events WHERE provider = $1 AND external_id = $2"
-            }
-        };
+        let sql = "SELECT source_instance_id, season_number, episode_number, item_id, event_type, occurred_at, air_at, is_upgrade FROM availability_events WHERE provider = ? AND external_id = ?";
         let rows = sqlx::query(sql)
             .bind(provider)
             .bind(external_id)

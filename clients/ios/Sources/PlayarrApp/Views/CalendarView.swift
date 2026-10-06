@@ -121,6 +121,8 @@ struct CalendarView: View {
                 case .loaded:
                     if viewModel.dayGroups.isEmpty {
                         phoneEmpty
+                    } else if viewModel.mode == .agenda {
+                        phoneAgenda(groups: viewModel.dayGroups)
                     } else {
                         loaded(phone: true)
                     }
@@ -185,14 +187,218 @@ struct CalendarView: View {
                 WMText("Today", 11.52, 720, color: WM.inkSoft, lh: 17.28)
                     .frame(width: 82, height: 46)
                     .background(WM.page, in: Capsule())
-                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+                    .overlay(Capsule().stroke(WM.ink, lineWidth: 3))
             }
             .buttonStyle(.plain)
             .offset(x: 267, y: 85)
             roundButton("\u{2192}", label: "Next period") { Task { await viewModel.step(1) } }
                 .offset(x: 223, y: 138)
         }
+        .ignoresSafeArea()
     }
+
+    private func chipLabel(_ text: String, size: CGFloat = 10.4, ls: CGFloat = 1.6, weight: Int = 400) -> some View {
+        WMText(text, size, weight, color: WM.muted, lh: 15.6, ls: ls)
+    }
+
+    private func releaseTypeLabel(_ type: String) -> String {
+        switch type {
+        case "air": "Airs"
+        case "cinema": "In cinemas"
+        case "digital": "Digital release"
+        case "physical": "Physical release"
+        default: "Releases"
+        }
+    }
+
+    private func kindLabel(_ kind: String) -> String {
+        switch kind {
+        case "episode": "Episodes"
+        case "movie": "Movies"
+        case "album": "Albums"
+        case "book": "Books"
+        default: "Releases"
+        }
+    }
+
+    /// Web mobile agenda: the selected release's detail block, then the day groups.
+    private func phoneAgenda(groups: [CalendarDayGroup]) -> some View {
+        let item = viewModel.selectedItem ?? groups.first?.items.first
+        return ScrollView(.vertical) {
+            ZStack(alignment: .topLeading) {
+                if let item, let entry = item.entries.first {
+                    VStack(alignment: .leading, spacing: 0) {
+                        chipLabel("\(kindLabel(entry.mediaKind)) \u{00B7} \(releaseTypeLabel(entry.releaseType))".uppercased(), ls: 1.8, weight: 700)
+                        WMText(item.title, 20.8, 700, lh: 28, ls: -0.6).padding(.top, 21.4)
+                        WMText(
+                            [entry.episodeCode, entry.subtitle].compactMap { $0 }.joined(separator: " \u{00B7} "),
+                            16, 400, lh: 24
+                        )
+                        .padding(.top, 16)
+                        chipLabel("RELEASE").padding(.top, 16.5)
+                        WMText(
+                            "\(entry.releaseAt.map { Self.releaseFormatter.string(from: $0) } ?? entry.date)",
+                            16, 400, lh: 24
+                        )
+                        chipLabel("STATUS").padding(.top, 11.5)
+                        WMText(statusLabel(entry), 16, 700, lh: 17)
+                            .padding(.horizontal, 8)
+                            .background(WM.adaptive(light: (214, 220, 240), dark: (58, 52, 86)), in: Capsule())
+                            .padding(.top, 6)
+                        chipLabel("REPORTED BY").padding(.top, 12)
+                        if let source = entry.sources.first {
+                            HStack(spacing: 5) {
+                                WMText(source.sourceName, 16, 400, lh: 24).fixedSize()
+                                WMText("(\(source.sourceKind))", 16, 400, color: WM.muted, lh: 24).fixedSize()
+                            }
+                        }
+                        phoneActions(item: item, entry: entry).padding(.top, 16)
+                    }
+                    .padding(.leading, 0)
+                    .offset(y: -27)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(groups) { group in
+                        WMText(Self.groupFormatter.string(from: CalendarDays.displayDate(group.day) ?? Date()), 16, 700, lh: 24)
+                            .padding(.leading, 14)
+                        ForEach(group.items) { row in
+                            phoneAgendaCard(row, selected: row.id == item?.id)
+                        }
+                    }
+                }
+                .padding(.top, 322)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, 130)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.horizontal, -16)
+        .padding(.leading, 16)
+    }
+
+    private func statusLabel(_ entry: CalendarEntry) -> String {
+        switch entry.libraryState {
+        case .inLibrary: "In library"
+        case .monitored: "Monitored"
+        case .notMonitored: "Not monitored"
+        }
+    }
+
+    private func phoneActions(item: CalendarItem, entry: CalendarEntry) -> some View {
+        HStack(spacing: 10) {
+            if let mediaWork = entry.workID {
+                NavigationLink {
+                    WorkDetailView(
+                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: mediaWork),
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
+                } label: {
+                    WMText("Play", 14.4, 700, color: WM.shell, lh: 21.6)
+                        .frame(width: 66, height: 44)
+                        .background(WM.adaptive(light: (104, 92, 99), dark: (244, 240, 241)), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                NavigationLink {
+                    WorkDetailView(
+                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: mediaWork),
+                        apiClient: apiClient,
+                        downloadRepository: downloadRepository
+                    )
+                } label: {
+                    WMText(entry.mediaKind == "episode" ? "Open series" : "Open", 14.4, 700, color: WM.inkSoft, lh: 21.6)
+                        .frame(width: entry.mediaKind == "episode" ? 108 : 70, height: 44)
+                        .overlay(Capsule().stroke(WM.line.opacity(0.22), lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+            }
+            HStack(spacing: 8) {
+                WMText("+", 14.4, 700, color: WM.inkSoft, lh: 21.6).fixedSize()
+                WMText("Add to watchlist", 14.4, 700, color: WM.inkSoft, lh: 21.6).fixedSize()
+            }
+            .frame(width: 147, height: 44)
+            .overlay(Capsule().stroke(WM.line.opacity(0.22), lineWidth: 1.5))
+        }
+    }
+
+    private func phoneAgendaCard(_ item: CalendarItem, selected: Bool) -> some View {
+        let entry = item.entries.first
+        return Button {
+            viewModel.select(item)
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                Group {
+                    if let workID = entry?.workID {
+                        WMRemoteImage(
+                            apiClient: apiClient,
+                            sources: [WMRemoteImage.Source(path: "/api/v1/artwork/work/\(workID.uuidString)/poster")]
+                        )
+                    } else {
+                        WM.artFill
+                    }
+                }
+                .frame(width: 38, height: 60)
+                .background(WM.artFill)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    WMText(item.title, 16, 700, lh: 22)
+                    if let entry {
+                        WMText(
+                            [entry.episodeCode, entry.subtitle].compactMap { $0 }.joined(separator: " \u{00B7} "),
+                            16, 400, color: WM.inkSoft, lh: 22
+                        )
+                        HStack(spacing: 10) {
+                            WMText(calendarTimeLabel24(entry), 14.4, 400, color: WM.muted, lh: 20).fixedSize()
+                            WMText(releaseTypeLabel(entry.releaseType), 14.4, 400, color: WM.muted, lh: 20).fixedSize()
+                            WMText(kindLabel(entry.mediaKind), 14.4, 400, color: WM.muted, lh: 20).fixedSize()
+                            WMText(statusLabel(entry), 14.4, 700, lh: 20)
+                                .padding(.horizontal, 8)
+                                .background(WM.adaptive(light: (214, 220, 240), dark: (58, 52, 86)), in: Capsule())
+                                .fixedSize()
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(width: 345, height: 90, alignment: .topLeading)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(selected ? WM.ink : WM.line.opacity(0.14), lineWidth: selected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 4)
+    }
+
+    private func calendarTimeLabel24(_ entry: CalendarEntry) -> String {
+        guard let at = entry.releaseAt else { return "" }
+        return Self.timeFormatter.string(from: at)
+    }
+
+    private static let releaseFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEEE, d MMMM yyyy 'at' HH:mm"
+        return formatter
+    }()
+
+    private static let groupFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEEE d MMMM"
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     private var phoneEmpty: some View {
         VStack(alignment: .leading, spacing: 0) {

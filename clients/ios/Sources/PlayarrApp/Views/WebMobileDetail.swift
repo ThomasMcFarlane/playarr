@@ -295,23 +295,9 @@ struct WMDetailPage: View {
     }
 
     private var artBackdrop: some View {
-        ZStack(alignment: .topLeading) {
-            PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
-                .frame(width: 406, height: 280)
-                .opacity(0.1)
-                .offset(x: -8, y: -5)
-            LinearGradient(
-                stops: [
-                    .init(color: WM.page.opacity(0), location: 0),
-                    .init(color: WM.page, location: 0.36),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: 390, height: 280)
-        }
-        .frame(width: 390, height: 608, alignment: .topLeading)
-        .clipped()
+        WMKeyArt(work: work, apiClient: apiClient, imageHeight: 280, fadeStart: 215, fadeEnd: 300)
+            .frame(width: 390, height: 608, alignment: .topLeading)
+            .clipped()
     }
 
     private var header: some View {
@@ -401,6 +387,7 @@ struct WMDetailPage: View {
         }
         .frame(width: width, height: height)
         .background(fill, in: Capsule())
+        .wmChipShadow()
     }
 
     private var actions: some View {

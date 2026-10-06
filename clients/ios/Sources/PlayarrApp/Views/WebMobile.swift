@@ -14,7 +14,7 @@ enum WM {
     static let inkSoft = PlayarrStyle.inkSoft
     static let muted = PlayarrStyle.muted
     static let pink = PlayarrStyle.pink
-    static let artFill = adaptive(light: (232, 228, 229), dark: (49, 42, 48))
+    static let artFill = adaptive(light: (223, 220, 221), dark: (49, 42, 48))
     static let chip = PlayarrStyle.surfaceStrong
     static let line = adaptive(light: (56, 38, 33), dark: (223, 220, 221))
 
@@ -39,7 +39,15 @@ enum WM {
     }
 
     static func font(_ size: CGFloat, _ css: Int = 400) -> Font {
-        .custom("Avenir Next", fixedSize: size).weight(weight(css))
+        #if DEBUG
+        // The committed web references were rendered on a host without Avenir Next, so the browser
+        // fell back to a metric-compatible Arial. The parity run draws the same face to compare
+        // layout rather than typeface; the shipped app always uses Avenir Next.
+        if ParityLaunch.isActive {
+            return .custom(css >= 600 ? "Arial-BoldMT" : "ArialMT", fixedSize: size)
+        }
+        #endif
+        return .custom("Avenir Next", fixedSize: size).weight(weight(css))
     }
 
     /// `--mobile-top-inset`: max(14px, safe-area-inset-top). The parity
@@ -363,6 +371,55 @@ struct WMIconView: View {
         }
         .frame(width: size, height: size)
     }
+}
+
+// MARK: - Key art and chip shadow
+
+/// The web's page backdrop: the featured title's artwork, drawn grey at low strength under a
+/// wash that fades to the page colour (`.tv-key-art` and `.tv-stage-wash`).
+struct WMKeyArt: View {
+    let work: Work?
+    let apiClient: PlayarrAPIClient
+    var imageHeight: CGFloat = 483
+    var fadeStart: CGFloat = 219
+    var fadeEnd: CGFloat = 456
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let work {
+                PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
+                    .saturation(0)
+                    .opacity(scheme == .dark ? 0.085 : 0.22)
+                    .frame(width: 406, height: imageHeight)
+                    .offset(x: -8, y: -9)
+            }
+            LinearGradient(
+                stops: [
+                    .init(color: WM.page.opacity(0), location: fadeStart / 844),
+                    .init(color: WM.page, location: fadeEnd / 844),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(width: 390, height: 844, alignment: .topLeading)
+        .clipped()
+        .allowsHitTesting(false)
+    }
+}
+
+/// Soft shadow under the web's pill buttons in the light theme.
+struct WMChipShadow: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(scheme == .dark ? 0 : 0.1), radius: 10, y: 5)
+    }
+}
+
+extension View {
+    func wmChipShadow() -> some View { modifier(WMChipShadow()) }
 }
 
 // MARK: - Cards

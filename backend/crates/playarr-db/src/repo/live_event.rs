@@ -9,8 +9,8 @@
 //! Fan-out is database-first. [`LiveEventPublisher::publish`] inserts a row and
 //! wakes in-process streams; every stream re-reads `seq > cursor` from the
 //! table. That makes the same code correct for a single process, for the
-//! API and worker roles running as separate processes, and for several replicas
-//! sharing one Postgres. A wake only cuts latency; streams also poll on a timer.
+//! API and worker roles running as separate processes sharing one SQLite
+//! file. A wake only cuts latency; streams also poll on a timer.
 //! Separate servers with separate databases (for example two regional servers) never share events.
 
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// Event kinds (the `type` field of a stream frame).
 pub mod kind {
@@ -130,20 +130,11 @@ pub trait LiveEventRepo: Send + Sync {
 
 pub struct SqlxLiveEventRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxLiveEventRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
-    }
-
-    fn q(&self, sqlite: &'static str, postgres: &'static str) -> &'static str {
-        match self.backend {
-            Backend::Sqlite => sqlite,
-            Backend::Postgres => postgres,
-        }
+        Self { pool }
     }
 }
 
@@ -165,13 +156,10 @@ fn from_row(row: &AnyRow) -> Result<LiveEvent, DbError> {
 #[async_trait]
 impl LiveEventRepo for SqlxLiveEventRepo {
     async fn insert(&self, e: &NewLiveEvent, now_ms: i64) -> Result<(), DbError> {
-        sqlx::query(self.q(
+        sqlx::query(
             "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
              source_instance_id, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            "INSERT INTO live_events (user_id, kind, entity, entity_id, changed, \
-             source_instance_id, created_ms) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        ))
+        )
         .bind(e.user_id.map(|u| u.to_string()))
         .bind(e.kind)
         .bind(e.entity)
@@ -185,12 +173,10 @@ impl LiveEventRepo for SqlxLiveEventRepo {
     }
 
     async fn list_after(&self, after: i64, limit: i64) -> Result<Vec<LiveEvent>, DbError> {
-        let rows = sqlx::query(self.q(
+        let rows = sqlx::query(
             "SELECT seq, user_id, kind, entity, entity_id, changed, source_instance_id, \
              created_ms FROM live_events WHERE seq > ? ORDER BY seq LIMIT ?",
-            "SELECT seq, user_id, kind, entity, entity_id, changed, source_instance_id, \
-             created_ms FROM live_events WHERE seq > $1 ORDER BY seq LIMIT $2",
-        ))
+        )
         .bind(after)
         .bind(limit)
         .fetch_all(&self.pool)
@@ -208,22 +194,18 @@ impl LiveEventRepo for SqlxLiveEventRepo {
     async fn purge(&self, now_ms: i64) -> Result<u64, DbError> {
         // The newest row is never purged: it is the watermark that lets a
         // reconnecting client prove it is not behind (see the stream handler).
-        let aged = sqlx::query(self.q(
+        let aged = sqlx::query(
             "DELETE FROM live_events WHERE created_ms < ? \
              AND seq < (SELECT MAX(seq) FROM live_events)",
-            "DELETE FROM live_events WHERE created_ms < $1 \
-             AND seq < (SELECT MAX(seq) FROM live_events)",
-        ))
+        )
         .bind(now_ms - RETENTION_MS)
         .execute(&self.pool)
         .await?
         .rows_affected();
-        let over_cap = sqlx::query(self.q(
+        let over_cap = sqlx::query(
             "DELETE FROM live_events WHERE seq <= \
              (SELECT MAX(seq) FROM live_events) - ?",
-            "DELETE FROM live_events WHERE seq <= \
-             (SELECT MAX(seq) FROM live_events) - $1",
-        ))
+        )
         .bind(MAX_ROWS)
         .execute(&self.pool)
         .await?

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 use crate::repo::user::SyncMetadata;
 
 /// CRUD surface over [`playarr_model::Policy`] -- the permission/
@@ -18,7 +18,7 @@ use crate::repo::user::SyncMetadata;
 /// one user it happens to be assigned to).
 ///
 /// `updated_at`/`deleted_at`/`origin_peer_id` (added by
-/// `backend/migrations/{postgres/0036,sqlite/0033}_peer_sync_state.sql`,
+/// `backend/migrations/sqlite/0033_peer_sync_state.sql`,
 /// nullable and additive -- see `docs/architecture/peer-groups.md` §2.2)
 /// exist purely for cross-node sync bookkeeping and are deliberately not
 /// read into [`playarr_model::Policy`] here -- same rationale as
@@ -75,13 +75,11 @@ pub trait PolicyRepo: Send + Sync {
 
 pub struct SqlxPolicyRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPolicyRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<Policy, DbError> {
@@ -158,22 +156,12 @@ impl SqlxPolicyRepo {
 #[async_trait]
 impl PolicyRepo for SqlxPolicyRepo {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Policy>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
+        let sql =
+            "SELECT id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
                  can_stream, is_admin, household, can_request \
-                 FROM policies WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "SELECT id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
-                 blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
-                 can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, household, can_request \
-                 FROM policies WHERE id = $1 AND deleted_at IS NULL"
-            }
-        };
+                 FROM policies WHERE id = ? AND deleted_at IS NULL";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -202,9 +190,7 @@ impl PolicyRepo for SqlxPolicyRepo {
         // upsert`: a fresh row's value stays `NULL` until `set_origin_
         // peer_id_if_unset` sets it once, and an update through this
         // method can never clobber an existing row's origin claim.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO policies \
+        let sql = "INSERT INTO policies \
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
@@ -221,30 +207,7 @@ impl PolicyRepo for SqlxPolicyRepo {
                  max_concurrent_sessions = excluded.max_concurrent_sessions, \
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
                  is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
-                 household = excluded.household, can_request = excluded.can_request"
-            }
-            Backend::Postgres => {
-                "INSERT INTO policies \
-                 (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
-                 blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
-                 can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at, household, can_request) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
-                 $17, $18, $19, $20) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, library_allow = excluded.library_allow, \
-                 group_library_allow = excluded.group_library_allow, \
-                 blocked_folders = excluded.blocked_folders, max_rating = excluded.max_rating, \
-                 blocked_tags = excluded.blocked_tags, allowed_tags = excluded.allowed_tags, \
-                 can_transcode = excluded.can_transcode, can_download = excluded.can_download, \
-                 can_delete = excluded.can_delete, can_share_public = excluded.can_share_public, \
-                 device_allow = excluded.device_allow, \
-                 max_concurrent_sessions = excluded.max_concurrent_sessions, \
-                 access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
-                 is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
-                 household = excluded.household, can_request = excluded.can_request"
-            }
-        };
+                 household = excluded.household, can_request = excluded.can_request";
         sqlx::query(sql)
             .bind(policy.id.to_string())
             .bind(policy.name.as_str())
@@ -276,14 +239,7 @@ impl PolicyRepo for SqlxPolicyRepo {
         // see `SqlxUserRepo::delete`'s doc comment for the full rationale,
         // including why `AND deleted_at IS NULL` keeps a double-delete
         // returning `NotFound` exactly like the hard delete this replaced.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE policies SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE policies SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL"
-            }
-        };
+        let sql = "UPDATE policies SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL";
         let result = sqlx::query(sql)
             .bind(format_datetime(chrono::Utc::now()))
             .bind(id.to_string())
@@ -306,14 +262,7 @@ impl PolicyRepo for SqlxPolicyRepo {
     }
 
     async fn set_origin_peer_id_if_unset(&self, id: Uuid, peer_id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE policies SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE policies SET origin_peer_id = $1 WHERE id = $2 AND origin_peer_id IS NULL"
-            }
-        };
+        let sql = "UPDATE policies SET origin_peer_id = ? WHERE id = ? AND origin_peer_id IS NULL";
         sqlx::query(sql)
             .bind(peer_id.to_string())
             .bind(id.to_string())
@@ -323,14 +272,7 @@ impl PolicyRepo for SqlxPolicyRepo {
     }
 
     async fn get_sync_metadata(&self, id: Uuid) -> Result<Option<SyncMetadata>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM policies WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT updated_at, origin_peer_id, deleted_at FROM policies WHERE id = $1"
-            }
-        };
+        let sql = "SELECT updated_at, origin_peer_id, deleted_at FROM policies WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -366,9 +308,7 @@ impl PolicyRepo for SqlxPolicyRepo {
             .transpose()?;
         let household = serde_json::to_string(&policy.household)?;
 
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO policies \
+        let sql = "INSERT INTO policies \
                  (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
                  blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
                  can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
@@ -386,31 +326,7 @@ impl PolicyRepo for SqlxPolicyRepo {
                  access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
                  is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
                  origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at, \
-                 household = excluded.household, can_request = excluded.can_request"
-            }
-            Backend::Postgres => {
-                "INSERT INTO policies \
-                 (id, name, library_allow, group_library_allow, blocked_folders, max_rating, \
-                 blocked_tags, allowed_tags, can_transcode, can_download, can_delete, \
-                 can_share_public, device_allow, max_concurrent_sessions, access_schedule, \
-                 can_stream, is_admin, updated_at, origin_peer_id, deleted_at, household, can_request) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
-                 $17, $18, $19, $20, $21, $22) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 name = excluded.name, library_allow = excluded.library_allow, \
-                 group_library_allow = excluded.group_library_allow, \
-                 blocked_folders = excluded.blocked_folders, max_rating = excluded.max_rating, \
-                 blocked_tags = excluded.blocked_tags, allowed_tags = excluded.allowed_tags, \
-                 can_transcode = excluded.can_transcode, can_download = excluded.can_download, \
-                 can_delete = excluded.can_delete, can_share_public = excluded.can_share_public, \
-                 device_allow = excluded.device_allow, \
-                 max_concurrent_sessions = excluded.max_concurrent_sessions, \
-                 access_schedule = excluded.access_schedule, can_stream = excluded.can_stream, \
-                 is_admin = excluded.is_admin, updated_at = excluded.updated_at, \
-                 origin_peer_id = excluded.origin_peer_id, deleted_at = excluded.deleted_at, \
-                 household = excluded.household, can_request = excluded.can_request"
-            }
-        };
+                 household = excluded.household, can_request = excluded.can_request";
         sqlx::query(sql)
             .bind(policy.id.to_string())
             .bind(policy.name.as_str())
@@ -450,17 +366,11 @@ impl PolicyRepo for SqlxPolicyRepo {
                                updated_at, origin_peer_id, deleted_at";
         // Deliberately no `WHERE deleted_at IS NULL` -- see this trait
         // method's own doc comment.
-        let sql = match (self.backend, since.is_some()) {
-            (Backend::Sqlite, true) => {
+        let sql = match since.is_some() {
+            true => {
                 format!("SELECT {SELECT} FROM policies WHERE updated_at > ? ORDER BY updated_at ASC, id ASC")
             }
-            (Backend::Sqlite, false) => {
-                format!("SELECT {SELECT} FROM policies ORDER BY updated_at ASC, id ASC")
-            }
-            (Backend::Postgres, true) => {
-                format!("SELECT {SELECT} FROM policies WHERE updated_at > $1 ORDER BY updated_at ASC, id ASC")
-            }
-            (Backend::Postgres, false) => {
+            false => {
                 format!("SELECT {SELECT} FROM policies ORDER BY updated_at ASC, id ASC")
             }
         };

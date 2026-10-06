@@ -9,7 +9,7 @@ use crate::codec::{
     bool_from_i64, bool_to_i64, decode_err, format_datetime, parse_datetime, parse_uuid,
 };
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// CRUD surface over [`playarr_model::Device`]. Kept separate from a
 /// hypothetical `UserRepo` because devices are queried and mutated far more
@@ -35,13 +35,11 @@ pub trait DeviceRepo: Send + Sync {
 
 pub struct SqlxDeviceRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxDeviceRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<Device, DbError> {
@@ -69,16 +67,8 @@ impl SqlxDeviceRepo {
 #[async_trait]
 impl DeviceRepo for SqlxDeviceRepo {
     async fn get(&self, id: Uuid) -> Result<Device, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
-                 FROM devices WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
-                 FROM devices WHERE id = $1"
-            }
-        };
+        let sql = "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
+                 FROM devices WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
@@ -88,19 +78,9 @@ impl DeviceRepo for SqlxDeviceRepo {
     }
 
     async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<Device>, DbError> {
-        // `NULLS LAST` is supported by both engines (SQLite since 3.30,
-        // Postgres always) so this needs no per-backend variant beyond the
-        // placeholder.
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
-                 FROM devices WHERE user_id = ? ORDER BY last_seen_at DESC NULLS LAST"
-            }
-            Backend::Postgres => {
-                "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
-                 FROM devices WHERE user_id = $1 ORDER BY last_seen_at DESC NULLS LAST"
-            }
-        };
+        // `NULLS LAST` needs SQLite 3.30 or newer.
+        let sql = "SELECT id, user_id, name, platform, client_version, last_seen_at, trusted \
+                 FROM devices WHERE user_id = ? ORDER BY last_seen_at DESC NULLS LAST";
         let rows = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -109,24 +89,12 @@ impl DeviceRepo for SqlxDeviceRepo {
     }
 
     async fn upsert(&self, device: &Device) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO devices (id, user_id, name, platform, client_version, last_seen_at, trusted) \
+        let sql = "INSERT INTO devices (id, user_id, name, platform, client_version, last_seen_at, trusted) \
                  VALUES (?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (id) DO UPDATE SET \
                  user_id = excluded.user_id, name = excluded.name, platform = excluded.platform, \
                  client_version = excluded.client_version, last_seen_at = excluded.last_seen_at, \
-                 trusted = excluded.trusted"
-            }
-            Backend::Postgres => {
-                "INSERT INTO devices (id, user_id, name, platform, client_version, last_seen_at, trusted) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 user_id = excluded.user_id, name = excluded.name, platform = excluded.platform, \
-                 client_version = excluded.client_version, last_seen_at = excluded.last_seen_at, \
-                 trusted = excluded.trusted"
-            }
-        };
+                 trusted = excluded.trusted";
         sqlx::query(sql)
             .bind(device.id.to_string())
             .bind(device.user_id.to_string())
@@ -141,10 +109,7 @@ impl DeviceRepo for SqlxDeviceRepo {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM devices WHERE id = ?",
-            Backend::Postgres => "DELETE FROM devices WHERE id = $1",
-        };
+        let sql = "DELETE FROM devices WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(id.to_string())
             .execute(&self.pool)
@@ -156,10 +121,7 @@ impl DeviceRepo for SqlxDeviceRepo {
     }
 
     async fn touch_last_seen(&self, id: Uuid, at: DateTime<Utc>) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "UPDATE devices SET last_seen_at = ? WHERE id = ?",
-            Backend::Postgres => "UPDATE devices SET last_seen_at = $1 WHERE id = $2",
-        };
+        let sql = "UPDATE devices SET last_seen_at = ? WHERE id = ?";
         let result = sqlx::query(sql)
             .bind(format_datetime(at))
             .bind(id.to_string())

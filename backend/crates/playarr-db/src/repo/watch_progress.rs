@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::codec::{decode_err, format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 #[async_trait]
 pub trait WatchProgressRepo: Send + Sync {
@@ -23,13 +23,11 @@ pub trait WatchProgressRepo: Send + Sync {
 
 pub struct SqlxWatchProgressRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxWatchProgressRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<WatchProgress, DbError> {
@@ -71,20 +69,10 @@ impl WatchProgressRepo for SqlxWatchProgressRepo {
         user_id: Uuid,
         media_file_id: Uuid,
     ) -> Result<Option<WatchProgress>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
+        let sql = "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
                  p.updated_at FROM watch_progress p \
                  JOIN media_files m ON m.id = p.media_file_id \
-                 WHERE p.user_id = ? AND p.media_file_id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
-                 p.updated_at FROM watch_progress p \
-                 JOIN media_files m ON m.id = p.media_file_id \
-                 WHERE p.user_id = $1 AND p.media_file_id = $2"
-            }
-        };
+                 WHERE p.user_id = ? AND p.media_file_id = ?";
         let row = sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(media_file_id.to_string())
@@ -94,20 +82,10 @@ impl WatchProgressRepo for SqlxWatchProgressRepo {
     }
 
     async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<WatchProgress>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
+        let sql = "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
                  p.updated_at FROM watch_progress p \
                  JOIN media_files m ON m.id = p.media_file_id \
-                 WHERE p.user_id = ? ORDER BY p.updated_at DESC"
-            }
-            Backend::Postgres => {
-                "SELECT p.media_file_id, m.work_id, p.position_ms, p.duration_ms, p.state, \
-                 p.updated_at FROM watch_progress p \
-                 JOIN media_files m ON m.id = p.media_file_id \
-                 WHERE p.user_id = $1 ORDER BY p.updated_at DESC"
-            }
-        };
+                 WHERE p.user_id = ? ORDER BY p.updated_at DESC";
         let rows = sqlx::query(sql)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -117,35 +95,13 @@ impl WatchProgressRepo for SqlxWatchProgressRepo {
 
     async fn upsert(&self, user_id: Uuid, progress: &WatchProgress) -> Result<(), DbError> {
         let updated_at = progress.updated_at.unwrap_or_else(chrono::Utc::now);
-        let sql = match self.backend {
-            // The trailing `WHERE excluded.updated_at > watch_progress.updated_at`
-            // guard is what makes this upsert safe against out-of-order
-            // writes -- an offline-buffered client replaying a stale update
-            // (see `UpdateWatchProgressRequest::occurred_at`'s doc comment)
-            // after a newer update from another device already landed must
-            // not regress the row back to an older position. A conflicting
-            // row with no matching `WHERE` match is simply left untouched
-            // (`ON CONFLICT ... DO UPDATE ... WHERE` is a real no-op, not an
-            // error, in both SQLite and Postgres when the predicate fails).
-            Backend::Sqlite => {
-                "INSERT INTO watch_progress \
+        let sql = "INSERT INTO watch_progress \
                  (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
                  VALUES (?, ?, ?, ?, ?, ?) \
                  ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
                  position_ms = excluded.position_ms, duration_ms = excluded.duration_ms, \
                  state = excluded.state, updated_at = excluded.updated_at \
-                 WHERE excluded.updated_at > watch_progress.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO watch_progress \
-                 (user_id, media_file_id, position_ms, duration_ms, state, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6) \
-                 ON CONFLICT (user_id, media_file_id) DO UPDATE SET \
-                 position_ms = EXCLUDED.position_ms, duration_ms = EXCLUDED.duration_ms, \
-                 state = EXCLUDED.state, updated_at = EXCLUDED.updated_at \
-                 WHERE EXCLUDED.updated_at > watch_progress.updated_at"
-            }
-        };
+                 WHERE excluded.updated_at > watch_progress.updated_at";
         sqlx::query(sql)
             .bind(user_id.to_string())
             .bind(progress.media_file_id.to_string())

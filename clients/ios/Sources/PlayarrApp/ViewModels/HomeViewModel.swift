@@ -122,14 +122,44 @@ public final class HomeViewModel {
               let serverRails = optionalRails,
               !serverRails.isEmpty
         else { return false }
-        rails = serverRails.map { Rail(id: $0.id, title: $0.title, works: $0.items) }
-        var seen = Set<UUID>()
-        recentlyAdded = serverRails.flatMap(\.items).filter { seen.insert($0.id).inserted }
-        continueWatching = []
-        loadState = .loaded
         let progress = (try? await apiClient.listWatchProgress()) ?? []
         progressByWorkID = Self.indexLatestProgress(progress)
+        // Like Web, a "Start watching" (or "On deck") rail leads the server rails.
+        let merged = serverRails.flatMap(\.items).sorted { $0.addedAt > $1.addedAt }
+        let onDeck = await resumableWorks(progress: progress, known: merged)
+        var used = Set<UUID>()
+        func take(_ source: [Work], count: Int) -> [Work] {
+            var result: [Work] = []
+            for work in source where used.insert(work.id).inserted {
+                result.append(work)
+                if result.count == count { break }
+            }
+            return result
+        }
+        let primary = onDeck.isEmpty ? take(merged, count: 8) : take(onDeck, count: 10)
+        var built = [Rail(id: "primary", title: onDeck.isEmpty ? "Start watching" : "On deck", works: primary)]
+        built += serverRails.map { Rail(id: $0.id, title: $0.title, works: $0.items) }
+        rails = built.filter { !$0.works.isEmpty }
+        var seen = Set<UUID>()
+        recentlyAdded = merged.filter { seen.insert($0.id).inserted }
+        continueWatching = []
+        loadState = .loaded
         return true
+    }
+
+    /// Works with part-watched progress, newest first, resolved from `known` or the catalogue.
+    private func resumableWorks(progress: [WatchProgress], known: [Work]) async -> [Work] {
+        var workByID = Dictionary(known.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var seen = Set<UUID>()
+        let resumable = progress
+            .filter { $0.state == .partWatched }
+            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+            .filter { seen.insert($0.workID).inserted }
+            .prefix(10)
+        for item in resumable where workByID[item.workID] == nil {
+            if let work = try? await apiClient.fetchWork(id: item.workID).work { workByID[item.workID] = work }
+        }
+        return resumable.compactMap { workByID[$0.workID] }
     }
 
     private func browse(kind: WorkKind) async throws -> [Work] {

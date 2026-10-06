@@ -35,12 +35,12 @@ use uuid::Uuid;
 
 use crate::codec::{format_datetime, parse_datetime, parse_uuid};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// One admin-issued, single-use invitation for another node to join a
 /// `playarr_model::PeerGroup` -- see `docs/architecture/peer-groups.md`
 /// §3.4. Column-for-column mirror of the `peer_join_tokens` table
-/// (`backend/migrations/{postgres/0035,sqlite/0032}_node_identity.sql`).
+/// (`backend/migrations/sqlite/0032_node_identity.sql`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PeerJoinToken {
     /// Hash of the raw, one-time token handed to the joining admin -- the
@@ -86,13 +86,11 @@ pub trait PeerJoinTokenRepo: Send + Sync {
 
 pub struct SqlxPeerJoinTokenRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxPeerJoinTokenRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 }
 
@@ -119,18 +117,9 @@ const COLUMNS: &str =
 #[async_trait]
 impl PeerJoinTokenRepo for SqlxPeerJoinTokenRepo {
     async fn create(&self, token: &PeerJoinToken) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO peer_join_tokens \
+        let sql = "INSERT INTO peer_join_tokens \
                  (token_hash, group_id, created_by, created_at, expires_at, redeemed_by_peer_id) \
-                 VALUES (?, ?, ?, ?, ?, ?)"
-            }
-            Backend::Postgres => {
-                "INSERT INTO peer_join_tokens \
-                 (token_hash, group_id, created_by, created_at, expires_at, redeemed_by_peer_id) \
-                 VALUES ($1, $2, $3, $4, $5, $6)"
-            }
-        };
+                 VALUES (?, ?, ?, ?, ?, ?)";
         sqlx::query(sql)
             .bind(&token.token_hash)
             .bind(token.group_id.to_string())
@@ -148,16 +137,10 @@ impl PeerJoinTokenRepo for SqlxPeerJoinTokenRepo {
         token_hash: &str,
         now: DateTime<Utc>,
     ) -> Result<Option<PeerJoinToken>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => format!(
-                "SELECT {COLUMNS} FROM peer_join_tokens \
+        let sql = format!(
+            "SELECT {COLUMNS} FROM peer_join_tokens \
                  WHERE token_hash = ? AND expires_at > ? AND redeemed_by_peer_id IS NULL"
-            ),
-            Backend::Postgres => format!(
-                "SELECT {COLUMNS} FROM peer_join_tokens \
-                 WHERE token_hash = $1 AND expires_at > $2 AND redeemed_by_peer_id IS NULL"
-            ),
-        };
+        );
         let row = sqlx::query(&sql)
             .bind(token_hash)
             .bind(format_datetime(now))
@@ -172,16 +155,8 @@ impl PeerJoinTokenRepo for SqlxPeerJoinTokenRepo {
         now: DateTime<Utc>,
         redeemed_by_peer_id: Uuid,
     ) -> Result<bool, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "UPDATE peer_join_tokens SET redeemed_by_peer_id = ? \
-                 WHERE token_hash = ? AND expires_at > ? AND redeemed_by_peer_id IS NULL"
-            }
-            Backend::Postgres => {
-                "UPDATE peer_join_tokens SET redeemed_by_peer_id = $1 \
-                 WHERE token_hash = $2 AND expires_at > $3 AND redeemed_by_peer_id IS NULL"
-            }
-        };
+        let sql = "UPDATE peer_join_tokens SET redeemed_by_peer_id = ? \
+                 WHERE token_hash = ? AND expires_at > ? AND redeemed_by_peer_id IS NULL";
         let result = sqlx::query(sql)
             .bind(redeemed_by_peer_id.to_string())
             .bind(token_hash)

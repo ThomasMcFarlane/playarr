@@ -87,7 +87,15 @@ jobs:
           run_install: false
 
       - name: Install ffmpeg
-        run: brew install ffmpeg
+        run: |
+          brew install ffmpeg
+          if [[ "$PLATFORM" == ios ]]; then
+            # The plain formula has no drawtext filter; the committed references show the title text on the artwork.
+            brew install ffmpeg-full
+            bin="$(brew --prefix ffmpeg-full)/bin"
+            "$bin/ffmpeg" -hide_banner -filters | grep -q drawtext
+            echo "$bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Build the fixture server
         working-directory: backend

@@ -11,7 +11,7 @@ use uuid::{uuid, Uuid};
 
 use crate::codec::{format_datetime, parse_datetime};
 use crate::error::DbError;
-use crate::pool::{Backend, DbPool};
+use crate::pool::DbPool;
 
 /// The one row this table ever holds -- every `upsert` targets this id,
 /// so re-registering (e.g. rotating the API key) replaces the existing
@@ -33,13 +33,11 @@ pub trait TdarrConnectionRepo: Send + Sync {
 
 pub struct SqlxTdarrConnectionRepo {
     pool: DbPool,
-    backend: Backend,
 }
 
 impl SqlxTdarrConnectionRepo {
     pub fn new(pool: DbPool) -> Self {
-        let backend = Backend::detect(&pool);
-        Self { pool, backend }
+        Self { pool }
     }
 
     fn from_row(row: &AnyRow) -> Result<TdarrConnection, DbError> {
@@ -72,18 +70,10 @@ impl SqlxTdarrConnectionRepo {
 #[async_trait]
 impl TdarrConnectionRepo for SqlxTdarrConnectionRepo {
     async fn get(&self) -> Result<Option<TdarrConnection>, DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "SELECT base_url, api_key_encrypted, tdarr_db_id, default_profile, worker_process, \
+        let sql =
+            "SELECT base_url, api_key_encrypted, tdarr_db_id, default_profile, worker_process, \
                  default_worker_limit, throttled_worker_limit, active_session_threshold, \
-                 throttle_check_interval_secs, updated_at FROM tdarr_connection WHERE id = ?"
-            }
-            Backend::Postgres => {
-                "SELECT base_url, api_key_encrypted, tdarr_db_id, default_profile, worker_process, \
-                 default_worker_limit, throttled_worker_limit, active_session_threshold, \
-                 throttle_check_interval_secs, updated_at FROM tdarr_connection WHERE id = $1"
-            }
-        };
+                 throttle_check_interval_secs, updated_at FROM tdarr_connection WHERE id = ?";
         let row = sqlx::query(sql)
             .bind(TDARR_CONNECTION_ID.to_string())
             .fetch_optional(&self.pool)
@@ -92,9 +82,7 @@ impl TdarrConnectionRepo for SqlxTdarrConnectionRepo {
     }
 
     async fn upsert(&self, connection: &TdarrConnection) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => {
-                "INSERT INTO tdarr_connection \
+        let sql = "INSERT INTO tdarr_connection \
                  (id, base_url, api_key_encrypted, tdarr_db_id, default_profile, worker_process, \
                   default_worker_limit, throttled_worker_limit, active_session_threshold, \
                   throttle_check_interval_secs, updated_at) \
@@ -107,25 +95,7 @@ impl TdarrConnectionRepo for SqlxTdarrConnectionRepo {
                  throttled_worker_limit = excluded.throttled_worker_limit, \
                  active_session_threshold = excluded.active_session_threshold, \
                  throttle_check_interval_secs = excluded.throttle_check_interval_secs, \
-                 updated_at = excluded.updated_at"
-            }
-            Backend::Postgres => {
-                "INSERT INTO tdarr_connection \
-                 (id, base_url, api_key_encrypted, tdarr_db_id, default_profile, worker_process, \
-                  default_worker_limit, throttled_worker_limit, active_session_threshold, \
-                  throttle_check_interval_secs, updated_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-                 ON CONFLICT (id) DO UPDATE SET \
-                 base_url = excluded.base_url, api_key_encrypted = excluded.api_key_encrypted, \
-                 tdarr_db_id = excluded.tdarr_db_id, default_profile = excluded.default_profile, \
-                 worker_process = excluded.worker_process, \
-                 default_worker_limit = excluded.default_worker_limit, \
-                 throttled_worker_limit = excluded.throttled_worker_limit, \
-                 active_session_threshold = excluded.active_session_threshold, \
-                 throttle_check_interval_secs = excluded.throttle_check_interval_secs, \
-                 updated_at = excluded.updated_at"
-            }
-        };
+                 updated_at = excluded.updated_at";
         sqlx::query(sql)
             .bind(TDARR_CONNECTION_ID.to_string())
             .bind(connection.base_url.as_str())
@@ -144,10 +114,7 @@ impl TdarrConnectionRepo for SqlxTdarrConnectionRepo {
     }
 
     async fn delete(&self) -> Result<(), DbError> {
-        let sql = match self.backend {
-            Backend::Sqlite => "DELETE FROM tdarr_connection WHERE id = ?",
-            Backend::Postgres => "DELETE FROM tdarr_connection WHERE id = $1",
-        };
+        let sql = "DELETE FROM tdarr_connection WHERE id = ?";
         sqlx::query(sql)
             .bind(TDARR_CONNECTION_ID.to_string())
             .execute(&self.pool)
