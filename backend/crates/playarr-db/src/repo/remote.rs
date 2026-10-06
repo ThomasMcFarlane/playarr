@@ -66,6 +66,8 @@ pub struct RemoteTarget {
     pub state: Option<Value>,
     pub state_at_ms: Option<i64>,
     pub last_seen_ms: i64,
+    /// Optional install-independent device fingerprint a reinstall can reclaim by.
+    pub fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -133,6 +135,24 @@ pub trait RemoteRepo: Send + Sync {
         now_ms: i64,
     ) -> Result<(), DbError>;
     async fn delete_target(&self, device_id: Uuid) -> Result<(), DbError>;
+    /// A reinstalled device (`new_id`) takes over `old_id`: pairings and queued events move
+    /// across and the stale target row is deleted. Pairings that become duplicates of one
+    /// another (same controller and target, both pending or active) keep only the newest.
+    async fn reclaim_device(
+        &self,
+        user_id: Uuid,
+        old_id: Uuid,
+        new_id: Uuid,
+        now_ms: i64,
+    ) -> Result<(), DbError>;
+    /// Deletes the user's targets not seen since `cutoff_ms` and revokes their live pairings.
+    /// Returns how many targets were removed.
+    async fn prune_stale_targets(
+        &self,
+        user_id: Uuid,
+        cutoff_ms: i64,
+        now_ms: i64,
+    ) -> Result<u64, DbError>;
 
     async fn insert_pairing(&self, pairing: &RemotePairing) -> Result<(), DbError>;
     async fn get_pairing(&self, id: Uuid) -> Result<Option<RemotePairing>, DbError>;
@@ -239,7 +259,7 @@ fn strings(raw: &str) -> Result<Vec<String>, DbError> {
 }
 
 const TARGET_COLS: &str =
-    "device_id, user_id, name, platform, capabilities, state, state_at_ms, last_seen_ms";
+    "device_id, user_id, name, platform, capabilities, state, state_at_ms, last_seen_ms, fingerprint";
 const PAIRING_COLS: &str = "id, user_id, controller_device_id, controller_name, target_device_id, \
      status, scopes, verification_code, created_ms, expires_ms, approved_ms, revoked_ms, revoked_by";
 const EVENT_COLS: &str = "id, target_device_id, seq, kind, pairing_id, user_id, \
@@ -258,6 +278,7 @@ fn target_from(row: &AnyRow) -> Result<RemoteTarget, DbError> {
         state: opt_json(row.try_get("state")?)?,
         state_at_ms: row.try_get("state_at_ms")?,
         last_seen_ms: row.try_get("last_seen_ms")?,
+        fingerprint: row.try_get("fingerprint")?,
     })
 }
 
@@ -320,10 +341,11 @@ fn handoff_from(row: &AnyRow) -> Result<RemoteHandoff, DbError> {
 impl RemoteRepo for SqlxRemoteRepo {
     async fn upsert_target(&self, t: &RemoteTarget) -> Result<(), DbError> {
         let sql = self.sql(&format!(
-            "INSERT INTO remote_targets ({TARGET_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) \
+            "INSERT INTO remote_targets ({TARGET_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
              ON CONFLICT (device_id) DO UPDATE SET user_id = excluded.user_id, \
              name = excluded.name, platform = excluded.platform, \
-             capabilities = excluded.capabilities, last_seen_ms = excluded.last_seen_ms"
+             capabilities = excluded.capabilities, last_seen_ms = excluded.last_seen_ms, \
+             fingerprint = excluded.fingerprint"
         ));
         sqlx::query(&sql)
             .bind(t.device_id.to_string())
@@ -334,6 +356,7 @@ impl RemoteRepo for SqlxRemoteRepo {
             .bind(json_str(&t.state))
             .bind(t.state_at_ms)
             .bind(t.last_seen_ms)
+            .bind(t.fingerprint.clone())
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -398,6 +421,94 @@ impl RemoteRepo for SqlxRemoteRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn reclaim_device(
+        &self,
+        user_id: Uuid,
+        old_id: Uuid,
+        new_id: Uuid,
+        now_ms: i64,
+    ) -> Result<(), DbError> {
+        let (u, old, new) = (user_id.to_string(), old_id.to_string(), new_id.to_string());
+        for col in ["controller_device_id", "target_device_id"] {
+            let sql = self.sql(&format!(
+                "UPDATE remote_pairings SET {col} = ? WHERE {col} = ? AND user_id = ?"
+            ));
+            sqlx::query(&sql)
+                .bind(new.clone())
+                .bind(old.clone())
+                .bind(u.clone())
+                .execute(&self.pool)
+                .await?;
+        }
+        // Queued commands for the old install can never be delivered to the new one.
+        let sql = self.sql("DELETE FROM remote_events WHERE target_device_id = ? AND user_id = ?");
+        sqlx::query(&sql)
+            .bind(old.clone())
+            .bind(u.clone())
+            .execute(&self.pool)
+            .await?;
+        self.delete_target(old_id).await?;
+        // Collapse duplicates the move created: keep the newest live pairing per pair.
+        let sql = self.sql(
+            "UPDATE remote_pairings SET status = 'revoked', revoked_ms = ? \
+             WHERE user_id = ? AND status IN ('pending', 'active') \
+             AND (controller_device_id = ? OR target_device_id = ?) \
+             AND EXISTS (SELECT 1 FROM remote_pairings n WHERE n.user_id = remote_pairings.user_id \
+               AND n.controller_device_id = remote_pairings.controller_device_id \
+               AND n.target_device_id = remote_pairings.target_device_id \
+               AND n.status IN ('pending', 'active') \
+               AND (n.created_ms > remote_pairings.created_ms \
+                    OR (n.created_ms = remote_pairings.created_ms AND n.id > remote_pairings.id)))",
+        );
+        sqlx::query(&sql)
+            .bind(now_ms)
+            .bind(u)
+            .bind(new.clone())
+            .bind(new)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn prune_stale_targets(
+        &self,
+        user_id: Uuid,
+        cutoff_ms: i64,
+        now_ms: i64,
+    ) -> Result<u64, DbError> {
+        let u = user_id.to_string();
+        let stale = "SELECT device_id FROM remote_targets WHERE user_id = ? AND last_seen_ms < ?";
+        for col in ["controller_device_id", "target_device_id"] {
+            let sql = self.sql(&format!(
+                "UPDATE remote_pairings SET status = 'revoked', revoked_ms = ? \
+                 WHERE user_id = ? AND status IN ('pending', 'active') AND {col} IN ({stale})"
+            ));
+            sqlx::query(&sql)
+                .bind(now_ms)
+                .bind(u.clone())
+                .bind(u.clone())
+                .bind(cutoff_ms)
+                .execute(&self.pool)
+                .await?;
+        }
+        let sql = self.sql(&format!(
+            "DELETE FROM remote_events WHERE user_id = ? AND target_device_id IN ({stale})"
+        ));
+        sqlx::query(&sql)
+            .bind(u.clone())
+            .bind(u.clone())
+            .bind(cutoff_ms)
+            .execute(&self.pool)
+            .await?;
+        let sql = self.sql("DELETE FROM remote_targets WHERE user_id = ? AND last_seen_ms < ?");
+        let done = sqlx::query(&sql)
+            .bind(u)
+            .bind(cutoff_ms)
+            .execute(&self.pool)
+            .await?;
+        Ok(done.rows_affected())
     }
 
     async fn insert_pairing(&self, p: &RemotePairing) -> Result<(), DbError> {

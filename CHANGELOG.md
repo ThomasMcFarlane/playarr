@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Remote control: reinstalling the app no longer leaves a stale "Offline" device and duplicate pairings. Registering a target now accepts an optional `fingerprint`; a new install on the same account with the same fingerprint (or, when either side has none, the same name and platform as an offline target) takes over the old target, its pairings and nothing else. Targets unseen for 30 days are pruned with their pairings revoked, and the target list hides a target that has been offline for over a day when a fresher one has the same name and platform. The Android app sends a hash of its per-device Android id as the fingerprint.
 - Android TV search: pressing Up from Filters now lands on the search field instead of the Back button, matching the web TV search page. Tests pin the focus order on both clients and the first-Enter/OK activation of web TV cards.
 - Phone remote: a press that cannot be delivered now says why, beside the pad instead of below the pairing lists: "No connection" when this phone has no network, "The device did not respond" when the command is not acknowledged within about 4 s (for example the TV app is in the background or its connection dropped), instead of silently doing nothing or blaming the device.
 - Android TV: the pairing approval prompt now keeps retrying to take D-pad focus until it has it, so a slow first composition no longer leaves the remote's keys falling through to the screen behind.
@@ -2294,6 +2295,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Pixel parity tooling for the Android phone client: platform profile options for capture-web (safe area, font, colour scheme), an emulator capture script, a system-bar mask and the measured results in both themes.
 - Added the 2026-10-07 emulator validation record for the phone remote and playback handoff (`docs/validation/remote-emulator-run-2026-10-07.md`), including what only a real device can prove.
 - Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.
 - Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.

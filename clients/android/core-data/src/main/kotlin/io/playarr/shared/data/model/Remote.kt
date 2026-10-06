@@ -21,6 +21,8 @@ data class RegisterRemoteTargetRequest(
     val name: String,
     val platform: String? = null,
     val capabilities: List<String>,
+    /** Install-independent id so a reinstall reclaims this target and its pairings. */
+    val fingerprint: String? = null,
 )
 
 @Serializable
