@@ -45,6 +45,7 @@ struct TVWorkDetailView: View {
                 }
             }
         }
+        .ignoresSafeArea()
         .task {
             if viewModel.state == .idle { await viewModel.load() }
         }

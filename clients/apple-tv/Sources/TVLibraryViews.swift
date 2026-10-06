@@ -1114,10 +1114,11 @@ struct TVLibraryKindView: View {
                     .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
                 }
 
-                libraryHeading
-                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
-                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
-                    .zIndex(10)
+                TVPageHeader(
+                    title: kindLabel,
+                    detail: items.isEmpty ? nil : "\(items.count) \(collectionNoun.lowercased())"
+                )
+                .zIndex(10)
 
                 if let selected {
                     libraryPreview(selected)

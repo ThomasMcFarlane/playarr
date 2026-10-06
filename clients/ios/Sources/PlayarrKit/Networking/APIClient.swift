@@ -182,6 +182,8 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     func fetchHomeRails() async throws -> [HomeRail]
     /// `GET /api/v1/catalog/{id}/availability-lag` for a series.
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag?
+    /// `GET /api/v1/household/status`: whether the signed-in profile may watch right now.
+    func fetchHouseholdStatus() async throws -> HouseholdStatus?
     /// `GET /api/v1/media/{id}/thumbnail`: a frame of the media file (chapter and episode stills).
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data
     func fetchWork(id: UUID) async throws -> WorkDetail
@@ -419,6 +421,10 @@ public final class APIClient: PlayarrAPIClient {
     public func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data {
         let query = positionMs.map { [URLQueryItem(name: "position_ms", value: String($0))] } ?? []
         return try await authenticatedData(path: "/api/v1/media/\(mediaFileID.uuidString)/thumbnail", query: query)
+    }
+
+    public func fetchHouseholdStatus() async throws -> HouseholdStatus? {
+        try await get("/api/v1/household/status")
     }
 
     public func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? {
@@ -1109,5 +1115,21 @@ public extension PlayarrAPIClient {
     /// Defaults for conformers (test doubles) that predate these endpoints.
     func fetchHomeRails() async throws -> [HomeRail] { [] }
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
+    func fetchHouseholdStatus() async throws -> HouseholdStatus? { nil }
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data { Data() }
+}
+
+/// The signed-in profile's household state (`allowed`, `outside_schedule`, `budget_exhausted`, ...).
+public struct HouseholdStatus: Decodable, Sendable {
+    public var state: String
+    public var nextStartAt: String?
+    public var resetsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case nextStartAt = "next_start_at"
+        case resetsAt = "resets_at"
+    }
+
+    public var isBlocked: Bool { state == "outside_schedule" || state == "budget_exhausted" }
 }

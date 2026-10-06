@@ -543,11 +543,16 @@ struct TVFloatingNav: View {
     private var navGroups: [[TVNavTab]] {
         [
             [.downloads, .search],
-            [.home, .series, .movies] + (showMusic ? [.music] : []),
+            [.home]
+                + ((browseKinds?.contains(.series) ?? true) ? [.series] : [])
+                + ((browseKinds?.contains(.movie) ?? true) ? [.movies] : [])
+                + ((browseKinds?.contains(.artist) ?? showMusic) ? [.music] : []),
             [.playlists, .watchlist, .requests, .calendar],
         ]
     }
     var showMusic: Bool = false
+    /// Kinds the profile can browse (`nil` while unknown shows Series and Movies).
+    var browseKinds: Set<WorkKind>? = nil
 
     var body: some View {
         // Whole nav is one centred column (web: top 50% + translateY(-50%)).

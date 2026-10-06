@@ -174,3 +174,34 @@ enum TVWebFormat {
         return "\(total / 60):" + String(format: "%02d", total % 60)
     }
 }
+
+/// Web `.app-user-identity`: avatar and name in a pill at (58.5, 997.3), version in monospace below.
+struct TVWebProfileChip: View {
+    var name: String
+    var version: String
+    var userID: String = ""
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Capsule()
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.66))
+                .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
+                .placed(x: 58.5, y: 997.3, w: 104.3, h: 48.2)
+            TVProfileAvatar(userID: userID, size: 34)
+                .placed(x: 65.6, y: 1004.4, w: 34, h: 34)
+            Text(name)
+                .font(TVTheme.font(size: 11.14, weight: .bold))
+                .tracking(0.22)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .lineLimit(1)
+                .placed(x: 110, y: 1013, w: 48, h: 16.7)
+            Text(version)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .tracking(0.32)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 66.3, y: 1050.5, h: 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+}

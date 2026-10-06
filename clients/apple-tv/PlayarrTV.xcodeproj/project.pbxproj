@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */; };
+		4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */; };
 		23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */; };
 		43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */; };
 		226B2B04940D4525C9DB2A6E /* PlayarrTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3221EA6B4513A57FE50ACE0E /* PlayarrTVApp.swift */; };
@@ -42,6 +44,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVProfileAvatar.swift; sourceTree = "<group>"; };
+		7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVHouseholdView.swift; sourceTree = "<group>"; };
 		FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVCalendarView.swift; sourceTree = "<group>"; };
 		9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebLayout.swift; sourceTree = "<group>"; };
 		12E4DA2002EFA25EC8BDF5D8 /* TVDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVDetailView.swift; sourceTree = "<group>"; };
@@ -112,6 +116,8 @@
 				2D582C12CA26152EFDEE5953 /* TVRootView.swift */,
 				A1B2C3D4E5F60718293A4F0 /* TVDisplayPreferences.swift */,
 				61029885CE1ECACC599117A4 /* TVSettingsView.swift */,
+				D83D57650058DB4821E3D536 /* TVProfileAvatar.swift */,
+				7B2F3874FAB952C36AD2059D /* TVHouseholdView.swift */,
 				FA896E1B3F9DC40338C987EA /* TVCalendarView.swift */,
 				9040FED80D9CC1AC57298FD3 /* TVWebLayout.swift */,
 				6A1B2C3D4E5F60718293A4B1 /* TVTheme.swift */,
@@ -253,6 +259,8 @@
 				4667E9FA407CD2E4D3FA1F50 /* TVRootView.swift in Sources */,
 				A1B2C3D4E5F60718293A4F1 /* TVDisplayPreferences.swift in Sources */,
 				B3106D278BEB5C717AF146C8 /* TVSettingsView.swift in Sources */,
+				8766969AD7B2F94DC7435230 /* TVProfileAvatar.swift in Sources */,
+				4E57CEB6B3FBC016D9FCF3DF /* TVHouseholdView.swift in Sources */,
 				23487EDB024D978495FEA9ED /* TVCalendarView.swift in Sources */,
 				43F62F297057D471425DD2E6 /* TVWebLayout.swift in Sources */,
 				6A1B2C3D4E5F60718293A4B6 /* TVTheme.swift in Sources */,

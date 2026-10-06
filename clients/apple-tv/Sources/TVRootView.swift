@@ -79,6 +79,9 @@ struct TVRootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
+        .task(id: isSignedIn) {
+            if isSignedIn { await environment.refreshShellState() }
+        }
         .onAppear {
             if let forced = parityForcedTab {
                 selectedTab = forced
@@ -87,6 +90,11 @@ struct TVRootView: View {
                 selectedTab = live
             }
         }
+    }
+
+    private var isSignedIn: Bool {
+        if case .signedIn = environment.pairingState { return true }
+        return false
     }
 
     private var signedInShell: some View {
@@ -143,7 +151,8 @@ struct TVRootView: View {
                 selection: nav,
                 suppressFocusChrome: true,
                 showSettings: false,
-                externalFocus: $shellFocus
+                externalFocus: $shellFocus,
+                browseKinds: environment.catalogKinds
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)
@@ -154,6 +163,10 @@ struct TVRootView: View {
                 .allowsHitTesting(false)
                 .zIndex(80)
 
+            if TVParityLaunch.isLive {
+                TVWebProfileChip(name: "Viewer", version: "v0.1.0", userID: environment.currentUserID)
+                    .zIndex(50)
+            } else {
             VStack {
                 Spacer()
                 HStack {
@@ -165,13 +178,16 @@ struct TVRootView: View {
             }
             .allowsHitTesting(false)
             .zIndex(50)
+            }
         }
         .ignoresSafeArea()
     }
 
     @ViewBuilder
     private func stageContent(tab: TVNavTab, detailWork: Work?) -> some View {
-        if TVParityLaunch.liveDetail != nil {
+        if environment.householdBlocked {
+            TVHouseholdBlockedView()
+        } else if TVParityLaunch.liveDetail != nil {
             TVParityLiveDetailView()
         } else if let detailWork {
             TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
@@ -248,7 +264,8 @@ private struct TVProductionShell<Stage: View>: View {
                     showSettings: true,
                     externalFocus: shellFocus,
                     focusNamespace: shellFocusNamespace,
-                    preferDefaultFocus: preferNavDefault
+                    preferDefaultFocus: preferNavDefault,
+                    browseKinds: environment.catalogKinds
                 )
                 .frame(width: navColumn)
                 .focusSection()
