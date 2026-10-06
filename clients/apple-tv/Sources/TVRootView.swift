@@ -249,6 +249,7 @@ private struct TVProductionShell<Stage: View>: View {
     var shellFocus: FocusState<TVShellFocus?>.Binding
     @ViewBuilder var stageContent: () -> Stage
 
+    @Environment(TVAppEnvironment.self) private var environment
     @Namespace private var shellFocusNamespace
     @State private var preferNavDefault = false
     @Environment(\.resetFocus) private var resetFocus
