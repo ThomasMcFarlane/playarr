@@ -1,0 +1,1 @@
+- Privacy policy now covers the iPhone, iPad and Apple TV apps, and the App Store listing metadata, privacy answers and review notes are documented for submission.

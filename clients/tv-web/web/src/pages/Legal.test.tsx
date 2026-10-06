@@ -67,4 +67,13 @@ describe("public legal pages", () => {
     expect(markup).toContain('href="mailto:support@playarr.app"');
     expect(markup).toContain("Google Play Android app require HTTPS");
   });
+
+  it("covers the iPhone, iPad and Apple TV apps", () => {
+    const markup = renderLegalPage("/legal/privacy", <PrivacyPolicyPage />);
+
+    expect(markup).toContain("iPhone, iPad and Apple TV applications");
+    expect(markup).toContain("app.playarr.ios");
+    expect(markup).toContain("do not register for push notifications");
+    expect(markup).toContain("contain no advertising or analytics software");
+  });
 });

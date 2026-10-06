@@ -51,15 +51,17 @@ export function PrivacyPolicyPage() {
   return (
     <LegalPage
       title="Privacy policy"
-      description="How the Playarr Android app, web app, self-hosted server and public linking service handle data."
+      description="How the Playarr Android, iOS, tvOS and web apps, self-hosted server and public linking service handle data."
     >
-      <p className="legal-effective-date">Effective 28 August 2026</p>
+      <p className="legal-effective-date">Effective 5 October 2026</p>
 
       <section>
         <h2>Who this policy covers</h2>
         <p>
           This policy applies to the Playarr Android application with package name
-          <code>app.playarr.mobile</code>, the Playarr web application at
+          <code>app.playarr.mobile</code>, the Playarr iPhone, iPad and Apple TV applications
+          distributed through the Apple App Store (bundle identifier
+          <code>app.playarr.ios</code>), the Playarr web application at
           <a href="https://playarr.app"> playarr.app</a>, and the short-lived device-linking
           service on that domain. Playarr connects to a Playarr Server chosen and operated by
           you or your server administrator.
@@ -78,6 +80,16 @@ export function PrivacyPolicyPage() {
         <p>
           Clear the app's storage or uninstall it to remove its local data. Downloaded media can
           also be removed from within the app.
+        </p>
+        <p>
+          On iPhone, iPad and Apple TV the app keeps this information in the app's own sandbox and
+          in the device Keychain, and requests Local Network access only so it can reach a
+          Playarr Server on your home network and discover Google Cast devices. The Apple apps
+          have no account of their own, contain no advertising or analytics software, do not
+          track you across other companies' apps or websites, and do not send any data to the
+          Playarr project other than the optional device-linking record described below. Apple
+          may separately collect App Store, TestFlight and crash-report information under its own
+          privacy policy; Playarr receives only aggregate reports through App Store Connect.
         </p>
       </section>
 
@@ -110,6 +122,12 @@ export function PrivacyPolicyPage() {
       <section>
         <h2>Notifications and Google services</h2>
         <p>
+          The iPhone, iPad and Apple TV apps do not register for push notifications and do not
+          include Firebase. Where a Google Cast receiver is configured, the app uses Google's
+          Cast SDK to find and control Cast devices on your local network; Google's handling of
+          that data is governed by its own terms and privacy policy.
+        </p>
+        <p>
           In production Android builds configured for invite notifications, Google Firebase Cloud
           Messaging creates an app-installation identifier and push token after you sign in. The
           token is registered with your selected Playarr Server so it can deliver invitation
@@ -135,7 +153,8 @@ export function PrivacyPolicyPage() {
         <h2>Security, retention and deletion</h2>
         <p>
           The hosted playarr.app service and the Google Play Android app require HTTPS. Sideloaded
-          builds can also connect to an HTTP address chosen by you or your administrator, so only
+          Android builds, and the Apple apps when you enter a server on a private or local network,
+          can also connect to an HTTP address chosen by you or your administrator, so only
           use an unencrypted address on a network you trust. Local records remain until removed in
           the app, cleared by the operating system or removed by uninstalling. Server-side records
           and backups follow the server operator's retention policy. Device-link records expire
@@ -153,7 +172,8 @@ export function PrivacyPolicyPage() {
         <p>
           You can avoid the hosted linking service by entering a server address and signing in
           directly. You can disable notifications, remove downloads, sign out, clear app storage or
-          uninstall the app at any time. Playarr is developed by Thomas McFarlane. For privacy
+          uninstall the app at any time. On Apple devices you can also revoke Local Network access
+          in Settings. Playarr is developed by Thomas McFarlane. For privacy
           questions, email <a href="mailto:support@playarr.app">support@playarr.app</a>. You can
           also use the contact method on the
           <a href="https://github.com/ThomasMcFarlane/playarr"> Playarr repository</a>. Do not put
