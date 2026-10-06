@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Xbox: the package has its tile, logo and splash images (the Playarr icon on the brand background), so the sideload MSIX can be packaged.
 - CI: the Release workflow downloads only the package artefacts, not the image build record that `docker/build-push-action` uploads, which failed the GitHub Release job.
 - Xbox: the default resource qualifier is `Language=en-US`, so MSIX packaging no longer fails in `CreatePriConfigXmlForFullIndex` ("Index was outside the bounds of the array").
 - CI: the Android APK verification reads the signer certificate from current `apksigner` output (`V3.0 Signer:` lines when the APK has no v1 signature), so a correctly signed release APK no longer fails as a certificate mismatch.

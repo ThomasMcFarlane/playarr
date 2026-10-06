@@ -273,14 +273,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      Referenced by Package.appxmanifest (Properties/Logo, uap:VisualElements,
-      uap:DefaultTile, uap:SplashScreen) but not created here — see that
-      file's own comment. These Content entries are kept anyway so the
-      project's file list structurally matches what the manifest expects;
-      a designer (or a `devdeploy`-style asset pipeline) still needs to drop
-      real PNGs at these paths before this project can actually package.
-    -->
+    <!-- Tile, logo and splash images referenced by Package.appxmanifest. -->
     <Content Include="Assets\Square150x150Logo.png" />
     <Content Include="Assets\Square44x44Logo.png" />
     <Content Include="Assets\StoreLogo.png" />

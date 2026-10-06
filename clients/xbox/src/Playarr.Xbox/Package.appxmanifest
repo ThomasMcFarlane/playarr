@@ -72,13 +72,8 @@
         Description="Playarr for Xbox — a native client for a self-hosted Playarr server."
         BackgroundColor="transparent">
         <!--
-          Every Assets\*.png referenced here and by Properties/Logo above
-          is a plausible filename, not a file that exists yet — no real
-          icon/tile/splash art has been produced for this client. Adding
-          the actual PNGs (and the corresponding <Content Include> entries
-          in Playarr.Xbox.csproj — see that file's own comment) is
-          required before this project can package, and belongs to the
-          MSIX-packaging phase (task #7), not this foundational one.
+          The tile, logo and splash PNGs in Assets/ are the Playarr app icon
+          centred on the brand background (#17111f).
         -->
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
