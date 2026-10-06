@@ -644,10 +644,15 @@ pub async fn discover_roots(state: &AppState) -> Result<Vec<Uuid>, ApiError> {
                 total_space_bytes: root.total_space.and_then(|v| u64::try_from(v).ok()),
             })
             .collect::<Vec<_>>();
-        state
+        // One source failing to record must not stop the others.
+        if let Err(error) = state
             .folder_repo
             .sync_discovered_roots(source.id, &roots)
-            .await?;
+            .await
+        {
+            tracing::warn!(source_instance_id = %source.id, %error, "recording discovered root folders failed");
+            failed.push(source.id);
+        }
     }
     Ok(failed)
 }

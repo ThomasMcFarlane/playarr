@@ -267,7 +267,7 @@ const UPSERT_ROOT: &str = "INSERT INTO source_root_folders \
      work_kind, accessible, free_space_bytes, total_space_bytes, active, scan_enabled, \
      scan_status, last_scanned_at, scan_error, updated_at) \
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
-    ON CONFLICT (id) DO UPDATE SET \
+    ON CONFLICT (source_instance_id, source_root_id) DO UPDATE SET \
     source_instance_id = excluded.source_instance_id, source_root_id = excluded.source_root_id, \
     reported_path = excluded.reported_path, local_path_override = excluded.local_path_override, \
     display_name = excluded.display_name, work_kind = excluded.work_kind, \
@@ -292,13 +292,17 @@ impl FolderRepo for SqlxFolderRepo {
         .execute(&mut *tx)
         .await?;
         // Configuration and scan state survive: only what the source owns is
-        // refreshed on conflict.
+        // refreshed on conflict. The conflict target is the natural key the
+        // table is unique on, not `id`: a row that already exists for this
+        // source root under another id (an older id scheme, a replicated row,
+        // a concurrent discovery) is updated in place and keeps its id, so
+        // the entries that reference it stay attached.
         let upsert = self.q("INSERT INTO source_root_folders \
              (id, source_instance_id, source_root_id, reported_path, display_name, work_kind, \
               accessible, free_space_bytes, total_space_bytes, active, scan_enabled, scan_status, \
               updated_at) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'pending', ?) \
-             ON CONFLICT (id) DO UPDATE SET \
+             ON CONFLICT (source_instance_id, source_root_id) DO UPDATE SET \
              reported_path = excluded.reported_path, display_name = excluded.display_name, \
              work_kind = excluded.work_kind, accessible = excluded.accessible, \
              free_space_bytes = excluded.free_space_bytes, \
@@ -748,6 +752,71 @@ mod tests {
         assert_eq!(alpha.display_name, "Alpha renamed");
         assert_eq!(alpha.local_path(), PathBuf::from("/srv/alpha"));
         assert!(!roots.iter().find(|r| r.id == b).unwrap().active);
+    }
+
+    #[tokio::test]
+    async fn discovery_adopts_existing_rows_under_another_id() {
+        let (repo, _files, _pool, source) = fixture().await;
+        let old = Uuid::new_v4();
+        // A row already present for the same source root, with a different id.
+        repo.sync_discovered_roots(source, &[discovered(old, "Alpha", "1")])
+            .await
+            .unwrap();
+        repo.update_root_config(
+            old,
+            &RootConfigUpdate {
+                scan_enabled: Some(true),
+                local_path_override: None,
+                display_name: None,
+            },
+        )
+        .await
+        .unwrap();
+        let fresh = Uuid::new_v4();
+        repo.sync_discovered_roots(
+            source,
+            &[
+                discovered(fresh, "Alpha renamed", "1"),
+                discovered(Uuid::new_v4(), "Beta", "2"),
+            ],
+        )
+        .await
+        .unwrap();
+        // Idempotent: a third run changes nothing structurally.
+        repo.sync_discovered_roots(source, &[discovered(fresh, "Alpha renamed", "1")])
+            .await
+            .unwrap();
+        let roots = repo.list_roots().await.unwrap();
+        let alpha: Vec<_> = roots.iter().filter(|r| r.source_root_id == "1").collect();
+        assert_eq!(alpha.len(), 1);
+        assert_eq!(alpha[0].id, old, "the existing row keeps its id");
+        assert_eq!(alpha[0].display_name, "Alpha renamed");
+        assert!(alpha[0].scan_enabled && alpha[0].active);
+        assert_eq!(roots.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn concurrent_discoveries_do_not_collide() {
+        let (repo, _files, _pool, source) = fixture().await;
+        let repo = std::sync::Arc::new(repo);
+        let mut tasks = Vec::new();
+        for _ in 0..8 {
+            let repo = repo.clone();
+            tasks.push(tokio::spawn(async move {
+                repo.sync_discovered_roots(
+                    source,
+                    &[
+                        discovered(Uuid::new_v4(), "Alpha", "1"),
+                        discovered(Uuid::new_v4(), "Beta", "2"),
+                    ],
+                )
+                .await
+            }));
+        }
+        for task in tasks {
+            task.await.unwrap().unwrap();
+        }
+        assert_eq!(repo.list_roots().await.unwrap().len(), 2);
     }
 
     #[tokio::test]
