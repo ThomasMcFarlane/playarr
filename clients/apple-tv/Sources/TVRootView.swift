@@ -95,7 +95,7 @@ struct TVRootView: View {
 
     private func signedInShell(forcedSelection: TVNavTab?, detailWork: Work? = nil) -> some View {
         let tab = forcedSelection ?? selectedTab
-        let parity = TVParityLaunch.requestedScreen != nil
+        let parity = TVParityLaunch.frozen
         let navBinding = Binding(
             get: { forcedSelection ?? selectedTab },
             set: { if forcedSelection == nil { selectedTab = $0 } }
@@ -157,7 +157,7 @@ struct TVRootView: View {
             VStack {
                 Spacer()
                 HStack {
-                    TVProfileChip(name: "Test User A", version: "v0.1.0")
+                    TVProfileChip(name: TVParityLaunch.isLive ? "Viewer" : "Test User A", version: TVParityLaunch.isLive ? "v0.1.0" : "v0.1.0")
                         .padding(.leading, DesignTokens.Shell.navEdge - 4)
                         .padding(.bottom, 36)
                     Spacer()
@@ -204,6 +204,8 @@ struct TVRootView: View {
                     workKind: .artist,
                     collectionNoun: "ARTISTS"
                 )
+            case .downloads, .watchlist, .requests, .calendar:
+                TVNotYetOnTVView(title: tab.title)
             case .playlists:
                 TVLibraryKindView(
                     kindLabel: "Playlists",

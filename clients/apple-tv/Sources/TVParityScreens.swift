@@ -50,6 +50,9 @@ extension TVParityLaunch {
 
     static var isLive: Bool { route != nil }
 
+    /// Static chrome (floating nav, no focus effects, frozen clock): fixture screens and live routes.
+    static var frozen: Bool { requestedScreen != nil || isLive }
+
     static var liveTab: TVNavTab? {
         guard let route else { return nil }
         switch route.split(separator: ":", maxSplits: 1).first.map(String.init) ?? route {
@@ -321,3 +324,23 @@ struct TVParityPlayerFixtureView: View {
 }
 
 
+
+/// Stage for web destinations the Apple TV client does not implement yet (Downloads, Watchlist,
+/// Requests, Calendar). Honest empty state rather than a missing nav entry.
+struct TVNotYetOnTVView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            TVStageBackground()
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(TVTheme.font(size: 34, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                Text("This screen is not available on Apple TV yet.")
+                    .font(TVTheme.font(size: 16, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+        }
+    }
+}
