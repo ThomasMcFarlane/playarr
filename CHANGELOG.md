@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Xbox: the package manifest declares `mp:PhoneIdentity`, which the UWP packaging targets require (APPX1673).
 - Xbox: the package has its tile, logo and splash images (the Playarr icon on the brand background), so the sideload MSIX can be packaged.
 - CI: the Release workflow downloads only the package artefacts, not the image build record that `docker/build-push-action` uploads, which failed the GitHub Release job.
 - Xbox: the default resource qualifier is `Language=en-US`, so MSIX packaging no longer fails in `CreatePriConfigXmlForFullIndex` ("Index was outside the bounds of the array").

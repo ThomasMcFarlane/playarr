@@ -2,9 +2,10 @@
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  IgnorableNamespaces="mp uap rescap">
 
   <Identity
     Name="Playarr.PlayarrXbox"
@@ -27,11 +28,11 @@
   -->
 
   <!--
-    No mp:PhoneIdentity element: that's a phone-app-only manifest element
-    (UWP mobile/phone support is deprecated), and the xmlns:mp namespace it
-    needs is deliberately not declared above either — both would be dead
-    weight on an Xbox/desktop-only client.
+    The UWP packaging targets require mp:PhoneIdentity (APPX1673) even for an
+    Xbox/desktop-only app. The product id is a fixed random GUID for this app;
+    the publisher id is the all-zero placeholder used for sideloaded packages.
   -->
+  <mp:PhoneIdentity PhoneProductId="134fc502-30d6-48f5-9e28-e19929e6e1b0" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
   <Properties>
     <DisplayName>Playarr</DisplayName>
