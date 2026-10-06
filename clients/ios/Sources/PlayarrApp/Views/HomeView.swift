@@ -68,16 +68,7 @@ struct HomeView: View {
     private var phoneContent: some View {
         ZStack(alignment: .topLeading) {
             WM.page
-            LinearGradient(
-                stops: [
-                    .init(color: WM.adaptive(light: (222, 221, 220), dark: (34, 32, 34)), location: 0),
-                    .init(color: WM.adaptive(light: (222, 221, 220), dark: (34, 32, 34)), location: 0.18),
-                    .init(color: WM.page, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: scheme == .dark ? 330 : 170)
+            WMKeyArt(work: viewModel.featuredWork, apiClient: apiClient)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(viewModel.rails.enumerated()), id: \.element.id) { index, rail in

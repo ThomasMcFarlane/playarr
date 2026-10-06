@@ -365,6 +365,55 @@ struct WMIconView: View {
     }
 }
 
+// MARK: - Key art and chip shadow
+
+/// The web's page backdrop: the featured title's artwork, drawn grey at low strength under a
+/// wash that fades to the page colour (`.tv-key-art` and `.tv-stage-wash`).
+struct WMKeyArt: View {
+    let work: Work?
+    let apiClient: PlayarrAPIClient
+    var imageHeight: CGFloat = 483
+    var fadeStart: CGFloat = 219
+    var fadeEnd: CGFloat = 456
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let work {
+                PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
+                    .saturation(0)
+                    .opacity(scheme == .dark ? 0.085 : 0.22)
+                    .frame(width: 406, height: imageHeight)
+                    .offset(x: -8, y: -9)
+            }
+            LinearGradient(
+                stops: [
+                    .init(color: WM.page.opacity(0), location: fadeStart / 844),
+                    .init(color: WM.page, location: fadeEnd / 844),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(width: 390, height: 844, alignment: .topLeading)
+        .clipped()
+        .allowsHitTesting(false)
+    }
+}
+
+/// Soft shadow under the web's pill buttons in the light theme.
+struct WMChipShadow: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(scheme == .dark ? 0 : 0.1), radius: 10, y: 5)
+    }
+}
+
+extension View {
+    func wmChipShadow() -> some View { modifier(WMChipShadow()) }
+}
+
 // MARK: - Cards
 
 struct WMUnseenDot: View {

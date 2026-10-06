@@ -9,6 +9,7 @@ struct LibraryView: View {
     let title: String
     @Environment(\.playarrGoHome) private var goHome
     @State private var showingFilters = false
+    @State private var filtersOpen = false
     @State private var downloadTarget: Work?
 
     init(kind: WorkKind?, apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository, title: String? = nil, initialQuery: String? = nil) {
@@ -78,6 +79,7 @@ struct LibraryView: View {
     private var phoneSearch: some View {
         ZStack(alignment: .topLeading) {
             WM.page
+            WMKeyArt(work: viewModel.works.first, apiClient: apiClient)
             ScrollView(.vertical) {
                 ZStack(alignment: .topLeading) {
                     HStack(spacing: 12) {
@@ -96,22 +98,28 @@ struct LibraryView: View {
                     .padding(.leading, 15)
                     .padding(.trailing, 16)
                     .frame(width: 358, height: 50)
-                    .background(WM.chip.opacity(0.66), in: Capsule())
-                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+                    .background(WM.chip, in: Capsule())
+                    .overlay(Capsule().stroke(WM.pink.opacity(0.7), lineWidth: 2))
+                    .shadow(color: WM.pink.opacity(0.22), radius: 5)
                     .offset(x: 16, y: 90)
 
-                    HStack(spacing: 10) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(WM.pink)
-                        WMText("Filters", 8, 760, lh: 12)
-                        WMText("\(scopeLabel(viewModel.searchScope)) · All libraries", 6.72, 400, color: WM.muted, lh: 10.08)
+                    Button { withAnimation { filtersOpen.toggle() } } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(WM.pink)
+                            WMText("Filters", 8, 760, lh: 12)
+                            WMText("\(scopeLabel(viewModel.searchScope)) · All libraries", 6.72, 400, color: WM.muted, lh: 10.08)
+                        }
+                        .padding(.leading, 25)
+                        .frame(width: 145, height: 42, alignment: .leading)
+                        .background(WM.chip.opacity(0.66), in: Capsule())
+                        .wmChipShadow()
                     }
-                    .padding(.leading, 25)
-                    .frame(width: 145, height: 42, alignment: .leading)
-                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .buttonStyle(.plain)
                     .offset(x: 16, y: 150)
 
+                    if filtersOpen {
                     WMText("Type", 6.72, 740, color: WM.muted, lh: 10.08).offset(x: 16, y: 188)
                     ForEach(Self.searchChips) { chip in
                         let active = viewModel.searchScope == chip.scope
@@ -128,6 +136,7 @@ struct LibraryView: View {
                         }
                         .buttonStyle(.plain)
                         .offset(x: chip.x, y: active ? 183 : 184)
+                    }
                     }
 
                     VStack(alignment: .leading, spacing: 0) {
@@ -244,6 +253,14 @@ struct LibraryView: View {
 
     /// Web mobile library: two 173x97 columns under the page header.
     private var phoneGrid: some View {
+        ZStack(alignment: .topLeading) {
+            WMKeyArt(work: viewModel.works.first, apiClient: apiClient)
+            phoneGridScroll
+        }
+        .ignoresSafeArea()
+    }
+
+    private var phoneGridScroll: some View {
         ScrollView(.vertical) {
             LazyVGrid(
                 columns: [
