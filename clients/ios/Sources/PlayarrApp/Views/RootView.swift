@@ -384,6 +384,14 @@ private struct AuthenticatedPlayarrShell: View {
         ZStack(alignment: .topLeading) {
             profileButton(size: 42, avatarSize: 32)
                 .offset(x: proxy.size.width - 16 - 42, y: WM.topInset)
+            Text("v \(InstalledAppVersion.current)")
+                .font(.system(size: 6.08, weight: .bold, design: .monospaced))
+                .tracking(0.2432)
+                .foregroundStyle(WM.muted)
+                .fixedSize()
+                .frame(width: 42)
+                .offset(x: proxy.size.width - 16 - 42, y: WM.topInset + 47)
+                .allowsHitTesting(false)
 
             VStack {
                 Spacer()

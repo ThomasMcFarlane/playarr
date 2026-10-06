@@ -1,0 +1,1 @@
+- iOS: Customise Home (show, hide and reorder Home rails, saved on the server), the illustrated profile avatars shared with the web, the web-style profile picker with theme and language menus, and the app version label under the profile button.

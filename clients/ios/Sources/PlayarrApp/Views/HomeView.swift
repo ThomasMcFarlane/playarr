@@ -89,6 +89,17 @@ struct HomeView: View {
             }
             .scrollIndicators(.hidden)
             .refreshable { await viewModel.load() }
+
+            NavigationLink {
+                HomeCustomiseView(apiClient: apiClient)
+            } label: {
+                WMText("Customise Home", 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                    .frame(width: 131, height: 38)
+                    .background(WM.chip, in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 243, y: WM.topInset + 2)
         }
         .ignoresSafeArea()
     }
