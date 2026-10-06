@@ -53,7 +53,7 @@ struct SettingsView: View {
     }
 
     let environment: AppEnvironment
-    @AppStorage("com.playarr.ios.appearance") private var appearance = "dark"
+    @AppStorage("com.playarr.ios.appearance") private var appearance = "system"
     @AppStorage("com.playarr.ios.language") private var language = "en"
     @AppStorage(NativePlayerDefaults.qualityKey) private var qualityID = "original"
     @AppStorage(NativePlayerDefaults.subtitleModeKey) private var subtitleMode = "off"

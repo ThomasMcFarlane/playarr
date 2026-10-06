@@ -531,7 +531,7 @@ struct WMDetailPage: View {
             LinearGradient(
                 stops: [
                     .init(color: WM.page, location: 0),
-                    .init(color: Color(red: 40 / 255, green: 35 / 255, blue: 40 / 255), location: 0.35),
+                    .init(color: WM.adaptive(light: (251, 250, 249), dark: (40, 35, 40)), location: 0.35),
                 ],
                 startPoint: .leading,
                 endPoint: .trailing

@@ -27,6 +27,7 @@ struct HomeView: View {
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
     @State private var downloadTarget: Work?
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Group {
@@ -69,14 +70,14 @@ struct HomeView: View {
             WM.page
             LinearGradient(
                 stops: [
-                    .init(color: Color(red: 34 / 255, green: 32 / 255, blue: 34 / 255), location: 0),
-                    .init(color: Color(red: 34 / 255, green: 32 / 255, blue: 34 / 255), location: 0.18),
+                    .init(color: WM.adaptive(light: (222, 221, 220), dark: (34, 32, 34)), location: 0),
+                    .init(color: WM.adaptive(light: (222, 221, 220), dark: (34, 32, 34)), location: 0.18),
                     .init(color: WM.page, location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 330)
+            .frame(height: scheme == .dark ? 330 : 170)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(viewModel.rails.enumerated()), id: \.element.id) { index, rail in
@@ -88,6 +89,17 @@ struct HomeView: View {
             }
             .scrollIndicators(.hidden)
             .refreshable { await viewModel.load() }
+
+            NavigationLink {
+                HomeCustomiseView(apiClient: apiClient)
+            } label: {
+                WMText("Customise Home", 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                    .frame(width: 131, height: 38)
+                    .background(WM.chip, in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 243, y: WM.topInset + 2)
         }
         .ignoresSafeArea()
     }

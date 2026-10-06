@@ -122,7 +122,7 @@ struct LibraryView: View {
                             WMText(chip.label, 7.04, 680, color: active ? WM.ink : WM.muted, lh: 10.56)
                                 .frame(width: chip.width, height: active ? 33 : 31)
                                 .background(
-                                    active ? Color(red: 64 / 255, green: 33 / 255, blue: 43 / 255) : WM.ink.opacity(0.06),
+                                    active ? WM.adaptive(light: (226, 214, 218), dark: (64, 33, 43)) : WM.ink.opacity(0.06),
                                     in: Capsule()
                                 )
                         }
