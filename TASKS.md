@@ -260,7 +260,7 @@ Export and import shipped on the server, web and Android.
 
 | # | Task | Status | Picked up by | Notes |
 |---|------|--------|--------------|-------|
-| 132 | Portability: iOS and Apple TV settings entry (SwiftUI) | pending | Unassigned | Parent: 67. Depends on 69-70. |
+| 132 | Portability: iOS and Apple TV settings entry (SwiftUI) | in progress: iOS "Your data" in Settings (export, preview, import, unmatched download) in review; Apple TV pending | Unassigned | Parent: 67. Depends on 69-70. Tests: PlayarrKitTests UserDataClientTests; compiled by the iOS tests workflow. Device verification of the file picker and share sheet still open. |
 | 133 | Portability: Harmony, Xbox and Roku settings entry | pending | Unassigned | Parent: 67. Depends on 69-70; native file pickers or companion hand-off where the platform has no picker, stated honestly. |
 | 134 | Portability: webOS and Tizen shells (inherit web panel) and VIDAA hosted web | pending | Unassigned | Parent: 67. Depends on 130. |
 
