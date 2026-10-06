@@ -158,6 +158,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Household approvals: the decision route now returns distinct 403 error codes (`self_approval_forbidden`, `not_guardian`, `guardian_pin_not_set`) with the same status and messages; the Android guardian screen uses them (falling back to message text for older servers) and confirms each approve or deny with a snackbar.
 - Web player: the top-left back arrow is replaced by an icon-only "Close player" X at the top right (localised, reachable with D-pad or arrow keys on the TV layout; Escape and Back still close). Clicking, tapping or pressing Enter/OK while the controls are hidden now only reveals them instead of pausing; Space, k and the media keys still toggle directly.
 - Web player: the Original quality now shows the source bitrate, for example "Original · 24.3 Mbps", or plain "Original" when the bitrate is unknown (never "0 Mbps").
 - Web player: Minimise uses the browser Picture-in-Picture window where supported, falling back to the in-app mini player otherwise.
