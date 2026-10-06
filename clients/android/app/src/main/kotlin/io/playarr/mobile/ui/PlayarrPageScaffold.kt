@@ -119,8 +119,6 @@ internal fun PlayarrPageScaffold(
     backActive: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // The web page body does not follow the top inset; it starts where a 24 dp status bar leaves it.
-    val bodyInsetGap = if (isTelevision || !padBody) 0.dp else (24.dp - webPhoneInsets().asPaddingValues().calculateTopPadding()).coerceAtLeast(0.dp)
     val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(webPhoneInsets())
     Box(
         modifier
@@ -135,7 +133,7 @@ internal fun PlayarrPageScaffold(
                     .padding(
                         start = playarrPageStart(isTelevision),
                         end = playarrPageEnd(isTelevision),
-                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp) + bodyInsetGap,
+                        top = (if (isTelevision) 56.dp + 50.dp + 16.dp else 16.dp + 44.dp + 12.dp) + (if (subtitle != null) (if (isTelevision) 22.dp else 18.dp) else 0.dp),
                         bottom = playarrPageSafeBottom(isTelevision),
                     )
             } else {

@@ -2112,6 +2112,7 @@ private fun ExperienceNavHost(
                     isTelevision = isTelevision,
                     onBack = { navController.openExperienceTopLevel("home") },
                     onOpenWork = { navController.navigate("experience-detail/$it") },
+                    onPlay = { navController.navigate("experience-player/$it") },
                 )
             }
         }
