@@ -1,0 +1,1 @@
+- iOS: blocked and remaining-time states for household policies (outside schedule, daily budget used, "Ask a guardian for more time"), with PlayarrKit household client and tests.

@@ -1,0 +1,1 @@
+- iOS: the phone shell, home, library, search, settings index, title page (film and series) and household blocked screen now follow the web mobile layout; the title page gains the Playback sheet, an availability note, chapters and an Add to watchlist button.

@@ -51,7 +51,76 @@ struct HomeView: View {
 
     private var loadedContent: some View {
         GeometryReader { proxy in
-            let phone = PlayarrLayout.isPhone(proxy.size)
+            if PlayarrLayout.isPhone(proxy.size) {
+                phoneContent
+            } else {
+                stageContent(proxy: proxy)
+            }
+        }
+        .background(PlayarrStyle.surface)
+        .ignoresSafeArea(edges: .horizontal)
+        .navigationBarHidden(true)
+    }
+
+    /// Web mobile home: left-aligned horizontal rails under the page gutter,
+    /// 179x101 cards, no featured-title copy (numbers from the web layout dump).
+    private var phoneContent: some View {
+        ZStack(alignment: .topLeading) {
+            WM.page
+            LinearGradient(
+                stops: [
+                    .init(color: Color(red: 34 / 255, green: 32 / 255, blue: 34 / 255), location: 0),
+                    .init(color: Color(red: 34 / 255, green: 32 / 255, blue: 34 / 255), location: 0.18),
+                    .init(color: WM.page, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 330)
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(viewModel.rails.enumerated()), id: \.element.id) { index, rail in
+                        phoneRail(rail, first: index == 0)
+                    }
+                }
+                .padding(.top, 89)
+                .padding(.bottom, 130)
+            }
+            .scrollIndicators(.hidden)
+            .refreshable { await viewModel.load() }
+        }
+        .ignoresSafeArea()
+    }
+
+    private func phoneRail(_ rail: HomeViewModel.Rail, first: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WMText(rail.title, 16, 610, lh: 24, ls: -0.48).padding(.horizontal, 16)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(rail.works.enumerated()), id: \.element.id) { index, work in
+                        workLink(work) {
+                            WMRailCard(
+                                work: work,
+                                apiClient: apiClient,
+                                unseen: viewModel.progressByWorkID[work.id] == nil,
+                                focused: first && index == 0
+                            )
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollClipDisabled()
+            .scrollIndicators(.hidden)
+            .frame(height: 147)
+            .padding(.top, 18)
+        }
+        .padding(.bottom, 66)
+    }
+
+    private func stageContent(proxy: GeometryProxy) -> some View {
+        Group {
+            let phone = false
             let backdropHeight = proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
             ZStack(alignment: .topLeading) {
                 stageBackdrop(phone: phone, height: backdropHeight)
@@ -79,9 +148,6 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .background(PlayarrStyle.surface)
-        .ignoresSafeArea(edges: .horizontal)
-        .navigationBarHidden(true)
     }
 
     @ViewBuilder
