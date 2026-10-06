@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Phone remote: a press that cannot be delivered now says why, beside the pad instead of below the pairing lists: "No connection" when this phone has no network, "The device did not respond" when the command is not acknowledged within about 4 s (for example the TV app is in the background or its connection dropped), instead of silently doing nothing or blaming the device.
+- Android TV: the pairing approval prompt now keeps retrying to take D-pad focus until it has it, so a slow first composition no longer leaves the remote's keys falling through to the screen behind.
 - Playback handoff: a destination that still held an earlier, stopped or paused playback of the same file acknowledged the handoff at once with that stale position, so the source stopped before the destination had really started. The destination now confirms only once it has begun the offered request (a playback session exists for it). Measured on an Android TV emulator: acknowledgement within 0.5 s with a position 64 s off before, 2.3 s with 0.4 s drift after.
 - Android TV: pressing Select (or OK on the phone remote) on a Home rail card or library grid card now opens it on the first press. A redundant extra focus target in front of the clickable meant the first press only moved focus and a second press was needed. A source test keeps a bare `focusable()` out of the front of clickables.
 - iOS: catalogue search read the server's `{items, remote_only}` answer as a bare list and always failed with "Couldn't load search"; it now decodes the envelope. A regression test covers it.
