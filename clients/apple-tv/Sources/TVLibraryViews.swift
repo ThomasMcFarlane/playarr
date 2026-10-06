@@ -186,12 +186,7 @@ struct TVHomeView: View {
                             .tracking(1.2)
                             .foregroundStyle(DesignTokens.Color.brandPrimary)
                             .textCase(.uppercase)
-                        Text(hero.title)
-                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                            .tracking(-4.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .lineLimit(3)
-                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
+                        TVHeroTitle(title: hero.title)
                             .padding(.top, 10)
                         if let overview = hero.overview, !overview.isEmpty {
                             Text(overview)
