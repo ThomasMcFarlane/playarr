@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web mobile home: rails and their headings now start at the page gutter instead of being indented by the TV left-fade inset; cards pack from the left at the normal gap.
 - Android: the app no longer crashes when signing in or switching profiles while the live-event stream is open.
 - Android: the release calendar header fits phones, and Watchlist shows beside Open when the server offers both.
 - Android: the guardian approval card names the child (from profiles saved on the device) and reads correctly for out-of-hours requests.
