@@ -1673,6 +1673,7 @@ internal enum class PlayarrString(
     ProfilesSignOut("Sign out", "ออกจากระบบ", "サインアウト"),
     ProfilesSignIn("Sign in", "เข้าสู่ระบบ", "サインイン"),
     ProfilesAddAnother("Add another profile", "เพิ่มโปรไฟล์อื่น", "プロフィールを追加"),
+    ProfilesClients("Clients", "ไคลเอนต์", "クライアント"),
     ProfilesSwitchProfile("Switch profile", "สลับโปรไฟล์", "プロフィールを切り替え"),
     ProfilesEnterPin("Enter four-digit PIN", "ป้อน PIN 4 หลัก", "4桁のPINを入力"),
     ProfilesPinNotAccepted(
