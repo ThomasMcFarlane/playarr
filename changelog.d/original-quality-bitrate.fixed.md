@@ -1,0 +1,1 @@
+- Playback options: the "Original" quality now reports the real source bitrate (`quality_options[0].video_bitrate_bps`); a zero bitrate from the media analysis is ignored and the average is derived from file size and duration, and it is omitted when neither is known. The Android quality menu shows "Original · 24.3 Mbps", or plain "Original" when unknown, instead of "0 Mbps".
