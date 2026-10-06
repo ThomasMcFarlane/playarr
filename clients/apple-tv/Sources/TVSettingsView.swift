@@ -101,8 +101,8 @@ struct TVSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                            .focusable(TVParityLaunch.requestedScreen == nil)
-                            .focusEffectDisabled(TVParityLaunch.requestedScreen != nil)
+                            .focusable(!TVParityLaunch.frozen)
+                            .focusEffectDisabled(TVParityLaunch.frozen)
                         }
                     }
                     .frame(width: 465, alignment: .leading)

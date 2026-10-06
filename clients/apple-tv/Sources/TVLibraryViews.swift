@@ -53,7 +53,7 @@ struct TVHomeView: View {
             )
             .foregroundStyle(DesignTokens.Color.textPrimary)
         case .loaded:
-            if TVParityLaunch.requestedScreen != nil {
+            if TVParityLaunch.frozen {
                 parityHomeLoaded(viewModel)
             } else {
                 productionHomeLoaded(viewModel)
@@ -173,7 +173,9 @@ struct TVHomeView: View {
 
     private func parityHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
         GeometryReader { geo in
-            let hero = heroWork(from: viewModel.works)
+            let hero = TVParityLaunch.isLive
+                ? Self.liveRailDefinitions(viewModel).first?.works.first
+                : heroWork(from: viewModel.works)
             ZStack(alignment: .topLeading) {
                 heroBackdrop(hero: hero, size: geo.size)
                 HStack(spacing: 0) {
@@ -228,13 +230,15 @@ struct TVHomeView: View {
     private func homeRails(viewModel: TVHomeViewModel, size: CGSize) -> some View {
         let (startWatching, newMovies) = Self.homeRailMembership(
             works: viewModel.works,
-            interactive: TVParityLaunch.requestedScreen == nil
+            interactive: !TVParityLaunch.frozen
         )
         // Interactive: real HStack layout so the focus engine can move left/right.
         // Absolute `.offset` stacking breaks directional focus (all cards share
         // one layout rect). Parity freezes keep pixel-locked absolute geometry.
         return Group {
-            if TVParityLaunch.requestedScreen == nil {
+            if TVParityLaunch.isLive {
+                homeRailsLive(viewModel: viewModel, size: size)
+            } else if !TVParityLaunch.frozen {
                 homeRailsInteractive(startWatching: startWatching, newMovies: newMovies, size: size)
             } else {
                 homeRailsAbsolute(startWatching: startWatching, newMovies: newMovies, size: size)
@@ -455,6 +459,61 @@ struct TVHomeView: View {
         .allowsHitTesting(false)
     }
 
+    /// Mirrors web `Home.tsx`: the primary rail is the most recently added unique works (8),
+    /// followed by the server's own rails.
+    private static func liveRailDefinitions(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
+        let all = viewModel.rails.flatMap(\.items).enumerated()
+            .sorted { lhs, rhs in
+                lhs.element.addedAt != rhs.element.addedAt
+                    ? lhs.element.addedAt > rhs.element.addedAt
+                    : lhs.offset < rhs.offset
+            }
+            .map(\.element)
+        var seen = Set<UUID>()
+        var primary: [Work] = []
+        for work in all where seen.insert(work.id).inserted {
+            primary.append(work)
+            if primary.count >= 8 { break }
+        }
+        let definitions: [(title: String, works: [Work])] =
+            [("Start watching", primary)] + viewModel.rails.map { ($0.title, $0.items) }
+        return definitions.filter { !$0.works.isEmpty }
+    }
+
+    /// Frozen live layout: web `.tv-home-rails` geometry measured on the 1920x1080 reference.
+    private func homeRailsLive(viewModel: TVHomeViewModel, size: CGSize) -> some View {
+        let definitions = Self.liveRailDefinitions(viewModel)
+        let x0: CGFloat = 881.6
+        let y0: CGFloat = 487.8
+        let railPitch: CGFloat = 317.9
+        let cardPitch: CGFloat = 243.9
+        let headingOffset = DesignTokens.Shell.homeRailHeadingOffsetY
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(definitions.enumerated()), id: \.offset) { railIndex, definition in
+                let top = y0 + CGFloat(railIndex) * railPitch
+                Text(definition.title)
+                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                    .tracking(-0.5)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .offset(x: x0, y: top - headingOffset)
+                ForEach(Array(definition.works.enumerated()), id: \.element.id) { index, work in
+                    let selected = railIndex == 0 && index == 0
+                    TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
+                        .frame(
+                            width: DesignTokens.Shell.homeCardWidth,
+                            height: DesignTokens.Shell.homeCardHeight + DesignTokens.Shell.homeCardTitleBlock,
+                            alignment: .topLeading
+                        )
+                        // Web: the first card of the first rail is focused (scale 1.025, lifted).
+                        .scaleEffect(selected ? 1.025 : 1)
+                        .offset(x: x0 + CGFloat(index) * cardPitch, y: top - (selected ? 5.5 : 0))
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
     private func heroWork(from works: [Work]) -> Work? {
         if let focus = focusedCard, let match = works.first(where: { $0.id == focus.workID }) {
             return match
@@ -594,24 +653,25 @@ struct TVHomeCard: View {
     var isSelected: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Web `.tv-home-card`: 218.9 x 123.1 art (radius 12.48), title 11.3/630 at +10, meta 8.6/400.
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 cardArtwork
                     .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
                 // Fixture art may already include the pink unwatched disc.
                 if TVParityArtwork.cardImage(forTitle: work.title) == nil {
                     Circle()
                         .fill(DesignTokens.Color.brandPrimary)
-                        .frame(width: 12, height: 12)
-                        .padding(10)
+                        .frame(width: 13, height: 13)
+                        .padding(10.8)
                 }
             }
             // Parity: no focus ring (SPA selected card uses soft lift only).
             .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                RoundedRectangle(cornerRadius: 12.5, style: .continuous)
                     .stroke(
-                        (isSelected && TVParityLaunch.requestedScreen == nil)
+                        (isSelected && !TVParityLaunch.frozen)
                             ? DesignTokens.Color.brandPrimary
                             : Color.clear,
                         lineWidth: 3
@@ -620,18 +680,19 @@ struct TVHomeCard: View {
 
             // `.tv-home-card > strong` / `small`
             Text(work.title)
-                .font(TVTheme.font(size: 12, weight: .semibold))
+                .font(TVTheme.font(size: 11.33, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(1)
-                .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
-                .padding(.top, 8)
+                .frame(width: DesignTokens.Shell.homeCardWidth, height: 17, alignment: .leading)
+                .padding(.top, 10)
             Text(
                 [work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }]
                     .compactMap { $0 }.joined(separator: " · ")
             )
-                .font(TVTheme.font(size: 10, weight: .bold))
+                .font(TVTheme.font(size: 8.64, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .padding(.top, 2)
+                .frame(width: DesignTokens.Shell.homeCardWidth, height: 13, alignment: .leading)
+                .padding(.top, 2.5)
         }
         .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
     }
@@ -680,7 +741,7 @@ struct TVSearchView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var viewModel: TVSearchViewModel?
     @FocusState private var searchFieldFocused: Bool
-    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+    private var parityMode: Bool { TVParityLaunch.frozen }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -940,7 +1001,7 @@ struct TVLibraryKindView: View {
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
 
-    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+    private var parityMode: Bool { TVParityLaunch.frozen }
 
     /// Leftmost grid column ids (SPA 3-col grid) — Left from these → dock.
     private var leadingColumnIDs: Set<UUID> {
@@ -1051,7 +1112,7 @@ struct TVLibraryKindView: View {
                 // SPA suite refs show live totals (e.g. 35 ARTISTS / 67 TITLES).
                 // Parity uses those labels so the heading matches the frame.
                 let countLabel: String = {
-                    if parityMode {
+                    if TVParityLaunch.requestedScreen != nil {
                         switch workKind {
                         case .artist: return "35"
                         case .series, .author: return "67"
@@ -1258,8 +1319,8 @@ struct TVLibraryKindView: View {
                 if showTitle {
                     // Fixture SPA crops do not include the title line; draw it.
                     Text(work.title)
-                        .font(TVTheme.font(size: 11.5, weight: .semibold))
-                        .tracking(-0.17)
+                        .font(TVTheme.font(size: 11.9, weight: .semibold))
+                        .tracking(-0.18)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .lineLimit(1)
                         .frame(width: width, alignment: .leading)
@@ -1267,7 +1328,9 @@ struct TVLibraryKindView: View {
             }
             .frame(width: width, alignment: .leading)
             .opacity(isSelected || parityMode ? 1 : 0.92)
-            .offset(y: isSelected && !parityMode ? -5 : 0)
+            // Web: the focused card scales to 1.04 and lifts ~4.6px; production lifts 5px.
+            .scaleEffect(isSelected && parityMode ? 1.04 : 1)
+            .offset(y: isSelected ? (parityMode ? -4.6 : -5) : 0)
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
@@ -1372,7 +1435,7 @@ struct TVLibraryKindView: View {
     @MainActor
     private func loadItems() async {
         // Offline parity: deterministic fixture catalogue (SPA-matching titles).
-        if parityMode {
+        if TVParityLaunch.requestedScreen != nil {
             items = TVParityFixtures.libraryWorks(kind: workKind)
             selectedID = items.first?.id
             didLoad = true

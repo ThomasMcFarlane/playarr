@@ -16,6 +16,8 @@ final class TVHomeViewModel {
 
     private(set) var state: State = .idle
     private(set) var works: [Work] = []
+    /// Server-computed Home shelves (same source as the web Home).
+    private(set) var rails: [HomeRail] = []
     private let apiClient: PlayarrAPIClient
 
     init(apiClient: PlayarrAPIClient) {
@@ -24,6 +26,9 @@ final class TVHomeViewModel {
 
     func load() async {
         state = .loading
+        if TVParityLaunch.isLive {
+            rails = (try? await apiClient.fetchHomeRails()) ?? []
+        }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
         if TVParityLaunch.requestedScreen != nil,
