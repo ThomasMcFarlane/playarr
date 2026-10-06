@@ -287,6 +287,28 @@ pub(crate) fn playback_subtitle_options(
         .collect()
 }
 
+/// The source file's overall bitrate for the "Original" quality entry.
+///
+/// The stored value is rejected when it is zero (arr apps report `0` when
+/// their media analysis is missing), and the average bitrate is then derived
+/// from file size and duration. `None` when neither is usable, so clients show
+/// no bitrate at all rather than `0 Mbps`.
+pub(crate) fn source_bitrate_bps(media_file: &MediaFile, duration_ms: u64) -> Option<u64> {
+    media_file
+        .bitrate
+        .filter(|bitrate| *bitrate > 0)
+        .or_else(|| {
+            let duration_ms = if duration_ms > 0 {
+                duration_ms
+            } else {
+                media_file.duration_ms.unwrap_or(0)
+            };
+            (media_file.size_bytes > 0 && duration_ms > 0)
+                .then(|| media_file.size_bytes.saturating_mul(8000) / duration_ms)
+                .filter(|bitrate| *bitrate > 0)
+        })
+}
+
 pub(crate) fn playback_quality_options(
     source_video_bitrate_bps: Option<u64>,
 ) -> Vec<PlaybackQualityOption> {
@@ -1165,7 +1187,7 @@ pub(crate) async fn negotiate_playback(
             selected_audio_track_id,
             subtitle_tracks: playback_subtitle_options(media_file_id, 0, &source_subtitle_tracks),
             selected_subtitle_track_id,
-            quality_options: playback_quality_options(media_file.bitrate),
+            quality_options: playback_quality_options(source_bitrate_bps(&media_file, duration_ms)),
             selected_quality_id,
             session_id,
         });
@@ -1222,7 +1244,7 @@ pub(crate) async fn negotiate_playback(
             selected_audio_track_id,
             subtitle_tracks: playback_subtitle_options(media_file_id, 0, &source_subtitle_tracks),
             selected_subtitle_track_id,
-            quality_options: playback_quality_options(media_file.bitrate),
+            quality_options: playback_quality_options(source_bitrate_bps(&media_file, duration_ms)),
             selected_quality_id,
             session_id,
         });
@@ -1389,7 +1411,7 @@ pub(crate) async fn negotiate_playback(
             &source_subtitle_tracks,
         ),
         selected_subtitle_track_id,
-        quality_options: playback_quality_options(media_file.bitrate),
+        quality_options: playback_quality_options(source_bitrate_bps(&media_file, duration_ms)),
         selected_quality_id,
         session_id,
     })
@@ -2677,6 +2699,60 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn source_bitrate_rejects_zero_and_derives_from_size_and_duration() {
+        let mut file = media_file();
+        file.bitrate = Some(24_300_000);
+        assert_eq!(source_bitrate_bps(&file, 0), Some(24_300_000));
+
+        file.bitrate = Some(0);
+        file.size_bytes = 3_000_000_000;
+        // 3 GB over 1000 s is 24 Mbps.
+        assert_eq!(source_bitrate_bps(&file, 1_000_000), Some(24_000_000));
+        file.bitrate = None;
+        file.duration_ms = Some(2_000_000);
+        assert_eq!(source_bitrate_bps(&file, 0), Some(12_000_000));
+
+        file.duration_ms = None;
+        assert_eq!(source_bitrate_bps(&file, 0), None);
+        file.bitrate = Some(0);
+        file.size_bytes = 0;
+        assert_eq!(source_bitrate_bps(&file, 1_000_000), None);
+        assert_eq!(playback_quality_options(None)[0].video_bitrate_bps, None);
+    }
+
+    #[tokio::test]
+    async fn original_quality_never_reports_a_zero_bitrate() {
+        let (router, state) = test_state().await;
+        let mut file = media_file();
+        file.container = "mp4".to_string();
+        file.codec = "h264".to_string();
+        file.duration_ms = Some(1_000_000);
+        file.bitrate = Some(0);
+        file.size_bytes = 3_000_000_000;
+        let id = file.id;
+        let source_instance_id = file.source_instance_id;
+        state.media_files.insert(file);
+        let user_id = Uuid::new_v4();
+        seed_streaming_user_with_library_allow(&state, user_id, vec![source_instance_id]).await;
+        let token = mint_access_token(&state, user_id);
+
+        let response = router
+            .oneshot(get_with_connect_info(
+                format!("/api/v1/playback/{id}?containers=mp4&video_codecs=h264"),
+                &token,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let info: PlaybackInfoResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(info.quality_options[0].id, "original");
+        assert_eq!(info.quality_options[0].video_bitrate_bps, Some(24_000_000));
     }
 
     #[tokio::test]
