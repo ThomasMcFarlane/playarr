@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ghcr-make-public.sh - check whether the Playarr Server container package is
+# ghcr-make-public.sh - check whether the Playarr container package is
 # public, and print the one manual step if it is not.
 #
 # GitHub's REST API cannot change a package's visibility, so a package created
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 owner="${1:-ThomasMcFarlane}"
-package="${2:-playarr-server}"
+package="${2:-playarr}"
 image="ghcr.io/$(echo "$owner" | tr '[:upper:]' '[:lower:]')/${package}"
 
 vis="$(gh api "users/${owner}/packages/container/${package}" --jq .visibility 2>/dev/null || echo missing)"
@@ -19,7 +19,7 @@ echo "package ${image}: ${vis}"
 
 case "$vis" in
   public) exit 0 ;;
-  missing) echo "The package does not exist yet. Push a backend-v* tag first." >&2; exit 1 ;;
+  missing) echo "The package does not exist yet. Publish the package first." >&2; exit 1 ;;
 esac
 
 cat <<TEXT

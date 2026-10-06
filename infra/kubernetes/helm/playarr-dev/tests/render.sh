@@ -32,8 +32,8 @@ test "$(grep -c '^        kubernetes.io/hostname: dev-node$' "$rendered")" -eq 6
 # Regional media access uses the host ACL group on both nodes.
 a_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-a/) printf "%s", block; show=0}' "$rendered")"
 b_deployment="$(awk '/^kind: Deployment$/{show=1; block=""} show{block=block $0 ORS} /^---$/{if(show && block ~ /name: playarr-b/) printf "%s", block; show=0}' "$rendered")"
-grep -q 'image: "registry.example.com/playarr-regional:0123abcd"' <<<"$a_deployment"
-grep -q 'image: "registry.example.com/playarr-regional:0123abcd"' <<<"$b_deployment"
+grep -q 'image: "registry.example.com/playarr:0123abcd"' <<<"$a_deployment"
+grep -q 'image: "registry.example.com/playarr:0123abcd"' <<<"$b_deployment"
 for deployment in "$a_deployment" "$b_deployment"; do
   grep -A1 -q 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment"
   grep -A1 'name: PLAYARR_TRANSCODE_MAX_CONCURRENT_JOBS' <<<"$deployment" | grep -q 'value: "1"'
@@ -51,14 +51,14 @@ grep -q 'service: "tv-web.playarr:80"' "$rendered"
 grep -q 'service: "tv-web-webos.playarr:80"' "$rendered"
 grep -q 'host: "tv-web-webos.example.com"' "$rendered"
 # Regional servers pull a self-contained image from the registry: no hostPath runtime.
-test "$(grep -c 'image: "registry.example.com/playarr-regional:' "$rendered")" -eq 2
+test "$(grep -c 'image: "registry.example.com/playarr:' "$rendered")" -eq 2
 # Both instances take the one shared regionalImage; no per-instance image is set in the example.
-test "$(grep -c '^    image: registry.example.com/playarr-regional' "$chart_dir/values.yaml")" -eq 0
-test "$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalImage=registry.example.com/playarr-regional:feedbeef | grep -c 'image: "registry.example.com/playarr-regional:feedbeef"')" -eq 2
+test "$(grep -c '^    image: registry.example.com/playarr' "$chart_dir/values.yaml")" -eq 0
+test "$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalImage=registry.example.com/playarr:feedbeef | grep -c 'image: "registry.example.com/playarr:feedbeef"')" -eq 2
 # A per-instance image remains an optional override.
-override="$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalInstances.playarr-b.image=registry.example.com/playarr-regional:cafe0001)"
-test "$(grep -c 'image: "registry.example.com/playarr-regional:cafe0001"' <<<"$override")" -eq 1
-test "$(grep -c 'image: "registry.example.com/playarr-regional:0123abcd"' <<<"$override")" -eq 1
+override="$(helm template playarr-dev "$chart_dir" --namespace playarr --set regionalInstances.playarr-b.image=registry.example.com/playarr:cafe0001)"
+test "$(grep -c 'image: "registry.example.com/playarr:cafe0001"' <<<"$override")" -eq 1
+test "$(grep -c 'image: "registry.example.com/playarr:0123abcd"' <<<"$override")" -eq 1
 # No shared image and no override: the render fails instead of emitting an empty image.
 if helm template playarr-dev "$chart_dir" --namespace playarr --set regionalImage= >/dev/null 2>&1; then echo "render succeeded without any regional image" >&2; exit 1; fi
 if grep -v '^ *#' "$rendered" | grep -q 'streamarr-runtime\|/opt/streamarr\|imagePullPolicy: Never'; then echo "forbidden hostPath runtime reference rendered" >&2; exit 1; fi

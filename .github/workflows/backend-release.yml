@@ -9,7 +9,7 @@
 #     systemd units) and SHA-256 checksums, attached to the GitHub release.
 #     GitHub Releases is the only download store; https://playarr.app/downloads/server/
 #     redirects to these assets (see docs/deployment/server-releases.md).
-#   * A multi-arch container image, ghcr.io/thomasmcfarlane/playarr-server,
+#   * A multi-arch container image, ghcr.io/thomasmcfarlane/playarr,
 #     tagged <version> and `latest` (pre-releases only get the version tag),
 #     with an SBOM and provenance attestation. The GHCR package must be public
 #     for anonymous `docker pull`; see scripts/ghcr-make-public.sh.
@@ -59,7 +59,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: ghcr.io/thomasmcfarlane/playarr-server
+  IMAGE: ghcr.io/thomasmcfarlane/playarr
 
 jobs:
   build:

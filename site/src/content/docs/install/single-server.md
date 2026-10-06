@@ -48,7 +48,7 @@ If your distribution installs them somewhere unusual, point Playarr at them expl
 
 ## 1. Obtain the `playarr` binary
 
-Each Playarr release (a `v<version>` GitHub Release) carries `playarr-server-<version>-linux-amd64.tar.gz` and `playarr-server-<version>-linux-arm64.tar.gz`, each with a `.sha256` sidecar. The newest is always at `https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz` (or `-arm64`), and the container image is `ghcr.io/thomasmcfarlane/playarr-server:<version>`. There is no hosted one-line installer script; building from source also works.
+Each Playarr release (a `v<version>` GitHub Release) carries `playarr-server-<version>-linux-amd64.tar.gz` and `playarr-server-<version>-linux-arm64.tar.gz`, each with a `.sha256` sidecar. The newest is always at `https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz` (or `-arm64`), and the container image is `ghcr.io/thomasmcfarlane/playarr:<version>`. There is no hosted one-line installer script; building from source also works.
 
 ### Build from source
 

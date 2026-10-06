@@ -405,8 +405,8 @@ describe("ClientsPage", () => {
       expect(text).toContain("Docker Compose");
       expect(text).toContain("systemd on a Linux host");
       expect(text).toContain("Kubernetes (Helm chart)");
-      expect(markup).toContain("docker pull ghcr.io/thomasmcfarlane/playarr-server:latest");
-      expect(markup).toContain("image: ghcr.io/thomasmcfarlane/playarr-server:latest");
+      expect(markup).toContain("docker pull ghcr.io/thomasmcfarlane/playarr:latest");
+      expect(markup).toContain("image: ghcr.io/thomasmcfarlane/playarr:latest");
       expect(markup).toContain("sudo ./systemd/install.sh");
       expect(markup).toContain("sudo systemctl enable --now playarr.service");
       expect(markup).toContain("infra/kubernetes/helm/playarr-standalone");

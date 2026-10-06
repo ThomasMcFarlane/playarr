@@ -741,7 +741,7 @@ function SmartTvInstallGuide({
   );
 }
 
-const SERVER_IMAGE = "ghcr.io/thomasmcfarlane/playarr-server";
+const SERVER_IMAGE = "ghcr.io/thomasmcfarlane/playarr";
 
 const SERVER_DOCKER_COMPOSE = `services:
   playarr:

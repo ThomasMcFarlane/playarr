@@ -114,7 +114,7 @@ workloads:
 # target release places both in one namespace while preserving their distinct
 # node-local state, runtime trees, security identities and public routes.
 # One image shared by every regional instance.
-regionalImage: registry.example.com/playarr-regional:0123abcd
+regionalImage: registry.example.com/playarr:0123abcd
 
 regionalInstances:
   playarr-a:

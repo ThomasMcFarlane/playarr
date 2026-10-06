@@ -8,7 +8,7 @@ Playarr Server is published as build artefacts on GitHub Releases.
 | Linux ARM64 tarball | `https://playarr.app/downloads/server/playarr-server-linux-arm64.tar.gz` (latest) or `.../playarr-server-<version>-linux-arm64.tar.gz` |
 | Checksums | `<tarball>.sha256` beside each tarball, and `.../playarr-server-<version>-SHA256SUMS` |
 | Latest manifest | `https://playarr.app/downloads/server/latest.json` (version, image, per-arch URL, SHA-256, size) |
-| Container image | `ghcr.io/thomasmcfarlane/playarr-server:<version>` and `:latest` (multi-arch, ffmpeg included, SBOM and provenance attached) |
+| Container image | `ghcr.io/thomasmcfarlane/playarr:<version>` and `:latest` (multi-arch, ffmpeg included, SBOM and provenance attached) |
 
 The tarball unpacks to `playarr-server-<version>-linux-<arch>/` with `playarr-server`, `web/` (the
 Admin UI, which the binary finds beside itself or via `PLAYARR_WEB_ASSETS_DIR`), `LICENSE`,
@@ -55,5 +55,5 @@ manual step (Package settings, Danger Zone, Change visibility, Public). It only 
 Verify with a logged-out Docker config:
 
 ```sh
-DOCKER_CONFIG=$(mktemp -d) docker pull ghcr.io/thomasmcfarlane/playarr-server:latest
+DOCKER_CONFIG=$(mktemp -d) docker pull ghcr.io/thomasmcfarlane/playarr:latest
 ```

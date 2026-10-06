@@ -4,7 +4,7 @@
 # Releases are published to GitHub Releases only, so no object-storage token is needed.
 #
 # GHCR visibility. GitHub's API cannot change package visibility, so this prints the one
-# click needed to make ghcr.io/thomasmcfarlane/playarr-server public.
+# click needed to make ghcr.io/thomasmcfarlane/playarr public.
 set -euo pipefail
 
 "$(dirname "$0")/ghcr-make-public.sh" || true

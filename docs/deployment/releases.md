@@ -16,15 +16,15 @@ single trigger and publishes one GitHub Release `v<version>`.
    if anything in the release path changed: it builds and signs everything but pushes no image,
    creates no release and uploads nothing to a store.
 
-The version must be newer than the latest `v*` release and must not exist yet. Every other package
-is stamped with it at build time.
+The version must be newer than the latest `v*` release and must not exist yet. Release version tags are
+applied by the multi-arch server publisher; the regional publisher uses immutable commit SHA tags.
 
 ## What it does
 
 | Job | Workflow | Output |
 |---|---|---|
-| Server | `backend-release.yml` | `playarr-server-<version>-linux-{amd64,arm64}.tar.gz` (+ `.sha256`), `playarr-server-<version>-SHA256SUMS`, `latest.json`; image `ghcr.io/<owner>/playarr-server:<version>` and `:latest` |
-| Regional image | `regional-image.yml` | `ghcr.io/<owner>/playarr-regional:<sha8>` and `:<version>` |
+| Server | `backend-release.yml` | `playarr-server-<version>-linux-{amd64,arm64}.tar.gz` (+ `.sha256`), `playarr-server-<version>-SHA256SUMS`, `latest.json`; image `ghcr.io/<owner>/playarr:<version>` and `:latest` |
+| Regional image | `regional-image.yml` | `ghcr.io/<owner>/playarr:<sha8>` |
 | Android APK | `android-ci.yml` | signed sideload `playarr-android.apk` and its update manifest `playarr-android.json` |
 | TV packages | `tv-web-ci.yml` | `playarr-webos-<version>.ipk`, `playarr-tizen-<version>-unsigned.zip` (Tizen package root; a `.wgt` needs the owner's Samsung certificate profile) |
 | Roku | inline | `playarr-roku-<version>.zip` (sideload channel) |

@@ -1,6 +1,6 @@
 # Builds the self-contained server image (server binary, Admin web assets,
 # ffmpeg/ffprobe) for every commit on main and pushes it to GitHub Container
-# Registry as ghcr.io/<owner>/playarr-regional:<first 8 characters of the SHA>.
+# Registry as ghcr.io/<owner>/playarr:<first 8 characters of the SHA>.
 # The package starts private: make it public once (Package settings > Change
 # visibility) so it can be pulled anonymously. Deployment pins are deployment
 # values and are never committed to this repository.
@@ -16,29 +16,24 @@ on:
       - 'infra/docker/backend.Dockerfile'
       - '.github/workflows/regional-image.yml'
   workflow_dispatch:
-  # Called by release.yml: also tags the image with the release version.
+  # Called by release.yml to publish its commit SHA tag.
   workflow_call:
     inputs:
-      release_tag:
-        description: 'Extra tag (the release version) pushed alongside the commit tag'
-        type: string
-        required: false
-        default: ''
       dry_run:
         description: 'Build and verify the image but push nothing'
         type: boolean
         default: false
 
 concurrency:
-  # A release run gets its own group so a later main push cannot replace it while it is pending.
-  group: regional-image-${{ inputs.release_tag || 'main' }}
+  # Keep the main-push and release-call groups separate while serialising each ref.
+  group: regional-image-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  IMAGE_NAME: playarr-regional
+  IMAGE_NAME: playarr
 
 jobs:
   image:
@@ -60,8 +55,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           tag="$(git rev-parse --short=8 HEAD)"
@@ -71,7 +64,6 @@ jobs:
           docker build -f infra/docker/backend.Dockerfile \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            ${RELEASE_TAG:+--label "org.opencontainers.image.version=${RELEASE_TAG}"} \
             -t "ghcr.io/$owner/$IMAGE_NAME:$tag" .
 
       - name: Verify tools in the image
@@ -83,14 +75,7 @@ jobs:
 
       - name: Push
         if: ${{ !inputs.dry_run }}
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           docker push "$IMAGE:$TAG"
           echo "Pushed \`$IMAGE:$TAG\` (from \`$GITHUB_SHA\`)." >> "$GITHUB_STEP_SUMMARY"
-          if [[ -n "${RELEASE_TAG:-}" ]]; then
-            docker tag "$IMAGE:$TAG" "$IMAGE:$RELEASE_TAG"
-            docker push "$IMAGE:$RELEASE_TAG"
-            echo "Pushed \`$IMAGE:$RELEASE_TAG\`." >> "$GITHUB_STEP_SUMMARY"
-          fi

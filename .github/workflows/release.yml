@@ -6,8 +6,8 @@
 # tag with the release. (The signing environments only admit `main`, so there is no tag trigger.)
 # It builds every app by calling the per-platform workflows (which keep working on their own tags):
 #
-#   server    backend-release.yml   tarballs, latest.json, ghcr.io/<owner>/playarr-server:<version>
-#   regional  regional-image.yml    ghcr.io/<owner>/playarr-regional:<sha8> and :<version>
+#   server    backend-release.yml   tarballs, latest.json, ghcr.io/<owner>/playarr:<version>
+#   regional  regional-image.yml    ghcr.io/<owner>/playarr:<sha8>
 #   android   android-ci.yml        signed sideload APK and its update manifest
 #   tv        tv-web-ci.yml         LG webOS IPK, unsigned Samsung Tizen package root
 #   roku      (below)               Roku sideload channel zip
@@ -142,7 +142,6 @@ jobs:
       contents: read
       packages: write
     with:
-      release_tag: ${{ needs.prepare.outputs.version }}
       dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
 
   android:
@@ -268,8 +267,8 @@ jobs:
             echo
             echo "| App | Where |"
             echo "|---|---|"
-            echo "| Playarr Server | \`ghcr.io/$owner/playarr-server:$VERSION\` (\`${SERVER_DIGEST}\`), Linux tarballs below, https://playarr.app/clients/server |"
-            echo "| Regional server image | \`ghcr.io/$owner/playarr-regional:$VERSION\` |"
+            echo "| Playarr Server | \`ghcr.io/$owner/playarr:$VERSION\` (\`${SERVER_DIGEST}\`), Linux tarballs below, https://playarr.app/clients/server |"
+            echo "| Regional server image | \`ghcr.io/$owner/playarr:${GITHUB_SHA:0:8}\` |"
             echo "| Android | \`playarr-android.apk\` (sideload), Google Play closed testing |"
             echo "| iOS and tvOS | TestFlight |"
             echo "| LG webOS | \`playarr-webos-$VERSION.ipk\` |"
@@ -351,8 +350,8 @@ jobs:
             echo
             echo "| Platform | Result | Where | Notes |"
             echo "|---|---|---|---|"
-            echo "| Server | $(mark "$(result server)") | GitHub Release tarballs, \`ghcr.io/$owner/playarr-server:$VERSION\` | required |"
-            echo "| Regional image | $(mark "$(result regional)") | \`ghcr.io/$owner/playarr-regional:$VERSION\` | |"
+            echo "| Server | $(mark "$(result server)") | GitHub Release tarballs, \`ghcr.io/$owner/playarr:$VERSION\` | required |"
+            echo "| Regional image | $(mark "$(result regional)") | \`ghcr.io/$owner/playarr:${GITHUB_SHA:0:8}\` | |"
             echo "| Android APK | $(mark "$(result android)") | GitHub Release, playarr.app/downloads/android | versionCode $ANDROID_CODE; required |"
             echo "| Google Play | $(mark "$(result play)") | closed testing (alpha) | versionCode $PLAY_CODE |"
             echo "| iOS and tvOS | $(mark "$(result apple)") | TestFlight | build $APPLE_BUILD |"

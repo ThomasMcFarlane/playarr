@@ -49,7 +49,7 @@ this chart manages only the matching Emissary routes.
 | --- | --- | --- |
 | `workloadNodeSelector` | `{}` | Node selector for every development workload. |
 | `workloads` | `{}` | Development workloads, keyed by name. |
-| `regionalImage` | `""` | The single image every regional instance runs, for example `<registry>/playarr-regional:<sha8>`. Required when `regionalInstances` is set. |
+| `regionalImage` | `""` | The single image every regional instance runs, for example `<registry>/playarr:<sha8>`. Required when `regionalInstances` is set. |
 | `regionalInstances` | `{}` | Regional servers, keyed by instance name (also the Deployment, Service and Mapping name). |
 
 ### Regional instance (`regionalInstances.<name>`)
@@ -148,7 +148,7 @@ wiring returns) and sync.
 ## Regional server image
 
 The regional servers run a self-contained image,
-`<registry>/playarr-regional:<main-sha>`, built from
+`<registry>/playarr:<main-sha>`, built from
 [`infra/docker/backend.Dockerfile`](../../../docker/backend.Dockerfile): the
 `playarr-server` binary, the Admin web assets (`/app/web`) and `ffmpeg` /
 `ffprobe` (the server shells out to both for transcoding, HLS, thumbnails,
@@ -170,7 +170,7 @@ The chart sets `PLAYARR_WEB_ASSETS_DIR=/app/web`, overriding the legacy
 ### Publishing an image
 
 The workflow `.github/workflows/regional-image.yml` builds and pushes
-`playarr-regional:<first 8 characters of the commit SHA>` on every push to
+`playarr:<first 8 characters of the commit SHA>` on every push to
 `main` that touches the backend, the Admin UI or the Dockerfile, and fails if
 `ffprobe` or `playarr-server --version` does not run inside the image. It
 pushes to the registry named by the repository variable `REGIONAL_IMAGE_REGISTRY`
@@ -180,9 +180,9 @@ by hand from a checkout of the commit:
 ```sh
 SHA=$(git rev-parse --short=8 HEAD)
 docker build -f infra/docker/backend.Dockerfile \
-  -t $REGISTRY/playarr-regional:$SHA .
-docker run --rm --entrypoint ffprobe $REGISTRY/playarr-regional:$SHA -version | head -n 1
-docker push $REGISTRY/playarr-regional:$SHA
+  -t $REGISTRY/playarr:$SHA .
+docker run --rm --entrypoint ffprobe $REGISTRY/playarr:$SHA -version | head -n 1
+docker push $REGISTRY/playarr:$SHA
 ```
 
 ### Rollout

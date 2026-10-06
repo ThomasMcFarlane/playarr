@@ -16,7 +16,7 @@ workloadNodeSelector: {}
 workloads: {}
 
 # The one image every regional instance runs, as a single reference such as
-# `<registry>/playarr-regional:<sha8>`. All instances share this value so the
+# `<registry>/playarr:<sha8>`. All instances share this value so the
 # whole fleet runs one version. Required whenever `regionalInstances` is set.
 regionalImage: ""
 
