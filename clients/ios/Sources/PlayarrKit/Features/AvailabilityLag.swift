@@ -38,7 +38,7 @@ public struct AvailabilityLag: Codable, Sendable, Hashable {
 
     /// Whole-unit duration such as "2 hours" or "3 days".
     public static func humanDuration(seconds: Int64) -> String {
-        let minute: Int64 = 60, hour = 3600, day = 86_400
+        let minute: Int64 = 60, hour: Int64 = 3600, day: Int64 = 86_400
         func unit(_ value: Int64, _ name: String) -> String { "\(value) \(name)\(value == 1 ? "" : "s")" }
         if seconds >= day { return unit((seconds + day / 2) / day, "day") }
         if seconds >= hour { return unit((seconds + hour / 2) / hour, "hour") }
