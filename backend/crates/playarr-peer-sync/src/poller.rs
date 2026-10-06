@@ -11,7 +11,9 @@
 //! cycle tries every one of that peer's known addresses, priority-ordered,
 //! running membership -> accounts -> invites -> libraries -> availability ->
 //! routing_rules sync at whichever address answers; the whole cycle only
-//! counts as failed once every address has failed. On success, `peer_nodes.
+//! counts as failed once every address has failed. A peer record with no
+//! address at all is skipped instead (no failure counted, status untouched),
+//! with one rate-limited warning that names the peer. On success, `peer_nodes.
 //! status` flips back to `Active` (if it wasn't already) and `last_seen_at`
 //! advances; on `PLAYARR_PEER_UNREACHABLE_THRESHOLD` (default 3)
 //! consecutive full-cycle failures, `status` flips to `Unreachable` and
@@ -84,6 +86,54 @@ pub const DEFAULT_PEER_SYNC_INTERVAL_SECS: u64 = 60;
 /// [`DEFAULT_PEER_SYNC_INTERVAL_SECS`].
 pub const DEFAULT_PEER_UNREACHABLE_THRESHOLD: u32 = 3;
 
+/// How often a peer with no known address is mentioned in the log
+/// (one line per peer per interval, not one per cycle).
+const NO_ADDRESS_LOG_INTERVAL: Duration = Duration::from_secs(60 * 60);
+
+/// Result of one cycle that did not fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CycleOutcome {
+    /// Some address answered and every phase ran.
+    Synced,
+    /// The peer record has no usable address (for example a member that
+    /// only dials out and never advertised one), so there was nothing to
+    /// try. Not a failure: it does not count towards the unreachable
+    /// threshold and does not change the stored status.
+    SkippedNoAddress,
+}
+
+/// Rate limiter for the "peer has no known address" log line.
+#[derive(Debug)]
+struct NoAddressLogGate {
+    interval: Duration,
+    last_logged: Option<std::time::Instant>,
+}
+
+impl NoAddressLogGate {
+    fn new(interval: Duration) -> Self {
+        Self {
+            interval,
+            last_logged: None,
+        }
+    }
+
+    fn should_log(&mut self, now: std::time::Instant) -> bool {
+        let due = match self.last_logged {
+            None => true,
+            Some(last) => now.saturating_duration_since(last) >= self.interval,
+        };
+        if due {
+            self.last_logged = Some(now);
+        }
+        due
+    }
+
+    /// Forget the last log time, so the next skip is logged straight away.
+    fn reset(&mut self) {
+        self.last_logged = None;
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PollError {
     #[error("no address is known for this peer")]
@@ -130,6 +180,7 @@ pub struct PeerSyncPoller {
     conflict_log_repo: Arc<dyn SyncConflictLogRepo>,
     status_reporter: Option<Arc<dyn SyncStatusReporter>>,
     consecutive_failures: u32,
+    no_address_log: NoAddressLogGate,
 }
 
 impl PeerSyncPoller {
@@ -175,6 +226,7 @@ impl PeerSyncPoller {
             conflict_log_repo,
             status_reporter: None,
             consecutive_failures: 0,
+            no_address_log: NoAddressLogGate::new(NO_ADDRESS_LOG_INTERVAL),
         }
     }
 
@@ -238,7 +290,11 @@ impl PeerSyncPoller {
 
         if let Some(reporter) = &self.status_reporter {
             let status = match &outcome {
-                Ok(()) => SyncRunStatus::Succeeded {
+                Ok(CycleOutcome::Synced) => SyncRunStatus::Succeeded {
+                    finished_at: Utc::now(),
+                },
+                Ok(CycleOutcome::SkippedNoAddress) => SyncRunStatus::Failed {
+                    error: PollError::NoAddresses.to_string(),
                     finished_at: Utc::now(),
                 },
                 Err(err) => SyncRunStatus::Failed {
@@ -249,7 +305,7 @@ impl PeerSyncPoller {
             reporter.report(self.peer_node_id, status);
         }
 
-        if let Err(err) = outcome {
+        if let Err(err) = &outcome {
             tracing::warn!(
                 peer_node_id = %self.peer_node_id,
                 error = %err,
@@ -263,7 +319,7 @@ impl PeerSyncPoller {
     /// Tries every one of this peer's known addresses, priority-ordered,
     /// running the full phase sequence at whichever one answers first --
     /// §3.6's "tries the next address... before giving up the cycle."
-    async fn reconcile_all(&mut self) -> Result<(), PollError> {
+    async fn reconcile_all(&mut self) -> Result<CycleOutcome, PollError> {
         let peer = self
             .peer_node_repo
             .get(self.peer_node_id)
@@ -273,16 +329,28 @@ impl PeerSyncPoller {
             .peer_client
             .addresses_for_peer(peer.id, &peer.addresses);
         if addresses.is_empty() {
-            self.mark_failure(&peer, &PollError::NoAddresses).await?;
-            return Err(PollError::NoAddresses);
+            // Nothing to dial: skip rather than fail the cycle, so the peer
+            // is not reported as "failed on every address" and is not
+            // flipped to Unreachable for a gap that retrying cannot fix.
+            if self.no_address_log.should_log(std::time::Instant::now()) {
+                tracing::warn!(
+                    peer_id = %peer.id,
+                    peer_name = %peer.name,
+                    last_seen_at = ?peer.last_seen_at,
+                    "peer has no known address, so peer sync skips it until membership \
+                     sync supplies one (logged at most once an hour per peer)"
+                );
+            }
+            return Ok(CycleOutcome::SkippedNoAddress);
         }
+        self.no_address_log.reset();
 
         let mut last_err = None;
         for address in &addresses {
             match self.run_cycle_at_address(address).await {
                 Ok(()) => {
                     self.mark_success(&peer).await?;
-                    return Ok(());
+                    return Ok(CycleOutcome::Synced);
                 }
                 Err(err) => {
                     tracing::warn!(
@@ -767,18 +835,86 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_peer_with_no_addresses_fails_without_panicking() {
+    async fn a_peer_with_no_addresses_is_skipped_without_counting_a_failure() {
         let harness = harness().await;
         let self_peer_id = Uuid::new_v4();
         let peer_node_id = Uuid::new_v4();
         let group_id = Uuid::new_v4();
         seed_peer(&harness, peer_node_id, group_id, vec![]).await;
 
-        let mut poller = poller(&harness, self_peer_id, peer_node_id, 3);
-        let err = poller
-            .reconcile_all()
+        // Threshold of one: the old behaviour would flip the peer to
+        // Unreachable on the very first cycle.
+        let mut poller = poller(&harness, self_peer_id, peer_node_id, 1);
+        for _ in 0..3 {
+            let outcome = poller
+                .reconcile_all()
+                .await
+                .expect("a skip is not an error");
+            assert!(matches!(outcome, CycleOutcome::SkippedNoAddress));
+        }
+        assert_eq!(poller.consecutive_failures, 0);
+        let stored = harness
+            .peer_node_repo
+            .get(peer_node_id)
             .await
-            .expect_err("no addresses to try");
-        assert!(matches!(err, PollError::NoAddresses));
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, PeerNodeStatus::Active);
+        assert!(stored.last_sync_error.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_peer_that_gains_an_address_is_synced_again() {
+        let harness = harness().await;
+        let self_peer_id = Uuid::new_v4();
+        let peer_node_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+        seed_peer(&harness, peer_node_id, group_id, vec![]).await;
+        let mut poller = poller(&harness, self_peer_id, peer_node_id, 3);
+        assert!(matches!(
+            poller.reconcile_all().await.unwrap(),
+            CycleOutcome::SkippedNoAddress
+        ));
+
+        let mock = MockServer::start().await;
+        mount_empty_peer_endpoints(&mock).await;
+        let mut peer = harness
+            .peer_node_repo
+            .get(peer_node_id)
+            .await
+            .unwrap()
+            .unwrap();
+        peer.addresses = vec![PeerAddress {
+            url: mock.uri(),
+            priority: 0,
+            label: "direct".to_string(),
+            client_reachable: false,
+        }];
+        harness.peer_node_repo.upsert(&peer).await.unwrap();
+
+        assert!(matches!(
+            poller.reconcile_all().await.unwrap(),
+            CycleOutcome::Synced
+        ));
+    }
+
+    #[test]
+    fn no_address_log_gate_logs_once_then_waits_for_the_interval() {
+        let start = std::time::Instant::now();
+        let mut gate = NoAddressLogGate::new(Duration::from_secs(3600));
+        assert!(gate.should_log(start));
+        assert!(!gate.should_log(start + Duration::from_secs(60)));
+        assert!(!gate.should_log(start + Duration::from_secs(3599)));
+        assert!(gate.should_log(start + Duration::from_secs(3600)));
+        assert!(!gate.should_log(start + Duration::from_secs(3601)));
+    }
+
+    #[test]
+    fn no_address_log_gate_logs_again_after_the_peer_had_an_address() {
+        let start = std::time::Instant::now();
+        let mut gate = NoAddressLogGate::new(Duration::from_secs(3600));
+        assert!(gate.should_log(start));
+        gate.reset();
+        assert!(gate.should_log(start + Duration::from_secs(1)));
     }
 }

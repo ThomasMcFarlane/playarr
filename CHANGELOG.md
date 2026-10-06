@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Peer sync now skips a peer record that has no known address instead of failing a cycle on it every minute, and logs one rate-limited "peer has no known address" warning naming the peer.
 - Xbox: the package manifest no longer puts a comment first inside `Dependencies`, which made the .NET Native toolchain insert the VCLibs dependency ahead of `TargetDeviceFamily` and fail MakeAppx schema validation.
 - Xbox: the package manifest declares `mp:PhoneIdentity`, which the UWP packaging targets require (APPX1673).
 - Xbox: the package has its tile, logo and splash images (the Playarr icon on the brand background), so the sideload MSIX can be packaged.
