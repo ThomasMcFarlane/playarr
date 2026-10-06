@@ -221,7 +221,7 @@ export struct MediaRail {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   /** `1` while this rail's focus group holds focus, `unfocusedRailFactor`
@@ -254,16 +254,6 @@ export struct MediaRail {
   }
 
   build() {
-    const headingScale = 1 + (FOCUS_LIFT.railHeading.scale - 1) * this.headingEffective();
-    const headingTranslateY = (FOCUS_LIFT.railHeading.translateY ?? 0) * this.headingEffective();
-    const factor = this.activeRailFactor;
-    // `gap` is read into a local first (rather than inlining `this.itemGap`
-    // directly into the `List({ space: ... })` object literal below) purely
-    // to keep `checks/arkts.mjs`'s lexical scan -- which naively flags any
-    // `:\s*this\b` sequence as ArkTS's banned "'this' used as a type" --
-    // from misreading an object-literal property value as a type position.
-    // Same documented ambiguity as `PosterCard.ets`'s `setFocused()`.
-    const gap = this.itemGap;
 
     Column({ space: Spacing.sm }) {
       if (this.heading.length > 0) {
@@ -274,16 +264,16 @@ export struct MediaRail {
           .letterSpacing(this.headingSize * RAIL_HEADING_TRACKING_EM)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .translateY(headingTranslateY)
-          .scale({ x: headingScale, y: headingScale, centerX: 0, centerY: '50%' })
+          .translate({ y: ((FOCUS_LIFT.railHeading.translateY ?? 0) * this.headingEffective()) })
+          .scale({ x: (1 + (FOCUS_LIFT.railHeading.scale - 1) * this.headingEffective()), y: (1 + (FOCUS_LIFT.railHeading.scale - 1) * this.headingEffective()), centerX: 0, centerY: '50%' })
       }
 
-      List({ space: gap }) {
+      List({ space: this.itemGap }) {
         ForEach(
           this.items,
           (item: MediaRailItem, index: number) => {
             ListItem() {
-              this.itemBuilder(item, index, factor)
+              this.itemBuilder(item, index, this.activeRailFactor)
             }
           },
           (item: MediaRailItem): string => item.id

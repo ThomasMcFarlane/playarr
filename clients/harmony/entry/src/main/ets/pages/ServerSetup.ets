@@ -54,7 +54,7 @@ const INVALID_URL_MESSAGE: string = 'Enter a valid address starting with http://
 struct ServerSetup {
   // Tracked purely to force a re-render on theme change; see
   // design/Theme.ets's own header comment for this exact pattern.
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private serverAddress: string = '';
@@ -119,13 +119,7 @@ struct ServerSetup {
           .textAlign(TextAlign.Center)
           .width('100%')
 
-        // Captured into a local rather than passed as `text: this.serverAddress`
-        // directly: the offline validator's lexical scan for a `this`-as-a-type
-        // annotation (`: this`) cannot distinguish that from an ordinary
-        // object-literal property whose value merely starts with `this.` --
-        // this local sidesteps the ambiguity without changing behaviour.
-        const currentServerAddress = this.serverAddress;
-        TextInput({ placeholder: $r('app.string.server_setup_placeholder'), text: currentServerAddress })
+        TextInput({ placeholder: $r('app.string.server_setup_placeholder'), text: this.serverAddress })
           .type(InputType.Normal)
           .enterKeyType(EnterKeyType.Done)
           .fontSize(16)

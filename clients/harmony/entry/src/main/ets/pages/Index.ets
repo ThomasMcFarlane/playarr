@@ -49,7 +49,6 @@
  * pattern `pages/Pairing.ets` already establishes.
  */
 
-import { NavPathStack } from '@kit.ArkUI';
 
 import { getServerDirectory, getSessionManager } from '../AppContainer';
 import type { DeviceProfile } from '../core/DeviceProfile';
@@ -90,7 +89,7 @@ enum BootPhase {
 struct Index {
   // Tracked purely to force a re-render on theme change; see
   // design/Theme.ets's own header comment for this exact pattern.
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   // The ONE shared NavPathStack for the whole app, obtained here, at
@@ -206,15 +205,12 @@ struct Index {
   }
 
   build() {
-    const bootPhase = this.bootPhase;
-    const errorMessage = this.errorMessage;
-
     Navigation(this.navPathStack) {
       Column({ space: Spacing.lg }) {
-        if (bootPhase === BootPhase.Error) {
+        if (this.bootPhase === BootPhase.Error) {
           AsyncState({
             kind: AsyncStateKind.Error,
-            message: errorMessage,
+            message: this.errorMessage,
             retryLabel: 'Try again',
             retry: (): void => {
               this.retryConnectivity();

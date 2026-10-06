@@ -42,7 +42,7 @@
  */
 
 import { PlayarrClient } from '../net/PlayarrClient';
-import { ApiResult, isApiOk } from '../net/ApiResult';
+import { ApiResult } from '../net/ApiResult';
 
 import { deviceCodeUrl, tokenUrl } from '../core/Endpoints.ts';
 import { DeviceCodeResponse, TokenResponse, PeerAddressBundle } from '../core/Types/Auth.ts';
@@ -73,17 +73,35 @@ interface DeviceTokenPollRequest {
   device_code: string;
 }
 
-/** The terminal (or cancelled) outcomes `beginPolling`'s callback reports. */
-export type DeviceAuthOutcome =
-  | { kind: 'success' }
-  | { kind: 'access_denied' }
-  | { kind: 'expired' }
-  | { kind: 'cancelled' }
-  | { kind: 'request_failed'; message: string };
+export type DeviceAuthOutcomeKind = 'success' | 'access_denied' | 'expired' | 'cancelled' | 'request_failed';
+
+/** The terminal (or cancelled) outcomes `beginPolling`'s callback reports.
+ * `message` is only meaningful for `'request_failed'` (empty otherwise). */
+export class DeviceAuthOutcome {
+  public readonly kind: DeviceAuthOutcomeKind;
+  public readonly message: string;
+
+  constructor(kind: DeviceAuthOutcomeKind, message: string = '') {
+    this.kind = kind;
+    this.message = message;
+  }
+}
 
 /** A cancellable in-progress poll loop -- see `beginPolling`. */
 export interface DeviceAuthHandle {
   cancel(): void;
+}
+
+class CallbackAuthHandle implements DeviceAuthHandle {
+  private readonly onCancel: () => void;
+
+  constructor(onCancel: () => void) {
+    this.onCancel = onCancel;
+  }
+
+  cancel(): void {
+    this.onCancel();
+  }
 }
 
 interface PollAttemptSuccess {
@@ -179,7 +197,7 @@ export class DeviceAuthService {
     const requestBody: DeviceCodeRequest = { client_platform: currentClientPlatform() };
     const result = await this.client.postJson<DeviceCodeRequest, DeviceCodeResponse>(deviceCodeUrl(), requestBody);
 
-    if (isApiOk(result)) {
+    if (result.kind === 'ok') {
       const serversParam = extractServersParam(result.value.verification_uri_complete);
       const peerAddresses = decodeServersParam(serversParam);
       const bundle: PeerAddressBundle = { group_id: null, group_name: null, addresses: peerAddresses };
@@ -231,7 +249,7 @@ export class DeviceAuthService {
 
       if (decision.kind === 'stop') {
         if (decision.reason === 'expired') {
-          deliver({ kind: 'expired' });
+          deliver(new DeviceAuthOutcome('expired'));
         }
         // A 'terminal' stop with nothing delivered yet cannot happen here:
         // every branch below that marks `state` terminal also calls
@@ -254,7 +272,7 @@ export class DeviceAuthService {
       const now = Date.now();
 
       if (attempt.kind === 'fatal_error') {
-        deliver({ kind: 'request_failed', message: attempt.message });
+        deliver(new DeviceAuthOutcome('request_failed', attempt.message));
         return;
       }
 
@@ -271,18 +289,18 @@ export class DeviceAuthService {
       if (attempt.kind === 'success') {
         state = applyPollResult(state, 'success', now);
         await this.completeSuccess(attempt.response, attempt.deviceId);
-        deliver({ kind: 'success' });
+        deliver(new DeviceAuthOutcome('success'));
         return;
       }
 
       // attempt.kind === 'outcome'
       state = applyPollResult(state, attempt.outcome, now);
       if (attempt.outcome === 'access_denied') {
-        deliver({ kind: 'access_denied' });
+        deliver(new DeviceAuthOutcome('access_denied'));
         return;
       }
       if (attempt.outcome === 'expired_token') {
-        deliver({ kind: 'expired' });
+        deliver(new DeviceAuthOutcome('expired'));
         return;
       }
       // 'authorization_pending' / 'slow_down' -- keep polling per the
@@ -292,16 +310,14 @@ export class DeviceAuthService {
 
     step();
 
-    const handle: DeviceAuthHandle = {
-      cancel: (): void => {
-        cancelled = true;
-        if (timeoutHandle !== null) {
-          clearTimeout(timeoutHandle);
-          timeoutHandle = null;
-        }
-        deliver({ kind: 'cancelled' });
-      },
-    };
+    const handle: DeviceAuthHandle = new CallbackAuthHandle((): void => {
+      cancelled = true;
+      if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      deliver(new DeviceAuthOutcome('cancelled'));
+    });
     return handle;
   }
 
@@ -318,7 +334,7 @@ export class DeviceAuthService {
     };
     const result = await this.client.postJson<DeviceTokenPollRequest, TokenResponse>(tokenUrl(), requestBody);
 
-    if (isApiOk(result)) {
+    if (result.kind === 'ok') {
       const response = result.value;
       const claims = decodeAccessTokenClaims(response.access_token);
       if (claims === null) {

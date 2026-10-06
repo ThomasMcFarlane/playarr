@@ -55,7 +55,7 @@ export struct AsyncState {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private spinnerAngle: number = 0;

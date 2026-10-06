@@ -50,7 +50,9 @@ jobs:
     name: Build the HarmonyOS NEXT package
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    environment: release-harmony
+    # The release-harmony environment only admits main and harmony-v* tags; any other ref (a PR branch
+    # dispatched to check the build) runs without it. No signing secret is used yet either way.
+    environment: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/harmony-v')) && 'release-harmony' || '' }}
     defaults:
       run:
         working-directory: clients/harmony

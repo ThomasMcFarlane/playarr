@@ -45,31 +45,22 @@ struct EndButton {
   @State private focused: boolean = false;
 
   build() {
-    const label = this.label;
-    const primary = this.primary;
-    const activate = this.onActivate;
-    const tvMode = isTvMetrics();
-    const isFocused = this.focused;
-    const defaultFocus = this.takeDefaultFocus;
-    const fill: RgbaColor = primary ? BRAND_PINK : CARD_TEXT_PRIMARY;
-    const fillAlpha = primary ? 1 : (isFocused ? 0.32 : 0.16);
-    const scale = isFocused ? FOCUSED_SCALE : 1;
 
-    Text(label)
-      .fontSize(tvMode ? tv(BUTTON_SIZE_TV) : BUTTON_SIZE_TOUCH)
+    Text(this.label)
+      .fontSize(isTvMetrics() ? tv(BUTTON_SIZE_TV) : BUTTON_SIZE_TOUCH)
       .fontWeight(FontWeight.Bold)
       .fontColor(toResourceColor(CARD_TEXT_PRIMARY))
       .maxLines(1)
-      .height(tvMode ? tv(BUTTON_HEIGHT_TV) : BUTTON_HEIGHT_TOUCH)
+      .height(isTvMetrics() ? tv(BUTTON_HEIGHT_TV) : BUTTON_HEIGHT_TOUCH)
       .padding({ left: Spacing.lg, right: Spacing.lg })
       .margin({ right: Spacing.md, bottom: Spacing.md })
       .textAlign(TextAlign.Center)
       .borderRadius(Radii.pillFull)
-      .backgroundColor(toResourceColorWithAlpha(fill, fillAlpha))
-      .scale({ x: scale, y: scale })
+      .backgroundColor(toResourceColorWithAlpha((this.primary ? BRAND_PINK : CARD_TEXT_PRIMARY), (this.primary ? 1 : (this.focused ? 0.32 : 0.16))))
+      .scale({ x: (this.focused ? FOCUSED_SCALE : 1), y: (this.focused ? FOCUSED_SCALE : 1) })
       .focusable(true)
-      .defaultFocus(defaultFocus)
-      .accessibilityText(label)
+      .defaultFocus(this.takeDefaultFocus)
+      .accessibilityText(this.label)
       .onFocus(() => {
         this.focused = true;
       })
@@ -77,7 +68,7 @@ struct EndButton {
         this.focused = false;
       })
       .onClick(() => {
-        activate();
+        this.onActivate();
       })
   }
 }
@@ -116,56 +107,46 @@ export struct EndScreen {
   }
 
   build() {
-    const tvMode = isTvMetrics();
-    const upNext = this.phase === 'upNext';
-    const hasNext = this.nextTitle.length > 0;
-    const heading = this.heading();
-    const nextTitle = this.nextTitle;
-    const onPlayNow = this.onPlayNow;
-    const onCancel = this.onCancel;
-    const onReplay = this.onReplay;
-    const onExit = this.onExit;
-    const announce = upNext ? 'Up next: ' + nextTitle : 'Finished playing ' + this.finishedTitle;
 
     Scroll() {
       Column({ space: Spacing.lg }) {
-        Text(heading)
-          .fontSize(tvMode ? tv(HEADING_SIZE_TV) : HEADING_SIZE_TOUCH)
+        Text(this.heading())
+          .fontSize(isTvMetrics() ? tv(HEADING_SIZE_TV) : HEADING_SIZE_TOUCH)
           .fontWeight(FontWeight.Bold)
           .fontColor(toResourceColor(CARD_TEXT_PRIMARY))
           .maxLines(2)
 
-        if (hasNext) {
-          Text(nextTitle)
-            .fontSize(tvMode ? tv(DETAIL_SIZE_TV) : DETAIL_SIZE_TOUCH)
+        if ((this.nextTitle.length > 0)) {
+          Text(this.nextTitle)
+            .fontSize(isTvMetrics() ? tv(DETAIL_SIZE_TV) : DETAIL_SIZE_TOUCH)
             .fontColor(toResourceColorWithAlpha(CARD_TEXT_PRIMARY, 0.85))
             .maxLines(2)
         }
 
         Flex({ wrap: FlexWrap.Wrap }) {
-          if (hasNext) {
+          if ((this.nextTitle.length > 0)) {
             EndButton({
-              label: upNext ? 'Play now' : 'Play next',
+              label: (this.phase === 'upNext') ? 'Play now' : 'Play next',
               primary: true,
               takeDefaultFocus: true,
-              onActivate: onPlayNow,
+              onActivate: this.onPlayNow,
             })
           }
-          if (upNext && this.countdownRunning) {
-            EndButton({ label: 'Cancel', onActivate: onCancel })
+          if ((this.phase === 'upNext') && this.countdownRunning) {
+            EndButton({ label: 'Cancel', onActivate: this.onCancel })
           }
           EndButton({
             label: 'Replay',
-            primary: !hasNext,
-            takeDefaultFocus: !hasNext,
-            onActivate: onReplay,
+            primary: !(this.nextTitle.length > 0),
+            takeDefaultFocus: !(this.nextTitle.length > 0),
+            onActivate: this.onReplay,
           })
-          EndButton({ label: 'Back to details', onActivate: onExit })
+          EndButton({ label: 'Back to details', onActivate: this.onExit })
         }
 
         if (this.hasSuggestions) {
           Text('More like this')
-            .fontSize(tvMode ? tv(DETAIL_SIZE_TV) : DETAIL_SIZE_TOUCH)
+            .fontSize(isTvMetrics() ? tv(DETAIL_SIZE_TV) : DETAIL_SIZE_TOUCH)
             .fontWeight(FontWeight.Bold)
             .fontColor(toResourceColor(CARD_TEXT_PRIMARY))
             .margin({ top: Spacing.md })
@@ -175,9 +156,9 @@ export struct EndScreen {
       .alignItems(HorizontalAlign.Start)
       .width('100%')
       .padding({
-        left: tvMode ? Spacing.xxxl : Spacing.md,
-        right: tvMode ? Spacing.xxxl : Spacing.md,
-        top: tvMode ? Spacing.xxl : Spacing.lg,
+        left: isTvMetrics() ? Spacing.xxxl : Spacing.md,
+        right: isTvMetrics() ? Spacing.xxxl : Spacing.md,
+        top: isTvMetrics() ? Spacing.xxl : Spacing.lg,
         bottom: Spacing.lg,
       })
     }
@@ -185,7 +166,7 @@ export struct EndScreen {
     .height('100%')
     .scrollBar(BarState.Off)
     .backgroundColor(toResourceColor(CARD_BACKDROP))
-    .accessibilityText(announce)
+    .accessibilityText(((this.phase === 'upNext') ? 'Up next: ' + this.nextTitle : 'Finished playing ' + this.finishedTitle))
     // Swallow taps so the dimmed backdrop never dismisses or toggles anything.
     .onClick(() => {})
   }

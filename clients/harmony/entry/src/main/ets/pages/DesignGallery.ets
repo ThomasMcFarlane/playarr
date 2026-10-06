@@ -150,7 +150,7 @@ struct DesignGallery {
   // change; the actual values always go through design/Theme.ets's and
   // design/Metrics.ets's own resolver functions (see those files' header
   // comments for this exact pattern, already used by every component below).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('deviceProfile') private trackedDeviceProfile: DeviceProfile | undefined = undefined;
   @StorageProp('tvScaleFactor') private trackedTvScaleFactor: number = 1;
@@ -230,17 +230,15 @@ struct DesignGallery {
 
   @Builder
   private focusLiftRow(label: string, delta: FocusLiftDelta): void {
-    const dy = delta.translateY ?? 0;
-    const scale = delta.scale;
     Row({ space: Spacing.sm }) {
       Text(label)
         .fontSize(GALLERY_BODY_FONT_SIZE)
         .fontColor(toResourceColor(activeColors().ink))
         .width(200)
-      Text(`translateY ${dy}`)
+      Text(`translateY ${delta.translateY ?? 0}`)
         .fontSize(GALLERY_CAPTION_FONT_SIZE)
         .fontColor(toResourceColor(activeColors().inkSoft))
-      Text(`scale ${scale}`)
+      Text(`scale ${delta.scale}`)
         .fontSize(GALLERY_CAPTION_FONT_SIZE)
         .fontColor(toResourceColor(activeColors().inkSoft))
     }
@@ -253,10 +251,9 @@ struct DesignGallery {
    * (see `PosterCard.ets`'s own header comment). */
   @Builder
   private tvRailItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const cardTitle = `Rail item ${index + 1}`;
     PosterCard({
       variant: 'home',
-      title: cardTitle,
+      title: `Rail item ${index + 1}`,
       subtitle: item.id,
       activeRailFactor: activeRailFactor,
     })
@@ -267,13 +264,12 @@ struct DesignGallery {
    * overrides (12/10), per `PosterCard.ets`'s own header comment. */
   @Builder
   private touchRailItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const cardTitle = `Rail item ${index + 1}`;
     PosterCard({
       variant: 'home',
-      title: cardTitle,
+      title: `Rail item ${index + 1}`,
       subtitle: item.id,
-      width: TouchGeometry.homeRailCardWidthLandscape,
-      height: Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16),
+      cardWidth: TouchGeometry.homeRailCardWidthLandscape,
+      cardHeight: Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16),
       artworkRadius: Radii.homeCardArtworkTouch,
       titleFontSize: 12,
       subtitleFontSize: 10,
@@ -287,30 +283,15 @@ struct DesignGallery {
    * MediaRail itself... until the caller supplies real content"). */
   @Builder
   private stageRailsSlot(): void {
-    const railBuilder = this.tvRailItem;
     MediaRail({
       railId: 'gallery-stage-rail',
       heading: 'More Like This',
       items: GALLERY_RAIL_ITEMS,
-      itemBuilder: railBuilder,
+      itemBuilder: this.tvRailItem,
     })
   }
 
   build() {
-    const tvRailItemBuilder = this.tvRailItem;
-    const touchRailItemBuilder = this.touchRailItem;
-    const stageRailsBuilder = this.stageRailsSlot;
-    const resolvedMode = resolvedThemeMode();
-    const themeOverride = getThemeModeSetting();
-    const metricsKey = activeMetricsKey();
-    const scaleFactor = tvScaleFactor();
-    const tvLandscapeWidth = tv(TvGeometry.homeRailCardWidthLandscape);
-    const tvCoverWidth = tv(TvGeometry.homeRailCardWidthCover);
-    const tvTitleEpisodeWidth = tv(TvGeometry.railPanelCardWidth);
-    const tvLogoSize = tv(TvGeometry.logoSize);
-    const touchLandscapeWidth = TouchGeometry.homeRailCardWidthLandscape;
-    const touchCoverWidth = TouchGeometry.homeRailCardWidthCover;
-
     Scroll() {
       Column({ space: Spacing.sm }) {
         // -- Title + theme toggle -------------------------------------------
@@ -357,7 +338,7 @@ struct DesignGallery {
         }
         .margin({ top: Spacing.xs })
 
-        Text(`Theme override: ${themeOverride} -> resolved: ${resolvedMode}`)
+        Text(`Theme override: ${getThemeModeSetting()} -> resolved: ${resolvedThemeMode()}`)
           .fontSize(GALLERY_CAPTION_FONT_SIZE)
           .fontColor(toResourceColor(activeColors().inkSoft))
 
@@ -383,10 +364,10 @@ struct DesignGallery {
 
         // -- Metrics (design/Metrics.ets) ------------------------------------
         this.sectionHeader('Metrics reference (design/Metrics.ets)')
-        Text(`Live device profile metrics key: ${metricsKey}`)
+        Text(`Live device profile metrics key: ${activeMetricsKey()}`)
           .fontSize(GALLERY_BODY_FONT_SIZE)
           .fontColor(toResourceColor(activeColors().inkSoft))
-        Text(`Live TV scale factor (windowWidthVp / 1920): ${scaleFactor}`)
+        Text(`Live TV scale factor (windowWidthVp / 1920): ${tvScaleFactor()}`)
           .fontSize(GALLERY_BODY_FONT_SIZE)
           .fontColor(toResourceColor(activeColors().inkSoft))
         this.metricsCompareRow(
@@ -450,9 +431,9 @@ struct DesignGallery {
         // -- PlayarrLogo -------------------------------------------------------
         this.sectionHeader('PlayarrLogo')
         Row({ space: Spacing.lg }) {
-          PlayarrLogo({ size: TvGeometry.logoSize })
-          PlayarrLogo({ size: tvLogoSize })
-          PlayarrLogo({ size: Spacing.xl })
+          PlayarrLogo({ logoSize: TvGeometry.logoSize })
+          PlayarrLogo({ logoSize: tv(TvGeometry.logoSize) })
+          PlayarrLogo({ logoSize: Spacing.xl })
         }
         .alignItems(VerticalAlign.Center)
 
@@ -460,13 +441,13 @@ struct DesignGallery {
         this.sectionHeader('Skeleton')
         Row({ space: Spacing.md }) {
           Skeleton({
-            width: tvLandscapeWidth,
-            height: Math.round((tvLandscapeWidth * 9) / 16),
+            blockWidth: tv(TvGeometry.homeRailCardWidthLandscape),
+            blockHeight: Math.round((tv(TvGeometry.homeRailCardWidthLandscape) * 9) / 16),
             radius: Radii.homeCardArtworkTv,
           })
           Skeleton({
-            width: touchLandscapeWidth,
-            height: Math.round((touchLandscapeWidth * 9) / 16),
+            blockWidth: TouchGeometry.homeRailCardWidthLandscape,
+            blockHeight: Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16),
             radius: Radii.homeCardArtworkTouch,
           })
         }
@@ -516,16 +497,16 @@ struct DesignGallery {
             variant: 'home',
             title: 'Cover card',
             subtitle: 'TV - 2:3',
-            width: tvCoverWidth,
-            height: Math.round((tvCoverWidth * 3) / 2),
+            cardWidth: tv(TvGeometry.homeRailCardWidthCover),
+            cardHeight: Math.round((tv(TvGeometry.homeRailCardWidthCover) * 3) / 2),
             artworkRadius: Radii.homeCardArtworkTv,
           })
           PosterCard({
             variant: 'titleEpisode',
             title: 'Title / episode card',
             subtitle: 'TV - title/episode',
-            width: tvTitleEpisodeWidth,
-            height: Math.round((tvTitleEpisodeWidth * 9) / 16),
+            cardWidth: tv(TvGeometry.railPanelCardWidth),
+            cardHeight: Math.round((tv(TvGeometry.railPanelCardWidth) * 9) / 16),
           })
         }
 
@@ -535,8 +516,8 @@ struct DesignGallery {
             variant: 'home',
             title: 'Landscape card',
             subtitle: 'Touch - 16:9',
-            width: touchLandscapeWidth,
-            height: Math.round((touchLandscapeWidth * 9) / 16),
+            cardWidth: TouchGeometry.homeRailCardWidthLandscape,
+            cardHeight: Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16),
             artworkRadius: Radii.homeCardArtworkTouch,
             titleFontSize: 12,
             subtitleFontSize: 10,
@@ -545,8 +526,8 @@ struct DesignGallery {
             variant: 'home',
             title: 'Cover card',
             subtitle: 'Touch - 2:3',
-            width: touchCoverWidth,
-            height: Math.round((touchCoverWidth * 3) / 2),
+            cardWidth: TouchGeometry.homeRailCardWidthCover,
+            cardHeight: Math.round((TouchGeometry.homeRailCardWidthCover * 3) / 2),
             artworkRadius: Radii.homeCardArtworkTouch,
             titleFontSize: 12,
             subtitleFontSize: 10,
@@ -559,7 +540,7 @@ struct DesignGallery {
           railId: 'gallery-media-rail-tv',
           heading: 'Continue Watching',
           items: GALLERY_RAIL_ITEMS,
-          itemBuilder: tvRailItemBuilder,
+          itemBuilder: this.tvRailItem,
         })
 
         this.sectionHeader('MediaRail -- Touch scale')
@@ -569,7 +550,7 @@ struct DesignGallery {
           items: GALLERY_RAIL_ITEMS,
           itemGap: TouchGeometry.railItemGap,
           headingSize: TouchGeometry.railHeadingSize,
-          itemBuilder: touchRailItemBuilder,
+          itemBuilder: this.touchRailItem,
         })
 
         // -- Stage + NavRail (TV canvas) ---------------------------------------
@@ -584,7 +565,7 @@ struct DesignGallery {
               'hero, clamped to five lines maximum on the TV profile so long copy ' +
               'never overruns the title panel.',
             onPlay: () => {},
-            railsSlot: stageRailsBuilder,
+            railsSlot: this.stageRailsSlot,
           })
           NavRail({
             items: GALLERY_NAV_RAIL_ITEMS,

@@ -22,7 +22,6 @@
  * screen for free.
  */
 
-import { NavPathStack } from '@kit.ArkUI';
 
 /** The one `AppStorage` key the shared `NavPathStack` instance lives
  * under. Exported so a debug page can read it back directly; ordinary
@@ -66,6 +65,9 @@ export function getNavStack(): NavPathStack {
   return stack;
 }
 
+/** Stands in for "no parameters" (ArkTS forbids a bare `{}` literal as an `Object`). */
+class NoRouteParams {}
+
 /**
  * Pushes `route`, one of `navigation/Routes.ets`'s `ROUTES` values, onto
  * `stack`, carrying `params` typed as that route's own parameter
@@ -76,7 +78,7 @@ export function getNavStack(): NavPathStack {
  */
 export function pushRoute<P extends Object>(stack: NavPathStack, route: string, params?: P): void {
   if (params === undefined) {
-    stack.pushPathByName(route, {});
+    stack.pushPathByName(route, new NoRouteParams());
     return;
   }
   stack.pushPathByName(route, params);
@@ -90,7 +92,7 @@ export function pushRoute<P extends Object>(stack: NavPathStack, route: string, 
  */
 export function replaceRoute<P extends Object>(stack: NavPathStack, route: string, params?: P): void {
   if (params === undefined) {
-    stack.replacePathByName(route, {});
+    stack.replacePathByName(route, new NoRouteParams());
     return;
   }
   stack.replacePathByName(route, params);

@@ -60,7 +60,6 @@ import {
   ApiNetworkFailureReason,
   ApiOk,
   ApiResult,
-  isApiOk,
 } from '../net/ApiResult';
 
 import { absoluteUrl } from '../core/Url.ts';
@@ -436,7 +435,7 @@ async function tryArtworkPriority(
 
   for (const kind of priority) {
     const result = await fetchOne(kind);
-    if (isApiOk(result)) {
+    if (result.kind === 'ok') {
       return result;
     }
     lastResult = result;

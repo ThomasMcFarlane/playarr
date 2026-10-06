@@ -183,7 +183,7 @@ export struct Stage {
   // actual values always go through design/Theme.ets's resolvers and
   // design/Metrics.ets's tv() below (see those files' own header comments
   // for this exact pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
@@ -369,21 +369,12 @@ export struct Stage {
 
   @Builder
   private titlePanelLayer(): void {
-    // Routed through local consts (rather than `kicker: this.kicker` inline)
-    // because the offline validator's lexical scan for banned `this`-as-a-
-    // type usage cannot distinguish that from an object-literal property
-    // whose value merely starts with `this.` -- see its own header comment
-    // on this exact class of ambiguity.
-    const kickerText: string = this.kicker;
-    const titleText: string = this.title;
-    const metaLinesValue: string[] = this.metaLines;
-    const synopsisText: string = this.synopsis;
     Column() {
       FeatureCopy({
-        kicker: kickerText,
-        title: titleText,
-        metaLines: metaLinesValue,
-        synopsis: synopsisText,
+        kicker: this.kicker,
+        title: this.title,
+        metaLines: this.metaLines,
+        synopsis: this.synopsis,
       })
     }
     .width(tv(TvGeometry.titlePanelWidth))
@@ -402,7 +393,7 @@ export struct Stage {
     }
     .width(tv(TvGeometry.primaryActionSize))
     .height(tv(TvGeometry.primaryActionSize))
-    .justifyContent(FlexAlign.Center)
+    .alignContent(Alignment.Center)
     .borderRadius(Radii.circleFull)
     .clip(true)
     .backgroundColor(this.primaryActionBackgroundColor())

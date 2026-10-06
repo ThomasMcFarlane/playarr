@@ -261,35 +261,30 @@ const PLAY_TRIANGLE_CENTER_Y_RATIO: number = 0.5;
 @Component
 struct PlayPauseGlyph {
   @Prop isPlaying: boolean = false;
-  @Prop size: number = 24;
+  @Prop glyphSize: number = 24;
 
   build() {
-    const size = this.size;
-    const playing = this.isPlaying;
-    const barWidth = size * PAUSE_BAR_WIDTH_RATIO;
-    const barHeight = size * PAUSE_BAR_HEIGHT_RATIO;
-    const barGap = size * PAUSE_BAR_GAP_RATIO;
 
     Stack({ alignContent: Alignment.Center }) {
-      if (playing) {
-        Row({ space: barGap }) {
-          Column().width(barWidth).height(barHeight).backgroundColor(toResourceColor(CHROME_TEXT_PRIMARY))
-          Column().width(barWidth).height(barHeight).backgroundColor(toResourceColor(CHROME_TEXT_PRIMARY))
+      if (this.isPlaying) {
+        Row({ space: (this.glyphSize * PAUSE_BAR_GAP_RATIO) }) {
+          Column().width((this.glyphSize * PAUSE_BAR_WIDTH_RATIO)).height((this.glyphSize * PAUSE_BAR_HEIGHT_RATIO)).backgroundColor(toResourceColor(CHROME_TEXT_PRIMARY))
+          Column().width((this.glyphSize * PAUSE_BAR_WIDTH_RATIO)).height((this.glyphSize * PAUSE_BAR_HEIGHT_RATIO)).backgroundColor(toResourceColor(CHROME_TEXT_PRIMARY))
         }
       } else {
         Polygon()
-          .width(size)
-          .height(size)
+          .width(this.glyphSize)
+          .height(this.glyphSize)
           .points([
-            [size * PLAY_TRIANGLE_INSET_X_RATIO, size * PLAY_TRIANGLE_TOP_Y_RATIO],
-            [size * PLAY_TRIANGLE_INSET_X_RATIO, size * PLAY_TRIANGLE_BOTTOM_Y_RATIO],
-            [size * PLAY_TRIANGLE_TIP_X_RATIO, size * PLAY_TRIANGLE_CENTER_Y_RATIO],
+            [this.glyphSize * PLAY_TRIANGLE_INSET_X_RATIO, this.glyphSize * PLAY_TRIANGLE_TOP_Y_RATIO],
+            [this.glyphSize * PLAY_TRIANGLE_INSET_X_RATIO, this.glyphSize * PLAY_TRIANGLE_BOTTOM_Y_RATIO],
+            [this.glyphSize * PLAY_TRIANGLE_TIP_X_RATIO, this.glyphSize * PLAY_TRIANGLE_CENTER_Y_RATIO],
           ])
           .fill(toResourceColor(CHROME_TEXT_PRIMARY))
       }
     }
-    .width(size)
-    .height(size)
+    .width(this.glyphSize)
+    .height(this.glyphSize)
   }
 }
 
@@ -302,8 +297,8 @@ struct PlayPauseGlyph {
 @Component
 struct ChromeButton {
   label: string = '';
-  width: number = 44;
-  height: number = 44;
+  buttonWidth: number = 44;
+  buttonHeight: number = 44;
   fontSize: number = BUTTON_LABEL_FONT_SIZE;
   showGlyph: boolean = false;
   isPlaying: boolean = false;
@@ -330,31 +325,21 @@ struct ChromeButton {
   }
 
   build() {
-    const effective = effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const scale = 1 + (FOCUS_LIFT.button.scale - 1) * effective;
-    const label = this.label;
-    const boxWidth = this.width;
-    const boxHeight = this.height;
-    const useGlyph = this.showGlyph;
-    const playing = this.isPlaying;
-    const glyphSize = this.glyphSize;
-    const labelFontSize = this.fontSize;
-    const activate = this.onActivate;
 
     Stack({ alignContent: Alignment.Center }) {
-      if (useGlyph) {
-        PlayPauseGlyph({ isPlaying: playing, size: glyphSize })
+      if (this.showGlyph) {
+        PlayPauseGlyph({ isPlaying: this.isPlaying, glyphSize: this.glyphSize })
       } else {
-        Text(label)
-          .fontSize(labelFontSize)
+        Text(this.label)
+          .fontSize(this.fontSize)
           .fontWeight(FontWeight.Bold)
           .fontColor(toResourceColor(CHROME_TEXT_PRIMARY))
           .maxLines(1)
       }
     }
-    .width(boxWidth)
-    .height(boxHeight)
-    .scale({ x: scale, y: scale })
+    .width(this.buttonWidth)
+    .height(this.buttonHeight)
+    .scale({ x: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)), y: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)) })
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);
@@ -363,7 +348,7 @@ struct ChromeButton {
       this.setFocused(false);
     })
     .onClick(() => {
-      activate();
+      this.onActivate();
     })
   }
 }
@@ -499,55 +484,32 @@ export struct PlayerChrome {
   }
 
   build() {
-    const transportBoxSize = defaultChromeTransportBoxSize();
-    const progressPercent = this.progressPercent();
-    const bufferedPercent = this.bufferedPercent();
-    const live = this.isLive();
-    const notifyFocus = (focused: boolean): void => {
-      this.setChildFocused(focused);
-    };
-    const backLabel = isTvMetrics() ? 'Back' : '<';
-    const topButtonHeightValue = this.topButtonHeight;
-    const backWidth = isTvMetrics() ? BACK_BUTTON_WIDTH_TV : topButtonHeightValue;
-    const handleBack = this.onBack;
-    const handleSeekBack = this.onSeekBack;
-    const handleTogglePlayPause = this.onTogglePlayPause;
-    const handleSeekForward = this.onSeekForward;
-    const isPlayingValue = this.isPlaying;
-    const playIconSizeValue = this.playIconSize;
-    const titleText = this.title;
-    const titleSize = this.titleFontSize;
-    const elapsedText = formatClockMs(this.positionMs);
-    const remainingText = '-' + formatClockMs(this.remainingMs());
-    const paddingH = this.paddingH;
-    const paddingV = this.paddingV;
-    const chromeOpacity = this.chromeOpacity;
-    const isVisible = this.visible;
-    const gap = this.gap;
 
-    Column({ space: gap }) {
+    Column({ space: this.gap }) {
       Row() {
         ChromeButton({
-          label: backLabel,
-          width: backWidth,
-          height: topButtonHeightValue,
-          onActivate: handleBack,
-          notifyFocusChanged: notifyFocus,
+          label: (isTvMetrics() ? 'Back' : '<'),
+          buttonWidth: (isTvMetrics() ? BACK_BUTTON_WIDTH_TV : this.topButtonHeight),
+          buttonHeight: this.topButtonHeight,
+          onActivate: this.onBack,
+          notifyFocusChanged: ((focused: boolean): void => {
+      this.setChildFocused(focused);
+    }),
         })
       }
       .width('100%')
       .justifyContent(FlexAlign.Start)
 
-      Text(titleText)
+      Text(this.title)
         .width('100%')
-        .fontSize(titleSize)
+        .fontSize(this.titleFontSize)
         .fontWeight(FontWeight.Medium)
         .fontColor(toResourceColor(CHROME_TEXT_PRIMARY))
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
       Column({ space: Spacing.xs }) {
-        if (!live) {
+        if (!this.isLive()) {
           Stack({ alignContent: Alignment.Start }) {
             Row()
               .width('100%')
@@ -555,26 +517,26 @@ export struct PlayerChrome {
               .backgroundColor(toResourceColorWithAlpha(CHROME_TEXT_PRIMARY, CHROME_TRACK_ALPHA))
 
             Row()
-              .width(`${bufferedPercent}%`)
+              .width(`${this.bufferedPercent()}%`)
               .height(PROGRESS_TRACK_HEIGHT)
               .backgroundColor(toResourceColorWithAlpha(CHROME_TEXT_PRIMARY, CHROME_BUFFERED_ALPHA))
 
             Row()
-              .width(`${progressPercent}%`)
+              .width(`${this.progressPercent()}%`)
               .height(PROGRESS_TRACK_HEIGHT)
               .backgroundColor(toResourceColor(BRAND_PINK))
           }
           .width('100%')
 
           Row() {
-            Text(elapsedText).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
-            Text(remainingText).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
+            Text(formatClockMs(this.positionMs)).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
+            Text(('-' + formatClockMs(this.remainingMs()))).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
           }
           .width('100%')
           .justifyContent(FlexAlign.SpaceBetween)
         } else {
           Row() {
-            Text(elapsedText).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
+            Text(formatClockMs(this.positionMs)).fontSize(TIME_LABEL_FONT_SIZE).fontColor(toResourceColor(CHROME_TEXT_SECONDARY))
             Text('LIVE').fontSize(TIME_LABEL_FONT_SIZE).fontWeight(FontWeight.Bold).fontColor(toResourceColor(BRAND_PINK))
           }
           .width('100%')
@@ -583,38 +545,44 @@ export struct PlayerChrome {
       }
       .width('100%')
 
-      Row({ space: gap }) {
+      Row({ space: this.gap }) {
         ChromeButton({
           label: '-10s',
-          width: transportBoxSize,
-          height: transportBoxSize,
-          onActivate: handleSeekBack,
-          notifyFocusChanged: notifyFocus,
+          buttonWidth: defaultChromeTransportBoxSize(),
+          buttonHeight: defaultChromeTransportBoxSize(),
+          onActivate: this.onSeekBack,
+          notifyFocusChanged: ((focused: boolean): void => {
+      this.setChildFocused(focused);
+    }),
         })
 
         ChromeButton({
           showGlyph: true,
-          isPlaying: isPlayingValue,
-          glyphSize: playIconSizeValue,
-          width: transportBoxSize,
-          height: transportBoxSize,
-          onActivate: handleTogglePlayPause,
-          notifyFocusChanged: notifyFocus,
+          isPlaying: this.isPlaying,
+          glyphSize: this.playIconSize,
+          buttonWidth: defaultChromeTransportBoxSize(),
+          buttonHeight: defaultChromeTransportBoxSize(),
+          onActivate: this.onTogglePlayPause,
+          notifyFocusChanged: ((focused: boolean): void => {
+      this.setChildFocused(focused);
+    }),
         })
 
         ChromeButton({
           label: '+10s',
-          width: transportBoxSize,
-          height: transportBoxSize,
-          onActivate: handleSeekForward,
-          notifyFocusChanged: notifyFocus,
+          buttonWidth: defaultChromeTransportBoxSize(),
+          buttonHeight: defaultChromeTransportBoxSize(),
+          onActivate: this.onSeekForward,
+          notifyFocusChanged: ((focused: boolean): void => {
+      this.setChildFocused(focused);
+    }),
         })
       }
       .width('100%')
       .justifyContent(FlexAlign.Center)
     }
     .width('100%')
-    .padding({ left: paddingH, right: paddingH, top: paddingV, bottom: paddingV })
+    .padding({ left: this.paddingH, right: this.paddingH, top: this.paddingV, bottom: this.paddingV })
     .linearGradient({
       angle: 180,
       colors: [
@@ -622,7 +590,7 @@ export struct PlayerChrome {
         [toResourceColor(CHROME_GRADIENT_BOTTOM), 1],
       ],
     })
-    .opacity(chromeOpacity)
-    .hitTestBehavior(isVisible ? HitTestMode.Default : HitTestMode.Transparent)
+    .opacity(this.chromeOpacity)
+    .hitTestBehavior(this.visible ? HitTestMode.Default : HitTestMode.Transparent)
   }
 }

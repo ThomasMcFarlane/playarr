@@ -329,7 +329,7 @@ const SIMPLE_BAN_RULES = [
     message: "'typeof' in type position",
     regex: /(?::\s*typeof\b)|(?:\btype\s+[A-Za-z_$][\w$]*\s*=\s*typeof\b)/,
   },
-  { message: "'this' used as a type", regex: /:\s*this\b/ },
+  { message: "'this' used as a type", regex: /:\s*this\b(?!\.)/ },
   { message: "'as const'", regex: /\bas\s+const\b/ },
   {
     message: '<T>x angle-bracket cast syntax',

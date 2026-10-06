@@ -43,7 +43,7 @@
  */
 
 import { getPlayarrClient } from '../AppContainer';
-import { ApiOk, ApiResult, isApiOk } from '../net/ApiResult';
+import { ApiOk, ApiResult } from '../net/ApiResult';
 
 import {
   catalogUrl,
@@ -147,7 +147,7 @@ function decodeCatalogPage(wire: CatalogPageWire): CatalogPage {
  * decode), only the success case's `available_on` is ever touched.
  */
 function mapCatalogPageResult(result: ApiResult<CatalogPageWire>): ApiResult<CatalogPage> {
-  if (isApiOk(result)) {
+  if (result.kind === 'ok') {
     const ok: ApiOk<CatalogPage> = { kind: 'ok', status: result.status, value: decodeCatalogPage(result.value) };
     return ok;
   }
@@ -305,7 +305,7 @@ async function getSimilarByGenreFallback(target: Work, limit: number): Promise<A
   for (const genre of genresToQuery) {
     const query: BrowseQuery = { genre: genre, limit: limit };
     const pageResult = await getCatalog(query);
-    if (isApiOk(pageResult)) {
+    if (pageResult.kind === 'ok') {
       pages.push(pageResult.value);
     }
   }
@@ -336,7 +336,7 @@ export async function getSimilarWorks(target: Work, limit?: number): Promise<Api
   const path = catalogSimilarUrl(target.id) + queryStringFromParts(parts);
 
   const result = await getPlayarrClient().getJson<Work[]>(path);
-  if (isApiOk(result)) {
+  if (result.kind === 'ok') {
     return result;
   }
   if (result.kind === 'http_failure' && result.status === 404) {
@@ -357,7 +357,7 @@ export async function getSimilarWorks(target: Work, limit?: number): Promise<Api
  */
 export async function getContinueWatching(): Promise<ApiResult<ContinueWatchingEntry[]>> {
   const progressResult = await getPlayarrClient().getJson<WatchProgress[]>(playbackProgressListUrl());
-  if (!isApiOk(progressResult)) {
+  if (progressResult.kind !== 'ok') {
     return progressResult;
   }
 
@@ -366,7 +366,7 @@ export async function getContinueWatching(): Promise<ApiResult<ContinueWatchingE
 
   for (const progress of selected) {
     const detailResult = await getWorkDetail(progress.work_id);
-    if (isApiOk(detailResult)) {
+    if (detailResult.kind === 'ok') {
       const entry: ContinueWatchingEntry = { progress: progress, work: detailResult.value.work };
       entries.push(entry);
     }

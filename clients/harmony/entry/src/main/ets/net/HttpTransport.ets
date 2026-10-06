@@ -138,30 +138,31 @@ function toExpectDataType(dataType: HttpResponseDataType | undefined): http.Http
 }
 
 /** Copies a `Map<string, string>` onto a plain `Object` for
- * `http.HttpRequestOptions.header`. Uses `Reflect.set` (a dynamic-key
- * function call) rather than bracket assignment, since this file has no
- * fixed set of header names to declare a literal-keyed interface for --
- * that would require restating the Playarr-specific header names this
- * file must never contain (`core/Headers.ts`'s exclusive territory). */
+ * `http.HttpRequestOptions.header`. Uses a `Record<string, string>`
+ * (dynamic keys) since this file has no fixed set of header names to
+ * declare a literal-keyed interface for -- that would require restating
+ * the Playarr-specific header names this file must never contain
+ * (`core/Headers.ts`'s exclusive territory). */
 function toHeaderObject(headers: Map<string, string>): Object {
-  const native: Object = {};
+  const native: Record<string, string> = {};
   headers.forEach((value: string, key: string): void => {
-    Reflect.set(native, key, value);
+    native[key] = value;
   });
-  return native;
+  return native as Object;
 }
 
 /** Inverse of `toHeaderObject`: reads every own key off the response
- * header `Object` via `Reflect.get` and lower-cases the key on the way in,
+ * header `Object` via a `Record` view and lower-cases the key on the way in,
  * so header lookups (in particular `Content-Type`) are deterministic
  * regardless of how the server or an intermediary cased them -- HTTP
  * header names are case-insensitive by spec. */
 function toHeaderMap(header: Object): Map<string, string> {
   const result = new Map<string, string>();
-  const keys = Object.keys(header);
+  const record = header as Record<string, Object>;
+  const keys = Object.keys(record);
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
-    const rawValue = Reflect.get(header, key);
+    const rawValue: Object = record[key];
     result.set(key.toLowerCase(), String(rawValue));
   }
   return result;

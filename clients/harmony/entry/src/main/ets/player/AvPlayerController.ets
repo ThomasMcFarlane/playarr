@@ -75,11 +75,9 @@
 import { media } from '@kit.MediaKit';
 import { audio } from '@kit.AudioKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { XComponentController } from '@kit.ArkUI';
 
 import { getServerDirectory, getSessionManager } from '../AppContainer';
 import { fetchSubtitleTrack } from '../data/SubtitleRepository';
-import { isApiOk } from '../net/ApiResult';
 import { logError, logInfo, logWarn } from '../util/Log';
 
 import { absoluteUrl } from '../core/Url.ts';
@@ -426,7 +424,7 @@ export class AvPlayerController {
     }
 
     try {
-      const mediaSource: media.AVMediaSource = media.createMediaSourceWithUrl(joinedUrl, headers);
+      const mediaSource: media.MediaSource = media.createMediaSourceWithUrl(joinedUrl, headers);
       await player.setMediaSource(mediaSource);
       return;
     } catch (err) {
@@ -794,7 +792,7 @@ export class AvPlayerController {
     }
 
     const result = await fetchSubtitleTrack(sessionId, track);
-    if (!isApiOk(result)) {
+    if (result.kind !== 'ok') {
       logError(LOG_TAG, 'failed to fetch a sidecar subtitle track for stream index ' + String(track.stream_index));
       return false;
     }

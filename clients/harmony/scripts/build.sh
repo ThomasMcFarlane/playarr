@@ -87,7 +87,8 @@ hvigorw assembleHap "${HVIGOR_ARGS[@]}"
 
 if [ "$MODE" = "release" ]; then
     echo "==> hvigorw assembleApp (buildMode=$MODE)" >&2
-    hvigorw assembleApp "${HVIGOR_ARGS[@]}"
+    # assembleApp is a project-level task: `--mode module` hides it ("Task assembleApp was not found").
+    hvigorw assembleApp -p product=default -p "buildMode=$MODE" --no-daemon --stacktrace
 fi
 
 echo "==> Build complete." >&2

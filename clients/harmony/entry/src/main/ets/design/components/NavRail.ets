@@ -113,7 +113,7 @@ struct NavTile {
   // actual values always go through design/Theme.ets's resolvers and
   // design/Metrics.ets's tv() below (see those files' own header comments
   // for this exact pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
@@ -146,14 +146,9 @@ struct NavTile {
   }
 
   build() {
-    const scale = this.targetScale();
-    const bgAlpha = this.targetBackgroundAlpha();
-    const iconRes = this.item.icon;
-    const labelText = this.item.label;
-    const tileId = `${this.item.id}-nav-tile`;
 
     Column({ space: NAV_TILE_ICON_LABEL_GAP }) {
-      Image(iconRes)
+      Image(this.item.icon)
         .width(tv(TvGeometry.navTileIconSize))
         .height(tv(TvGeometry.navTileIconSize))
         .objectFit(ImageFit.Contain)
@@ -161,22 +156,22 @@ struct NavTile {
         .draggable(false)
         .focusable(false)
 
-      Text(labelText)
+      Text(this.item.label)
         .fontSize(tv(TvGeometry.navTileLabelSize))
         .fontColor(toResourceColor(activeColors().ink))
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
-    .id(tileId)
+    .id(`${this.item.id}-nav-tile`)
     .width(tv(TvGeometry.navTileSize))
     .height(tv(TvGeometry.navTileSize))
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .borderRadius(tv(TvGeometry.navTileRadius))
     .clip(true)
-    .backgroundColor(toResourceColorWithAlpha(activeColors().ink, bgAlpha))
-    .scale({ x: scale, y: scale })
+    .backgroundColor(toResourceColorWithAlpha(activeColors().ink, this.targetBackgroundAlpha()))
+    .scale({ x: this.targetScale(), y: this.targetScale() })
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);
@@ -205,19 +200,17 @@ export struct NavRail {
 
   // Tracked purely to force a re-render on theme / TV-scale change -- see
   // `NavTile`'s own identical fields for this exact pattern.
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
   build() {
-    const selected = this.selectedId;
-    const dispatch = this.onSelect;
 
     Column({ space: tv(TvGeometry.navGroupItemGap) }) {
       ForEach(
         this.items,
         (item: NavRailItem) => {
-          NavTile({ item: item, selected: item.id === selected, onSelect: dispatch })
+          NavTile({ item: item, selected: item.id === this.selectedId, onSelect: this.onSelect })
         },
         (item: NavRailItem): string => item.id
       )

@@ -75,17 +75,19 @@ export const ROUTE_PLAYER: string = 'Player';
  * individual constants above; the constants exist only to build this one
  * namespace.
  */
-export const ROUTES = {
-  Index: ROUTE_INDEX,
-  DesignGallery: ROUTE_DESIGN_GALLERY,
-  ServerSetup: ROUTE_SERVER_SETUP,
-  Pairing: ROUTE_PAIRING,
-  Profiles: ROUTE_PROFILES,
-  Home: ROUTE_HOME,
-  Library: ROUTE_LIBRARY,
-  Detail: ROUTE_DETAIL,
-  Player: ROUTE_PLAYER,
-};
+export class RouteNames {
+  readonly Index: string = ROUTE_INDEX;
+  readonly DesignGallery: string = ROUTE_DESIGN_GALLERY;
+  readonly ServerSetup: string = ROUTE_SERVER_SETUP;
+  readonly Pairing: string = ROUTE_PAIRING;
+  readonly Profiles: string = ROUTE_PROFILES;
+  readonly Home: string = ROUTE_HOME;
+  readonly Library: string = ROUTE_LIBRARY;
+  readonly Detail: string = ROUTE_DETAIL;
+  readonly Player: string = ROUTE_PLAYER;
+}
+
+export const ROUTES: RouteNames = new RouteNames();
 
 /** `pages/Detail.ets`. `workId` identifies the work (movie or series)
  * whose detail sheet to render. */

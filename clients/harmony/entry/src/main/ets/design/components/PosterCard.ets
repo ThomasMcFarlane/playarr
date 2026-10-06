@@ -108,7 +108,7 @@ export type PosterCardVariant = 'home' | 'titleEpisode';
 
 /** One CSS `box-shadow` layer, copied as `{offsetY, radius, alpha}` rather
  * than a pre-built colour string so rest/focused values can be linearly
- * interpolated by `effectiveFocusPercent(...)` (see `shadowLayers()`
+ * interpolated by `effectiveFocusPercent(...)` (see `shadowLayer()`
  * below). `offsetX` is always 0 in every brief-5.6 value used here. */
 interface ShadowLayerSpec {
   offsetY: number;
@@ -163,11 +163,11 @@ export struct PosterCard {
    * (`TvGeometry.homeRailCardWidthLandscape`, scaled live via
    * `design/Metrics.ets`'s `tv()`) -- every other placement overrides
    * explicitly. See this file's header comment. */
-  @Prop width: number = tv(TvGeometry.homeRailCardWidthLandscape);
+  @Prop cardWidth: number = tv(TvGeometry.homeRailCardWidthLandscape);
 
   /** Artwork height in vp. Defaults to the same card at its brief-5.10
    * "16:9 landscape" aspect ratio. */
-  @Prop height: number = Math.round((tv(TvGeometry.homeRailCardWidthLandscape) * 9) / 16);
+  @Prop cardHeight: number = Math.round((tv(TvGeometry.homeRailCardWidthLandscape) * 9) / 16);
 
   /** Artwork corner radius. `-1` (the default) means "resolve from
    * `variant`" -- see `resolvedArtworkRadius()` and this file's header
@@ -198,7 +198,7 @@ export struct PosterCard {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private focusPercent: number = 0;
@@ -253,7 +253,10 @@ export struct PosterCard {
     return from + (to - from) * t;
   }
 
-  private shadowLayers(): ShadowOptions[] {
+  /** ArkUI's `.shadow()` takes a single `ShadowOptions` (the brief-5.6 CSS
+   * two-layer `box-shadow` has no direct equivalent), so only the dominant
+   * (first, wider) layer is rendered; the tight second layer is dropped. */
+  private shadowLayer(): ShadowOptions {
     const rest = this.isTitleEpisode() ? TITLE_EPISODE_SHADOW_REST : HOME_SHADOW_REST;
     const focused = this.isTitleEpisode() ? TITLE_EPISODE_SHADOW_FOCUSED : HOME_SHADOW_FOCUSED;
     const t = this.effective();
@@ -264,22 +267,13 @@ export struct PosterCard {
     const offsetY0 = this.lerp(rest[0].offsetY, focused[0].offsetY, t);
     const radius0 = this.lerp(rest[0].radius, focused[0].radius, t);
     const alpha0 = this.lerp(rest[0].alpha, focused[0].alpha, t);
-    const offsetY1 = this.lerp(rest[1].offsetY, focused[1].offsetY, t);
-    const radius1 = this.lerp(rest[1].radius, focused[1].radius, t);
-    const alpha1 = this.lerp(rest[1].alpha, focused[1].alpha, t);
     const first: ShadowOptions = {
       offsetX: 0,
       offsetY: offsetY0,
       radius: radius0,
       color: toResourceColorWithAlpha(LightColors.ink, alpha0),
     };
-    const second: ShadowOptions = {
-      offsetX: 0,
-      offsetY: offsetY1,
-      radius: radius1,
-      color: toResourceColorWithAlpha(LightColors.ink, alpha1),
-    };
-    return [first, second];
+    return first;
   }
 
   private clampedProgressPercent(): number {
@@ -287,15 +281,6 @@ export struct PosterCard {
   }
 
   build() {
-    // Read every reactive value into a local once per build() -- besides
-    // avoiding repeat recomputation, this also keeps object-literal values
-    // below from ever starting with a bare `this.`, which is what
-    // `setFocused()`'s comment explains `checks/arkts.mjs` misreads.
-    const artworkWidth = this.width;
-    const artworkHeight = this.height;
-    const radius = this.resolvedArtworkRadius();
-    const scale = this.artworkScale();
-    const progressPercent = this.clampedProgressPercent();
 
     Column({ space: Spacing.xs }) {
       Stack({ alignContent: Alignment.Bottom }) {
@@ -306,13 +291,13 @@ export struct PosterCard {
             .objectFit(ImageFit.Cover)
             .draggable(false)
         } else {
-          Skeleton({ width: artworkWidth, height: artworkHeight, radius: radius })
+          Skeleton({ blockWidth: this.cardWidth, blockHeight: this.cardHeight, radius: this.resolvedArtworkRadius() })
         }
 
         if (this.progress >= 0) {
           Row() {
             Row()
-              .width(`${progressPercent}%`)
+              .width(`${this.clampedProgressPercent()}%`)
               .height('100%')
               .backgroundColor(toResourceColor(BRAND_PINK))
           }
@@ -322,15 +307,15 @@ export struct PosterCard {
           .justifyContent(FlexAlign.Start)
         }
       }
-      .width(artworkWidth)
-      .height(artworkHeight)
+      .width(this.cardWidth)
+      .height(this.cardHeight)
       .clip(true)
-      .borderRadius(radius)
-      .scale({ x: scale, y: scale })
-      .shadow(this.shadowLayers())
+      .borderRadius(this.resolvedArtworkRadius())
+      .scale({ x: this.artworkScale(), y: this.artworkScale() })
+      .shadow(this.shadowLayer())
 
       Text(this.title)
-        .width(artworkWidth)
+        .width(this.cardWidth)
         .fontSize(this.titleFontSize)
         .fontWeight(FontWeight.Medium)
         .fontColor(toResourceColor(activeColors().ink))
@@ -339,7 +324,7 @@ export struct PosterCard {
 
       if (this.subtitle.length > 0) {
         Text(this.subtitle)
-          .width(artworkWidth)
+          .width(this.cardWidth)
           .fontSize(this.subtitleFontSize)
           .fontWeight(FontWeight.Normal)
           .fontColor(toResourceColor(activeColors().inkSoft))
@@ -347,9 +332,9 @@ export struct PosterCard {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
     }
-    .width(artworkWidth)
+    .width(this.cardWidth)
     .alignItems(HorizontalAlign.Start)
-    .translateY(this.cardTranslateY())
+    .translate({ y: this.cardTranslateY() })
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);

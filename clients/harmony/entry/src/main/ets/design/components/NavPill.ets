@@ -101,7 +101,7 @@ struct NavPillTile {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private focusPercent: number = 0;
@@ -120,17 +120,13 @@ struct NavPillTile {
   }
 
   build() {
-    const effective = effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const scale = 1 + (FOCUS_LIFT.button.scale - 1) * effective;
-    const iconRes = this.item.icon;
-    const tint = this.iconColor();
 
     Row() {
-      Image(iconRes)
+      Image(this.item.icon)
         .width(TouchGeometry.navIconOnlySize)
         .height(TouchGeometry.navIconOnlySize)
         .objectFit(ImageFit.Contain)
-        .fillColor(tint)
+        .fillColor(this.iconColor())
         .draggable(false)
         .focusable(false)
     }
@@ -140,7 +136,7 @@ struct NavPillTile {
     .clip(true)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
-    .scale({ x: scale, y: scale })
+    .scale({ x: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)), y: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)) })
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);
@@ -169,12 +165,10 @@ export struct NavPill {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   build() {
-    const selected = this.selectedId;
-    const dispatch = this.onSelect;
 
     // Two nested layers on purpose (see this file's header comment): the
     // OUTER glass pill (this Row) carries brief 5.10's `navPaddingH`/`V`
@@ -188,7 +182,7 @@ export struct NavPill {
         ForEach(
           this.items,
           (item: NavPillItem) => {
-            NavPillTile({ item: item, selected: item.id === selected, onSelect: dispatch })
+            NavPillTile({ item: item, selected: item.id === this.selectedId, onSelect: this.onSelect })
           },
           (item: NavPillItem): string => item.id
         )
@@ -212,6 +206,6 @@ export struct NavPill {
       radius: NAV_PILL_SHADOW_RADIUS,
       color: toResourceColorWithAlpha(LightColors.ink, NAV_PILL_SHADOW_ALPHA),
     })
-    .align(Alignment.BottomCenter)
+    .align(Alignment.Bottom)
   }
 }

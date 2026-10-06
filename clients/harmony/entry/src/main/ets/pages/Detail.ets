@@ -557,7 +557,7 @@ struct Detail {
   // design/Metrics.ets's own resolver functions (see those files' header
   // comments for this exact pattern, already used by every component in
   // this design system).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('deviceProfile') private trackedDeviceProfile: DeviceProfile | undefined = undefined;
   @StorageProp('tvScaleFactor') private trackedTvScaleFactor: number = 1;
@@ -750,35 +750,32 @@ struct Detail {
    * delta and shadow pair (`PosterCard`'s `'titleEpisode'` variant). */
   @Builder
   private rowItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const row = item as DetailRow;
     if (isTvMetrics()) {
-      const width = tv(TvGeometry.railPanelCardWidth);
       PosterCard({
         variant: 'titleEpisode',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 9) / 16),
+        title: (item as DetailRow).title,
+        subtitle: (item as DetailRow).subtitle,
+        artwork: (item as DetailRow).artwork,
+        cardWidth: tv(TvGeometry.railPanelCardWidth),
+        cardHeight: Math.round((tv(TvGeometry.railPanelCardWidth) * 9) / 16),
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.selectRow(row);
+          this.selectRow((item as DetailRow));
         },
       })
     } else {
-      const width = TouchGeometry.homeRailCardWidthLandscape;
       PosterCard({
         variant: 'titleEpisode',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 9) / 16),
+        title: (item as DetailRow).title,
+        subtitle: (item as DetailRow).subtitle,
+        artwork: (item as DetailRow).artwork,
+        cardWidth: TouchGeometry.homeRailCardWidthLandscape,
+        cardHeight: Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16),
         titleFontSize: 12,
         subtitleFontSize: 10,
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.selectRow(row);
+          this.selectRow((item as DetailRow));
         },
       })
     }
@@ -789,37 +786,34 @@ struct Detail {
    * `COVER_ARTWORK_PRIORITY`). */
   @Builder
   private similarItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const row = item as DetailRow;
     if (isTvMetrics()) {
-      const width = tv(TvGeometry.homeRailCardWidthCover);
       PosterCard({
         variant: 'home',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 3) / 2),
+        title: (item as DetailRow).title,
+        subtitle: (item as DetailRow).subtitle,
+        artwork: (item as DetailRow).artwork,
+        cardWidth: tv(TvGeometry.homeRailCardWidthCover),
+        cardHeight: Math.round((tv(TvGeometry.homeRailCardWidthCover) * 3) / 2),
         artworkRadius: Radii.homeCardArtworkTv,
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.selectRow(row);
+          this.selectRow((item as DetailRow));
         },
       })
     } else {
-      const width = TouchGeometry.homeRailCardWidthCover;
       PosterCard({
         variant: 'home',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 3) / 2),
+        title: (item as DetailRow).title,
+        subtitle: (item as DetailRow).subtitle,
+        artwork: (item as DetailRow).artwork,
+        cardWidth: TouchGeometry.homeRailCardWidthCover,
+        cardHeight: Math.round((TouchGeometry.homeRailCardWidthCover * 3) / 2),
         artworkRadius: Radii.homeCardArtworkTouch,
         titleFontSize: 12,
         subtitleFontSize: 10,
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.selectRow(row);
+          this.selectRow((item as DetailRow));
         },
       })
     }
@@ -835,15 +829,12 @@ struct Detail {
    * nothing is resolved to play yet. */
   @Builder
   private playButton(enabled: boolean, height: number): void {
-    const label = enabled ? 'Play' : 'Unavailable';
-    const backgroundColor = enabled ? toResourceColor(activeColors().accent) : toResourceColor(activeColors().inkMuted);
-    const opacity = enabled ? 1 : 0.6;
 
     Row({ space: Spacing.sm }) {
       Text('▶')
         .fontSize(PLAY_BUTTON_ICON_SIZE)
         .fontColor(toResourceColor(activeColors().onAccent))
-      Text(label)
+      Text((enabled ? 'Play' : 'Unavailable'))
         .fontSize(PLAY_BUTTON_LABEL_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor(toResourceColor(activeColors().onAccent))
@@ -853,8 +844,8 @@ struct Detail {
     .borderRadius(Radii.pillFull)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(backgroundColor)
-    .opacity(opacity)
+    .backgroundColor((enabled ? toResourceColor(activeColors().accent) : toResourceColor(activeColors().inkMuted)))
+    .opacity((enabled ? 1 : 0.6))
     .focusable(enabled)
     .onClick(() => {
       this.playPrimary();
@@ -863,37 +854,30 @@ struct Detail {
 
   @Builder
   private railsColumn(): void {
-    const rails = this.rails;
-    const similar = this.similarRail;
-    const railBuilder = this.rowItem;
-    const similarBuilder = this.similarItem;
-    const tv_ = isTvMetrics();
-    const itemGap = tv_ ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap;
-    const headingSize = tv_ ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize;
 
     Column({ space: Spacing.xl }) {
       ForEach(
-        rails,
+        this.rails,
         (rail: DetailRail) => {
           MediaRail({
             railId: rail.id,
             heading: rail.heading,
-            itemGap: itemGap,
-            headingSize: headingSize,
+            itemGap: (isTvMetrics() ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap),
+            headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
             items: rail.items,
-            itemBuilder: railBuilder,
+            itemBuilder: this.rowItem,
           })
         },
         (rail: DetailRail): string => rail.id
       )
 
-      if (similar !== null) {
+      if (this.similarRail !== null) {
         MediaRail({
-          railId: similar.id,
-          heading: similar.heading,
-          headingSize: headingSize,
-          items: similar.items,
-          itemBuilder: similarBuilder,
+          railId: this.similarRail.id,
+          heading: this.similarRail.heading,
+          headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
+          items: this.similarRail.items,
+          itemBuilder: this.similarItem,
         })
       }
     }
@@ -901,32 +885,26 @@ struct Detail {
     .width('100%')
   }
 
+  private synopsisText(): string {
+    if (this.detail !== null && this.detail.work.overview !== null) {
+      return this.detail.work.overview;
+    }
+    return '';
+  }
+
   @Builder
   private tvLayout(): void {
-    const hero = this.heroArtwork;
-    const detail = this.detail;
-    const kicker = detail !== null ? kindLabel(detail.work.kind) : '';
-    const title = detail !== null ? detail.work.title : '';
-    const metaLines = detail !== null ? buildMetaLines(detail) : [];
-    let synopsis = '';
-    if (detail !== null && detail.work.overview !== null) {
-      synopsis = detail.work.overview;
-    }
-    const canPlay = this.primaryMediaFileId !== null;
-    const railsBuilder = this.railsColumn;
-    const playButtonBuilder = this.playButton;
-    const panelOpacity = this.railPanelSurfaceOpacity();
 
     Stack() {
-      if (hero !== undefined) {
-        Image(hero)
+      if (this.heroArtwork !== undefined) {
+        Image(this.heroArtwork)
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Cover)
           .draggable(false)
           .focusable(false)
       } else {
-        Skeleton({ width: tv(1920), height: tv(1080), radius: 0 })
+        Skeleton({ blockWidth: tv(1920), blockHeight: tv(1080), radius: 0 })
       }
 
       Row()
@@ -959,8 +937,8 @@ struct Detail {
         })
 
       Column({ space: Spacing.lg }) {
-        FeatureCopy({ kicker: kicker, title: title, metaLines: metaLines, synopsis: synopsis })
-        playButtonBuilder(canPlay, tv(PLAY_BUTTON_HEIGHT_TV))
+        FeatureCopy({ kicker: (this.detail !== null ? kindLabel(this.detail.work.kind) : ''), title: (this.detail !== null ? this.detail.work.title : ''), metaLines: (this.detail !== null ? buildMetaLines(this.detail) : []), synopsis: this.synopsisText() })
+        this.playButton(this.primaryMediaFileId !== null, tv(PLAY_BUTTON_HEIGHT_TV))
       }
       .width(`${TvGeometry.detailCopyColumnWidthRatio * 100}%`)
       .alignItems(HorizontalAlign.Start)
@@ -968,7 +946,7 @@ struct Detail {
 
       Row() {
         Scroll() {
-          railsBuilder()
+          this.railsColumn()
         }
         .align(Alignment.Top)
         .width('100%')
@@ -976,7 +954,7 @@ struct Detail {
         .padding(tv(TvGeometry.railPanelPadding))
         .borderRadius(Radii.railPanel)
         .clip(true)
-        .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, panelOpacity))
+        .backgroundColor(toResourceColorWithAlpha(activeColors().surfaceStrong, this.railPanelSurfaceOpacity()))
         .backdropBlur(tv(RAIL_PANEL_BLUR_RADIUS))
         .border({ width: tv(1), color: toResourceColorWithAlpha(HAIRLINE_WHITE, RAIL_PANEL_HAIRLINE_ALPHA) })
       }
@@ -993,41 +971,29 @@ struct Detail {
 
   @Builder
   private touchLayout(): void {
-    const hero = this.heroArtwork;
-    const detail = this.detail;
-    const kicker = detail !== null ? kindLabel(detail.work.kind) : '';
-    const title = detail !== null ? detail.work.title : '';
-    const metaLines = detail !== null ? buildMetaLines(detail) : [];
-    let synopsis = '';
-    if (detail !== null && detail.work.overview !== null) {
-      synopsis = detail.work.overview;
-    }
-    const canPlay = this.primaryMediaFileId !== null;
-    const railsBuilder = this.railsColumn;
-    const playButtonBuilder = this.playButton;
 
     Stack({ alignContent: Alignment.Top }) {
-      if (hero !== undefined) {
-        Image(hero)
+      if (this.heroArtwork !== undefined) {
+        Image(this.heroArtwork)
           .width('100%')
           .height(HERO_TOUCH_HEIGHT)
           .objectFit(ImageFit.Cover)
           .draggable(false)
           .focusable(false)
       } else {
-        Skeleton({ width: TouchGeometry.homeRailCardWidthLandscape * 4, height: HERO_TOUCH_HEIGHT, radius: 0 })
+        Skeleton({ blockWidth: TouchGeometry.homeRailCardWidthLandscape * 4, blockHeight: HERO_TOUCH_HEIGHT, radius: 0 })
       }
 
       Scroll() {
         Column({ space: TouchGeometry.detailListSpacing }) {
           Column({ space: Spacing.md }) {
-            FeatureCopy({ kicker: kicker, title: title, metaLines: metaLines, synopsis: synopsis })
-            playButtonBuilder(canPlay, PLAY_BUTTON_HEIGHT_TOUCH)
+            FeatureCopy({ kicker: (this.detail !== null ? kindLabel(this.detail.work.kind) : ''), title: (this.detail !== null ? this.detail.work.title : ''), metaLines: (this.detail !== null ? buildMetaLines(this.detail) : []), synopsis: this.synopsisText() })
+            this.playButton(this.primaryMediaFileId !== null, PLAY_BUTTON_HEIGHT_TOUCH)
           }
           .width('100%')
           .alignItems(HorizontalAlign.Start)
 
-          railsBuilder()
+          this.railsColumn()
         }
         .padding({
           top: TouchGeometry.detailListTop,
@@ -1048,18 +1014,10 @@ struct Detail {
 
   @Builder
   private busyOrErrorState(): void {
-    // `message` is read into a local first (rather than inlining
-    // `this.errorMessage` directly into the object literal below) purely to
-    // keep `checks/arkts.mjs`'s lexical scan -- which naively flags any
-    // `:\s*this\b` sequence as ArkTS's banned "'this' used as a type" --
-    // from misreading an object-literal property value as a type position.
-    // Same documented ambiguity as `design/components/PosterCard.ets`'s
-    // `setFocused()`.
-    const message = this.errorMessage;
     if (this.loadFailed) {
       AsyncState({
         kind: AsyncStateKind.Error,
-        message: message,
+        message: this.errorMessage,
         retryLabel: 'Retry',
         retry: () => {
           this.loadDetail();
@@ -1102,7 +1060,5 @@ struct Detail {
  */
 @Builder
 export function DetailBuilder(name: string, param: Object): void {
-  const params = param as DetailRouteParams;
-  const workId = params.workId;
-  Detail({ workId: workId })
+  Detail({ workId: ((param as DetailRouteParams).workId) })
 }

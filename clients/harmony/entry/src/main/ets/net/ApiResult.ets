@@ -67,14 +67,6 @@ export type ApiFailure = ApiNetworkFailure | ApiHttpFailure;
  * thrown exception, never a rejected promise a caller must also catch. */
 export type ApiResult<T> = ApiOk<T> | ApiFailure;
 
-/** Narrows an `ApiResult` to its success case for an `if`/early-return
- * style caller. Callers that need to distinguish `network_failure` from
- * `http_failure` still switch on `result.kind` themselves. */
-export function isApiOk<T>(result: ApiResult<T>): result is ApiOk<T> {
-  return result.kind === 'ok';
-}
-
-/** Narrows an `ApiResult` to either failure case. */
-export function isApiFailure<T>(result: ApiResult<T>): result is ApiFailure {
-  return result.kind !== 'ok';
-}
+// ArkTS has no user-defined type guards (`x is T`), so there are no
+// `isApiOk`/`isApiFailure` helpers: callers narrow a result with
+// `result.kind === 'ok'` (or `!== 'ok'` for either failure case).

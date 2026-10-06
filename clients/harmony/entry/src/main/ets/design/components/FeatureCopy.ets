@@ -108,7 +108,7 @@ export struct FeatureCopy {
   // actual values always go through design/Theme.ets's resolvers and
   // design/Metrics.ets's tv() below (see those files' own header comments
   // for this exact pattern, already used by Skeleton.ets/AsyncState.ets).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 

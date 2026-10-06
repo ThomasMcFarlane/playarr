@@ -113,7 +113,7 @@ struct Profiles {
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern, already
   // used by every design/ component in this client).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private viewState: ProfilesViewState = ProfilesViewState.Loading;
@@ -269,30 +269,19 @@ struct Profiles {
     });
   }
 
+  private avatarDiameter(): number {
+    return isTvMetrics() ? tv(TV_AVATAR_DIAMETER) : TOUCH_AVATAR_DIAMETER;
+  }
+
+  private focusScale(focusPercent: number): number {
+    return 1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
+  }
+
+  private pinContinueEnabled(): boolean {
+    return this.pinValue.length === PIN_LENGTH && !this.pinSubmitting;
+  }
+
   build() {
-    // Read every reactive value into a local once per build(), matching
-    // `design/components/ProfileAvatar.ets`'s own build()-header
-    // convention: besides avoiding repeat recomputation, this also keeps
-    // object-literal values below from ever starting with a bare `this.`.
-    const viewState = this.viewState;
-    const profiles = this.profiles;
-    const errorMessage = this.errorMessage;
-    const pinTarget = this.pinTargetProfile;
-    const pinValue = this.pinValue;
-    const pinError = this.pinError;
-    const pinSubmitting = this.pinSubmitting;
-
-    const avatarDiameter = isTvMetrics() ? tv(TV_AVATAR_DIAMETER) : TOUCH_AVATAR_DIAMETER;
-    const signOutScale =
-      1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.signOutFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const pinCancelScale =
-      1 +
-      (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.pinCancelFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const pinContinueScale =
-      1 +
-      (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.pinContinueFocusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const pinContinueEnabled = pinValue.length === PIN_LENGTH && !pinSubmitting;
-
     NavDestination() {
       Stack() {
         Scroll() {
@@ -302,30 +291,30 @@ struct Profiles {
               .fontWeight(FontWeight.Bold)
               .fontColor(toResourceColor(activeColors().ink))
 
-            if (viewState === ProfilesViewState.Loading) {
+            if (this.viewState === ProfilesViewState.Loading) {
               AsyncState({ kind: AsyncStateKind.Loading })
-            } else if (viewState === ProfilesViewState.Error) {
+            } else if (this.viewState === ProfilesViewState.Error) {
               AsyncState({
                 kind: AsyncStateKind.Error,
-                message: errorMessage,
+                message: this.errorMessage,
                 retryLabel: 'Retry',
                 retry: () => {
                   this.loadProfiles();
                 },
               })
-            } else if (profiles.length === 0) {
+            } else if (this.profiles.length === 0) {
               // Defensive only -- brief 4.7 guarantees at least one entry
               // (the caller's own account) even under `AuthMode::FullAccount`.
               AsyncState({ kind: AsyncStateKind.Empty, message: 'No profiles are available.' })
             } else {
               Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center, alignItems: ItemAlign.Center }) {
                 ForEach(
-                  profiles,
+                  this.profiles,
                   (profile: AvailableProfileResponse) => {
                     Column({ space: Spacing.sm }) {
                       ProfileAvatar({
                         presetId: resolveAvatarPreset(profile.id),
-                        diameter: avatarDiameter,
+                        diameter: this.avatarDiameter(),
                         onSelect: () => {
                           this.selectProfile(profile);
                         },
@@ -360,8 +349,8 @@ struct Profiles {
                       .fontSize(ADD_PROFILE_GLYPH_FONT_SIZE)
                       .fontColor(toResourceColor(activeColors().inkMuted))
                   }
-                  .width(avatarDiameter)
-                  .height(avatarDiameter)
+                  .width(this.avatarDiameter())
+                  .height(this.avatarDiameter())
                   .borderRadius(Radii.circleFull)
                   .backgroundColor(toResourceColor(activeColors().surfaceSoft))
                   .justifyContent(FlexAlign.Center)
@@ -375,7 +364,7 @@ struct Profiles {
                     .fontSize(PROFILE_STATUS_FONT_SIZE)
                     .fontColor(toResourceColor(activeColors().inkMuted))
                     .textAlign(TextAlign.Center)
-                    .constraintSize({ maxWidth: avatarDiameter + Spacing.xl })
+                    .constraintSize({ maxWidth: this.avatarDiameter() + Spacing.xl })
                 }
                 .margin(TILE_MARGIN)
                 .opacity(0.6)
@@ -398,7 +387,7 @@ struct Profiles {
               .onBlur(() => {
                 this.setSignOutFocused(false);
               })
-              .scale({ x: signOutScale, y: signOutScale })
+              .scale({ x: this.focusScale(this.signOutFocusPercent), y: this.focusScale(this.signOutFocusPercent) })
               .onClick(() => {
                 this.handleSignOut();
               })
@@ -410,7 +399,7 @@ struct Profiles {
         .width('100%')
         .height('100%')
 
-        if (pinTarget !== null) {
+        if (this.pinTargetProfile !== null) {
           Stack({ alignContent: Alignment.Center }) {
             Column()
               .width('100%')
@@ -419,7 +408,7 @@ struct Profiles {
 
             Column({ space: Spacing.md }) {
               ProfileAvatar({
-                presetId: resolveAvatarPreset(pinTarget.id),
+                presetId: resolveAvatarPreset(this.pinTargetProfile.id),
                 diameter: PIN_DIALOG_AVATAR_DIAMETER,
                 onSelect: () => {},
               })
@@ -429,11 +418,11 @@ struct Profiles {
                 .fontWeight(FontWeight.Bold)
                 .fontColor(toResourceColor(activeColors().ink))
 
-              Text(pinTarget.display_name)
+              Text(this.pinTargetProfile.display_name)
                 .fontSize(SUBHEADING_FONT_SIZE)
                 .fontColor(toResourceColor(activeColors().inkSoft))
 
-              TextInput({ text: pinValue, placeholder: '0000' })
+              TextInput({ text: this.pinValue, placeholder: '0000' })
                 .type(InputType.Number)
                 .maxLength(PIN_LENGTH)
                 .textAlign(TextAlign.Center)
@@ -442,8 +431,8 @@ struct Profiles {
                   this.onPinDigitsChange(value);
                 })
 
-              if (pinError.length > 0) {
-                Text(pinError)
+              if (this.pinError.length > 0) {
+                Text(this.pinError)
                   .fontSize(PROFILE_STATUS_FONT_SIZE)
                   .fontColor(toResourceColor(activeColors().danger))
               }
@@ -462,7 +451,7 @@ struct Profiles {
                   .onBlur(() => {
                     this.setPinCancelFocused(false);
                   })
-                  .scale({ x: pinCancelScale, y: pinCancelScale })
+                  .scale({ x: this.focusScale(this.pinCancelFocusPercent), y: this.focusScale(this.pinCancelFocusPercent) })
                   .onClick(() => {
                     this.closePinPrompt();
                   })
@@ -474,7 +463,7 @@ struct Profiles {
                   .backgroundColor(toResourceColor(activeColors().accent))
                   .borderRadius(Radii.drawerButton)
                   .padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.sm, bottom: Spacing.sm })
-                  .enabled(pinContinueEnabled)
+                  .enabled(this.pinContinueEnabled())
                   .focusable(true)
                   .onFocus(() => {
                     this.setPinContinueFocused(true);
@@ -482,7 +471,7 @@ struct Profiles {
                   .onBlur(() => {
                     this.setPinContinueFocused(false);
                   })
-                  .scale({ x: pinContinueScale, y: pinContinueScale })
+                  .scale({ x: this.focusScale(this.pinContinueFocusPercent), y: this.focusScale(this.pinContinueFocusPercent) })
                   .onClick(() => {
                     this.submitPin();
                   })

@@ -3,7 +3,7 @@
  * sections 5.1/5.2). Two AppStorage keys drive everything:
  *
  * - `'colorMode'` -- the OS-level signal. Seeded and kept live for the
- *   whole app lifetime by `Environment.envProp('colorMode', ColorMode.Light)`
+ *   whole app lifetime by `Environment.envProp('colorMode', ColorMode.LIGHT)`
  *   (`@kit.ArkUI`). This is the API this file settled on among the three
  *   candidates in the implementation brief:
  *     - `Environment.envProp` (chosen) -- a static call, no ability/window
@@ -44,7 +44,7 @@
  * `build()` for the actual values, e.g.:
  *
  * ```
- * @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+ * @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
  * @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
  * // ...
  * build() {
@@ -57,7 +57,6 @@
  * theme-change behaviour.
  */
 
-import { Environment } from '@kit.ArkUI';
 import { LightColors, DarkColors } from '../core/Tokens';
 import type { ColorTokens, RgbaColor } from '../core/Tokens';
 
@@ -73,7 +72,7 @@ export const THEME_MODE_SETTING_KEY: string = 'themeModeSetting';
 
 // Bind + keep 'colorMode' live for the app's lifetime. Safe to evaluate at
 // module load: `envProp` only binds once and is a no-op on any later call.
-Environment.envProp('colorMode', ColorMode.Light);
+Environment.envProp('colorMode', ColorMode.LIGHT);
 
 /** Playarr's own theme preference. `'system'` (the default) follows the
  * OS signal; `'light'`/`'dark'` are an explicit user override. */
@@ -106,7 +105,7 @@ export function setThemeModeSetting(mode: ThemeModeSetting): void {
 /** The live OS colour-mode signal, collapsed to Playarr's two-mode model. */
 export function systemColorMode(): ResolvedThemeMode {
   const mode = AppStorage.get<ColorMode>(SYSTEM_COLOR_MODE_KEY);
-  if (mode === ColorMode.Dark) {
+  if (mode === ColorMode.DARK) {
     return 'dark';
   }
   return 'light';

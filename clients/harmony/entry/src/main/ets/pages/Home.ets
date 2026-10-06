@@ -460,7 +460,7 @@ export struct Home {
   // design/Metrics.ets's own resolvers below (see those files' own header
   // comments, and pages/Library.ets's/pages/DesignGallery.ets's identical
   // fields, for this exact pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('deviceProfile') private deviceProfile: DeviceProfile | undefined = undefined;
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
@@ -725,38 +725,31 @@ export struct Home {
    * `if (this.artwork !== undefined)` branch works within, one level up). */
   @Builder
   private tvCardItemBuilder(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const cardItem = item as HomeCardItem;
-    const cardTitle = cardItem.title;
-    const cardSubtitle = cardItem.subtitle;
-    const cardProgress = cardItem.progress;
-    const cardArtwork = cardItem.artwork;
-    const cardId = cardItem.id;
-    const applyFocusWiring = cardItem.applyTopRailFocus;
-    const navFocusUpId = this.topRailFocusUpId;
-    const onSelectHandler = (): void => {
-      this.openDetail(cardId);
-    };
 
-    if (applyFocusWiring && navFocusUpId.length > 0) {
+    if (((item as HomeCardItem).applyTopRailFocus) && this.topRailFocusUpId.length > 0) {
       PosterCard({
         variant: 'home',
-        title: cardTitle,
-        subtitle: cardSubtitle,
-        progress: cardProgress,
-        artwork: cardArtwork,
+        title: ((item as HomeCardItem).title),
+        subtitle: ((item as HomeCardItem).subtitle),
+        progress: ((item as HomeCardItem).progress),
+        artwork: ((item as HomeCardItem).artwork),
         activeRailFactor: activeRailFactor,
-        onSelect: onSelectHandler,
+        onSelect: ((): void => {
+      this.openDetail(((item as HomeCardItem).id));
+    }),
       })
-        .nextFocus({ up: navFocusUpId })
+        .nextFocus({ up: this.topRailFocusUpId })
     } else {
       PosterCard({
         variant: 'home',
-        title: cardTitle,
-        subtitle: cardSubtitle,
-        progress: cardProgress,
-        artwork: cardArtwork,
+        title: ((item as HomeCardItem).title),
+        subtitle: ((item as HomeCardItem).subtitle),
+        progress: ((item as HomeCardItem).progress),
+        artwork: ((item as HomeCardItem).artwork),
         activeRailFactor: activeRailFactor,
-        onSelect: onSelectHandler,
+        onSelect: ((): void => {
+      this.openDetail(((item as HomeCardItem).id));
+    }),
       })
     }
   }
@@ -768,27 +761,22 @@ export struct Home {
    * concept, `NavPill` is always visible instead (brief 9). */
   @Builder
   private touchCardItemBuilder(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const cardItem = item as HomeCardItem;
-    const cardId = cardItem.id;
-    const cardWidth = TouchGeometry.homeRailCardWidthLandscape;
-    const cardHeight = Math.round((cardWidth * 9) / 16);
-    const onSelectHandler = (): void => {
-      this.openDetail(cardId);
-    };
 
     PosterCard({
       variant: 'home',
-      title: cardItem.title,
-      subtitle: cardItem.subtitle,
-      progress: cardItem.progress,
-      artwork: cardItem.artwork,
-      width: cardWidth,
-      height: cardHeight,
+      title: (item as HomeCardItem).title,
+      subtitle: (item as HomeCardItem).subtitle,
+      progress: (item as HomeCardItem).progress,
+      artwork: (item as HomeCardItem).artwork,
+      cardWidth: TouchGeometry.homeRailCardWidthLandscape,
+      cardHeight: (Math.round((TouchGeometry.homeRailCardWidthLandscape * 9) / 16)),
       artworkRadius: Radii.homeCardArtworkTouch,
       titleFontSize: TOUCH_CARD_TITLE_FONT_SIZE,
       subtitleFontSize: TOUCH_CARD_SUBTITLE_FONT_SIZE,
       activeRailFactor: activeRailFactor,
-      onSelect: onSelectHandler,
+      onSelect: ((): void => {
+      this.openDetail(((item as HomeCardItem).id));
+    }),
     })
   }
 
@@ -799,53 +787,46 @@ export struct Home {
    * `Stage`'s own compact rail-panel geometry. */
   @Builder
   private tvRailsSlot(): void {
-    const itemBuilder = this.tvCardItemBuilder;
-    const gap = tv(TvGeometry.homeRailsColumnRowGap);
-    const continueWatchingItemsValue = this.continueWatchingItems;
-    const newMovieItemsValue = this.newMovieItems;
-    const newSeriesItemsValue = this.newSeriesItems;
-    const moreMovieItemsValue = this.moreMovieItems;
-    const moreSeriesItemsValue = this.moreSeriesItems;
 
-    Column({ space: gap }) {
-      if (continueWatchingItemsValue.length > 0) {
+    Column({ space: tv(TvGeometry.homeRailsColumnRowGap) }) {
+      if (this.continueWatchingItems.length > 0) {
         MediaRail({
           railId: 'home-continue-watching-tv',
           heading: 'Continue Watching',
-          items: continueWatchingItemsValue,
-          itemBuilder: itemBuilder,
+          items: this.continueWatchingItems,
+          itemBuilder: this.tvCardItemBuilder,
         })
       }
-      if (newMovieItemsValue.length > 0) {
+      if (this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-tv',
           heading: 'New Movies',
-          items: newMovieItemsValue,
-          itemBuilder: itemBuilder,
+          items: this.newMovieItems,
+          itemBuilder: this.tvCardItemBuilder,
         })
       }
-      if (newSeriesItemsValue.length > 0) {
+      if (this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-tv',
           heading: 'New Series',
-          items: newSeriesItemsValue,
-          itemBuilder: itemBuilder,
+          items: this.newSeriesItems,
+          itemBuilder: this.tvCardItemBuilder,
         })
       }
-      if (moreMovieItemsValue.length > 0) {
+      if (this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-tv',
           heading: 'More Movies',
-          items: moreMovieItemsValue,
-          itemBuilder: itemBuilder,
+          items: this.moreMovieItems,
+          itemBuilder: this.tvCardItemBuilder,
         })
       }
-      if (moreSeriesItemsValue.length > 0) {
+      if (this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-tv',
           heading: 'More Series',
-          items: moreSeriesItemsValue,
-          itemBuilder: itemBuilder,
+          items: this.moreSeriesItems,
+          itemBuilder: this.tvCardItemBuilder,
         })
       }
     }
@@ -857,64 +838,56 @@ export struct Home {
    * `NavPill` (brief 9). */
   @Builder
   private touchRailsColumn(): void {
-    const itemBuilder = this.touchCardItemBuilder;
-    const itemGap = TouchGeometry.railItemGap;
-    const headingSize = TouchGeometry.railHeadingSize;
-    const continueWatchingItemsValue = this.continueWatchingItems;
-    const newMovieItemsValue = this.newMovieItems;
-    const newSeriesItemsValue = this.newSeriesItems;
-    const moreMovieItemsValue = this.moreMovieItems;
-    const moreSeriesItemsValue = this.moreSeriesItems;
 
     Column({ space: TOUCH_RAIL_GAP }) {
-      if (continueWatchingItemsValue.length > 0) {
+      if (this.continueWatchingItems.length > 0) {
         MediaRail({
           railId: 'home-continue-watching-touch',
           heading: 'Continue Watching',
-          items: continueWatchingItemsValue,
-          itemGap: itemGap,
-          headingSize: headingSize,
-          itemBuilder: itemBuilder,
+          items: this.continueWatchingItems,
+          itemGap: TouchGeometry.railItemGap,
+          headingSize: TouchGeometry.railHeadingSize,
+          itemBuilder: this.touchCardItemBuilder,
         })
       }
-      if (newMovieItemsValue.length > 0) {
+      if (this.newMovieItems.length > 0) {
         MediaRail({
           railId: 'home-new-movies-touch',
           heading: 'New Movies',
-          items: newMovieItemsValue,
-          itemGap: itemGap,
-          headingSize: headingSize,
-          itemBuilder: itemBuilder,
+          items: this.newMovieItems,
+          itemGap: TouchGeometry.railItemGap,
+          headingSize: TouchGeometry.railHeadingSize,
+          itemBuilder: this.touchCardItemBuilder,
         })
       }
-      if (newSeriesItemsValue.length > 0) {
+      if (this.newSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-new-series-touch',
           heading: 'New Series',
-          items: newSeriesItemsValue,
-          itemGap: itemGap,
-          headingSize: headingSize,
-          itemBuilder: itemBuilder,
+          items: this.newSeriesItems,
+          itemGap: TouchGeometry.railItemGap,
+          headingSize: TouchGeometry.railHeadingSize,
+          itemBuilder: this.touchCardItemBuilder,
         })
       }
-      if (moreMovieItemsValue.length > 0) {
+      if (this.moreMovieItems.length > 0) {
         MediaRail({
           railId: 'home-more-movies-touch',
           heading: 'More Movies',
-          items: moreMovieItemsValue,
-          itemGap: itemGap,
-          headingSize: headingSize,
-          itemBuilder: itemBuilder,
+          items: this.moreMovieItems,
+          itemGap: TouchGeometry.railItemGap,
+          headingSize: TouchGeometry.railHeadingSize,
+          itemBuilder: this.touchCardItemBuilder,
         })
       }
-      if (moreSeriesItemsValue.length > 0) {
+      if (this.moreSeriesItems.length > 0) {
         MediaRail({
           railId: 'home-more-series-touch',
           heading: 'More Series',
-          items: moreSeriesItemsValue,
-          itemGap: itemGap,
-          headingSize: headingSize,
-          itemBuilder: itemBuilder,
+          items: this.moreSeriesItems,
+          itemGap: TouchGeometry.railItemGap,
+          headingSize: TouchGeometry.railHeadingSize,
+          itemBuilder: this.touchCardItemBuilder,
         })
       }
     }
@@ -928,33 +901,25 @@ export struct Home {
    * demo composition exactly. */
   @Builder
   private tvContent(): void {
-    const heroKeyArtValue = heroKeyArtFor(this.hero);
-    const heroKickerValue = heroKickerFor(this.hero);
-    const heroTitleValue = heroTitleFor(this.hero);
-    const heroMetaLinesValue = heroMetaLinesFor(this.hero);
-    const railsSlotBuilder = this.tvRailsSlot;
-    const onPlayHandler = (): void => {
-      this.handleHeroPlay();
-    };
-    const navItemsValue = this.navItems;
-    const onNavSelectHandler = (id: string): void => {
-      this.handleNavSelect(id);
-    };
 
     Stack() {
       Stage({
-        keyArt: heroKeyArtValue,
-        kicker: heroKickerValue,
-        title: heroTitleValue,
-        metaLines: heroMetaLinesValue,
+        keyArt: heroKeyArtFor(this.hero),
+        kicker: heroKickerFor(this.hero),
+        title: heroTitleFor(this.hero),
+        metaLines: heroMetaLinesFor(this.hero),
         synopsis: '',
-        onPlay: onPlayHandler,
-        railsSlot: railsSlotBuilder,
+        onPlay: ((): void => {
+      this.handleHeroPlay();
+    }),
+        railsSlot: this.tvRailsSlot,
       })
       NavRail({
-        items: navItemsValue,
+        items: this.navItems,
         selectedId: HOME_NAV_ID,
-        onSelect: onNavSelectHandler,
+        onSelect: ((id: string): void => {
+      this.handleNavSelect(id);
+    }),
       })
     }
     .width('100%')
@@ -965,11 +930,6 @@ export struct Home {
    * bottom, always visible, per brief 9's own words. */
   @Builder
   private touchContent(): void {
-    const navItemsValue = this.navItems;
-    const navPillItemsValue = toNavPillItems(navItemsValue);
-    const onNavSelectHandler = (id: string): void => {
-      this.handleNavSelect(id);
-    };
 
     Stack() {
       Scroll() {
@@ -979,9 +939,11 @@ export struct Home {
       .height('100%')
 
       NavPill({
-        items: navPillItemsValue,
+        items: toNavPillItems(this.navItems),
         selectedId: HOME_NAV_ID,
-        onSelect: onNavSelectHandler,
+        onSelect: ((id: string): void => {
+      this.handleNavSelect(id);
+    }),
       })
     }
     .width('100%')
@@ -989,27 +951,21 @@ export struct Home {
   }
 
   build() {
-    const profile = this.deviceProfile;
-    const isTv = profile !== undefined && profile.metricsKey === 'tv';
-    const showLoading = this.loading;
-    const showError = this.showError;
-    const errorMessageValue = this.errorMessage;
-    const retryHandler = (): void => {
-      this.load();
-    };
 
     NavDestination() {
       Stack() {
-        if (showLoading) {
+        if (this.loading) {
           AsyncState({ kind: AsyncStateKind.Loading })
-        } else if (showError) {
+        } else if (this.showError) {
           AsyncState({
             kind: AsyncStateKind.Error,
-            message: errorMessageValue,
+            message: this.errorMessage,
             retryLabel: 'Retry',
-            retry: retryHandler,
+            retry: ((): void => {
+      this.load();
+    }),
           })
-        } else if (isTv) {
+        } else if ((this.deviceProfile !== undefined && this.deviceProfile.metricsKey === 'tv')) {
           this.tvContent()
         } else {
           this.touchContent()

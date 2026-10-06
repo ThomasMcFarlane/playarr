@@ -93,7 +93,7 @@ import {
   StopReason,
 } from '../core/Types/Playback.ts';
 
-import { ApiFailure, isApiFailure } from '../net/ApiResult';
+import { ApiFailure } from '../net/ApiResult';
 
 import { logWarn, logError } from '../util/Log';
 
@@ -351,7 +351,7 @@ export class PlaybackSessionReporter {
   private async sendOne(event: PlaybackEventKind): Promise<void> {
     try {
       const result = await sendPlaybackSessionEvent(this.sessionId, event);
-      if (isApiFailure(result)) {
+      if (result.kind !== 'ok') {
         logWarn(
           LOG_TAG,
           'session event "' + event.kind + '" for session ' + this.sessionId + ' was rejected: ' + describeApiFailure(result)
@@ -384,7 +384,7 @@ export class PlaybackSessionReporter {
   private async sendProgressCheckpoint(reportedPositionValue: number): Promise<void> {
     try {
       const result = await putWatchProgress(this.mediaFileId, reportedPositionValue, this.currentDurationMs);
-      if (isApiFailure(result)) {
+      if (result.kind !== 'ok') {
         logWarn(
           LOG_TAG,
           'watch-progress checkpoint for media file ' + this.mediaFileId + ' was rejected: ' + describeApiFailure(result)

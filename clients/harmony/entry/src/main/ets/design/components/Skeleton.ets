@@ -15,7 +15,7 @@
  * `#211d21` in dark, which is not this effect), so they are named
  * constants here rather than silently re-typed inline at each use.
  *
- * Usage: `Skeleton({ width: 219, height: 123, radius: Radii.homeCardArtworkTv })`
+ * Usage: `Skeleton({ blockWidth: 219, blockHeight: 123, radius: Radii.homeCardArtworkTv })`
  * anywhere a card, artwork tile or text line is still loading.
  */
 
@@ -30,14 +30,14 @@ const SHIMMER_HIGHLIGHT_ALPHA_DARK: number = 0.07;
 
 @Component
 export struct Skeleton {
-  @Prop width: number = 100;
-  @Prop height: number = 100;
+  @Prop blockWidth: number = 100;
+  @Prop blockHeight: number = 100;
   @Prop radius: number = 0;
 
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions below (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private sweepPercent: number = -100;
@@ -73,8 +73,8 @@ export struct Skeleton {
         })
         .translate({ x: `${this.sweepPercent}%` })
     }
-    .width(this.width)
-    .height(this.height)
+    .width(this.blockWidth)
+    .height(this.blockHeight)
     .backgroundColor(toResourceColor(activeColors().surfaceSoft))
     .borderRadius(this.radius)
     .clip(true)

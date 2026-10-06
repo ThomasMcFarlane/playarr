@@ -1031,24 +1031,21 @@ struct Player {
 
   @Builder
   private loadingOrErrorOverlay(): void {
-    const isError = this.phase === 'error';
-    const message = this.errorMessage;
-    const textSize = this.overlayTextSize();
 
     Column({ space: Spacing.md }) {
-      if (!isError) {
+      if (!(this.phase === 'error')) {
         Text('Loading...')
-          .fontSize(textSize)
+          .fontSize(this.overlayTextSize())
           .fontColor(toResourceColor(PLAYER_TEXT_PRIMARY))
       } else {
-        Text(message)
-          .fontSize(textSize)
+        Text(this.errorMessage)
+          .fontSize(this.overlayTextSize())
           .fontColor(toResourceColor(PLAYER_TEXT_PRIMARY))
           .textAlign(TextAlign.Center)
           .padding({ left: Spacing.xl, right: Spacing.xl })
 
         Text('Retry')
-          .fontSize(textSize)
+          .fontSize(this.overlayTextSize())
           .fontWeight(FontWeight.Bold)
           .fontColor(toResourceColor(PLAYER_TEXT_PRIMARY))
           .padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.sm, bottom: Spacing.sm })
@@ -1070,27 +1067,14 @@ struct Player {
   /** The ended card / up-next countdown (spec sections 1, 5, 6). */
   @Builder
   private endScreenOverlay(): void {
-    const suggestionsBuilder = this.suggestionItem;
-    const suggestionItems: MediaRailItem[] = this.suggestions;
-    const running = this.endMachine.countdownRunning();
-    const tvMode = isTvMetrics();
-    const itemGap = tvMode ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap;
-    const headingSize = tvMode ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize;
-
-    // Hoisted into locals: see `build()`'s note on `checks/arkts.mjs`'s `:\s*this\b` scan.
-    const phase = this.endPhase;
-    const finishedTitle = this.title;
-    const nextTitle = this.endNextTitle;
-    const seconds = this.endSeconds;
-    const hasSuggestions = this.suggestions.length > 0;
 
     EndScreen({
-      phase: phase,
-      finishedTitle: finishedTitle,
-      nextTitle: nextTitle,
-      secondsRemaining: seconds,
-      countdownRunning: running,
-      hasSuggestions: hasSuggestions,
+      phase: this.endPhase,
+      finishedTitle: this.title,
+      nextTitle: this.endNextTitle,
+      secondsRemaining: this.endSeconds,
+      countdownRunning: this.endMachine.countdownRunning(),
+      hasSuggestions: (this.suggestions.length > 0),
       onPlayNow: () => {
         this.handleEndPlayNow();
       },
@@ -1107,70 +1091,57 @@ struct Player {
       MediaRail({
         railId: 'end-screen-suggestions',
         heading: '',
-        itemGap: itemGap,
-        headingSize: headingSize,
-        items: suggestionItems,
-        itemBuilder: suggestionsBuilder,
+        itemGap: (isTvMetrics() ? tv(TvGeometry.railItemGapTitle) : TouchGeometry.railItemGap),
+        headingSize: (isTvMetrics() ? tv(TvGeometry.railHeadingSize) : TouchGeometry.railHeadingSize),
+        items: this.suggestions,
+        itemBuilder: this.suggestionItem,
       })
     }
   }
 
   @Builder
   private suggestionItem(item: MediaRailItem, index: number, activeRailFactor: number): void {
-    const row = item as SuggestionRow;
-    const tvMode = isTvMetrics();
-    const width = tvMode ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover;
-    if (tvMode) {
+    if (isTvMetrics()) {
       PosterCard({
         variant: 'home',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 3) / 2),
+        title: (item as SuggestionRow).title,
+        subtitle: (item as SuggestionRow).subtitle,
+        artwork: (item as SuggestionRow).artwork,
+        cardWidth: (isTvMetrics() ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover),
+        cardHeight: Math.round(((isTvMetrics() ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover) * 3) / 2),
         artworkRadius: Radii.homeCardArtworkTv,
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.handleSelectSuggestion(row.id);
+          this.handleSelectSuggestion((item as SuggestionRow).id);
         },
       })
     } else {
       PosterCard({
         variant: 'home',
-        title: row.title,
-        subtitle: row.subtitle,
-        artwork: row.artwork,
-        width: width,
-        height: Math.round((width * 3) / 2),
+        title: (item as SuggestionRow).title,
+        subtitle: (item as SuggestionRow).subtitle,
+        artwork: (item as SuggestionRow).artwork,
+        cardWidth: (isTvMetrics() ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover),
+        cardHeight: Math.round(((isTvMetrics() ? tv(TvGeometry.homeRailCardWidthCover) : TouchGeometry.homeRailCardWidthCover) * 3) / 2),
         artworkRadius: Radii.homeCardArtworkTouch,
         titleFontSize: 12,
         subtitleFontSize: 10,
         activeRailFactor: activeRailFactor,
         onSelect: () => {
-          this.handleSelectSuggestion(row.id);
+          this.handleSelectSuggestion((item as SuggestionRow).id);
         },
       })
     }
   }
 
   build() {
-    // `surfaceController` is read into a local first, rather than inlining
-    // `this.controller.surfaceController` directly into the object literal
-    // below, purely to keep `checks/arkts.mjs`'s lexical scan -- which
-    // naively flags any `:\s*this\b` sequence as ArkTS's banned "'this'
-    // used as a type" -- from misreading an object-literal property value
-    // as a type position. Same documented ambiguity as
-    // `pages/Detail.ets#busyOrErrorState`'s and
-    // `design/components/PosterCard.ets#setFocused`'s own `message`/local
-    // workaround.
-    const surfaceController = this.controller.surfaceController;
 
     NavDestination() {
       Stack({ alignContent: Alignment.Bottom }) {
         XComponent({
           id: 'playarr-player-surface',
           type: XComponentType.SURFACE,
-          controller: surfaceController,
+          controller: this.controller.surfaceController,
         })
           .width('100%')
           .height('100%')
@@ -1192,24 +1163,14 @@ struct Player {
         }
 
         if (this.phase === 'ready' && this.endPhase === 'playing') {
-          // Every prop below is read into a local first, rather than
-          // inlining `this.<field>` directly into the object literal --
-          // see this method's own comment above `surfaceController` for
-          // why (`checks/arkts.mjs`'s `:\s*this\b` lexical scan).
-          const chromeTitle = this.title;
-          const chromePositionMs = this.positionMs;
-          const chromeDurationMs = this.durationMs;
-          const chromeBufferedPositionMs = this.bufferedPositionMs;
-          const chromeIsPlaying = this.isPlaying;
-          const chromeKeepAliveSignal = this.keepAliveSignal;
 
           PlayerChrome({
-            title: chromeTitle,
-            positionMs: chromePositionMs,
-            durationMs: chromeDurationMs,
-            bufferedPositionMs: chromeBufferedPositionMs,
-            isPlaying: chromeIsPlaying,
-            keepAliveSignal: chromeKeepAliveSignal,
+            title: this.title,
+            positionMs: this.positionMs,
+            durationMs: this.durationMs,
+            bufferedPositionMs: this.bufferedPositionMs,
+            isPlaying: this.isPlaying,
+            keepAliveSignal: this.keepAliveSignal,
             onTogglePlayPause: () => {
               this.handleTogglePlayPause();
             },
@@ -1293,13 +1254,10 @@ struct Player {
  */
 @Builder
 export function PlayerBuilder(name: string, param: Object): void {
-  const params = param as PlayerRouteParams;
-  const startPositionMs = params.startPositionMs ?? 0;
-  const queue = params.queue ?? [];
   Player({
-    mediaFileId: params.mediaFileId,
-    workId: params.workId,
-    startPositionMs: startPositionMs,
-    queue: queue,
+    mediaFileId: (param as PlayerRouteParams).mediaFileId,
+    workId: (param as PlayerRouteParams).workId,
+    startPositionMs: ((param as PlayerRouteParams).startPositionMs ?? 0),
+    queue: ((param as PlayerRouteParams).queue ?? []),
   });
 }

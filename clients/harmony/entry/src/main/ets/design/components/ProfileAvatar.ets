@@ -124,7 +124,7 @@ export struct ProfileAvatar {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private focusPercent: number = 0;
@@ -163,20 +163,6 @@ export struct ProfileAvatar {
   }
 
   build() {
-    // Read every reactive value into a local once per build() -- besides
-    // avoiding repeat recomputation, this also keeps object-literal values
-    // below from ever starting with a bare `this.`, which
-    // `checks/arkts.mjs`'s lexical scan misreads as ArkTS's banned
-    // "'this' used as a type" (`:\s*this\b` matches ordinary
-    // `key: this.foo` object-literal values too, not just real type
-    // positions).
-    const diameter = this.diameter;
-    const startColor = this.preset().gradientStart;
-    const endColor = this.preset().gradientEnd;
-    const scale = this.avatarScale();
-    const ringAlpha = this.ringOpacity();
-    const illustrationSlot = diameter * ILLUSTRATION_SLOT_RATIO;
-    const glyphFontSize = diameter * GLYPH_FONT_RATIO;
 
     Stack() {
       // Base: linear-gradient(145deg, start, end).
@@ -186,8 +172,8 @@ export struct ProfileAvatar {
         .linearGradient({
           angle: GRADIENT_ANGLE_DEG,
           colors: [
-            [toResourceColor({ r: startColor.r, g: startColor.g, b: startColor.b, a: 1 }), 0],
-            [toResourceColor({ r: endColor.r, g: endColor.g, b: endColor.b, a: 1 }), 1],
+            [toResourceColor({ r: (this.preset().gradientStart).r, g: (this.preset().gradientStart).g, b: (this.preset().gradientStart).b, a: 1 }), 0],
+            [toResourceColor({ r: (this.preset().gradientEnd).r, g: (this.preset().gradientEnd).g, b: (this.preset().gradientEnd).b, a: 1 }), 1],
           ],
         })
 
@@ -197,7 +183,7 @@ export struct ProfileAvatar {
         .height('100%')
         .radialGradient({
           center: [HIGHLIGHT_CENTER_X_PCT, HIGHLIGHT_CENTER_Y_PCT],
-          radius: diameter,
+          radius: this.diameter,
           colors: [
             [toResourceColor({ r: 255, g: 255, b: 255, a: HIGHLIGHT_ALPHA }), 0],
             [toResourceColor({ r: 255, g: 255, b: 255, a: 0 }), HIGHLIGHT_STOP],
@@ -209,23 +195,23 @@ export struct ProfileAvatar {
       // header comment).
       Stack() {
         Text(this.glyph())
-          .fontSize(glyphFontSize)
+          .fontSize((this.diameter * GLYPH_FONT_RATIO))
           .fontWeight(FontWeight.Bold)
           .fontColor(toResourceColor({ r: 255, g: 255, b: 255, a: FOREGROUND_ALPHA }))
       }
-      .width(illustrationSlot)
-      .height(illustrationSlot)
+      .width((this.diameter * ILLUSTRATION_SLOT_RATIO))
+      .height((this.diameter * ILLUSTRATION_SLOT_RATIO))
     }
-    .width(diameter)
-    .height(diameter)
+    .width(this.diameter)
+    .height(this.diameter)
     .borderRadius(Radii.circleFull)
     .clip(true)
     .border({
       width: RING_WIDTH,
-      color: toResourceColorWithAlpha(activeColors().focusOutline, ringAlpha),
+      color: toResourceColorWithAlpha(activeColors().focusOutline, this.ringOpacity()),
       radius: Radii.circleFull,
     })
-    .scale({ x: scale, y: scale })
+    .scale({ x: this.avatarScale(), y: this.avatarScale() })
     .focusable(true)
     .onFocus(() => {
       this.setFocused(true);

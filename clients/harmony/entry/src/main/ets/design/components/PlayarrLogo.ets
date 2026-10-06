@@ -11,7 +11,7 @@
  * a second, subtly-different hand-copy of the gradient stops / arc radii
  * drifting from the source SVG over time).
  *
- * Usage: `PlayarrLogo({ size: TvGeometry.logoSize })` on the TV profile
+ * Usage: `PlayarrLogo({ logoSize: TvGeometry.logoSize })` on the TV profile
  * (brief 5.9: 42, at `left 59, top 34`), or any other caller-chosen size
  * (e.g. a smaller mark in a touch-profile header).
  */
@@ -23,12 +23,12 @@ export struct PlayarrLogo {
   /** Side length, in vp, of the (square) logo mark. Defaults to the TV
    * stage's own logo size (brief 5.9) rather than an independently
    * re-typed literal. */
-  @Prop size: number = TvGeometry.logoSize;
+  @Prop logoSize: number = TvGeometry.logoSize;
 
   build() {
     Image($r('app.media.playarr_logo'))
-      .width(this.size)
-      .height(this.size)
+      .width(this.logoSize)
+      .height(this.logoSize)
       .objectFit(ImageFit.Contain)
       .draggable(false)
       .focusable(false)

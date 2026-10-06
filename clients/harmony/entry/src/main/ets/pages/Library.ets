@@ -167,6 +167,9 @@ function lengthToVp(value: Length): number {
   if (typeof value === 'number') {
     return value;
   }
+  if (typeof value !== 'string') {
+    return 0;
+  }
   const parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed)) {
     return 0;
@@ -281,7 +284,7 @@ struct LibraryChip {
   // Tracked purely to force a re-render when the theme changes; the actual
   // colour decision always goes through design/Theme.ets's own resolver
   // functions (see that file's header comment for this pattern).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
 
   @State private focusPercent: number = 0;
@@ -293,20 +296,13 @@ struct LibraryChip {
   }
 
   build() {
-    const effective = effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR);
-    const scale = 1 + (FOCUS_LIFT.button.scale - 1) * effective;
-    const isSelected = this.selected;
-    const chipLabel = this.label;
-    const activate = this.onActivate;
-    const bg = isSelected ? activeColors().accent : activeColors().surfaceSoft;
-    const fg = isSelected ? activeColors().onAccent : activeColors().ink;
 
-    Text(chipLabel)
+    Text(this.label)
       .fontSize(13)
       .fontWeight(FontWeight.Medium)
-      .fontColor(toResourceColor(fg))
+      .fontColor(toResourceColor((this.selected ? activeColors().onAccent : activeColors().ink)))
       .padding({ left: Spacing.md, right: Spacing.md, top: Spacing.xs, bottom: Spacing.xs })
-      .backgroundColor(toResourceColor(bg))
+      .backgroundColor(toResourceColor((this.selected ? activeColors().accent : activeColors().surfaceSoft)))
       .borderRadius(Radii.pillFull)
       .focusable(true)
       .onFocus(() => {
@@ -315,9 +311,9 @@ struct LibraryChip {
       .onBlur(() => {
         this.setFocused(false);
       })
-      .scale({ x: scale, y: scale })
+      .scale({ x: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)), y: (1 + (FOCUS_LIFT.button.scale - 1) * effectiveFocusPercent(this.focusPercent, DEFAULT_ACTIVE_RAIL_FACTOR)) })
       .onClick(() => {
-        activate();
+        this.onActivate();
       })
   }
 }
@@ -381,24 +377,16 @@ struct LibraryGridCell {
   }
 
   build() {
-    const artwork = this.artwork;
-    const width = this.cardWidth;
-    const height = this.cardHeight;
-    const radius = this.cardRadius;
-    const title = this.work.title;
-    const subtitle = releaseYearOf(this.work);
-    const workId = this.work.id;
-    const dispatch = this.onSelect;
 
     PosterCard({
-      artwork: artwork,
-      width: width,
-      height: height,
-      artworkRadius: radius,
-      title: title,
-      subtitle: subtitle,
+      artwork: this.artwork,
+      cardWidth: this.cardWidth,
+      cardHeight: this.cardHeight,
+      artworkRadius: this.cardRadius,
+      title: this.work.title,
+      subtitle: releaseYearOf(this.work),
       onSelect: () => {
-        dispatch(workId);
+        this.onSelect(this.work.id);
       },
     })
   }
@@ -425,7 +413,7 @@ export struct Library {
   // design/Metrics.ets's tv() below (see those files' own header comments
   // for this exact pattern -- also NavRail.ets's/NavTile's identical
   // fields).
-  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.Light;
+  @StorageProp('colorMode') private sysColorMode: ColorMode = ColorMode.LIGHT;
   @StorageProp('themeModeSetting') private themeSetting: ThemeModeSetting = 'system';
   @StorageProp('tvScaleFactor') private trackedTvScale: number = 1;
 
@@ -580,22 +568,6 @@ export struct Library {
   }
 
   build() {
-    const title = libraryKindTitle(this.kind);
-    const sortValue = this.sort;
-    const orderLabel = this.order === 'asc' ? 'Order: Asc' : 'Order: Desc';
-    const loading = this.isLoading;
-    const loadingMore = this.isLoadingMore;
-    const loadMoreFailed = this.loadMoreFailed;
-    const errorMessage = this.errorMessage;
-    const itemCount = this.items.length;
-    const gridItems = this.items;
-    const columns = this.gridColumnCount();
-    const columnGap = this.gridColumnGapVp();
-    const rowGap = this.gridRowGapVp();
-    const cardRadius = this.gridCardRadiusVp();
-    const cardWidth = this.gridCardWidthVp();
-    const cardHeight = this.gridCardHeightVp();
-    const columnsTemplate = columnsTemplateFor(columns);
 
     NavDestination() {
       Column() {
@@ -608,7 +580,7 @@ export struct Library {
             },
           })
 
-          Text(title)
+          Text(libraryKindTitle(this.kind))
             .fontSize(20)
             .fontWeight(FontWeight.Bold)
             .fontColor(toResourceColor(activeColors().ink))
@@ -622,7 +594,7 @@ export struct Library {
               (option: LibrarySortOption) => {
                 LibraryChip({
                   label: option.label,
-                  selected: option.value === sortValue,
+                  selected: option.value === this.sort,
                   onActivate: () => {
                     this.setSort(option.value);
                   },
@@ -633,7 +605,7 @@ export struct Library {
           }
 
           LibraryChip({
-            label: orderLabel,
+            label: (this.order === 'asc' ? 'Order: Asc' : 'Order: Desc'),
             selected: true,
             onActivate: () => {
               this.toggleOrder();
@@ -643,7 +615,7 @@ export struct Library {
         .width('100%')
         .padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.md, bottom: Spacing.md })
 
-        if (loadingMore) {
+        if (this.isLoadingMore) {
           Row() {
             AsyncState({ kind: AsyncStateKind.Loading })
           }
@@ -652,7 +624,7 @@ export struct Library {
           .justifyContent(FlexAlign.Center)
         }
 
-        if (loadMoreFailed && !loadingMore) {
+        if (this.loadMoreFailed && !this.isLoadingMore) {
           Text("Couldn't load more. Scroll to try again.")
             .fontSize(12)
             .fontColor(toResourceColor(activeColors().inkMuted))
@@ -661,35 +633,35 @@ export struct Library {
             .padding({ top: Spacing.xs, bottom: Spacing.xs })
         }
 
-        if (loading) {
+        if (this.isLoading) {
           AsyncState({ kind: AsyncStateKind.Loading })
             .layoutWeight(1)
             .width('100%')
-        } else if (itemCount === 0 && errorMessage.length > 0) {
+        } else if (this.items.length === 0 && this.errorMessage.length > 0) {
           AsyncState({
             kind: AsyncStateKind.Error,
-            message: errorMessage,
+            message: this.errorMessage,
             retry: () => {
               this.resetAndReload();
             },
           })
             .layoutWeight(1)
             .width('100%')
-        } else if (itemCount === 0) {
+        } else if (this.items.length === 0) {
           AsyncState({ kind: AsyncStateKind.Empty, message: 'No titles found.' })
             .layoutWeight(1)
             .width('100%')
         } else {
           Grid() {
             ForEach(
-              gridItems,
+              this.items,
               (work: Work) => {
                 GridItem() {
                   LibraryGridCell({
                     work: work,
-                    cardWidth: cardWidth,
-                    cardHeight: cardHeight,
-                    cardRadius: cardRadius,
+                    cardWidth: this.gridCardWidthVp(),
+                    cardHeight: this.gridCardHeightVp(),
+                    cardRadius: this.gridCardRadiusVp(),
                     onSelect: (workId: string) => {
                       this.openDetail(workId);
                     },
@@ -699,9 +671,9 @@ export struct Library {
               (work: Work): string => work.id
             )
           }
-          .columnsTemplate(columnsTemplate)
-          .columnsGap(columnGap)
-          .rowsGap(rowGap)
+          .columnsTemplate((columnsTemplateFor(this.gridColumnCount())))
+          .columnsGap(this.gridColumnGapVp())
+          .rowsGap(this.gridRowGapVp())
           .edgeEffect(EdgeEffect.Spring)
           .padding({ left: Spacing.lg, right: Spacing.lg, bottom: Spacing.lg })
           .onAreaChange((_oldValue: Area, newValue: Area) => {
@@ -711,7 +683,7 @@ export struct Library {
             this.maybeLoadMore(last);
           })
           .onReachEnd(() => {
-            this.maybeLoadMore(itemCount - 1);
+            this.maybeLoadMore(this.items.length - 1);
           })
           .layoutWeight(1)
           .width('100%')
@@ -737,6 +709,5 @@ export struct Library {
  */
 @Builder
 export function LibraryBuilder(_name: string, param: Object): void {
-  const routeParams = param as LibraryRouteParams;
-  Library({ kind: routeParams.kind })
+  Library({ kind: (param as LibraryRouteParams).kind })
 }
