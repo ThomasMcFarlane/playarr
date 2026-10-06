@@ -97,7 +97,8 @@ pub struct CalendarEntry {
 pub enum CalendarActionKind {
     /// Open the title's detail page.
     Open,
-    /// Play the title (or its next unwatched episode).
+    /// Play exactly this entry: offered only when the library holds its own
+    /// file (never an unaired or file-less episode, never another episode).
     Play,
     /// Continue a part-watched title.
     Resume,

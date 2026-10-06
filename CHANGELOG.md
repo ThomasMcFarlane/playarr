@@ -9,6 +9,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Server: `GET /api/v1/calendar` offers `play` (and `resume`) only when the exact episode or film has its own file in the library, and the action carries that file; an unaired or file-less entry gets Open, Watchlist or Request instead. Grouped (`group=series_day`) entries follow the same rule.
 - Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
 - Android player: the top-left back arrow is replaced by an X close button at the top right (with minimise to its left; content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
 - Playback options: the "Original" quality now reports the real source bitrate (`quality_options[0].video_bitrate_bps`); a zero bitrate from the media analysis is ignored and the average is derived from file size and duration, and it is omitted when neither is known. The Android quality menu shows "Original · 24.3 Mbps", or plain "Original" when unknown, instead of "0 Mbps".

@@ -236,8 +236,72 @@ fn entry_snapshot(c: &CalendarCandidate) -> Option<TitleSnapshot> {
     })
 }
 
-/// Turns a resolved title into the calendar's action list.
-fn calendar_actions(resolved: &ResolvedTitle) -> Vec<CalendarAction> {
+/// The library files a calendar entry can play, per work.
+enum WorkFiles {
+    /// A movie's own file, when one has synced.
+    Movie(Option<Uuid>),
+    /// A series' episode files by `(season, episode)`.
+    Series(HashMap<(i64, i64), Uuid>),
+    /// Albums, books and anything else: the calendar never offers Play.
+    Other,
+}
+
+impl WorkFiles {
+    /// The file belonging to exactly this entry, if the library has one.
+    fn file_for(&self, entry: &playarr_model::CalendarEntry) -> Option<Uuid> {
+        match (self, entry.media_kind) {
+            (WorkFiles::Movie(file), CalendarMediaKind::Movie) => *file,
+            (WorkFiles::Series(files), CalendarMediaKind::Episode) => files
+                .get(&(entry.season_number?, entry.episode_number?))
+                .copied(),
+            _ => None,
+        }
+    }
+}
+
+async fn work_files(state: &AppState, viewer: &CatalogViewer, work_id: Uuid) -> WorkFiles {
+    let allowed = viewer.allowed_libraries();
+    let gate = state
+        .household
+        .gate_for(&viewer.policy, viewer.user_id)
+        .await;
+    let detail = state
+        .catalog
+        .get_by_id_with(
+            work_id,
+            crate::household::access(allowed.as_deref(), gate.as_deref()),
+        )
+        .await;
+    match detail {
+        Ok(detail) => match detail.children {
+            playarr_catalog::WorkChildren::Movie => WorkFiles::Movie(detail.media_file_id),
+            playarr_catalog::WorkChildren::Series(seasons) => WorkFiles::Series(
+                seasons
+                    .iter()
+                    .flat_map(|s| {
+                        s.episodes.iter().filter_map(|e| {
+                            Some((
+                                (
+                                    i64::from(s.season.season_number),
+                                    i64::from(e.episode.episode_number),
+                                ),
+                                e.media_file_id?,
+                            ))
+                        })
+                    })
+                    .collect(),
+            ),
+            _ => WorkFiles::Other,
+        },
+        Err(_) => WorkFiles::Other,
+    }
+}
+
+/// Turns a resolved title into the calendar's action list for one entry.
+/// The resolved actions describe the whole title (a series' "next episode");
+/// `own_file` is the file of exactly this entry's episode or film. Play and
+/// Resume are offered only when that file exists, and always point at it.
+fn calendar_actions(resolved: &ResolvedTitle, own_file: Option<Uuid>) -> Vec<CalendarAction> {
     let mut out = Vec::new();
     let in_library = resolved
         .actions
@@ -262,12 +326,23 @@ fn calendar_actions(resolved: &ResolvedTitle) -> Vec<CalendarAction> {
             ActionKind::Request => CalendarActionKind::Request,
             _ => continue,
         };
+        let media_file_id = match kind {
+            CalendarActionKind::Play => match own_file {
+                Some(file) if a.enabled => Some(file),
+                _ => continue,
+            },
+            // Resume only where the part-watched file is this entry's own.
+            CalendarActionKind::Resume if own_file.is_none() || a.media_file_id != own_file => {
+                continue
+            }
+            _ => a.media_file_id,
+        };
         out.push(CalendarAction {
             action: kind,
             enabled: a.enabled,
             reason: a.reason.clone(),
             work_id: a.work_id,
-            media_file_id: a.media_file_id,
+            media_file_id,
             position_ms: a.position_ms,
             active: kind == CalendarActionKind::Request && resolved.request.is_some(),
         });
@@ -303,10 +378,10 @@ async fn attach_actions(
         }
         keys.push(key);
     }
-    let resolved: HashMap<String, Vec<CalendarAction>> = futures::stream::iter(distinct)
+    let resolved: HashMap<String, ResolvedTitle> = futures::stream::iter(distinct)
         .map(|(key, snapshot)| async move {
             match crate::discovery::resolve_snapshot(state, viewer, &snapshot).await {
-                Ok(resolved) => Some((key, calendar_actions(&resolved))),
+                Ok(resolved) => Some((key, resolved)),
                 Err(error) => {
                     tracing::warn!(?error, "calendar action resolution failed");
                     None
@@ -317,12 +392,23 @@ async fn attach_actions(
         .filter_map(|r| async move { r })
         .collect()
         .await;
+    let mut files: HashMap<Uuid, WorkFiles> = HashMap::new();
     for (candidate, key) in candidates.iter_mut().zip(keys) {
         let Some(key) = key else { continue };
         candidate.entry.snapshot = entry_snapshot(candidate);
-        if let Some(actions) = resolved.get(&key) {
-            candidate.entry.actions = actions.clone();
-        }
+        let Some(title) = resolved.get(&key) else {
+            continue;
+        };
+        let own_file = match candidate.entry.work_id {
+            Some(work_id) => {
+                if let std::collections::hash_map::Entry::Vacant(slot) = files.entry(work_id) {
+                    slot.insert(work_files(state, viewer, work_id).await);
+                }
+                files[&work_id].file_for(&candidate.entry)
+            }
+            None => None,
+        };
+        candidate.entry.actions = calendar_actions(title, own_file);
     }
 }
 
@@ -1332,6 +1418,203 @@ mod tests {
 
         let (status, _) = get(router, &token, &format!("{base}&group=week")).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    /// Seeds a library series (tvdb 77) with season 1: episodes 1 and 2 have
+    /// their own files, episode 3 is known but has no file, episode 4 is not
+    /// in the library at all. Returns the work id and the files of 1 and 2.
+    async fn seed_series_with_files(state: &crate::test_support::TestState) -> (Uuid, Uuid, Uuid) {
+        let work = crate::test_support::seed_series_with_tvdb(state, "Show", "77").await;
+        let season = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO seasons (id, series_work_id, season_number, title, overview, monitored, availability) \
+             VALUES (?, ?, 1, NULL, NULL, 1, 'available')",
+        )
+        .bind(season.to_string())
+        .bind(work.to_string())
+        .execute(&state.pool)
+        .await
+        .unwrap();
+        let mut files = Vec::new();
+        for number in 1..=3 {
+            let episode = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO episodes (id, season_id, episode_number, title, overview, images, air_date, runtime_minutes, monitored, availability) \
+                 VALUES (?, ?, ?, ?, NULL, '[]', NULL, 30, 1, 'available')",
+            )
+            .bind(episode.to_string())
+            .bind(season.to_string())
+            .bind(number)
+            .bind(format!("Episode {number}"))
+            .execute(&state.pool)
+            .await
+            .unwrap();
+            if number <= 2 {
+                let file = crate::test_support::seed_media_file(
+                    state,
+                    work,
+                    playarr_model::media::LeafRef::Episode(episode),
+                    Uuid::new_v4(),
+                )
+                .await;
+                files.push(file);
+            }
+        }
+        (work, files[0], files[1])
+    }
+
+    async fn fake_sonarr_file_states() -> MockServer {
+        let server = MockServer::start().await;
+        let series = json!({"id": 1, "title": "Show", "tvdbId": 77, "images": []});
+        let episode = |id: i64, number: i64, day: &str, has_file: bool| {
+            json!({"id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
+                   "title": format!("E{number}"), "airDate": day,
+                   "airDateUtc": format!("{day}T20:00:00Z"),
+                   "hasFile": has_file, "monitored": true, "series": series})
+        };
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                episode(1, 1, "2026-10-01", true),
+                episode(2, 2, "2026-10-02", true),
+                episode(3, 3, "2026-10-03", false),
+                episode(4, 4, "2026-10-20", false),
+            ])))
+            .mount(&server)
+            .await;
+        server
+    }
+
+    fn entry_for_episode(body: &serde_json::Value, number: i64) -> &serde_json::Value {
+        body["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["episode_number"] == number)
+            .unwrap_or_else(|| panic!("no entry for episode {number}: {body}"))
+    }
+
+    fn action<'a>(entry: &'a serde_json::Value, kind: &str) -> Option<&'a serde_json::Value> {
+        entry["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["action"] == kind)
+    }
+
+    #[tokio::test]
+    async fn play_is_offered_only_for_an_episode_with_its_own_file() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr_file_states().await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        let (work, file1, file2) = seed_series_with_files(&state).await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let (status, body) = get(
+            router,
+            &token,
+            "/api/v1/calendar?start=2026-10-01&end=2026-10-31",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        // Aired, with a file: Play carries that episode's own file.
+        let one = action(entry_for_episode(&body, 1), "play").expect("play for episode 1");
+        assert_eq!(one["enabled"], true);
+        assert_eq!(one["media_file_id"], file1.to_string());
+        let two = action(entry_for_episode(&body, 2), "play").expect("play for episode 2");
+        assert_eq!(two["media_file_id"], file2.to_string());
+
+        // Aired, known to the library, but no file: never Play.
+        let three = entry_for_episode(&body, 3);
+        assert!(action(three, "play").is_none(), "{three}");
+        assert!(action(three, "resume").is_none(), "{three}");
+        assert_eq!(action(three, "open").unwrap()["work_id"], work.to_string());
+        assert!(action(three, "watchlist").is_some());
+
+        // Unaired, not in the library as an episode: never Play, and the
+        // action never points at another episode's file.
+        let four = entry_for_episode(&body, 4);
+        assert!(action(four, "play").is_none(), "{four}");
+        assert!(four["actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["media_file_id"].is_null()));
+        assert!(action(four, "open").is_some());
+        assert!(action(four, "watchlist").is_some());
+    }
+
+    #[tokio::test]
+    async fn an_unaired_episode_of_a_series_not_in_the_library_never_plays() {
+        let (router, state) = test_state().await;
+        let server = fake_sonarr_file_states().await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let (_, body) = get(
+            router,
+            &token,
+            "/api/v1/calendar?start=2026-10-01&end=2026-10-31",
+        )
+        .await;
+        for entry in body["entries"].as_array().unwrap() {
+            assert!(action(entry, "play").is_none(), "{entry}");
+            assert!(action(entry, "request").is_some(), "{entry}");
+        }
+    }
+
+    #[tokio::test]
+    async fn grouped_members_do_not_borrow_another_episodes_file() {
+        let (router, state) = test_state().await;
+        let server = MockServer::start().await;
+        let series = json!({"id": 1, "title": "Show", "tvdbId": 77, "images": []});
+        let episode = |id: i64, number: i64, day: &str| {
+            json!({"id": id, "seriesId": 1, "seasonNumber": 1, "episodeNumber": number,
+                   "title": format!("E{number}"), "airDate": day,
+                   "airDateUtc": format!("{day}T20:00:00Z"),
+                   "hasFile": false, "monitored": true, "series": series})
+        };
+        Mock::given(method("GET"))
+            .and(path("/api/v3/calendar"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+                // Day one folds episodes 1 and 2 (the first has a file).
+                episode(1, 1, "2026-10-01"),
+                episode(2, 2, "2026-10-01"),
+                // Day two folds episodes 3 (no file) and 4 (not in the library).
+                episode(3, 3, "2026-10-20"),
+                episode(4, 4, "2026-10-20"),
+            ])))
+            .mount(&server)
+            .await;
+        state
+            .source_instances
+            .upsert(instance(SourceKind::Sonarr, "TV", server.uri()));
+        let (_, file1, _) = seed_series_with_files(&state).await;
+        let admin = Uuid::new_v4();
+        seed_admin_user(&state, admin).await;
+        let token = mint_access_token(&state, admin);
+        let (_, body) = get(
+            router,
+            &token,
+            "/api/v1/calendar?start=2026-10-01&end=2026-10-31&group=series_day",
+        )
+        .await;
+        let entries = body["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 2, "{body}");
+        assert_eq!(entries[0]["members"].as_array().unwrap().len(), 2);
+        let play = action(&entries[0], "play").expect("the first episode has a file");
+        assert_eq!(play["media_file_id"], file1.to_string());
+        assert_eq!(entries[1]["members"].as_array().unwrap().len(), 2);
+        assert!(action(&entries[1], "play").is_none(), "{}", entries[1]);
+        assert!(action(&entries[1], "resume").is_none(), "{}", entries[1]);
+        assert!(action(&entries[1], "open").is_some());
     }
 
     #[tokio::test]
