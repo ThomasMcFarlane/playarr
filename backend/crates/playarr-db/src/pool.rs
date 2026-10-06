@@ -254,6 +254,27 @@ pub(crate) async fn test_sqlite_pool() -> DbPool {
 
 #[cfg(test)]
 mod tests {
+    /// sqlx keys `_sqlx_migrations` by version, so two files that share a version number make a fresh
+    /// database fail part-way (a duplicate key on `_sqlx_migrations_pkey`). The SQLite set may not repeat one.
+    #[test]
+    fn sqlite_migration_versions_are_unique() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
+        for backend in ["sqlite"] {
+            let mut seen = std::collections::BTreeMap::new();
+            for entry in std::fs::read_dir(root.join(backend)).unwrap() {
+                let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+                if !name.ends_with(".sql") {
+                    continue;
+                }
+                let version = name.split('_').next().unwrap().to_string();
+                if let Some(other) = seen.insert(version.clone(), name.clone()) {
+                    panic!("{backend}: migrations {other} and {name} share version {version}");
+                }
+            }
+            assert!(!seen.is_empty(), "{backend}: no migrations found");
+        }
+    }
+
     use super::*;
     use uuid::Uuid;
 
