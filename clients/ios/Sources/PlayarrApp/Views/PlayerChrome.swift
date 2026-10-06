@@ -14,6 +14,13 @@ struct PlayerLayerView: UIViewRepresentable {
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let view = PlayerLayerUIView()
         view.backgroundColor = .black
+        #if DEBUG
+        // The parity simulator drops the blue channel when it composites YUV video
+        // (every captured pixel had B = 0); ask for BGRA frames in the parity run.
+        if ParityLaunch.isActive {
+            view.playerLayer.pixelBufferAttributes = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        }
+        #endif
         return view
     }
 
