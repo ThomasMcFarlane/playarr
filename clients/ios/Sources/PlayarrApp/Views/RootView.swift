@@ -1,5 +1,6 @@
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 private struct PlayarrChromeHiddenKey: PreferenceKey {
     static let defaultValue = false
@@ -100,6 +101,27 @@ private struct AuthenticatedPlayarrShell: View {
             }
         }
 
+        var webIcon: WMIcon {
+            switch self {
+            case .downloads: .downloads
+            case .search: .search
+            case .home: .home
+            case .library(let kind):
+                switch kind {
+                case .movie: .movies
+                case .series: .series
+                case .site: .sites
+                case .artist, .author: .music
+                }
+            case .playlists: .playlists
+            case .calendar: .calendar
+            case .profiles, .settings: .home
+            #if DEBUG
+            case .detail: .movies
+            #endif
+            }
+        }
+
         var icon: String {
             switch self {
             case .downloads: "arrow.down.circle"
@@ -195,6 +217,12 @@ private struct AuthenticatedPlayarrShell: View {
 
     @ViewBuilder
     private var selectedContent: some View {
+        selectedScreen
+            .environment(\.playarrGoHome, { select(.home) })
+    }
+
+    @ViewBuilder
+    private var selectedScreen: some View {
         switch selected {
         case .downloads:
             NavigationStack {
@@ -264,6 +292,7 @@ private struct AuthenticatedPlayarrShell: View {
                 stageChrome(proxy: proxy)
             }
         }
+        .ignoresSafeArea(edges: UIDevice.current.userInterfaceIdiom == .phone ? .all : [])
         .allowsHitTesting(true)
     }
 
@@ -303,11 +332,12 @@ private struct AuthenticatedPlayarrShell: View {
         .allowsHitTesting(true)
     }
 
+    /// Web mobile chrome: round profile button at the top right and the floating
+    /// 58pt nav pill 10pt from each side (`app-nav` and `app-user-identity`).
     private func phoneChrome(proxy: GeometryProxy) -> some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .topLeading) {
             profileButton(size: 42, avatarSize: 32)
-                .padding(4)
-                .offset(x: -16, y: 4)
+                .offset(x: proxy.size.width - 16 - 42, y: WM.topInset)
 
             VStack {
                 Spacer()
@@ -315,16 +345,15 @@ private struct AuthenticatedPlayarrShell: View {
                     HStack(spacing: 2) {
                         ForEach(destinations, id: \.self) { destination in
                             Button { select(destination) } label: {
-                                Image(systemName: destination.icon)
-                                    .font(.system(size: 21, weight: .medium))
-                                    .foregroundStyle(
-                                        selected == destination ? PlayarrStyle.background : PlayarrStyle.muted
-                                    )
-                                    .frame(width: 44, height: 46)
-                                    .background(
-                                        selected == destination ? PlayarrStyle.ink : .clear,
-                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    )
+                                WMIconView(
+                                    icon: destination.webIcon,
+                                    color: selected == destination ? WM.shell : WM.muted
+                                )
+                                .frame(width: 44, height: 46)
+                                .background(
+                                    selected == destination ? WM.ink : .clear,
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(destination.title)
@@ -340,9 +369,10 @@ private struct AuthenticatedPlayarrShell: View {
                 )
                 .shadow(color: Color(red: 31 / 255, green: 14 / 255, blue: 20 / 255).opacity(0.2), radius: 20, y: 14)
                 .padding(.horizontal, 10)
-                .padding(.bottom, max(8, proxy.safeAreaInsets.bottom))
+                .padding(.bottom, WM.bottomInset)
             }
         }
+        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
     }
 
     private func stageChrome(proxy: GeometryProxy) -> some View {

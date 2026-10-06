@@ -6,6 +6,7 @@ struct LibraryView: View {
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
     let title: String
+    @Environment(\.playarrGoHome) private var goHome
     @State private var showingFilters = false
     @State private var downloadTarget: Work?
 
@@ -76,7 +77,17 @@ struct LibraryView: View {
 
                 content().zIndex(1)
 
-                pageHeading(phone: phone, proxy: proxy).zIndex(3)
+                if phone && !viewModel.isSearchMode {
+                    WMLibraryHeader(
+                        title: title,
+                        detail: "\(viewModel.total ?? Int64(viewModel.works.count)) titles",
+                        onBack: goHome,
+                        onFilters: { showingFilters = true }
+                    )
+                    .zIndex(3)
+                } else {
+                    pageHeading(phone: phone, proxy: proxy).zIndex(3)
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
@@ -85,6 +96,55 @@ struct LibraryView: View {
     }
 
     private var libraryContent: some View {
+        GeometryReader { proxy in
+            if PlayarrLayout.isPhone(proxy.size) && !viewModel.isSearchMode && viewModel.viewMode != .coverFlow {
+                phoneGrid
+            } else {
+                stageLibraryContent
+            }
+        }
+    }
+
+    /// Web mobile library: two 173x97 columns under the page header.
+    private var phoneGrid: some View {
+        ScrollView(.vertical) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.fixed(173), spacing: 12, alignment: .top),
+                    GridItem(.fixed(173), spacing: 12, alignment: .top),
+                ],
+                alignment: .leading,
+                spacing: 23.5
+            ) {
+                ForEach(Array(viewModel.works.enumerated()), id: \.element.id) { index, work in
+                    NavigationLink {
+                        WorkDetailView(
+                            viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                            apiClient: apiClient,
+                            downloadRepository: downloadRepository
+                        )
+                    } label: {
+                        WMLibraryCard(work: work, apiClient: apiClient, focused: index == 0)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Download", systemImage: "arrow.down.circle") { downloadTarget = work }
+                    }
+                    .task {
+                        if work.id == viewModel.works.last?.id { await viewModel.loadMore() }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 84)
+            .padding(.bottom, 130)
+        }
+        .scrollIndicators(.hidden)
+        .refreshable { await viewModel.load() }
+        .ignoresSafeArea()
+    }
+
+    private var stageLibraryContent: some View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
             let panelWidth = phone ? proxy.size.width : proxy.size.width * 0.65
