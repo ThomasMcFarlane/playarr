@@ -1556,6 +1556,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Performance
 
+- Android handoff destination: check for playback start every 100 ms instead of 250 ms and settle for 150 ms instead of 300 ms before acknowledging, saving about 0.3 s per phone or TV handoff. The latency breakdown is recorded in the 2026-10-07 emulator validation notes.
 - Per-file language indexing no longer rewrites unchanged rows. A reconciliation pass used to run a `DELETE FROM media_file_languages` plus inserts and a state upsert for every file, each in its own write transaction, which queued behind other sync writers and logged "slow statement" warnings (about 23 ms per file and up to 1.7 s for one file on a 30,000-file benchmark with a competing writer). The repository now compares the stored rows first and writes only the kinds that changed; an unchanged re-sync of 5,000 files dropped from 117 s to 1.5 s. The delete already used the primary-key index, so no migration is needed.
 - CI: pull requests run only the affected Android modules plus the sideload debug app (`scripts/ci/android-scope.sh`); the full `build` stays on main and nightly. Gradle and Rust caches are written by main only and read by pull requests.
 - CI: backend tests run under cargo-nextest, and the Argon2 crates are optimised in dev/test builds (the playarr-api suite dropped from about 4.5 minutes to under one on two cores).
