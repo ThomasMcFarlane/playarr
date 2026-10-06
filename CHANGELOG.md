@@ -68,6 +68,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple clients: Release Calendar kit (models, client for the calendar and subscription endpoints, window/filter/series-grouping logic) with unit tests.
+- Apple clients: a shared authenticated JSON transport (`PlayarrRequestTransport`) in PlayarrKit for the upcoming parity features, with tests.
+- iOS: new Calendar tab with the shared page header and Filters button, Agenda (master-detail on wide screens), Week and Month views, a Filters sheet and the calendar subscription sheet (QR code, copy, revoke).
 - Android: minimising a video uses system Picture-in-Picture (entered automatically when leaving the app during playback: API 31+ auto-enter, older versions via the user-leave hint). The window takes its aspect ratio from the video, offers play/pause and 10 second skip actions, hides all controls, and closing it stops playback and records progress. On devices without PiP (including most TVs) minimise falls back to the in-app mini player, which now shows the live video from the same player (no restart or re-buffer); tapping it, or pressing OK on TV, expands back to full screen.
 - Add a fixture-based local verification environment (`scripts/fixtures/up.sh`, `down.sh`, `verify.mjs`): a local server seeded with an admin, a viewer, a guardian with a PIN and two child profiles with household policies, generated placeholder media (H.264, HEVC, several audio and subtitle languages), a Sonarr, Radarr and Dubarr stub including a dub track, and documentation in `docs/validation/fixture-environment.md`.
 - Android: guardians can review requests from the profiles they look after and approve (with their PIN and bonus minutes) or deny them, with clear messages for a wrong PIN, self-approval, an already decided request and a PIN lockout.
@@ -2254,6 +2257,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - The headless player smoke script now also checks close/minimise placement, the Original label, reveal-only tap and Enter, and runs on the 1920x1080 TV layout; vitest guards the player chrome across the web and legacy TV player.
 - A test now fails if two SQLite migrations share a version number.

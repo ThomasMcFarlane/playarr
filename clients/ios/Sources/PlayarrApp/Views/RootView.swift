@@ -67,6 +67,7 @@ private struct AuthenticatedPlayarrShell: View {
         case home
         case library(WorkKind)
         case playlists
+        case calendar
         case profiles
         case settings
         #if DEBUG
@@ -80,6 +81,7 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "Home"
             case .library(let kind): kind.displayName
             case .playlists: "Playlists"
+            case .calendar: "Calendar"
             case .profiles: "Profiles"
             case .settings: "Profile"
             #if DEBUG
@@ -95,6 +97,7 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "house"
             case .library(let kind): kind.symbolName
             case .playlists: "music.note.list"
+            case .calendar: "calendar"
             case .profiles: "person.2"
             case .settings: "person.crop.circle"
             #if DEBUG
@@ -180,6 +183,10 @@ private struct AuthenticatedPlayarrShell: View {
         case .playlists:
             NavigationStack {
                 PlaylistsView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
+            }
+        case .calendar:
+            NavigationStack {
+                CalendarView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
             }
         case .profiles:
             NavigationStack {
@@ -415,6 +422,7 @@ private struct AuthenticatedPlayarrShell: View {
             result.append(.library(kind))
         }
         result.append(.playlists)
+        result.append(.calendar)
         return result
     }
 }

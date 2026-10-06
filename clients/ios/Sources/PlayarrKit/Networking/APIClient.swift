@@ -140,7 +140,7 @@ public enum APIError: Error, Sendable {
 /// The shape of the Playarr Server HTTP API this app depends on (minus the
 /// OAuth device flow — see the header note above), independent of how a
 /// request actually gets made.
-public protocol PlayarrAPIClient: Sendable {
+public protocol PlayarrAPIClient: PlayarrRequestTransport {
     /// The server this client is configured to talk to — exposed so
     /// callers can resolve server-relative URLs the API hands back (e.g.
     /// `PlaybackInfoResponse.url`) without needing their own copy of it.
@@ -242,6 +242,16 @@ public protocol PlayarrAPIClient: Sendable {
 }
 
 public extension PlayarrAPIClient {
+    func requestData(
+        method: String,
+        path: String,
+        query: [URLQueryItem],
+        body: Data?,
+        expectedStatuses: Set<Int>
+    ) async throws -> Data {
+        throw APIError.http(status: 501, body: nil, rawBody: nil)
+    }
+
     func signup(_ body: SignupRequest) async throws -> UserAccount { throw APIError.http(status: 501, body: nil, rawBody: nil) }
     func browseLibrary(kind: WorkKind, sort: String, order: String, availableOnly: Bool, limit: Int, offset: Int) async throws -> CatalogPage {
         try await browseCatalog(kind: kind, genre: nil, tag: nil, sort: sort, limit: limit, offset: offset)
@@ -609,6 +619,27 @@ public final class APIClient: PlayarrAPIClient {
 
     public func resolvedURL(forPath path: String) -> URL? {
         URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL
+    }
+
+    public func requestData(
+        method: String,
+        path: String,
+        query: [URLQueryItem],
+        body: Data?,
+        expectedStatuses: Set<Int>
+    ) async throws -> Data {
+        var request = try makeRequest(path: path, method: method, query: query)
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        }
+        try await attachAuthorization(to: &request)
+        do {
+            return try await sendRaw(request, expectedStatuses: expectedStatuses)
+        } catch APIError.unauthorized where accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            return try await sendRaw(request, expectedStatuses: expectedStatuses)
+        }
     }
 
     // MARK: - Request helpers
