@@ -2,6 +2,13 @@ name: TV Application Build
 
 on:
   workflow_dispatch:
+  # Called by release.yml: stamps the release version, builds the LG webOS IPK and the Samsung
+  # Tizen package root and leaves them as the `playarr-tv-packages` artefact.
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
   push:
     tags:
       - "tv-web-v*"
@@ -42,6 +49,25 @@ jobs:
       # (package.json `main`/`types`), so build them first; without it the
       # AVPlay adapter cannot find `@playarr-tv/player-core` and every
       # inherited member of its base class (`state`, `setState`) fails to type.
+      - name: Stamp the release version
+        if: ${{ inputs.version }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const v = process.env.VERSION;
+            for (const f of ["apps/tv-webos/package.json", "apps/tv-webos/appinfo.json", "apps/tv-tizen/package.json"]) {
+              const j = JSON.parse(fs.readFileSync(f, "utf8")); j.version = v;
+              fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+            }
+            const x = "apps/tv-tizen/tizen-manifest.xml";
+            const m = fs.readFileSync(x, "utf8");
+            const out = m.replace(/(<widget\b[^>]*\bversion=")[^"]+(")/s, `$1${v}$2`);
+            if (out === m) throw new Error("tizen-manifest.xml widget version not found");
+            fs.writeFileSync(x, out);
+          '
+
       - name: Build shared packages
         run: pnpm --filter './packages/**' run build
 
@@ -75,4 +101,27 @@ jobs:
         with:
           name: playarr-tizen-package-root
           path: clients/tv-web/apps/tv-tizen/dist
+          if-no-files-found: error
+
+      - name: Package the webOS IPK and the Tizen package root
+        if: ${{ inputs.version }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          npm install --global --no-fund --no-audit @webos-tools/cli
+          mkdir -p "$RUNNER_TEMP/tv-packages"
+          ares-package apps/tv-webos/dist -o "$RUNNER_TEMP/ipk"
+          cp "$RUNNER_TEMP"/ipk/*.ipk "$RUNNER_TEMP/tv-packages/playarr-webos-${VERSION}.ipk"
+          # A Tizen .wgt must be signed with the owner's Samsung certificate profile; release the
+          # complete, unsigned package root for signing with `tizen package -t wgt -s <profile>`.
+          (cd apps/tv-tizen/dist && zip -q -r "$RUNNER_TEMP/tv-packages/playarr-tizen-${VERSION}-unsigned.zip" .)
+          ls -l "$RUNNER_TEMP/tv-packages"
+
+      - name: Upload the TV packages
+        if: ${{ inputs.version }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playarr-tv-packages
+          path: ${{ runner.temp }}/tv-packages/*
           if-no-files-found: error

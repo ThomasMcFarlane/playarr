@@ -258,7 +258,8 @@ deprecatedBelow = "1.3.0"
     fn shipped_client_compatibility_toml_parses() {
         let raw = include_str!("../../../config/client-compatibility.toml");
         let table = ClientCompatibilityTable::from_toml_str(raw).unwrap();
-        assert_eq!(table.server.version, "0.1.0");
+        // The served server version is the release version: keep it equal to the workspace version.
+        assert_eq!(table.server.version, env!("CARGO_PKG_VERSION"));
         assert!(table.android_mobile.is_some());
         assert!(table.android_tv.is_some());
         assert!(table.ios.is_some());

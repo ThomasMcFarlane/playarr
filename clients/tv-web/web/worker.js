@@ -9,10 +9,12 @@ const DOWNLOADS = new Map([
 ]);
 
 // Android and Playarr Server downloads are served from GitHub Releases first,
-// falling back to the R2 bucket when no release or asset exists. The
-// stable /downloads/... paths resolve the newest stable release for the right
-// tag family (android-v*, backend-v*) and redirect to its assets; versioned
-// paths redirect straight to the matching tag.
+// falling back to the R2 bucket when no release or asset exists. A release is
+// either the single all-platform release (tag vX.Y.Z, .github/workflows/release.yml)
+// or a per-platform one (android-v*, backend-v*). The stable /downloads/... paths
+// resolve the newest stable release of either kind that carries the asset and
+// redirect to it; versioned paths redirect to the vX.Y.Z release when it has the
+// asset and to the per-platform tag otherwise.
 const RELEASES_REPO = "ThomasMcFarlane/playarr";
 const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
 const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=50`;
@@ -530,45 +532,61 @@ function downloadKey(pathname) {
   return DOWNLOADS.get(pathname);
 }
 
-async function latestReleaseTag(prefix) {
+const ANDROID_TAG = /^(?:android-)?v(\d+\.\d+\.\d+)$/;
+const SERVER_TAG = /^(?:backend-)?v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$/;
+
+// The newest stable release whose tag matches `family` and which carries the
+// asset `assetFor(version)`. Releases are listed newest first. A release
+// listed without its assets (never the case for the GitHub API) is assumed to
+// carry it, and the asset is still probed before redirecting.
+async function latestRelease(family, assetFor) {
   const response = await fetch(RELEASES_API, {
     headers: { Accept: "application/vnd.github+json", "User-Agent": "playarr-downloads" },
     cf: { cacheTtl: 300, cacheEverything: true },
   });
   if (!response.ok) return undefined;
   const releases = await response.json();
-  const latest = releases.find(
-    (release) =>
-      !release.draft &&
-      !release.prerelease &&
-      typeof release.tag_name === "string" &&
-      release.tag_name.startsWith(prefix)
-  );
-  return latest?.tag_name;
+  for (const release of releases) {
+    if (release.draft || release.prerelease || typeof release.tag_name !== "string") continue;
+    const match = release.tag_name.match(family);
+    if (!match) continue;
+    const asset = assetFor(match[1]);
+    if (Array.isArray(release.assets) && !release.assets.some((item) => item?.name === asset)) continue;
+    return { tag: release.tag_name, asset };
+  }
+  return undefined;
 }
 
-// Returns { tag, asset, immutable } for a GitHub Releases download path, or
-// undefined when the path is not one. `tag` is resolved lazily for "latest".
+// Returns a download target for a GitHub Releases download path, or undefined
+// when the path is not one: either `candidates` (versioned paths: tags tried in
+// order) or `resolve` (stable paths: the newest matching release).
 function releaseDownload(pathname) {
   const androidAsset = LATEST_ANDROID_DOWNLOADS.get(pathname);
-  if (androidAsset) return { prefix: "android-v", asset: () => androidAsset };
+  if (androidAsset) return { resolve: () => latestRelease(ANDROID_TAG, () => androidAsset) };
   const androidVersioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
   if (androidVersioned) {
-    return { tag: `android-v${androidVersioned[1]}`, asset: () => androidVersioned[2], immutable: true };
+    const [, version, asset] = androidVersioned;
+    return {
+      immutable: true,
+      candidates: [`v${version}`, `android-v${version}`].map((tag) => ({ tag, asset })),
+    };
   }
   const serverVersioned = pathname.match(VERSIONED_SERVER_DOWNLOAD);
   if (serverVersioned) {
-    return { tag: `backend-v${serverVersioned[2]}`, asset: () => serverVersioned[1], immutable: true };
+    const [, asset, version] = serverVersioned;
+    return {
+      immutable: true,
+      candidates: [`v${version}`, `backend-v${version}`].map((tag) => ({ tag, asset })),
+    };
   }
   const serverLatest = pathname.match(LATEST_SERVER_DOWNLOAD);
   if (serverLatest) {
     const name = serverLatest[1];
     return {
-      prefix: "backend-v",
-      asset: (tag) =>
-        name === "latest.json"
-          ? name
-          : name.replace("playarr-server-", `playarr-server-${tag.slice("backend-v".length)}-`),
+      resolve: () =>
+        latestRelease(SERVER_TAG, (version) =>
+          name === "latest.json" ? name : name.replace("playarr-server-", `playarr-server-${version}-`)
+        ),
     };
   }
   return undefined;
@@ -592,38 +610,36 @@ function legacyDownloadKey(pathname) {
 // caller can fall back to the R2 bucket.
 async function serveReleaseDownload(request, target) {
   try {
-    const tag = target.tag ?? (await latestReleaseTag(target.prefix));
-    if (!tag) return undefined;
-    const asset = target.asset(tag);
-    const location = `${RELEASES_URL}/download/${tag}/${asset}`;
-    const cacheControl = target.immutable
-      ? "public, max-age=86400"
-      : "public, max-age=300";
-
-    // Small JSON manifests are proxied so browsers and the Android updater read
-    // them same-origin; everything else is a redirect to the release asset.
-    if (asset.endsWith(".json")) {
-      const upstream = await fetch(location, { cf: { cacheTtl: 300, cacheEverything: true } });
-      if (!upstream.ok) return undefined;
-      return new Response(request.method === "HEAD" ? null : upstream.body, {
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": cacheControl,
-          "X-Content-Type-Options": "nosniff",
-        },
+    const candidates = target.candidates ?? [await target.resolve()].filter(Boolean);
+    const cacheControl = target.immutable ? "public, max-age=86400" : "public, max-age=300";
+    for (const { tag, asset } of candidates) {
+      const location = `${RELEASES_URL}/download/${tag}/${asset}`;
+      // Small JSON manifests are proxied so browsers and the Android updater read
+      // them same-origin; everything else is a redirect to the release asset.
+      if (asset.endsWith(".json")) {
+        const upstream = await fetch(location, { cf: { cacheTtl: 300, cacheEverything: true } });
+        if (!upstream.ok) continue;
+        return new Response(request.method === "HEAD" ? null : upstream.body, {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": cacheControl,
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+      // Confirm the asset exists without following the redirect to storage.
+      const probe = await fetch(location, {
+        method: "HEAD",
+        redirect: "manual",
+        cf: { cacheTtl: 300, cacheEverything: true },
+      });
+      if (probe.status === 404 || probe.status >= 500) continue;
+      return new Response(null, {
+        status: 302,
+        headers: { Location: location, "Cache-Control": cacheControl },
       });
     }
-    // Confirm the asset exists without following the redirect to storage.
-    const probe = await fetch(location, {
-      method: "HEAD",
-      redirect: "manual",
-      cf: { cacheTtl: 300, cacheEverything: true },
-    });
-    if (probe.status === 404 || probe.status >= 500) return undefined;
-    return new Response(null, {
-      status: 302,
-      headers: { Location: location, "Cache-Control": cacheControl },
-    });
+    return undefined;
   } catch {
     return undefined;
   }

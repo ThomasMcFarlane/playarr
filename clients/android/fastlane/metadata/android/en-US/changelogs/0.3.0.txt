@@ -1,0 +1,1 @@
+Playarr 0.3.0: browse and play unsorted folders, request titles and manage your watchlist from calendar entries, and link a calendar feed in one step. Includes reliability fixes for reconnecting to your Playarr server.

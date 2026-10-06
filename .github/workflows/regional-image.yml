@@ -16,9 +16,22 @@ on:
       - 'infra/docker/backend.Dockerfile'
       - '.github/workflows/regional-image.yml'
   workflow_dispatch:
+  # Called by release.yml: also tags the image with the release version.
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'Extra tag (the release version) pushed alongside the commit tag'
+        type: string
+        required: false
+        default: ''
+      dry_run:
+        description: 'Build and verify the image but push nothing'
+        type: boolean
+        default: false
 
 concurrency:
-  group: regional-image
+  # A release run gets its own group so a later main push cannot replace it while it is pending.
+  group: regional-image-${{ inputs.release_tag || 'main' }}
   cancel-in-progress: false
 
 permissions:
@@ -39,6 +52,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Log in to GHCR
+        if: ${{ !inputs.dry_run }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -46,6 +60,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
           tag="$(git rev-parse --short=8 HEAD)"
@@ -55,6 +71,7 @@ jobs:
           docker build -f infra/docker/backend.Dockerfile \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            ${RELEASE_TAG:+--label "org.opencontainers.image.version=${RELEASE_TAG}"} \
             -t "ghcr.io/$owner/$IMAGE_NAME:$tag" .
 
       - name: Verify tools in the image
@@ -65,6 +82,15 @@ jobs:
           docker run --rm --entrypoint /app/playarr-server "$IMAGE:$TAG" --version
 
       - name: Push
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
+          set -euo pipefail
           docker push "$IMAGE:$TAG"
           echo "Pushed \`$IMAGE:$TAG\` (from \`$GITHUB_SHA\`)." >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${RELEASE_TAG:-}" ]]; then
+            docker tag "$IMAGE:$TAG" "$IMAGE:$RELEASE_TAG"
+            docker push "$IMAGE:$RELEASE_TAG"
+            echo "Pushed \`$IMAGE:$RELEASE_TAG\`." >> "$GITHUB_STEP_SUMMARY"
+          fi

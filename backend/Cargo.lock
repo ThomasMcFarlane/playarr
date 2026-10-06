@@ -3596,7 +3596,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "playarr-api"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -3647,7 +3647,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-arr-client"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3663,7 +3663,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-arr-sync"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3687,7 +3687,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-artwork"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "dashmap",
  "image",
@@ -3702,7 +3702,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-auth"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "argon2",
  "async-trait",
@@ -3728,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-backup"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "age",
  "axum 0.8.9",
@@ -3755,7 +3755,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-bin"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3804,7 +3804,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-cache"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3820,7 +3820,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-catalog"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3841,14 +3841,14 @@ dependencies = [
 
 [[package]]
 name = "playarr-config"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "playarr-coordination"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "sqlx",
@@ -3860,7 +3860,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-db"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3877,7 +3877,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-embeddings"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "fastembed",
@@ -3888,7 +3888,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-model"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "serde",
@@ -3899,7 +3899,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-peer-sync"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3925,7 +3925,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-portability"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "serde",
@@ -3939,7 +3939,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-tdarr-client"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "playarr-model",
  "reqwest",
@@ -3953,7 +3953,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-telemetry"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -3980,7 +3980,7 @@ dependencies = [
 
 [[package]]
 name = "playarr-transcode"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",

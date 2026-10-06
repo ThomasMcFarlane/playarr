@@ -17,6 +17,11 @@ Admin UI, which the binary finds beside itself or via `PLAYARR_WEB_ASSETS_DIR`),
 
 ## How a release is cut
 
+Normally the server is released with every other app by the single release workflow
+(`.github/workflows/release.yml`, tag `v<version>`); see [releases.md](releases.md). It calls
+`backend-release.yml` and attaches the same tarballs, checksums and `latest.json` to the `v<version>`
+release. A server-only release still works with a `backend-v*` tag:
+
 1. Bump `version` in `backend/Cargo.toml` and merge it.
 2. Tag the merge commit and push: `git tag backend-v0.1.0 && git push origin backend-v0.1.0`. The tag
    version must equal the crate version (a `-rc.1` style suffix is allowed and marks a pre-release).
@@ -28,9 +33,10 @@ Admin UI, which the binary finds beside itself or via `PLAYARR_WEB_ASSETS_DIR`),
    tag (`backend-v<version>`). GitHub Releases is the only download store. Pre-releases are marked as
    such, are never the "latest" stable release, and do not get the `latest` image tag.
 4. The Worker (`clients/tv-web/web/worker.js`) keeps the stable `https://playarr.app/downloads/server/`
-   URLs: the unversioned aliases resolve the newest stable `backend-v*` release and redirect to its
-   assets, versioned paths redirect to the matching tag, and `latest.json` is proxied same-origin. The
-   Android APK is served the same way from `android-v*` releases. The Clients hub page `/clients/server` shows the
+   URLs: the unversioned aliases resolve the newest stable `v*` or `backend-v*` release that carries
+   the asset and redirect to it, versioned paths redirect to `v<version>` (or `backend-v<version>`),
+   and `latest.json` is proxied same-origin. The Android APK is served the same way from `v*` and
+   `android-v*` releases. The Clients hub page `/clients/server` shows the
    buttons and reads the manifest for the version and checksums. Bump `SERVER_FALLBACK_VERSION` in
    `Clients.tsx` when convenient; it is only the pre-load fallback.
 

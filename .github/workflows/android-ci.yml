@@ -10,12 +10,20 @@ on:
         description: 'Semver without the android-v prefix (e.g. 0.2.11)'
         required: true
         type: string
+  # Called by release.yml: builds and verifies the signed APK and its manifest and leaves them as
+  # the `playarr-android-<version>` artefact for that workflow's single GitHub Release.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version (X.Y.Z)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: publish-android-${{ github.ref }}-${{ github.event.inputs.version || github.ref }}
+  group: publish-android-${{ github.ref }}-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -55,9 +63,11 @@ jobs:
       - name: Resolve release version
         id: version
         shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            version="${{ github.event.inputs.version }}"
+          if [[ -n "$VERSION_INPUT" ]]; then
+            version="$VERSION_INPUT"
           else
             version="${GITHUB_REF_NAME#android-v}"
           fi
@@ -145,6 +155,8 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release assets
+        # Tag pushes (android-v*) and manual runs; release.yml publishes the artefact itself.
+        if: ${{ github.workflow == 'Publish Android APK' }}
         uses: softprops/action-gh-release@v2
         with:
           files: |

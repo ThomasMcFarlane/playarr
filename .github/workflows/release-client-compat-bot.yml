@@ -22,6 +22,8 @@ on:
     tags:
       - '*'
       - '!backend-v*'
+      # vX.Y.Z is the all-platform release (release.yml), not a single client.
+      - '!v[0-9]*'
 
 permissions:
   contents: write

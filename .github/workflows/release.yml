@@ -1,0 +1,369 @@
+# =============================================================================
+# Release: every Playarr app from one trigger
+# =============================================================================
+#
+# Actions > Release > Run workflow on `main` with `version` (X.Y.Z); the run creates the `vX.Y.Z`
+# tag with the release. (The signing environments only admit `main`, so there is no tag trigger.)
+# It builds every app by calling the per-platform workflows (which keep working on their own tags):
+#
+#   server    backend-release.yml   tarballs, latest.json, ghcr.io/<owner>/playarr-server:<version>
+#   regional  regional-image.yml    ghcr.io/<owner>/playarr-regional:<sha8> and :<version>
+#   android   android-ci.yml        signed sideload APK and its update manifest
+#   tv        tv-web-ci.yml         LG webOS IPK, unsigned Samsung Tizen package root
+#   roku      (below)               Roku sideload channel zip
+#   xbox      xbox-ci.yml           unsigned x64 sideload MSIX
+#   harmony   harmony-ci.yml        unsigned HarmonyOS HAP
+#
+# then creates ONE GitHub Release `v<version>` with every artefact, a combined SHA256SUMS and notes
+# generated from CHANGELOG.md, and only then publishes to the stores:
+#
+#   play      android-play-internal.yml   Google Play closed testing (alpha)
+#   apple     ios-release.yml             iOS and tvOS to TestFlight
+#
+# The server and Android APK are required (playarr.app/downloads serves them from the release); any
+# other platform that fails is left out of the release and reported in the summary. `dry_run` builds
+# and signs everything but pushes no image, creates no release and uploads nothing to a store.
+#
+# Versions: backend/Cargo.toml and clients/android/version.properties must already carry the
+# release version (bump them in a PR first, with the Play notes in
+# clients/android/fastlane/metadata/android/<locale>/changelogs/<version>.txt). Every other package
+# is stamped with it at build time. Android versionCodes: sideload major*1e6+minor*1e3+patch,
+# Play (major*1e4+minor*1e2+patch)*1e5+commit count. Apple build number: commit count.attempt,
+# above every build already in TestFlight. See docs/deployment/releases.md.
+# =============================================================================
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without the v prefix (X.Y.Z)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build and sign everything but publish nothing (no image push, release or store upload)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Resolve and check the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
+      dry_run: ${{ steps.version.outputs.dry_run }}
+      apple_build: ${{ steps.version.outputs.apple_build }}
+      android_code: ${{ steps.version.outputs.android_code }}
+      play_code: ${{ steps.version.outputs.play_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the version
+        id: version
+        shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*" >&2; exit 1; }
+          [[ "$GITHUB_REF" == refs/heads/main ]] || fail "Run the release from main (the signing environments only admit main)"
+          version="${VERSION_INPUT#v}"
+          [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || fail "Version '$version' must be X.Y.Z"
+          major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[3]}"
+          tag="v$version"
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/Cargo.toml | head -n 1)"
+          [[ "$crate" == "$version" ]] || fail "backend/Cargo.toml is $crate; bump it to $version in a PR before releasing"
+          android="$(sed -n 's/^PLAYARR_VERSION_NAME=//p' clients/android/version.properties)"
+          [[ "$android" == "$version" ]] || fail "clients/android/version.properties is $android; bump it to $version in a PR before releasing"
+          for locale in en-GB en-US; do
+            notes="clients/android/fastlane/metadata/android/$locale/changelogs/$version.txt"
+            [[ -s "$notes" ]] || fail "Missing Google Play release notes $notes"
+          done
+          previous="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
+          if [[ "$DRY_RUN" != "true" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+              fail "Tag $tag already exists; release a new version"
+            fi
+            if gh release view "$tag" >/dev/null 2>&1; then fail "GitHub Release $tag already exists"; fi
+            if [[ -n "$previous" && "$(printf '%s\n%s\n' "$previous" "$tag" | sort -V | tail -n 1)" != "$tag" ]]; then
+              fail "$tag is not newer than the latest release $previous"
+            fi
+          fi
+          count="$(git rev-list --count HEAD)"
+          (( count < 10000 )) || fail "Commit count $count no longer fits the Apple build number scheme"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "previous_tag=$previous"
+            echo "dry_run=$DRY_RUN"
+            echo "apple_build=$count.$GITHUB_RUN_ATTEMPT"
+            echo "android_code=$((major * 1000000 + minor * 1000 + patch))"
+            echo "play_code=$(( (major * 10000 + minor * 100 + patch) * 100000 + count ))"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Test the release notes generator
+        run: node --test scripts/release-notes.test.mjs
+
+  server:
+    name: Server
+    needs: prepare
+    uses: ./.github/workflows/backend-release.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
+
+  regional:
+    name: Regional image
+    needs: prepare
+    uses: ./.github/workflows/regional-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      release_tag: ${{ needs.prepare.outputs.version }}
+      dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
+
+  android:
+    name: Android APK
+    needs: prepare
+    uses: ./.github/workflows/android-ci.yml
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  tv:
+    name: TV packages
+    needs: prepare
+    uses: ./.github/workflows/tv-web-ci.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  xbox:
+    name: Xbox
+    needs: prepare
+    uses: ./.github/workflows/xbox-ci.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  harmony:
+    name: HarmonyOS
+    needs: prepare
+    uses: ./.github/workflows/harmony-ci.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  roku:
+    name: Roku
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: clients/roku
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp the version and package the channel
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          IFS=. read -r major minor patch <<<"$VERSION"
+          sed -i -E "s/^major_version=.*/major_version=$major/; s/^minor_version=.*/minor_version=$minor/; s/^build_version=.*/build_version=$(printf '%05d' "$patch")/" manifest
+          sed -i -E "s/(clientVersion: )\"[^\"]*\"/\1\"$VERSION\"/" source/Config.brs
+          grep -E '^(major|minor|build)_version=' manifest
+          make package PACKAGE="build/playarr-roku-$VERSION.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-roku-package
+          path: clients/roku/build/playarr-roku-*.zip
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: [prepare, server, regional, android, tv, roku, xbox, harmony]
+    # The server and the Android APK are required; other platforms are optional.
+    if: >-
+      always() && needs.prepare.result == 'success' &&
+      needs.server.result == 'success' && needs.android.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+
+      - name: Collect the release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          a=artefacts
+          cp "$a/playarr-server-dist"/playarr-server-* "$a/playarr-server-dist/latest.json" assets/
+          cp "$a/playarr-android-$VERSION/playarr-android.apk" "$a/playarr-android-$VERSION/playarr-android.json" assets/
+          [[ -d "$a/playarr-tv-packages" ]] && cp "$a/playarr-tv-packages"/* assets/
+          [[ -d "$a/playarr-roku-package" ]] && cp "$a/playarr-roku-package"/*.zip assets/
+          [[ -d "$a/playarr-xbox-package" ]] && cp "$a/playarr-xbox-package"/* assets/
+          if [[ -d "$a/playarr-harmony-package" ]]; then
+            hap="$(find "$a/playarr-harmony-package" -name '*.hap' -print -quit)"
+            [[ -n "$hap" ]] && cp "$hap" "assets/playarr-harmony-$VERSION-unsigned.hap"
+          fi
+          (cd assets && sha256sum -c "playarr-server-$VERSION-SHA256SUMS")
+          (cd assets && sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS" && mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS)
+          ls -l assets
+          cat assets/SHA256SUMS
+
+      - name: Write the release notes
+        shell: bash
+        env:
+          PREVIOUS_TAG: ${{ needs.prepare.outputs.previous_tag }}
+          SERVER_DIGEST: ${{ needs.server.outputs.digest }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          node scripts/release-notes.mjs "$VERSION" $PREVIOUS_TAG > "assets/playarr-$VERSION-CHANGELOG.md"
+          {
+            echo "Playarr $VERSION for every platform, built from \`${GITHUB_SHA:0:8}\`."
+            echo
+            echo "| App | Where |"
+            echo "|---|---|"
+            echo "| Playarr Server | \`ghcr.io/$owner/playarr-server:$VERSION\` (\`${SERVER_DIGEST}\`), Linux tarballs below, https://playarr.app/clients/server |"
+            echo "| Regional server image | \`ghcr.io/$owner/playarr-regional:$VERSION\` |"
+            echo "| Android | \`playarr-android.apk\` (sideload), Google Play closed testing |"
+            echo "| iOS and tvOS | TestFlight |"
+            echo "| LG webOS | \`playarr-webos-$VERSION.ipk\` |"
+            echo "| Samsung Tizen | \`playarr-tizen-$VERSION-unsigned.zip\` (sign with your Samsung certificate profile) |"
+            echo "| Roku | \`playarr-roku-$VERSION.zip\` (sideload) |"
+            echo "| Xbox | \`playarr-xbox-$VERSION-x64-unsigned.msix\` (sign before sideloading) |"
+            echo "| HarmonyOS | \`playarr-harmony-$VERSION-unsigned.hap\` |"
+            echo
+            echo "A platform whose package is missing below did not build for this release; see the run summary."
+            echo "Verify downloads against \`SHA256SUMS\`."
+            echo
+          } > "$RUNNER_TEMP/notes.md"
+          notes="assets/playarr-$VERSION-CHANGELOG.md"
+          # GitHub caps a release body at 125,000 characters; the full notes are always attached.
+          if (( $(wc -c < "$notes") > 110000 )); then
+            head -c 110000 "$notes" | sed '$d' >> "$RUNNER_TEMP/notes.md"
+            printf '\n\n…truncated: the full notes are in `playarr-%s-CHANGELOG.md` below.\n' "$VERSION" >> "$RUNNER_TEMP/notes.md"
+          else
+            cat "$notes" >> "$RUNNER_TEMP/notes.md"
+          fi
+          wc -c "$RUNNER_TEMP/notes.md"
+
+      - name: Create the GitHub Release
+        id: publish
+        if: needs.prepare.outputs.dry_run != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" assets/* --target "$GITHUB_SHA" --title "Playarr $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" --latest
+          echo "url=$(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_OUTPUT"
+
+  play:
+    name: Google Play closed testing
+    needs: [prepare, release]
+    if: always() && needs.release.result == 'success'
+    uses: ./.github/workflows/android-play-internal.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
+
+  apple:
+    name: TestFlight
+    needs: [prepare, release]
+    if: always() && needs.release.result == 'success'
+    uses: ./.github/workflows/ios-release.yml
+    secrets: inherit
+    with:
+      source_sha: ${{ github.sha }}
+      marketing_version: ${{ needs.prepare.outputs.version }}
+      build_number: ${{ needs.prepare.outputs.apple_build }}
+      platform: both
+      dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
+
+  summary:
+    name: Summary
+    needs: [prepare, server, regional, android, tv, roku, xbox, harmony, release, play, apple]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the summary
+        shell: bash
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          RELEASE_URL: ${{ needs.release.outputs.url }}
+          APPLE_BUILD: ${{ needs.prepare.outputs.apple_build }}
+          ANDROID_CODE: ${{ needs.prepare.outputs.android_code }}
+          PLAY_CODE: ${{ needs.play.outputs.version_code || needs.prepare.outputs.play_code }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          result() { jq -r --arg j "$1" '.[$j].result // "unknown"' <<<"$NEEDS"; }
+          mark() { case "$1" in success) echo "✅ released" ;; skipped) echo "⏭️ skipped" ;; *) echo "❌ $1" ;; esac; }
+          [[ "$DRY_RUN" == "true" ]] && dry=" (dry run: nothing published)" || dry=""
+          {
+            echo "## Playarr ${VERSION:-?} release$dry"
+            echo
+            echo "GitHub Release: ${RELEASE_URL:-not created}"
+            echo
+            echo "| Platform | Result | Where | Notes |"
+            echo "|---|---|---|---|"
+            echo "| Server | $(mark "$(result server)") | GitHub Release tarballs, \`ghcr.io/$owner/playarr-server:$VERSION\` | required |"
+            echo "| Regional image | $(mark "$(result regional)") | \`ghcr.io/$owner/playarr-regional:$VERSION\` | |"
+            echo "| Android APK | $(mark "$(result android)") | GitHub Release, playarr.app/downloads/android | versionCode $ANDROID_CODE; required |"
+            echo "| Google Play | $(mark "$(result play)") | closed testing (alpha) | versionCode $PLAY_CODE |"
+            echo "| iOS and tvOS | $(mark "$(result apple)") | TestFlight | build $APPLE_BUILD |"
+            echo "| webOS and Tizen | $(mark "$(result tv)") | GitHub Release | Tizen is unsigned (no Samsung certificate in CI) |"
+            echo "| Roku | $(mark "$(result roku)") | GitHub Release | sideload zip |"
+            echo "| Xbox | $(mark "$(result xbox)") | GitHub Release | unsigned MSIX (no signing certificate) |"
+            echo "| HarmonyOS | $(mark "$(result harmony)") | GitHub Release | unsigned HAP (no AppGallery signing material) |"
+            echo "| GitHub Release | $(mark "$(result release)") | ${RELEASE_URL:-} | |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+          # Fail the run if anything required or any store publish failed, so it is visible.
+          for job in prepare server android release play apple; do
+            r="$(result "$job")"
+            if [[ "$r" != success ]]; then echo "::error::$job: $r"; failed=1; fi
+          done
+          exit "${failed:-0}"

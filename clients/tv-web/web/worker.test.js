@@ -99,9 +99,59 @@ describe("client package downloads", () => {
     );
     expect(apk.status).toBe(302);
     expect(apk.headers.get("Location")).toBe(
-      `${RELEASES}/download/android-v1.2.3/playarr-android.apk`
+      `${RELEASES}/download/v1.2.3/playarr-android.apk`
     );
     expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+  });
+
+  it("redirects a versioned APK to its android-v release when no v release has it", async () => {
+    const fetchMock = vi.fn(async (url) =>
+      String(url).includes("/download/v1.2.3/")
+        ? new Response("Not Found", { status: 404 })
+        : new Response("", { status: 302 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const env = environment(null);
+    const apk = await worker.fetch(
+      new Request("https://playarr.app/downloads/android/releases/1.2.3/SHA256SUMS"),
+      env
+    );
+    expect(apk.status).toBe(302);
+    expect(apk.headers.get("Location")).toBe(`${RELEASES}/download/android-v1.2.3/SHA256SUMS`);
+  });
+
+  it("prefers the newest all-platform v release that carries the asset", async () => {
+    const { env } = releaseEnv([
+      { tag_name: "v0.6.0", prerelease: false, assets: [{ name: "latest.json" }] },
+      {
+        tag_name: "v0.5.0",
+        prerelease: false,
+        assets: [
+          { name: "playarr-android.apk" },
+          { name: "playarr-android.json" },
+          { name: "latest.json" },
+          { name: "playarr-server-0.5.0-linux-arm64.tar.gz" },
+        ],
+      },
+      { tag_name: "backend-v0.4.0", prerelease: false },
+      { tag_name: "android-v0.3.1", prerelease: false },
+    ]);
+    const get = async (path) => worker.fetch(new Request(`https://playarr.app${path}`), env);
+
+    const apk = await get("/downloads/android/playarr-android.apk");
+    expect(apk.headers.get("Location")).toBe(`${RELEASES}/download/v0.5.0/playarr-android.apk`);
+
+    const tarball = await get("/downloads/server/playarr-server-linux-arm64.tar.gz");
+    expect(tarball.headers.get("Location")).toBe(
+      `${RELEASES}/download/v0.5.0/playarr-server-0.5.0-linux-arm64.tar.gz`
+    );
+
+    const manifest = await get("/downloads/server/latest.json");
+    expect(manifest.status).toBe(200);
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${RELEASES}/download/v0.6.0/latest.json`,
+      expect.anything()
+    );
   });
 
   it.each([
@@ -189,11 +239,11 @@ describe("client package downloads", () => {
       "/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz"
     );
     expect(versioned.headers.get("Location")).toBe(
-      `${RELEASES}/download/backend-v0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz`
+      `${RELEASES}/download/v0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz`
     );
     const sums = await get("/downloads/server/playarr-server-0.2.0-rc.1-SHA256SUMS");
     expect(sums.headers.get("Location")).toBe(
-      `${RELEASES}/download/backend-v0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS`
+      `${RELEASES}/download/v0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS`
     );
     expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });

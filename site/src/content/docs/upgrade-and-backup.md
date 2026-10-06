@@ -248,11 +248,10 @@ Practical consequences worth planning around:
 
 ## Upgrade procedures
 
-> No backend release has been published yet, there is no `backend-v*` tag in the repository, and
-> the image name referenced by the Compose files and Helm chart
-> (`ghcr.io/playarr/playarr`) has not been confirmed against a real published image. The
-> mechanics below are correct; the artefact you point them at is your own build until releases
-> begin.
+> Releases are published as `v<version>` GitHub Releases with the server tarballs, and the image
+> is `ghcr.io/thomasmcfarlane/playarr-server:<version>`. The Compose files and Helm chart may still
+> reference another image name (`ghcr.io/playarr/playarr`); point them at the published image or
+> your own build.
 
 ### Tier 1, systemd
 

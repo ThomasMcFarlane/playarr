@@ -27,6 +27,13 @@ name: Publish HarmonyOS package
 
 on:
   workflow_dispatch:
+  # Called by release.yml: stamps the release version and leaves the unsigned HAP as the
+  # `playarr-harmony-package` artefact.
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
   push:
     tags:
       - 'harmony-v*'
@@ -35,7 +42,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-harmony-${{ github.ref }}
+  group: publish-harmony-${{ github.ref }}-${{ inputs.version || 'tag' }}
   cancel-in-progress: false
 
 jobs:
@@ -85,6 +92,18 @@ jobs:
         run: |
           npm ci --prefix tools
           node tools/run-core-tests.mjs
+
+      - name: Stamp the release version
+        if: ${{ inputs.version }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          IFS=. read -r major minor patch <<<"$VERSION"
+          # Offset by the committed development versionCode (1000000) so release codes only grow.
+          code=$((1000000 + major * 1000000 + minor * 1000 + patch))
+          sed -i -E "s/(\"versionName\": )\"[^\"]*\"/\1\"$VERSION\"/; s/(\"versionCode\": )[0-9]+/\1$code/" AppScope/app.json5
+          grep -E 'versionName|versionCode' AppScope/app.json5
 
       - name: Build the HAP (release, unsigned)
         run: bash scripts/build.sh release

@@ -35,11 +35,34 @@ on:
         required: false
         default: false
 
+  # Called by release.yml after its GitHub Release exists, with the release version and a
+  # build number that is higher than any build already in TestFlight.
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: false
+        default: ''
+      marketing_version:
+        type: string
+        required: true
+      build_number:
+        type: string
+        required: true
+      platform:
+        type: string
+        required: false
+        default: both
+      dry_run:
+        type: boolean
+        required: false
+        default: false
+
 permissions:
   contents: read
 
 concurrency:
-  group: playarr-apple-release-${{ inputs.source_sha || github.sha }}
+  group: playarr-apple-release-${{ inputs.source_sha || github.sha }}-${{ inputs.marketing_version || 'tag' }}
   cancel-in-progress: false
 
 jobs:
@@ -91,6 +114,7 @@ jobs:
           persist-credentials: false
 
       - name: Confirm the commit is on main
+        if: ${{ !inputs.dry_run }}
         env:
           SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
         run: |

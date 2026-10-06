@@ -15,12 +15,13 @@ store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choo
 and control a compatible DNS, proxy, or self-hosted interception method themselves.
 
 The signed universal Android APK and the Playarr Server tarballs are published to GitHub Releases only
-(tags `android-v<version>` and `backend-v<version>`). The Worker keeps the stable same-origin URLs and
+(the all-platform release `v<version>`, or the per-platform tags `android-v<version>` and
+`backend-v<version>`). The Worker keeps the stable same-origin URLs and
 resolves them to release assets: `/downloads/android/playarr-android.apk` and
 `/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (plus `.sha256`) redirect to the newest
-stable release of the matching tag family (looked up through the GitHub Releases API and cached for five
+stable release (of either kind) that carries the asset (looked up through the GitHub Releases API and cached for five
 minutes), and the versioned paths `/downloads/android/releases/<version>/...` and
-`/downloads/server/playarr-server-<version>-...` redirect straight to that tag's assets. The small JSON
+`/downloads/server/playarr-server-<version>-...` redirect to that version's `v<version>` release, or its per-platform tag when no `v` release has the asset. The small JSON
 manifests (`/downloads/android/playarr-android.json`, `/downloads/server/latest.json`) are proxied so the
 native television self-update action and the Clients hub read them same-origin. No release workflow
 uploads to object storage and no object-storage credential is needed. See

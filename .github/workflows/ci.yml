@@ -111,6 +111,9 @@ jobs:
       - name: Merge train logic tests
         run: scripts/ci/test-merge-train.sh
 
+      - name: Release notes script tests
+        run: node --test scripts/release-notes.test.mjs
+
       # Nightly and post-merge dispatches on main validate everything.
       - name: Full run?
         id: all

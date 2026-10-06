@@ -15,12 +15,28 @@ on:
         description: 'Semver without the android-v prefix (e.g. 0.2.14)'
         required: true
         type: string
+  # Called by release.yml after its GitHub Release exists: builds, signs and publishes the release
+  # version to the closed-testing track.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version (X.Y.Z)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Build, sign and verify the bundle but do not upload it to Google Play'
+        type: boolean
+        default: false
+    outputs:
+      version_code:
+        description: 'The versionCode built (and published unless dry_run)'
+        value: ${{ jobs.build-and-publish.outputs.version_code }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-android-play-${{ github.ref }}-${{ github.event.inputs.version || github.ref }}
+  group: publish-android-play-${{ github.ref }}-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -29,6 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release-android
+    outputs:
+      version_code: ${{ steps.version.outputs.code }}
     defaults:
       run:
         working-directory: clients/android
@@ -67,9 +85,11 @@ jobs:
       - name: Resolve release version
         id: version
         shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            version="${{ github.event.inputs.version }}"
+          if [[ -n "$VERSION_INPUT" ]]; then
+            version="$VERSION_INPUT"
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             version="${GITHUB_REF_NAME#android-v}"
           else
@@ -97,7 +117,7 @@ jobs:
             echo "Resolved Android versionCode $version_code is outside the usable Play range" >&2
             exit 1
           fi
-          if [[ "${{ github.event_name }}" == "push" && "${GITHUB_REF_TYPE}" != "tag" ]]; then
+          if [[ -z "$VERSION_INPUT" && "${{ github.event_name }}" == "push" && "${GITHUB_REF_TYPE}" != "tag" ]]; then
             release_name="${version}-main.${commit_count}"
           else
             release_name="$version"
@@ -189,6 +209,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish private closed test and store listing
+        if: ${{ !inputs.dry_run }}
         env:
           GOOGLE_PLAY_JSON_KEY: ${{ steps.version.outputs.publisher_path }}
           PLAYARR_AAB: release/playarr-android-play.aab

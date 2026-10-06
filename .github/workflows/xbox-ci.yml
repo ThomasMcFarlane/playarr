@@ -17,15 +17,10 @@
 #     the Windows 10 SDK, and Visual Studio's UWP workload, and cannot be
 #     built with the `dotnet` CLI at all (on any OS, not just Linux). It
 #     also has no signing certificate or Microsoft Partner Center
-#     credentials configured yet. The `build-and-package` job below sets up
-#     real Windows/MSBuild tooling but its actual restore/build/package/
-#     upload steps are TODO placeholders for that reason, same as
-#     a placeholder pending a signing certificate. Replace the
-#     placeholders with real MSBuild/MSIX steps once Playarr.Xbox has a
-#     signing certificate and the packaging steps have been verified by
-#     hand at least once. See ci.yml's xbox-check job for the PR-time
-#     `dotnet build`/`dotnet test` gate on Playarr.Core that already runs
-#     today.
+#     credentials yet, so `build-and-package` builds an UNSIGNED x64
+#     sideload MSIX on the hosted Visual Studio 2022 image. Sign it before
+#     sideloading in Xbox Dev Mode; Store submission needs Partner Center.
+#     ci.yml's xbox-check job is the PR-time gate on Playarr.Core.
 # =============================================================================
 
 name: Xbox Release
@@ -34,6 +29,18 @@ on:
   push:
     tags:
       - 'xbox-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version stamped into the package (X.Y.Z)'
+        type: string
+        required: true
+  # Called by release.yml: leaves the unsigned sideload MSIX as the `playarr-xbox-package` artefact.
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -74,53 +81,51 @@ jobs:
   # file header comment above for why.
   # ---------------------------------------------------------------------
   build-and-package:
-    name: Build UWP head (MSIX signing and publish are placeholders)
+    name: Build the unsigned UWP sideload package
     needs: core-check
-    # Runs on a GitHub-hosted Windows runner, which ships MSBuild, the Windows
-    # 10/11 SDKs and the UWP workload. It only reaches the (still placeholder)
-    # signing/packaging steps; it is enabled so the toolchain setup is
-    # exercised on every Xbox tag.
-    runs-on: windows-latest
+    # The UWP workload (MSBuild, Windows 10 SDK, .NET Native toolchain) ships on the Visual
+    # Studio 2022 image. There is no signing certificate yet, so the MSIX is unsigned: sign it
+    # with a certificate before sideloading it in Xbox Dev Mode.
+    runs-on: windows-2022
+    timeout-minutes: 60
     environment: release-xbox
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # TODO: restore a code-signing certificate for the MSIX package.
-      # This would decode a base64-encoded .pfx from a repository secret,
-      # the same pattern android-ci.yml uses for ANDROID_KEYSTORE_BASE64 /
-      # ANDROID_KEYSTORE_PASSWORD -- e.g. secrets named something like
-      # XBOX_SIGNING_CERT_BASE64 and XBOX_SIGNING_CERT_PASSWORD. NEITHER OF
-      # THOSE SECRETS EXISTS IN THIS REPO YET. Do not reference
-      # `secrets.XBOX_SIGNING_CERT_BASE64` (or similar) in a real `env:`/
-      # `with:` block until they've actually been created in the
-      # release-xbox environment -- this step is an unverified placeholder.
-      - name: Restore signing certificate (placeholder)
+      - name: Stamp the version
+        shell: pwsh
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          echo "TODO: decode a base64-encoded .pfx into a temporary file from a secret such as XBOX_SIGNING_CERT_BASE64 (does not exist yet), then import it so MSBuild can sign the MSIX package."
+          $version = if ($env:VERSION_INPUT) { $env:VERSION_INPUT } else { $env:GITHUB_REF_NAME -replace '^xbox-v', '' }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Expected a version such as 1.2.3, got '$version'" }
+          $manifest = 'clients/xbox/src/Playarr.Xbox/Package.appxmanifest'
+          $text = Get-Content $manifest -Raw
+          $updated = $text -replace '(<Identity[^>]*?Version=")[^"]+(")', "`${1}$version.0`${2}"
+          if ($updated -eq $text) { throw 'Package.appxmanifest Identity Version not found' }
+          Set-Content -Path $manifest -Value $updated -NoNewline
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # Unsigned Release x64 build of the UWP head on the hosted Windows image
-      # (MSBuild, Windows SDK and the UWP workload are preinstalled). UNVERIFIED
-      # on a hosted runner: the first xbox-v* tag run is the proof. Signing and
-      # Store packaging (AppxBundle/StoreUpload) are added once a certificate exists.
-      - name: Build UWP head (unsigned)
+      - name: Build the unsigned x64 MSIX
         shell: pwsh
         run: |
-          msbuild clients/xbox/src/Playarr.Xbox/Playarr.Xbox.csproj /restore `
+          msbuild clients/xbox/src/Playarr.Xbox/Playarr.Xbox.csproj /restore /m `
             /p:Configuration=Release /p:Platform=x64 `
-            /p:AppxPackageSigningEnabled=false /p:AppxBundle=Never
+            /p:AppxBundle=Never /p:UapAppxPackageBuildMode=SideloadOnly `
+            /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=false `
+            "/p:AppxPackageDir=$env:RUNNER_TEMP\AppPackages\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $package = Get-ChildItem "$env:RUNNER_TEMP\AppPackages" -Recurse -Include *.msix, *.appx | Select-Object -First 1
+          if (-not $package) { throw 'msbuild produced no MSIX/APPX package' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\xbox" | Out-Null
+          Copy-Item $package.FullName "$env:RUNNER_TEMP\xbox\playarr-xbox-$env:VERSION-x64-unsigned$($package.Extension)"
+          Get-ChildItem "$env:RUNNER_TEMP\xbox"
 
-      # TODO: publish the signed MSIX -- to a GitHub release
-      # (softprops/action-gh-release@v2, matching android-ci.yml) and/or
-      # submit via the Microsoft Store submission API once Partner Center
-      # credentials exist. None of those credentials/targets are wired up
-      # yet.
-      - name: Publish MSIX (placeholder)
-        run: |
-          echo "TODO: upload the signed MSIX package for tag ${env:GITHUB_REF_NAME}."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-xbox-package
+          path: ${{ runner.temp }}/xbox/*
+          if-no-files-found: error

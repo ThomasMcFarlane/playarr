@@ -33,6 +33,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- CI: one Release workflow (`.github/workflows/release.yml`) releases every app from a single `version` dispatch on `main`: server tarballs and the `playarr-server` and `playarr-regional` images, the signed Android APK, webOS, Tizen, Roku, Xbox and HarmonyOS packages in one GitHub Release with a combined `SHA256SUMS` and generated notes, then Google Play closed testing and TestFlight, with a per-platform summary. The per-platform workflows are reusable and keep their own tags.
+- The downloads Worker serves the Android and server downloads from the all-platform `v*` releases as well as `android-v*` and `backend-v*` ones.
 - Android: the Release Calendar offers Request and Add to watchlist for releases that are not in the library, using the actions the server computes for the signed-in user (a disabled Request shows the server's reason), and the calendar link is fetched in one call and no longer needs resetting to be shown again.
 - Android (phone and TV): a Folders view browses the folders an administrator enabled, with breadcrumbs, grid or list, size, sort, order, search and show filters in the shared Filters sheet, play and resume of files, and live refresh. Route state (`folders?query=root=…&path=…&view=…&size=…&sort=…&order=…&q=…&type=…`) uses the same parameter names as the web client, and Folders appears in the navigation once a folder is available.
 - Unsorted folders: the server now scans administrator-enabled root folders (reported by Radarr, Sonarr and the other source applications, or added by hand) for media those applications do not manage, keeps the result current with incremental rescans and live events, and serves it through `GET /api/v1/folders/roots` and `GET /api/v1/folders/roots/{root_id}/browse` (breadcrumbs, filters, sort, paging, resume state). Folder items play through the existing playback, thumbnail and progress routes and respect library access, rating rules and blocked folders. Admin routes under `/api/v1/admin/folders` choose which roots are scanned. New migration 0075 adds `scan_enabled`.
@@ -138,6 +140,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Version 0.3.0: Playarr Server (`backend/Cargo.toml`, `[server] version`) and the Android app (`version.properties`), with Google Play notes for 0.3.0.
+- CI: the Xbox release job builds an unsigned x64 sideload MSIX on the hosted Visual Studio 2022 image instead of placeholder steps.
 - CI: the Apple signed release workflow has a `dry_run` dispatch input that signs, archives and exports the IPAs on a hosted macOS runner but stops before the TestFlight upload.
 - `POST /api/v1/calendar/feed` returns the existing calendar subscription link (`200`) or creates one (`201`); the token is stored sealed so it can be shown again, and `?rotate=true` replaces it. Links created before this change are replaced the first time they are requested.
 - CI now rejects pull requests with any commit carrying a `Co-authored-by:` trailer, and the merge train strips such lines from the title and body it uses for its squash commit.

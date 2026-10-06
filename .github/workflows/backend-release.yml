@@ -25,6 +25,24 @@ on:
   push:
     tags:
       - 'backend-v*'
+  # Called by release.yml (the single all-platform release): builds, smoke-tests and pushes the
+  # image, and leaves the tarballs plus latest.json as the `playarr-server-dist` artefact for that
+  # workflow's GitHub Release instead of creating a `backend-v*` release of its own.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version (X.Y.Z); must match backend/Cargo.toml'
+        type: string
+        required: true
+      dry_run:
+        description: 'Build everything but push no image'
+        type: boolean
+        default: false
+    outputs:
+      version:
+        value: ${{ jobs.build.outputs.version }}
+      digest:
+        value: ${{ jobs.build.outputs.digest }}
   workflow_dispatch:
     # Run against an existing tag ("Use workflow from" = the tag) to re-publish.
     inputs:
@@ -34,7 +52,7 @@ on:
         default: false
 
 concurrency:
-  group: backend-release-${{ github.ref }}
+  group: backend-release-${{ github.ref }}-${{ inputs.version || 'tag' }}
   cancel-in-progress: false
 
 permissions:
@@ -63,10 +81,13 @@ jobs:
         shell: bash
         env:
           DRY_RUN: ${{ inputs.dry_run }}
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
           crate="$(sed -n 's/^version = "\(.*\)"/\1/p' backend/Cargo.toml | head -n 1)"
-          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+          if [[ -n "${VERSION_INPUT:-}" ]]; then
+            version="$VERSION_INPUT"
+          elif [[ "${DRY_RUN:-false}" == "true" ]]; then
             version="${crate}-dryrun"
           else
             case "$GITHUB_REF_NAME" in
@@ -156,13 +177,6 @@ jobs:
           curl -fsS http://127.0.0.1:18484/ | grep -qi '<!doctype html' || { echo "Admin UI not served" >&2; exit 1; }
           kill "$pid"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: playarr-server-dist
-          path: dist/*
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Image tags
         id: tags
         shell: bash
@@ -198,11 +212,43 @@ jobs:
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Write the latest manifest
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          asset() {
+            local arch="$1" file="playarr-server-${VERSION}-linux-$1.tar.gz"
+            jq -n --arg url "https://playarr.app/downloads/server/${file}" \
+              --arg sha "$(cut -d ' ' -f 1 "dist/${file}.sha256")" \
+              --argjson size "$(stat -c %s "dist/${file}")" \
+              '{url: $url, sha256: $sha, size: $size}'
+          }
+          jq -n --arg version "$VERSION" \
+            --arg image "${IMAGE}:${VERSION}" --arg digest "$IMAGE_DIGEST" \
+            --arg released "$(date -u +%FT%TZ)" \
+            --argjson amd64 "$(asset amd64)" --argjson arm64 "$(asset arm64)" \
+            --arg sums "https://playarr.app/downloads/server/playarr-server-${VERSION}-SHA256SUMS" \
+            '{version: $version, released_at: $released, image: $image, image_digest: $digest, sha256sums_url: $sums, assets: {amd64: $amd64, arm64: $arm64}}' \
+            > dist/latest.json
+          cat dist/latest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playarr-server-dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
 
   publish:
     name: Publish downloads
     needs: build
-    if: ${{ !inputs.dry_run }}
+    # A workflow_call (release.yml) publishes these assets in its own single release.
+    if: ${{ !inputs.dry_run && !inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -221,28 +267,6 @@ jobs:
       - name: Verify checksums
         working-directory: dist
         run: sha256sum -c "playarr-server-${VERSION}-SHA256SUMS"
-
-      - name: Write the latest manifest
-        shell: bash
-        env:
-          IMAGE_DIGEST: ${{ needs.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          asset() {
-            local arch="$1" file="playarr-server-${VERSION}-linux-$1.tar.gz"
-            jq -n --arg url "https://playarr.app/downloads/server/${file}" \
-              --arg sha "$(cut -d ' ' -f 1 "dist/${file}.sha256")" \
-              --argjson size "$(stat -c %s "dist/${file}")" \
-              '{url: $url, sha256: $sha, size: $size}'
-          }
-          jq -n --arg version "$VERSION" \
-            --arg image "${IMAGE}:${VERSION}" --arg digest "$IMAGE_DIGEST" \
-            --arg released "$(date -u +%FT%TZ)" \
-            --argjson amd64 "$(asset amd64)" --argjson arm64 "$(asset arm64)" \
-            --arg sums "https://playarr.app/downloads/server/playarr-server-${VERSION}-SHA256SUMS" \
-            '{version: $version, released_at: $released, image: $image, image_digest: $digest, sha256sums_url: $sums, assets: {amd64: $amd64, arm64: $arm64}}' \
-            > dist/latest.json
-          cat dist/latest.json
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
