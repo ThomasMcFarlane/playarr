@@ -73,6 +73,13 @@ REVERT_WINDOW=0 landing_guard "$m1" "$legit" >/dev/null && ok "guard allows an o
 git checkout -q -b r-recentdel "$m1"; git rm -q SECURITY.md; git commit -qm del
 landing_guard "$m1" "$(git rev-parse HEAD)" >/dev/null && bad "guard allowed deleting a just-added file" || ok "guard refuses deleting a file main just added (land manually)"
 
+# A `remove: <row>` fragment deletes a row main just added: allowed only with the train's trailer.
+git checkout -q -b r-rm "$m1"; sed -i '/^| 2 | row two/d' TASKS.md; git commit -qam "chore(train): fold fragments for #1"
+landing_guard "$m1" "$(git rev-parse HEAD)" >/dev/null && bad "guard allowed an unannounced row removal" || ok "guard refuses removing a recent row without the trailer"
+git commit -q --amend -m "chore(train): fold fragments for #1" -m "$REMOVED_TRAILER 2"
+landing_guard "$m1" "$(git rev-parse HEAD)" >/dev/null && ok "guard allows a row removed by a remove fragment" || bad "guard refused a remove-fragment row removal"
+git reset -q --hard "$m1"
+
 # --- End to end: process() in key mode on a branch that lacks main's newest commit. ---
 e2e=$(mktemp -d); git init -q --bare "$e2e/origin.git"
 git push -q "$e2e/origin.git" "r-pr:refs/heads/feature" "$m1:refs/heads/main"
