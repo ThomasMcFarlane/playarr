@@ -195,4 +195,5 @@ jobs:
           PLAYARR_VERSION_NAME: ${{ steps.version.outputs.name }}
           PLAYARR_VERSION_CODE: ${{ steps.version.outputs.code }}
           PLAYARR_RELEASE_NOTES_VERSION: ${{ steps.version.outputs.notes_version }}
+          PLAYARR_PLAY_SKIP_WHEN_IN_REVIEW: ${{ github.event_name == 'push' && github.ref_type != 'tag' }}
         run: node scripts/publish-google-play.mjs

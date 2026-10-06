@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 
 import {
   findInReviewVersionCodes,
+  findReleaseLifecycle,
   formatReleaseLifecycleEvidence,
   waitForReleaseLifecycle,
 } from './release-lifecycle.mjs';
@@ -18,6 +19,9 @@ const metadataRoot = process.env.PLAYARR_METADATA_ROOT ?? 'fastlane/metadata/and
 const releaseNotesRoot = process.env.PLAYARR_RELEASE_NOTES_ROOT ?? 'fastlane/metadata/android';
 const metadataLocale = process.env.PLAYARR_METADATA_LOCALE ?? 'en-US';
 const listingImagesOnly = process.env.PLAYARR_LISTING_IMAGES_ONLY === 'true';
+// Untagged main pushes set this: a release already in review is left alone and this run is skipped
+// (a later push publishes), instead of failing the workflow. Tag and manual runs still fail.
+const skipWhenInReview = process.env.PLAYARR_PLAY_SKIP_WHEN_IN_REVIEW === 'true';
 
 if (
   !packageName ||
@@ -108,7 +112,20 @@ if (!listingImagesOnly) {
   const currentLifecycle = await request(
     `${apiRoot}/tracks/${encodeURIComponent(releaseTrack)}/releases`,
   );
+  const existingLifecycle = findReleaseLifecycle(currentLifecycle.releases, versionCode);
+  if (existingLifecycle) {
+    console.log(
+      `Google Play ${releaseTrack} already has versionCode ${versionCode} (${existingLifecycle}); nothing to upload`,
+    );
+    process.exit(0);
+  }
   const inReviewVersionCodes = findInReviewVersionCodes(currentLifecycle.releases);
+  if (inReviewVersionCodes.length > 0 && skipWhenInReview) {
+    console.log(
+      `::warning::Google Play ${releaseTrack} already has versionCode ${inReviewVersionCodes.join(',')} in review; skipping this upload so that review is not replaced (a later push publishes)`,
+    );
+    process.exit(0);
+  }
   if (inReviewVersionCodes.length > 0) {
     throw new Error(
       `Google Play ${releaseTrack} already has versionCode ${inReviewVersionCodes.join(',')} in review; refusing to cancel or replace that review`,
