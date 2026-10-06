@@ -14,20 +14,20 @@ struct SettingsView: View {
             case .avatar: "Profile avatar"
             case .language: "Language"
             case .player: "Player"
-            case .server: "Server"
+            case .server: "Server connection"
             case .lock: "Profile lock"
             case .invite: "Invite a friend"
             }
         }
         var description: String {
             switch self {
-            case .appearance: "Choose how Playarr looks on this device."
-            case .avatar: "Pick a playful preset or use your own photo."
-            case .language: "Choose the language used by Playarr."
-            case .player: "Set quality, audio, and subtitle defaults."
-            case .server: "Review or change the connected Playarr Server."
-            case .lock: "Protect this profile with a four-digit PIN."
-            case .invite: "Request a one-use invitation for someone else."
+            case .appearance: "Choose this device's theme and home screen artwork."
+            case .avatar: "Choose how your profile appears on this device."
+            case .language: "Follow this device or keep a language fixed."
+            case .player: "Choose how Playarr should start quality, subtitles and audio."
+            case .server: "Combine libraries from multiple servers in one Playarr interface."
+            case .lock: "Require a four-digit PIN before switching profiles."
+            case .invite: "Ask your Playarr Server admin for one friend-invite QR code."
             }
         }
         var icon: String {
@@ -57,7 +57,8 @@ struct SettingsView: View {
     @AppStorage(NativePlayerDefaults.subtitleLanguageKey) private var subtitleLanguage = "en"
     @AppStorage(NativePlayerDefaults.audioLanguageKey) private var audioLanguage = "en"
 
-    @State private var selected: Section? = .appearance
+    @Environment(\.playarrGoHome) private var goHome
+    @State private var selected: Section?
     @State private var serverURL: String
     @State private var avatar: ProfileAvatarPreference?
     @State private var photoItem: PhotosPickerItem?
@@ -80,7 +81,7 @@ struct SettingsView: View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
             ZStack {
-                settingsBackground
+                if phone && selected == nil { WM.page } else { settingsBackground }
                 if phone { phoneLayout(safeTop: proxy.safeAreaInsets.top) }
                 else { wideLayout(proxy: proxy) }
             }
@@ -106,7 +107,64 @@ struct SettingsView: View {
         }
     }
 
+    /// Web mobile "Preferences" index: back arrow, title and numbered rows of 88pt.
+    private var phoneIndex: some View {
+        ZStack(alignment: .topLeading) {
+            Button { goHome() } label: {
+                Text("←")
+                    .font(WM.font(12.8, 720))
+                    .foregroundStyle(WM.shell)
+                    .frame(width: 44, height: 40)
+                    .background(WM.ink, in: Ellipse())
+            }
+            .buttonStyle(.plain)
+            .offset(x: 15, y: WM.topInset + 1)
+            WMText("Preferences", 21.6, 580, lh: 32.4, ls: -0.972)
+                .offset(x: 68, y: WM.topInset + 5)
+            VStack(spacing: 0) {
+                ForEach(Array(Section.allCases.enumerated()), id: \.element.id) { index, section in
+                    Button { selected = section } label: {
+                        ZStack(alignment: .topLeading) {
+                            if index == 0 { WM.artFill }
+                            WMText(section.number, 8.96, 760, color: WM.muted, lh: 13.44).offset(x: 12, y: 16)
+                            WMText(section.title, 16, 480, lh: 18.4, ls: -0.56)
+                                .frame(width: 257, alignment: .leading)
+                                .offset(x: 56, y: 25)
+                            Text(section.description)
+                                .font(WM.font(10.88))
+                                .foregroundStyle(WM.muted)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(width: 257, height: 15.776, alignment: .leading)
+                                .offset(x: 56, y: 47)
+                            Text("→")
+                                .font(WM.font(20.8))
+                                .foregroundStyle(index == 0 ? WM.ink : WM.muted)
+                                .offset(x: index == 0 ? 330 : 325, y: 28)
+                            VStack { Spacer(); Rectangle().fill(WM.ink.opacity(0.1)).frame(height: 1) }
+                        }
+                        .frame(width: 358, height: 88, alignment: .topLeading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.leading, 16)
+            .padding(.top, 84)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
     private func phoneLayout(safeTop: CGFloat) -> some View {
+        if selected == nil {
+            phoneIndex
+        } else {
+            phoneDetailLayout(safeTop: safeTop)
+        }
+    }
+
+    private func phoneDetailLayout(safeTop: CGFloat) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 if selected != nil {

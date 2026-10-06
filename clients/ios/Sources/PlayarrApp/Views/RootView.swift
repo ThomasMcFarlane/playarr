@@ -222,12 +222,19 @@ private struct AuthenticatedPlayarrShell: View {
     @ViewBuilder
     private var householdOverlay: some View {
         if let block = household.block, selected != .profiles {
-            HouseholdBlockedView(
-                block: block,
-                requestState: household.requestState,
-                onAskGuardian: { Task { await household.askGuardian() } },
-                onSwitchProfile: { select(.profiles) }
-            )
+            ZStack(alignment: .topLeading) {
+                HouseholdBlockedView(
+                    block: block,
+                    requestState: household.requestState,
+                    onAskGuardian: { Task { await household.askGuardian() } },
+                    onSwitchProfile: { select(.profiles) }
+                )
+                GeometryReader { proxy in
+                    profileButton(size: 42, avatarSize: 32)
+                        .offset(x: proxy.size.width - 16 - 42, y: WM.topInset)
+                }
+            }
+            .ignoresSafeArea()
             .zIndex(30)
         } else if let minutes = household.remainingMinutes {
             VStack {

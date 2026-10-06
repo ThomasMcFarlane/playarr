@@ -1,5 +1,6 @@
 import PlayarrKit
 import SwiftUI
+import UIKit
 
 struct LibraryView: View {
     @State private var viewModel: LibraryViewModel
@@ -30,6 +31,9 @@ struct LibraryView: View {
 
     var body: some View {
         Group {
+            if viewModel.isSearchMode && UIDevice.current.userInterfaceIdiom == .phone {
+                phoneSearch
+            } else {
             switch viewModel.loadState {
             case .idle, .loading:
                 PlayarrLoadingView(title: viewModel.searchText.isEmpty ? "Loading \(title.lowercased())…" : "Searching…")
@@ -42,6 +46,7 @@ struct LibraryView: View {
             case .loaded:
                 stage { libraryContent }
             }
+            }
         }
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
@@ -50,6 +55,138 @@ struct LibraryView: View {
         .sheet(isPresented: $showingFilters) { filterSheet }
         .sheet(item: $downloadTarget) { work in
             WorkDownloadSheet(work: work, apiClient: apiClient, downloadRepository: downloadRepository)
+        }
+    }
+
+    private struct SearchChip: Identifiable {
+        let label: String
+        let scope: LibraryViewModel.SearchScope
+        let x: CGFloat
+        let width: CGFloat
+        var id: String { label }
+    }
+
+    private static let searchChips: [SearchChip] = [
+        SearchChip(label: "All", scope: .all, x: 72, width: 35),
+        SearchChip(label: "Movies", scope: .movie, x: 112, width: 48),
+        SearchChip(label: "Series", scope: .series, x: 168, width: 44),
+        SearchChip(label: "Playlists", scope: .playlist, x: 218, width: 51),
+    ]
+
+    /// Web mobile search: pill field, filter chip, type chips and a two-column
+    /// result grid (numbers from the web layout dump).
+    private var phoneSearch: some View {
+        ZStack(alignment: .topLeading) {
+            WM.page
+            ScrollView(.vertical) {
+                ZStack(alignment: .topLeading) {
+                    HStack(spacing: 12) {
+                        WMIconView(icon: .search, color: WM.muted, size: 16)
+                        TextField("", text: $viewModel.searchText, prompt: Text("Search").foregroundColor(WM.muted))
+                            .font(WM.font(16))
+                            .foregroundStyle(WM.ink)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.search)
+                            .onSubmit { Task { await viewModel.load() } }
+                            .onChange(of: viewModel.searchText) { _, value in
+                                if value.isEmpty { Task { await viewModel.load() } }
+                            }
+                    }
+                    .padding(.leading, 15)
+                    .padding(.trailing, 16)
+                    .frame(width: 358, height: 50)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+                    .offset(x: 16, y: 90)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(WM.pink)
+                        WMText("Filters", 8, 760, lh: 12)
+                        WMText("\(scopeLabel(viewModel.searchScope)) · All libraries", 6.72, 400, color: WM.muted, lh: 10.08)
+                    }
+                    .padding(.leading, 25)
+                    .frame(width: 145, height: 42, alignment: .leading)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .offset(x: 16, y: 150)
+
+                    WMText("Type", 6.72, 740, color: WM.muted, lh: 10.08).offset(x: 16, y: 188)
+                    ForEach(Self.searchChips) { chip in
+                        let active = viewModel.searchScope == chip.scope
+                        Button {
+                            viewModel.searchScope = chip.scope
+                            Task { await viewModel.load() }
+                        } label: {
+                            WMText(chip.label, 7.04, 680, color: active ? WM.ink : WM.muted, lh: 10.56)
+                                .frame(width: chip.width, height: active ? 33 : 31)
+                                .background(
+                                    active ? Color(red: 64 / 255, green: 33 / 255, blue: 43 / 255) : WM.ink.opacity(0.06),
+                                    in: Capsule()
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: chip.x, y: active ? 183 : 184)
+                    }
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.fixed(173), spacing: 12, alignment: .top),
+                                GridItem(.fixed(173), spacing: 12, alignment: .top),
+                            ],
+                            alignment: .leading,
+                            spacing: 22
+                        ) {
+                            ForEach(Array(viewModel.works.enumerated()), id: \.element.id) { index, work in
+                                NavigationLink {
+                                    WorkDetailView(
+                                        viewModel: WorkDetailViewModel(apiClient: apiClient, workID: work.id),
+                                        apiClient: apiClient,
+                                        downloadRepository: downloadRepository
+                                    )
+                                } label: {
+                                    WMSearchCard(work: work, apiClient: apiClient, focused: index == 0)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 30)
+                        if case .loaded = viewModel.loadState {
+                            WMText("OTHER SOURCES", 8, 720, color: WM.muted, lh: 12, ls: 0.56)
+                                .padding(.leading, 16).padding(.top, 19.5)
+                            WMText("Nothing found in other sources.", 8.8, 400, color: WM.muted, lh: 13.2)
+                                .padding(.leading, 16).padding(.top, 12)
+                        }
+                    }
+                    .offset(y: 321)
+                }
+                .frame(maxWidth: .infinity, minHeight: 844, alignment: .topLeading)
+                .padding(.bottom, 130)
+            }
+            .scrollIndicators(.hidden)
+
+            ZStack(alignment: .topLeading) {
+                WMHeaderCircleButton(width: 42, height: 38, glyph: "←", action: goHome)
+                    .offset(x: 16, y: WM.topInset + 2)
+                WMText("Search", 21.6, 580, lh: 32.4, ls: -0.972)
+                    .offset(x: 68, y: WM.topInset + 5)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func scopeLabel(_ scope: LibraryViewModel.SearchScope) -> String {
+        switch scope {
+        case .all: "All"
+        case .movie: "Movies"
+        case .series: "Series"
+        case .site: "Sites"
+        case .artist: "Music"
+        case .playlist: "Playlists"
         }
     }
 

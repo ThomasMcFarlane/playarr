@@ -434,6 +434,29 @@ struct WMLibraryCard: View {
     }
 }
 
+/// Search result card (`tv-search-result`): 173x97 art, bold title, uppercase kind line.
+struct WMSearchCard: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+    var focused = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PlayarrArtwork(work: work, kind: .backdrop, apiClient: apiClient)
+                .frame(width: 173, height: 97.3)
+                .background(WM.chip)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(alignment: .topTrailing) { WMUnseenDot().padding(.top, 7).padding(.trailing, 7) }
+            WMText(work.title, 12.16, 650, lh: 18.24).padding(.top, 11)
+            WMText(work.singularKindYearLabel.uppercased(), 9.28, 720, color: WM.muted, lh: 13.92, ls: 0.3)
+                .padding(.top, 2)
+        }
+        .frame(width: 173, height: 142.5, alignment: .topLeading)
+        .scaleEffect(focused ? 1.04 : 1)
+        .offset(y: focused ? -6 : 0)
+    }
+}
+
 /// `app-user-identity`-style round header button.
 struct WMHeaderCircleButton: View {
     let width: CGFloat

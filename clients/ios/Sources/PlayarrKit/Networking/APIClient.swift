@@ -399,7 +399,10 @@ public final class APIClient: PlayarrAPIClient {
     public func searchCatalog(query searchQuery: String, limit: Int? = nil) async throws -> [Work] {
         var query = [URLQueryItem(name: "q", value: searchQuery)]
         if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
-        return try await get("/api/v1/catalog/search", query: query)
+        // The server answers with `{ items, remote_only }`; only the locally
+        // known matches are listed here.
+        let response: CatalogSearchResponse = try await get("/api/v1/catalog/search", query: query)
+        return response.items
     }
 
     public func fetchWork(id: UUID) async throws -> WorkDetail {
@@ -1063,4 +1066,10 @@ private actor AccessTokenCoordinator {
             throw APIError.decoding(error)
         }
     }
+}
+
+/// `GET /api/v1/catalog/search`'s response: locally known matches plus titles only
+/// a peer knows (ignored by the list views).
+struct CatalogSearchResponse: Decodable, Sendable {
+    var items: [Work]
 }
