@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV: pressing Select (or OK on the phone remote) on a Home rail card or library grid card now opens it on the first press. A redundant extra focus target in front of the clickable meant the first press only moved focus and a second press was needed. A source test keeps a bare `focusable()` out of the front of clickables.
 - iOS: catalogue search read the server's `{items, remote_only}` answer as a bare list and always failed with "Couldn't load search"; it now decodes the envelope. A regression test covers it.
 - Web mobile: the autofocused card on home, library, detail rails and search is no longer scaled and raised on touch layouts; the lift stays for remote input.
 - Web mobile home: the Customise Home button no longer overlaps the profile avatar.

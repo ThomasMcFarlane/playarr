@@ -20,7 +20,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -2771,7 +2770,6 @@ private fun ExperienceLandscapeCard(
             .width(width)
             .scale(scale)
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
-            .focusable()
             .combinedClickable(
                 onClick = { onSelected(); onClick() },
                 onLongClick = onContext,
@@ -2982,7 +2980,7 @@ private fun LibraryCoverCard(
     )
     Column(
         (if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
-            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }.focusable()
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
         Box {
