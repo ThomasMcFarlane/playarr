@@ -34,6 +34,11 @@ enum ParityLaunch {
     }
     static var title: String? { parts.first == "detail" && parts.count > 2 ? parts[2] : nil }
     static var query: String? { parts.first == "search" && parts.count > 1 ? parts[1] : nil }
+    /// `--playarr-parity-now <ISO 8601>`: the instant the web reference was captured at.
+    static var frozenNow: Date? {
+        guard let raw = value("--playarr-parity-now") else { return nil }
+        return ISO8601DateFormatter().date(from: raw)
+    }
     static var isActive: Bool { server != nil && user != nil }
 }
 #endif

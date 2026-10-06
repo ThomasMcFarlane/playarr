@@ -11,12 +11,13 @@ xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --ba
   --cellularMode active --cellularBars 4 --wifiBars 3 || true
 node -e '
   const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-  for (const x of s.screens) if (x.native) console.log([x.id, x.native, x.nativeUser ?? s.user].join("\t"));
-' "$screens" | while IFS=$'\t' read -r id route user; do
+  for (const x of s.screens) if (x.native) console.log([x.id, x.native, x.nativeUser ?? s.user, s.frozenTime ?? ""].join("\t"));
+' "$screens" | while IFS=$'\t' read -r id route user now; do
   xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl launch "$udid" "$bundle" \
     --playarr-parity-server "$server" --playarr-parity-user "$user" \
-    --playarr-parity-password "$password" --playarr-parity-route "$route" >/dev/null
+    --playarr-parity-password "$password" --playarr-parity-route "$route" \
+    ${now:+--playarr-parity-now "$now"} >/dev/null
   sleep "${PARITY_SETTLE_SECONDS:-8}"
   xcrun simctl io "$udid" screenshot --type=png "$out/$id.png"
   echo "captured $id ($route as $user)"

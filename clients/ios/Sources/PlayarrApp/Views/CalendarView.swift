@@ -5,6 +5,7 @@ import SwiftUI
 /// header, a Filters sheet and the iCal subscription sheet. Parity with Web `CalendarPage` and the
 /// Android calendar; all logic is in `PlayarrKit` and `CalendarViewModel`.
 struct CalendarView: View {
+    @Environment(\.playarrGoHome) private var goHome
     @State private var viewModel: CalendarViewModel
     let apiClient: PlayarrAPIClient
     let downloadRepository: DownloadRepository
@@ -15,12 +16,21 @@ struct CalendarView: View {
     init(apiClient: PlayarrAPIClient, downloadRepository: DownloadRepository) {
         self.apiClient = apiClient
         self.downloadRepository = downloadRepository
+        #if DEBUG
+        // The parity capture freezes the web clock; the native calendar follows the same instant.
+        let frozen = ParityLaunch.frozenNow
+        _viewModel = State(initialValue: CalendarViewModel(transport: apiClient, now: { frozen ?? Date() }))
+        #else
         _viewModel = State(initialValue: CalendarViewModel(transport: apiClient))
+        #endif
     }
 
     var body: some View {
         GeometryReader { proxy in
             let phone = PlayarrLayout.isPhone(proxy.size)
+            if phone {
+                phoneBody
+            } else {
             VStack(alignment: .leading, spacing: 12) {
                 header(phone: phone)
                 controls(phone: phone)
@@ -32,6 +42,7 @@ struct CalendarView: View {
             .padding(.top, phone ? 56 : 40)
             .padding(.bottom, phone ? 84 : 24)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            }
         }
         .background(PlayarrStyle.background.ignoresSafeArea())
         .foregroundStyle(PlayarrStyle.ink)
@@ -55,6 +66,150 @@ struct CalendarView: View {
                 }
             }
             .presentationDetents([.medium, .large])
+        }
+    }
+
+    // MARK: Web mobile layout
+
+    private var phoneRangeLabel: String {
+        let window = viewModel.window
+        guard let start = CalendarDays.displayDate(window.start), let end = CalendarDays.displayDate(window.end) else {
+            return viewModel.windowTitle
+        }
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = utc.timeZone
+        if viewModel.mode == .month, let anchor = CalendarDays.displayDate(viewModel.anchor) {
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: anchor)
+        }
+        let sameYear = utc.component(.year, from: start) == utc.component(.year, from: end)
+        formatter.dateFormat = sameYear ? "d MMM" : "d MMM yyyy"
+        let first = formatter.string(from: start)
+        formatter.dateFormat = "d MMM yyyy"
+        return "\(first) \u{2013} \(formatter.string(from: end))"
+    }
+
+    private func roundButton(_ glyph: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            WMText(glyph, 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                .frame(width: 38, height: 38)
+                .background(WM.page, in: Circle())
+                .overlay(Circle().stroke(WM.line.opacity(0.14), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// Web mobile calendar: header with link and filter buttons, the range picker with
+    /// previous, Today and next controls, then the agenda (numbers from the web layout).
+    private var phoneBody: some View {
+        let top = WM.topInset + 2
+        return ZStack(alignment: .topLeading) {
+            WM.page.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 12) {
+                if !viewModel.unhealthySources.isEmpty { sourceBanner }
+                switch viewModel.loadState {
+                case .loading:
+                    CalendarSkeleton()
+                case .failed(let message):
+                    PlayarrFailureView(title: "Couldn\u{2019}t load the calendar", message: message) {
+                        Task { await viewModel.load() }
+                    }
+                case .loaded:
+                    if viewModel.dayGroups.isEmpty {
+                        phoneEmpty
+                    } else {
+                        loaded(phone: true)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 212)
+            .padding(.bottom, 120)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            WMHeaderCircleButton(width: 42, height: 38, glyph: "\u{2190}", action: goHome)
+                .offset(x: 16, y: top)
+            WMText("Release Calendar", 17.6, 580, lh: 26.4, ls: -0.792)
+                .frame(height: 38)
+                .offset(x: 68, y: top)
+            Button { showingSubscription = true } label: {
+                Image(systemName: "link")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(WM.inkSoft)
+                    .frame(width: 44, height: 38)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 230, y: top)
+            Button { showingFilters = true } label: {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(WM.inkSoft)
+                    .frame(width: 44, height: 38)
+                    .background(WM.chip.opacity(0.66), in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 274, y: top)
+
+            Menu {
+                Picker("View", selection: Binding(
+                    get: { viewModel.mode },
+                    set: { newMode in Task { await viewModel.setMode(newMode) } }
+                )) {
+                    Text("Agenda").tag(CalendarViewMode.agenda)
+                    Text("Week").tag(CalendarViewMode.week)
+                    Text("Month").tag(CalendarViewMode.month)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(phoneRangeLabel)
+                        .font(WM.font(16, 640))
+                        .foregroundStyle(WM.ink)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 139)
+                    Text("\u{25BE}\u{FE0E}").font(WM.font(11.52, 720)).foregroundStyle(WM.ink)
+                }
+                .frame(width: 198, height: 74)
+            }
+            .offset(x: 16, y: 94)
+
+            roundButton("\u{2190}", label: "Previous period") { Task { await viewModel.step(-1) } }
+                .offset(x: 223, y: 89)
+            Button { Task { await viewModel.goToToday() } } label: {
+                WMText("Today", 11.52, 720, color: WM.inkSoft, lh: 17.28)
+                    .frame(width: 82, height: 46)
+                    .background(WM.page, in: Capsule())
+                    .overlay(Capsule().stroke(WM.line.opacity(0.14), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 267, y: 85)
+            roundButton("\u{2192}", label: "Next period") { Task { await viewModel.step(1) } }
+                .offset(x: 223, y: 138)
+        }
+    }
+
+    private var phoneEmpty: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            WMText(
+                viewModel.filters.isEmpty ? "Nothing scheduled" : "No releases match these filters",
+                16, 700, lh: 24
+            )
+            Text("No releases from your connected sources fall in this period.")
+                .font(WM.font(16))
+                .foregroundStyle(WM.muted)
+                .frame(width: 358, alignment: .topLeading)
+                .padding(.top, 10)
+            Text("Select a release to see its details.")
+                .font(WM.font(16))
+                .foregroundStyle(WM.muted)
+                .frame(width: 358, alignment: .topLeading)
+                .padding(.top, 36)
         }
     }
 
