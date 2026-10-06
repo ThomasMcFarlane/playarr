@@ -1,0 +1,1 @@
+- iOS and Apple TV: household blocked state (outside schedule, daily budget used up) with an Ask a guardian request, and an N min left pill in the last hour, backed by a shared PlayarrKit household client.

@@ -144,6 +144,7 @@ private struct AuthenticatedPlayarrShell: View {
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
     @State private var chromeHidden = false
+    @State private var household: HouseholdViewModel
     @State private var routeTransitionTitle: String?
     /// App-wide, so "Casting to <device>" stays visible while browsing
     /// anywhere in the app, not only inside `PlayerView` -- the same
@@ -156,6 +157,7 @@ private struct AuthenticatedPlayarrShell: View {
     init(environment: AppEnvironment) {
         self.environment = environment
         _homeViewModel = State(initialValue: HomeViewModel(apiClient: environment.apiClient))
+        _household = State(initialValue: HouseholdViewModel(apiClient: environment.apiClient))
         #if DEBUG
         _demoDetailViewModel = State(initialValue: WorkDetailViewModel(
             apiClient: environment.apiClient,
@@ -191,6 +193,7 @@ private struct AuthenticatedPlayarrShell: View {
             selectedContent
             if !chromeHidden { chrome }
             if castCoordinator.isCasting { castMiniBar }
+            householdOverlay
             if let routeTransitionTitle {
                 PlayarrLoadingView(title: "Opening \(routeTransitionTitle.lowercased())…")
                     .transition(.opacity)
@@ -213,6 +216,27 @@ private struct AuthenticatedPlayarrShell: View {
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
         }
         .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
+        .task { await household.poll() }
+    }
+
+    @ViewBuilder
+    private var householdOverlay: some View {
+        if let block = household.block, selected != .profiles {
+            HouseholdBlockedView(
+                block: block,
+                requestState: household.requestState,
+                onAskGuardian: { Task { await household.askGuardian() } },
+                onSwitchProfile: { select(.profiles) }
+            )
+            .zIndex(30)
+        } else if let minutes = household.remainingMinutes {
+            VStack {
+                HouseholdRemainingBadge(minutes: minutes)
+                Spacer()
+            }
+            .allowsHitTesting(false)
+            .zIndex(14)
+        }
     }
 
     @ViewBuilder
