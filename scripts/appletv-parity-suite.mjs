@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * Screen-by-screen visual parity suite: native tvOS Simulator screenshots
- * vs Playwright captures of https://playarr.app at 1920×1080.
+ * vs Playwright captures of the web client at 1920×1080. The web client is the
+ * local fixture environment (scripts/fixtures/up.sh, placeholder library only);
+ * never point this at a real library.
  *
  * Usage:
  *   node scripts/appletv-parity-suite.mjs --run-dir <dir> [--native-dir <dir>]
@@ -9,7 +11,9 @@
  *   node scripts/appletv-parity-suite.mjs --diff-only --run-dir <dir>
  *
  * Environment:
- *   PLAYARR_WEB_ORIGIN  (default https://playarr.app)
+ *   PLAYARR_WEB_ORIGIN  (default http://127.0.0.1:18484, the fixture server)
+ *   PARITY_USER / PARITY_PASSWORD  sign in before capturing (fixture user, e.g. fx-viewer;
+ *                                  the password is in scripts/fixtures/catalog.mjs)
  *   PARITY_TOLERANCE_PCT (default 0.1)
  */
 import { chromium } from "playwright";
@@ -24,13 +28,13 @@ const pixelmatch = pixelmatchImport.default || pixelmatchImport;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
-const WEB_ORIGIN = process.env.PLAYARR_WEB_ORIGIN || "https://playarr.app";
+const WEB_ORIGIN = process.env.PLAYARR_WEB_ORIGIN || "http://127.0.0.1:18484";
 const TOLERANCE_PCT = Number(process.env.PARITY_TOLERANCE_PCT || "0.1");
 const VIEWPORT = { width: 1920, height: 1080 };
 
 /**
  * Required suite screens (plan acceptance criteria).
- * `webPath` is the route on playarr.app.
+ * `webPath` is the route on the fixture web client.
  * `nativeFile` is the expected native screenshot basename (without .png).
  * `note` documents known mapping caveats.
  */
@@ -194,6 +198,15 @@ async function captureReferences(runDir) {
       document.documentElement.style.colorScheme = "dark";
     } catch (_) {}
   });
+
+  if (process.env.PARITY_USER && process.env.PARITY_PASSWORD) {
+    await page.goto(`${WEB_ORIGIN}/login`, { waitUntil: "networkidle", timeout: 45_000 });
+    await page.fill("#login-server-url", WEB_ORIGIN).catch(() => {});
+    await page.fill("#login-username", process.env.PARITY_USER);
+    await page.fill('input[name="password"]', process.env.PARITY_PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForTimeout(3000);
+  }
 
   for (const screen of SCREENS) {
     const url = `${WEB_ORIGIN}${screen.webPath}`;

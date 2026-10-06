@@ -1,0 +1,107 @@
+name: Apple TV parity captures
+
+# Regenerates the Apple TV visual-parity captures from the placeholder parity
+# fixtures built into the app (`-PlayarrParityScreen`, see
+# clients/apple-tv/Sources/TVParityScreens.swift). Nothing here reads a real
+# catalogue: titles are neutral placeholders and artwork is procedural.
+# The PNGs are uploaded as a workflow artifact; none are committed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Optional full commit SHA to capture (default - the selected ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture tvOS parity screens
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Record the toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          swift --version
+
+      - name: Create an isolated simulator
+        id: simulator
+        shell: bash
+        timeout-minutes: 5
+        env:
+          INPUT_DESTINATION: platform=tvOS Simulator,name=Apple TV
+        run: node .github/scripts/apple-test-simulator/main.js
+
+      - name: Build the tvOS app
+        shell: bash
+        timeout-minutes: 30
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          [[ "$SIMULATOR_UDID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+          xcodebuild build \
+            -project clients/apple-tv/PlayarrTV.xcodeproj \
+            -scheme PlayarrTV -configuration Debug \
+            -destination "platform=tvOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/dd" 2>&1 | tee "$RUNNER_TEMP/appletv-build.txt"
+
+      - name: Capture every parity screen
+        shell: bash
+        timeout-minutes: 15
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/appletv-parity"
+          mkdir -p "$out"
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name 'PlayarrTV.app' | head -1)
+          [[ -n "$app" ]]
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl boot "$SIMULATOR_UDID"
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl install "$SIMULATOR_UDID" "$app"
+          for screen in device-code-pairing home-recently-added search detail-movie detail-episode detail-track detail-book player settings; do
+            xcrun simctl terminate "$SIMULATOR_UDID" "$bundle" 2>/dev/null || true
+            xcrun simctl launch "$SIMULATOR_UDID" "$bundle" -PlayarrParityScreen "$screen"
+            sleep 6
+            xcrun simctl io "$SIMULATOR_UDID" screenshot "$out/$screen.png"
+          done
+          ls -l "$out"
+
+      - name: Delete the simulator
+        if: ${{ always() && steps.simulator.outputs.udid != '' }}
+        shell: bash
+        timeout-minutes: 5
+        env:
+          STATE_simulator_udid: ${{ steps.simulator.outputs.udid }}
+        run: node .github/scripts/apple-test-simulator/cleanup.js
+
+      - name: Upload the captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appletv-parity-native-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/appletv-parity
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appletv-parity-build-log-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/appletv-build.txt
+          if-no-files-found: ignore
+          retention-days: 7
