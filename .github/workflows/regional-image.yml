@@ -74,7 +74,9 @@ jobs:
           docker run --rm --entrypoint /app/playarr-server "$IMAGE:$TAG" --version
 
       - name: Push
-        if: ${{ !inputs.dry_run }}
+        # Only main builds publish a SHA tag: deployment tooling follows the
+        # newest SHA tag, so a manual run on another ref must never push one.
+        if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
         run: |
           set -euo pipefail
           docker push "$IMAGE:$TAG"
