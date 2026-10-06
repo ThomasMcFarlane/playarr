@@ -99,10 +99,7 @@ struct TVWorkDetailView: View {
             }
             .frame(width: 1038.3, height: 1190.6)
             .clipped()
-            .saturation(0)
-            .contrast(DesignTokens.Shell.keyArtContrast)
-            .colorMultiply(Color(white: DesignTokens.Shell.keyArtBrightness))
-            .opacity(DesignTokens.Shell.keyArtOpacity)
+            .modifier(TVKeyArtFilter())
             .mask(
                 LinearGradient(
                     stops: [

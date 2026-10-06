@@ -17,23 +17,58 @@ extension View {
 }
 
 /// Web `.tv-rail-panel` / `.tv-rail-surface`: frosted gradient across the right of the stage.
+/// Light follows the CSS (`--tv-rail-frost` is 48% surface-soft over surface-strong, alphas 68/88/96/100);
+/// dark keeps the calibrated soft-surface ramp.
 struct TVRailPanelGradient: View {
     var width: CGFloat
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        LinearGradient(
-            stops: [
+        LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
+            .frame(width: width)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var stops: [Gradient.Stop] {
+        if scheme == .light {
+            let frost = Color(red: 239.6 / 255, green: 238.2 / 255, blue: 238.7 / 255)
+            return [
                 .init(color: .clear, location: 0),
-                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(width: width)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+                .init(color: frost.opacity(0.68), location: 0.12),
+                .init(color: frost.opacity(0.88), location: 0.34),
+                .init(color: frost.opacity(0.96), location: 0.62),
+                .init(color: frost, location: 1),
+            ]
+        }
+        return [
+            .init(color: .clear, location: 0),
+            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
+            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
+            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
+            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
+        ]
+    }
+}
+
+/// Web `.tv-key-art img` filter: dark `grayscale contrast(.82) brightness(.6)` at 0.72, light
+/// `grayscale contrast(.88) brightness(1.1)` at 0.4.
+struct TVKeyArtFilter: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        if scheme == .light {
+            content
+                .saturation(0)
+                .contrast(0.88)
+                .brightness(0.08)
+                .opacity(0.4)
+        } else {
+            content
+                .saturation(0)
+                .contrast(DesignTokens.Shell.keyArtContrast)
+                .colorMultiply(Color(white: DesignTokens.Shell.keyArtBrightness))
+                .opacity(DesignTokens.Shell.keyArtOpacity)
+        }
     }
 }
 

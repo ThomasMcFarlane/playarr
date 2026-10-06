@@ -178,21 +178,7 @@ struct TVHomeView: View {
                 : heroWork(from: viewModel.works)
             ZStack(alignment: .topLeading) {
                 heroBackdrop(hero: hero, size: geo.size)
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
-                }
+                TVRailPanelGradient(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
                 if let hero {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(kindKicker(hero))
@@ -570,10 +556,7 @@ struct TVHomeView: View {
                             .scaledToFill()
                             .frame(width: keyW, height: size.height * DesignTokens.Shell.keyArtHeightFraction)
                             .clipped()
-                            .saturation(0)
-                            .contrast(DesignTokens.Shell.keyArtContrast)
-                            .colorMultiply(Color(white: DesignTokens.Shell.keyArtBrightness))
-                            .opacity(DesignTokens.Shell.keyArtOpacity)
+                            .modifier(TVKeyArtFilter())
                             .mask(
                                 LinearGradient(
                                     stops: [
@@ -1098,21 +1081,7 @@ struct TVLibraryKindView: View {
                 heroBackdrop(size: geo.size)
 
                 // Right frost panel (65%).
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
-                }
+                TVRailPanelGradient(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
 
                 TVPageHeader(
                     title: kindLabel,
