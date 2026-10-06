@@ -45,7 +45,7 @@ describe("Playarr signed release platform selector", () => {
   it("gates each signed upload independently and requires only its platform profile", () => {
     assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == ios \]\]; then[\s\S]*?APPLE_PROVISIONING_PROFILE_BASE64/);
     assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == tvos \]\]; then[\s\S]*?APPLE_TVOS_PROVISIONING_PROFILE_BASE64/);
-    assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == ios \]\]; then\n\s+ARCHIVE_PATH="\$IOS_ARCHIVE_PATH"[\s\S]*?release\.sh testflight ios\n\s+fi/);
-    assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == tvos \]\]; then\n\s+ARCHIVE_PATH="\$TVOS_ARCHIVE_PATH"[\s\S]*?release\.sh testflight tvos\n\s+fi/);
+    assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == ios \]\]; then\n\s+ARCHIVE_PATH="\$IOS_ARCHIVE_PATH"[\s\S]*?release\.sh "\$RELEASE_MODE" ios\n\s+fi/);
+    assert.match(workflow, /if \[\[ "\$RELEASE_PLATFORM" == both \|\| "\$RELEASE_PLATFORM" == tvos \]\]; then\n\s+ARCHIVE_PATH="\$TVOS_ARCHIVE_PATH"[\s\S]*?release\.sh "\$RELEASE_MODE" tvos\n\s+fi/);
   });
 });
