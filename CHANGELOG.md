@@ -2235,6 +2235,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Made the live-events stream tests deterministic: absence is now asserted by reading up to a later sentinel frame (ordered by `seq`) instead of draining for a fixed time window, positive waits use a generous bound, and the API test database pool waits longer for its single connection. Removes failures seen when the full parallel suite ran on saturated cores.
 - Fixture-based web playback test (`pnpm --filter @playarr-tv/web run test:playback-e2e`): signs in as a fixture user, plays a fixture film, asserts `currentTime` advances, and kills and restarts the fixture server mid-playback to check the reconnect card and recovery. Fixture clip length is configurable with `PLAYARR_FIXTURE_CLIP_SECONDS`.
 - Added vitest coverage for the web player's Original bitrate label, reveal-only input gate, Picture-in-Picture helper and close button.
 - Folder scanning and browsing are covered by fixture directory trees with generated tiny media (ffmpeg; skipped on hosts without it), including incremental rescans, live events, access control, discovery against a mocked source and playback negotiation of a folder item.
