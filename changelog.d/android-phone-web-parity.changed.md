@@ -1,0 +1,1 @@
+- Android phone: the client uses the web font and the web top-inset rules, the calendar offers Play and Resume, and the profile page follows the web phone layout with the theme selector and a Clients link.
