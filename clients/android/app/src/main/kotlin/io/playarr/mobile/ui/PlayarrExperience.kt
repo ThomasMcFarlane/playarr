@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -105,7 +107,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.BlendMode
@@ -1146,18 +1147,18 @@ internal enum class LibraryViewMode { List, Screen, Cover, CoverFlow }
 internal enum class LibraryArtworkSize { Small, Medium, Large }
 
 internal val experienceDestinations = listOf(
-    ExperienceDestination("downloads", PlayarrString.NavDownloads, Icons.Outlined.Download),
-    ExperienceDestination("search", PlayarrString.NavSearch, Icons.Outlined.Search),
-    ExperienceDestination("home", PlayarrString.NavHome, Icons.Outlined.Home),
-    ExperienceDestination("series", PlayarrString.NavSeries, Icons.Outlined.Tv, WorkKind.Series),
-    ExperienceDestination("movies", PlayarrString.NavMovies, Icons.Outlined.Movie, WorkKind.Movie),
-    ExperienceDestination("sites", PlayarrString.NavSites, Icons.Outlined.Language, WorkKind.Site),
-    ExperienceDestination("music", PlayarrString.NavMusic, Icons.Outlined.MusicNote, WorkKind.Artist),
-    ExperienceDestination("folders", PlayarrString.NavFolders, Icons.Outlined.Folder, requiresFolders = true),
-    ExperienceDestination("playlists", PlayarrString.NavPlaylists, Icons.AutoMirrored.Outlined.PlaylistPlay),
-    ExperienceDestination("watchlist", PlayarrString.NavWatchlist, Icons.Outlined.BookmarkAdd),
-    ExperienceDestination("requests", PlayarrString.NavRequests, Icons.Outlined.BookmarkAdd),
-    ExperienceDestination("calendar", PlayarrString.NavCalendar, Icons.Outlined.CalendarMonth),
+    ExperienceDestination("downloads", PlayarrString.NavDownloads, PlayarrWebIcons.Downloads),
+    ExperienceDestination("search", PlayarrString.NavSearch, PlayarrWebIcons.Search),
+    ExperienceDestination("home", PlayarrString.NavHome, PlayarrWebIcons.Home),
+    ExperienceDestination("series", PlayarrString.NavSeries, PlayarrWebIcons.Series, WorkKind.Series),
+    ExperienceDestination("movies", PlayarrString.NavMovies, PlayarrWebIcons.Movies, WorkKind.Movie),
+    ExperienceDestination("sites", PlayarrString.NavSites, PlayarrWebIcons.Sites, WorkKind.Site),
+    ExperienceDestination("music", PlayarrString.NavMusic, PlayarrWebIcons.Music, WorkKind.Artist),
+    ExperienceDestination("folders", PlayarrString.NavFolders, PlayarrWebIcons.Folders, requiresFolders = true),
+    ExperienceDestination("playlists", PlayarrString.NavPlaylists, PlayarrWebIcons.Playlists),
+    ExperienceDestination("watchlist", PlayarrString.NavWatchlist, PlayarrWebIcons.Watchlist),
+    ExperienceDestination("requests", PlayarrString.NavRequests, PlayarrWebIcons.Watchlist),
+    ExperienceDestination("calendar", PlayarrString.NavCalendar, PlayarrWebIcons.Calendar),
 )
 
 internal fun visibleExperienceDestinations(
@@ -1181,6 +1182,21 @@ internal fun televisionDestinationGroups(
     destinations.filter { it.route in setOf("home", "series", "movies", "sites", "music", "folders") },
     destinations.filter { it.route in setOf("playlists", "watchlist", "requests", "calendar") },
 ).filter(List<ExperienceDestination>::isNotEmpty)
+
+/** Hairlines drawn by the web as a translucent line colour: light ink on dark, dark ink on light (alpha per CSS). */
+private fun webHairline(darkAlpha: Float, lightAlpha: Float): Color =
+    if (webIsDark) Color(0xFFDFDCDD).copy(alpha = darkAlpha) else Color(0xFF382621).copy(alpha = lightAlpha)
+internal val WebPillBorder: Color get() = webHairline(0.1527f, 0.1838f)
+internal val WebDivider: Color get() = webHairline(0.23f, 0.28f)
+internal val WebSearchBorder: Color get() = webHairline(0.1758f, 0.2116f)
+
+/** CSS puts half the line-height leading above and below the glyphs; this is Compose's equivalent. */
+internal val WebTextStyle = androidx.compose.ui.text.TextStyle(
+    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+    ),
+)
 
 /** Active letter chip in the library A-Z rail (web `.tv-alphabet .is-active`). */
 private val WebAlphabetActive = Color(0xFFC6C2C4)
@@ -1711,13 +1727,20 @@ private fun ExperienceNavigation(
         TelevisionNavigation(destinations, currentRoute, onNavigate, modifier)
         return
     }
-    val bottomInsets = if (isTelevision) WindowInsets(0) else WindowInsets.navigationBars.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)
+    // Web: `bottom: max(8px, env(safe-area-inset-bottom))`, so the bar sits on the gesture inset or 8 dp up.
+    val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomInsets = WindowInsets(0)
     val phoneNavShape = RoundedCornerShape(if (isTelevision) 28.dp else 20.dp)
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+    ) {
     Surface(
         modifier = modifier
             .windowInsetsPadding(bottomInsets)
-            .padding(horizontal = if (isTelevision) 0.dp else 10.dp, vertical = if (isTelevision) 26.dp else 8.dp)
-            .glass(phoneNavShape, WebGlass.NavGroup),
+            .then(if (isTelevision) Modifier else Modifier.fillMaxWidth())
+            .padding(horizontal = if (isTelevision) 0.dp else 10.dp)
+            .padding(top = if (isTelevision) 26.dp else 8.dp, bottom = if (isTelevision) 26.dp else maxOf(8.dp, systemBottom))
+            .glass(phoneNavShape, if (isTelevision) WebGlass.NavGroup else WebGlass.PhoneNav),
         color = Color.Transparent,
         shape = phoneNavShape,
         tonalElevation = 0.dp,
@@ -1734,11 +1757,11 @@ private fun ExperienceNavigation(
                     onClick = { onNavigate(destination.route) },
                     color = if (selected) WebInk else Color.Transparent,
                     contentColor = if (selected) WebBackground else WebInkMuted,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.height(if (isTelevision) 46.dp else 46.dp),
+                    shape = RoundedCornerShape(if (isTelevision) 16.dp else 14.dp),
+                    modifier = Modifier.height(46.dp),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = if (selected && isTelevision) 16.dp else 12.dp),
+                        modifier = Modifier.padding(horizontal = if (selected && isTelevision) 16.dp else if (isTelevision) 12.dp else 11.5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
                     ) {
@@ -1756,6 +1779,7 @@ private fun ExperienceNavigation(
                 }
             }
         }
+    }
     }
 }
 
@@ -1871,7 +1895,7 @@ private fun ProfileControl(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
             .then(
-                if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 15.dp) else Modifier.padding(16.dp),
+                if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 15.dp) else Modifier.padding(end = 16.dp),
             ),
         horizontalAlignment = Alignment.Start,
     ) {
@@ -1896,8 +1920,8 @@ private fun ProfileControl(
                 PlayarrProfileAvatar(
                     userId = userId,
                     preference = avatar,
-                    modifier = Modifier.size(if (isTelevision) 34.dp else 42.dp),
-                    glyphSize = if (isTelevision) 18.sp else 20.sp,
+                    modifier = Modifier.size(if (isTelevision) 34.dp else 32.dp),
+                    glyphSize = if (isTelevision) 18.sp else 16.sp,
                 )
                 if (isTelevision) {
                     Text(
@@ -1917,9 +1941,10 @@ private fun ProfileControl(
             Text(
                 profileVersionLabel(BuildConfig.VERSION_NAME),
                 color = WebInkMuted,
-                fontSize = 8.sp,
+                fontSize = if (isTelevision) 8.sp else 6.08.sp,
+                lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else 6.08.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 0.32.sp,
+                letterSpacing = if (isTelevision) 0.32.sp else 0.2432.sp,
                 modifier = Modifier.clearAndSetSemantics { },
             )
         }
@@ -2364,6 +2389,7 @@ private fun ExperienceHomeScreen(
             }
             val allWorks = current.value.flatMap(HomeRail::works)
             var selectedId by remember(allWorks) { mutableStateOf(allWorks.first().id) }
+            var activeRailKey by remember(allWorks) { mutableStateOf(current.value.first().key) }
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var resumeChooser by remember { mutableStateOf<PlayarrOnDeckEntry?>(null) }
             val homeScope = rememberCoroutineScope()
@@ -2409,14 +2435,15 @@ private fun ExperienceHomeScreen(
                         val index = current.value.indexOfFirst { it.key == focusedRailKey }
                         if (isTelevision && index >= 0) railsState.animateScrollToItem(index)
                     }
+                    Box(Modifier.fillMaxSize()) {
                     LazyColumn(
                         state = railsState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            top = if (isTelevision) 480.dp else 68.dp,
+                            top = if (isTelevision) 480.dp else 102.dp,
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 67.6.dp),
                     ) {
                         items(current.value, key = HomeRail::key) { rail ->
                             ExperienceMediaRail(
@@ -2426,8 +2453,9 @@ private fun ExperienceHomeScreen(
                                 isTelevision = isTelevision,
                                 homeView = homeView,
                                 selectedId = selectedId,
+                                active = rail.key == activeRailKey,
                                 progressByWork = progressByWork,
-                                onSelected = { selectedId = it.id },
+                                onSelected = { selectedId = it.id; activeRailKey = rail.key },
                                 onClick = { work, onDeck ->
                                     if (onDeck?.resumePlan?.isStacked == true) {
                                         // Several ways to continue: ask here instead of opening the series.
@@ -2446,7 +2474,7 @@ private fun ExperienceHomeScreen(
                                 onRailFocused = { focusedRailKey = rail.key },
                             )
                         }
-                        item(key = "customise-home") {
+                        if (isTelevision) item(key = "customise-home") {
                             PlayarrButton(
                                 variant = PlayarrButtonVariant.Secondary,
                                 onClick = { viewModel.loadRailPreferences(); customising = true },
@@ -2455,6 +2483,22 @@ private fun ExperienceHomeScreen(
                                 Text(playarrString(PlayarrString.HomeCustomise))
                             }
                         }
+                    }
+                    if (!isTelevision) {
+                        // Web phone: "Customise Home" is a 38 px pill in the header row, left of the profile control.
+                        Surface(
+                            onClick = { viewModel.loadRailPreferences(); customising = true },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 68.dp).height(38.dp),
+                            shape = CircleShape,
+                            color = WebSurface,
+                            contentColor = WebInkSoft,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
+                        ) {
+                            Box(Modifier.padding(horizontal = 12.85.dp), contentAlignment = Alignment.Center) {
+                                Text(playarrString(PlayarrString.HomeCustomise), fontSize = 11.52.sp, fontWeight = FontWeight(720), maxLines = 1)
+                            }
+                        }
+                    }
                     }
                 },
             )
@@ -2543,6 +2587,10 @@ private fun ExperienceStage(
 ) {
     Box(modifier = Modifier.fillMaxSize().background(WebSurface)) {
         HeroBackdropStack {
+        if (!isTelevision) {
+            PhoneKeyArt(selected, serverUrl, accessToken, Modifier.fillMaxSize())
+            PhoneStageWash(Modifier.fillMaxSize())
+        } else {
         AuthenticatedArtwork(
             work = selected,
             kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
@@ -2556,6 +2604,7 @@ private fun ExperienceStage(
             Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)),
         )
         }
+        }
         if (isTelevision) {
             Box(Modifier.fillMaxWidth(0.38f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 28.dp), contentAlignment = Alignment.TopStart) {
                 feature()
@@ -2566,7 +2615,10 @@ private fun ExperienceStage(
                 ),
             ) { rails() }
         } else {
-            Box(Modifier.fillMaxSize()) { rails() }
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.padding(top = 82.dp).fillMaxSize().background(phoneHomePanelBrush()))
+                rails()
+            }
         }
     }
 }
@@ -2679,24 +2731,42 @@ private fun ExperienceMediaRail(
     onClick: (Work, PlayarrOnDeckEntry?) -> Unit,
     onContext: (Work) -> Unit,
     onRailFocused: () -> Unit = {},
+    /** The rail that holds the selection; only its card (and heading) draw the selected state. */
+    active: Boolean = true,
 ) {
     val collection = playarrString(PlayarrString.LibraryCollectionTitles)
+    val railTitle = rail.literalTitle ?: rail.title?.let { playarrString(it) }.orEmpty()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .onFocusChanged { if (it.hasFocus) onRailFocused() }
-            .padding(start = if (isTelevision) 46.dp else 16.dp),
+            .then(if (isTelevision) Modifier.padding(start = 46.dp) else Modifier),
     ) {
-        Text(rail.literalTitle ?: rail.title?.let { playarrString(it) }.orEmpty(), color = WebInk, fontSize = if (isTelevision) 18.sp else 16.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            playarrString(PlayarrString.LibraryCollectionCount, "count" to rail.works.size, "collection" to collection),
-            color = WebInkMuted,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        if (isTelevision) {
+            Text(railTitle, color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                playarrString(PlayarrString.LibraryCollectionCount, "count" to rail.works.size, "collection" to collection),
+                color = WebInkMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        } else {
+            // Web phone rail heading: 24 px tall, 16 px / 610; the active rail's title is drawn 1.16x, lifted 1 px.
+            Box(Modifier.fillMaxWidth().height(24.dp).padding(start = 16.dp), contentAlignment = Alignment.CenterStart) {
+                Text(
+                    railTitle, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(610), letterSpacing = (-0.48).sp,
+                    style = WebTextStyle, maxLines = 1,
+                    modifier = Modifier.graphicsLayer {
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                        if (active) { scaleX = 1.16f; scaleY = 1.16f; translationY = -1.dp.toPx() }
+                    },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
-            contentPadding = PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth().then(if (isTelevision) Modifier.padding(top = 7.dp) else Modifier),
+            contentPadding = if (isTelevision) PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 12.dp),
         ) {
             items(rail.works, key = Work::id) { work ->
@@ -2707,11 +2777,14 @@ private fun ExperienceMediaRail(
                     serverUrl = serverUrl,
                     accessToken = accessToken,
                     width = when (homeView) {
-                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 219.dp else 150.dp
+                        PlayarrHomeViewPreference.Thumbnail -> if (isTelevision) 219.dp else 179.4.dp
                         PlayarrHomeViewPreference.Cover -> if (isTelevision) 172.dp else 118.dp
                     },
                     homeView = homeView,
-                    selected = selectedId == work.id,
+                    webPhone = !isTelevision && homeView == PlayarrHomeViewPreference.Thumbnail,
+                    webHome = true,
+                    showUnwatched = !isTelevision,
+                    selected = active && selectedId == work.id,
                     progress = onDeck?.progress ?: progressByWork[work.id],
                     onSelected = { onSelected(work) },
                     onClick = { onClick(work, onDeck) },
@@ -2756,28 +2829,44 @@ private fun ExperienceLandscapeCard(
     showUnwatched: Boolean = false,
     /** More than 1 draws the card as a stack with a "N ways to continue" badge. */
     stackCount: Int = 0,
+    /** Web phone card: 8 dp art corners, fixed selected transform and the web's small type. */
+    webPhone: Boolean = false,
+    /** With [webPhone]: the Home rail variant (title and kind line, lifted 6 px when selected) instead of the library's. */
+    webHome: Boolean = false,
+    /** With [webPhone]: the Search result variant (darker art tile, kind and year in capitals). */
+    webSearch: Boolean = false,
 ) {
     val resolvedSubtitle = displaySubtitle ?: work.playarrKindYearLabel()
     var focused by remember { mutableStateOf(false) }
-    val scale = rememberPlayarrFocusScale(
+    val animatedScale = rememberPlayarrFocusScale(
         focused = focused,
         focusedScale = FocusMotion.cardFocusScale,
         label = "playarrCardFocus",
     )
+    // Web touch layouts no longer raise the autofocused card (#90): a phone card is never lifted or scaled.
+    val scale = if (webPhone) 1f else animatedScale
     val stackNear = WebInk.copy(alpha = 0.26f)
     val stackFar = WebInk.copy(alpha = 0.14f)
     Column(
         modifier = modifier
             .width(width)
-            .scale(scale)
+            .then(
+                if (webPhone) {
+                    Modifier.graphicsLayer { scaleX = scale; scaleY = scale; translationY = 0f }
+                } else {
+                    Modifier.scale(scale)
+                },
+            )
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
             .combinedClickable(
                 onClick = { onSelected(); onClick() },
                 onLongClick = onContext,
             ),
     ) {
-        Box(
-            Modifier.fillMaxWidth()
+        WebShadowedBox(
+            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else emptyList(),
+            shape = RoundedCornerShape(if (webPhone) 8.dp else 10.dp),
+            modifier = Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
                 .then(
                     if (stackCount > 1) {
@@ -2798,11 +2887,13 @@ private fun ExperienceLandscapeCard(
                         Modifier
                     },
                 )
-                .clip(RoundedCornerShape(10.dp)).background(WebSurfaceSoft)
-                .then(if (focused || selected) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
+                ,
+            innerModifier = Modifier.background(if (webSearch) WebSurfaceStrong else WebSurfaceSoft)
+                .then(if (!webPhone && (focused || selected)) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
         ) {
             AuthenticatedArtwork(
                 work = work,
+                placeholderSize = if (webPhone) (if (webHome) 9.28.sp else if (webSearch) 8.96.sp else 10.88.sp) else 12.sp,
                 kinds = if (homeView == PlayarrHomeViewPreference.Cover) {
                     listOf(ImageKind.Poster, ImageKind.Backdrop)
                 } else {
@@ -2828,7 +2919,7 @@ private fun ExperienceLandscapeCard(
                 }
             }
             if (showUnwatched && stackCount <= 1 && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
-                PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
+                PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(if (webPhone) 7.dp else 8.dp), size = if (webPhone) 9.dp else 12.dp)
             }
             if (stackCount > 1) {
                 Text(
@@ -2844,8 +2935,38 @@ private fun ExperienceLandscapeCard(
                 )
             }
         }
+        if (webPhone && webHome) {
+            Text(
+                displayTitle, color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight(630),
+                style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 9.4.dp),
+            )
+            Text(
+                resolvedSubtitle, color = WebInkMuted, fontSize = 9.92.sp, lineHeight = 14.88.sp,
+                style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.5.dp),
+            )
+        } else if (webPhone && webSearch) {
+            Text(
+                displayTitle, color = WebInk, fontSize = 12.16.sp, lineHeight = 18.24.sp, fontWeight = FontWeight(650),
+                style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 1.6.dp, top = 10.9.dp),
+            )
+            Text(
+                resolvedSubtitle.uppercase(LocalPlayarrLanguage.current.locale), color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, fontWeight = FontWeight(720),
+                style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 1.6.dp, top = 1.9.dp),
+            )
+        } else if (webPhone) {
+            Text(
+                displayTitle, color = WebInk, fontSize = 8.8.sp, lineHeight = 13.2.sp, fontWeight = FontWeight(610),
+                letterSpacing = (-0.132).sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 1.9.dp, top = 11.5.dp),
+            )
+        } else {
         Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
         Text(resolvedSubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -2853,11 +2974,11 @@ private fun ExperienceLandscapeCard(
 private val UnwatchedDotColour = Color(0xFFCF3157)
 
 @Composable
-private fun PlayarrUnwatchedDot(modifier: Modifier = Modifier) {
+private fun PlayarrUnwatchedDot(modifier: Modifier = Modifier, size: Dp = 12.dp) {
     val label = playarrString(PlayarrString.WatchStateUnwatched)
     Box(
         modifier
-            .size(12.dp)
+            .size(size)
             .background(UnwatchedDotColour, CircleShape)
             .border(2.dp, Color.White.copy(alpha = 0.94f), CircleShape)
             .semantics { contentDescription = label },
@@ -2885,14 +3006,15 @@ private fun LibraryResults(
         LibraryArtworkSize.Medium -> if (isTelevision) 190.dp else 164.dp
         LibraryArtworkSize.Large -> if (isTelevision) 250.dp else 206.dp
     }
-    val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 28.dp, bottom = 104.dp)
+    // Web phone: first row 20 px under the 38 px header, which starts 2 px under the status bar inset.
+    val padding = PaddingValues(start = if (isTelevision) 32.dp else 16.dp, end = if (isTelevision) 82.dp else 16.dp, top = if (isTelevision) 18.dp else 60.dp, bottom = 104.dp)
     when (viewMode) {
         LibraryViewMode.Screen -> LazyVerticalGrid(
-            columns = fixedColumns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(landscapeWidth),
+            columns = fixedColumns?.let { GridCells.Fixed(it) } ?: if (isTelevision) GridCells.Adaptive(landscapeWidth) else GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
             contentPadding = padding,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 14.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 24.dp),
         ) {
             items(works, key = Work::id) { work ->
                 ExperienceLandscapeCard(
@@ -2907,6 +3029,7 @@ private fun LibraryResults(
                     progress = progressByWork[work.id],
                     onContext = { onContext(work) },
                     showUnwatched = progressLoaded,
+                    webPhone = !isTelevision,
                 )
             }
         }
@@ -3231,6 +3354,11 @@ private fun ExperienceLibraryScreen(
             ) {
             Box(modifier = Modifier.fillMaxSize().background(WebSurface)) {
         HeroBackdropStack {
+                if (!isTelevision) {
+                    PhoneKeyArt(selected, serverUrl, accessToken, Modifier.fillMaxSize())
+                    PhoneStageWash(Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(phonePanelBrush()))
+                } else {
                 AuthenticatedArtwork(
                     work = selected,
                     kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
@@ -3241,6 +3369,7 @@ private fun ExperienceLibraryScreen(
                     heroStyle = true,
                 )
                 Box(Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)))
+                }
         }
                 if (isTelevision) {
                     Box(Modifier.fillMaxWidth(0.35f).fillMaxHeight().padding(start = 154.dp, top = 259.dp, end = 26.dp), contentAlignment = Alignment.TopStart) { FeatureCopy(selected, true) }
@@ -3250,9 +3379,9 @@ private fun ExperienceLibraryScreen(
                         .then(if (isTelevision) Modifier.fillMaxWidth(0.65f).fillMaxHeight().align(Alignment.CenterEnd) else Modifier.fillMaxSize())
                         .background(if (isTelevision) webRailSurfaceBrush() else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
                         .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
-                        .padding(top = if (isTelevision) 76.dp else 18.dp),
+                        .padding(top = if (isTelevision) 76.dp else 0.dp),
                 ) {
-                    Spacer(Modifier.height(if (isTelevision) 64.dp else 54.dp))
+                    Spacer(Modifier.height(if (isTelevision) 64.dp else 0.dp))
 if (filteredWorks.isEmpty() && matchingIds != null) {
                         Text(
                             playarrString(PlayarrString.LibraryNoMatches),
@@ -3366,8 +3495,6 @@ private fun ExperienceSearchScreen(
     var mediaFilter by remember { mutableStateOf(PlayarrSearchMediaType.All) }
     var libraryId by remember { mutableStateOf<String?>(null) }
     var filtersOpen by remember { mutableStateOf(false) }
-    // Up from Filters must land on the search field, not the page Back button (same as the web TV page).
-    val searchFieldFocus = remember { FocusRequester() }
     var contextWork by remember { mutableStateOf<Work?>(null) }
     var selectedResultKey by remember { mutableStateOf<String?>(null) }
     val visibleMediaTypes = remember(availableKinds) {
@@ -3407,10 +3534,96 @@ private fun ExperienceSearchScreen(
     }
     PlayarrPageScaffold(
         title = playarrString(PlayarrString.SearchTitle),
-        subtitle = resultStatus,
+        subtitle = if (isTelevision) resultStatus else null,
         onBack = { navController.openExperienceTopLevel("home") },
         isTelevision = isTelevision,
+        padBody = isTelevision,
+        largeTitle = true,
     ) {
+        val filterPanel: @Composable () -> Unit = {
+            if (filtersOpen) {
+                Text(playarrString(PlayarrString.SearchType), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(visibleMediaTypes, key = PlayarrSearchMediaType::value) { type ->
+                        PlayarrButton(
+                            onClick = {
+                                mediaFilter = type
+                                if (type == PlayarrSearchMediaType.Playlist) libraryId = null
+                                submitSearch(debounce = false)
+                            },
+                            enabled = mediaFilter != type,
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            variant = PlayarrButtonVariant.Secondary,
+                        ) { Text(playarrString(type.label), fontSize = 10.sp) }
+                    }
+                }
+                Text(playarrString(PlayarrString.SearchLibrary), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    item {
+                        PlayarrButton(
+                            onClick = {
+                                libraryId = null
+                                submitSearch(debounce = false)
+                            },
+                            enabled = libraryId != null,
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            variant = PlayarrButtonVariant.Secondary,
+                        ) { Text(playarrString(PlayarrString.SearchAll), fontSize = 10.sp) }
+                    }
+                    items(views, key = ViewSummary::id) { view ->
+                        PlayarrButton(
+                            onClick = {
+                                libraryId = view.id
+                                if (mediaFilter == PlayarrSearchMediaType.Playlist) {
+                                    mediaFilter = PlayarrSearchMediaType.All
+                                }
+                                submitSearch(debounce = false)
+                            },
+                            enabled = libraryId != view.id,
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            variant = PlayarrButtonVariant.Secondary,
+                        ) { Text(view.name, fontSize = 10.sp) }
+                    }
+                }
+            }
+        }
+        if (!isTelevision) {
+            PhoneSearchContent(
+                query = query,
+                onQueryChange = { query = it; viewModel.search(it, mediaFilter, libraryId, debounce = true) },
+                onSubmit = { submitSearch(debounce = false) },
+                filterSummary = playarrString(mediaFilter.label) + playarrString(
+                    PlayarrString.SearchLibraryFilter,
+                    "library" to (activeLibrary?.name ?: playarrString(PlayarrString.SearchAllLibraries)),
+                ),
+                onToggleFilters = { filtersOpen = !filtersOpen },
+                filterPanel = filterPanel,
+                state = state,
+                query_ = query,
+                extrasEligible = extrasEligible,
+                gamesOnly = mediaFilter == PlayarrSearchMediaType.Game,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+                selectedResultKey = selectedResultKey,
+                onSelectResult = { selectedResultKey = it },
+                progressByWork = progressByWork,
+                onOpenWork = { navController.navigate("experience-detail/${it.id}") },
+                onContext = { contextWork = it },
+                onOpenPlaylist = { navController.navigate("playlists/${it.id}") },
+                navController = navController,
+                selectedWork = selectedWork,
+            )
+            return@PlayarrPageScaffold
+        }
         OutlinedTextField(
             value = query,
             onValueChange = {
@@ -3420,7 +3633,6 @@ private fun ExperienceSearchScreen(
             modifier = Modifier
                 .fillMaxWidth(if (isTelevision) 0.58f else 1f)
                 .padding(top = 18.dp)
-                .focusRequester(searchFieldFocus)
                 .playarrSingleLineArrowNavigation(),
             placeholder = { Text(playarrString(PlayarrString.SearchPlaceholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
@@ -3446,9 +3658,7 @@ private fun ExperienceSearchScreen(
         )
         PlayarrButton(
             onClick = { filtersOpen = !filtersOpen },
-            modifier = Modifier
-                .padding(top = 10.dp)
-                .focusProperties { up = searchFieldFocus },
+            modifier = Modifier.padding(top = 10.dp),
             variant = PlayarrButtonVariant.Secondary,
         ) {
             Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -3463,60 +3673,7 @@ private fun ExperienceSearchScreen(
                 )
             }
         }
-        if (filtersOpen) {
-            Text(playarrString(PlayarrString.SearchType), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(visibleMediaTypes, key = PlayarrSearchMediaType::value) { type ->
-                    PlayarrButton(
-                        onClick = {
-                            mediaFilter = type
-                            if (type == PlayarrSearchMediaType.Playlist) libraryId = null
-                            submitSearch(debounce = false)
-                        },
-                        enabled = mediaFilter != type,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        variant = PlayarrButtonVariant.Secondary,
-                    ) { Text(playarrString(type.label), fontSize = 10.sp) }
-                }
-            }
-            Text(playarrString(PlayarrString.SearchLibrary), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                item {
-                    PlayarrButton(
-                        onClick = {
-                            libraryId = null
-                            submitSearch(debounce = false)
-                        },
-                        enabled = libraryId != null,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        variant = PlayarrButtonVariant.Secondary,
-                    ) { Text(playarrString(PlayarrString.SearchAll), fontSize = 10.sp) }
-                }
-                items(views, key = ViewSummary::id) { view ->
-                    PlayarrButton(
-                        onClick = {
-                            libraryId = view.id
-                            if (mediaFilter == PlayarrSearchMediaType.Playlist) {
-                                mediaFilter = PlayarrSearchMediaType.All
-                            }
-                            submitSearch(debounce = false)
-                        },
-                        enabled = libraryId != view.id,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        variant = PlayarrButtonVariant.Secondary,
-                    ) { Text(view.name, fontSize = 10.sp) }
-                }
-            }
-        }
+        filterPanel()
         if (query.isNotBlank() && (selectedWork != null || selectedPlaylist != null)) {
             ExperienceSearchPreview(
                 work = selectedWork,
@@ -3593,6 +3750,159 @@ private fun ExperienceSearchScreen(
             onMark = { watched -> viewModel.markWork(work, watched); contextWork = null },
             canDownload = canDownload,
         )
+    }
+}
+
+
+/** Phone Search laid out to the web mobile `.tv-search` page (390 x 844 CSS px reference). */
+@Composable
+private fun PhoneSearchContent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    filterSummary: String,
+    onToggleFilters: () -> Unit,
+    filterPanel: @Composable () -> Unit,
+    state: ExperienceLoad<PlayarrSearchResults>,
+    query_: String,
+    extrasEligible: Boolean,
+    gamesOnly: Boolean,
+    serverUrl: String,
+    accessToken: String?,
+    selectedResultKey: String?,
+    onSelectResult: (String) -> Unit,
+    progressByWork: Map<String, WatchProgress>,
+    onOpenWork: (Work) -> Unit,
+    onContext: (Work) -> Unit,
+    onOpenPlaylist: (Playlist) -> Unit,
+    navController: NavHostController,
+    selectedWork: Work?,
+) {
+    Box(Modifier.fillMaxSize().background(WebSurface)) {
+        HeroBackdropStack {
+            PhoneKeyArt(selectedWork, serverUrl, accessToken, Modifier.fillMaxSize())
+            PhoneStageWash(Modifier.fillMaxSize())
+            Box(Modifier.padding(top = 320.7.dp).fillMaxSize().background(phonePanelBrush(fadeFraction = 0.1f)))
+        }
+        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+            Spacer(Modifier.height(76.dp))
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                val pillShape = CircleShape
+                Row(
+                    Modifier.fillMaxWidth().height(50.dp)
+                        .background(WebSurfaceStrong.copy(alpha = 0.88f), pillShape)
+                        .border(1.dp, WebSearchBorder, pillShape)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(PlayarrWebIcons.Search, contentDescription = null, tint = WebInkMuted, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 16.sp, lineHeight = 24.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (query.isEmpty()) {
+                                    Text(playarrString(PlayarrString.SearchPlaceholder), color = WebInkMuted, fontSize = 16.sp, lineHeight = 24.sp, maxLines = 1)
+                                }
+                                inner()
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+                ) {
+                    Surface(
+                        onClick = onToggleFilters,
+                        shape = CircleShape,
+                        color = WebSurfaceStrong.copy(alpha = 0.78f),
+                        contentColor = WebInk,
+                    ) {
+                        Row(
+                            Modifier.height(42.dp).padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.4.dp),
+                        ) {
+                            Icon(PlayarrWebIcons.FilterToggle, contentDescription = null, tint = WebPink, modifier = Modifier.size(18.4.dp))
+                            Text(playarrString(PlayarrString.SearchFilters), fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight(760), style = WebTextStyle, maxLines = 1)
+                            Text(filterSummary, color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, style = WebTextStyle, maxLines = 1)
+                        }
+                    }
+                }
+                filterPanel()
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (val current = state) {
+                    ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
+                    is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
+                    is ExperienceLoad.Ready -> if (query_.isBlank()) {
+                        ExperienceEmpty(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
+                    } else if (gamesOnly) {
+                        DiscoveryExtrasSection(
+                            query = query_.trim(),
+                            gamesOnly = true,
+                            navController = navController,
+                            modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 22.dp),
+                            webPhone = true,
+                        )
+                    } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
+                        ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(24.dp),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 148.7.dp, bottom = 104.dp),
+                        ) {
+                            items(current.value.works, key = { "work:${it.id}" }) { work ->
+                                ExperienceLandscapeCard(
+                                    work, serverUrl, accessToken,
+                                    width = 173.dp,
+                                    // Web search marks no result until one is focused; a touch search types and taps.
+                                    selected = false,
+                                    progress = progressByWork[work.id],
+                                    onSelected = { onSelectResult("work:${work.id}") },
+                                    onClick = { onOpenWork(work) },
+                                    onContext = { onContext(work) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    showUnwatched = true,
+                                    webPhone = true,
+                                    webSearch = true,
+                                )
+                            }
+                            items(current.value.playlists, key = { "playlist:${it.id}" }) { playlist ->
+                                PlaylistCard(
+                                    playlist = playlist,
+                                    onClick = { onOpenPlaylist(playlist) },
+                                    selected = selectedResultKey == "playlist:${playlist.id}",
+                                    onSelected = { onSelectResult("playlist:${playlist.id}") },
+                                )
+                            }
+                            if (extrasEligible) {
+                                item(span = { GridItemSpan(maxLineSpan) }, key = "discovery-extras") {
+                                    DiscoveryExtrasSection(
+                                        query = query_.trim(),
+                                        gamesOnly = false,
+                                        navController = navController,
+                                        modifier = Modifier.padding(top = 0.dp).graphicsLayer { translationY = -4.dp.toPx() },
+                                        webPhone = true,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -4113,7 +4423,8 @@ private fun ExperienceDetailScreen(
             var pendingDownloadCandidates by remember(detail.work.id) { mutableStateOf<List<DownloadCandidate>?>(null) }
             PlayarrPageScaffold(
                 title = detail.work.kind.playarrPluralLabel(),
-                subtitle = detail.work.title,
+                subtitle = if (isTelevision) detail.work.title else null,
+                largeTitle = true,
                 onBack = onBack,
                 isTelevision = isTelevision,
                 padBody = false,
@@ -4424,6 +4735,11 @@ private fun ExperienceVideoDetailContent(
 
     Box(Modifier.fillMaxSize().background(WebSurface)) {
         HeroBackdropStack {
+        if (!isTelevision) {
+            // Web `.tv-detail`: key art 58% of the viewport tall (490 px), wash 72% (608 px).
+            PhoneKeyArt(detail.work, serverUrl, accessToken, Modifier.fillMaxWidth().height(489.5.dp))
+            PhoneStageWash(Modifier.fillMaxWidth().height(607.7.dp))
+        } else {
         AuthenticatedArtwork(
             work = detail.work,
             kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
@@ -4436,6 +4752,7 @@ private fun ExperienceVideoDetailContent(
         Box(
             Modifier.fillMaxSize().background(heroScrimBrush(isTelevision)),
         )
+        }
         }
         ReportDetailSection(detail.work.kind)
 
@@ -4514,75 +4831,34 @@ private fun ExperienceVideoDetailContent(
                 )
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 245.dp, bottom = 112.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
-                item {
-                    VideoDetailCopy(
-                        detail.work,
-                        selectedSeason?.season?.seasonNumber,
-                        selectedEpisode,
-                        activeProgress,
-                        movieMetadata?.durationMs,
-                        false,
-                    )
-                }
-                availabilityLag?.let { lag -> item { PlayarrAvailabilityLagLine(lag) } }
-                item {
-                    VideoDetailActions(
-                        work = detail.work,
-                        episode = selectedEpisode,
-                        mediaFileId = mediaFileId,
-                        progress = activeProgress,
-                        canDownload = canDownload,
-                        posterUrl = posterUrl,
-                        onPlay = onPlay,
-                        launchSettings = movieLaunchSettings,
-                        onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
-                        onAddToPlaylist = onAddToPlaylist,
-                        onDownload = onDownload,
-                        resumePlan = resumePlan,
-                        onResumeChoice = onResumeChoice,
-                    )
-                }
-                if (series != null) {
-                    item {
-                        SeriesEpisodeBrowser(
-                            seasons = playableSeasons,
-                            selectedEpisodeId = selectedEpisode?.episode?.id,
-                            work = detail.work,
-                            progressByMedia = progressByMedia,
-                            serverUrl = serverUrl,
-                            accessToken = accessToken,
-                            isTelevision = false,
-                            canDownload = canDownload,
-                            onSelect = ::selectEpisode,
-                            onPlay = { mediaFileId -> onPlay(mediaFileId, null, null) },
-                            onDownload = onDownload,
-                            credits = credits,
-                            similarWorks = similarWorks,
-                            onOpenWork = onOpenWork,
-                        )
-                    }
-                } else if (mediaFileId != null) {
-                    item {
-                        MovieDetailBrowser(
-                            mediaFileId = mediaFileId,
-                            chapters = playarrDisplayedMovieChapters(movieChapters, movieMetadata?.durationMs ?: 0L),
-                            credits = credits,
-                            similarWorks = similarWorks,
-                            serverUrl = serverUrl,
-                            accessToken = accessToken,
-                            isTelevision = false,
-                            launchSettings = movieLaunchSettings,
-                            onPlay = onPlay,
-                            onOpenWork = onOpenWork,
-                        )
-                    }
-                }
-            }
+            PhoneVideoDetailBody(
+                detail = detail,
+                series = series,
+                seasons = playableSeasons,
+                selectedSeason = selectedSeason,
+                selectedEpisode = selectedEpisode,
+                mediaFileId = mediaFileId,
+                progress = activeProgress,
+                progressByMedia = progressByMedia,
+                movieRuntimeMs = movieMetadata?.durationMs,
+                chapters = playarrDisplayedMovieChapters(movieChapters, movieMetadata?.durationMs ?: 0L),
+                credits = credits,
+                similarWorks = similarWorks,
+                availabilityLag = availabilityLag,
+                resumePlan = resumePlan,
+                onResumeChoice = onResumeChoice,
+                canDownload = canDownload,
+                posterUrl = posterUrl,
+                launchSettings = movieLaunchSettings,
+                onPlaybackSettings = moviePlaybackOptions?.let { { playbackSettingsOpen = true } },
+                onPlay = onPlay,
+                onAddToPlaylist = onAddToPlaylist,
+                onDownload = onDownload,
+                onOpenWork = onOpenWork,
+                onSelectEpisode = ::selectEpisode,
+                serverUrl = serverUrl,
+                accessToken = accessToken,
+            )
         }
     }
     if (playbackSettingsOpen && mediaFileId != null && moviePlaybackOptions != null) {
@@ -4594,6 +4870,316 @@ private fun ExperienceVideoDetailContent(
                 playbackSettingsOpen = false
             },
         )
+    }
+}
+
+/** Web phone `.tv-detail` page: copy, action pills and the chapter or season rails, positioned as the web lays them out. */
+@Composable
+private fun PhoneVideoDetailBody(
+    detail: WorkDetail,
+    series: WorkChildren.Series?,
+    seasons: List<SeasonDetail>,
+    selectedSeason: SeasonDetail?,
+    selectedEpisode: EpisodeDetail?,
+    mediaFileId: String?,
+    progress: WatchProgress?,
+    progressByMedia: Map<String, WatchProgress>,
+    movieRuntimeMs: Long?,
+    chapters: List<MediaChapter>,
+    credits: WorkCreditsResponse,
+    similarWorks: List<Work>,
+    availabilityLag: io.playarr.shared.data.model.AvailabilityLag?,
+    resumePlan: io.playarr.shared.data.model.ResumePlan?,
+    onResumeChoice: (io.playarr.shared.data.model.ResumeOption) -> Unit,
+    canDownload: Boolean,
+    posterUrl: String?,
+    launchSettings: PlayarrPlaybackLaunchSettings?,
+    onPlaybackSettings: (() -> Unit)?,
+    onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
+    onAddToPlaylist: (String?) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+    onOpenWork: (String) -> Unit,
+    onSelectEpisode: (EpisodeDetail, Int) -> Unit,
+    serverUrl: String,
+    accessToken: String?,
+) {
+    val work = detail.work
+    val language = LocalPlayarrLanguage.current
+    val episode = selectedEpisode?.episode
+    val seasonNumber = selectedSeason?.season?.seasonNumber
+    val episodeCode = episode?.let { "S${(seasonNumber ?: 0).toString().padStart(2, '0')} · E${it.episodeNumber.toString().padStart(2, '0')}" }
+    val dateFormat = remember(language) { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale) }
+    val metaItems = buildList {
+        if (episode != null) {
+            add(playarrString(PlayarrString.DetailSeasonNumber, "number" to (seasonNumber ?: 0)))
+            add(episodeCode.orEmpty())
+            episode.runtimeMinutes?.let { add(playarrString(PlayarrString.DetailRuntimeMinutes, "minutes" to it)) }
+        } else {
+            add(playarrString(PlayarrString.DetailKindMovie))
+            if (movieRuntimeMs != null && movieRuntimeMs > 0L) add(formatPlayarrVideoRuntime(movieRuntimeMs, language))
+        }
+        work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year?.let { add(it.toString()) }
+        if (episode != null) {
+            episode.airDate?.let { add(playarrString(PlayarrString.DetailAired, "date" to dateFormat.format(it))) }
+        } else {
+            work.releaseDate?.let { add(playarrString(PlayarrString.DetailReleased, "date" to dateFormat.format(it.atZone(java.time.ZoneOffset.UTC)))) }
+        }
+        addAll(work.genres.take(3))
+    }.filter(String::isNotBlank)
+    val synopsis = episode?.overview?.takeIf(String::isNotBlank)
+        ?: work.overview?.takeIf(String::isNotBlank)
+        ?: playarrString(if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        // Web: the copy block starts 375 px down (kicker top) and the page scrolls under the fixed key art.
+        contentPadding = PaddingValues(top = 375.dp, bottom = 112.dp),
+    ) {
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    (episodeCode ?: work.genres.firstOrNull() ?: work.kind.playarrSingularLabel()).uppercase(language.locale),
+                    color = WebKicker, fontSize = 10.56.sp, lineHeight = 15.84.sp, fontWeight = FontWeight(820), letterSpacing = 0.8448.sp, style = WebTextStyle,
+                )
+                Spacer(Modifier.height(10.dp))
+                // The 36.66 px line box is shorter than the 39 px glyphs: CSS lets them overflow upwards, while Compose grows
+                // the box to the font height, so pin the height and lift the text the way CSS centres it.
+                Box(Modifier.height(36.66.dp).wrapContentHeight(align = Alignment.Top, unbounded = true)) {
+                    Text(
+                        work.title, color = WebInk, fontSize = 39.sp, lineHeight = 36.66.sp, fontWeight = FontWeight(560), letterSpacing = (-2.808).sp,
+                        style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer { translationY = -5.3.dp.toPx() },
+                    )
+                }
+                if (episode != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        episode.title ?: playarrString(PlayarrString.DetailEpisodeNumber, "number" to episode.episodeNumber),
+                        color = WebInkSoft, fontSize = 14.4.sp, lineHeight = 16.56.sp, fontWeight = FontWeight(570), letterSpacing = (-0.504).sp,
+                        style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.graphicsLayer { translationY = -1.7.dp.toPx() },
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    metaItems.forEachIndexed { index, item ->
+                        Text(
+                            item, color = if (index == 0) WebInkSoft else WebInkMuted, fontSize = 10.24.sp, lineHeight = 15.36.sp,
+                            fontWeight = if (index == 0) FontWeight(680) else FontWeight.Normal, style = WebTextStyle, maxLines = 1,
+                        )
+                    }
+                }
+                if (series != null && availabilityLag != null) {
+                    Spacer(Modifier.height(5.2.dp))
+                    Text(
+                        if (availabilityLag.averageSeconds != null) {
+                            playarrString(PlayarrString.AvailabilityLagUsually, "duration" to calendarLagText(availabilityLag.averageSeconds!!))
+                        } else {
+                            playarrString(PlayarrString.AvailabilityLagNone)
+                        },
+                        color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(640), style = WebTextStyle,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                } else {
+                    Spacer(Modifier.height(10.dp))
+                }
+                Text(synopsis, color = WebInkMuted, fontSize = 11.52.sp, lineHeight = 16.704.sp, style = WebTextStyle, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(14.dp))
+                PhoneDetailActions(
+                    work = work, episode = selectedEpisode, mediaFileId = mediaFileId, progress = progress, canDownload = canDownload,
+                    posterUrl = posterUrl, launchSettings = launchSettings, onPlaybackSettings = onPlaybackSettings, onPlay = onPlay,
+                    onAddToPlaylist = onAddToPlaylist, onDownload = onDownload, resumePlan = resumePlan, onResumeChoice = onResumeChoice,
+                )
+            }
+        }
+        item {
+            Column(
+                Modifier.padding(top = 28.dp).fillMaxWidth().then(if (webIsDark) Modifier.background(webRailSurfaceBrush()) else Modifier),
+            ) {
+                if (series != null) {
+                    seasons.forEach { season ->
+                        PhoneDetailRail(
+                            title = season.season.title ?: playarrString(PlayarrString.DetailSeasonNumber, "number" to season.season.seasonNumber),
+                            subtitle = playarrString(PlayarrString.DetailEpisodeCount, "count" to season.episodes.size),
+                        ) {
+                            items(season.episodes, key = { it.episode.id }) { ep ->
+                                EpisodeDetailCard(
+                                    episode = ep,
+                                    seasonNumber = season.season.seasonNumber,
+                                    work = work,
+                                    progress = ep.mediaFileId?.let(progressByMedia::get),
+                                    serverUrl = serverUrl,
+                                    accessToken = accessToken,
+                                    selected = ep.episode.id == selectedEpisode?.episode?.id,
+                                    isTelevision = false,
+                                    onSelect = { onSelectEpisode(ep, season.season.seasonNumber) },
+                                    onPlay = {
+                                        onSelectEpisode(ep, season.season.seasonNumber)
+                                        ep.mediaFileId?.let { onPlay(it, null, null) }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else if (mediaFileId != null && chapters.isNotEmpty()) {
+                    PhoneDetailRail(
+                        title = playarrString(PlayarrString.DetailChapters),
+                        subtitle = playarrString(PlayarrString.DetailSceneMarkersCount, "count" to chapters.size),
+                    ) {
+                        items(chapters, key = MediaChapter::index) { chapter ->
+                            PhoneChapterCard(chapter, mediaFileId, serverUrl, accessToken) { onPlay(mediaFileId, chapter.startMs, launchSettings) }
+                        }
+                    }
+                }
+                if (credits.cast.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) { DetailCreditsRail(credits.cast) }
+                if (similarWorks.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) { SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork) }
+            }
+        }
+    }
+}
+
+/** Web phone rail heading (24 px title, 10.56 px count) above a row of 179.4 px cards 12 px apart. */
+@Composable
+private fun PhoneDetailRail(title: String, subtitle: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 21.3.dp, bottom = 20.dp)) {
+        Text(
+            title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(610), letterSpacing = (-0.48).sp,
+            style = WebTextStyle, maxLines = 1, modifier = Modifier.padding(start = 16.dp),
+        )
+        Text(
+            subtitle, color = WebInkMuted, fontSize = 10.56.sp, lineHeight = 15.84.sp, style = WebTextStyle, maxLines = 1,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun PhoneChapterCard(chapter: MediaChapter, mediaFileId: String, serverUrl: String, accessToken: String?, onClick: () -> Unit) {
+    Column(Modifier.width(179.4.dp).clickable(onClick = onClick)) {
+        PhoneEpisodeArt(
+            badge = {
+                Text(
+                    (chapter.index + 1).toString().padStart(2, '0'), color = Color.White, fontSize = 12.8.sp, lineHeight = 19.2.sp,
+                    fontWeight = FontWeight(560), style = WebTextStyle, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 11.5.dp, bottom = 8.7.dp),
+                )
+            },
+        ) {
+            AuthenticatedMediaThumbnail(
+                mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                positionMs = chapter.startMs,
+                fallbackLabel = chapter.title ?: playarrString(PlayarrString.DetailChapterNumber, "number" to chapter.index + 1),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Row(Modifier.padding(top = 11.5.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.8.dp)) {
+            Text(formatPlayarrPlayerTime(chapter.startMs), color = WebInkMuted, fontSize = 9.92.sp, lineHeight = 14.88.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            Text(
+                chapter.title ?: playarrString(PlayarrString.DetailChapterNumber, "number" to chapter.index + 1),
+                color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight(610), letterSpacing = (-0.1872).sp,
+                style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Web phone detail actions: Download, Playback and Play pills (a film) or Start and watchlist (a series). */
+@Composable
+private fun PhoneDetailActions(
+    work: Work,
+    episode: EpisodeDetail?,
+    mediaFileId: String?,
+    progress: WatchProgress?,
+    canDownload: Boolean,
+    posterUrl: String?,
+    launchSettings: PlayarrPlaybackLaunchSettings?,
+    onPlaybackSettings: (() -> Unit)?,
+    onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
+    onAddToPlaylist: (String?) -> Unit,
+    onDownload: (List<DownloadCandidate>) -> Unit,
+    resumePlan: io.playarr.shared.data.model.ResumePlan?,
+    onResumeChoice: (io.playarr.shared.data.model.ResumeOption) -> Unit,
+) {
+    if (mediaFileId == null) {
+        Text(playarrString(PlayarrString.DetailNoPlayableMedia), color = WebInkMuted)
+        return
+    }
+    val title = episode?.episode?.title
+        ?: episode?.let { playarrString(PlayarrString.DetailEpisodeNumber, "number" to it.episode.episodeNumber) }
+        ?: work.title
+    val smartPlan = resumePlan?.takeIf { work.kind == WorkKind.Series && it.target != null }
+    var chooserOpen by remember(work.id) { mutableStateOf(false) }
+    if (smartPlan != null && chooserOpen) {
+        PlayarrResumeChooserDialog(
+            plan = smartPlan, seriesTitle = work.title, onDismiss = { chooserOpen = false },
+            onSelect = { option -> chooserOpen = false; onResumeChoice(option); onPlay(option.mediaFileId, null, null) },
+        )
+    }
+    val playLabel = when {
+        smartPlan != null -> playarrString(smartPlan.buttonLabel())
+        progress?.state == WatchState.PartWatched -> playarrString(PlayarrString.DetailResumeFrom, "position" to formatPlayarrPlayerTime(progress.positionMs))
+        else -> playarrString(PlayarrString.DetailPlay)
+    }
+    val onPlayClick = {
+        val target = smartPlan?.target
+        when {
+            smartPlan != null && smartPlan.isStacked -> chooserOpen = true
+            target != null -> onPlay(target.mediaFileId, null, null)
+            else -> onPlay(mediaFileId, null, launchSettings)
+        }
+    }
+    val downloadCandidate = DownloadCandidate(mediaFileId, work.id, title, work.title, posterUrl, if (episode == null) "movie" else "episode")
+    val pillColor = WebSurfaceStrong.copy(alpha = 0.72f)
+    val series = episode != null
+    if (series) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Series: the primary Start pill grows to fill the row, the watchlist pill follows.
+            PhonePill(
+                onClick = onPlayClick, container = WebInk, fill = true,
+                shadow = WebShadow(18.dp, 46.dp, Color(0xFF382621).copy(alpha = 0.18f)),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("▶", color = WebBackground, fontSize = 9.52.sp, lineHeight = 14.28.sp, style = WebTextStyle)
+                Spacer(Modifier.width(10.dp))
+                Text(playLabel, color = WebBackground, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            }
+            WatchlistToggleButton(work, webPhone = true)
+        }
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        run {
+            if (canDownload) {
+                PhonePill(onClick = { onDownload(listOf(downloadCandidate)) }, container = pillColor, width = 104.dp) {
+                    Text("⇩", color = WebKicker, fontSize = 9.2.sp, lineHeight = 13.8.sp, style = WebTextStyle)
+                    Spacer(Modifier.width(10.dp))
+                    Text(playarrString(PlayarrString.DetailDownloadButton), color = WebInk, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+                }
+            }
+            onPlaybackSettings?.let { open ->
+                PhonePill(onClick = open, container = pillColor, width = 119.dp) {
+                    Text("☷", color = WebKicker, fontSize = 12.88.sp, lineHeight = 19.32.sp, style = WebTextStyle)
+                    Spacer(Modifier.width(10.dp))
+                    Text(playarrString(PlayarrString.DetailPlayback), color = WebInk, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+                }
+            }
+            PhonePill(
+                onClick = onPlayClick, container = WebKicker, width = 119.dp,
+                shadow = WebShadow(18.dp, 46.dp, Color(0xFF382621).copy(alpha = 0.18f)),
+                // The film's Play pill is drawn at 1.06x (web `.tv-detail-play`).
+                modifier = Modifier.graphicsLayer { scaleX = 1.06f; scaleY = 1.06f },
+            ) {
+                Text("▶", color = Color.White, fontSize = 9.52.sp, lineHeight = 14.28.sp, style = WebTextStyle)
+                Spacer(Modifier.width(10.dp))
+                Text(playLabel, color = Color.White, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            }
+            WatchlistToggleButton(work, webPhone = true)
+        }
     }
 }
 
@@ -5040,6 +5626,10 @@ private fun EpisodeDetailCard(
     onSelect: () -> Unit,
     onPlay: () -> Unit,
 ) {
+    if (!isTelevision) {
+        PhoneEpisodeCard(episode, seasonNumber, work, progress, serverUrl, accessToken, onSelect, onPlay)
+        return
+    }
     var focused by remember(episode.episode.id) { mutableStateOf(false) }
     val available = episode.mediaFileId != null
     val episodeScale = rememberPlayarrFocusScale(
@@ -5047,23 +5637,22 @@ private fun EpisodeDetailCard(
         focusedScale = FocusMotion.tileFocusScale,
         label = "episodeFocus",
     )
-    Column(Modifier.width(if (isTelevision) 268.dp else 184.dp)) {
+    Column(Modifier.width(if (isTelevision) 268.dp else 179.4.dp)) {
         Surface(
             onClick = onPlay,
             enabled = available,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .scale(episodeScale)
+                .scale(if (isTelevision) episodeScale else 1f)
                 .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
                 .then(
                     when {
                         isTelevision && focused -> Modifier.border(2.dp, WebInk.copy(alpha = 0.92f), RoundedCornerShape(10.dp))
-                        !isTelevision && selected -> Modifier.border(2.dp, WebPink, RoundedCornerShape(10.dp))
                         else -> Modifier
                     },
                 ),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(if (isTelevision) 10.dp else 8.dp),
             color = WebSurfaceSoft,
         ) {
             Box {
@@ -5110,12 +5699,11 @@ private fun EpisodeDetailCard(
                         modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 8.dp),
                     )
                 } else {
+                    // Web phone `.tv-episode-art strong`: the episode number bottom-right.
                     Text(
-                        "S${seasonNumber.toString().padStart(2, '0')} · E${episode.episode.episodeNumber.toString().padStart(2, '0')}",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+                        episode.episode.episodeNumber.toString().padStart(2, '0'),
+                        color = Color.White, fontSize = 12.8.sp, lineHeight = 19.2.sp, fontWeight = FontWeight(560), style = WebTextStyle,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 11.5.dp, bottom = 8.7.dp),
                     )
                 }
                 progress?.takeIf { it.state != WatchState.Unseen }?.let {
@@ -5124,7 +5712,7 @@ private fun EpisodeDetailCard(
                     }
                 }
                 if (available && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
-                    PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
+                    PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(if (isTelevision) 8.dp else 7.dp), size = if (isTelevision) 12.dp else 9.dp)
                 }
             }
         }
@@ -5149,25 +5737,80 @@ private fun EpisodeDetailCard(
             }
             if (!available) Text(playarrString(PlayarrString.DetailUnavailable), color = WebInkMuted, fontSize = 10.sp)
         } else {
-            Text(
-                title,
-                color = if (available) WebInk else WebInkMuted,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp),
+            // Web phone `.tv-episode-copy`: muted code and title on one baseline, 11.5 px under the art.
+            Row(Modifier.padding(top = 11.5.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.8.dp)) {
+                Text(code, color = WebInkMuted, fontSize = 9.92.sp, lineHeight = 14.88.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+                Text(
+                    title, color = if (available) WebInk else WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp,
+                    fontWeight = FontWeight(610), letterSpacing = (-0.1872).sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!available) Text(playarrString(PlayarrString.DetailUnavailable), color = WebInkMuted, fontSize = 10.sp)
+        }
+    }
+}
+
+/** Web phone `.tv-episode-card`: 179.4 px wide art tile with the episode number, then code and title on one baseline. */
+@Composable
+private fun PhoneEpisodeCard(
+    episode: EpisodeDetail,
+    seasonNumber: Int,
+    work: Work,
+    progress: WatchProgress?,
+    serverUrl: String,
+    accessToken: String?,
+    onSelect: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    val available = episode.mediaFileId != null
+    val code = "S${seasonNumber.toString().padStart(2, '0')} · E${episode.episode.episodeNumber.toString().padStart(2, '0')}"
+    val title = episode.episode.title ?: playarrString(PlayarrString.DetailEpisodeNumber, "number" to episode.episode.episodeNumber)
+    Column(Modifier.width(179.4.dp).clickable(enabled = available) { onSelect(); onPlay() }) {
+        PhoneEpisodeArt(
+            badge = {
+                Text(
+                    episode.episode.episodeNumber.toString().padStart(2, '0'),
+                    color = Color.White, fontSize = 12.8.sp, lineHeight = 19.2.sp, fontWeight = FontWeight(560), style = WebTextStyle,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 11.5.dp, bottom = 8.7.dp),
+                )
+                progress?.takeIf { it.state != WatchState.Unseen }?.let {
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
+                        Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                    }
+                }
+                if (available && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
+                    PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(7.dp), size = 9.dp)
+                }
+            },
+        ) {
+            AuthenticatedArtwork(
+                work = work,
+                kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
+                serverUrl = serverUrl, accessToken = accessToken, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                episode.episode.runtimeMinutes?.let {
-                    Text(
-                        playarrString(PlayarrString.DetailRuntimeMinutes, "minutes" to it),
-                        color = WebInkMuted,
-                        fontSize = 10.sp,
+            // Bottom to top: series art, frame thumbnail, the episode's own still; each shows through if the one above fails.
+            episode.mediaFileId?.let { mediaFileId ->
+                AuthenticatedMediaThumbnail(
+                    mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
+                    AuthenticatedMediaThumbnail(
+                        mediaFileId = mediaFileId, serverUrl = serverUrl, accessToken = accessToken, contentDescription = "",
+                        modifier = Modifier.fillMaxSize(),
+                        artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
                     )
                 }
-                if (!available) Text(playarrString(PlayarrString.DetailUnavailable), color = WebInkMuted, fontSize = 10.sp)
             }
         }
+        Row(Modifier.padding(top = 11.5.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.8.dp)) {
+            Text(code, color = WebInkMuted, fontSize = 9.92.sp, lineHeight = 14.88.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            Text(
+                title, color = if (available) WebInk else WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp,
+                fontWeight = FontWeight(610), letterSpacing = (-0.1872).sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (!available) Text(playarrString(PlayarrString.DetailUnavailable), color = WebInkMuted, fontSize = 10.sp)
     }
 }
 
@@ -7322,6 +7965,10 @@ internal fun AuthenticatedArtwork(
     contentScale: ContentScale,
     modifier: Modifier = Modifier,
     heroStyle: Boolean = false,
+    placeholderSize: androidx.compose.ui.unit.TextUnit = 12.sp,
+    /** Overrides the hero opacity (the phone key art is drawn at 0.42 in the light theme). */
+    artAlpha: Float? = null,
+    artAlignment: androidx.compose.ui.Alignment = androidx.compose.ui.Alignment.Center,
 ) {
     val context = LocalContext.current
     val serverAccess = rememberPlayarrWorkServerAccess(work.id, serverUrl, accessToken)
@@ -7339,7 +7986,7 @@ internal fun AuthenticatedArtwork(
     var exposureGain by remember(resolved) { mutableStateOf(1f) }
     if (serverAccess == null || resolved == null) {
         Box(modifier.background(WebSurfaceSoft), contentAlignment = Alignment.Center) {
-            Text(work.title, color = WebInkMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
+            Text(work.title, color = WebInkMuted, fontSize = placeholderSize, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
         }
         return
     }
@@ -7380,8 +8027,9 @@ internal fun AuthenticatedArtwork(
             }
         } else null,
         modifier = modifier,
+        alignment = artAlignment,
         colorFilter = if (heroStyle) heroArtFilter(webIsDark, exposureGain) else null,
-        alpha = if (heroStyle) heroArtOpacity(webIsDark) else 1f,
+        alpha = if (heroStyle) (artAlpha ?: heroArtOpacity(webIsDark)) else 1f,
     )
 }
 
