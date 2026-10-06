@@ -1,0 +1,1 @@
+- Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.
