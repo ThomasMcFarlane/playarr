@@ -68,6 +68,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple parity workflow (`parity-apple.yml`) and tooling under `scripts/parity/apple/`: web reference versus tvOS Simulator captures on the fixture environment, with a pixel diff report; the tvOS app gains a live `-PlayarrParityRoute` launch argument.
+- The older `appletv-parity.yml` fixture-capture workflow is folded into `parity-apple.yml` (the fixture-art workaround for `ffmpeg` builds without `drawtext` is part of the fixtures now).
 - Apple clients: Release Calendar kit (models, client for the calendar and subscription endpoints, window/filter/series-grouping logic) with unit tests.
 - Apple clients: a shared authenticated JSON transport (`PlayarrRequestTransport`) in PlayarrKit for the upcoming parity features, with tests.
 - iOS: new Calendar tab with the shared page header and Filters button, Agenda (master-detail on wide screens), Week and Month views, a Filters sheet and the calendar subscription sheet (QR code, copy, revoke).
@@ -529,6 +531,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the retired Google Play review demo server (`clients/tv-web/apps/play-review-server`), which was shut down on 2026-08-30 and is not deployed, together with its `just` recipes, workspace lockfile entry and README attribution.
 - Removed Postgres and Redis from the Docker Compose files, the Kubernetes base and overlays and the Helm chart: compose runs one server with a SQLite data volume, and the chart deploys a single-replica StatefulSet with a persistent volume (the api/worker split sharing one database is gone). Multi-node deployments use peer sync between SQLite nodes (ADR 0002).
 - Rewrote the README, architecture documents, deployment guides, backup guide and site copy for SQLite-only storage.
 - Postgres storage support is being removed from the server, Helm chart and compose files; a `postgres://` database URL will be rejected at startup. See ADR 0002.

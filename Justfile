@@ -85,14 +85,6 @@ tv-web-build:
 playarr-deploy:
     cd {{tv_web_dir}} && pnpm install --frozen-lockfile && pnpm --filter @playarr-tv/web run deploy:cloudflare
 
-# Validate the isolated Google Play review server without network access.
-play-review-test:
-    cd {{tv_web_dir}}/apps/play-review-server && npm test
-
-# Deploy review.playarr.app through the Cloudflare REST API (never Wrangler).
-play-review-deploy:
-    cd {{tv_web_dir}}/apps/play-review-server && node scripts/deploy-cloudflare-api.mjs
-
 # Build the Chromecast custom web receiver in isolation (see
 # clients/tv-web/apps/cast-receiver/README.md to test it standalone with the
 # Cast Command & Control tool before touching any sender).
