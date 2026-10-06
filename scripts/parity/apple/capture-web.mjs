@@ -63,9 +63,9 @@ for (const s of cfg.screens) {
     const id = await workId(s.web.work.kind, s.web.work.title);
     route = `/${s.web.work.kind === "series" ? "series" : "movies"}/${id}`;
   }
-  await page.goto(base + route, { waitUntil: "networkidle" });
+  await page.goto(base + route, { waitUntil: "load" });
   await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(5000);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
   results.push({ id: s.id, route, url: page.url() });
   console.log(`web ${s.id} -> ${page.url()}`);
