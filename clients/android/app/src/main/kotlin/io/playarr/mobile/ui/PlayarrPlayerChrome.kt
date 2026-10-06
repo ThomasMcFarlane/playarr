@@ -236,13 +236,6 @@ internal fun PlayarrPlayerChrome(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PlayarrPlayerTopButton(
-                    icon = Icons.Outlined.PictureInPictureAlt,
-                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
-                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
-                    isTelevision = isTelevision,
-                    onClick = { showControls(); onMinimise() },
-                )
                 if (onPlayOnDevice != null) {
                     PlayarrPlayerTopButton(
                         icon = Icons.Outlined.Devices,
@@ -291,7 +284,17 @@ internal fun PlayarrPlayerChrome(
         }
 
         AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
-            Box(Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
+            Row(
+                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlayarrPlayerTopButton(
+                    icon = Icons.Outlined.PictureInPictureAlt,
+                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
+                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
+                    isTelevision = isTelevision,
+                    onClick = { showControls(); onMinimise() },
+                )
                 PlayarrPlayerTopButton(
                     icon = Icons.Outlined.Close,
                     label = playarrString(PlayarrString.PlayerCloseLabel),

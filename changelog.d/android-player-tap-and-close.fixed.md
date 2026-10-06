@@ -1,2 +1,2 @@
 - Android player: a tap or D-pad centre/OK press while the controls are hidden now only reveals them instead of pausing; play/pause on that input happens only while the controls are visible. Dedicated media keys still toggle directly.
-- Android player: the top-left back arrow is replaced by an X close button at the top right (content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
+- Android player: the top-left back arrow is replaced by an X close button at the top right (with minimise to its left; content description "Close player", localised in EN, TH and JA), focusable with the D-pad and reachable with D-pad up.
