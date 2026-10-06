@@ -36,17 +36,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'tvos' }}
+  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'ios' }}
   cancel-in-progress: true
 
 env:
-  PLATFORM: ${{ inputs.platform || 'tvos' }}
+  PLATFORM: ${{ inputs.platform || 'ios' }}
   PLAYARR_FIXTURE_PORT: "18484"
   CARGO_PROFILE_DEV_DEBUG: "0"
 
 jobs:
   parity:
-    name: Parity captures (${{ inputs.platform || 'tvos' }})
+    name: Parity captures (${{ inputs.platform || 'ios' }})
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
@@ -240,7 +240,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: parity-apple-${{ inputs.platform || 'tvos' }}-attempt-${{ github.run_attempt }}
+          name: parity-apple-${{ inputs.platform || 'ios' }}-attempt-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/parity
             ${{ runner.temp }}/build.txt
