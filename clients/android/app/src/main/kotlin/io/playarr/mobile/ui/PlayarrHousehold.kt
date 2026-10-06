@@ -6,6 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Text
@@ -92,6 +98,8 @@ internal fun HouseholdBlockedScreen(
     onAskGuardian: suspend (subject: String) -> Boolean,
     onSwitchProfile: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Web phone layout: the empty-state group (art circle and copy) over two outlined pills. */
+    webPhone: Boolean = false,
 ) {
     val language = LocalPlayarrLanguage.current
     val until = formatHouseholdInstant(block.until, language.locale)
@@ -113,6 +121,21 @@ internal fun HouseholdBlockedScreen(
     val firstAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstAction.requestFocus() } }
 
+    if (webPhone) {
+        PhoneHouseholdBlocked(
+            title = title, description = description, sending = sending, requestState = requestState,
+            onAsk = {
+                sending = true
+                scope.launch {
+                    requestState = onAskGuardian(block.approvalSubject)
+                    sending = false
+                }
+            },
+            onSwitchProfile = onSwitchProfile,
+            modifier = modifier,
+        )
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -166,5 +189,68 @@ internal fun HouseholdRemainingBadge(minutes: Int, modifier: Modifier = Modifier
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         )
+    }
+}
+
+/** Web `.household-blocked`: art circle and copy side by side 101 px down, two 48 px outlined pills below. */
+@Composable
+private fun PhoneHouseholdBlocked(
+    title: String,
+    description: String,
+    sending: Boolean,
+    requestState: Boolean?,
+    onAsk: () -> Unit,
+    onSwitchProfile: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ink = WebInk
+    val icon = androidx.compose.ui.graphics.lerp(WebKicker, WebInk, 0.22f)
+    val border = if (webIsDark) Color(0xFFDFDCDD).copy(alpha = 0.1157f) else Color(0xFF382621).copy(alpha = 0.139f)
+    androidx.compose.foundation.layout.Box(modifier.fillMaxSize().background(WebBackground).semantics { liveRegion = LiveRegionMode.Polite }) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            androidx.compose.foundation.layout.Spacer(Modifier.height(101.3.dp))
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                androidx.compose.foundation.layout.Box(
+                    Modifier.size(116.dp).background(WebSurfaceStrong.copy(alpha = 0.54f), androidx.compose.foundation.shape.CircleShape)
+                        .border(1.dp, border, androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(PlayarrWebIcons.EmptyDetails, contentDescription = null, tint = icon)
+                }
+                Column(Modifier.widthIn(max = 141.5.dp)) {
+                    Text(title, color = ink, fontSize = 14.4.sp, lineHeight = 21.6.sp, fontWeight = FontWeight(650), letterSpacing = (-0.288).sp, style = WebTextStyle)
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(7.2.dp))
+                    Text(description, color = WebInkMuted, fontSize = 7.68.sp, lineHeight = 11.52.sp, style = WebTextStyle)
+                }
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.height(20.dp))
+            PhoneHouseholdPill(playarrString(PlayarrString.HouseholdAskGuardian), width = 253.dp, enabled = !sending && requestState != true, onClick = onAsk)
+            androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
+            PhoneHouseholdPill(playarrString(PlayarrString.ProfilesSwitchProfile), width = 143.2.dp, enabled = true, onClick = onSwitchProfile)
+            when (requestState) {
+                true -> Text(playarrString(PlayarrString.HouseholdRequestSent), color = WebInkSoft, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+                false -> Text(
+                    playarrString(PlayarrString.HouseholdRequestFailed),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error, fontSize = 13.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                null -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneHouseholdPill(label: String, width: androidx.compose.ui.unit.Dp, enabled: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        onClick = onClick, enabled = enabled, shape = androidx.compose.foundation.shape.CircleShape, color = Color.Transparent, contentColor = WebInk,
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebInk), modifier = Modifier.size(width, 48.dp),
+    ) {
+        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle, maxLines = 1)
+        }
     }
 }

@@ -20,13 +20,13 @@ private fun roundRect(x: Float, y: Float, w: Float, h: Float, r: Float) =
     "M${x + r},$y h${w - 2 * r} a$r,$r 0 0 1 $r,$r v${h - 2 * r} a$r,$r 0 0 1 ${-r},$r h${-(w - 2 * r)} " +
         "a$r,$r 0 0 1 ${-r},${-r} v${-(h - 2 * r)} a$r,$r 0 0 1 $r,${-r} Z"
 
-private class IconSpec(val name: String, val strokeWidth: Float = 1.8f) {
+private class IconSpec(val name: String, val strokeWidth: Float = 1.8f, val viewW: Float = 24f, val viewH: Float = 24f, val widthDp: Float = 24f, val heightDp: Float = 24f) {
     val strokes = mutableListOf<String>()
     val fills = mutableListOf<String>()
     fun stroke(vararg d: String) = apply { strokes += d }
     fun fill(d: String) = apply { fills += d }
     fun build(): ImageVector {
-        val b = ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)
+        val b = ImageVector.Builder(name, widthDp.dp, heightDp.dp, viewW, viewH)
         strokes.forEach {
             b.addPath(
                 pathData = addPathNodes(it),
@@ -42,6 +42,12 @@ private class IconSpec(val name: String, val strokeWidth: Float = 1.8f) {
 }
 
 internal object PlayarrWebIcons {
+    /** `.tv-empty-state-art` "details" graphic (48 x 32 viewport) drawn at 44 x 29.3. */
+    val EmptyDetails: ImageVector by lazy {
+        IconSpec("WebEmptyDetails", 1.8f, 48f, 32f, 44f, 29.3f).stroke(
+            roundRect(7f, 5f, 34f, 22f, 3f), "M13 12h14M13 17h20M13 22h12", circle(35f, 11f, 2f),
+        ).build()
+    }
     val Bell: ImageVector by lazy {
         IconSpec("WebBell", 1.5f).stroke("M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0").build()
     }

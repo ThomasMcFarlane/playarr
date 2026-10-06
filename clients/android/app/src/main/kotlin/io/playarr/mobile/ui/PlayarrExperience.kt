@@ -1517,10 +1517,11 @@ internal fun PlayarrExperience(
                     block = householdBlock,
                     onAskGuardian = viewModel::askGuardian,
                     onSwitchProfile = { navController.openExperienceTopLevel("profiles") },
+                    webPhone = !isTelevision,
                 )
             }
 
-            if (!isPlayer && !isProfiles && householdBlock == null) {
+            if (!isPlayer && !isProfiles && (householdBlock == null || !isTelevision)) {
                 val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload, hasFolders)
                 if (visibleDestinations.isNotEmpty()) {
                     ExperienceNavigation(
@@ -1747,8 +1748,9 @@ private fun ExperienceNavigation(
         tonalElevation = 0.dp,
     ) {
         LazyRow(
-            modifier = Modifier.padding(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(5.dp).fillMaxWidth(),
+            // A short list (a household-limited profile) is centred in the bar; a long one scrolls from the start.
+            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
             contentPadding = PaddingValues(0.dp),
         ) {
             items(destinations, key = { it.route }) { destination ->
