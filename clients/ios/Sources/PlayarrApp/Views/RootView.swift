@@ -174,9 +174,14 @@ private struct AuthenticatedPlayarrShell: View {
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
             #if DEBUG
-            if let title = ParityLaunch.title,
-               let match = try? await environment.apiClient.searchCatalog(query: title, limit: 5).first {
-                demoDetailViewModel = WorkDetailViewModel(apiClient: environment.apiClient, workID: match.id)
+            if let title = ParityLaunch.title {
+                let kind: WorkKind = ParityLaunch.screen == "detail-series" ? .series : .movie
+                let page = try? await environment.apiClient.browseCatalog(
+                    kind: kind, genre: nil, tag: nil, sort: nil, limit: 100, offset: nil
+                )
+                if let match = page?.items.first(where: { $0.title == title }) {
+                    demoDetailViewModel = WorkDetailViewModel(apiClient: environment.apiClient, workID: match.id)
+                }
             }
             #endif
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])

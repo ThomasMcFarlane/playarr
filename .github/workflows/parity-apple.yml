@@ -36,18 +36,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'tvos' }}
+  group: parity-apple-${{ github.ref }}-${{ inputs.platform || 'both' }}
   cancel-in-progress: true
 
 env:
-  PLATFORM: ${{ inputs.platform || 'tvos' }}
   PLAYARR_FIXTURE_PORT: "18484"
   CARGO_PROFILE_DEV_DEBUG: "0"
   PLAYARR_FIXTURE_NO_SCOPE: "1"
 
 jobs:
   parity:
-    name: Parity captures (${{ inputs.platform || 'tvos' }})
+    name: Parity captures (${{ matrix.platform }})
+    # Dispatch runs the chosen client; a pull request runs both.
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platform && format('["{0}"]', inputs.platform) || '["tvos","ios"]') }}
+    env:
+      PLATFORM: ${{ matrix.platform }}
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
@@ -241,7 +247,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: parity-apple-${{ inputs.platform || 'tvos' }}-attempt-${{ github.run_attempt }}
+          name: parity-apple-${{ matrix.platform }}-attempt-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/parity
             ${{ runner.temp }}/build.txt
