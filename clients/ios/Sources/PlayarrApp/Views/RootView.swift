@@ -78,6 +78,8 @@ private struct AuthenticatedPlayarrShell: View {
         case home
         case library(WorkKind)
         case playlists
+        case watchlist
+        case requests
         case calendar
         case profiles
         case settings
@@ -92,6 +94,8 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "Home"
             case .library(let kind): kind.displayName
             case .playlists: "Playlists"
+            case .watchlist: "Watchlist"
+            case .requests: "Requests"
             case .calendar: "Calendar"
             case .profiles: "Profiles"
             case .settings: "Profile"
@@ -114,6 +118,7 @@ private struct AuthenticatedPlayarrShell: View {
                 case .artist, .author: .music
                 }
             case .playlists: .playlists
+            case .watchlist, .requests: .watchlist
             case .calendar: .calendar
             case .profiles, .settings: .home
             #if DEBUG
@@ -129,6 +134,8 @@ private struct AuthenticatedPlayarrShell: View {
             case .home: "house"
             case .library(let kind): kind.symbolName
             case .playlists: "music.note.list"
+            case .watchlist: "bookmark"
+            case .requests: "tray.and.arrow.down"
             case .calendar: "calendar"
             case .profiles: "person.2"
             case .settings: "person.crop.circle"
@@ -274,6 +281,14 @@ private struct AuthenticatedPlayarrShell: View {
         case .playlists:
             NavigationStack {
                 PlaylistsView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
+            }
+        case .watchlist:
+            NavigationStack {
+                WatchlistView(apiClient: environment.apiClient, downloadRepository: environment.downloadRepository)
+            }
+        case .requests:
+            NavigationStack {
+                RequestsView(apiClient: environment.apiClient)
             }
         case .calendar:
             NavigationStack {
@@ -524,6 +539,8 @@ private struct AuthenticatedPlayarrShell: View {
             result.append(.library(kind))
         }
         result.append(.playlists)
+        result.append(.watchlist)
+        result.append(.requests)
         result.append(.calendar)
         return result
     }

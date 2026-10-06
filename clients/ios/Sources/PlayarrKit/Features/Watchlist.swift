@@ -55,10 +55,13 @@ public struct DiscoveryTitle: Codable, Sendable, Hashable, Identifiable {
     public var year: Int32?
     public var overview: String?
     public var posterURL: String?
+    public var externalRefs: [ExternalRef]?
+    public var sources: [TitleSource]?
     public var id: String { titleKey }
 
     enum CodingKeys: String, CodingKey {
-        case kind, title, year, overview
+        case kind, title, year, overview, sources
+        case externalRefs = "external_refs"
         case titleKey = "title_key"
         case posterURL = "poster_url"
     }
@@ -68,9 +71,10 @@ public struct DiscoveryTitle: Codable, Sendable, Hashable, Identifiable {
 public struct ResolvedTitle: Codable, Sendable, Hashable {
     public var title: DiscoveryTitle
     public var inWatchlist: Bool
+    public var actions: [TitleAction]?
 
     enum CodingKeys: String, CodingKey {
-        case title
+        case title, actions
         case inWatchlist = "in_watchlist"
     }
 }
@@ -79,11 +83,12 @@ public struct ResolvedTitle: Codable, Sendable, Hashable {
 public struct WatchlistEntry: Codable, Sendable, Hashable, Identifiable {
     public var title: DiscoveryTitle
     public var inWatchlist: Bool
+    public var actions: [TitleAction]?
     public var addedAt: Date
     public var id: String { title.titleKey }
 
     enum CodingKeys: String, CodingKey {
-        case title
+        case title, actions
         case inWatchlist = "in_watchlist"
         case addedAt = "added_at"
     }
