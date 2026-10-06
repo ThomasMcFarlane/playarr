@@ -1,0 +1,1 @@
+- Android phone parity harness (emulator capture, system bar mask) and first mismatch baseline against the web mobile layout.
