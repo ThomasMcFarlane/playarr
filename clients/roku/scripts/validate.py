@@ -118,7 +118,7 @@ def validate_source_contract() -> None:
     required_fragments = (
         "/api/system/version",
         "/api/v1/auth/refresh",
-        "/api/v1/oauth/device/code",
+        "/api/link/code",
         "/api/v1/oauth/token",
         "/api/v1/users/profiles",
         "/api/v1/catalog?",

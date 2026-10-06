@@ -1,0 +1,1 @@
+- Roku: lint now requires the hosted-link path the channel actually uses, and CI runs the Roku lint, contract tests and package build when `clients/roku` changes.

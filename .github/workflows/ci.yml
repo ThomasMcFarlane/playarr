@@ -75,6 +75,7 @@ jobs:
       android_tasks: ${{ steps.android.outputs.android_tasks }}
       xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
       harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
+      roku: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.roku == 'true' }}
       tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
       tv_web_filters: ${{ steps.tvweb.outputs.tv_web_filters }}
     steps:
@@ -157,6 +158,8 @@ jobs:
               - '.github/workflows/ci.yml'
             harmony:
               - 'clients/harmony/**'
+            roku:
+              - 'clients/roku/**'
             tv-web:
               - 'clients/tv-web/**'
 
@@ -358,6 +361,28 @@ jobs:
         run: node tools/run-core-tests.mjs
 
   # ---------------------------------------------------------------------
+  # Roku (clients/roku -- native SceneGraph/BrightScript channel). Offline
+  # tiers only: structural lint (scripts/validate.py), contract tests and a
+  # sideload package build. No Roku device is involved.
+  # ---------------------------------------------------------------------
+  roku-check:
+    name: Roku client checks (lint, tests, package)
+    needs: changes
+    if: needs.changes.outputs.roku == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/roku
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint, test and package
+        run: make package
+
+  # ---------------------------------------------------------------------
   # tv-web (pnpm workspace under clients/tv-web -- packages/*, apps/*, web/)
   # ---------------------------------------------------------------------
   tv-web-check:
@@ -458,6 +483,7 @@ jobs:
       - android-check
       - xbox-check
       - harmony-check
+      - roku-check
       - tv-web-check
       - openapi-contract-check
     if: always()
@@ -471,7 +497,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check roku-check tv-web-check openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in
