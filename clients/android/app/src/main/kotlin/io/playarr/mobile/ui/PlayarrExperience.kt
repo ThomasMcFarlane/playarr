@@ -289,6 +289,24 @@ private var webPalette = darkWebPalette
 internal var webIsDark: Boolean = true
     private set
 
+/**
+ * The web client's font stack ("Avenir Next", Avenir, "Segoe UI", Helvetica, Arial) resolves to Liberation Sans, the
+ * metric-compatible Arial, where no earlier family exists, which is what the shared parity references render. The phone
+ * client bundles it so its text has the web's glyphs and advance widths. Television keeps the platform font.
+ */
+internal var webFontFamily: androidx.compose.ui.text.font.FontFamily? = null
+
+internal fun setPlayarrWebFont(enabled: Boolean) {
+    webFontFamily = if (enabled) {
+        androidx.compose.ui.text.font.FontFamily(
+            androidx.compose.ui.text.font.Font(io.playarr.mobile.R.font.liberation_sans_regular, FontWeight.Normal),
+            androidx.compose.ui.text.font.Font(io.playarr.mobile.R.font.liberation_sans_bold, FontWeight.Bold),
+        )
+    } else {
+        null
+    }
+}
+
 internal fun setPlayarrWebPalette(darkTheme: Boolean) {
     webPalette = if (darkTheme) darkWebPalette else lightWebPalette
     webIsDark = darkTheme
@@ -1193,7 +1211,9 @@ internal val WebDivider: Color get() = webHairline(0.23f, 0.28f)
 internal val WebSearchBorder: Color get() = webHairline(0.1758f, 0.2116f)
 
 /** CSS puts half the line-height leading above and below the glyphs; this is Compose's equivalent. */
-internal val WebTextStyle = androidx.compose.ui.text.TextStyle(
+internal val WebTextStyle: androidx.compose.ui.text.TextStyle
+    get() = androidx.compose.ui.text.TextStyle(
+    fontFamily = webFontFamily,
     lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
         alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
         trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
@@ -1731,7 +1751,7 @@ private fun ExperienceNavigation(
         return
     }
     // Web: `bottom: max(8px, env(safe-area-inset-bottom))`, so the bar sits on the gesture inset or 8 dp up.
-    val systemBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val systemBottom = if (parityNoInsets) 0.dp else WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomInsets = WindowInsets(0)
     val phoneNavShape = RoundedCornerShape(if (isTelevision) 28.dp else 20.dp)
     androidx.compose.runtime.CompositionLocalProvider(
@@ -1897,7 +1917,7 @@ private fun ProfileControl(
     )
     Column(
         modifier = modifier
-            .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.safeDrawing)
+            .windowInsetsPadding(if (isTelevision) WindowInsets(0) else webPhoneInsets())
             .then(
                 if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 15.dp) else Modifier.padding(end = 16.dp),
             ),
@@ -2444,7 +2464,7 @@ private fun ExperienceHomeScreen(
                         state = railsState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
-                            top = if (isTelevision) 480.dp else 102.dp,
+                            top = if (isTelevision) 480.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
                         verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 67.6.dp),
@@ -2492,7 +2512,7 @@ private fun ExperienceHomeScreen(
                         // Web phone: "Customise Home" is a 38 px pill in the header row, left of the profile control.
                         Surface(
                             onClick = { viewModel.loadRailPreferences(); customising = true },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 30.dp, end = 68.dp).height(38.dp),
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(), end = 68.dp).height(38.dp),
                             shape = CircleShape,
                             color = WebSurface,
                             contentColor = WebInkSoft,
@@ -2620,7 +2640,7 @@ private fun ExperienceStage(
             ) { rails() }
         } else {
             Box(Modifier.fillMaxSize()) {
-                Box(Modifier.padding(top = 82.dp).fillMaxSize().background(phoneHomePanelBrush()))
+                Box(Modifier.padding(top = 58.dp + webPhoneInsets().asPaddingValues().calculateTopPadding()).fillMaxSize().background(phoneHomePanelBrush()))
                 rails()
             }
         }
@@ -3382,7 +3402,7 @@ private fun ExperienceLibraryScreen(
                     modifier = Modifier
                         .then(if (isTelevision) Modifier.fillMaxWidth(0.65f).fillMaxHeight().align(Alignment.CenterEnd) else Modifier.fillMaxSize())
                         .background(if (isTelevision) webRailSurfaceBrush() else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
-                        .windowInsetsPadding(if (isTelevision) WindowInsets(0) else WindowInsets.statusBars)
+                        .windowInsetsPadding(if (isTelevision) WindowInsets(0) else webPhoneBodyInsets())
                         .padding(top = if (isTelevision) 76.dp else 0.dp),
                 ) {
                     Spacer(Modifier.height(if (isTelevision) 64.dp else 0.dp))
@@ -3793,7 +3813,7 @@ private fun PhoneSearchContent(
             PhoneStageWash(Modifier.fillMaxSize())
             Box(Modifier.padding(top = 320.7.dp).fillMaxSize().background(phonePanelBrush(fadeFraction = 0.1f)))
         }
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+        Column(Modifier.fillMaxSize().windowInsetsPadding(webPhoneInsets())) {
             Spacer(Modifier.height(76.dp))
             Column(Modifier.padding(horizontal = 16.dp)) {
                 val pillShape = CircleShape
@@ -3811,7 +3831,7 @@ private fun PhoneSearchContent(
                         onValueChange = onQueryChange,
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 16.sp, lineHeight = 24.sp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = webFontFamily, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
@@ -3848,7 +3868,9 @@ private fun PhoneSearchContent(
                 }
                 filterPanel()
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            // The web results area does not follow the top inset: it starts where a 24 dp status bar leaves it.
+            val topInset = webPhoneInsets().asPaddingValues().calculateTopPadding()
+            Box(Modifier.padding(top = (24.dp - topInset).coerceAtLeast(0.dp)).weight(1f).fillMaxWidth()) {
                 when (val current = state) {
                     ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
                     is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
@@ -4941,7 +4963,7 @@ private fun PhoneVideoDetailBody(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         // Web: the copy block starts 375 px down (kicker top) and the page scrolls under the fixed key art.
-        contentPadding = PaddingValues(top = 375.dp, bottom = 112.dp),
+        contentPadding = PaddingValues(top = 351.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(), bottom = 112.dp),
     ) {
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
