@@ -121,6 +121,55 @@ class PlayarrGuardianApprovalsTest {
     }
 
     @Test
+    fun specificForbiddenCodesWinOverTheMessageText() {
+        // The code is authoritative: a reworded message must not change the outcome.
+        assertEquals(
+            GuardianDecisionError.SelfApproval,
+            guardianDecisionError(http(403, """{"error":"self_approval_forbidden","message":"reworded"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NoPin,
+            guardianDecisionError(http(403, """{"error":"guardian_pin_not_set","message":"reworded"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NotAllowed,
+            guardianDecisionError(http(403, """{"error":"not_guardian","message":"a profile cannot approve its own request"}""")),
+        )
+    }
+
+    @Test
+    fun genericForbiddenFromOlderServersFallsBackToTheMessageText() {
+        assertEquals(
+            GuardianDecisionError.SelfApproval,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"A profile cannot approve its own request"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NoPin,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"set a profile PIN before approving requests"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NotAllowed,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"a restricted profile cannot approve requests"}""")),
+        )
+        assertEquals(GuardianDecisionError.NotAllowed, guardianDecisionError(http(403, "{}")))
+        assertNull(guardianForbiddenByCode("forbidden"))
+        assertNull(guardianForbiddenByCode(null))
+    }
+
+    @Test
+    fun aRecordedDecisionYieldsAConfirmationMessage() {
+        assertEquals(
+            PlayarrString.GuardianApprovedConfirmation,
+            guardianConfirmation(approval("a").copy(status = "approved")),
+        )
+        assertEquals(
+            PlayarrString.GuardianDeniedConfirmation,
+            guardianConfirmation(approval("a").copy(status = "denied")),
+        )
+        assertNull(guardianConfirmation(approval("a").copy(status = "pending")))
+    }
+
+    @Test
     fun everyErrorHasALocalisedMessageAndLockoutsShowWholeMinutes() {
         assertEquals(
             PlayarrMessage.Localized(PlayarrString.GuardianWrongPin),

@@ -1701,6 +1701,8 @@ internal enum class PlayarrString(
         "リクエストを承認する前にプロフィールのPINを設定してください。",
     ),
     GuardianNotFound("That request no longer exists.", "ไม่พบคำขอนี้แล้ว", "このリクエストは存在しません。"),
+    GuardianApprovedConfirmation("Request approved.", "อนุมัติคำขอแล้ว", "リクエストを承認しました。"),
+    GuardianDeniedConfirmation("Request denied.", "ปฏิเสธคำขอแล้ว", "リクエストを却下しました。"),
     GuardianDecisionFailed(
         "Couldn't record the decision. Try again.",
         "บันทึกการตัดสินใจไม่สำเร็จ ลองอีกครั้ง",

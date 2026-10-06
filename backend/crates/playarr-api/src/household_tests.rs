@@ -744,8 +744,10 @@ async fn a_child_cannot_approve_its_own_request_or_anyone_elses() {
         json!({"approve": true}),
         json!({"approve": true, "pin": "2468"}),
     ] {
-        let (status, _) = post(&h.router, &h.child_token, &decide, body).await;
+        let (status, err) = post(&h.router, &h.child_token, &decide, body).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(err["error"], "self_approval_forbidden");
+        assert_eq!(err["message"], "a profile cannot approve its own request");
     }
 
     // A sibling who is not a guardian cannot either.
@@ -753,7 +755,7 @@ async fn a_child_cannot_approve_its_own_request_or_anyone_elses() {
     seed_policy_user(&h.state, sibling, |p| p.library_allow = vec![h.instance]).await;
     set_pin(&h.state, sibling, "1357").await;
     let sibling_token = mint_access_token(&h.state, sibling);
-    let (status, _) = post(
+    let (status, err) = post(
         &h.router,
         &sibling_token,
         &decide,
@@ -761,6 +763,8 @@ async fn a_child_cannot_approve_its_own_request_or_anyone_elses() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(err["error"], "not_guardian");
+    assert_eq!(err["message"], "caller is not a guardian of this profile");
 
     // Nothing was granted: still locked out.
     assert_eq!(
@@ -859,7 +863,7 @@ async fn a_guardian_without_a_pin_cannot_approve() {
     )
     .await;
     let id = created["id"].as_str().unwrap();
-    let (status, _) = post(
+    let (status, err) = post(
         &h.router,
         &h.guardian_token,
         &format!("/api/v1/household/approvals/{id}/decision"),
@@ -867,6 +871,11 @@ async fn a_guardian_without_a_pin_cannot_approve() {
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(err["error"], "guardian_pin_not_set");
+    assert_eq!(
+        err["message"],
+        "set a profile PIN before approving requests"
+    );
 }
 
 #[tokio::test]
