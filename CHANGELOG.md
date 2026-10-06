@@ -510,6 +510,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Task board: fragments can now remove a row (`remove: <row-number>`); work belonging to other repositories such as Dubarr is no longer tracked on the board.
 - Smoke scripts (`live-events-smoke.sh`, `remote-control-smoke.sh`) no longer read `~/.playarr-test.env`; export `TEST_SERVER`, `TEST_USERNAME` and `TEST_PASSWORD` explicitly. Shared test-account references were removed from the docs.
 - The in-process authoritative relay DNS server and `PLAYARR_RELAY_DNS_BIND_ADDR` /
   `PLAYARR_RELAY_DNS_ACME_CHALLENGE`. The Worker now publishes the relay records and answers
