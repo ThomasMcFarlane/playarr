@@ -72,6 +72,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
 - iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
 - Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.
 - Apple parity workflow (`parity-apple.yml`) and tooling under `scripts/parity/apple/`: web reference versus tvOS Simulator captures on the fixture environment, with a pixel diff report; the tvOS app gains a live `-PlayarrParityRoute` launch argument.
@@ -539,6 +540,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the Postgres backend: the `postgres` cargo features and `sqlx` Postgres driver, `backend/migrations/postgres`, the Postgres coordinator, `LISTEN`/`NOTIFY` cache and Postgres backup/restore paths, the Redis cache (only reachable on the shared-database tier), the `DeploymentTier` and `REDIS_URL` configuration, and the per-backend SQL variants in `playarr-db`. Playarr is SQLite-only (ADR 0002).
+- A `postgres://` or `postgresql://` `DATABASE_URL` now fails startup with a clear error instead of connecting, and `playarr_db::run_migrations` no longer takes an `is_postgres` argument.
 - Removed the retired Google Play review demo server (`clients/tv-web/apps/play-review-server`), which was shut down on 2026-08-30 and is not deployed, together with its `just` recipes, workspace lockfile entry and README attribution.
 - Removed Postgres and Redis from the Docker Compose files, the Kubernetes base and overlays and the Helm chart: compose runs one server with a SQLite data volume, and the chart deploys a single-replica StatefulSet with a persistent volume (the api/worker split sharing one database is gone). Multi-node deployments use peer sync between SQLite nodes (ADR 0002).
 - Rewrote the README, architecture documents, deployment guides, backup guide and site copy for SQLite-only storage.
