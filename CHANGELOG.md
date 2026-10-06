@@ -184,6 +184,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.
 - The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
 - Web: the player's audio picker shows the codec next to the language (for example "deu · AAC"), including for dub tracks.
@@ -2283,6 +2284,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.
 - Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.
 - README: rebuilt with a banner, a screenshot showcase, light and dark platform and architecture diagrams, collapsible reference sections, and an expanded third-party media attribution for the openly licensed titles shown in the screenshots.
 - Add `SECURITY.md` (private vulnerability reporting) and stop naming the deployment configuration in `AGENTS.md`, as part of the public-readiness audit.

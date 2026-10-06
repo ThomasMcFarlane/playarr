@@ -76,6 +76,10 @@ import androidx.compose.ui.window.DialogProperties
  * pinned bottom-left. PlayarrPageScaffoldRegistryTest keeps new screens from bypassing it.
  */
 
+/** Web header icon button fill and ring (`a.ui-btn--icon`, dark theme). */
+private val WebHeaderIconFill = Color(0xB3211D21)
+private val WebHeaderIconRing = Color(0x27DFDCDD)
+
 /** Space the body reserves at the bottom so nothing renders under the bottom-left profile chip. */
 internal fun playarrPageSafeBottom(isTelevision: Boolean): Dp = if (isTelevision) 96.dp else 72.dp
 
@@ -210,8 +214,8 @@ internal fun decideSubtitlePlacement(
     else -> PlayarrSubtitlePlacement.Wrapped
 }
 
-/** Start of the shell clock's reserved area on television (the clock is drawn at 486 dp, top 68 dp). */
-internal val PlayarrClockReservedStart = 478.dp
+/** Start of the shell clock's reserved area on television (the clock is drawn at 558.1 dp, top 68.2 dp, as web). */
+internal val PlayarrClockReservedStart = 550.dp
 
 /**
  * Back + title + breadcrumb row. The title is truncated before the clock; the breadcrumb sits on the
@@ -239,9 +243,21 @@ internal fun PlayarrPageHeaderRow(
                 onClick = onBack,
                 contentDescription = playarrString(PlayarrString.CommonBack),
                 size = if (isTelevision) PlayarrButtonSize.Large else PlayarrButtonSize.Medium,
-                variant = PlayarrButtonVariant.Secondary,
+                variant = if (isTelevision) PlayarrButtonVariant.Ghost else PlayarrButtonVariant.Secondary,
+                modifier = if (isTelevision) {
+                    // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
+                    Modifier
+                        .background(WebHeaderIconFill, CircleShape)
+                        .border(1.dp, WebHeaderIconRing, CircleShape)
+                } else {
+                    Modifier
+                },
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, tint = WebInk, modifier = Modifier.size(20.dp))
+                if (isTelevision) {
+                    Text("\u2190", color = WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
+                } else {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, tint = WebInk, modifier = Modifier.size(20.dp))
+                }
             }
         }.first().measure(androidx.compose.ui.unit.Constraints.fixed(backSize, backSize))
         val titleMax = ((reservedStartPx ?: constraints.maxWidth) - back.width - gap).coerceAtLeast(0)
@@ -257,7 +273,7 @@ internal fun PlayarrPageHeaderRow(
                 modifier = Modifier.semantics { heading() },
             )
         }.first().measure(loose.copy(maxWidth = titleMax.coerceAtMost(constraints.maxWidth)))
-        val separator = (if (isTelevision) 45.dp else 24.dp).roundToPx()
+        val separator = (if (isTelevision) 47.04.dp else 24.dp).roundToPx()
         val titleEnd = back.width + gap + titleP.width
         val probe = subtitle?.let {
             subcompose("probe") { PlayarrBreadcrumbText(it) }.first().measure(loose)
@@ -266,7 +282,7 @@ internal fun PlayarrPageHeaderRow(
         val inline = if (placement == PlayarrSubtitlePlacement.Inline) {
             subcompose("inline") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.padding(horizontal = if (isTelevision) 22.dp else 10.dp).width(1.dp).height(16.dp).background(WebInkMuted.copy(alpha = 0.45f)))
+                    Box(Modifier.padding(horizontal = if (isTelevision) 23.04.dp else 10.dp).width(1.dp).height(if (isTelevision) 50.dp else 16.dp).background(if (isTelevision) Color(0x3BDFDCDD) else WebInkMuted.copy(alpha = 0.45f)))
                     PlayarrBreadcrumbText(subtitle!!)
                 }
             }.first().measure(loose)
@@ -300,9 +316,9 @@ private fun PlayarrBreadcrumbText(text: String) {
     Text(
         text,
         color = WebInkMuted,
-        fontSize = 11.sp,
+        fontSize = 11.136.sp,
         fontWeight = FontWeight(680),
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.501.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
