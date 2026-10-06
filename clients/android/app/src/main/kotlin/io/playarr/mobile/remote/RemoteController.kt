@@ -210,10 +210,10 @@ class RemoteController @Inject constructor(
                 }
                 if (started != null) {
                     // Give the engine a beat so the acknowledged position is the started one.
-                    delay(300L)
+                    delay(HANDOFF_START_SETTLE_MS)
                     return RemoteHandoffResult.Playing(withContext(Dispatchers.Main) { started.positionMs() })
                 }
-                delay(250L)
+                delay(HANDOFF_START_POLL_MS)
             }
             return RemoteHandoffResult.Failed("playback did not start in time")
         }
@@ -283,6 +283,10 @@ class RemoteController @Inject constructor(
     private companion object {
         const val KEY_HOST_ENABLED = "host_enabled"
         const val HANDOFF_START_TIMEOUT_MS = 40_000L
+        /** How often a handoff destination checks whether playback has started (each tick costs up to this much latency). */
+        const val HANDOFF_START_POLL_MS = 100L
+        /** Pause after playback starts so the acknowledged position is the started one. */
+        const val HANDOFF_START_SETTLE_MS = 150L
         const val CATCH_UP_THRESHOLD_MS = 1_500L
     }
 }
