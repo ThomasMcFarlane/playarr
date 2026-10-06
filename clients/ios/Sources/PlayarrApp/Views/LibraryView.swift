@@ -276,7 +276,7 @@ struct LibraryView: View {
                 .foregroundStyle(PlayarrStyle.inkSoft)
             } else {
                 Button { showingFilters = true } label: {
-                    Label(phone ? "" : "Filters", systemImage: "slider.horizontal.3")
+                    Label(phone ? "" : (viewModel.languageFilter.isActive ? "Filters (\(viewModel.languageFilter.activeCount))" : "Filters"), systemImage: "slider.horizontal.3")
                         .font(.custom("Avenir Next", fixedSize: 11).weight(.bold))
                         .frame(minWidth: 42, minHeight: 42)
                 }
@@ -339,6 +339,34 @@ struct LibraryView: View {
         .overlay { Rectangle().stroke(PlayarrStyle.line, lineWidth: 1) }
     }
 
+    private func languageSection(
+        title: String,
+        entries: [LanguageFacetEntry],
+        selected: [String],
+        toggle: @escaping (String) -> Void
+    ) -> some View {
+        Section(title) {
+            if entries.isEmpty {
+                Text("No languages available").foregroundStyle(PlayarrStyle.inkSoft)
+            }
+            ForEach(entries, id: \.code) { entry in
+                Button {
+                    toggle(entry.code)
+                } label: {
+                    HStack {
+                        Text(entry.displayName())
+                        Spacer()
+                        Text("\(entry.count)").foregroundStyle(PlayarrStyle.inkSoft)
+                        if selected.contains(entry.code) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .foregroundStyle(PlayarrStyle.ink)
+            }
+        }
+    }
+
     private var filterSheet: some View {
         NavigationStack {
             Form {
@@ -364,7 +392,26 @@ struct LibraryView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                if viewModel.selectedKind != nil, let facets = viewModel.languageFacets {
+                    languageSection(title: "Audio language", entries: facets.audio, selected: viewModel.languageFilter.audio) {
+                        viewModel.toggleAudioLanguage($0)
+                        Task { await viewModel.loadLanguageFacets() }
+                    }
+                    languageSection(title: "Subtitle language", entries: facets.subtitle, selected: viewModel.languageFilter.subtitle) {
+                        viewModel.toggleSubtitleLanguage($0)
+                        Task { await viewModel.loadLanguageFacets() }
+                    }
+                    if viewModel.languageFilter.isActive {
+                        Section {
+                            Button("Clear language filters", role: .destructive) {
+                                viewModel.clearLanguages()
+                                Task { await viewModel.loadLanguageFacets() }
+                            }
+                        }
+                    }
+                }
             }
+            .task { await viewModel.loadLanguageFacets() }
             .scrollContentBackground(.hidden)
             .background(PlayarrStyle.background)
             .navigationTitle("Library filters")

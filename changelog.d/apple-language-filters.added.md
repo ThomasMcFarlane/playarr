@@ -1,0 +1,1 @@
+- iOS and Apple TV: audio and subtitle language filters in the library views, backed by the catalogue language facets (hidden when the server does not offer them), with unit tests.

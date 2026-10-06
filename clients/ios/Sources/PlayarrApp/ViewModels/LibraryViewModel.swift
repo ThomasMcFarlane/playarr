@@ -34,6 +34,10 @@ public final class LibraryViewModel {
     public var searchScope: SearchScope = .all
     public var isSearchMode = false
     public private(set) var isLoadingMore = false
+    /// Audio/subtitle language selection; applies to kind-specific browsing.
+    public var languageFilter = LanguageFilter()
+    /// Facets for the filters sheet; `nil` hides the section (older server).
+    public private(set) var languageFacets: LanguageFacets?
 
     public var canLoadMore: Bool {
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
@@ -64,7 +68,17 @@ public final class LibraryViewModel {
             if trimmedQuery.isEmpty {
                 playlists = []
                 let page: CatalogPage
-                if let selectedKind {
+                if let selectedKind, languageFilter.isActive {
+                    page = try await LanguageFilterClient(transport: apiClient).browse(
+                        kind: selectedKind,
+                        sort: sort,
+                        order: order,
+                        availableOnly: true,
+                        limit: pageSize,
+                        offset: 0,
+                        filter: languageFilter
+                    )
+                } else if let selectedKind {
                     page = try await apiClient.browseLibrary(
                         kind: selectedKind,
                         sort: sort,
@@ -114,19 +128,53 @@ public final class LibraryViewModel {
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let page = try await apiClient.browseLibrary(
-                kind: selectedKind,
-                sort: sort,
-                order: order,
-                availableOnly: true,
-                limit: pageSize,
-                offset: works.count
-            )
+            let page: CatalogPage
+            if languageFilter.isActive {
+                page = try await LanguageFilterClient(transport: apiClient).browse(
+                    kind: selectedKind,
+                    sort: sort,
+                    order: order,
+                    availableOnly: true,
+                    limit: pageSize,
+                    offset: works.count,
+                    filter: languageFilter
+                )
+            } else {
+                page = try await apiClient.browseLibrary(
+                    kind: selectedKind,
+                    sort: sort,
+                    order: order,
+                    availableOnly: true,
+                    limit: pageSize,
+                    offset: works.count
+                )
+            }
             let existing = Set(works.map(\.id))
             works.append(contentsOf: page.items.filter { !existing.contains($0.id) })
             total = page.total ?? total
         } catch {
             // Keep the loaded page visible; pull-to-refresh remains available.
         }
+    }
+
+    /// Refreshes the language facets for the current kind and selection. Any
+    /// failure (for example an older server without the endpoint) hides the
+    /// language section rather than surfacing an error.
+    public func loadLanguageFacets() async {
+        languageFacets = try? await LanguageFilterClient(transport: apiClient).facets(
+            kind: selectedKind, filter: languageFilter
+        )
+    }
+
+    public func toggleAudioLanguage(_ code: String) {
+        languageFilter.audio = LanguageFilter.toggled(code, in: languageFilter.audio)
+    }
+
+    public func toggleSubtitleLanguage(_ code: String) {
+        languageFilter.subtitle = LanguageFilter.toggled(code, in: languageFilter.subtitle)
+    }
+
+    public func clearLanguages() {
+        languageFilter = LanguageFilter()
     }
 }

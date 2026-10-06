@@ -934,8 +934,19 @@ struct TVLibraryKindView: View {
     @State private var items: [Work] = []
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
+    @State private var languageFilter = LanguageFilter()
+    @State private var languageFacets: LanguageFacets?
+    @State private var showingLanguageFilters = false
 
     private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+
+    /// Reload key: kind, server and the active language selection.
+    private var loadIdentity: String {
+        let kind = workKind?.rawValue ?? "all"
+        let audio = languageFilter.audio.joined(separator: ",")
+        let subtitle = languageFilter.subtitle.joined(separator: ",")
+        return "\(kind)|\(environment.serverURL.absoluteString)|\(audio)|\(subtitle)"
+    }
 
     /// Leftmost grid column ids (SPA 3-col grid) — Left from these → dock.
     private var leadingColumnIDs: Set<UUID> {
@@ -1006,16 +1017,35 @@ struct TVLibraryKindView: View {
                     .padding(.bottom, 48)
                     .zIndex(20)
 
-                filterLauncher
+                if parityMode {
+                    filterLauncher
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.trailing, 14)
+                        .padding(.top, 140)
+                        .zIndex(21)
+                } else if languageFacets != nil {
+                    Button {
+                        showingLanguageFilters = true
+                    } label: {
+                        filterLauncher
+                    }
+                    .buttonStyle(TVFocusableCardButtonStyle())
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.trailing, 14)
                     .padding(.top, 140)
                     .zIndex(21)
+                }
             }
         }
         .ignoresSafeArea()
-        .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
+        .task(id: loadIdentity) {
             await loadItems()
+        }
+        .sheet(isPresented: $showingLanguageFilters) {
+            TVLanguageFilterSheet(
+                facets: languageFacets ?? LanguageFacets(),
+                filter: $languageFilter
+            )
         }
     }
 
@@ -1374,14 +1404,29 @@ struct TVLibraryKindView: View {
             return
         }
         do {
-            let page = try await environment.apiClient.browseCatalog(
-                kind: workKind,
-                genre: nil,
-                tag: nil,
-                sort: "title",
-                limit: 48,
-                offset: 0
-            )
+            let languageClient = LanguageFilterClient(transport: environment.apiClient)
+            languageFacets = try? await languageClient.facets(kind: workKind, filter: languageFilter)
+            let page: CatalogPage
+            if let workKind, languageFilter.isActive {
+                page = try await languageClient.browse(
+                    kind: workKind,
+                    sort: "title",
+                    order: "asc",
+                    availableOnly: true,
+                    limit: 48,
+                    offset: 0,
+                    filter: languageFilter
+                )
+            } else {
+                page = try await environment.apiClient.browseCatalog(
+                    kind: workKind,
+                    genre: nil,
+                    tag: nil,
+                    sort: "title",
+                    limit: 48,
+                    offset: 0
+                )
+            }
             items = page.items
             selectedID = items.first?.id
             didLoad = true
@@ -1389,6 +1434,71 @@ struct TVLibraryKindView: View {
             items = TVParityFixtures.libraryWorks(kind: workKind)
             selectedID = items.first?.id
             didLoad = true
+        }
+    }
+}
+
+/// Audio and subtitle language filter sheet for the library directory. Each
+/// language is a focusable button that toggles it; counts come from
+/// `GET /api/v1/catalog/languages`.
+struct TVLanguageFilterSheet: View {
+    let facets: LanguageFacets
+    @Binding var filter: LanguageFilter
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+                Text("Language filters")
+                    .font(TVTheme.titleFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                section(title: "Audio language", entries: facets.audio, selected: filter.audio) { code in
+                    filter.audio = LanguageFilter.toggled(code, in: filter.audio)
+                }
+                section(title: "Subtitle language", entries: facets.subtitle, selected: filter.subtitle) { code in
+                    filter.subtitle = LanguageFilter.toggled(code, in: filter.subtitle)
+                }
+                HStack(spacing: DesignTokens.Spacing.md) {
+                    if filter.isActive {
+                        TVSecondaryButton(label: "Clear") { filter = LanguageFilter() }
+                    }
+                    TVPrimaryButton(label: "Done") { dismiss() }
+                }
+            }
+            .padding(DesignTokens.Spacing.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func section(
+        title: String,
+        entries: [LanguageFacetEntry],
+        selected: [String],
+        toggle: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+            Text(title)
+                .font(TVTheme.bodyFont(emphasis: true))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            if entries.isEmpty {
+                Text("No languages available")
+                    .font(TVTheme.bodyFont())
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+            ForEach(entries, id: \.code) { entry in
+                Button {
+                    toggle(entry.code)
+                } label: {
+                    HStack {
+                        Image(systemName: selected.contains(entry.code) ? "checkmark.circle.fill" : "circle")
+                        Text("\(entry.displayName()) (\(entry.count))")
+                        Spacer(minLength: 0)
+                    }
+                    .font(TVTheme.bodyFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                }
+                .buttonStyle(TVFocusableCardButtonStyle())
+            }
         }
     }
 }
