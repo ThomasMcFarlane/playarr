@@ -46,6 +46,7 @@ import io.playarr.mobile.remote.RemoteController
 import io.playarr.mobile.remote.RemoteHandoffApi
 import io.playarr.mobile.remote.RemotePairingRequest
 import io.playarr.mobile.remote.RemotePlayerControls
+import io.playarr.mobile.remote.handoffDestinationStarted
 import io.playarr.mobile.remote.RemoteUiBridge
 import io.playarr.mobile.remote.apiErrorCode
 import io.playarr.mobile.remote.handOffPlayback
@@ -718,7 +719,13 @@ internal class ExperienceRemotePlayerControls(
 
     override fun hasStarted(): Boolean {
         val state = player.state.value
-        return isReady() && !state.isBuffering && (state.isPlaying || !state.playWhenReady)
+        return handoffDestinationStarted(
+            ready = isReady(),
+            buffering = state.isBuffering,
+            playing = state.isPlaying,
+            playWhenReady = state.playWhenReady,
+            ownsSession = playerViewModel.hasActiveSessionFor(mediaFileId),
+        )
     }
 
     override fun play() = player.play()

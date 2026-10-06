@@ -6516,6 +6516,9 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         recordEvent(sessionId, PlaybackEventRequest.heartbeat(currentSourcePositionMs()))
     }
 
+    /** True once this player has begun [mediaFileId] (a playback session exists), not merely still holds it. */
+    fun hasActiveSessionFor(mediaFileId: String): Boolean = activeMediaFileId == mediaFileId && activeSessionId != null
+
     fun stopPlayback() {
         discardPrewarm()
         prepareJob?.cancel()

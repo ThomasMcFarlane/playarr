@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Playback handoff: a destination that still held an earlier, stopped or paused playback of the same file acknowledged the handoff at once with that stale position, so the source stopped before the destination had really started. The destination now confirms only once it has begun the offered request (a playback session exists for it). Measured on an Android TV emulator: acknowledgement within 0.5 s with a position 64 s off before, 2.3 s with 0.4 s drift after.
 - Android TV: pressing Select (or OK on the phone remote) on a Home rail card or library grid card now opens it on the first press. A redundant extra focus target in front of the clickable meant the first press only moved focus and a second press was needed. A source test keeps a bare `focusable()` out of the front of clickables.
 - iOS: catalogue search read the server's `{items, remote_only}` answer as a bare list and always failed with "Couldn't load search"; it now decodes the envelope. A regression test covers it.
 - Web mobile: the autofocused card on home, library, detail rails and search is no longer scaled and raised on touch layouts; the lift stays for remote input.
