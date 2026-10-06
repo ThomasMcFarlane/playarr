@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.auth.SavedProfile
+import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.HouseholdApproval
 import java.time.Instant
 import okhttp3.MediaType.Companion.toMediaType
@@ -205,5 +207,20 @@ class PlayarrGuardianApprovalsTest {
         assertEquals(PlayarrString.GuardianSubjectSchedule, guardianSubjectLabel(approval("a", subject = "schedule")))
         assertEquals(PlayarrString.GuardianSubjectContent, guardianSubjectLabel(approval("a", kind = "content", subject = "w")))
         assertEquals(PlayarrString.GuardianSubjectOther, guardianSubjectLabel(approval("a", kind = "install", subject = "x")))
+    }
+
+    @Test
+    fun profileNamesFallBackToProfilesSavedOnThisDevice() {
+        // In full-account mode the server lists only the signed-in profile, so the child is named from the saved list.
+        val names = guardianProfileNames(
+            available = listOf(AvailableProfile(id = "guardian", username = "fx-guardian", displayName = "Guardian", isCurrent = true, pinLocked = true)),
+            saved = listOf(
+                SavedProfile("http://server.example", "child", "Child"),
+                SavedProfile("http://server.example", "blank", " "),
+            ),
+        )
+        assertEquals("Child", names["child"])
+        assertEquals("Guardian", names["guardian"])
+        assertEquals(null, names["blank"])
     }
 }

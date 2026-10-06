@@ -40,6 +40,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.playarr.shared.auth.SavedProfile
+import io.playarr.shared.auth.TokenStore
+import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.DecideHouseholdApprovalRequest
 import io.playarr.shared.data.model.HouseholdApproval
 import io.playarr.shared.data.remote.PlayarrApi
@@ -53,6 +56,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -185,6 +189,19 @@ internal fun guardianSubjectLabel(approval: HouseholdApproval): PlayarrString = 
     else -> PlayarrString.GuardianSubjectOther
 }
 
+/**
+ * Names for the profiles a guardian looks after. The server's profile list holds only the signed-in
+ * account in full-account mode, so profiles saved on this device (by their display name) fill the rest.
+ */
+internal fun guardianProfileNames(
+    available: List<AvailableProfile>,
+    saved: List<SavedProfile>,
+): Map<String, String> {
+    val fromSaved = saved.mapNotNull { profile -> profile.name?.takeIf(String::isNotBlank)?.let { profile.userId to it } }.toMap()
+    val fromServer = available.associate { it.id to it.displayName.ifBlank { it.username } }.filterValues(String::isNotBlank)
+    return fromSaved + fromServer
+}
+
 internal data class GuardianApprovalsSnapshot(
     val approvals: List<HouseholdApproval>,
     val names: Map<String, String>,
@@ -193,6 +210,7 @@ internal data class GuardianApprovalsSnapshot(
 @HiltViewModel
 internal class GuardianApprovalsViewModel @Inject constructor(
     private val api: PlayarrApi,
+    private val tokenStore: TokenStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ParityLoad<GuardianApprovalsSnapshot>>(ParityLoad.Loading)
     val state: StateFlow<ParityLoad<GuardianApprovalsSnapshot>> = _state.asStateFlow()
@@ -215,8 +233,10 @@ internal class GuardianApprovalsViewModel @Inject constructor(
             _errors.value = emptyMap()
             _state.value = try {
                 val approvals = api.listHouseholdApprovals()
-                val names = runCatching { api.listAvailableProfiles() }.getOrDefault(emptyList())
-                    .associate { it.id to it.displayName.ifBlank { it.username } }
+                val names = guardianProfileNames(
+                    runCatching { api.listAvailableProfiles() }.getOrDefault(emptyList()),
+                    runCatching { tokenStore.savedProfiles.first() }.getOrDefault(emptyList()),
+                )
                 ParityLoad.Ready(GuardianApprovalsSnapshot(approvals, names))
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -307,7 +327,7 @@ internal fun ExperienceGuardianApprovalsScreen(
                                 GuardianApprovalCard(
                                     approval = approval,
                                     profileName = current.value.names[approval.profileUserId].orEmpty()
-                                        .ifBlank { playarrString(PlayarrString.ProfileViewerFallback) },
+                                        .ifBlank { playarrString(PlayarrString.GuardianUnknownProfile) },
                                     busy = busyId != null,
                                     error = errors[approval.id],
                                     onDecide = { viewModel.decide(approval, it) },

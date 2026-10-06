@@ -8,7 +8,14 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 /** Where the live stream stands; drives fallback polling. */
 enum class LiveConnectionState {
@@ -40,13 +47,23 @@ fun interface LiveEventsTransport {
 
 /** Adapts the Retrofit [LiveEventsApi]; [ConnectException][IOException]s propagate to the connection's backoff. */
 fun LiveEventsApi.asTransport(): LiveEventsTransport = LiveEventsTransport { lastEventId ->
-    val response = events(lastEventId?.toString())
+    val call = events(lastEventId?.toString())
+    val response = suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) = continuation.resume(response)
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) = continuation.resumeWithException(t)
+        })
+    }
     val body = response.body() ?: response.errorBody()
     LiveEventsResponse(
         code = response.code(),
         contentType = response.headers()["Content-Type"] ?: body?.contentType()?.toString(),
         reader = if (response.isSuccessful) body?.charStream() else null,
-        close = { body?.close() },
+        // Cancel the call, never close the body from here: closing a chunked body drains it, which races
+        // the reader blocked in another thread ("Unbalanced enter/exit") and killed the app on a profile
+        // switch. Cancelling unblocks that reader with an IOException instead.
+        close = { call.cancel() },
     )
 }
 

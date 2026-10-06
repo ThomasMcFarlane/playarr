@@ -9,6 +9,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: the app no longer crashes when signing in or switching profiles while the live-event stream is open.
+- Android: the release calendar header fits phones, and Watchlist shows beside Open when the server offers both.
+- Android: the guardian approval card names the child (from profiles saved on the device) and reads correctly for out-of-hours requests.
+- Android: a session with no refresh token is dropped instead of failing every request.
+- Server: refreshing a token for a deleted account, or using a live access token of one, now answers 401 instead of minting a token or answering 403, so clients ask for a sign-in.
 - Android: the minimised player no longer shows an empty or black surface for video. The mini player previously had no video surface (artwork only); it now binds a video view to the shared player, and the full-screen video view re-binds on every recomposition.
 - Web: the Household page shows the same time left as the "min left" chip, counting the schedule window as well as the daily budget.
 - Web: the language filter drawer sends the sign-in token with its facet request, so audio and subtitle language counts show instead of "No languages indexed yet".
