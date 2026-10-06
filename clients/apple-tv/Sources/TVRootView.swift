@@ -204,7 +204,9 @@ struct TVRootView: View {
                     workKind: .artist,
                     collectionNoun: "ARTISTS"
                 )
-            case .downloads, .watchlist, .requests, .calendar:
+            case .calendar:
+                TVCalendarView()
+            case .downloads, .watchlist, .requests:
                 TVNotYetOnTVView(title: tab.title)
             case .playlists:
                 TVLibraryKindView(

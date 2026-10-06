@@ -50,6 +50,9 @@ extension TVParityLaunch {
 
     static var isLive: Bool { route != nil }
 
+    /// The instant the web reference freezes its clock at (2026-07-29 05:59 UTC).
+    static var frozenNow: Date { Date(timeIntervalSince1970: 1_785_304_740) }
+
     /// Static chrome (floating nav, no focus effects, frozen clock): fixture screens and live routes.
     static var frozen: Bool { requestedScreen != nil || isLive }
 
@@ -63,6 +66,7 @@ extension TVParityLaunch {
         case "playlists": return .playlists
         case "settings": return .settings
         case "search": return .search
+        case "calendar": return .calendar
         case "detail": return .movies
         default: return nil
         }
