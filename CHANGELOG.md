@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV search: pressing Up from Filters now lands on the search field instead of the Back button, matching the web TV search page. Tests pin the focus order on both clients and the first-Enter/OK activation of web TV cards.
 - Phone remote: a press that cannot be delivered now says why, beside the pad instead of below the pairing lists: "No connection" when this phone has no network, "The device did not respond" when the command is not acknowledged within about 4 s (for example the TV app is in the background or its connection dropped), instead of silently doing nothing or blaming the device.
 - Android TV: the pairing approval prompt now keeps retrying to take D-pad focus until it has it, so a slow first composition no longer leaves the remote's keys falling through to the screen behind.
 - Playback handoff: a destination that still held an earlier, stopped or paused playback of the same file acknowledged the handoff at once with that stale position, so the source stopped before the destination had really started. The destination now confirms only once it has begun the offered request (a playback session exists for it). Measured on an Android TV emulator: acknowledgement within 0.5 s with a position 64 s off before, 2.3 s with 0.4 s drift after.
