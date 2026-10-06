@@ -1,0 +1,1 @@
+- Deleting a user now frees their username for a new account (the tombstone is renamed; migration 0077 does the same for existing ones), and an administrator delete revokes all of the user's refresh-token families and sessions immediately.
