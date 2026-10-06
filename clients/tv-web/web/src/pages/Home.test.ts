@@ -87,6 +87,7 @@ describe("Home layout", () => {
     expect(rule).toMatch(/--tv-track-left-fade:\s*var\(--mobile-page-gutter\)/);
     expect(rule).toMatch(/padding-left:\s*var\(--mobile-page-gutter\)/);
     expect(mobile).not.toMatch(/\.tv-media-track\s*\{\s*padding-left:\s*var\(--tv-track-left-fade\);\s*\}/);
+    expect(mobile).toMatch(/\.tv-home-customise\s*\{[^}]*right:\s*calc\(var\(--mobile-page-gutter\) \+ 52px\)/);
     // Rails stay start-packed: no distributed spacing on the card rows.
     expect(css).not.toMatch(/\.tv-(home-rail|media-track-scroll)\s*\{[^}]*justify-content:\s*space-/s);
   });

@@ -10302,6 +10302,12 @@ html.is-native-scroll-root .profile-auth-scroll {
     scroll-padding-block: 20px calc(var(--mobile-nav-height) + 24px);
   }
 
+  /* Keep the Customise button clear of the 44px profile avatar in the top-right corner. */
+  .tv-home .tv-home-customise {
+    top: calc(var(--mobile-top-inset) + 6px);
+    right: calc(var(--mobile-page-gutter) + 52px);
+  }
+
   .tv-home-rail-section,
   .tv-media-track {
     padding-left: var(--mobile-page-gutter);
