@@ -1,0 +1,76 @@
+# Ubuntu 22.04 container carrying the Vega SDK, so building/running this app
+# never depends on the host's own OS or Node version. Two separate,
+# independently-verified facts make this container necessary rather than a
+# nice-to-have (design doc §8.1):
+#
+#   - Amazon documents SDK support for macOS 10.15+ and Ubuntu 20.04+ only --
+#     not "any glibc distro". `libpython3.8-dev`, which the installer
+#     needs, is missing from many newer distributions -- exactly the
+#     kind of dependency that fails at link time, not at a friendly
+#     "unsupported OS" check.
+#   - A current host Node is often far ahead of
+#     what Metro 0.76 / React Native 0.72 tooling supports; installing Node
+#     20 in here, deliberately NOT reusing whatever the host has, is load-
+#     bearing, not cosmetic.
+#
+# Nothing that runs day-to-day needs this file at all -- `npm run typecheck`
+# / `npm test` / `npm run gate` all run on the host directly (design doc
+# §8.2's whole point). This container is only ever entered through
+# scripts/vega-docker.sh, and only for the handful of commands design doc
+# §8.4 marks "SDK required".
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Native (non-Snap) curl is required -- Ubuntu's default Snap-packaged curl
+# cannot reach the SDK installer correctly (a known Snap-confinement
+# networking quirk, not specific to this installer).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
+      git \
+      lz4 \
+      software-properties-common \
+      build-essential \
+      python3 \
+      unzip \
+      xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# libpython3.8-dev via the deadsnakes PPA -- Ubuntu 22.04's own default
+# Python is newer than 3.8, and this is exactly the package many newer
+# distributions no longer ship (the reason this container exists at all).
+RUN add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libpython3.8-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node 20 -- NOT whatever version the host happens to run. Metro 0.76 /
+# React Native 0.72's tooling is untested (and, in practice, broken) on much newer Node majors.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Watchman speeds up Metro's file watching; not fatal if this package
+# happens to be unavailable on a future Ubuntu point release, hence `|| true`.
+RUN apt-get update && (apt-get install -y --no-install-recommends watchman || true) \
+    && rm -rf /var/lib/apt/lists/*
+
+# Matches the host UID (see vega-docker.sh's --build-arg) so build/
+# .vega/node_modules output written from inside the container is owned by
+# the invoking host user, not root -- otherwise every artefact this
+# container produces would need a manual chown before the host could touch
+# it again.
+ARG UID=1000
+# The container user's home is /opt/vega; the SDK installer puts its tools under
+# $HOME/vega.
+RUN useradd -m -d /opt/vega -u ${UID} vega
+USER vega
+
+# The SDK installer itself. Unverified without a real run whether this
+# requires an Amazon developer account to even reach (design doc §9.1 R1) --
+# tracked there, not assumed away here.
+RUN curl -fsSL https://sdk-installer.vega.labcollab.net/get_vvm.sh | bash
+ENV PATH="/opt/vega/vega/bin:${PATH}"
+
+WORKDIR /work

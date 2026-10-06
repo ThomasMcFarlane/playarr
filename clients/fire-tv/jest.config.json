@@ -1,0 +1,22 @@
+{
+  "preset": "react-native",
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"],
+  "moduleNameMapper": {
+    "^@playarr-tv/api-client/react$": "<rootDir>/../tv-web/packages/api-client/src/hooks.ts",
+    "^@playarr-tv/api-client$": "<rootDir>/../tv-web/packages/api-client/src/index.ts",
+    "^@playarr-tv/device-auth$": "<rootDir>/../tv-web/packages/device-auth/src/index.ts",
+    "^@playarr-tv/domain$": "<rootDir>/../tv-web/packages/domain/src/index.ts",
+    "^@playarr-tv/player-core$": "<rootDir>/../tv-web/packages/player-core/src/index.ts",
+    "^@playarr-tv/design-tokens$": "<rootDir>/../tv-web/packages/design-tokens/src/index.ts",
+
+    "^openapi-fetch$": "<rootDir>/node_modules/openapi-fetch",
+    "^qrcode$": "<rootDir>/node_modules/qrcode",
+    "^react$": "<rootDir>/node_modules/react",
+
+    "^@babel/runtime/(.*)$": "<rootDir>/node_modules/@babel/runtime/$1",
+    "^@babel/runtime$": "<rootDir>/node_modules/@babel/runtime"
+  },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(react-native|@react-native|@amazon-devices|react-native-url-polyfill|react-native-uuid|openapi-fetch)/)"
+  ]
+}

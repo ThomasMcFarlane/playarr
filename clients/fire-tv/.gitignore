@@ -1,0 +1,20 @@
+# Fire TV (Vega OS) client -- adds only what's specific to this project.
+# node_modules/, dist/, build/, *.tsbuildinfo, coverage/ etc. are already
+# covered by the repo root .gitignore's Node/pnpm section; this file exists
+# for the things unique to the Vega SDK toolchain.
+
+# `vega` CLI state (SDK installs itself under ~/vega, but per-project caches
+# and device-pairing state land here) and .vpkg build output. build/ is
+# already caught by the root .gitignore, but is repeated here so this file
+# reads standalone.
+.vega/
+build/
+*.vpkg
+
+# Metro bundler cache and the debug bundle it can be asked to write out.
+.metro-cache/
+*.jsbundle
+*.jsbundle.map
+
+# Watchman, if run from inside this directory rather than the SDK container.
+.watchmanconfig.local

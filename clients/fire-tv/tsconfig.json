@@ -1,0 +1,92 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    // TS ~4.9.5 is Vega's pinned compiler (see package.json); "bundler"
+    // module resolution was only introduced in TS 5.0, so this project uses
+    // the classic Node-style algorithm instead.
+    "moduleResolution": "node",
+    // "dom" is NOT here because this app renders any DOM (design doc §1.1:
+    // "No DOM, no CSS") -- it is here because the shared @playarr-tv/*
+    // packages are typechecked as part of THIS program once aliased in
+    // (paths, above), and they were written for tv-web's browser tsconfig,
+    // which has "dom". @playarr-tv/device-auth's TokenStore and
+    // @playarr-tv/domain's getStoredApiBaseUrl both reference the bare
+    // global `localStorage`, and device-auth/session.ts constructs a real
+    // `new URL(...)`; without "dom" those are "Cannot find name" errors in
+    // code this project does not own and must not edit. At runtime none of
+    // this matters either way -- Hermes has neither, and
+    // src/platform/storage/localStorageShim.ts + polyfills.ts supply both,
+    // exactly because "dom" here is a type-checking fiction, not a runtime
+    // fact.
+    "lib": ["es2020", "dom"],
+    "jsx": "react-native",
+    "allowJs": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    // The @amazon-devices packages' own .d.ts quality is unverified (design
+    // doc §3.3/§9.1 R3) -- skipLibCheck keeps a crack in THEIR types from
+    // failing typecheck for code we did not write, while still fully
+    // checking every file under src/.
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      // The shared @playarr-tv/* packages are consumed by TypeScript
+      // SOURCE (not their built dist/), mirroring metro.config.js's
+      // resolver.extraNodeModules exactly -- see design doc §4.1. Pointing
+      // at the src/ directory (rather than src/index.ts) lets TS apply its
+      // normal index.ts resolution, the same as a real package import
+      // would.
+      "@playarr-tv/api-client": ["../tv-web/packages/api-client/src"],
+      // The "/react" subpath needs its OWN entry, not just a side effect of
+      // the one above: @playarr-tv/api-client's package.json "exports"
+      // maps "./react" to hooks.ts specifically (not <dir>/react.ts, which
+      // doesn't exist), and paths substitution does plain string matching,
+      // not package.json "exports" awareness -- so without this exact-match
+      // entry, "@playarr-tv/api-client/react" would resolve nowhere.
+      "@playarr-tv/api-client/react": ["../tv-web/packages/api-client/src/hooks"],
+      "@playarr-tv/device-auth": ["../tv-web/packages/device-auth/src"],
+      "@playarr-tv/domain": ["../tv-web/packages/domain/src"],
+      "@playarr-tv/player-core": ["../tv-web/packages/player-core/src"],
+      "@playarr-tv/design-tokens": ["../tv-web/packages/design-tokens/src"],
+
+      // The three lines below are NOT part of the shared-package surface --
+      // they exist because the aliased source above has its own plain-npm
+      // dependencies (api-client/src/index.ts imports "openapi-fetch",
+      // api-client/src/hooks.ts imports "react", device-auth/src imports
+      // "qrcode"), and those files physically live inside
+      // clients/tv-web/packages/, where TS's normal upward node_modules walk
+      // would look in clients/tv-web/node_modules -- which does not exist in
+      // this worktree (tv-web's pnpm workspace has never been installed
+      // here), and even if it did, walking up from a file under
+      // clients/tv-web/ can never reach clients/fire-tv/node_modules at all
+      // (fire-tv is a sibling directory, not an ancestor). Redirecting these
+      // three explicitly is what makes fire-tv's own `npm ci` sufficient on
+      // its own, with no dependency on tv-web's install state -- exactly
+      // the isolation design doc §4.1 argues for.
+      //
+      // "react" and "qrcode" point at their `@types/*` companion packages
+      // specifically, NOT at the runtime package itself (found the hard
+      // way, via a real `tsc` run): neither package ships its own `.d.ts`
+      // (confirmed -- neither has a "types" field in its own package.json),
+      // so they normally rely on TypeScript's automatic "look for
+      // @types/<name> next to node_modules" fallback. That fallback is part
+      // of ordinary bare-specifier resolution -- a `paths` redirect
+      // replaces the specifier with a literal path BEFORE that fallback
+      // logic runs, so pointing straight at "./node_modules/react" resolves
+      // the JS fine but finds no types at all. `openapi-fetch` has no such
+      // entry below because it DOES ship its own `.d.ts` (its package.json
+      // declares "types" directly), so redirecting straight at its package
+      // folder already carries working types with it.
+      "openapi-fetch": ["./node_modules/openapi-fetch"],
+      "qrcode": ["./node_modules/@types/qrcode"],
+      "react": ["./node_modules/@types/react"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "jest.setup.ts"]
+}
