@@ -20,8 +20,8 @@ Playarr is SQLite-only: every node owns one SQLite database file, and there is n
 | --- | --- | --- | --- |
 | **Who it suits** | One always-on Linux box you administer by hand. The default, and what most people should run. | You prefer containers and want Playarr managed as one stack on a home server or small VPS. | You already run a cluster and want to host one or more Playarr nodes on it. |
 | **Database** | SQLite file, created on first boot | SQLite file on a named volume | SQLite file on a persistent volume, one replica per node |
-| **What runs** | One `playarr` process under systemd, role `all` | `caddy` plus one `playarr` container | One single-replica Deployment per node |
-| **Nodes** | 1 | 1 | 1 per Deployment, peer-synced if you run several |
+| **What runs** | One `playarr` process under systemd, role `all` | `caddy` plus one `playarr` container | One single-replica StatefulSet per node |
+| **Nodes** | 1 | 1 | 1 per StatefulSet, peer-synced if you run several |
 | **Hardware** | Targets NAS boxes (Synology, QNAP), Raspberry Pi 4/5 and other consumer hardware, down to 1-2 GB RAM | Any Docker host | Any cluster |
 | **Walkthrough** | [Single server](/docs/install/single-server) | [Docker Compose](/docs/install/docker-compose) | [Kubernetes](/docs/install/kubernetes) |
 
@@ -47,7 +47,7 @@ Playarr is SQLite-only: every node owns one SQLite database file, and there is n
 - **A `DATABASE_URL`.** The only genuinely required variable. The process fails at startup if it is unset or empty.
 - **At least one *arr instance.** Playarr integrates with the *arr suite for library management and builds its catalogue by reconciling against the apps you already run. It does not scan folders itself, so a deployment with nothing registered has an empty catalogue. You register instances after first boot, through the admin API or Playarr Admin, nothing needs to be in place before you install.
 - **Two ports.** `8484/tcp` for the application (`PLAYARR_HTTP_BIND_ADDR`) and `9090/tcp` for the Prometheus endpoint (`PLAYARR_METRICS_BIND_ADDR`). Both take a full socket address, not a bare port number. `/metrics` should never be reachable from the public edge.
-- **A long-lived signing secret.** Set `PLAYARR_JWT_SECRET` to at least 32 bytes. Leave it unset and a fresh random secret is generated on every boot, so every client is signed out on restart and no two nodes ever agree.
+- **A long-lived signing secret.** Set `PLAYARR_JWT_SECRET` to at least 32 bytes. Leave it unset and the server derives a stable secret from its persisted node identity, so sessions survive restarts, but each node derives a different one and tokens are not honoured across nodes.
 
 ```bash
 openssl rand -hex 32

@@ -133,7 +133,7 @@ PLAYARR_HTTP_BIND_ADDR=0.0.0.0:8484
 PLAYARR_METRICS_BIND_ADDR=0.0.0.0:9090
 ```
 
-`PLAYARR_JWT_SECRET` must be at least 32 bytes; anything shorter is ignored with a warning. If it is unset, Playarr mints a random secret for the lifetime of that boot, which means every restart signs out every signed-in device.
+`PLAYARR_JWT_SECRET` must be at least 32 bytes; anything shorter is ignored with a warning. If it is unset, Playarr derives a stable secret from its persisted node identity, so sessions survive restarts; set it explicitly anyway.
 
 ### Corrections to the shipped example file
 
@@ -394,7 +394,7 @@ sudo systemctl restart playarr.service
 
 > **Self-update is not built yet.** `playarr-update-check.timer` ships installed but disabled, and enabling it is one explicit `systemctl enable --now playarr-update-check.timer`. Even then, `playarr update --check` makes no network call today and unconditionally reports the running binary as current, and `playarr update --yes` returns "not implemented yet" and touches no files. The signed-download-and-atomic-swap sequence exists only as a doc comment describing intended future work. Treat both as inert.
 
-**Backups.** The repository ships no backup script, restore procedure or snapshot tooling. On this tier the state that matters is a single directory:
+**Backups.** Playarr has a built-in, opt-in backup feature that writes age-encrypted archives to `PLAYARR_BACKUP_DIR` (see [Upgrade and backup](/docs/upgrade-and-backup)); the shipped unit and example env file do not enable it, and it keeps no off-node copy unless you copy archives away or configure an S3-compatible destination. Otherwise, on this tier the state that matters is a single directory, which you can archive cold:
 
 ```bash
 sudo systemctl stop playarr.service

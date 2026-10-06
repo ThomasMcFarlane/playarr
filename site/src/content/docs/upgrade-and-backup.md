@@ -10,20 +10,21 @@ configuration you wrote yourself or a cache the server can rebuild. That makes t
 short, but it is worth knowing exactly which files fall into which category before you touch a
 running install.
 
-> **Read this first.** The repository documents backups in a single sentence ("Data lives under
-> `/var/lib/playarr` … Back that up if you're running SQLite; the database is a single file
-> there", `docs/architecture/deployment/systemd.md`). There is **no backup script, no restore
-> procedure and no documented rollback** anywhere in the tree. The procedures below marked *general
-> guidance* are the standard, safe procedures for SQLite, Playarr's only storage engine, not
-> project-documented steps. Test them on your own install before
-> relying on them.
+> **Read this first.** Playarr has a built-in backup feature, but it is **off by default** and the
+> shipped systemd, Compose and Helm files do not enable it. It writes age-encrypted archives to a
+> local directory (`PLAYARR_BACKUP_DIR`) and needs at least one recovery public key
+> (`PLAYARR_BACKUP_RECIPIENTS`). Restore is an offline command-line action. See
+> [Built-in encrypted backups](#built-in-encrypted-backups) below. The other procedures here,
+> marked *general guidance*, are standard SQLite and platform steps rather than project-documented
+> ones. Rollback is not documented by the project at all. Test everything on your own install
+> before relying on it.
 
 ## What state actually needs backing up
 
 | State | Matters? | Why |
 | --- | --- | --- |
 | **The database** (the SQLite file) | **Critical** | Everything durable: catalogue, users and policies, *arr source-instance registrations and their API keys, Tdarr connection, library views, playlists, playback progress, invites, and this installation's Ed25519 node identity. |
-| **Configuration**, `/etc/playarr/playarr.env`, your Compose `.env`, or your Helm values file and Kubernetes Secret | **Critical** | Not stored in the database. Losing `PLAYARR_JWT_SECRET` signs every client out. |
+| **Configuration**, `/etc/playarr/playarr.env`, your Compose `.env`, or your Helm values file and Kubernetes Secret | **Critical** | Not stored in the database. If you set `PLAYARR_JWT_SECRET` explicitly, losing it signs every client out. If you do not, the server derives a stable secret from its node identity, which is in the database. |
 | **ACME state**, `PLAYARR_ACME_CACHE_DIR`, default `/var/lib/playarr/acme` | Useful | Holds the Let's Encrypt account and issued certificate. Recoverable by re-issuing, at the cost of rate-limit budget. Only exists if you enabled automatic HTTPS. |
 | **Artwork cache**, `PLAYARR_ARTWORK_CACHE_DIR` | Optional | A local copy of artwork already published by your *arr apps. Regenerated on demand; back it up only to avoid a re-fetch storm after a restore. |
 | **Episode-thumbnail and subtitle caches** | Optional | Derived from your own files with `ffmpeg`/`ffprobe`. Fully regenerable. |
@@ -72,8 +73,8 @@ The containerised single-node stack (`docker-compose.standalone.yml`) is simpler
 
 ### Kubernetes
 
-A Playarr node on Kubernetes is a single-replica Deployment with a persistent volume mounted at
-`/data`, holding the SQLite database and the caches. The database is that volume's `playarr.db`. The
+A Playarr node on Kubernetes is a single-replica StatefulSet whose volume claim template creates a
+persistent volume mounted at `/data`, holding the SQLite database and the caches. The database is that volume's `playarr.db`. The
 state that is also yours to preserve is your Secret and your values file. Playarr is SQLite-only, so
 there is no external database to back up.
 
@@ -149,17 +150,45 @@ docker run --rm \
 
 ### Kubernetes
 
-Run the SQLite online backup inside the pod, which has the database volume mounted, or use Playarr's
-built-in backup service. Then capture the Kubernetes-side configuration:
+The runtime image has no `sqlite3`, so for a manual snapshot enable the built-in backup feature (next
+section), or stop the pod and take a volume snapshot. Then capture the Kubernetes-side
+configuration:
 
 ```bash
-kubectl get secret playarr-secrets -n playarr -o yaml > playarr-secrets.yaml
+kubectl get secret <YOUR-SECRET> -n playarr -o yaml > playarr-secrets.yaml   # only if you created one
 helm get values playarr -n playarr -o yaml   > playarr-values.yaml
 ```
 
 > Back up the Secret wherever your secrets tool already keeps its source of truth rather than as a
 > plaintext YAML dump if you can. If your storage class supports volume snapshots, a snapshot of the
 > database volume taken while the pod is stopped is a portable second copy.
+
+## Built-in encrypted backups
+
+Playarr Server can write its own backups. The design is in `docs/architecture/server-backups.md` in
+the repository. What it does today:
+
+- **Opt-in.** Nothing happens unless `PLAYARR_BACKUP_DIR` is set, and the server refuses to enable
+  backups without a valid age public key in `PLAYARR_BACKUP_RECIPIENTS`. Generate the key pair offline
+  with `playarr-server backup keygen --out <file>`; the server only ever holds the public key, so keep
+  the private identity file somewhere other than the server.
+- **What an archive holds.** A consistent snapshot of the SQLite database (`VACUUM INTO`, safe
+  while the server runs) and, in the default `full` mode, the artwork cache. It never contains your
+  media, your `PLAYARR_JWT_SECRET`, TLS or ACME material, or any other secret from the environment.
+  Archives are `.parbak` files, age-encrypted, with a SHA-256 manifest.
+- **Schedule and retention.** One run every `PLAYARR_BACKUP_INTERVAL_HOURS` (default 24, `0` for
+  manual only), keeping the newest `PLAYARR_BACKUP_KEEP_LAST` (7) plus anything younger than
+  `PLAYARR_BACKUP_KEEP_DAYS` (30). You can also run `playarr-server backup create` or use Playarr Admin.
+- **Where it goes.** Into `PLAYARR_BACKUP_DIR` on the same machine. If that directory is on the same
+  disk as the database, a backup protects you against corruption and mistakes but not against losing
+  the disk or the node. There is **no off-node copy unless you arrange one**: download archives from
+  Admin, Backups, copy the directory elsewhere, or set the optional `PLAYARR_BACKUP_S3_*` variables to
+  also replicate each completed backup to an S3-compatible bucket that you provide.
+- **Restore.** An offline command on the replacement server, with the server stopped:
+  `playarr-server backup restore --archive <file> --identity-file <key>`. It validates the
+  archive, stages and integrity-checks the new database, and only then swaps it in, keeping the old
+  one as `<name>.pre-restore-<timestamp>`. `playarr-server backup verify` checks an archive without
+  restoring. Restoring signs every user out. There is no restore button in Admin.
 
 ## How migrations run on upgrade
 
@@ -184,10 +213,12 @@ Practical consequences worth planning around:
 
 - **Take the backup immediately before the upgrade, not on yesterday's schedule.** It is your only
   route back.
-- On a multi-node deployment, whichever node starts first runs the migrations; the others find the
-  work already done. Migrations are still applied by every role, including workers.
-- If `PLAYARR_JWT_SECRET` is unset, a fresh random secret is generated at each boot and every
-  client is signed out on restart. Set it before your first upgrade, not after.
+- Every node owns its own database, so each node runs the migrations against its own file when it
+  starts. Upgrade peer-synced nodes one at a time. Migrations are applied by every role, including
+  workers.
+- If `PLAYARR_JWT_SECRET` is unset (or shorter than 32 bytes), the server derives a stable secret
+  from its persisted node identity, so sessions survive restarts. Setting it explicitly is still the
+  recommended configuration.
 
 ## Upgrade procedures
 
@@ -275,7 +306,7 @@ helm upgrade playarr infra/kubernetes/helm/playarr \
   -f my-values.yaml \
   --wait --timeout 5m
 
-kubectl rollout status deployment/playarr -n playarr
+kubectl rollout status statefulset/playarr -n playarr
 ```
 
 With one replica and one volume, expect a short outage while the pod restarts. For the kustomize
@@ -333,9 +364,10 @@ restore of the pre-upgrade database file:
 helm history playarr -n playarr
 
 # 1. Stop the workload.
-kubectl scale deployment/playarr --replicas=0 -n playarr
+kubectl scale statefulset/playarr --replicas=0 -n playarr
 
-# 2. Restore the pre-upgrade database file onto the volume, then:
+# 2. Restore the pre-upgrade database onto the volume (for example with
+#    `playarr-server backup restore` from a built-in backup), then:
 helm rollback playarr <REVISION> -n playarr --wait
 ```
 
@@ -372,7 +404,7 @@ docker compose -f infra/docker/docker-compose.prod.yml logs --since 10m playarr
 
 # Kubernetes
 kubectl get pods -n playarr
-kubectl logs deployment/playarr -n playarr --since=10m
+kubectl logs statefulset/playarr -n playarr --since=10m
 ```
 
 Prometheus metrics are exposed by every role on `PLAYARR_METRICS_BIND_ADDR`, default
@@ -404,7 +436,8 @@ Finally, confirm the parts of the install that depend on database state survived
 
 Stated plainly, so you are not left looking for something that isn't there:
 
-- No rollback procedure is documented for any deployment shape.
+- No rollback procedure is documented for any deployment shape. Built-in backups and the offline
+  restore command are documented, but they are opt-in and the shipped manifests do not enable them.
 - No down or reverse migrations exist, so there is no supported schema downgrade.
 - No Postgres migration path exists: Postgres support was removed (ADR 0002) and `DATABASE_URL` must be a `sqlite:` URL.
 - No deployment shape has been booted end-to-end and verified in the project's own environment; the

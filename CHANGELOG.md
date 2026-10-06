@@ -2295,6 +2295,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Regenerated the `@2x` architecture diagram PNGs from the SQLite-only SVGs, and corrected docs left over from the Postgres era: the backup description on the site (opt-in, age-encrypted, local unless an S3 destination is configured, offline CLI restore), the Kubernetes tier (StatefulSet, volume claim template, no Secret hook), the JWT secret fallback, the multi-node locking claims and the stale persistence gaps in the architecture overview.
 - Pixel parity tooling for the Android phone client: platform profile options for capture-web (safe area, font, colour scheme), an emulator capture script, a system-bar mask and the measured results in both themes.
 - Added the 2026-10-07 emulator validation record for the phone remote and playback handoff (`docs/validation/remote-emulator-run-2026-10-07.md`), including what only a real device can prove.
 - Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.

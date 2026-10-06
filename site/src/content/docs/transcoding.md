@@ -170,7 +170,7 @@ sudo systemctl restart playarr.service
 There is no hot reload; everything resolved at startup is read once.
 
 > **Not built yet: session-to-node affinity.** A live session is pinned to the node that started it.
-> In a multi-replica deployment nothing routes a client's subsequent manifest and segment requests
+> With several nodes nothing routes a client's subsequent manifest and segment requests
 > back to that node, and if the node dies the session dies with it and the client must restart
 > playback. Behind a load balancer, prefer sticky sessions until this lands.
 
@@ -328,7 +328,7 @@ What that means per deployment shape:
 | systemd | The unit's private `/tmp` (`PrivateTmp=true`) | If `/tmp` is a tmpfs on your host, segments consume RAM. |
 | Docker Compose (prod) | `tmpfs: /tmp` on a read-only root filesystem | A RAM disk sized by Docker's default. |
 | Kubernetes, Helm chart | An `emptyDir` mounted at `/tmp` | Node-local, sized by the node's ephemeral storage. |
-| Kubernetes, Kustomize base | Nowhere in particular | `infra/kubernetes/base/deployment-api.yaml` declares no volumes and no `readOnlyRootFilesystem`, so segments land in the container's own writable layer. Add an `emptyDir` yourself if you use the overlays rather than the chart. |
+| Kubernetes, Kustomize base | Nowhere in particular | `infra/kubernetes/base/statefulset.yaml` mounts only the data volume and sets no `readOnlyRootFilesystem`, so segments land in the container's own writable layer. Add an `emptyDir` yourself if you use the overlays rather than the chart. |
 
 To move it onto disk on a systemd install, point `TMPDIR` at a directory the unit may write to. The
 unit's `ProtectSystem=strict` allows writes only to `ReadWritePaths`, which is

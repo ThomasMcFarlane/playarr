@@ -277,8 +277,9 @@ Playarr owns and overwrites: title, sort title, monitored flag, availability, ov
 images and release date. It never touches your tags, the `added_at` timestamp, or external
 references contributed by anything else.
 
-In a multi-node deployment each pass takes a cluster lock named `arr-sync:<source_instance_id>`, so
-only one node reconciles a given instance at a time.
+Each pass takes an in-process lock named `arr-sync:<source_instance_id>`, so only one pass runs for a
+given instance at a time on a node. Nodes in a peer group do not elect a leader: each node keeps its own
+database and reconciles its own registrations.
 
 ## Webhooks: endpoint built, faster updates not built yet
 
