@@ -672,6 +672,39 @@ export interface CalendarEntry {
   work_id?: string | null;
   average_lag_seconds?: number | null;
   sources: CalendarEntrySource[];
+  /**
+   * Identity of the title for `requestTitle` and `addToWatchlist`; post it back
+   * unchanged. Absent on servers that predate server-computed actions and for
+   * entries with no external id.
+   */
+  snapshot?: TitleSnapshot | null;
+  /** What the signed-in caller can do with this entry, computed by the server. */
+  actions?: CalendarAction[];
+  /** Episodes folded into this entry when `group=series_day` was requested. */
+  members?: CalendarGroupMember[];
+}
+
+export type CalendarActionKind = "open" | "play" | "resume" | "request" | "watchlist";
+
+/** One server-computed action; a disabled one carries a `reason` to show. */
+export interface CalendarAction {
+  action: CalendarActionKind;
+  enabled: boolean;
+  reason?: string | null;
+  work_id?: string | null;
+  media_file_id?: string | null;
+  position_ms?: number | null;
+  /** `watchlist`: already listed. `request`: already requested. */
+  active?: boolean;
+}
+
+export interface CalendarGroupMember {
+  id: string;
+  subtitle?: string | null;
+  season_number?: number | null;
+  episode_number?: number | null;
+  monitored: boolean;
+  has_file: boolean;
 }
 
 export interface CalendarSourceStatus {
@@ -697,12 +730,20 @@ export interface CalendarParams {
   end?: string;
   kinds?: ReadonlyArray<CalendarMediaKind>;
   sourceInstanceId?: string;
+  /** `series_day` folds same-day episodes of a series into one entry with `members`. */
+  group?: "series_day";
 }
 
 export interface CalendarFeedStatus {
   active: boolean;
   created_at?: string | null;
   last_used_at?: string | null;
+  /**
+   * `POST /api/v1/calendar/feed` would return the existing link unchanged.
+   * Absent on servers that predate re-showable links, where that POST always
+   * replaces the link, so callers must not POST unless this is true.
+   */
+  link_available?: boolean;
 }
 
 /** Returned only when a feed token is created or regenerated. */
@@ -736,6 +777,7 @@ export function buildCalendarQuery(params: CalendarParams = {}): string {
   if (params.end) query.set("end", params.end);
   if (params.kinds && params.kinds.length > 0) query.set("kind", params.kinds.join(","));
   if (params.sourceInstanceId) query.set("source_instance_id", params.sourceInstanceId);
+  if (params.group) query.set("group", params.group);
   const text = query.toString();
   return text ? `?${text}` : "";
 }
@@ -3035,9 +3077,17 @@ export class ApiClient {
     return this.requestJson<CalendarFeedStatus>("GET", "/api/v1/calendar/feed");
   }
 
-  /** Creates or regenerates the feed token; the previous URL stops working. The URL is only ever returned here. */
-  async createCalendarFeed(): Promise<CalendarFeedCreated> {
-    return this.requestJson<CalendarFeedCreated>("POST", "/api/v1/calendar/feed");
+  /**
+   * `POST /api/v1/calendar/feed`: returns the existing link (200) or creates one (201).
+   * With `rotate`, replaces it and the previous URL stops working. Servers that
+   * predate `rotate` ignore it and always replace, so only call this without
+   * `rotate` when `getCalendarFeed()` reported `link_available`.
+   */
+  async createCalendarFeed(options: { rotate?: boolean } = {}): Promise<CalendarFeedCreated> {
+    return this.requestJson<CalendarFeedCreated>(
+      "POST",
+      `/api/v1/calendar/feed${options.rotate ? "?rotate=true" : ""}`
+    );
   }
 
   async revokeCalendarFeed(): Promise<void> {

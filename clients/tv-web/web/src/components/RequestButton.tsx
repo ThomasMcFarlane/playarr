@@ -12,18 +12,24 @@ export function RequestButton({
   snapshot,
   className,
   focusKey,
+  disabled,
+  alreadyRequested,
 }: {
   snapshot: TitleSnapshot;
   className?: string;
   focusKey?: string;
+  /** The server says the caller cannot request this title (its reason is shown by the caller). */
+  disabled?: boolean;
+  /** The server says the title is already requested. */
+  alreadyRequested?: boolean;
 }) {
   const { t } = useLanguage();
   const client = useApiClient();
-  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [state, setState] = useState<"idle" | "busy" | "done">(alreadyRequested ? "done" : "idle");
   const [error, setError] = useState<string | null>(null);
 
   async function request() {
-    if (state !== "idle") return;
+    if (state !== "idle" || disabled) return;
     setState("busy");
     setError(null);
     try {
@@ -40,7 +46,7 @@ export function RequestButton({
       <button
         type="button"
         className={className ?? "tv-watchlist-primary"}
-        disabled={state !== "idle"}
+        disabled={state !== "idle" || disabled}
         data-navigation-focus-key={focusKey}
         onClick={() => void request()}
       >

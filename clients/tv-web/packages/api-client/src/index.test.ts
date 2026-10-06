@@ -1544,6 +1544,28 @@ describe("release calendar client", () => {
     expect(buildCalendarQuery({ kinds: [] })).toBe("");
   });
 
+  it("asks for series_day grouping only when requested", () => {
+    expect(buildCalendarQuery({ group: "series_day" })).toBe("?group=series_day");
+    expect(buildCalendarQuery({ start: "2026-10-01" })).toBe("?start=2026-10-01");
+  });
+
+  it("replaces the subscription link only when rotate is requested", async () => {
+    const urls: string[] = [];
+    const fetchImpl = mockFetch((request) => {
+      urls.push(`${request.method} ${new URL(request.url).pathname}${new URL(request.url).search}`);
+      return jsonResponse(200, { url: "https://x/feed/t.ics", token: "t", created_at: "2026-10-04T00:00:00Z" });
+    });
+    const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });
+    await client.createCalendarFeed();
+    await client.createCalendarFeed({ rotate: false });
+    await client.createCalendarFeed({ rotate: true });
+    expect(urls).toEqual([
+      "POST /api/v1/calendar/feed",
+      "POST /api/v1/calendar/feed",
+      "POST /api/v1/calendar/feed?rotate=true",
+    ]);
+  });
+
   it("surfaces invalid_range as an ApiError", async () => {
     const fetchImpl = mockFetch(() => jsonResponse(400, { code: "invalid_range" }));
     const client = new ApiClient({ baseUrl: BASE_URL, fetchImpl });

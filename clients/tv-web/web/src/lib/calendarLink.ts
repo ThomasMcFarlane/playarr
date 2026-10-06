@@ -1,4 +1,4 @@
-import { ApiError } from "@playarr-tv/api-client";
+import { ApiError, type CalendarFeedCreated, type CalendarFeedStatus } from "@playarr-tv/api-client";
 
 /** Why the calendar link could not be loaded or changed, in terms a viewer can act on. */
 export type CalendarLinkFailure = "unreachable" | "unsupported" | "signin" | "other";
@@ -62,4 +62,43 @@ export function storeCalendarLink(url: string | null, storage: Pick<Storage, "ge
   } catch {
     // Storage may be unavailable (private mode); the link then shows once per visit.
   }
+}
+
+export type CalendarLinkOpenPlan = "fetch" | "stored" | "needsReset";
+
+/**
+ * What opening the link panel should do, given the server's status.
+ *
+ * `POST /api/v1/calendar/feed` returns the existing link unchanged only when
+ * the server says `link_available` (or when there is no link yet, so it simply
+ * creates one). A server that predates re-showable links reports no such field
+ * and a POST would replace the link, so then the device's stored copy is shown,
+ * and when there is none the viewer is left to press Reset on purpose.
+ */
+export function planCalendarLinkOpen(
+  status: Pick<CalendarFeedStatus, "active" | "link_available">,
+  storedUrl: string | null,
+): CalendarLinkOpenPlan {
+  if (!status.active || status.link_available === true) return "fetch";
+  return storedUrl ? "stored" : "needsReset";
+}
+
+type CalendarLinkClient = {
+  getCalendarFeed(): Promise<CalendarFeedStatus>;
+  createCalendarFeed(options?: { rotate?: boolean }): Promise<CalendarFeedCreated>;
+};
+
+export type CalendarLinkState = { kind: "link"; url: string } | { kind: "needsReset" };
+
+/** Shows the viewer's link: one status call, then at most one POST that never replaces an existing link. */
+export async function openCalendarLink(client: CalendarLinkClient, storedUrl: string | null): Promise<CalendarLinkState> {
+  const plan = planCalendarLinkOpen(await client.getCalendarFeed(), storedUrl);
+  if (plan === "fetch") return { kind: "link", url: (await client.createCalendarFeed()).url };
+  if (plan === "stored" && storedUrl) return { kind: "link", url: storedUrl };
+  return { kind: "needsReset" };
+}
+
+/** Replaces the link (the old URL stops working). Only the Reset action calls this. */
+export async function resetCalendarLink(client: CalendarLinkClient): Promise<string> {
+  return (await client.createCalendarFeed({ rotate: true })).url;
 }

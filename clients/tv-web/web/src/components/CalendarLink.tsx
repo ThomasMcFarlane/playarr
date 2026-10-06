@@ -3,6 +3,8 @@ import { useApiClient } from "../lib/ApiClientProvider";
 import {
   classifyCalendarLinkError,
   loadStoredCalendarLink,
+  openCalendarLink,
+  resetCalendarLink,
   storeCalendarLink,
   type CalendarLinkFailure,
 } from "../lib/calendarLink";
@@ -19,9 +21,10 @@ const FAILURE_KEYS: Record<CalendarLinkFailure, TranslationKey> = {
 };
 
 /**
- * The viewer's personal calendar (iCal) link: created automatically on first
- * open, with Copy, QR and Google/Apple/Outlook instructions, and a secondary
- * "Reset link" that replaces it after a confirmation.
+ * The viewer's personal calendar (iCal) link: one call shows the existing link
+ * (or creates the first one), with Copy, QR and Google/Apple/Outlook
+ * instructions. Only the secondary "Reset link", after a confirmation,
+ * replaces it (`rotate`).
  */
 export function CalendarLink() {
   const { t } = useLanguage();
@@ -33,39 +36,42 @@ export function CalendarLink() {
   const [confirming, setConfirming] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
-  const create = useCallback(async () => {
-    setBusy(true);
-    setFailure(null);
-    try {
-      const created = await client.createCalendarFeed();
-      storeCalendarLink(created.url);
-      setUrl(created.url);
+  const show = useCallback(
+    (link: string) => {
+      storeCalendarLink(link);
+      setUrl(link);
       setNeedsReset(false);
       setConfirming(false);
       setCopyState("idle");
-    } catch (error) {
-      setFailure(classifyCalendarLinkError(error));
-    } finally {
-      setBusy(false);
-    }
-  }, [client]);
+    },
+    []
+  );
 
   const open = useCallback(async () => {
     setBusy(true);
     setFailure(null);
     try {
-      const status = await client.getCalendarFeed();
-      if (!status.active) {
-        await create();
-        return;
-      }
-      if (!loadStoredCalendarLink()) setNeedsReset(true);
-      setBusy(false);
+      const state = await openCalendarLink(client, loadStoredCalendarLink());
+      if (state.kind === "link") show(state.url);
+      else setNeedsReset(true);
     } catch (error) {
       setFailure(classifyCalendarLinkError(error));
+    } finally {
       setBusy(false);
     }
-  }, [client, create]);
+  }, [client, show]);
+
+  const reset = useCallback(async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      show(await resetCalendarLink(client));
+    } catch (error) {
+      setFailure(classifyCalendarLinkError(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [client, show]);
 
   useEffect(() => {
     void open();
@@ -136,7 +142,7 @@ export function CalendarLink() {
         <div className="calendar-subscription-confirm" role="alertdialog" aria-labelledby="calendar-reset-text">
           <p id="calendar-reset-text">{t("pages.calendar.subscription.confirmRegenerate")}</p>
           <div className="calendar-actions">
-            <Button variant="primary" disabled={busy} autoFocus onClick={() => void create()}>
+            <Button variant="primary" disabled={busy} autoFocus onClick={() => void reset()}>
               {t("pages.calendar.subscription.regenerate")}
             </Button>
             <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>

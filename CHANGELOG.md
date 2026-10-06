@@ -150,6 +150,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the Release Calendar now shows Play, Open, Request and Watchlist from the actions the server computes for the signed-in user, and posts the server's title snapshot unchanged; a disabled action shows the server's reason.
+- Web: the calendar link panel shows the existing link with one call and only replaces it when you press Reset.
 - CI passes the optional `GRADLE_ENCRYPTION_KEY` secret to setup-gradle so the Gradle configuration cache can be persisted once the owner creates it.
 - Use the canonical `playarr` container image name for server releases and regional commit images.
 - The GitHub Release body is now a short generated summary (highlights and artefact list) with the full changelog attached, so it stays within GitHub's size limit; the Xbox package is named correctly as an unsigned `.appx`.

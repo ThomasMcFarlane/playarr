@@ -50,6 +50,7 @@ import {
   type Day,
   type DayGroup,
 } from "../lib/calendar";
+import { legacySnapshot, planCalendarActions } from "../lib/calendarActions";
 import {
   activeFilterCount,
   applyCalendarFilters,
@@ -485,30 +486,19 @@ function MonthGrid({
   );
 }
 
-function snapshotKind(entry: CalendarEntry): "movie" | "series" | "artist" | "author" {
-  switch (entry.media_kind) {
-    case "movie":
-      return "movie";
-    case "album":
-      return "artist";
-    case "book":
-      return "author";
-    default:
-      return "series";
-  }
-}
-
 /** Details of the selected item: facts, plus Open (in library) or Request / Watchlist (not yet). */
 function ItemDetails({
   item,
   t,
   locale,
   onOpen,
+  onPlay,
 }: {
   item: CalendarItem;
   t: TFunction;
   locale: string;
   onOpen: ((route: string) => void) | null;
+  onPlay: ((mediaFileId: string, title: string) => void) | null;
 }) {
   const first = itemEntry(item);
   const entries = item.kind === "series" ? item.entries : [item.entry];
@@ -517,13 +507,13 @@ function ItemDetails({
   const subtitle = item.kind === "series"
     ? t("pages.calendar.groupSummary", { count: item.entries.length, codes: item.codes })
     : entrySubtitle(first);
-  const snapshot = {
-    kind: snapshotKind(first),
-    title: first.title,
-    poster_url: first.poster_url ?? null,
-    work_id: first.work_id ?? null,
-    year: Number(first.date.slice(0, 4)) || null,
-  } as const;
+  const plan = planCalendarActions(first);
+  // A server without computed actions gets the earlier behaviour: open when the
+  // entry is in the catalogue, otherwise request and watchlist.
+  const openRoute = plan.legacy ? route : (plan.open?.route ?? null);
+  const snapshot = plan.snapshot ?? legacySnapshot(first);
+  const showRequest = plan.legacy ? !openRoute : plan.request !== null;
+  const showWatchlist = plan.legacy ? !openRoute : plan.watchlist !== null;
   return (
     <article className="calendar-details">
       <p className="page-kicker">
@@ -597,17 +587,41 @@ function ItemDetails({
         </div>
       </dl>
       <div className="calendar-sheet-actions">
-        {route && onOpen ? (
-          <Button variant="primary" onClick={() => onOpen(route)}>
+        {plan.play && onPlay ? (
+          <Button variant="primary" onClick={() => onPlay(plan.play!.mediaFileId, first.title)}>
+            {t(plan.play.resume ? "discovery.action.resume" : "discovery.action.play")}
+          </Button>
+        ) : null}
+        {openRoute && onOpen ? (
+          <Button variant={plan.play ? "secondary" : "primary"} onClick={() => onOpen(openRoute)}>
             {first.media_kind === "episode" ? t("pages.calendar.openSeries") : t("pages.calendar.open")}
           </Button>
-        ) : (
+        ) : null}
+        {!openRoute && !plan.play ? <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p> : null}
+        {showRequest ? (
           <>
-            <p className="hint">{t("pages.calendar.sheetNotInCatalogue")}</p>
-            <RequestButton snapshot={snapshot} className={buttonClassName({ variant: "primary" })} />
-            <WatchlistToggle snapshot={snapshot} className={buttonClassName({ variant: "secondary" })} />
+            <RequestButton
+              snapshot={snapshot}
+              className={buttonClassName({ variant: openRoute ? "secondary" : "primary" })}
+              disabled={plan.request ? !plan.request.enabled && !plan.request.requested : false}
+              alreadyRequested={plan.request?.requested}
+            />
+            {plan.request && !plan.request.enabled && plan.request.reason ? (
+              <p className="hint">{plan.request.reason}</p>
+            ) : null}
           </>
-        )}
+        ) : null}
+        {showWatchlist ? (
+          plan.watchlist && !plan.watchlist.enabled ? (
+            plan.watchlist.reason ? <p className="hint">{plan.watchlist.reason}</p> : null
+          ) : (
+            <WatchlistToggle
+              snapshot={snapshot}
+              initialListed={plan.watchlist?.listed}
+              className={buttonClassName({ variant: "secondary" })}
+            />
+          )
+        ) : null}
       </div>
     </article>
   );
@@ -770,6 +784,13 @@ export function CalendarPage() {
     navigate(route, { state: { backTo: `/calendar${location.search}`, navigationOrigin: origin } });
   }
 
+  function playFile(mediaFileId: string, title: string) {
+    const origin = captureNavigationLayer(location.pathname, location.key, openerRef.current);
+    navigate(`/player/${mediaFileId}`, {
+      state: { title, backTo: `/calendar${location.search}`, mediaFileId, navigationOrigin: origin },
+    });
+  }
+
   function changeView(next: CalendarView) {
     if (next === view) return;
     updateParams((params) =>
@@ -844,7 +865,7 @@ export function CalendarPage() {
           loading ? (
             <DetailsSkeleton />
           ) : detailItem ? (
-            <ItemDetails item={detailItem} t={t} locale={locale} onOpen={openRoute} />
+            <ItemDetails item={detailItem} t={t} locale={locale} onOpen={openRoute} onPlay={playFile} />
           ) : (
             <p className="muted calendar-details">{t("pages.calendar.selectPrompt")}</p>
           )
@@ -1062,6 +1083,7 @@ export function CalendarPage() {
             onOpen={(route) => {
               openRoute(route);
             }}
+            onPlay={playFile}
           />
         </DetailSheet>
       ) : null}
