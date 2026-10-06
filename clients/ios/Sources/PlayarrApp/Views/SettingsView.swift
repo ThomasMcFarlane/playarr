@@ -144,7 +144,6 @@ struct SettingsView: View {
                                 .font(WM.font(20.8))
                                 .foregroundStyle(index == 0 ? WM.ink : WM.muted)
                                 .offset(x: index == 0 ? 330 : 325, y: 28)
-                            VStack { Spacer(); Rectangle().fill(WM.ink.opacity(0.1)).frame(height: 1) }
                         }
                         .frame(width: 358, height: 88, alignment: .topLeading)
                         .contentShape(Rectangle())
