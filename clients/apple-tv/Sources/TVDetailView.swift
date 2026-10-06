@@ -59,7 +59,7 @@ struct TVWorkDetailView: View {
             DesignTokens.Color.backgroundElevated
             keyArt(detail.work)
             keyArtAfterOverlay
-            stageWash
+            TVStageWash()
 
             TVPageHeader(
                 title: detail.work.kind == .series ? "Series" : "Movies",
@@ -85,34 +85,8 @@ struct TVWorkDetailView: View {
 
     // MARK: Key art
 
-    /// Web `.tv-key-art img`: 1038 x 1190 at (-20, -23), greyscale, contrast 0.82, brightness 0.6, opacity 0.72.
-    @ViewBuilder
     private func keyArt(_ work: Work) -> some View {
-        if let url = backdropURL(for: work) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    Color.clear
-                }
-            }
-            .frame(width: 1038.3, height: 1190.6)
-            .clipped()
-            .modifier(TVKeyArtFilter())
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .offset(x: -20, y: -22.9)
-        }
+        TVKeyArt(url: backdropURL(for: work))
     }
 
     /// SPA `.tv-key-art::after`.
@@ -136,29 +110,6 @@ struct TVWorkDetailView: View {
                 ],
                 startPoint: .bottom,
                 endPoint: .top
-            )
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// SPA `.tv-stage-wash`.
-    private var stageWash: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
-                    .init(color: .clear, location: 0.31),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.50), location: 0),
-                    .init(color: .clear, location: 0.34),
-                ],
-                startPoint: .trailing,
-                endPoint: .leading
             )
         }
         .allowsHitTesting(false)

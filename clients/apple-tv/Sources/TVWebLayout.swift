@@ -60,7 +60,6 @@ struct TVKeyArtFilter: ViewModifier {
             content
                 .saturation(0)
                 .contrast(0.88)
-                .brightness(0.08)
                 .opacity(0.4)
         } else {
             content
@@ -240,6 +239,65 @@ struct TVWebProfileChip: View {
                 .placed(x: 66.3, y: 1050.5, h: 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Web `.tv-key-art img`: 1038 x 1190 at (-20, -23), filtered, fading out to the right.
+struct TVKeyArt: View {
+    var url: URL?
+
+    var body: some View {
+        if let url {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    Color.clear
+                }
+            }
+            .frame(width: 1038.3, height: 1190.6)
+            .clipped()
+            .modifier(TVKeyArtFilter())
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .offset(x: -20, y: -22.9)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+/// Web `.tv-stage-wash`: the surface colour washing in from the left and, lighter, from the right.
+struct TVStageWash: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
+                    .init(color: .clear, location: 0.31),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.50), location: 0),
+                    .init(color: .clear, location: 0.34),
+                ],
+                startPoint: .trailing,
+                endPoint: .leading
+            )
+        }
         .allowsHitTesting(false)
     }
 }

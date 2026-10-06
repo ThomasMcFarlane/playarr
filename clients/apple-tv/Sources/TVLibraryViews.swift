@@ -518,6 +518,26 @@ struct TVHomeView: View {
 
     @ViewBuilder
     private func heroBackdrop(hero: Work?, size: CGSize) -> some View {
+        if TVParityLaunch.isLive {
+            liveHeroBackdrop(hero)
+        } else {
+            legacyHeroBackdrop(hero: hero, size: size)
+        }
+    }
+
+    private func liveHeroBackdrop(_ hero: Work?) -> some View {
+        ZStack(alignment: .topLeading) {
+            DesignTokens.Color.backgroundElevated
+            if let hero {
+                TVKeyArt(url: imageURL(for: hero, prefer: .backdrop))
+            }
+            TVStageWash()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func legacyHeroBackdrop(hero: Work?, size: CGSize) -> some View {
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
             // Fixture hero is already SPA-filtered; display with opacity + mask only.
@@ -773,6 +793,10 @@ struct TVSearchView: View {
         ZStack(alignment: .topLeading) {
             // `.tv-search` uses surface (#1b181b), not pure stage base.
             DesignTokens.Color.backgroundElevated.ignoresSafeArea()
+            if let viewModel, let work = selectedWork(viewModel) {
+                TVKeyArt(url: searchArtURL(work))
+            }
+            TVStageWash()
             // `.tv-search-rail-surface`: x 729.6, width 1190.4.
             TVRailPanelGradient(width: 1190.4)
             if let viewModel {
@@ -789,6 +813,13 @@ struct TVSearchView: View {
                 await model.search()
             }
         }
+    }
+
+    private func searchArtURL(_ work: Work) -> URL? {
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .poster })?.url
+        guard let path else { return nil }
+        return environment.apiClient.resolvedURL(forPath: path)
     }
 
     private func selectedWork(_ model: TVSearchViewModel) -> Work? {
@@ -1418,6 +1449,29 @@ struct TVLibraryKindView: View {
 
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
+        if TVParityLaunch.isLive {
+            ZStack(alignment: .topLeading) {
+                DesignTokens.Color.backgroundElevated
+                if let selected {
+                    TVKeyArt(url: libraryArtURL(selected))
+                }
+                TVStageWash()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            legacyHeroBackdrop(size: size)
+        }
+    }
+
+    private func libraryArtURL(_ work: Work) -> URL? {
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .poster })?.url
+        guard let path else { return nil }
+        return environment.apiClient.resolvedURL(forPath: path)
+    }
+
+    @ViewBuilder
+    private func legacyHeroBackdrop(size: CGSize) -> some View {
         let kind = workKind ?? .series
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
