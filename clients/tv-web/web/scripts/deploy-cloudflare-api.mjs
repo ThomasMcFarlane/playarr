@@ -143,11 +143,6 @@ const metadata = {
     { name: "RELAY_ZONE_ID", type: "plain_text", text: relayZoneId },
     { name: "ASSETS", type: "assets" },
     {
-      name: "CLIENT_DOWNLOADS",
-      type: "r2_bucket",
-      bucket_name: "playarr-client-downloads",
-    },
-    {
       name: "LINK_SESSIONS",
       type: "durable_object_namespace",
       class_name: "LinkSession",

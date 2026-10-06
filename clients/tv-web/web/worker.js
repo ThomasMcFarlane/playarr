@@ -1,23 +1,23 @@
 import * as QRCode from "qrcode/lib/core/qrcode.js";
 import { handleRelayRequest, runCleanup } from "./relay.js";
 
-// Roku, webOS and Tizen packages are still served from the private R2 bucket.
-const DOWNLOADS = new Map([
-  ["/downloads/roku/playarr-roku.zip", "roku/playarr-roku.zip"],
-  ["/downloads/webos/playarr-webos.ipk", "webos/playarr-webos.ipk"],
-  ["/downloads/tizen/playarr-tizen.wgt", "tizen/playarr-tizen.wgt"],
-]);
-
-// Android and Playarr Server downloads are served from GitHub Releases first,
-// falling back to the R2 bucket when no release or asset exists. A release is
-// either the single all-platform release (tag vX.Y.Z, .github/workflows/release.yml)
-// or a per-platform one (android-v*, backend-v*). The stable /downloads/... paths
-// resolve the newest stable release of either kind that carries the asset and
-// redirect to it; versioned paths redirect to the vX.Y.Z release when it has the
-// asset and to the per-platform tag otherwise.
+// Every client download is served from GitHub Releases only: the single
+// all-platform release (tag vX.Y.Z, .github/workflows/release.yml) or, for
+// Android and the server, a per-platform one (android-v*, backend-v*). The
+// stable /downloads/... paths resolve the newest stable release that carries
+// the asset and redirect to it (small JSON manifests are proxied); versioned
+// paths redirect to the vX.Y.Z release when it has the asset and to the
+// per-platform tag otherwise. A path with no published asset is a 404.
 const RELEASES_REPO = "ThomasMcFarlane/playarr";
 const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
 const RELEASES_API = `https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=50`;
+
+// Stable TV package paths and their versioned asset names in a vX.Y.Z release.
+const LATEST_TV_DOWNLOADS = new Map([
+  ["/downloads/roku/playarr-roku.zip", (version) => `playarr-roku-${version}.zip`],
+  ["/downloads/webos/playarr-webos.ipk", (version) => `playarr-webos-${version}.ipk`],
+  ["/downloads/tizen/playarr-tizen.wgt", (version) => `playarr-tizen-${version}.wgt`],
+]);
 
 const LATEST_ANDROID_DOWNLOADS = new Map([
   ["/downloads/android/playarr-android.apk", "playarr-android.apk"],
@@ -528,12 +528,9 @@ export class LinkSession {
   }
 }
 
-function downloadKey(pathname) {
-  return DOWNLOADS.get(pathname);
-}
-
 const ANDROID_TAG = /^(?:android-)?v(\d+\.\d+\.\d+)$/;
 const SERVER_TAG = /^(?:backend-)?v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$/;
+const UNIFIED_TAG = /^v(\d+\.\d+\.\d+)$/;
 
 // The newest stable release whose tag matches `family` and which carries the
 // asset `assetFor(version)`. Releases are listed newest first. A release
@@ -561,6 +558,8 @@ async function latestRelease(family, assetFor) {
 // when the path is not one: either `candidates` (versioned paths: tags tried in
 // order) or `resolve` (stable paths: the newest matching release).
 function releaseDownload(pathname) {
+  const tvAsset = LATEST_TV_DOWNLOADS.get(pathname);
+  if (tvAsset) return { resolve: () => latestRelease(UNIFIED_TAG, tvAsset) };
   const androidAsset = LATEST_ANDROID_DOWNLOADS.get(pathname);
   if (androidAsset) return { resolve: () => latestRelease(ANDROID_TAG, () => androidAsset) };
   const androidVersioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
@@ -592,22 +591,8 @@ function releaseDownload(pathname) {
   return undefined;
 }
 
-// The R2 object key an Android or server download path had before downloads
-// moved to GitHub Releases. Used as the fallback while a path has no release.
-function legacyDownloadKey(pathname) {
-  const androidLatest = LATEST_ANDROID_DOWNLOADS.get(pathname);
-  if (androidLatest) return `android/${androidLatest}`;
-  const androidVersioned = pathname.match(VERSIONED_ANDROID_DOWNLOAD);
-  if (androidVersioned) return `android/releases/${androidVersioned[1]}/${androidVersioned[2]}`;
-  const serverVersioned = pathname.match(VERSIONED_SERVER_DOWNLOAD);
-  if (serverVersioned) return `server/releases/${serverVersioned[2]}/${serverVersioned[1]}`;
-  const serverLatest = pathname.match(LATEST_SERVER_DOWNLOAD);
-  return serverLatest ? `server/${serverLatest[1]}` : undefined;
-}
-
 // Resolves a GitHub Release response for the path, or undefined when no
-// matching release or asset exists (or GitHub cannot be reached), so the
-// caller can fall back to the R2 bucket.
+// matching release or asset exists (or GitHub cannot be reached).
 async function serveReleaseDownload(request, target) {
   try {
     const candidates = target.candidates ?? [await target.resolve()].filter(Boolean);
@@ -723,8 +708,7 @@ export default {
     }
 
     const releaseTarget = releaseDownload(url.pathname);
-    const key = releaseTarget ? legacyDownloadKey(url.pathname) : downloadKey(url.pathname);
-    if (!releaseTarget && !key) return env.ASSETS.fetch(request);
+    if (!releaseTarget) return env.ASSETS.fetch(request);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", {
@@ -733,54 +717,11 @@ export default {
       });
     }
 
-    if (releaseTarget) {
-      // GitHub Releases first; fall back to the R2 bucket until a release exists.
-      const release = await serveReleaseDownload(request, releaseTarget);
-      if (release) return release;
-    }
-
-    const object = key ? await env.CLIENT_DOWNLOADS.get(key) : null;
-    if (!object) {
-      return new Response("This Playarr client package has not been published yet.", {
-        status: 404,
-        headers: { "Cache-Control": "no-store" },
-      });
-    }
-
-    const filename = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
-    const isApk = filename.endsWith(".apk");
-    const isIpk = filename.endsWith(".ipk");
-    const isWgt = filename.endsWith(".wgt");
-    const isZip = filename.endsWith(".zip");
-    const isTarball = filename.endsWith(".tar.gz");
-    const isJson = filename.endsWith(".json");
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set("Cache-Control", "public, max-age=300");
-    headers.set(
-      "Content-Disposition",
-      `${isApk || isIpk || isWgt || isZip || isTarball ? "attachment" : "inline"}; filename="${filename}"`
-    );
-    headers.set("Content-Length", String(object.size));
-    headers.set(
-      "Content-Type",
-      isApk
-        ? "application/vnd.android.package-archive"
-        : isIpk
-          ? "application/octet-stream"
-          : isWgt
-            ? "application/widget"
-            : isZip
-              ? "application/zip"
-            : isTarball
-              ? "application/gzip"
-            : isJson
-              ? "application/json; charset=utf-8"
-              : "text/plain; charset=utf-8"
-    );
-    headers.set("ETag", object.httpEtag);
-    headers.set("X-Content-Type-Options", "nosniff");
-
-    return new Response(request.method === "HEAD" ? null : object.body, { headers });
+    const release = await serveReleaseDownload(request, releaseTarget);
+    if (release) return release;
+    return new Response("This Playarr client package has not been published yet.", {
+      status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
   },
 };

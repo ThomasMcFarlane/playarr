@@ -55,10 +55,8 @@ that were not already there at the previous `v*` tag.
 
 ## Downloads
 
-`https://playarr.app/downloads/...` (the Worker, `clients/tv-web/web/worker.js`) serves the Android
-and server downloads from GitHub Releases: the stable paths resolve the newest stable release, a
-`v*` release or a per-platform `android-v*`/`backend-v*` one, that carries the asset; versioned paths
-try `v<version>` first, then the per-platform tag. See `docs/deployment/server-releases.md`.
+`https://playarr.app/downloads/...` (the Worker, `clients/tv-web/web/worker.js`) serves every client
+download from GitHub Releases only; see the table in `docs/deployment/playarr-cloudflare.md`.
 
 ## Credentials
 

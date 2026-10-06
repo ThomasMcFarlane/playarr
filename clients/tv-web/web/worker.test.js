@@ -9,11 +9,10 @@ class MemoryStorage {
   async deleteAll() { this.values.clear(); }
 }
 
-function environment(object) {
+function environment() {
   const sessions = new Map();
   return {
     ASSETS: { fetch: vi.fn(async () => new Response("asset")) },
-    CLIENT_DOWNLOADS: { get: vi.fn(async () => object) },
     LINK_SESSIONS: {
       idFromName: (name) => name,
       get(id) {
@@ -46,7 +45,7 @@ function releaseEnv(releases) {
       : new Response("{}", { status: 200 })
   );
   vi.stubGlobal("fetch", fetchMock);
-  return { env: environment(null), fetchMock };
+  return { env: environment(), fetchMock };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -64,7 +63,6 @@ describe("client package downloads", () => {
       `${RELEASES}/download/android-v0.3.1/playarr-android.apk`
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
   it("returns a clear 404 when no stable android release exists", async () => {
@@ -101,7 +99,6 @@ describe("client package downloads", () => {
     expect(apk.headers.get("Location")).toBe(
       `${RELEASES}/download/v1.2.3/playarr-android.apk`
     );
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
   it("redirects a versioned APK to its android-v release when no v release has it", async () => {
@@ -111,7 +108,7 @@ describe("client package downloads", () => {
         : new Response("", { status: 302 })
     );
     vi.stubGlobal("fetch", fetchMock);
-    const env = environment(null);
+    const env = environment();
     const apk = await worker.fetch(
       new Request("https://playarr.app/downloads/android/releases/1.2.3/SHA256SUMS"),
       env
@@ -155,49 +152,19 @@ describe("client package downloads", () => {
   });
 
   it.each([
-    {
-      path: "/downloads/webos/playarr-webos.ipk",
-      key: "webos/playarr-webos.ipk",
-      filename: "playarr-webos.ipk",
-      contentType: "application/octet-stream",
-    },
-    {
-      path: "/downloads/tizen/playarr-tizen.wgt",
-      key: "tizen/playarr-tizen.wgt",
-      filename: "playarr-tizen.wgt",
-      contentType: "application/widget",
-    },
-    {
-      path: "/downloads/roku/playarr-roku.zip",
-      key: "roku/playarr-roku.zip",
-      filename: "playarr-roku.zip",
-      contentType: "application/zip",
-    },
-  ])("serves the published $filename from its stable R2 key", async ({
-    path,
-    key,
-    filename,
-    contentType,
-  }) => {
-    const env = environment({
-      body: new Uint8Array([1, 2, 3]),
-      httpEtag: '"release-etag"',
-      size: 3,
-      writeHttpMetadata() {},
-    });
+    ["/downloads/roku/playarr-roku.zip", "playarr-roku-0.5.0.zip"],
+    ["/downloads/webos/playarr-webos.ipk", "playarr-webos-0.5.0.ipk"],
+    ["/downloads/tizen/playarr-tizen.wgt", "playarr-tizen-0.5.0.wgt"],
+  ])("redirects %s to the newest v release that carries %s", async (path, asset) => {
+    const { env } = releaseEnv([
+      { tag_name: "v0.6.0", prerelease: false, assets: [{ name: "latest.json" }] },
+      { tag_name: "v0.5.0", prerelease: false, assets: [{ name: asset }] },
+      { tag_name: "android-v0.4.0", prerelease: false },
+    ]);
+    const response = await worker.fetch(new Request(`https://playarr.app${path}`), env);
 
-    const response = await worker.fetch(
-      new Request(`https://playarr.app${path}`),
-      env
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Disposition")).toBe(
-      `attachment; filename="${filename}"`
-    );
-    expect(response.headers.get("Content-Type")).toBe(contentType);
-    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(key);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe(`${RELEASES}/download/v0.5.0/${asset}`);
   });
 
   it.each([
@@ -205,10 +172,9 @@ describe("client package downloads", () => {
     "/downloads/tizen/playarr-tizen.wgt",
     "/downloads/roku/playarr-roku.zip",
   ])("returns a truthful unpublished response for %s", async (path) => {
-    const response = await worker.fetch(
-      new Request(`https://playarr.app${path}`),
-      environment(null)
-    );
+    // A release without the package (for example Tizen, which needs the owner's signing profile).
+    const { env } = releaseEnv([{ tag_name: "v0.5.0", prerelease: false, assets: [{ name: "latest.json" }] }]);
+    const response = await worker.fetch(new Request(`https://playarr.app${path}`), env);
 
     expect(response.status).toBe(404);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -245,103 +211,60 @@ describe("client package downloads", () => {
     expect(sums.headers.get("Location")).toBe(
       `${RELEASES}/download/v0.2.0-rc.1/playarr-server-0.2.0-rc.1-SHA256SUMS`
     );
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 
-  describe("R2 fallback when no GitHub release exists", () => {
-    function r2Object(body, contentType) {
-      return {
-        body,
-        size: body.length,
-        httpEtag: '"r2-etag"',
-        writeHttpMetadata: (headers) => headers.set("Content-Type", contentType),
-      };
-    }
-
-    // No releases at all: the API lists none and every asset URL is a 404.
-    function noReleaseEnv(object) {
-      const fetchMock = vi.fn(async (url) =>
-        String(url).startsWith("https://api.github.com/")
-          ? new Response("[]", { status: 200 })
-          : new Response("Not Found", { status: 404 })
+  describe("no published release", () => {
+    function noRelease(list = []) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url) =>
+          String(url).startsWith("https://api.github.com/")
+            ? new Response(JSON.stringify(list), { status: 200 })
+            : new Response("Not Found", { status: 404 })
+        )
       );
-      vi.stubGlobal("fetch", fetchMock);
-      return { env: environment(object), fetchMock };
     }
 
     it.each([
-      ["/downloads/android/playarr-android.apk", "android/playarr-android.apk", "application/vnd.android.package-archive"],
-      ["/downloads/android/playarr-android.json", "android/playarr-android.json", "application/json; charset=utf-8"],
-      ["/downloads/android/releases/1.2.3/playarr-android.apk", "android/releases/1.2.3/playarr-android.apk", "application/vnd.android.package-archive"],
-      ["/downloads/android/releases/1.2.3/SHA256SUMS", "android/releases/1.2.3/SHA256SUMS", "text/plain; charset=utf-8"],
-      ["/downloads/server/latest.json", "server/latest.json", "application/json; charset=utf-8"],
-      ["/downloads/server/playarr-server-linux-amd64.tar.gz", "server/playarr-server-linux-amd64.tar.gz", "application/gzip"],
-      ["/downloads/server/playarr-server-linux-arm64.tar.gz.sha256", "server/playarr-server-linux-arm64.tar.gz.sha256", "text/plain; charset=utf-8"],
-      ["/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz", "server/releases/0.1.0/playarr-server-0.1.0-linux-amd64.tar.gz", "application/gzip"],
-      ["/downloads/server/playarr-server-0.1.0-SHA256SUMS", "server/releases/0.1.0/playarr-server-0.1.0-SHA256SUMS", "text/plain; charset=utf-8"],
-    ])("serves %s from the bucket", async (path, key, contentType) => {
-      const { env } = noReleaseEnv(r2Object("payload", contentType));
-      const response = await worker.fetch(new Request(`https://playarr.app${path}`), env);
+      "/downloads/android/playarr-android.apk",
+      "/downloads/android/playarr-android.json",
+      "/downloads/android/releases/1.2.3/playarr-android.apk",
+      "/downloads/android/releases/1.2.3/SHA256SUMS",
+      "/downloads/server/latest.json",
+      "/downloads/server/playarr-server-linux-amd64.tar.gz",
+      "/downloads/server/playarr-server-linux-arm64.tar.gz.sha256",
+      "/downloads/server/playarr-server-0.1.0-linux-amd64.tar.gz",
+      "/downloads/server/playarr-server-0.1.0-SHA256SUMS",
+    ])("returns 404 for %s", async (path) => {
+      noRelease();
+      const response = await worker.fetch(new Request(`https://playarr.app${path}`), environment());
 
-      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith(key);
-      expect(response.status).toBe(200);
-      expect(response.headers.get("Content-Type")).toBe(contentType);
-      await expect(response.text()).resolves.toBe("payload");
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      await expect(response.text()).resolves.toContain("has not been published yet");
     });
 
-    it("falls back when the tag exists but the asset does not", async () => {
-      const fetchMock = vi.fn(async (url) =>
-        String(url).startsWith("https://api.github.com/")
-          ? new Response(JSON.stringify([{ tag_name: "android-v0.3.1", prerelease: false }]), { status: 200 })
-          : new Response("Not Found", { status: 404 })
-      );
-      vi.stubGlobal("fetch", fetchMock);
-      const env = environment(r2Object("{}", "application/json; charset=utf-8"));
+    it("returns 404 when the tag exists but the asset does not", async () => {
+      noRelease([{ tag_name: "android-v0.3.1", prerelease: false }]);
       const response = await worker.fetch(
         new Request("https://playarr.app/downloads/android/playarr-android.json"),
-        env
+        environment()
       );
-
-      expect(response.status).toBe(200);
-      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith("android/playarr-android.json");
-    });
-
-    it("falls back when GitHub cannot be reached", async () => {
-      vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
-      const env = environment(r2Object("apk", "application/vnd.android.package-archive"));
-      const response = await worker.fetch(
-        new Request("https://playarr.app/downloads/android/playarr-android.apk"),
-        env
-      );
-
-      expect(response.status).toBe(200);
-      expect(env.CLIENT_DOWNLOADS.get).toHaveBeenCalledWith("android/playarr-android.apk");
-    });
-
-    it("returns 404 when neither a release nor a bucket object exists", async () => {
-      const { env } = noReleaseEnv(null);
-      const response = await worker.fetch(
-        new Request("https://playarr.app/downloads/server/latest.json"),
-        env
-      );
-
       expect(response.status).toBe(404);
     });
 
-    it("prefers a release over the bucket when one exists", async () => {
-      const { env } = releaseEnv();
+    it("returns 404 when GitHub cannot be reached", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
       const response = await worker.fetch(
-        new Request("https://playarr.app/downloads/server/playarr-server-linux-amd64.tar.gz"),
-        env
+        new Request("https://playarr.app/downloads/android/playarr-android.apk"),
+        environment()
       );
-
-      expect(response.status).toBe(302);
-      expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
     });
   });
 
-  it("does not expose other server R2 object paths", async () => {
-    const env = environment(null);
+  it("does not expose other download paths", async () => {
+    const env = environment();
     for (const path of [
       "/downloads/server/releases/0.1.0/anything",
       "/downloads/server/playarr-server-0.1.0-linux-riscv.tar.gz",
@@ -349,33 +272,31 @@ describe("client package downloads", () => {
     ]) {
       await worker.fetch(new Request(`https://playarr.app${path}`), env);
     }
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
+    // Not release download paths: handed to static assets, never to GitHub.
+    expect(env.ASSETS.fetch).toHaveBeenCalledTimes(3);
   });
 
-  it("does not expose arbitrary R2 object paths", async () => {
-    const env = environment(null);
+  it("does not expose arbitrary download paths", async () => {
+    const env = environment();
     await worker.fetch(
       new Request("https://playarr.app/downloads/android/releases/latest/private-key"),
       env
     );
-
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
     expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
   });
 
   it("delegates ordinary application routes to static assets", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(new Request("https://playarr.app/clients"), env);
 
     expect(await response.text()).toBe("asset");
     expect(env.ASSETS.fetch).toHaveBeenCalledOnce();
-    expect(env.CLIENT_DOWNLOADS.get).not.toHaveBeenCalled();
   });
 });
 
 describe("hosted cast receiver", () => {
   it("redirects the bare /cast path to the trailing-slash form", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(new Request("https://playarr.app/cast"), env);
 
     expect(response.status).toBe(301);
@@ -384,7 +305,7 @@ describe("hosted cast receiver", () => {
   });
 
   it("serves the receiver's index.html for /cast/", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(new Request("https://playarr.app/cast/"), env);
 
     expect(await response.text()).toBe("asset");
@@ -394,7 +315,7 @@ describe("hosted cast receiver", () => {
   });
 
   it("passes through non-html cast assets unchanged", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response("console.log('cast')", {
         headers: { "Content-Type": "application/javascript" },
@@ -412,7 +333,7 @@ describe("hosted cast receiver", () => {
   });
 
   it("turns the SPA fallback's html response into a real 404 for a missing cast asset", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response("<html>web app shell</html>", {
         status: 200,
@@ -432,7 +353,7 @@ describe("hosted cast receiver", () => {
 
 describe("hosted device linking", () => {
   it("allows packaged TV webviews to preflight and read link responses", async () => {
-    const env = environment(null);
+    const env = environment();
     const preflight = await worker.fetch(
       new Request("https://playarr.app/api/link/code", {
         method: "OPTIONS",
@@ -471,7 +392,7 @@ describe("hosted device linking", () => {
   });
 
   it("keeps phone-side inspection and authorisation same-origin", async () => {
-    const env = environment(null);
+    const env = environment();
     const preflight = await worker.fetch(
       new Request("https://playarr.app/api/link/authorize", {
         method: "OPTIONS",
@@ -487,7 +408,7 @@ describe("hosted device linking", () => {
   it.each(["android-mobile", "android-tv", "ios", "web", "tv-webos", "tv-tizen", "tv-vidaa", "tv-roku", "tv-fire", "xbox"])(
     "preserves the %s client platform in the link session",
     async (clientPlatform) => {
-      const env = environment(null);
+      const env = environment();
       const created = await worker.fetch(
         new Request("https://playarr.app/api/link/code", {
           method: "POST",
@@ -517,7 +438,7 @@ describe("hosted device linking", () => {
         method: "POST",
         body: JSON.stringify({ client_platform: "not-a-playarr-client" }),
       }),
-      environment(null)
+      environment()
     );
 
     expect(response.status).toBe(400);
@@ -527,7 +448,7 @@ describe("hosted device linking", () => {
   });
 
   it("creates, authorises, and returns a one-time pairing claim", async () => {
-    const env = environment(null);
+    const env = environment();
     const created = await worker.fetch(
       new Request("https://playarr.app/api/link/code", {
         method: "POST",
@@ -581,7 +502,7 @@ describe("hosted device linking", () => {
   it("lets the secret-holder collect a claim approved just before display expiry", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     try {
-      const env = environment(null);
+      const env = environment();
       const created = await worker.fetch(
         new Request("https://playarr.app/api/link/code", {
           method: "POST",
@@ -624,7 +545,7 @@ describe("hosted device linking", () => {
   });
 
   it("rejects polling without the high-entropy device secret", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(
       new Request("https://playarr.app/api/link/code/ABCD2345.guessed"),
       env
@@ -633,7 +554,7 @@ describe("hosted device linking", () => {
   });
 
   it("rejects server claims containing URL credentials", async () => {
-    const env = environment(null);
+    const env = environment();
     const created = await worker.fetch(
       new Request("https://playarr.app/api/link/code", {
         method: "POST",
@@ -661,7 +582,7 @@ describe("hosted device linking", () => {
 
 describe("link QR code", () => {
   it("renders a decodable PNG for a playarr.app link URL", async () => {
-    const env = environment(null);
+    const env = environment();
     const value = "https://playarr.app/link?user_code=ABCD-1234";
     const response = await worker.fetch(
       new Request(`https://playarr.app/api/link/qr?value=${encodeURIComponent(value)}`),
@@ -682,7 +603,7 @@ describe("link QR code", () => {
   });
 
   it("refuses to encode arbitrary text", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(
       new Request(
         `https://playarr.app/api/link/qr?value=${encodeURIComponent("https://evil.example/phish")}`
@@ -694,7 +615,7 @@ describe("link QR code", () => {
   });
 
   it("refuses to encode without a value", async () => {
-    const env = environment(null);
+    const env = environment();
     const response = await worker.fetch(new Request("https://playarr.app/api/link/qr"), env);
 
     expect(response.status).toBe(400);
@@ -737,7 +658,7 @@ const SAMPLE_INDEX_HTML = `<!doctype html>
 
 describe("client page meta tags", () => {
   it("rewrites the title and every description/og/twitter tag for a known client", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -770,7 +691,7 @@ describe("client page meta tags", () => {
     // file (every /clients/* path) instead takes the SPA fallback and
     // returns the real content with no redirect, so the fetched request
     // must preserve the actual incoming path.
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );
@@ -783,7 +704,7 @@ describe("client page meta tags", () => {
   });
 
   it("strips a trailing slash so the id still matches a real client", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );
@@ -799,7 +720,7 @@ describe("client page meta tags", () => {
   });
 
   it("drops the original Content-Length and Content-Encoding, which no longer match the rewritten body", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, {
         headers: {
@@ -818,7 +739,7 @@ describe("client page meta tags", () => {
   });
 
   it("leaves the generic shell untouched for an id that isn't a real client", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );
@@ -833,7 +754,7 @@ describe("client page meta tags", () => {
   });
 
   it("gives the bare /clients index the first client's meta tags, matching where it redirects", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );
@@ -848,7 +769,7 @@ describe("client page meta tags", () => {
 
 describe("public legal page meta tags", () => {
   it("serves the privacy route anonymously with privacy-specific metadata", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -871,7 +792,7 @@ describe("public legal page meta tags", () => {
   });
 
   it("normalises a trailing slash to the canonical legal URL", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );
@@ -887,7 +808,7 @@ describe("public legal page meta tags", () => {
   });
 
   it("serves account-deletion guidance with a canonical public URL", async () => {
-    const env = environment(null);
+    const env = environment();
     env.ASSETS.fetch.mockResolvedValueOnce(
       new Response(SAMPLE_INDEX_HTML, { headers: { "Content-Type": "text/html" } })
     );

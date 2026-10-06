@@ -7,34 +7,35 @@ navigation to React Router routes works.
 
 Cloudflare hosts only the client app (the web UI, release downloads and relay DNS registration). It never receives or
 stores Playarr server data: backups, media, databases and logs stay on the self-hoster's own infrastructure and are
-never sent to or routed through Cloudflare or R2.
+never sent to or routed through Cloudflare.
 
 The public Clients hub is served at `/clients`; `/download` and `/install`
 redirect there, and `/vidaa-store/` publishes the fixed Playarr-only VIDAA custom
 store assets. Playarr does not operate a public VIDAA DNS resolver. Viewers choose
 and control a compatible DNS, proxy, or self-hosted interception method themselves.
 
-The signed universal Android APK and the Playarr Server tarballs are published to GitHub Releases only
-(the all-platform release `v<version>`, or the per-platform tags `android-v<version>` and
-`backend-v<version>`). The Worker keeps the stable same-origin URLs and
-resolves them to release assets: `/downloads/android/playarr-android.apk` and
-`/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (plus `.sha256`) redirect to the newest
-stable release (of either kind) that carries the asset (looked up through the GitHub Releases API and cached for five
-minutes), and the versioned paths `/downloads/android/releases/<version>/...` and
-`/downloads/server/playarr-server-<version>-...` redirect to that version's `v<version>` release, or its per-platform tag when no `v` release has the asset. The small JSON
-manifests (`/downloads/android/playarr-android.json`, `/downloads/server/latest.json`) are proxied so the
-native television self-update action and the Clients hub read them same-origin. No release workflow
-uploads to object storage and no object-storage credential is needed. See
+Every client download is served from GitHub Releases only; the Worker has no storage binding for
+downloads. The all-platform release `v<version>` (`.github/workflows/release.yml`) carries the signed
+Android APK and its manifest, the Playarr Server tarballs, checksums and `latest.json`, the Roku
+developer-mode ZIP and the webOS IPK; Android and the server may also come from the per-platform tags
+`android-v<version>` and `backend-v<version>`. The Worker keeps the stable same-origin URLs and resolves
+them to release assets (looked up through the GitHub Releases API and cached for five minutes):
+
+| Path | Redirects to |
+|---|---|
+| `/downloads/android/playarr-android.apk` | `playarr-android.apk` of the newest stable `v*` or `android-v*` release that has it |
+| `/downloads/android/releases/<version>/{playarr-android.apk,SHA256SUMS}` | that asset of `v<version>`, else `android-v<version>` |
+| `/downloads/server/playarr-server-linux-{amd64,arm64}.tar.gz` (and `.sha256`) | `playarr-server-<version>-linux-<arch>.tar.gz` of the newest stable `v*` or `backend-v*` release |
+| `/downloads/server/playarr-server-<version>-...` | that asset of `v<version>`, else `backend-v<version>` |
+| `/downloads/roku/playarr-roku.zip` | `playarr-roku-<version>.zip` of the newest `v*` release |
+| `/downloads/webos/playarr-webos.ipk` | `playarr-webos-<version>.ipk` of the newest `v*` release |
+| `/downloads/tizen/playarr-tizen.wgt` | `playarr-tizen-<version>.wgt` of the newest `v*` release (none yet: a `.wgt` needs the owner's Samsung certificate profile, so releases carry the unsigned package root) |
+
+The small JSON manifests (`/downloads/android/playarr-android.json`, `/downloads/server/latest.json`) are
+proxied so the native television self-update action and the Clients hub read them same-origin. A path
+whose asset is in no release (or when GitHub cannot be reached) returns 404 "not published yet". No
+release workflow uploads to object storage. See [Releasing Playarr](releases.md) and
 [Playarr Server releases](server-releases.md).
-
-GitHub Releases are tried first. When no matching release or asset exists (for example before the first
-release is cut, or for a version that predates the move), the Worker falls back to the same path in the
-downloads bucket binding, so existing installs and the Android self-updater keep working. A path returns
-404 only when neither source has it.
-
-The Roku developer-mode ZIP (and the webOS and Tizen packages, when published) are still stored in the
-private `playarr-client-downloads` R2 bucket and streamed by the Worker from
-`/downloads/roku/playarr-roku.zip`, while ordinary application routes come from Static Assets.
 
 The Worker also owns the short-lived first-contact broker under `/api/link/*`. Each
 generated code is isolated in a Durable Object and expires after five minutes. The record contains

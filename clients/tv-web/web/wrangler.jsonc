@@ -18,12 +18,6 @@
       "/legal/*"
     ]
   },
-  "r2_buckets": [
-    {
-      "binding": "CLIENT_DOWNLOADS",
-      "bucket_name": "playarr-client-downloads"
-    }
-  ],
   "durable_objects": {
     "bindings": [
       {
