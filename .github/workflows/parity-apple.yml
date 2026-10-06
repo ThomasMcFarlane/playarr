@@ -42,6 +42,7 @@ concurrency:
 env:
   PLATFORM: ${{ inputs.platform || 'ios' }}
   PLAYARR_FIXTURE_PORT: "18484"
+  PLAYARR_FIXTURE_NO_SCOPE: "1"
   CARGO_PROFILE_DEV_DEBUG: "0"
 
 jobs:
