@@ -22,8 +22,14 @@ final class TVHomeViewModel {
         self.apiClient = apiClient
     }
 
-    func load() async {
-        state = .loading
+    /// `silent` refetches in place (live events, fallback polling): no spinner,
+    /// and a failure keeps what is already on screen.
+    func load(silent: Bool = false) async {
+        if silent {
+            guard state == .loaded else { return }
+        } else {
+            state = .loading
+        }
         // Offline fixture catalogue only when no access token was injected
         // (ATS/tunnel unavailable). Prefer live API when signed in.
         if TVParityLaunch.requestedScreen != nil,
@@ -64,6 +70,7 @@ final class TVHomeViewModel {
                 state = .loaded
                 return
             }
+            if silent { return }
             if let error = error as? APIError {
                 state = .failed(error.displayMessage)
             } else {

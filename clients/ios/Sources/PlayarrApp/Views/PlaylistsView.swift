@@ -14,8 +14,9 @@ private final class PlaylistsViewModel {
 
     init(apiClient: PlayarrAPIClient) { self.apiClient = apiClient }
 
-    func load() async {
-        state = .loading
+    func load(silent: Bool = false) async {
+        if silent { guard case .loaded = state else { return } }
+        if !silent { state = .loading }
         do {
             let loaded = try await apiClient.listPlaylists()
                 .sorted { $0.updatedAt > $1.updatedAt }
@@ -23,9 +24,9 @@ private final class PlaylistsViewModel {
             state = .loaded
             await loadDirectorySummaries(for: loaded)
         } catch let error as APIError {
-            state = .failed(error.displayMessage)
+            if !silent { state = .failed(error.displayMessage) }
         } catch {
-            state = .failed(error.localizedDescription)
+            if !silent { state = .failed(error.localizedDescription) }
         }
     }
 
@@ -116,6 +117,9 @@ struct PlaylistsView: View {
         }
         .task {
             if case .idle = viewModel.state { await viewModel.load() }
+        }
+        .onLiveInvalidation([.playlist]) {
+            await viewModel.load(silent: true)
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingCreate) { playlistEditor }

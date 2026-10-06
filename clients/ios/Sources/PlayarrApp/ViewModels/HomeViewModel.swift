@@ -52,8 +52,11 @@ public final class HomeViewModel {
         self.apiClient = apiClient
     }
 
-    public func load() async {
-        loadState = .loading
+    /// `silent` refetches in place (live events, fallback polling): no spinner,
+    /// and a failure keeps what is already on screen.
+    public func load(silent: Bool = false) async {
+        if silent && loadState != .loaded { return }
+        if !silent { loadState = .loading }
         do {
             async let moviesRequest = browse(kind: .movie)
             async let seriesRequest = browse(kind: .series)
@@ -103,9 +106,9 @@ public final class HomeViewModel {
             )
             loadState = .loaded
         } catch let error as APIError {
-            loadState = .failed(error.displayMessage)
+            if !silent { loadState = .failed(error.displayMessage) }
         } catch {
-            loadState = .failed(error.localizedDescription)
+            if !silent { loadState = .failed(error.localizedDescription) }
         }
     }
 

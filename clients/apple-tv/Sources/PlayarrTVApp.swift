@@ -1,9 +1,11 @@
+import PlayarrKit
 import SwiftUI
 
 @main
 struct PlayarrTVApp: App {
     @State private var environment = TVAppEnvironment()
     @State private var displayPreferences = TVDisplayPreferences()
+    @State private var liveEvents = LiveEventsHub()
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +15,7 @@ struct PlayarrTVApp: App {
             TVRootView()
                 .environment(environment)
                 .environment(displayPreferences)
+                .environment(\.liveEvents, liveEvents)
                 .preferredColorScheme(displayPreferences.colorScheme)
         }
     }

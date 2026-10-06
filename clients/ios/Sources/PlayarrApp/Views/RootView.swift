@@ -105,6 +105,7 @@ private struct AuthenticatedPlayarrShell: View {
     }
 
     let environment: AppEnvironment
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selected: Destination = .home
     @State private var availableKinds: Set<WorkKind> = []
     @State private var homeViewModel: HomeViewModel
@@ -154,6 +155,17 @@ private struct AuthenticatedPlayarrShell: View {
         .background(PlayarrStyle.background.ignoresSafeArea())
         .task {
             availableKinds = Set((try? await environment.apiClient.listCatalogKinds()) ?? [])
+        }
+        .environment(\.liveEvents, environment.liveEvents)
+        .task(id: scenePhase) {
+            // Subscribe to live events only while foregrounded; the cursor
+            // survives pauses so a resume replays what was missed.
+            guard scenePhase == .active else { return }
+            await environment.liveEvents.run(
+                transport: environment.apiClient,
+                resetKey: "\(environment.serverBaseURL.absoluteString)|\(environment.currentUserID?.uuidString ?? "")",
+                pollInterval: 30
+            )
         }
         .onPreferenceChange(PlayarrChromeHiddenKey.self) { chromeHidden = $0 }
     }

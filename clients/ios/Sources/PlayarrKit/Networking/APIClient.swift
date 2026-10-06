@@ -639,6 +639,53 @@ public final class APIClient: PlayarrAPIClient {
         }
     }
 
+    public func openEventStream(lastEventID: Int64?) async throws -> EventStreamResponse {
+        var request = try makeRequest(path: "/api/v1/events", method: "GET", query: [])
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        if let lastEventID {
+            request.setValue(String(lastEventID), forHTTPHeaderField: "Last-Event-ID")
+        }
+        try await attachAuthorization(to: &request)
+
+        func open(_ request: URLRequest) async throws -> (URLSession.AsyncBytes, HTTPURLResponse) {
+            let bytes: URLSession.AsyncBytes
+            let response: URLResponse
+            do {
+                (bytes, response) = try await session.bytes(for: request)
+            } catch {
+                throw APIError.transport(error)
+            }
+            guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+            return (bytes, http)
+        }
+
+        var (bytes, http) = try await open(request)
+        if http.statusCode == 401, accessTokenCoordinator != nil {
+            try await attachAuthorization(to: &request, forceRefresh: true)
+            (bytes, http) = try await open(request)
+        }
+        let contentType = http.value(forHTTPHeaderField: "Content-Type")
+        guard http.statusCode == 200 else {
+            return EventStreamResponse(statusCode: http.statusCode, contentType: contentType, lines: nil)
+        }
+        let byteStream = bytes
+        let lines = AsyncThrowingStream<String, Error> { continuation in
+            let task = Task {
+                do {
+                    var splitter = SSELineSplitter()
+                    for try await byte in byteStream {
+                        if let line = splitter.push(byte) { continuation.yield(line) }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        return EventStreamResponse(statusCode: 200, contentType: contentType, lines: lines)
+    }
+
     // MARK: - Request helpers
     //
     // Catalog/playback GETs attach auth. System, login/refresh and webhook

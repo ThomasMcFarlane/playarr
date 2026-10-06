@@ -26,6 +26,9 @@ struct TVHomeView: View {
             viewModel = model
             await model.load()
         }
+        .onLiveInvalidation([.home, .progress, .library]) {
+            await viewModel?.load(silent: true)
+        }
     }
 
     /// Stable focus key: rail id + work id (works may not repeat across rails).
@@ -1017,6 +1020,9 @@ struct TVLibraryKindView: View {
         .task(id: "\(workKind?.rawValue ?? "all")-\(environment.serverURL.absoluteString)") {
             await loadItems()
         }
+        .onLiveInvalidation([.library, .search]) {
+            await loadItems(silent: true)
+        }
     }
 
     private var libraryHeading: some View {
@@ -1365,7 +1371,8 @@ struct TVLibraryKindView: View {
     }
 
     @MainActor
-    private func loadItems() async {
+    private func loadItems(silent: Bool = false) async {
+        if silent && (parityMode || !didLoad) { return }
         // Offline parity: deterministic fixture catalogue (SPA-matching titles).
         if parityMode {
             items = TVParityFixtures.libraryWorks(kind: workKind)
@@ -1383,9 +1390,16 @@ struct TVLibraryKindView: View {
                 offset: 0
             )
             items = page.items
+            if silent {
+                // Keep focus where it is when the item still exists.
+                if let current = selectedID, items.contains(where: { $0.id == current }) {
+                    return
+                }
+            }
             selectedID = items.first?.id
             didLoad = true
         } catch {
+            if silent { return }
             items = TVParityFixtures.libraryWorks(kind: workKind)
             selectedID = items.first?.id
             didLoad = true

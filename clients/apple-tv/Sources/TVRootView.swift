@@ -6,6 +6,8 @@ import UIKit
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(\.liveEvents) private var liveEvents
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: TVNavTab = .home
     /// Shared focus so the shell can move between nav and stage with arrows.
     @FocusState private var shellFocus: TVShellFocus?
@@ -47,6 +49,12 @@ struct TVRootView: View {
         }
     }
 
+    private var liveEventsTaskKey: String {
+        var signedIn = false
+        if case .signedIn = environment.pairingState { signedIn = true }
+        return "\(signedIn)-\(scenePhase)-\(environment.serverURL.absoluteString)"
+    }
+
     var body: some View {
         ZStack {
             TVStageBackground()
@@ -77,6 +85,18 @@ struct TVRootView: View {
         }
         .preferredColorScheme(.dark)
         .tint(DesignTokens.Color.brandPrimary)
+        .task(id: liveEventsTaskKey) {
+            // Subscribe to live events only while signed in and foregrounded;
+            // the cursor survives pauses so a resume replays what was missed.
+            guard let liveEvents, scenePhase == .active,
+                  TVParityLaunch.requestedScreen == nil,
+                  case .signedIn = environment.pairingState else { return }
+            await liveEvents.run(
+                transport: environment.apiClient,
+                resetKey: environment.serverURL.absoluteString,
+                pollInterval: 60
+            )
+        }
         .onAppear {
             if let forced = parityForcedTab {
                 selectedTab = forced

@@ -41,6 +41,8 @@ public final class AppEnvironment {
     /// downloads" feature — constructed once here alongside every other
     /// shared service, per this type's own composition-root role.
     public private(set) var downloadRepository: DownloadRepository
+    /// Live-events hub (`GET /api/v1/events`); the signed-in shell runs it while the app is active.
+    @ObservationIgnored public let liveEvents = LiveEventsHub()
     public private(set) var isSignedIn = false
     public private(set) var sessionState: SessionState = .restoring
     public private(set) var currentUserName: String?

@@ -50,8 +50,9 @@ public final class LibraryViewModel {
 
     /// Loads (or reloads) the current page: a catalog search if
     /// `searchText` is non-empty, otherwise a filtered/sorted browse.
-    public func load() async {
-        loadState = .loading
+    public func load(silent: Bool = false) async {
+        if silent && loadState != .loaded && loadState != .empty { return }
+        if !silent { loadState = .loading }
         let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             if trimmedQuery.isEmpty && isSearchMode {
@@ -103,9 +104,9 @@ public final class LibraryViewModel {
             }
             loadState = works.isEmpty && playlists.isEmpty ? .empty : .loaded
         } catch let error as APIError {
-            loadState = .failed(error.displayMessage)
+            if !silent { loadState = .failed(error.displayMessage) }
         } catch {
-            loadState = .failed(error.localizedDescription)
+            if !silent { loadState = .failed(error.localizedDescription) }
         }
     }
 

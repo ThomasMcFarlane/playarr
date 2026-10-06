@@ -47,6 +47,9 @@ struct HomeView: View {
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
         }
+        .onLiveInvalidation([.home, .progress, .library]) {
+            await viewModel.load(silent: true)
+        }
     }
 
     private var loadedContent: some View {

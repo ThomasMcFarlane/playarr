@@ -44,6 +44,9 @@ struct LibraryView: View {
         .task {
             if case .idle = viewModel.loadState { await viewModel.load() }
         }
+        .onLiveInvalidation([.library, .search]) {
+            await viewModel.load(silent: true)
+        }
         .navigationBarHidden(true)
         .sheet(isPresented: $showingFilters) { filterSheet }
         .sheet(item: $downloadTarget) { work in

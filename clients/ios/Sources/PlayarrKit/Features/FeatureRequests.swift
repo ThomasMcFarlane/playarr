@@ -15,6 +15,11 @@ public protocol PlayarrRequestTransport: Sendable {
         body: Data?,
         expectedStatuses: Set<Int>
     ) async throws -> Data
+
+    /// Opens `GET /api/v1/events` (server-sent events) with an optional
+    /// `Last-Event-ID`. Has a default (see `LiveEventsConnection.swift`) that
+    /// reports an unsupported server, so existing stubs keep compiling.
+    func openEventStream(lastEventID: Int64?) async throws -> EventStreamResponse
 }
 
 /// Typed JSON helpers over `PlayarrRequestTransport.requestData`, shared by

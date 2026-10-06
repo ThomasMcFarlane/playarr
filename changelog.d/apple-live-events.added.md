@@ -1,0 +1,1 @@
+- iOS and Apple TV subscribe to the live events stream (`GET /api/v1/events`) while foregrounded: a reconnecting server-sent-events client with Last-Event-ID resume, backoff, unsupported-server and polling fallbacks, and in-place refresh of Home, Continue Watching, Library, search and (iOS) playlists.
