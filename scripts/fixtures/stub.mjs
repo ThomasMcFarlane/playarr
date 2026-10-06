@@ -5,6 +5,7 @@
 import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
 import { basename, join } from "node:path";
+import { artKey } from "./art.mjs";
 import { SERIES, MOVIES, episodeRelPath, movieRelPath, dubRelPath, LANG_NAME } from "./catalog.mjs";
 
 const [root, portArg, apiKey] = process.argv.slice(2);
@@ -13,9 +14,21 @@ if (!root || !portArg || !apiKey) {
   process.exit(2);
 }
 const port = Number(portArg);
+const artDir = join(root, "art");
+const artUrl = (kind, id, which) => `http://127.0.0.1:${port}/art/${artKey(kind, id)}-${which}.png`;
+const artImages = (kind, id) => [
+  { coverType: "poster", url: "", remoteUrl: artUrl(kind, id, "poster") },
+  { coverType: "fanart", url: "", remoteUrl: artUrl(kind, id, "backdrop") },
+];
 const names = (langs) => langs.map((l) => LANG_NAME[l]).join("/");
 const quality = { quality: { id: 7, name: "Bluray-1080p", source: "bluray", resolution: 1080 }, revision: { version: 1, real: 0, isRepack: false } };
 const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+
+// Must match the generated clip length (media.mjs).
+const CLIP_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_CLIP_SECONDS) || 6));
+// Dub length; defaults to the clip length (see media.mjs).
+const DUB_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_DUB_SECONDS) || CLIP_SECONDS));
+const runTime = () => `${Math.floor(CLIP_SECONDS / 3600)}:${String(Math.floor(CLIP_SECONDS / 60) % 60).padStart(2, "0")}:${String(CLIP_SECONDS % 60).padStart(2, "0")}`;
 
 function mediaInfo(codec, audio, subs) {
   return {
@@ -25,7 +38,7 @@ function mediaInfo(codec, audio, subs) {
     videoCodec: codec === "hevc" ? "x265" : "x264",
     videoBitrate: 300000,
     resolution: "320x180",
-    runTime: "0:00:06",
+    runTime: runTime(),
     audioLanguages: names(audio),
     subtitles: names(subs),
   };
@@ -44,7 +57,7 @@ const sonarr = SERIES.map((s) => {
       const size = statSync(abs).size;
       epId++;
       fileId++;
-      episodes.push({ id: epId, seriesId: s.id, seasonNumber: sn.season, episodeNumber: e, title: `Episode ${e}`, overview: "Placeholder episode.", airDate: `${s.year + sn.season - 1}-01-0${e}`, runtime: 1, images: [], hasFile: true, monitored: true, episodeFileId: fileId });
+      episodes.push({ id: epId, seriesId: s.id, seasonNumber: sn.season, episodeNumber: e, title: `Episode ${e}`, overview: "Placeholder episode.", airDate: `${s.year + sn.season - 1}-01-0${e}`, runtime: 1, images: [{ coverType: "screenshot", url: "", remoteUrl: artUrl("series", s.id, "backdrop") }], hasFile: true, monitored: true, episodeFileId: fileId });
       files.push({ id: fileId, seriesId: s.id, seasonNumber: sn.season, relativePath: rel.split("/").slice(2).join("/"), path: abs, size, quality, mediaInfo: mediaInfo(sn.codec, s.audio, s.subtitles) });
     }
   }
@@ -54,7 +67,7 @@ const sonarr = SERIES.map((s) => {
   }
   const series = {
     id: s.id, title: s.title, sortTitle: s.title.toLowerCase(), tvdbId: s.tvdbId, monitored: true, status: "continuing",
-    path: join(root, "tv", `${s.title} (${s.year})`), overview: "Placeholder series.", genres: s.genres, images: [],
+    path: join(root, "tv", `${s.title} (${s.year})`), overview: "Placeholder series.", genres: s.genres, images: artImages("series", s.id),
     firstAired: `${s.year}-01-01T00:00:00Z`, certification: s.certification, ratings: { value: 7.5, votes: 100 },
     statistics: { episodeFileCount: files.length },
   };
@@ -67,14 +80,14 @@ const radarr = MOVIES.map((m) => {
   return {
     id: m.id, title: m.title, sortTitle: m.title.toLowerCase(), tmdbId: m.tmdbId, monitored: true, hasFile: true,
     path: join(root, "movies", `${m.title} (${m.year})`), runtime: 1, movieFile: file, overview: "Placeholder film.",
-    genres: m.genres, images: [], digitalRelease: `${m.year}-06-01T00:00:00Z`, year: m.year, certification: m.certification,
+    genres: m.genres, images: artImages("movie", m.id), digitalRelease: `${m.year}-06-01T00:00:00Z`, year: m.year, certification: m.certification,
   };
 });
 
 const dubTracks = MOVIES.filter((m) => m.dub).map((m) => {
   const abs = join(root, dubRelPath(m));
   return {
-    id: m.dub.id, language: m.dub.language, vendor: "fixture", codec: "aac", channels: 1, bitrateKbps: 48, durationMs: 6000,
+    id: m.dub.id, language: m.dub.language, vendor: "fixture", codec: "aac", channels: 1, bitrateKbps: 48, durationMs: DUB_SECONDS * 1000,
     sizeBytes: statSync(abs).size, title: m.dub.title, mediaPath: join(root, movieRelPath(m)), checksum: "",
     downloadUrl: `/api/v1/tracks/${m.dub.id}/download`, _file: abs,
   };
@@ -104,6 +117,14 @@ function handle(req, res) {
   const url = new URL(req.url, "http://stub");
   const q = url.searchParams;
   if (url.pathname === "/healthz") return send(res, 200, { ok: true });
+  const art = /^\/art\/([a-z]+-\d+-(?:poster|backdrop)\.png)$/.exec(url.pathname);
+  if (art) {
+    try {
+      return sendFileRanged(req, res, join(artDir, art[1]), "image/png");
+    } catch {
+      return send(res, 404, {});
+    }
+  }
   if (req.headers["x-api-key"] !== apiKey) return send(res, 401, { error: "bad api key" });
   const [, app, ...rest] = url.pathname.split("/");
   const path = "/" + rest.join("/");
@@ -124,7 +145,7 @@ function handle(req, res) {
       const [start, end] = [q.get("start") ?? "0000", q.get("end") ?? "9999"];
       const out = sonarr.flatMap((s) =>
         s.episodes.filter((e) => e.airDate >= start.slice(0, 10) && e.airDate <= end.slice(0, 10))
-          .map((e) => ({ ...e, airDateUtc: `${e.airDate}T01:00:00Z`, series: { id: s.series.id, title: s.series.title, tvdbId: s.series.tvdbId, images: [] } })));
+          .map((e) => ({ ...e, airDateUtc: `${e.airDate}T01:00:00Z`, series: { id: s.series.id, title: s.series.title, tvdbId: s.series.tvdbId, images: s.series.images } })));
       return send(res, 200, out);
     }
     return send(res, 404, { error: `fixture stub: no route ${path}` });

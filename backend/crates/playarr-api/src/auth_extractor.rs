@@ -251,7 +251,11 @@ pub(crate) async fn resolve_policy(
             );
             deny.clone()
         })?
-        .ok_or_else(|| deny.clone())?;
+        // A valid token for an account that no longer exists is an expired
+        // session, not a missing grant: 401 lets a client try its refresh
+        // token (which also fails) and then ask the person to sign in again,
+        // instead of treating the account as merely restricted (403).
+        .ok_or_else(|| unauthorized("this account no longer exists"))?;
 
     state
         .policy_repo

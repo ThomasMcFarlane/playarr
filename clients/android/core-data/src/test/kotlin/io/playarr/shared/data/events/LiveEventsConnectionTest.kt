@@ -239,4 +239,33 @@ class LiveEventsConnectionTest {
             server.close()
         }
     }
+
+    @Test
+    fun `pausing while a chunked stream is mid-read neither crashes nor hangs`() = runBlocking {
+        val server = MockWebServer()
+        // One frame arrives, then the body trickles so the reader is blocked inside a chunk.
+        server.enqueue(
+            MockResponse().setResponseCode(200).setHeader("Content-Type", "text/event-stream")
+                .setChunkedBody(sse(readyFrame, changeFrame(4)) + "x".repeat(4_000), 64)
+                .throttleBody(32, 1, java.util.concurrent.TimeUnit.SECONDS),
+        )
+        server.start()
+        try {
+            val api = PlayarrHttpClient.createEvents(
+                baseUrlProvider = { server.url("/").toString() },
+                clientPlatform = ClientPlatform.AndroidTv,
+                clientVersion = "1",
+                accessTokenProvider = { "t" },
+            )
+            val recorder = Recorder()
+            val connection = LiveEventsConnection(api.asTransport(), sleep = { }, clock = { 0L })
+            val job = async { connection.run({ recorder.states += it }, { recorder.events += it }) }
+            withTimeout(10_000) { while (recorder.events.isEmpty()) kotlinx.coroutines.delay(10) }
+            kotlinx.coroutines.delay(300)
+            withTimeout(10_000) { job.cancelAndJoin() }
+            assertEquals(LiveConnectionState.Idle, recorder.states.last())
+        } finally {
+            server.close()
+        }
+    }
 }

@@ -95,6 +95,7 @@ pub async fn refresh_handler(
         .sessions
         .rotate(body.device_id, &body.refresh_token)
         .await?;
+    ensure_account_exists(&state, session.user_id).await?;
 
     let peer_addresses = peer_addresses_for_response(&state).await?;
 
@@ -106,6 +107,23 @@ pub async fn refresh_handler(
         user_id: session.user_id,
         peer_addresses,
     }))
+}
+
+/// A refresh token outlives the account it was issued to (nothing revokes it when an administrator
+/// deletes the user), so redeeming one for a deleted account answers 401 like any dead session
+/// rather than minting an access token that every request then refuses.
+async fn ensure_account_exists(state: &AppState, user_id: Uuid) -> Result<(), ApiError> {
+    match state.user_repo.find_by_id(user_id).await {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(ApiError::new(
+            axum::http::StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "refresh token is invalid or expired",
+        )),
+        Err(err) => Err(ApiError::internal(format!(
+            "failed to look up user {user_id}: {err}"
+        ))),
+    }
 }
 
 /// Body of `POST /api/v1/auth/unlock`: the stored refresh credential of a
@@ -172,6 +190,7 @@ pub async fn unlock_handler(
         .sessions
         .unlock(body.device_id, &body.refresh_token)
         .await?;
+    ensure_account_exists(&state, session.user_id).await?;
     let peer_addresses = peer_addresses_for_response(&state).await?;
     Ok(Json(RefreshResponse {
         access_token: token_response.access_token,
@@ -216,6 +235,7 @@ mod tests {
         let (router, state) = test_state().await;
         let user_id = Uuid::new_v4();
         seed_streaming_user(&state, user_id).await;
+        seed_streaming_user(&state, Uuid::nil()).await;
         let device_id = Uuid::new_v4();
 
         // Real login first, exactly like a client would, via the
@@ -285,6 +305,7 @@ mod tests {
         let (router, state) = test_state().await;
         let user_id = Uuid::new_v4();
         seed_streaming_user(&state, user_id).await;
+        seed_streaming_user(&state, Uuid::nil()).await;
         let device_id = Uuid::new_v4();
 
         let group_id = Uuid::new_v4();
@@ -408,6 +429,7 @@ mod tests {
     #[tokio::test]
     async fn presenting_an_already_rotated_token_again_is_rejected_as_reuse() {
         let (router, state) = test_state().await;
+        seed_streaming_user(&state, Uuid::nil()).await;
         let device_id = Uuid::new_v4();
         let device = playarr_model::Device {
             id: device_id,
@@ -691,5 +713,47 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    /// An administrator deleting a user does not revoke the user's refresh tokens, so redeeming one must
+    /// fail with 401 (not mint a token that every request refuses): a client then signs out cleanly.
+    #[tokio::test]
+    async fn refreshing_for_a_deleted_account_is_unauthorised() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        let (device_id, token) = issue_for(&state, user_id).await;
+        state.user_repo.delete(user_id).await.unwrap();
+
+        let (status, json) = post_json(
+            &router,
+            "/api/v1/auth/refresh",
+            None,
+            serde_json::json!({ "device_id": device_id, "refresh_token": token }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{json}");
+    }
+
+    /// A still-valid access token for a deleted account is a dead session (401), not a restriction (403).
+    #[tokio::test]
+    async fn a_live_access_token_for_a_deleted_account_is_unauthorised() {
+        let (router, state) = test_state().await;
+        let user_id = Uuid::new_v4();
+        seed_streaming_user(&state, user_id).await;
+        let token = crate::test_support::mint_access_token(&state, user_id);
+        state.user_repo.delete(user_id).await.unwrap();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/catalog")
+                    .header("Authorization", crate::test_support::bearer_header(&token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

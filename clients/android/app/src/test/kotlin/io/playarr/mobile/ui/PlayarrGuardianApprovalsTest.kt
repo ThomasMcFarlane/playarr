@@ -1,5 +1,7 @@
 package io.playarr.mobile.ui
 
+import io.playarr.shared.auth.SavedProfile
+import io.playarr.shared.data.model.AvailableProfile
 import io.playarr.shared.data.model.HouseholdApproval
 import java.time.Instant
 import okhttp3.MediaType.Companion.toMediaType
@@ -121,6 +123,55 @@ class PlayarrGuardianApprovalsTest {
     }
 
     @Test
+    fun specificForbiddenCodesWinOverTheMessageText() {
+        // The code is authoritative: a reworded message must not change the outcome.
+        assertEquals(
+            GuardianDecisionError.SelfApproval,
+            guardianDecisionError(http(403, """{"error":"self_approval_forbidden","message":"reworded"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NoPin,
+            guardianDecisionError(http(403, """{"error":"guardian_pin_not_set","message":"reworded"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NotAllowed,
+            guardianDecisionError(http(403, """{"error":"not_guardian","message":"a profile cannot approve its own request"}""")),
+        )
+    }
+
+    @Test
+    fun genericForbiddenFromOlderServersFallsBackToTheMessageText() {
+        assertEquals(
+            GuardianDecisionError.SelfApproval,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"A profile cannot approve its own request"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NoPin,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"set a profile PIN before approving requests"}""")),
+        )
+        assertEquals(
+            GuardianDecisionError.NotAllowed,
+            guardianDecisionError(http(403, """{"error":"forbidden","message":"a restricted profile cannot approve requests"}""")),
+        )
+        assertEquals(GuardianDecisionError.NotAllowed, guardianDecisionError(http(403, "{}")))
+        assertNull(guardianForbiddenByCode("forbidden"))
+        assertNull(guardianForbiddenByCode(null))
+    }
+
+    @Test
+    fun aRecordedDecisionYieldsAConfirmationMessage() {
+        assertEquals(
+            PlayarrString.GuardianApprovedConfirmation,
+            guardianConfirmation(approval("a").copy(status = "approved")),
+        )
+        assertEquals(
+            PlayarrString.GuardianDeniedConfirmation,
+            guardianConfirmation(approval("a").copy(status = "denied")),
+        )
+        assertNull(guardianConfirmation(approval("a").copy(status = "pending")))
+    }
+
+    @Test
     fun everyErrorHasALocalisedMessageAndLockoutsShowWholeMinutes() {
         assertEquals(
             PlayarrMessage.Localized(PlayarrString.GuardianWrongPin),
@@ -156,5 +207,20 @@ class PlayarrGuardianApprovalsTest {
         assertEquals(PlayarrString.GuardianSubjectSchedule, guardianSubjectLabel(approval("a", subject = "schedule")))
         assertEquals(PlayarrString.GuardianSubjectContent, guardianSubjectLabel(approval("a", kind = "content", subject = "w")))
         assertEquals(PlayarrString.GuardianSubjectOther, guardianSubjectLabel(approval("a", kind = "install", subject = "x")))
+    }
+
+    @Test
+    fun profileNamesFallBackToProfilesSavedOnThisDevice() {
+        // In full-account mode the server lists only the signed-in profile, so the child is named from the saved list.
+        val names = guardianProfileNames(
+            available = listOf(AvailableProfile(id = "guardian", username = "fx-guardian", displayName = "Guardian", isCurrent = true, pinLocked = true)),
+            saved = listOf(
+                SavedProfile("http://server.example", "child", "Child"),
+                SavedProfile("http://server.example", "blank", " "),
+            ),
+        )
+        assertEquals("Child", names["child"])
+        assertEquals("Guardian", names["guardian"])
+        assertEquals(null, names["blank"])
     }
 }

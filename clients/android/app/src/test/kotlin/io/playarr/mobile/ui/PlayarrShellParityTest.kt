@@ -1,5 +1,6 @@
 package io.playarr.mobile.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,6 +53,20 @@ class PlayarrShellParityTest {
         assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = true, playerReady = false))
         assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = true, hasPlayback = true, playerReady = true))
         assertFalse(shouldShowPlayarrMiniPlayer(isPlayer = false, hasPlayback = false, playerReady = true))
+    }
+
+    @Test
+    fun minimiseFallsBackToTheMiniPlayerWhenPictureInPictureIsUnavailable() {
+        assertEquals(PlayarrMinimiseTarget.PictureInPicture, playarrMinimiseTarget(isMusic = false, pipSupported = true))
+        assertEquals(PlayarrMinimiseTarget.MiniPlayer, playarrMinimiseTarget(isMusic = false, pipSupported = false))
+        assertEquals(PlayarrMinimiseTarget.MiniPlayer, playarrMinimiseTarget(isMusic = true, pipSupported = true))
+        assertEquals(PlayarrMinimiseTarget.MiniPlayer, playarrMinimiseTarget(isMusic = true, pipSupported = false))
+    }
+
+    @Test
+    fun miniPlayerShowsLiveVideoForVideoOnly() {
+        assertTrue(playarrMiniPlayerShowsVideo(isMusic = false))
+        assertFalse(playarrMiniPlayerShowsVideo(isMusic = true))
     }
 
     @Test

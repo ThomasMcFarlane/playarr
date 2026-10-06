@@ -4342,7 +4342,7 @@ paths:
         '401':
           description: Missing or invalid access token, or wrong guardian PIN
         '403':
-          description: Caller is not a guardian of this profile, is restricted, has no PIN, or is the requester
+          description: Caller is the requester (`self_approval_forbidden`), is not a guardian of this profile (`not_guardian`), has no profile PIN (`guardian_pin_not_set`), or is a restricted profile (`forbidden`)
         '404':
           description: Unknown approval
         '409':

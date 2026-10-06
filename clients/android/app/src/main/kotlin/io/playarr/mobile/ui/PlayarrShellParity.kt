@@ -51,9 +51,24 @@ internal fun shouldShowPlayarrOfflineState(isOnline: Boolean, currentRoute: Stri
 internal fun shouldHandlePlayarrMiniPlayerBack(isPlayer: Boolean, hasPlayback: Boolean): Boolean =
     !isPlayer && hasPlayback
 
-/** The mini player only appears once playback is actually ready, never over loading or failed starts. */
+/**
+ * The in-app mini player only appears once playback is actually ready, never over loading or failed
+ * starts. Video uses it as the fallback when system Picture-in-Picture is unavailable.
+ */
 internal fun shouldShowPlayarrMiniPlayer(isPlayer: Boolean, hasPlayback: Boolean, playerReady: Boolean): Boolean =
     !isPlayer && hasPlayback && playerReady
+
+/** Video items get a live video surface in the mini player; music keeps its artwork. */
+internal fun playarrMiniPlayerShowsVideo(isMusic: Boolean): Boolean = !isMusic
+
+/**
+ * Minimise target for the player screen: music always uses the in-app mini player, video uses
+ * system Picture-in-Picture when the device offers it and the mini player otherwise.
+ */
+internal enum class PlayarrMinimiseTarget { MiniPlayer, PictureInPicture }
+
+internal fun playarrMinimiseTarget(isMusic: Boolean, pipSupported: Boolean): PlayarrMinimiseTarget =
+    if (!isMusic && pipSupported) PlayarrMinimiseTarget.PictureInPicture else PlayarrMinimiseTarget.MiniPlayer
 
 /** A failed start that the viewer has left (minimised or navigated away from) is discarded. */
 internal fun shouldClearPlayarrFailedPlayback(playerFailed: Boolean, isPlayer: Boolean, hasPlayback: Boolean): Boolean =

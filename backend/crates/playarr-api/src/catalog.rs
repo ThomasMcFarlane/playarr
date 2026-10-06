@@ -1084,10 +1084,9 @@ mod tests {
     async fn browse_without_streaming_or_admin_access_is_forbidden() {
         let (router, state) = test_state().await;
         // A logged-in caller who is neither a streaming user nor an admin
-        // (an unknown/unseeded user id resolves to "no policy at all",
-        // failing closed the same way as an explicit `can_stream: false,
-        // is_admin: false` policy would) must still 403.
+        // (an explicit `can_stream: false, is_admin: false` policy) must 403.
         let user_id = Uuid::new_v4();
+        crate::test_support::seed_policy_user(&state, user_id, |p| p.can_stream = false).await;
         let token = mint_access_token(&state, user_id);
 
         let response = router

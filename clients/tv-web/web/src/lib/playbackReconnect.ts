@@ -42,3 +42,32 @@ export function reconnectDelayMs(attempt: number): number {
 export function canReconnect(attempt: number): boolean {
   return attempt < MAX_RECONNECT_ATTEMPTS;
 }
+
+/**
+ * True when `error` is not the one a reconnect was already started for. The
+ * engine keeps reporting its last error until the replacement source starts to
+ * load, so the same error object can still be visible when the re-negotiated
+ * session becomes ready; a genuinely new failure is a new object.
+ */
+export function isUnhandledEngineError<T extends object>(
+  error: T | undefined,
+  handled: T | undefined
+): boolean {
+  return error !== undefined && error !== handled;
+}
+
+/**
+ * Which server-side session close a change of engine state calls for. Only the
+ * transition into a terminal state closes the session: a stale terminal state
+ * seen again after a reconnect has negotiated a replacement must leave that
+ * replacement alone.
+ */
+export function sessionCloseForEngineState(
+  previousState: string,
+  state: string
+): "completed" | "error" | null {
+  if (previousState === state) return null;
+  if (state === "ended") return "completed";
+  if (state === "error") return "error";
+  return null;
+}

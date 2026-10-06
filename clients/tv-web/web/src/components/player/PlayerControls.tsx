@@ -17,6 +17,7 @@ import {
   isOriginalQuality,
   qualityDisplayLabel,
 } from "../../lib/playerQualityLabel";
+import { audioTrackDetail } from "../../lib/sourceAudioTracks";
 import { CastButton } from "./CastButton";
 import {
   AudioTrackIcon,
@@ -37,6 +38,7 @@ export interface PlayerTrackOption {
   id: string;
   label: string;
   language?: string;
+  codec?: string;
 }
 
 const SEEK_COMMIT_DEBOUNCE_MS = 300;
@@ -898,7 +900,7 @@ export function PlayerControls({
                   >
                     <span>
                       <strong>{track.label}</strong>
-                      {track.language ? <small>{track.language}</small> : null}
+                      {audioTrackDetail(track) ? <small>{audioTrackDetail(track)}</small> : null}
                     </span>
                     <span className="player-quality-check" aria-hidden="true">
                       {selected ? "✓" : ""}

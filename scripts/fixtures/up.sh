@@ -8,6 +8,7 @@
 # Env: PLAYARR_FIXTURE_DIR, PLAYARR_FIXTURE_PORT (18484), PLAYARR_FIXTURE_BIND,
 #      PLAYARR_SERVER_BIN (skip the cargo build), PLAYARR_FIXTURE_NO_BUILD=1,
 #      PLAYARR_WEB_ASSETS_DIR (also serve a built web client),
+#      PLAYARR_FIXTURE_CLIP_SECONDS (length of each generated clip, default 6),
 #      FIXTURE_CHILD_WINDOW="start-end" (child schedule, minutes of day UTC).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -39,6 +40,9 @@ fi
 # 2. Media.
 echo "==> generating fixture media"
 node "${FIX_SCRIPT_DIR}/media.mjs" "${FIX_MEDIA_DIR}"
+
+echo "==> generating placeholder artwork"
+node "${FIX_SCRIPT_DIR}/art.mjs" "${FIX_MEDIA_DIR}/art"
 
 # 3. Stub Sonarr/Radarr/Dubarr.
 if ! alive "${FIX_RUN_DIR}/stub.pid"; then

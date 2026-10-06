@@ -1953,6 +1953,16 @@ pub async fn delete_user_handler(
         }
     }
 
+    // End every device's session now: without this the user's refresh tokens stay redeemable.
+    let revoked = state
+        .sessions
+        .revoke_all_for_user(id)
+        .await
+        .map_err(|err| {
+            ApiError::internal(format!("failed to revoke sessions of user {id}: {err}"))
+        })?;
+    tracing::info!(user_id = %id, revoked_families = revoked, "revoked sessions of deleted user");
+
     if let Some(policy_id) = policy_id {
         match state.policy_repo.delete(policy_id).await {
             Ok(()) | Err(playarr_db::DbError::NotFound) => {}
@@ -2746,10 +2756,194 @@ apiVersion = "1"
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
+    async fn call(
+        router: &axum::Router,
+        method: &str,
+        uri: &str,
+        token: &str,
+        body: Option<serde_json::Value>,
+    ) -> (StatusCode, serde_json::Value) {
+        let mut builder = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("Authorization", bearer_header(token));
+        let body = match body {
+            Some(json) => {
+                builder = builder.header("content-type", "application/json");
+                Body::from(json.to_string())
+            }
+            None => Body::empty(),
+        };
+        let response = router
+            .clone()
+            .oneshot(builder.body(body).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+        )
+    }
+
+    fn create_body(username: &str) -> serde_json::Value {
+        serde_json::json!({
+            "username": username,
+            "display_name": "Fixture",
+            "password": "another good password",
+            "is_admin": false,
+        })
+    }
+
+    /// Row 520 follow-up: a deleted account's username is free again, so a fixture script can delete
+    /// and re-create the same user.
+    #[tokio::test]
+    async fn a_deleted_username_can_be_registered_again() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let token = mint_access_token(&state, admin_id);
+
+        let (status, first) = call(
+            &router,
+            "POST",
+            "/api/v1/admin/users",
+            &token,
+            Some(create_body("fx-reuse")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{first}");
+        let first_id = first["id"].as_str().unwrap().to_string();
+        let (status, _) = call(
+            &router,
+            "DELETE",
+            &format!("/api/v1/admin/users/{first_id}"),
+            &token,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let (status, second) = call(
+            &router,
+            "POST",
+            "/api/v1/admin/users",
+            &token,
+            Some(create_body("fx-reuse")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{second}");
+        assert_ne!(second["id"].as_str().unwrap(), first_id);
+
+        // And it can happen again: the second account is deletable and the name still reusable.
+        let second_id = second["id"].as_str().unwrap().to_string();
+        let (status, _) = call(
+            &router,
+            "DELETE",
+            &format!("/api/v1/admin/users/{second_id}"),
+            &token,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let (status, third) = call(
+            &router,
+            "POST",
+            "/api/v1/admin/users",
+            &token,
+            Some(create_body("fx-reuse")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{third}");
+    }
+
+    /// Row 520 follow-up: deleting an account ends every device's session at once, rather than
+    /// leaving refresh tokens redeemable.
+    #[tokio::test]
+    async fn deleting_a_user_revokes_all_their_refresh_families() {
+        let (router, state) = test_state().await;
+        let admin_id = Uuid::new_v4();
+        seed_admin_user(&state, admin_id).await;
+        let admin_token = mint_access_token(&state, admin_id);
+
+        let (status, created) = call(
+            &router,
+            "POST",
+            "/api/v1/admin/users",
+            &admin_token,
+            Some(create_body("fx-revoke")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{created}");
+        let user_id: Uuid = created["id"].as_str().unwrap().parse().unwrap();
+
+        // Two devices signed in as the user, plus an unrelated admin session that must survive.
+        let mut sessions = Vec::new();
+        for owner in [user_id, user_id, admin_id] {
+            let device_id = Uuid::new_v4();
+            let device = playarr_model::Device {
+                id: device_id,
+                user_id: owner,
+                name: "test device".to_string(),
+                platform: playarr_model::ClientPlatform::Web,
+                client_version: "1.0.0".to_string(),
+                last_seen_at: None,
+                trusted: false,
+            };
+            let (_session, issued) = state
+                .app
+                .sessions
+                .issue(device, state.app.refresh_ttl)
+                .await
+                .expect("issue session");
+            sessions.push((device_id, issued.refresh_token));
+        }
+
+        let (status, _) = call(
+            &router,
+            "DELETE",
+            &format!("/api/v1/admin/users/{user_id}"),
+            &admin_token,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        for (device_id, refresh_token) in &sessions[..2] {
+            let err = state
+                .app
+                .sessions
+                .peek_user(*device_id, refresh_token)
+                .await
+                .expect_err("the deleted user's family must be revoked");
+            assert!(
+                matches!(err, playarr_auth::RefreshError::FamilyRevoked),
+                "{err:?}"
+            );
+        }
+        let (device_id, refresh_token) = &sessions[2];
+        assert_eq!(
+            state
+                .app
+                .sessions
+                .peek_user(*device_id, refresh_token)
+                .await
+                .unwrap(),
+            admin_id,
+            "another account's session is untouched"
+        );
+    }
+
     #[tokio::test]
     async fn non_admin_is_rejected() {
         let (router, state) = test_state().await;
-        let token = mint_access_token(&state, Uuid::new_v4());
+        // A real account without the admin grant (an account that no longer exists is a 401 instead).
+        let user_id = Uuid::new_v4();
+        crate::test_support::seed_streaming_user(&state, user_id).await;
+        let token = mint_access_token(&state, user_id);
 
         let response = router
             .oneshot(

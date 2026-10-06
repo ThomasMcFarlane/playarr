@@ -9,6 +9,16 @@ use crate::codec::{bool_from_i64, bool_to_i64, format_datetime, parse_datetime, 
 use crate::error::DbError;
 use crate::pool::{Backend, DbPool};
 
+/// Marks a soft-deleted row's username. `users.username` is `UNIQUE`, so a tombstone that kept its name
+/// would reserve it forever; a deleted row is renamed `<name>~deleted~<id>` (unique by id) so the
+/// name can be registered again. Migrations 0077 (sqlite) / 0077 (postgres) rename tombstones that
+/// predate this.
+const TOMBSTONE_MARK: &str = "~deleted~";
+
+fn tombstone_suffix(id: Uuid) -> String {
+    format!("{TOMBSTONE_MARK}{id}")
+}
+
 /// Sync-only metadata for one row: `updated_at`/`origin_peer_id`/
 /// `deleted_at` -- deliberately kept off `playarr_model::User`/
 /// `playarr_model::Policy` themselves (see this module's own doc
@@ -328,14 +338,15 @@ impl UserRepo for SqlxUserRepo {
         // rather than silently re-stamping `deleted_at` with a later time.
         let sql = match self.backend {
             Backend::Sqlite => {
-                "UPDATE users SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL"
+                "UPDATE users SET deleted_at = ?, username = username || ? WHERE id = ? AND deleted_at IS NULL"
             }
             Backend::Postgres => {
-                "UPDATE users SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL"
+                "UPDATE users SET deleted_at = $1, username = username || $2 WHERE id = $3 AND deleted_at IS NULL"
             }
         };
         let result = sqlx::query(sql)
             .bind(format_datetime(chrono::Utc::now()))
+            .bind(tombstone_suffix(id))
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
@@ -399,6 +410,12 @@ impl UserRepo for SqlxUserRepo {
     }
 
     async fn apply_synced(&self, user: &User, metadata: SyncMetadata) -> Result<(), DbError> {
+        // A tombstone from a peer that predates username release still carries the live name; free it.
+        let username = if metadata.deleted_at.is_some() && !user.username.contains(TOMBSTONE_MARK) {
+            format!("{}{}", user.username, tombstone_suffix(user.id))
+        } else {
+            user.username.clone()
+        };
         let sql = match self.backend {
             Backend::Sqlite => {
                 "INSERT INTO users \
@@ -431,7 +448,7 @@ impl UserRepo for SqlxUserRepo {
         };
         sqlx::query(sql)
             .bind(user.id.to_string())
-            .bind(user.username.as_str())
+            .bind(username)
             .bind(user.display_name.as_str())
             .bind(user.email.as_deref())
             .bind(user.password_hash.expose_secret().as_str())
@@ -919,6 +936,79 @@ mod tests {
         // hard delete this replaced.
         let err = repo.delete(user.id).await.unwrap_err();
         assert!(matches!(err, DbError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn delete_releases_the_username_for_a_new_account() {
+        let pool = test_sqlite_pool().await;
+        let policy_id = sample_policy_id(&pool).await;
+        let repo = SqlxUserRepo::new(pool.clone());
+        let old = sample_user(policy_id, "reusable");
+        repo.upsert(&old).await.unwrap();
+        repo.delete(old.id).await.unwrap();
+
+        let new = sample_user(policy_id, "reusable");
+        repo.upsert(&new).await.unwrap();
+        assert_eq!(
+            repo.find_by_username("reusable").await.unwrap().unwrap().id,
+            new.id
+        );
+        // The tombstone survives under a name carrying its id.
+        let name: String = sqlx::query_scalar("SELECT username FROM users WHERE id = ?")
+            .bind(old.id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(name, format!("reusable~deleted~{}", old.id));
+        // Deleting the replacement works too (a second tombstone, a distinct name).
+        repo.delete(new.id).await.unwrap();
+        repo.upsert(&sample_user(policy_id, "reusable"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn migration_renames_tombstones_that_predate_username_release() {
+        let pool = test_sqlite_pool().await;
+        let policy_id = sample_policy_id(&pool).await;
+        let repo = SqlxUserRepo::new(pool.clone());
+        let legacy = sample_user(policy_id, "legacy");
+        repo.upsert(&legacy).await.unwrap();
+        // A tombstone as the old `delete` left it: deleted, name still held.
+        sqlx::query("UPDATE users SET deleted_at = ? WHERE id = ?")
+            .bind(format_datetime(Utc::now()))
+            .bind(legacy.id.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(include_str!(
+            "../../../../migrations/sqlite/0077_release_deleted_usernames.sql"
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        repo.upsert(&sample_user(policy_id, "legacy"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_synced_tombstone_with_a_live_name_does_not_reserve_it() {
+        let pool = test_sqlite_pool().await;
+        let policy_id = sample_policy_id(&pool).await;
+        let repo = SqlxUserRepo::new(pool.clone());
+        let ghost = sample_user(policy_id, "synced-name");
+        let metadata = SyncMetadata {
+            updated_at: Utc::now(),
+            origin_peer_id: None,
+            deleted_at: Some(Utc::now()),
+        };
+        repo.apply_synced(&ghost, metadata).await.unwrap();
+        repo.upsert(&sample_user(policy_id, "synced-name"))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

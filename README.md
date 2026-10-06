@@ -1,9 +1,69 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/banner-light.svg">
+    <img src="docs/assets/readme/banner-light.svg" alt="Playarr Server / Playarr" width="100%">
+  </picture>
+</p>
+
+<p align="center">
+  <strong>A self-hosted media server, and the native clients that play it.</strong><br>
+  One Rust backend, seven playback clients, and the infrastructure to run it all on anything from a Raspberry Pi to a Kubernetes cluster.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue" alt="Licence: MIT"></a>
+  <a href="backend/"><img src="https://img.shields.io/badge/backend-Rust-b7410e?logo=rust&logoColor=white" alt="Backend: Rust"></a>
+  <a href="https://playarr.app/clients"><img src="https://img.shields.io/badge/clients-playarr.app%2Fclients-e11d48" alt="Playarr clients page"></a>
+</p>
+
+<p align="center">
+  <a href="#what-this-is">What this is</a> ·
+  <a href="#why-it-exists">Why it exists</a> ·
+  <a href="#high-level-architecture">Architecture</a> ·
+  <a href="#clients">Clients</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#third-party-media">Third-party media</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/readme/screenshots/web-home.png" alt="Playarr Web home screen with a featured film and continue-watching rails" width="100%">
+</p>
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-movie-detail.png" alt="Movie detail page with chapters and a resume button" width="420"><br><sub><b>Movie detail</b><br>Chapters, resume point and similar titles.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-series-detail.png" alt="Series detail page listing a season of episodes" width="420"><br><sub><b>Series detail</b><br>Seasons, episodes and one-click resume.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-calendar.png" alt="Calendar page listing an upcoming episode" width="420"><br><sub><b>Calendar</b><br>Upcoming episodes and releases from your source apps.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-movies-library.png" alt="Movies library grid with alphabet scrubber" width="420"><br><sub><b>Movies library</b><br>Artwork grid with an A to Z scrubber and filters.</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/tv-movie-detail.png" alt="Ten-foot television layout of a movie detail page" width="420"><br><sub><b>TV, ten-foot view</b><br>The same detail page laid out for a remote and a sofa.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-mobile-detail.png" alt="Phone-sized movie detail page with a bottom navigation bar" width="280"><br><sub><b>Mobile</b><br>Responsive layout with a bottom navigation bar.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/assets/readme/screenshots/admin-library.png" alt="Playarr Server admin library browser" width="860"><br><sub><b>Server admin</b><br>Library browser in the Playarr Server admin UI.</sub></td>
+</tr>
+</table>
+
+<p align="center"><sub>The demo library is a placeholder library with generated artwork; no real titles or artwork are shown.</sub></p>
+
 # Playarr Server / Playarr
 
 **Playarr Server** is a self-hosted media server. **Playarr** is the suite of
 native clients that watch things on it. This repository is the monorepo for
 both: one Rust backend, seven playback clients, and the infrastructure to run
 the whole thing on anything from a Raspberry Pi to a Kubernetes cluster.
+
+## Highlights
+
+- **One server, one API.** Library scanning, metadata, artwork, authentication and playback behind a single versioned HTTP/JSON API.
+- **Native clients everywhere.** Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, Web and Xbox, with full product parity and native-class performance wherever the platform allows.
+- **Built on the *arr stack.** Sonarr, Radarr, Lidarr, Bazarr, Prowlarr and Readarr keep doing acquisition; Playarr Server owns the library and the playing.
+- **Two kinds of transcoding.** Latency-sensitive transcode-on-play, and library-wide background re-encoding through [Tdarr](https://github.com/HaveAGitGat/Tdarr).
+- **Three deployment tiers, one codebase.** systemd and SQLite, Docker Compose and Postgres, or Kubernetes with role-split workloads of the same binary.
 
 ## What this is
 
@@ -13,20 +73,12 @@ place to *watch* the result, and no first-class native apps for phones,
 tablets, or TVs. Playarr Server sits on top of that stack: it owns your media
 library (scanning, metadata, artwork), playback (on-demand and background
 transcoding, via [Tdarr](https://github.com/HaveAGitGat/Tdarr) for the
-library-wide encode work), authentication, and a single unified HTTP/JSON API
-,  while leaving indexing, acquisition, and subtitle-fetching to the *arr apps
+library-wide encode work), authentication, and a single unified HTTP/JSON API,
+while leaving indexing, acquisition, and subtitle-fetching to the *arr apps
 that already do it well. Playarr is what you actually install to watch things:
 Android Mobile, Android TV, iOS, LG webOS, Samsung Tizen, Hisense VIDAA, a
 browser-based Web client, and a native Xbox client, all speaking the same
 versioned API contract.
-
-See the public [Playarr Clients page](https://playarr.app/clients) for current
-availability. Hisense owners can follow the [VIDAA guide](docs/clients/vidaa.md)
-to open the hosted Playarr Web App in the television Browser or try the
-experimental, temporary-DNS launcher installer on compatible firmware. Xbox
-owners can follow the [Xbox guide](docs/clients/xbox.md) to use Playarr in
-Xbox's built-in Edge browser today, ahead of a native Developer Mode/Store
-release.
 
 Playarr Server is designed to run at three tiers without a different codebase or a
 data-migration story at each step: a single systemd-managed binary against
@@ -51,7 +103,36 @@ support them (for example offline downloads on some TV runtimes). The binding
 policy is
 [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md).
 
+## Clients
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/platforms-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/platforms-light.svg">
+    <img src="docs/assets/readme/platforms-light.svg" alt="Playarr client platforms: Web, Android, Hisense VIDAA, LG webOS, Samsung Tizen, Xbox, Apple and more" width="100%">
+  </picture>
+</p>
+
+See the public [Playarr Clients page](https://playarr.app/clients) for current
+availability. Hisense owners can follow the [VIDAA guide](docs/clients/vidaa.md)
+to open the hosted Playarr Web App in the television Browser or try the
+experimental, temporary-DNS launcher installer on compatible firmware. Xbox
+owners can follow the [Xbox guide](docs/clients/xbox.md) to use Playarr in
+Xbox's built-in Edge browser today, ahead of a native Developer Mode/Store
+release.
+
 ## High-level architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/architecture-light.svg">
+    <img src="docs/assets/readme/architecture-light.svg" alt="Architecture: Playarr clients talk to Playarr Server over a versioned HTTP/JSON API; the server fronts the *arr apps, Tdarr and SQLite or Postgres" width="100%">
+  </picture>
+</p>
+
+<details>
+<summary>Text version of the diagram</summary>
 
 ```
                     ┌───────────────────────────────────────────┐
@@ -78,19 +159,40 @@ policy is
                 └───────────────┘   └─────────────────┘   └────────┘
 ```
 
+</details>
+
 Playarr Server treats each *arr application as a managed external service rather
 than reimplementing indexing/acquisition/subtitles itself, and splits
 transcoding into two independent problems: latency-sensitive on-demand
 transcode-on-play, and low-priority library-wide background re-encoding
 dispatched to a Tdarr worker pool. The full reasoning, the crate layout, the
 deployment-tier matrix, and the client code-sharing strategy are documented
-in depth in [`docs/architecture/overview.md`](docs/architecture/overview.md)
-,  read that before making non-trivial changes anywhere in the tree.
+in depth in [`docs/architecture/overview.md`](docs/architecture/overview.md),
+so read that before making non-trivial changes anywhere in the tree.
 
 For what's built, what's next, and how work is sequenced across the monorepo,
 see [`docs/roadmap.md`](docs/roadmap.md).
 
+## Getting started
+
+```sh
+just --list        # see every available recipe
+just backend-check  # fmt + clippy + cargo check for the Rust backend
+just backend-test    # backend test suite
+just backend-run      # run the Playarr Server locally
+just tv-web-dev        # tv-web client dev server
+just dev-up              # bring up the local Docker Compose dev stack
+just dev-seed              # seed it with sample data
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full local-development
+walkthrough, and [`docs/architecture/overview.md`](docs/architecture/overview.md)
+for how the system fits together before you dive into a specific component.
+
 ## Repo layout
+
+<details>
+<summary>Directory map</summary>
 
 ```
 .
@@ -146,32 +248,33 @@ Every directory above is independently ownable: a crate, an infra tier, a
 client platform, or a docs subtree. That's deliberate, see the "Why this is
 a monorepo" section of the architecture overview for the reasoning.
 
-## Getting started
+</details>
 
-```sh
-just --list        # see every available recipe
-just backend-check  # fmt + clippy + cargo check for the Rust backend
-just backend-test    # backend test suite
-just backend-run      # run the Playarr Server locally
-just tv-web-dev        # tv-web client dev server
-just dev-up              # bring up the local Docker Compose dev stack
-just dev-seed              # seed it with sample data
-```
+## Documentation
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full local-development
-walkthrough, and [`docs/architecture/overview.md`](docs/architecture/overview.md)
-for how the system fits together before you dive into a specific component.
+- [`docs/architecture/overview.md`](docs/architecture/overview.md): start here.
+- [`docs/architecture/client-principles.md`](docs/architecture/client-principles.md): the native, parity and performance bar.
+- [`docs/roadmap.md`](docs/roadmap.md): what's built, what's next.
+- [VIDAA guide](docs/clients/vidaa.md) and [Xbox guide](docs/clients/xbox.md).
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to build and run each component locally, and keep pull requests scoped to the component or components they actually touch. Cross-language tasks live in the [`Justfile`](Justfile).
+
+## Security
+
+Please do not report vulnerabilities in public issues. See [`SECURITY.md`](SECURITY.md) for how to report them privately.
 
 ## Third-party media
 
 Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org,
 is licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
 (see <https://peach.blender.org/about/>). It is used only by the Google Play
-review demo server (`clients/tv-web/apps/play-review-server`) and in the Android
-Play store screenshots (`clients/android/fastlane/metadata/android/en-US/images/`).
-It is not distributed in the app. The licence does not cover Blender or Big Buck
-Bunny logos or trademarks, and none are used.
+review demo server (`clients/tv-web/apps/play-review-server`). It is not distributed
+in the app. The licence does not cover Blender or Big Buck Bunny logos or trademarks,
+and none are used. Every screenshot in this repository is taken against a placeholder
+library with generated artwork.
 
-## License
+## Licence
 
 MIT, see [`LICENSE`](LICENSE).

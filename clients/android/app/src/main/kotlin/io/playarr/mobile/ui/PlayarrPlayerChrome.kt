@@ -124,7 +124,7 @@ internal fun PlayarrPlayerChrome(
     onNext: () -> Unit,
     onSelectQueueItem: (Int) -> Unit,
     onBack: () -> Unit,
-    onMinimise: () -> Unit,
+    onMinimise: (() -> Unit)?,
     onTogglePlayback: () -> Unit,
     onSeek: (Long) -> Unit,
     onQuality: (String) -> Unit,
@@ -288,13 +288,15 @@ internal fun PlayarrPlayerChrome(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PlayarrPlayerTopButton(
-                    icon = Icons.Outlined.PictureInPictureAlt,
-                    label = playarrString(PlayarrString.PlayerMinimiseLabel),
-                    accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
-                    isTelevision = isTelevision,
-                    onClick = { showControls(); onMinimise() },
-                )
+                if (onMinimise != null) {
+                    PlayarrPlayerTopButton(
+                        icon = Icons.Outlined.PictureInPictureAlt,
+                        label = playarrString(PlayarrString.PlayerMinimiseLabel),
+                        accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
+                        isTelevision = isTelevision,
+                        onClick = { showControls(); onMinimise() },
+                    )
+                }
                 PlayarrPlayerTopButton(
                     icon = Icons.Outlined.Close,
                     label = playarrString(PlayarrString.PlayerCloseLabel),

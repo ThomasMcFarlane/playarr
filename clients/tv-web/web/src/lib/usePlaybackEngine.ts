@@ -1,4 +1,5 @@
 import { shouldKeepEngineAttached } from "./playerMounting";
+import { sourceAudioTracksFromInfo } from "./sourceAudioTracks";
 import {
   useCallback,
   useEffect,
@@ -40,6 +41,8 @@ import { DOWNLOADED_QUALITY_ID } from "./qualityIds";
 import {
   canReconnect,
   isRecoverableConnectionError,
+  isUnhandledEngineError,
+  sessionCloseForEngineState,
   reconnectDelayMs,
 } from "./playbackReconnect";
 
@@ -111,17 +114,6 @@ function sourceTimeToEngineTime(
   return isOnDemandHlsUrl(negotiation.url)
     ? Math.max(0, positionSeconds - negotiation.sourceOffsetSeconds)
     : positionSeconds;
-}
-
-function sourceAudioTracksFromInfo(info: PlaybackInfo): PlaybackAudioTrack[] {
-  return info.audio_tracks.map((track) => ({
-    id: track.id,
-    label: track.label,
-    language: track.language ?? undefined,
-    roles: [],
-    channelsCount: track.channels ?? undefined,
-    selected: track.id === info.selected_audio_track_id,
-  }));
 }
 
 function sourceSubtitleTracksFromInfo(info: PlaybackInfo): PlaybackSubtitleTrack[] {
@@ -242,6 +234,14 @@ export function usePlaybackEngine(
 ): PlaybackEngineController {
   const client = useServerClient(serverUrl);
   const getAccessToken = useServerAccessToken(serverUrl);
+  // The token provider's identity changes whenever the API client context is
+  // rebuilt (profile session persistence, server list refresh). The engine
+  // must not be torn down for that: a recreated engine has no source loaded,
+  // and `loadedForUrl` stops the load effect from loading it again, which
+  // left the player on an endless spinner after the manifest and first
+  // segment had been fetched (TASKS 456). Always read the latest provider.
+  const getAccessTokenRef = useRef(getAccessToken);
+  getAccessTokenRef.current = getAccessToken;
   const downloads = useDownloads();
   const online = useOnlineStatus();
   const [localSource, setLocalSource] = useState<LocalPlaybackSource | null>(null);
@@ -271,6 +271,8 @@ export function usePlaybackEngine(
   const userSelectedQualityRef = useRef(false);
   const negotiationRequestRef = useRef<PlaybackInfoParams>(WEB_PLAYBACK_CAPABILITIES);
   const automaticRecoveryUrlRef = useRef<string | null>(null);
+  // The engine error a reconnect was already started for (see `isUnhandledEngineError`).
+  const recoveredEngineErrorRef = useRef<PlaybackEngineState["error"]>(undefined);
   const initialNegotiationRef = useRef(true);
   const activeSessionIdRef = useRef<string | null>(null);
   const onDemandTranscodeRef = useRef(false);
@@ -798,6 +800,11 @@ export function usePlaybackEngine(
       return;
     }
     if (automaticRecoveryUrlRef.current === negotiation.url) return;
+    // The replacement negotiation becomes "ready" while `engineState` still
+    // holds the error that caused this reconnect. Treating that stale error as
+    // a failure of the new session renegotiated a second time, which closed
+    // the session the player had just been handed (TASKS 456).
+    if (!isUnhandledEngineError(engineState.error, recoveredEngineErrorRef.current)) return;
     if (!canReconnect(reconnectAttemptRef.current)) {
       reconnectingRef.current = false;
       setReconnecting(false);
@@ -805,6 +812,7 @@ export function usePlaybackEngine(
     }
 
     automaticRecoveryUrlRef.current = negotiation.url;
+    recoveredEngineErrorRef.current = engineState.error;
     const absolutePositionSeconds =
       engineState.currentTimeSeconds + negotiation.sourceOffsetSeconds;
     pendingQualitySwitchRef.current = {
@@ -886,7 +894,7 @@ export function usePlaybackEngine(
       } else {
         const shaka = new ShakaPlaybackEngine();
         shaka.attach(videoRef.current);
-        shaka.setAuthHeaderProvider(getAccessToken);
+        shaka.setAuthHeaderProvider((request) => getAccessTokenRef.current(request));
         engine = shaka;
       }
     } catch (err) {
@@ -915,7 +923,7 @@ export function usePlaybackEngine(
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the loading/error <-> ready transition (see comment above), not on every negotiation object identity change.
-  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching || reconnecting), getAccessToken]);
+  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching || reconnecting)]);
 
   // Load whatever the negotiation resolved to, once there's both a ready
   // negotiation result and an attached engine. Guarded by `loadedForUrl` so
@@ -1098,11 +1106,13 @@ export function usePlaybackEngine(
       if (sessionId) void recordHeartbeat(sessionId);
     }
 
-    if (engineState.state === "ended") {
-      void stopActiveSession("completed");
-    } else if (engineState.state === "error") {
-      void stopActiveSession("error");
-    }
+    // Only on the transition: this effect also re-runs for unrelated changes
+    // (a re-negotiated source sets `fixedDurationSeconds`) while the engine
+    // still reports the previous session's terminal state. Closing "the active
+    // session" then closed the replacement session a reconnect had just
+    // negotiated, so its playlist 404ed forever (TASKS 456).
+    const closeReason = sessionCloseForEngineState(previousState, engineState.state);
+    if (closeReason) void stopActiveSession(closeReason);
   }, [
     engineState,
     fixedDurationSeconds,

@@ -445,6 +445,9 @@ async fn test_pool() -> DbPool {
     sqlx::any::install_default_drivers();
     let pool: DbPool = sqlx::any::AnyPoolOptions::new()
         .max_connections(1)
+        // The default 30 s acquire timeout is shorter than a test thread can
+        // be starved for when the whole suite runs on saturated cores.
+        .acquire_timeout(std::time::Duration::from_secs(300))
         .connect(&url)
         .await
         .expect("open in-memory sqlite pool");

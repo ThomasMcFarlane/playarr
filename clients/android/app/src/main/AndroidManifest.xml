@@ -85,6 +85,7 @@
             android:exported="true"
             android:theme="@style/Theme.Playarr.Splash"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|colorMode|layoutDirection|locale|fontScale|touchscreen|mcc|mnc"
+            android:supportsPictureInPicture="true"
             android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
