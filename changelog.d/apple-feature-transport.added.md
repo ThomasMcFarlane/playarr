@@ -1,0 +1,1 @@
+- Apple clients: a shared authenticated JSON transport (`PlayarrRequestTransport`) in PlayarrKit for the upcoming parity features, with tests.
