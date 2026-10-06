@@ -1,0 +1,1 @@
+- Apple parity workflow (`parity-apple.yml`) and tooling under `scripts/parity/apple/`: web reference versus tvOS Simulator captures on the fixture environment, with a pixel diff report; the tvOS app gains a live `-PlayarrParityRoute` launch argument.

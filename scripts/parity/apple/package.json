@@ -1,0 +1,11 @@
+{
+  "name": "playarr-parity-apple",
+  "private": true,
+  "type": "module",
+  "description": "Capture and diff helpers for the Apple parity workflow (web reference vs simulator).",
+  "dependencies": {
+    "playwright-core": "1.63.0",
+    "pixelmatch": "7.1.0",
+    "pngjs": "7.0.0"
+  }
+}

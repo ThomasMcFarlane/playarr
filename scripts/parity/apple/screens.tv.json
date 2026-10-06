@@ -1,0 +1,16 @@
+{
+  "viewport": { "width": 1920, "height": 1080 },
+  "user": "fx-viewer",
+  "frozenTime": "2026-07-29T05:59:00Z",
+  "screens": [
+    { "id": "home", "web": { "path": "/" }, "native": "home" },
+    { "id": "movies", "web": { "path": "/movies" }, "native": "movies" },
+    { "id": "series", "web": { "path": "/series" }, "native": "series" },
+    { "id": "detail-film", "web": { "work": { "kind": "movie", "title": "Test Movie A" } }, "native": "detail:movie:Test Movie A" },
+    { "id": "detail-series", "web": { "work": { "kind": "series", "title": "Sample Series 1" } }, "native": "detail:series:Sample Series 1" },
+    { "id": "search", "web": { "path": "/search?q=Test" }, "native": "search:Test" },
+    { "id": "settings", "web": { "path": "/settings" }, "native": "settings" },
+    { "id": "calendar", "web": { "path": "/calendar" }, "native": null, "missing": "The tvOS client has no calendar screen yet." },
+    { "id": "profiles", "web": { "path": "/profiles" }, "native": null, "missing": "Profile switcher needs a signed-out launch route; not wired yet." }
+  ]
+}
