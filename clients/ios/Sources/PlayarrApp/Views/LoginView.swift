@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var errorMessage: String?
     @State private var languageMenuOpen = false
     @State private var showingSignup = false
+    @State private var showingDeviceLink = false
     @AppStorage("com.playarr.ios.language") private var language = "system"
     @FocusState private var focusedField: Field?
 
@@ -56,6 +57,9 @@ struct LoginView: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .tint(PlayarrStyle.accent)
+        .sheet(isPresented: $showingDeviceLink) {
+            DeviceLinkSignInView(environment: environment, isPresented: $showingDeviceLink)
+        }
         .fullScreenCover(isPresented: $showingSignup) {
             SignupView(
                 environment: environment,
@@ -171,6 +175,17 @@ struct LoginView: View {
                 .disabled(isSubmitting)
                 .opacity(isSubmitting ? 0.45 : 1)
                 .padding(.top, 24)
+
+                Button { showingDeviceLink = true } label: {
+                    Label("Sign in with a QR code", systemImage: "qrcode")
+                        .font(.custom("Avenir Next", fixedSize: 11.5).weight(.semibold))
+                        .foregroundStyle(PlayarrStyle.inkSoft)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
+                .padding(.top, 8)
+                .accessibilityIdentifier("login.qr")
 
                 Button("Have an invitation? Create account") { showingSignup = true }
                     .font(.custom("Avenir Next", fixedSize: 11.5).weight(.semibold))

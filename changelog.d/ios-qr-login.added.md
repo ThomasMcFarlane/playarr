@@ -1,0 +1,1 @@
+- iOS: "Sign in with a QR code" on the login screen. It shows a locally rendered QR code, the short code and the link for another device to approve, then saves the session and the chosen server; password sign-in is unchanged. Expired codes renew, and denial, network failure, retry and cancel are handled. The flow lives in PlayarrKit with unit tests.

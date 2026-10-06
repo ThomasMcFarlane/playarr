@@ -167,6 +167,26 @@ public final class AppEnvironment {
         await refreshCurrentAvatar()
     }
 
+    /// Completes a QR / pairing-code sign-in: adopts the server the approving
+    /// device chose, saves the session and loads the signed-in profile.
+    public func completeDeviceLinkSignIn(_ result: DeviceLinkResult) async throws {
+        prepareServerForSignIn(result.serverURL)
+        try await setSession(
+            accessToken: result.token.accessToken,
+            refreshToken: result.token.refreshToken,
+            tokenType: result.token.tokenType,
+            expiresIn: result.token.expiresIn
+        )
+        let userID = JWTClaims.subject(ofAccessToken: result.token.accessToken)
+        currentUserID = userID
+        if let profiles = try? await apiClient.listProfiles(),
+           let match = profiles.first(where: { $0.id == userID }) ?? profiles.first(where: { $0.isCurrent }) {
+            currentUserName = match.displayName
+            userDefaults.set(match.displayName, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
+        }
+        await refreshCurrentAvatar()
+    }
+
     func prepareServerForSignIn(_ url: URL) {
         guard url != serverBaseURL else { return }
         suppressAutomaticSessionRestore = true
