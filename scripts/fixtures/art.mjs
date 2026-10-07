@@ -4,8 +4,10 @@
 // title. Nothing real is involved. Usage: node art.mjs <art-dir>
 // Idempotent: an image that already exists is left alone.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SERIES, MOVIES } from "./catalog.mjs";
 
 export const artKey = (kind, id) => `${kind}-${id}`;
@@ -39,6 +41,7 @@ function run(args) {
   if (r.status !== 0) throw new Error(`ffmpeg failed: ${args.join(" ")}`);
 }
 
+// The gradients source picks a random start unless it is given a seed: pin it so the PNG is byte-identical.
 function render(out, w, h, [c0, c1], title, caption, seed) {
   if (existsSync(out)) return;
   const fs = Math.round(w / 9.5);
@@ -50,11 +53,19 @@ function render(out, w, h, [c0, c1], title, caption, seed) {
     `drawtext=font='Sans':text='${title.toUpperCase()}':fontcolor=white:fontsize=${fs}:x=(w-text_w)/2:y=${Math.round(h * 0.76)}`,
     `drawtext=font='Sans':text='${caption}':fontcolor=white@0.6:fontsize=${Math.round(fs / 2.8)}:x=(w-text_w)/2:y=${Math.round(h * 0.76 + fs * 1.5)}`,
   ].filter((f) => hasDrawtext || !f.startsWith("drawtext")).join(",");
-  run(["-f", "lavfi", "-i", `gradients=s=${w}x${h}:c0=${c0}:c1=${c1}:x0=0:y0=0:x1=${w}:y1=${h}:d=1:n=2`, "-frames:v", "1", "-vf", vf, out]);
+  run(["-f", "lavfi", "-i", `gradients=s=${w}x${h}:c0=${c0}:c1=${c1}:x0=0:y0=0:x1=${w}:y1=${h}:d=1:n=2:seed=${seed + 1}`, "-frames:v", "1", "-vf", vf, out]);
 }
 
 export function generateArt(dir) {
   mkdirSync(dir, { recursive: true });
+  // Art made by another version of this script or catalogue is regenerated (stale art differs between instances).
+  const source = ["art.mjs", "catalog.mjs"].map((f) => readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8")).join("\n");
+  const stamp = createHash("sha1").update(source).digest("hex");
+  const stampFile = join(dir, ".art-stamp");
+  if (!existsSync(stampFile) || readFileSync(stampFile, "utf8") !== stamp) {
+    for (const f of readdirSync(dir)) if (f.endsWith(".png")) rmSync(join(dir, f));
+    writeFileSync(stampFile, stamp);
+  }
   [...MOVIES.map((m) => ["movie", m]), ...SERIES.map((s) => ["series", s])].forEach(([kind, item], i) => {
     const colours = PALETTE[i % PALETTE.length];
     const key = artKey(kind, item.id);

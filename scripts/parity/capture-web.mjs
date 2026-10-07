@@ -227,6 +227,31 @@ async function captureOnce(layoutId, layout, theme, screen) {
     }
     // Wait for every <img> to decode so a slow host cannot capture a page before its hero or tile pictures.
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
+    // Let the app's own scroll-into-view (for example the active season) run, then wait until every scroll
+    // position is stable across several frames. Smooth scrolling is off (FREEZE_CSS and reduced motion), so
+    // the final offsets are deterministic. Only the document's vertical scroll is reset to the top.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const snapshot = () =>
+            [...document.querySelectorAll("*")]
+              .filter((el) => el.scrollTop > 0 || el.scrollLeft > 0)
+              .map((el) => `${el.tagName}.${el.className}:${Math.round(el.scrollLeft)},${Math.round(el.scrollTop)}`)
+              .join("|");
+          let last = snapshot();
+          let stable = 0;
+          const started = performance.now();
+          const tick = () => {
+            const now = snapshot();
+            stable = now === last ? stable + 1 : 0;
+            last = now;
+            if (stable >= 8 || performance.now() - started > 6000) resolve(undefined);
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        })
+    );
     await page.waitForTimeout(800);
     await page.screenshot({ path: join(out, layoutId, theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
     return errors.length;
