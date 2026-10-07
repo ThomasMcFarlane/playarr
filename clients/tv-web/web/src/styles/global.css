@@ -1581,7 +1581,8 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
+  /* The list column never shrinks below the rail clearance plus room for a full option label. */
+  grid-template-columns: minmax(calc(var(--tv-nav-clearance) + 320px), 35fr) minmax(0, 65fr);
 }
 
 .settings-options-panel,
@@ -1617,7 +1618,7 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
     var(--library-rail-top)
     clamp(18px, 2vw, 38px)
     clamp(118px, calc(14 * var(--viewport-unit)), 156px)
-    clamp(102px, 8vw, 160px);
+    max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
   list-style: none;
   background: transparent;
 }
@@ -4619,7 +4620,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   }
 
   .settings-workspace-track {
-    grid-template-columns: minmax(0, 34fr) minmax(0, 66fr);
+    grid-template-columns: minmax(calc(var(--tv-nav-clearance) + 320px), 34fr) minmax(0, 66fr);
   }
 }
 
@@ -4770,6 +4771,12 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   --tv-user-padding-start: 0.38rem;
   --tv-nav-centre-x: calc(
     var(--tv-nav-edge) + var(--tv-nav-padding-inline) + (var(--tv-nav-item-size) / 2) + 1px
+  );
+  /* Left edge of page content: the right edge of the rail (item, both paddings, 1px borders) plus a gap.
+     Every proportional left offset (7.5vw, 8vw) is floored to this, so titles never slide under the rail
+     at widths where those percentages are smaller than the rail. At 1920 px it is below the old values. */
+  --tv-nav-clearance: calc(
+    var(--tv-nav-edge) + var(--tv-nav-item-size) + (2 * var(--tv-nav-padding-inline)) + 2px + 12px
   );
   position: relative;
   display: block;
@@ -5848,7 +5855,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   position: absolute;
   z-index: 24;
   top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
-  left: clamp(102px, 8vw, 160px);
+  left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
   display: flex;
   align-items: center;
   gap: clamp(14px, 1.2vw, 24px);
@@ -6151,7 +6158,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 .tv-detail-copy {
   position: absolute;
   top: 24%;
-  left: clamp(102px, 8vw, 160px);
+  left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
   width: min(24vw, 455px);
 }
 
@@ -7588,7 +7595,7 @@ body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-res
 
 .tv-detail .tv-back {
   top: clamp(38px, calc(6.2 * var(--viewport-unit)), 76px);
-  left: clamp(102px, 8vw, 160px);
+  left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
 }
 
 .tv-detail-copy {
@@ -8477,7 +8484,7 @@ body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-res
   position: absolute;
   z-index: 14;
   top: clamp(86px, calc(12 * var(--viewport-unit)), 142px);
-  left: clamp(102px, 8vw, 160px);
+  left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
   width: min(31vw, 590px);
   animation: tv-copy-in 520ms 70ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
@@ -9786,7 +9793,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 
 @media (max-width: 1100px), (max-height: 700px) {
   .tv-library-heading {
-    left: 7.5vw;
+    left: max(7.5vw, var(--tv-nav-clearance));
   }
 
   .tv-library-grid-panel {
@@ -9813,11 +9820,11 @@ html.is-native-scroll-root .profile-auth-scroll {
   .tv-home-feature,
   .tv-library-preview,
   .tv-detail-copy {
-    left: 7.5vw;
+    left: max(7.5vw, var(--tv-nav-clearance));
   }
 
   .tv-detail .tv-back {
-    left: 7.5vw;
+    left: max(7.5vw, var(--tv-nav-clearance));
   }
 
   .tv-series-browser {
@@ -9830,7 +9837,7 @@ html.is-native-scroll-root .profile-auth-scroll {
   }
 
   .tv-search-copy {
-    left: 7.5vw;
+    left: max(7.5vw, var(--tv-nav-clearance));
     width: 33vw;
   }
 
@@ -12373,7 +12380,7 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   display: flex;
   flex-direction: column;
   padding: clamp(104px, calc(15 * var(--viewport-unit)), 168px) clamp(24px, 4vw, 96px) var(--page-safe-bottom)
-    clamp(102px, 8vw, 160px);
+    max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance));
   background: var(--surface);
   color: var(--ink);
   overflow: hidden;
@@ -12457,6 +12464,29 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 /* Long page titles must not run into the shell clock sitting at the stage divider. */
 .app-shell:has(.page-header) .app-clock {
   right: calc(65% - clamp(10px, 2vw, 40px));
+}
+
+/* The settings detail panel is pinned to the right edge at a percentage width, independent of the list
+   column. Keep the two in step: the list column is never narrower than the rail clearance plus a full option
+   label (see .settings-workspace-track), so the panel gives up that space instead of overlapping the list. */
+@media (min-width: 761px) {
+  .tv-library-grid-panel.settings-detail-panel {
+    width: min(65%, calc(100% - var(--tv-nav-clearance) - 320px));
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1100px), (min-width: 761px) and (max-height: 700px) {
+  .tv-library-grid-panel.settings-detail-panel {
+    width: min(66%, calc(100% - var(--tv-nav-clearance) - 320px));
+  }
+}
+
+/* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
+   page title (Preferences, Release Calendar). The clock is already hidden on phones; hide it here too. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-shell:has(.page-header) .app-clock {
+    display: none;
+  }
 }
 
 .tv-library-heading.has-actions {

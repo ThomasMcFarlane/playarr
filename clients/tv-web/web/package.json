@@ -17,7 +17,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "smoke:header": "node scripts/header-parity.mjs",
-    "smoke:calendar-layout": "node scripts/calendar-layout.mjs"
+    "smoke:calendar-layout": "node scripts/calendar-layout.mjs",
+    "smoke:tablet-layout": "node scripts/tablet-layout.mjs"
   },
   "dependencies": {
     "@playarr-tv/api-client": "workspace:*",

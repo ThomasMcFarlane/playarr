@@ -269,6 +269,14 @@
   flex-direction: column;
 }
 
+/* Phones scroll the 720px grid sideways. Wider screens fit the month into the space beside the rail
+   (a tablet gives it about 640px) instead of cutting off the Sunday column. */
+@media (min-width: 761px) {
+  .calendar-month {
+    min-width: 0;
+  }
+}
+
 .calendar-month-head,
 .calendar-month-row {
   display: grid;
