@@ -1,0 +1,1 @@
+- iOS: the Nunito Sans optical-size axis now follows the text size (clamped 6 to 12) like the browser does, instead of a fixed 12, so small text matches the web's width.
