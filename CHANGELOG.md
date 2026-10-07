@@ -209,6 +209,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The Apple clients' shared PlayarrKit now decodes the calendar entry's server-computed actions and title snapshot, ready for the calendar views to show exactly what the server offers.
 - Parity: Downloads, Watchlist and Requests screens added to the shared list and references; diff.mjs gained --chrome-only/--keep-rect, capture-web.mjs --dump-dom and the hideVideo step, and the Apple workflow now uses the shared capture and diff tools instead of its private copies (removed).
 - Parity: the web calendar references (both layouts and themes) are recaptured. The upcoming episode has no file, so the detail offers only "Open series" and "Add to watchlist" (play only for an episode with its own file); the old references still showed a Play button.
 - Android TV profile page: web background glow, positions, avatar ring and a Clients pill that shows a QR code for the clients page.

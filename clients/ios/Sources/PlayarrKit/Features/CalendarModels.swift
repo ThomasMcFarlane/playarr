@@ -52,6 +52,10 @@ public struct CalendarEntry: Codable, Sendable, Equatable, Hashable, Identifiabl
     public let workID: UUID?
     public let averageLagSeconds: Int64?
     public let sources: [CalendarEntrySource]
+    /// Identity of the title for the request and watchlist endpoints; sent back verbatim.
+    public let snapshot: TitleSnapshot?
+    /// What the caller can do with this entry, computed by the server; shown as given.
+    public let actions: [CalendarAction]
 
     public init(
         id: String,
@@ -68,7 +72,9 @@ public struct CalendarEntry: Codable, Sendable, Equatable, Hashable, Identifiabl
         posterURL: String? = nil,
         workID: UUID? = nil,
         averageLagSeconds: Int64? = nil,
-        sources: [CalendarEntrySource] = []
+        sources: [CalendarEntrySource] = [],
+        snapshot: TitleSnapshot? = nil,
+        actions: [CalendarAction] = []
     ) {
         self.id = id
         self.mediaKind = mediaKind
@@ -85,6 +91,29 @@ public struct CalendarEntry: Codable, Sendable, Equatable, Hashable, Identifiabl
         self.workID = workID
         self.averageLagSeconds = averageLagSeconds
         self.sources = sources
+        self.snapshot = snapshot
+        self.actions = actions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        mediaKind = try c.decode(String.self, forKey: .mediaKind)
+        releaseType = try c.decode(String.self, forKey: .releaseType)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        seasonNumber = try c.decodeIfPresent(Int.self, forKey: .seasonNumber)
+        episodeNumber = try c.decodeIfPresent(Int.self, forKey: .episodeNumber)
+        date = try c.decode(String.self, forKey: .date)
+        releaseAt = try c.decodeIfPresent(Date.self, forKey: .releaseAt)
+        monitored = try c.decode(Bool.self, forKey: .monitored)
+        hasFile = try c.decode(Bool.self, forKey: .hasFile)
+        posterURL = try c.decodeIfPresent(String.self, forKey: .posterURL)
+        workID = try c.decodeIfPresent(UUID.self, forKey: .workID)
+        averageLagSeconds = try c.decodeIfPresent(Int64.self, forKey: .averageLagSeconds)
+        sources = try c.decode([CalendarEntrySource].self, forKey: .sources)
+        snapshot = try c.decodeIfPresent(TitleSnapshot.self, forKey: .snapshot)
+        actions = try c.decodeIfPresent([CalendarAction].self, forKey: .actions) ?? []
     }
 
     public var kind: CalendarMediaKind? { CalendarMediaKind(rawValue: mediaKind) }
@@ -104,7 +133,7 @@ public struct CalendarEntry: Codable, Sendable, Equatable, Hashable, Identifiabl
         case posterURL = "poster_url"
         case workID = "work_id"
         case averageLagSeconds = "average_lag_seconds"
-        case sources
+        case sources, snapshot, actions
     }
 }
 
