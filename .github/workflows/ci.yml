@@ -76,6 +76,7 @@ jobs:
       xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
       harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
       tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
+      server-image: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.server-image == 'true' }}
       firetv: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.firetv == 'true' }}
       tv_web_filters: ${{ steps.tvweb.outputs.tv_web_filters }}
     steps:
@@ -171,6 +172,11 @@ jobs:
             harmony:
               - 'clients/harmony/**'
             tv-web:
+              - 'clients/tv-web/**'
+            # The server image builds the Admin and web assets from clients/tv-web inside the Dockerfile.
+            server-image:
+              - 'infra/docker/backend.Dockerfile'
+              - '.dockerignore'
               - 'clients/tv-web/**'
             # The Fire TV app builds against the shared tv-web packages, the shared translations and the web
             # stylesheet its token test reads, so a change to any of them can break its tests.
@@ -526,6 +532,28 @@ jobs:
         run: npm test -- --ci
 
   # ---------------------------------------------------------------------
+  # Server image web stage: builds the Dockerfile's `web` export stage from a clean checkout,
+  # exactly as the post-merge Regional image and the Release do, so a change that breaks the
+  # image build (a workspace package missing from the build, a bad COPY) fails before merge.
+  # Only the Node stages run (BuildKit skips the Rust ones for this target).
+  # ---------------------------------------------------------------------
+  server-image-web:
+    name: Server image web stage
+    needs: changes
+    if: needs.changes.outputs.server-image == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the web export stage
+        run: docker buildx build -f infra/docker/backend.Dockerfile --target web --output type=cacheonly .
+
+  # ---------------------------------------------------------------------
   # Terminal aggregator -- see the file header comment for why this is the
   # only job that should be a required status check.
   # ---------------------------------------------------------------------
@@ -538,6 +566,7 @@ jobs:
       - xbox-check
       - harmony-check
       - tv-web-check
+      - server-image-web
       - firetv-check
       - openapi-contract-check
     if: always()
@@ -551,7 +580,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check firetv-check openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

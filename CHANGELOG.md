@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The server image build no longer fails with `Cannot find module '@playarr-tv/player-core'`: the Dockerfile builds every workspace package under `packages/` before the web app, and a new CI job builds the image's web stage on pull requests that touch the Dockerfile or `clients/tv-web/`.
 - VIDAA, webOS and Tizen: the TV layout is scaled to a 1080-high stage whatever viewport the TV browser reports (for example 1280x720), so the sign-in link code and the navigation rail are no longer cut off. Adds the `smoke:tv-viewport` Playwright check.
 - Web TV layout: on a series page, UP and DOWN from the far right of a season rail now land on the nearest episode card instead of the season download button.
 - Android: closing the player while it was still buffering no longer resets the saved resume point to the start. Progress is only written once playback has actually started.

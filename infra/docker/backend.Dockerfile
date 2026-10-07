@@ -155,6 +155,12 @@ RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
 COPY clients/tv-web/ ./clients/tv-web/
 WORKDIR /build/clients/tv-web
 RUN pnpm install --frozen-lockfile
+# Every shared library under packages/ points its entry (`main`/`types`) at dist/, which only
+# exists after its own `build`. `pnpm --filter <app>... run build:server` runs ONLY the app's
+# script (the libraries have no `build:server`), so build all of packages/ first, generically:
+# a library added later is picked up with no edit here. `tsc` in the app steps below resolves
+# the libraries through those dist/ outputs.
+RUN pnpm --filter "./packages/**" run build
 RUN pnpm --filter @playarr-tv/admin... run build
 # The web client built for hosting by the server itself under /tv/ (`vite --mode server`,
 # base "/tv/"): lets a TV whose browser can only reach an http:// server (VIDAA) load the
