@@ -175,3 +175,15 @@ and the bell on Calendar link. The header pills are now the outlined web pills o
 Dates everywhere on Android (phone and TV) now go through `PlayarrDateFormat`, which uses the same CLDR skeletons as the
 web's `Intl.DateTimeFormat` ("7 Oct 2026" in en-GB, "Oct 7, 2026" in en-US) instead of hard-coded patterns, and the
 range label is built as the web builds it (short start, dated end, plain spaces around the en dash).
+
+### Settings sections
+
+The panels next to the section list now follow the web TV: no panel title, the sections' own 26 px headings, square segmented
+controls and choice cells (crimson border, bar and fill for the selected one), a select for the language, the avatar presets as
+six 146 px circles four to a row, the PIN and invite fields as bordered web fields with light pills (the brand pink is not used
+on these pages), the Phone remote groups with bold 16 px headings and a checkbox, the joined server inputs with the Connect pill
+and the collapsed "TV app connection details", and the Your data headings and body at web size. Captured section by section
+(web captured with the TV identity on a second fixture instance) the mismatch against the web is, dark: avatar 1.4%, language
+0.8%, request latency 0.9%, remote 1.4%, lock 1.8%, invite 2.2%, player 2.4%, data 2.9%, server 3.6% (light within 0.3 of
+dark, server 3.8%). The player quality matrix, the server cards and the data page still differ in detail (row pitch, box
+heights and fonts); the section panels are not part of the shared references yet, so these figures come from my own captures.

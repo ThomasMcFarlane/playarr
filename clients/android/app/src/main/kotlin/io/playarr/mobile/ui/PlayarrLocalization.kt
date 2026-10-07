@@ -1217,6 +1217,12 @@ internal enum class PlayarrString(
         "ดูความหน่วงของคำขอได้ใน Playarr Web",
         "リクエストのレイテンシはPlayarr Webで確認できます。",
     ),
+    SettingsRequestLatencyAdminsOnly("Admins only", "เฉพาะผู้ดูแลระบบ", "管理者のみ"),
+    SettingsRequestLatencyAdminsOnlyDescription(
+        "Sign in with an admin account to see per-route request latency.",
+        "ลงชื่อเข้าใช้ด้วยบัญชีผู้ดูแลระบบเพื่อดูความหน่วงของคำขอแต่ละเส้นทาง",
+        "管理者アカウントでサインインすると、ルートごとのリクエストのレイテンシを確認できます。",
+    ),
     SettingsIndexRemoteDescription(
         "Control this device from your phone, or control another device.",
         "ควบคุมอุปกรณ์นี้จากโทรศัพท์ หรือควบคุมอุปกรณ์อื่น",
