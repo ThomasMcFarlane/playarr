@@ -443,6 +443,7 @@ struct TVWorkDetailView: View {
     private func episodeArt<Content: View>(
         width: CGFloat,
         height: CGFloat,
+        heavy: Bool = false,
         @ViewBuilder content: () -> Content
     ) -> some View {
         ZStack {
@@ -457,8 +458,8 @@ struct TVWorkDetailView: View {
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: 13.44, style: .continuous))
-        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(0.14), radius: 10, y: 10)
-        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(0.1), radius: 4, y: 3)
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(heavy ? 0.3 : 0.14), radius: heavy ? 24 : 10, y: heavy ? 24 : 10)
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(heavy ? 0.2 : 0.1), radius: heavy ? 10 : 4, y: heavy ? 10 : 3)
     }
 
     // MARK: Right rail: series
@@ -503,7 +504,7 @@ struct TVWorkDetailView: View {
         let title = ep.title ?? "Episode \(ep.episodeNumber)"
         let code = "S \(String(format: "%02d", season.season.seasonNumber)) \u{00B7} E \(String(format: "%02d", ep.episodeNumber))"
         let card = ZStack(alignment: .topLeading) {
-            episodeArt(width: 268, height: 150.8) {
+            episodeArt(width: 268, height: 150.8, heavy: selected) {
                 TVWorkArt(work: detail.work, apiClient: apiClient)
             }
             .overlay(alignment: .bottomTrailing) {
