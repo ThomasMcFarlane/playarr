@@ -15,31 +15,31 @@ The captures here are the native frames at half size (960x540, 64 colours); the 
 native, reference and diff images and an HTML report. `shared-summary.md` and `{dark,light}/extra-summary.md` are the
 raw tables.
 
-Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37594165924 (head 4c38bd9).
+Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37604182853 (against the #147 TV-identity references).
 
 ## Mismatch per screen (percent, against the shared references)
 
 | Screen | Dark | Light |
 | --- | --- | --- |
-| home | 0.79 | 0.93 |
+| home | 0.80 | 0.93 |
 | movies library | 0.51 | 0.62 |
-| series library | 0.79 | 0.87 |
+| series library | 0.80 | 0.87 |
 | title detail (film) | 0.53 | 0.60 |
 | title detail (series, seasons) | 0.85 | 0.85 |
-| search with results | 0.45 | 0.62 |
-| release calendar | 0.43 | 0.56 |
+| search with results | 0.46 | 0.62 |
+| release calendar (agenda) | 0.84 | 0.85 |
 | settings | 0.77 | 0.76 |
-| profile switcher | 0.67 | 0.77 |
+| profile switcher | 0.70 | 0.80 |
 | household blocked (fx-child-locked) | 0.41 | 0.39 |
-| player, controls visible | 1.27 | 1.27 |
-| player, quality menu open | 1.83 | 1.83 |
-| Downloads, Watchlist, Requests (local capture) | 0.25 to 0.35 | 0.28 to 0.38 |
+| player, controls visible | 0.91 | 0.91 |
+| player, quality menu open | 1.70 | 1.70 |
+| Downloads, Watchlist, Requests (local capture) | 0.27 to 0.36 | 0.27 to 0.38 |
 
-22 of 24 shared captures are at or under 1%.
+23 of 24 shared captures are at or under 1%; the quality menu is the exception (justified below).
 
 ## Justified differences
 
-- Player screens (1.27% and 1.83%): the fixture clips are Matroska and the runner cannot transcode, so the native
+- Player quality menu (1.70%): the fixture clips are Matroska and the runner cannot transcode, so the native
   player cannot play them there. The video layer is the server's own frame of the clip at 2.0 s (the endpoint the chapter
   thumbnails use), colour-corrected for the browser's conversion and scaled to the stage. The remaining difference is the
   scaler along colour edges and, in the quality menu, the web's backdrop blur behind the panel. Chrome (scrim, buttons,
@@ -59,7 +59,5 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37594165924 (
 
 ## Not covered / follow-ups
 
-- The calendar is a month grid in this baseline; the TV references are being re-captured with a real TV platform
-  identity, where the calendar is an agenda list and the player chrome loses volume, fullscreen and the HD badge. The
-  next re-baseline follows those references.
 - Per-episode download buttons wait for the web.
+- The calendar Play button shows only for entries whose media is on disk, as on the web.
