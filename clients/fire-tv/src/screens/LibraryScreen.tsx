@@ -47,6 +47,7 @@ import {useTvBackNavigation} from '../navigation/backPolicy';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
 import {Icon} from '../shell/icons';
+import {ActionTile} from '../tv/ActionTile';
 import {EdgeFade} from '../tv/EdgeFade';
 import {MediaFocus} from '../tv/mediaFocus';
 import {Box, T, u} from '../tv/kit';
@@ -342,7 +343,6 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
   return (
     <Stage artUri={stageArtUrl(baseUrl, selected)} accessToken={accessToken}>
       <PageHeader title={label} detail={items === null ? undefined : `${(total ?? items.length).toLocaleString('en-GB')} ${noun}`} onBack={() => navigation.navigate(ROUTES.home)} />
-      <Filters />
       {selected ? (
         <Preview
           kicker={selected.genres[0]}
@@ -352,6 +352,7 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
         />
       ) : null}
       <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} />
+      <Filters />
       {failed ? (
         <Box x={783} y={200} w={600}>
           <T size={17} weight={610} color={colour.ink}>
@@ -410,38 +411,8 @@ function releaseYearOf(work: Pick<Work, 'release_date'>): string | undefined {
 }
 
 function Filters(): React.ReactElement {
-  const {colour} = useTheme();
   const {t} = useLanguage();
-  const [focused, setFocused] = useState(false);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t('pages.library.filters')}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={{
-        position: 'absolute',
-        left: u(1739),
-        top: u(56.2),
-        width: u(104.2),
-        height: u(50),
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: mix(colour.lineStrong, 0.7),
-        backgroundColor: focused ? colour.ink : mix(colour.surfaceStrong, 0.7),
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingLeft: u(20),
-      }}
-    >
-      <Icon name="filters" size={u(14)} color={focused ? colour.bg : '#cf3157'} />
-      <View style={{marginLeft: u(11)}}>
-        <T size={13.44} weight={680} color={focused ? colour.bg : colour.inkSoft} lh={20.2}>
-          {t('pages.library.filters')}
-        </T>
-      </View>
-    </Pressable>
-  );
+  return <ActionTile icon="filters" label={t('pages.library.filters')} />;
 }
 
 function LibraryCard(props: {

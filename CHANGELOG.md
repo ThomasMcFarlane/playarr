@@ -271,6 +271,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the release calendar (agenda view with the selected release's details and the unreadable-source banner), the household-blocked page (outside the schedule or over the daily budget, with the guardian request), and the action column at the right edge for the library Filters button.
 - Fire TV client: the player has the web's controls (close button, scrubber, play and pause, subtitles and the quality menu with the resolution matrix), and Back unwinds one layer per press (menu, then controls, then exit). The first key press with the controls hidden only shows them, the OK key on the scrubber toggles play and pause, and seeking settles before it is sent. A title the device cannot decode now offers a quality choice instead of a bare error.
 - tvOS parity run now captures a scrolled Home (rail moved right by four cards) in both themes and fails on a hard-cut rail edge, comparing it with the web at the same scroll offset.
 - tvOS Home no longer draws a Customise Home button (owner ruling: it lives in Settings).

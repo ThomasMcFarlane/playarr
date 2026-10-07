@@ -90,7 +90,10 @@ import {useApiClient, useAuthFailed} from '../api/ApiClientProvider';
 import {APP_CONFIG} from '../config/appConfig';
 import {findCurrentProfile, listViewerProfiles, type ViewerProfile} from '../auth/profiles';
 import {ShellChrome, type RailTarget} from '../shell/ShellChrome';
-import {PlaceholderScreen} from '../screens/PlaceholderScreen';
+import {CalendarScreen} from '../screens/CalendarScreen';
+import {HouseholdBlockedScreen} from '../screens/HouseholdBlockedScreen';
+import {householdBlockFromStatus} from '../lib/householdState';
+import {useHouseholdStatus} from '../lib/householdStatus';
 import {DownloadsScreen, RequestsScreen, WatchlistScreen} from '../screens/ListPages';
 import {StyleSheet} from 'react-native';
 import {
@@ -362,6 +365,9 @@ export function AppShellNavigator(): React.ReactElement {
     };
   }, [client]);
 
+  const household = useHouseholdStatus(client, activeRoute);
+  const householdBlock = householdBlockFromStatus(household.status);
+
   const railRoutes: Record<RailTarget, RouteName> = {
     downloads: ROUTES.downloads,
     search: ROUTES.search,
@@ -390,7 +396,7 @@ export function AppShellNavigator(): React.ReactElement {
         <ContentStack.Screen name={ROUTES.downloads} component={DownloadsScreen} />
         <ContentStack.Screen name={ROUTES.watchlist} component={WatchlistScreen} />
         <ContentStack.Screen name={ROUTES.requests} component={RequestsScreen} />
-        <ContentStack.Screen name={ROUTES.calendar} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.calendar} component={CalendarScreen} />
         <ContentStack.Screen name={ROUTES.workDetail} component={WorkDetailScreenScreen} />
         <ContentStack.Screen name={ROUTES.musicDetail} component={MusicDetailScreenScreen} />
         <ContentStack.Screen name={ROUTES.settings} component={SettingsRoutes.settings} />
@@ -407,6 +413,9 @@ export function AppShellNavigator(): React.ReactElement {
         <ContentStack.Screen name={ROUTES.settingsCustomiseHome} component={SettingsRoutes.customiseHome} />
         <ContentStack.Screen name={ROUTES.notFound} component={NotFoundScreenScreen} />
       </ContentStack.Navigator>
+      {household.status && householdBlock ? (
+        <HouseholdBlockedScreen client={client} status={household.status} onSwitchProfile={() => navigation.navigate(ROUTES.profiles)} />
+      ) : null}
       <ShellChrome
         active={activeTarget}
         profileId={profile?.id}

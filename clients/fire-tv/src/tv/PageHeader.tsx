@@ -76,7 +76,7 @@ export function PageHeader({title, detail, detailUpper = true, onBack, titleWidt
           </T>
         </View>
         {detail !== undefined ? (
-          <View style={{marginLeft: u(23.1), height: u(50), justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: colour.lineStrong, paddingLeft: u(23)}}>
+          <View style={{marginLeft: u(23.1), height: u(17), justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: colour.lineStrong, paddingLeft: u(23)}}>
             <T size={11.136} weight={680} ls={0.501} color={colour.inkMuted} upper={detailUpper}>
               {detail}
             </T>
