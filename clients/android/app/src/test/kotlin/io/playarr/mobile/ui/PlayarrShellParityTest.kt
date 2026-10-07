@@ -75,4 +75,11 @@ class PlayarrShellParityTest {
         assertFalse(shouldClearPlayarrFailedPlayback(playerFailed = true, isPlayer = true, hasPlayback = true))
         assertFalse(shouldClearPlayarrFailedPlayback(playerFailed = false, isPlayer = false, hasPlayback = true))
     }
+
+    @Test
+    fun `settings section numbers are two digits like web`() {
+        assertEquals("01", settingsSectionNumber(0))
+        assertEquals("09", settingsSectionNumber(8))
+        assertEquals("10", settingsSectionNumber(9))
+    }
 }

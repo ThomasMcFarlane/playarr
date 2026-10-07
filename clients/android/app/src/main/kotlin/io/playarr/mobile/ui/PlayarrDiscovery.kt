@@ -285,6 +285,8 @@ internal fun WatchlistToggleButton(
     viewModel: DiscoveryViewModel = hiltViewModel(),
     /** Web phone action pill: accent plus glyph and an 8 px label. */
     webPhone: Boolean = false,
+    /** Television detail pages draw the web pill instead of the shared button. */
+    television: Boolean = false,
 ) {
     val snapshot = remember(work.id) { work.toSnapshot() }
     var listed by remember(work.id) { mutableStateOf<Boolean?>(null) }
@@ -302,6 +304,15 @@ internal fun WatchlistToggleButton(
                 color = WebInk, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1,
             )
         }
+        return
+    }
+    if (television) {
+        WebDetailPill(
+            label = playarrString(if (listed == true) PlayarrString.WatchlistRemove else PlayarrString.WatchlistAdd),
+            glyph = if (listed == true) "\u2713" else "+",
+            onClick = { viewModel.toggleWatchlist(snapshot, listed == true) { listed = it } },
+            enabled = listed != null,
+        )
         return
     }
     PlayarrButton(

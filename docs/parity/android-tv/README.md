@@ -1,72 +1,70 @@
-# Android TV pixel parity (1920x1080)
+# Android TV pixel parity (1920x1080, light and dark)
 
-Reference: web TV layout at 1920x1080, dark theme, signed in as `fx-viewer` against the fixture
-environment. Candidate: the sideload debug build on a 1080p Android TV emulator (API 36, density forced to
-160 dpi by the app so 1 dp = 1 CSS px). Diff: `scripts/parity/diff.mjs` (pixelmatch threshold 0.1).
-Native captures are in `tv/` (palette-quantised to keep the repository small; mismatch figures were
-measured on the full-colour captures).
+Reference: web TV layout at 1920x1080, signed in as `fx-viewer` against the fixture environment, captured with the
+`PlayarrAndroidTV/` user agent so web behaves as it does on the television (no mute or fullscreen control in the player,
+the "Check for updates" and "Clients" chips on the profile screen). Candidate: the sideload debug build on a 1080p Android TV
+emulator (API 36, density forced to 160 dp so 1 dp = 1 CSS px), once in dark and once in light system appearance.
+Diff: pixelmatch threshold 0.1 through `scripts/parity/diff.mjs`. Native captures are in `dark/` and `light/`
+(palette-quantised to keep the repository small; the figures below were measured on the full-colour captures).
 
 ## How the captures were made
 
-- Fixture server (`scripts/fixtures/up.sh`) on its own port; the web client was built from `main` and served by it.
-- Web reference: Playwright, 1920x1080 at 1x, dark colour scheme, reduced motion, animations and transitions off, and
-  the Android system font (Roboto, pulled from the emulator image) injected for the web UI. Without that the host
-  falls back to a different typeface and every text pixel differs for a reason that has nothing to do with layout.
-- Android: `adb exec-out screencap -p`, D-pad/tap navigation through the same screens, `fx-child-locked` for the household screen.
-- The shell clock rectangle (x 470-730, y 60-100) is painted out in both images: the emulator clock cannot be
-  frozen without root, and the web clock is frozen at 12:00.
+- Fixture server on a reserved port with generated placeholder artwork; web built from `main` plus the player chrome
+  change; the web reference captured by Playwright with the system Chromium (it decodes the fixture clip), 1920x1080 at 1x,
+  reduced motion, animations off and the Android system font (Roboto) injected so text is compared like for like.
+- Android: `adb exec-out screencap -p`, tap and D-pad navigation, watch progress reset before each run so detail pages match.
+  `fx-child-locked` is signed in for `household-blocked`.
+- The shell clock rectangle (x 470-730, y 60-100) is painted out in both images: the emulator clock cannot be frozen
+  without root. Web artefacts that depend on the clock are therefore ignored.
 
 ## Mismatch per screen
 
-| Screen | Before | After this change | Status |
-| --- | ---: | ---: | --- |
-| home | 2.66% | 1.65% | open |
-| movies | 3.03% | 2.61% | open |
-| series | 1.22% | 1.23% | open |
-| film-detail | 5.36% | 4.86% | open |
-| series-detail | 2.19% | 1.98% | open |
-| search | 1.06% | 1.00% | at the threshold (fails the strict 1% rule by rounding) |
-| calendar | 5.78% | 0.73% | pass |
-| settings | 1.72% | 1.79% | open |
-| player-controls | 92.94% | 92.97% | video exception, controls open |
-| player-quality-menu | 65.52% | 72.82% | video exception, controls open |
-| profile-switcher | 6.20% | 6.20% | open |
-| household-blocked | 1.08% | 1.09% | open |
+| Screen | Dark before | Dark now | Light now | Status |
+| --- | ---: | ---: | ---: | --- |
+| home | 2.66% | 1.35% | 2.16% | open |
+| movies | 3.03% | 0.66% | 1.46% | dark passes |
+| series | 1.22% | 0.64% | 1.32% | dark passes |
+| film-detail | 5.36% | 3.01% | 3.32% | open |
+| series-detail | 2.19% | 1.89% | 3.60% | open |
+| search | 1.06% | 0.96% | 1.17% | dark passes |
+| calendar | 5.78% | 1.27% | 1.39% | open |
+| settings | 1.72% | 1.60% | 3.54% | open |
+| player-controls | 92.94% | 13.68% | 13.17% | video frame masked, chrome open |
+| player-quality-menu | 65.52% | 12.91% | 12.57% | video frame masked, chrome open |
+| profile-switcher | 6.20% | 1.46% | 1.66% | open |
+| household-blocked | 1.08% | 0.39% | 0.38% | passes in both themes |
 
-The two player rows are not comparable before and after: their "before" used a stale web reference. "Before" for the other rows was measured with the same capture setup on the unchanged `main` build.
+"Dark before" is the table from the first Android TV parity change. Its references were measured without the TV user agent
+and with a stale web build, so "before" and "now" are not strictly comparable; the direction is. The player rows now mask the
+video area (y 100 to 900, and around the quality popover): the clip has a running timestamp and is scaled by different
+decoders, so only the chrome around the frame is compared. What remains in those rows is the video behind the bottom control bar
+and the top buttons, which cannot be masked without hiding the chrome.
 
-## What changed in this step (shared chrome, every screen)
+## What changed
 
-- Navigation rail follows web grouping and metrics: Calendar moves to the third group after Requests, 64 dp links,
-  9.6 dp spacing, 7.68 dp group padding, 8.832 sp labels; Requests uses the same bookmark glyph as Watchlist.
-- Clock right-aligned to x = 710.4 with the web type sizes; profile chip and version label use the web sizes.
-- Page header: outlined back button with the arrow glyph, full-height divider, web breadcrumb type.
-- Library A-Z rail: 62 x 690 at (1845.5, 270), 24 dp cells, filled circle on the active letter.
+- Home leads with "Start watching"; rails and cards use the web sizes, 25 dp gap, 6 dp lift and 1.025 art scale,
+  no count line; "Customise Home" is the small pill at the top right.
+- Hero block: web type, 9ch title width, two-line titles drawn line by line, the web scrim and key-art geometry
+  (52% wide, 106% tall, scaled 1.04, top aligned, 72% mask) so the key art lines up in both themes.
+- Library grid and A-Z rail follow web (card 327 dp, 25.92 x 27 gaps, the selected title's letter highlighted).
+- Detail: web pills (Download, Playback, Play, Add to watchlist), web meta chips (Movie, runtime, year, Released ..., genres),
+  and the Chapters and Similar Titles tracks at x 881.6 starting at y 540.
+- Series detail: web episode rail (heading block 46 dp with the Download button at x 1828, cards on a 314.8 dp track pitch, selected card lifted 7 dp), availability note between meta and synopsis, ink Start pill.
+- Quality menu: web popover (620 x 408 at x 1074.8, y 540) with the Original choice over the Low, Medium and High matrix instead of a side panel.
+- Player: icon-only 48 dp close circle and labelled Minimise pill at y 37.8, web bottom bar (6 dp seek track, 64 dp round controls),
+  Playback health and Play on another device moved from the top-left pills to the bottom bar where web puts them
+  (cast, when available, sits with them).
+- Search: web search pill, Filters pill, preview and a results panel at x 825.6.
+- Profiles: web sizes (244 dp avatars, 80.64 sp heading), add-profile plate gradient, theme and language dropdown positions.
+- Household blocked: the web empty-state tile and outlined pills; the rail, clock and profile chip stay around it.
+- Settings numbering is two digits (10, not 010).
+- Tokens that were fixed to dark values (back button, divider, A-Z chip, detail pills, hero scrim) now follow the theme.
 
-## Remaining differences (not yet fixed)
+## Remaining differences
 
-- Hero block of library, home and detail screens: web renders the title over two lines with a large watermark title
-  behind it and a year/genre line; Android renders one line. Card sizes and focus scale also differ (web grid cards 327-332 dp wide).
-- Home: web has a "Start watching" rail that Android lacks.
-- Film detail: web shows Download, Playback and Play as large pills plus a chapters and similar-titles column; Android uses a boxed panel and a different button order.
-- Profile switcher, household-blocked and settings: spacing and chrome differ (web household screen keeps the rail and an icon tile).
-- Icons: web uses an outline icon set; Android uses Material outlined icons.
-- Settings list prints "010" for the tenth entry on Android.
-
-## Player screens and justified exceptions
-
-- The web reference for the player screens was captured with a system Chromium that can decode the fixture clip,
-  from a web build of `main` plus the open "align every player chrome with the X-close layout" PR (not yet on `main`).
-  An earlier reference that showed Back and Minimise at the top left came from a stale web build and was discarded.
-- Layout verified: the web player has Minimise to the left of a close X at the top right, the same arrangement as Android.
-  They still differ in detail: web is a 47 dp icon-only circle at y 38, Android uses 48 dp labelled pills ("Minimise", "Close") at y 16, and Android adds
-  "Play on another device" and "Playback health" pills at the top left that web does not show. The web quality menu is a popover grid anchored to the
-  control bar; Android opens a right-hand side panel. These are open differences, not exceptions.
-- Exception (video pixels only): the procedural test clip has a running timestamp and is scaled by different decoders, so the video area cannot
-  match pixel for pixel. The player mismatch figures are dominated by it. Compare the overlay controls by region instead.
-
-## Findings from the sign-in investigation
-
-- The Play flavour deliberately blocks cleartext traffic (`usesCleartextTraffic="false"`, covered by `PlayDistributionPolicyTest`),
-  so it cannot reach the loopback fixture server over HTTP; use the sideload flavour for fixture work. This is not a bug.
-- BACK on the manual sign-in form leaves the app when the soft keyboard is not showing; the on-screen back button returns to the QR screen.
+- series-detail: small offsets in the left column and the card art; web now also has the Add to Playlist pill and the season Download button (web PR for row 473), so those match.
+- film-detail and series-detail: pill glyphs. Web draws them as text characters (a down arrow, a trigram, a play triangle and a plus)
+  from whatever symbol font the browser falls back to; Android draws the same characters with its own fallback font.
+  There is no web SVG for them to port.
+- calendar, settings and home: small spacing and icon differences.
+- Player: the video area cannot match (running timestamp, different decoders).

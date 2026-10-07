@@ -77,13 +77,39 @@ Known source of difference, which is data and not layout: the calendar shows dat
 and the seeding day (the unaired episode is seeded three days ahead), so seed the fixture on the capture day or
 pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
 
-Reproducibility: two consecutive captures of the same fixture database differ by at most 0.05% of pixels per
-screen (dark mobile re-run: 0.00 to 0.05%, the calendar and film detail being the largest), so the 1% budget
-leaves room for real layout differences only. Rail order and artwork depend on the fixture database, which is
-why `seed.mjs` syncs the sources one after another (it used to race) and artwork is generated from fixed
-palettes; the references were re-captured for both themes on one fresh database from current main, with the
-fixture seeded the same day as the frozen clock (2026-10-07) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`. Capture the
-web again after changing the fixtures or the web client.
+Reproducibility: two consecutive captures of the same fixture database are identical to within 0.05% of pixels per
+screen (the repeat of the dark mobile set with the bundled fonts differed by 0.00% on every screen), so the 1% budget
+leaves room for real layout differences only. Rail order and artwork depend on the fixture database, which is why
+`seed.mjs` registers and syncs the sources one after another, each awaited (a race between the background syncs used
+to change the order of the home rails) and artwork is generated from fixed palettes. The references were captured for
+both themes on one fresh database from current main with the bundled fonts, the fixture seeded on the day of the
+frozen clock (2026-10-07; the calendar's unaired episode is seeded three days ahead) and
+`PLAYARR_FIXTURE_CLIP_SECONDS=60`. Capture the web again after changing the fixtures or the web client.
+
+## Design font (every native client must embed it)
+
+The web bundles its design fonts (self-hosted woff2 in `clients/tv-web/web/src/assets/fonts/`, declared in
+`src/styles/fonts.css`, both SIL Open Font License 1.1 with the licence texts alongside):
+
+| Role | Font | Where it is used | Web file |
+| --- | --- | --- | --- |
+| UI text (`--font`) | **Nunito Sans** (variable) | everything except the monospace runs | `nunito-sans-{latin,latin-ext,vietnamese,cyrillic,cyrillic-ext}-wght-normal.woff2` |
+| Monospace (`--mono`) | **JetBrains Mono** (variable) | the version label and other technical runs (every `var(--mono)` rule) | `jetbrains-mono-{latin,latin-ext}-wght-normal.woff2` |
+
+The web uses the weight axis only; the width, optical-size and `YTLC` axes stay at their defaults (`wdth` 100,
+`opsz` 12, `YTLC` 500). Weights in use, as CSS `font-weight`: 100, 200, 260, 300, 400, 410, 420, 430, 440, 470, 480,
+500, 520, 540, 560, 570, 580, 590, 600, 610, 620, 630, 640, 650, 680, 690, 700, 720, 730, 740, 750, 760, 780, 800,
+820 (Nunito Sans starts at 200, so 100 renders as 200). Weights are used as fractional values, so embed the variable
+font and set the weight axis; a static family at 400/600/700/800 is only an approximation.
+
+Embed these (also in `docs/parity/fonts/`, with the licences): `NunitoSans[YTLC,opsz,wdth,wght].ttf` and
+`JetBrainsMono[wght].ttf`, both unmodified upstream builds. Note that the upstream default of the `wght` axis in the
+Nunito Sans file is 200: always set the weight explicitly. Glyphs outside Latin, Vietnamese and Cyrillic (for
+example CJK) fall back to the platform font, as on the web.
+
+Platforms without variable-font support can generate static instances of the weights they need from these files with
+`fonttools varLib.instancer`, pinning `wdth=100 opsz=12 YTLC=500`. The `--font <file>` option of `capture-web.mjs` is
+no longer needed to match fonts: the committed references use the bundled fonts.
 
 ## Canonical web mobile bottom navigation
 
