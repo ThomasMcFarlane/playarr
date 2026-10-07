@@ -3,6 +3,7 @@ import type { LoginResponse, RefreshResponse } from "@playarr-tv/api-client";
 import { readKnownServers, rememberGroup, setStoredApiBaseUrl } from "@playarr-tv/domain";
 import {
   createManagedApiClient,
+  profileDisplayNameFor,
   resolveInitialApiBaseUrl,
   sameStoredProfileSessions,
   selectRestorableProfileSession,
@@ -402,5 +403,21 @@ describe("profile session persistence keeps React state stable", () => {
     expect(sameStoredProfileSessions([entry()], [entry()])).toBe(true);
     expect(sameStoredProfileSessions([entry()], [entry({ name: "Other" })])).toBe(false);
     expect(sameStoredProfileSessions([entry()], [])).toBe(false);
+  });
+});
+
+describe("profileDisplayNameFor", () => {
+  const profiles = [
+    { id: "u1", display_name: "Fixture Viewer" },
+    { id: "u2", display_name: "  " },
+    { id: "u3" },
+  ];
+  it("returns the trimmed server display name of the user", () => {
+    expect(profileDisplayNameFor(profiles, "u1")).toBe("Fixture Viewer");
+  });
+  it("returns undefined for a blank, missing or unknown name so the stored name is kept", () => {
+    expect(profileDisplayNameFor(profiles, "u2")).toBeUndefined();
+    expect(profileDisplayNameFor(profiles, "u3")).toBeUndefined();
+    expect(profileDisplayNameFor(profiles, "nobody")).toBeUndefined();
   });
 });

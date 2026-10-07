@@ -96,6 +96,19 @@ function readStoredCurrentUserName(): string | undefined {
   return value || undefined;
 }
 
+/**
+ * The server's display name for `userId` from the profile list, or undefined when the list does not
+ * name it (or it is blank). A restored session stores whatever was typed at login (a username) or a
+ * placeholder; clients show the display name instead.
+ */
+export function profileDisplayNameFor(
+  profiles: ReadonlyArray<{ id: string; display_name?: string | null }>,
+  userId: string
+): string | undefined {
+  const name = profiles.find((profile) => profile.id === userId)?.display_name?.trim();
+  return name ? name : undefined;
+}
+
 export interface StoredProfileSession {
   profileKey: string;
   apiBaseUrl: string;
@@ -1020,6 +1033,37 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
     return [primary, ...secondary];
   }, [activeProfileKey, apiBaseUrl, client, persistProfileSession, storedProfileSessions]);
 
+  // Session restore: the stored profile name is whatever was typed at login (a username) or the
+  // placeholder, so resolve the server's display name once per restored session and store it.
+  useEffect(() => {
+    const active = activeProfileRef.current;
+    if (!client || !currentUserId || !active || active.userId !== currentUserId) return;
+    const { profileKey } = active;
+    let cancelled = false;
+    void client
+      .listAvailableProfiles()
+      .then((profiles) => {
+        const realName = profileDisplayNameFor(profiles, currentUserId);
+        const current = activeProfileRef.current;
+        if (cancelled || !realName || !current || current.profileKey !== profileKey || current.name === realName) {
+          return;
+        }
+        activeProfileRef.current = { ...current, name: realName };
+        window.localStorage.setItem(CURRENT_USER_NAME_STORAGE_KEY, realName);
+        setCurrentUserName(realName);
+        const session = tokenStoreRef.current?.get();
+        if (session) {
+          persistProfileSession(apiBaseUrl, profileKey, currentUserId, realName, current.deviceId, session);
+        }
+      })
+      .catch(() => {
+        // Offline or unauthorised: keep what is stored; the next restore tries again.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, client, currentUserId, persistProfileSession]);
+
   const [serverNames, setServerNames] = useState<Record<string, string>>({});
   useEffect(() => {
     let cancelled = false;
@@ -1260,7 +1304,7 @@ export function ApiClientProvider({ children }: { children: ReactNode }) {
       void profileClient
         .listAvailableProfiles()
         .then((profiles) => {
-          const realName = profiles.find((profile) => profile.id === userId)?.display_name;
+          const realName = profileDisplayNameFor(profiles, userId);
           // Bail if a logout/profile-switch already moved past this session
           // by the time this resolves -- stale enrichment must not stomp it.
           if (!realName || activeProfileRef.current?.profileKey !== profileKey) return;

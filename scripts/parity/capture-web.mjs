@@ -62,7 +62,13 @@ async function login(username) {
       method: "POST",
       body: JSON.stringify({ username, password: PASSWORD, device_id: deviceId(username), device_name: `parity-${username}`, client_platform: "web", client_version: "parity" }),
     });
-    return { ...r, username };
+    // The profile's DISPLAY name (what the app shows after a restore), not the typed username.
+    let displayName = username;
+    try {
+      const profiles = await api("/api/v1/users/profiles", r.access_token);
+      displayName = profiles.find((p) => p.id === r.user_id)?.display_name?.trim() || username;
+    } catch {}
+    return { ...r, username, displayName };
   }
 }
 
@@ -191,7 +197,8 @@ async function captureOnce(layoutId, layout, theme, screen) {
           localStorage.setItem("playarr-theme", theme); // the app's own explicit theme choice (lib/theme.tsx)
           localStorage.setItem("playarr:apiBaseUrl", base);
           const session = { accessToken: s.access_token, refreshToken: s.refresh_token, tokenType: "Bearer", expiresAt: Date.now() + s.expires_in * 1000 };
-          localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "parity", apiBaseUrl: base, userId: s.user_id, name: s.username, deviceId: dev, session }]));
+          localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "parity", apiBaseUrl: base, userId: s.user_id, name: s.displayName, deviceId: dev, session }]));
+          localStorage.setItem("playarr.currentUserName", s.displayName);
           localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "parity", apiBaseUrl: base, userId: s.user_id }));
         } catch {}
       },
