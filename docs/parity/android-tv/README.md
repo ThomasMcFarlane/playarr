@@ -141,3 +141,17 @@ Remaining player difference: the shared references are captured without the TV u
 slider, the fullscreen button and the HD badge, and the quality popover sits 78 px further left because of the extra
 fullscreen button. Android TV (like the web with the TV user agent) has neither, which is why the quality menu stays at
 about 2.8%.
+
+### Structural gaps found in the light heat maps
+
+Percentages are a weak signal on mostly empty pages, so these were checked by eye as well. Two screens still have a different
+structure from the web TV layout even though their mismatch looks small:
+
+- Settings: the web lists the sections as a wide numbered list on the left with the selected section's panel beside
+  it; Android TV draws the two-pane preferences layout (compact section list, panel card, Sign out bar). Light 3.5%,
+  dark 1.6%.
+- Calendar: the web TV shows the month grid (weekday header, day cells, the Sample Series 1 chip on the 10th); Android TV
+  shows the agenda list with a poster card. Light 7.4%, dark 6.0%.
+
+Series detail was fixed in this change (overview and pill row spacing, and the series-level Download pill, which the web
+does not have, removed): dark 0.92%, light 1.67%.

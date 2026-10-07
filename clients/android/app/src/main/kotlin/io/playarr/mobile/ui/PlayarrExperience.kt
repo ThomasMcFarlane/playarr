@@ -5389,7 +5389,7 @@ private fun ExperienceVideoDetailContent(
                     onResumeChoice = onResumeChoice,
                     autoFocusPlay = true,
                     television = true,
-                    modifier = Modifier.padding(top = 37.8.dp),
+                    modifier = Modifier.padding(top = if (selectedEpisode != null) 10.3.dp else 37.8.dp),
                 )
             }
             if (series != null) {
@@ -5876,7 +5876,7 @@ private fun VideoDetailCopy(
                     fontSize = 21.sp,
                     fontWeight = FontWeight(570),
                     letterSpacing = (-0.739).sp,
-                    modifier = Modifier.padding(top = 19.5.dp),
+                    modifier = Modifier.padding(top = 17.dp),
                 )
             }
             androidx.compose.foundation.layout.FlowRow(
@@ -5894,7 +5894,7 @@ private fun VideoDetailCopy(
                     )
                 }
             }
-            afterMeta?.let { Box(Modifier.padding(top = 6.5.dp)) { it() } }
+            afterMeta?.let { Box(Modifier.padding(top = 5.5.dp)) { it() } }
             Text(
                 episode?.episode?.overview?.takeIf(String::isNotBlank)
                     ?: work.overview?.takeIf(String::isNotBlank)
@@ -5906,7 +5906,7 @@ private fun VideoDetailCopy(
                 lineHeight = 20.325.sp,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 21.7.dp).widthIn(max = 360.dp),
+                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 360.dp),
             )
         }
         return
@@ -6135,7 +6135,6 @@ private fun VideoDetailActions(
                     glyph = "+",
                     onClick = { onAddToPlaylist(episode?.episode?.id) },
                 )
-                if (canDownload && (episode != null || work.kind != WorkKind.Movie)) downloadPill()
             }
         }
         return

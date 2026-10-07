@@ -12,8 +12,8 @@
         "id": "home",
         "title": "Home",
         "status": "pass",
-        "mismatchPercent": 0.946,
-        "mismatchedPixels": 28034,
+        "mismatchPercent": 0.947,
+        "mismatchedPixels": 28049,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -22,8 +22,8 @@
         "id": "movies",
         "title": "Movies library",
         "status": "pass",
-        "mismatchPercent": 0.522,
-        "mismatchedPixels": 15465,
+        "mismatchPercent": 0.526,
+        "mismatchedPixels": 15573,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -32,8 +32,8 @@
         "id": "series",
         "title": "Series library",
         "status": "pass",
-        "mismatchPercent": 0.412,
-        "mismatchedPixels": 12201,
+        "mismatchPercent": 0.421,
+        "mismatchedPixels": 12477,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -53,7 +53,7 @@
         "title": "Title detail (series with seasons)",
         "status": "fail",
         "mismatchPercent": 1.13,
-        "mismatchedPixels": 33485,
+        "mismatchedPixels": 33478,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -62,8 +62,8 @@
         "id": "search",
         "title": "Search with results",
         "status": "pass",
-        "mismatchPercent": 0.636,
-        "mismatchedPixels": 18854,
+        "mismatchPercent": 0.676,
+        "mismatchedPixels": 20025,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -72,8 +72,8 @@
         "id": "calendar",
         "title": "Calendar",
         "status": "fail",
-        "mismatchPercent": 2.581,
-        "mismatchedPixels": 76475,
+        "mismatchPercent": 2.541,
+        "mismatchedPixels": 75279,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
