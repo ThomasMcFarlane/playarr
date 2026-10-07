@@ -203,6 +203,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android phone: the client uses the web font and the web top-inset rules, the calendar offers Play and Resume, and the profile page follows the web phone layout with the theme selector and a Clients link.
 - Android TV: series detail uses the web episode rail and ink Start pill with the availability note between the meta chips and the synopsis, and the player quality menu is the web popover with the Original choice over the Low, Medium and High matrix instead of a side panel.
 - Web: Nunito Sans and JetBrains Mono are now bundled as self-hosted variable webfonts (SIL OFL) and lead the font stacks, so the UI no longer depends on a platform-specific font; the parity references were re-captured with them.
 - Pixel parity tooling now covers the light and dark themes: `capture-web.mjs --theme`, theme-aware `diff.mjs` and `screens.json`, web references under `docs/parity/web/<layout>/<theme>/`, and a deterministic source sync order in the fixture seed.

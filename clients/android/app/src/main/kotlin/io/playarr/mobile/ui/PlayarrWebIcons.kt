@@ -96,4 +96,52 @@ internal object PlayarrWebIcons {
     val Calendar: ImageVector by lazy {
         IconSpec("WebCalendar").stroke(roundRect(3.5f, 5f, 17f, 15f, 2f), "M3.5 10h17M8 3v4M16 3v4").build()
     }
+
+    // The web player's control icons (`components/player/PlayerIcons.tsx`): 24 viewport drawn at 20 dp, 1.8 stroke.
+    val PlayerPlay: ImageVector by lazy { IconSpec("WebPlayerPlay", 1.8f, widthDp = 20f, heightDp = 20f).fill("M7 4.5v15l13-7.5z").build() }
+    val PlayerPause: ImageVector by lazy {
+        IconSpec("WebPlayerPause", 1.8f, widthDp = 20f, heightDp = 20f).fill(roundRect(6f, 4.5f, 4.5f, 15f, 1f)).fill(roundRect(13.5f, 4.5f, 4.5f, 15f, 1f)).build()
+    }
+    val PlayerPrevious: ImageVector by lazy {
+        IconSpec("WebPlayerPrevious", 1.8f, widthDp = 20f, heightDp = 20f).fill(roundRect(4.5f, 5f, 2.4f, 14f, 1f)).fill("M19.5 5.5v13L8.2 12z").build()
+    }
+    val PlayerNext: ImageVector by lazy {
+        IconSpec("WebPlayerNext", 1.8f, widthDp = 20f, heightDp = 20f).fill(roundRect(17.1f, 5f, 2.4f, 14f, 1f)).fill("M4.5 5.5v13L15.8 12z").build()
+    }
+    val PlayerAudio: ImageVector by lazy {
+        IconSpec("WebPlayerAudio", 1.8f, widthDp = 20f, heightDp = 20f).fill("M5 9.5v5h4l4.5 3.5V6L9 9.5z").stroke("M16.5 9a4.5 4.5 0 0 1 0 6", "M19 6.5a8 8 0 0 1 0 11").build()
+    }
+    val PlayerSubtitles: ImageVector by lazy {
+        IconSpec("WebPlayerSubtitles", 1.8f, widthDp = 20f, heightDp = 20f)
+            .stroke(roundRect(3.5f, 5f, 17f, 14f, 2f), "M6.5 12h4", "M13.5 12h4", "M6.5 15.5h7", "M15.5 15.5h2").build()
+    }
+    val PlayerPlaylist: ImageVector by lazy {
+        IconSpec("WebPlayerPlaylist", 1.8f, widthDp = 20f, heightDp = 20f).stroke("M4 6.5h10", "M4 11.5h10", "M4 16.5h7").fill("m16 14 4 2.5-4 2.5z").build()
+    }
+    val PlayerHealth: ImageVector by lazy {
+        IconSpec("WebPlayerHealth", 1.8f, widthDp = 20f, heightDp = 20f).stroke(circle(12f, 12f, 8.5f), "M12 11v5.5").fill(circle(12f, 7.8f, 0.9f)).build()
+    }
+    val PlayerVolumeHigh: ImageVector by lazy {
+        IconSpec("WebPlayerVolumeHigh", 1.8f, widthDp = 20f, heightDp = 20f).fill("M4 9.5v5h4l5 4V5.5l-5 4z").stroke("M17 8.5a5 5 0 0 1 0 7", "M19.7 6a9 9 0 0 1 0 12").build()
+    }
+    val PlayerVolumeMuted: ImageVector by lazy {
+        IconSpec("WebPlayerVolumeMuted", 1.8f, widthDp = 20f, heightDp = 20f).fill("M4 9.5v5h4l5 4V5.5l-5 4z").stroke("M16 10.5 21 15.5", "M21 10.5 16 15.5").build()
+    }
+    val PlayerFullscreenEnter: ImageVector by lazy {
+        IconSpec("WebPlayerFullscreenEnter", 1.8f, widthDp = 20f, heightDp = 20f)
+            .stroke("M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9", "M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9", "M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15", "M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15").build()
+    }
+    val PlayerFullscreenExit: ImageVector by lazy {
+        IconSpec("WebPlayerFullscreenExit", 1.8f, widthDp = 20f, heightDp = 20f)
+            .stroke("M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4", "M15 4v3.5A1.5 1.5 0 0 0 16.5 9H20", "M20 15h-3.5a1.5 1.5 0 0 0-1.5 1.5V20", "M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20").build()
+    }
+    val PlayerClose: ImageVector by lazy { IconSpec("WebPlayerClose", 1.8f, widthDp = 20f, heightDp = 20f).stroke("M6 6l12 12", "M18 6 6 18").build() }
+    val PlayerMinimise: ImageVector by lazy {
+        IconSpec("WebPlayerMinimise", 1.8f, widthDp = 20f, heightDp = 20f).stroke("M5 15h4v4", "m9 15-5 5", "M19 9h-4V5", "m15 9 5-5").build()
+    }
+    /** The "play on" device glyph: a monitor and a phone (an inline SVG in `PlayerControls.tsx`). */
+    val PlayerPlayOn: ImageVector by lazy {
+        IconSpec("WebPlayerPlayOn", 1.8f, widthDp = 20f, heightDp = 20f)
+            .stroke(roundRect(2.5f, 5f, 13f, 9f, 1.2f), "M6 18h6M9 14v4", roundRect(17f, 9f, 5f, 10f, 1.2f)).build()
+    }
 }
