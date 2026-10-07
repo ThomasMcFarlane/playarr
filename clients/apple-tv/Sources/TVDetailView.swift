@@ -221,6 +221,7 @@ struct TVWorkDetailView: View {
             }
             seriesStart(detail, ordered: ordered, x: 153.6, y: buttonsY)
             actionPill("Add to watchlist", glyph: "+", x: 325.6, y: buttonsY, width: 142)
+            actionPill("Add to Playlist", glyph: "+", x: 483.6, y: buttonsY, width: 142)
         }
     }
 
