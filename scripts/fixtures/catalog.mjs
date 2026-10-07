@@ -142,3 +142,8 @@ export const ADDED_AT = {
   "Test Movie B": "2026-10-07T08:00:00.000Z",
   "Test Movie C": "2026-10-07T07:00:00.000Z",
 };
+
+// The one instant the fixture and the parity captures share. Dates that depend on "now" (the upcoming
+// episode's air date) are computed from it, never from the real clock, so a fixture seeded on any day
+// produces the same calendar as the committed references. capture-web.mjs freezes the page clock at it.
+export const FIXTURE_CLOCK = "2026-10-07T12:00:00Z";

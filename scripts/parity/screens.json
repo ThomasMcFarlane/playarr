@@ -24,6 +24,7 @@
   ],
   "determinism": {
     "clock": "2026-10-07T12:00:00Z",
+    "clockNote": "must equal FIXTURE_CLOCK in scripts/fixtures/catalog.mjs; the stub derives the upcoming episode air date from it",
     "timezone": "UTC",
     "locale": "en-GB",
     "animations": "disabled (reduced motion plus zero-duration transitions)",

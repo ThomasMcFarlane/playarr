@@ -6,7 +6,7 @@ import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { artKey } from "./art.mjs";
-import { SERIES, MOVIES, episodeRelPath, movieRelPath, dubRelPath, LANG_NAME } from "./catalog.mjs";
+import { SERIES, MOVIES, episodeRelPath, movieRelPath, dubRelPath, LANG_NAME, FIXTURE_CLOCK } from "./catalog.mjs";
 
 const [root, portArg, apiKey] = process.argv.slice(2);
 if (!root || !portArg || !apiKey) {
@@ -26,7 +26,8 @@ const artImages = (kind, id) => [
 ];
 const names = (langs) => langs.map((l) => LANG_NAME[l]).join("/");
 const quality = { quality: { id: 7, name: "Bluray-1080p", source: "bluray", resolution: 1080 }, revision: { version: 1, real: 0, isRepack: false } };
-const isoDay = (offsetDays) => new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+// Absolute, relative to the shared fixture instant (FIXTURE_CLOCK), not to the real clock at seed time.
+const isoDay = (offsetDays) => new Date(Date.parse(FIXTURE_CLOCK) + offsetDays * 86400000).toISOString().slice(0, 10);
 
 // Must match the generated clip length (media.mjs).
 const CLIP_SECONDS = Math.max(1, Math.min(600, Number(process.env.PLAYARR_FIXTURE_CLIP_SECONDS) || 6));

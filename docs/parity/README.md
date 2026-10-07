@@ -79,9 +79,11 @@ The player screens use a real decoded frame: the capture seeks the paused player
 reveals the controls. They run with the real clock, because a frozen `Date` stalls playback start; nothing
 date-dependent is on screen. Native clients should seek to 2.0 s, pause, and compare including the video area.
 
-Known source of difference, which is data and not layout: the calendar shows dates relative to the frozen clock
-and the seeding day (the unaired episode is seeded three days ahead), so seed the fixture on the capture day or
-pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
+The calendar does not depend on the day you seed or capture: the page clock is frozen at `FIXTURE_CLOCK`
+(`2026-10-07T12:00:00Z`, one constant in `scripts/fixtures/catalog.mjs` that `capture-web.mjs` reads and checks against
+`screens.json`), and the stub computes the unaired episode's air date from the same constant (three days after it,
+2026-10-10), not from the real clock at seed time. Native clients that show the calendar must show that agenda for
+7 October 2026 (use the same instant, or the same absolute date), not "today".
 
 Reproducibility: two fresh fixture databases in different directories (separate media, art and ports) produced
 captures that differ by at most 0.01% of pixels on every one of the 48 screens, so the 1% budget leaves room for real
@@ -93,8 +95,7 @@ pinned, captures swallow playback progress writes, and the capture waits for ima
 position to settle. `up.sh` regenerates media and artwork when `media.mjs`, `art.mjs`, `catalog.mjs` or the clip
 length changed (a stamp file), so a stale media directory cannot leak into a fixture; seed a database with
 `--fresh` for a clean database (or re-run `up.sh`, which re-pins `added_at`). The references were captured for both themes on
-one fresh database from current main with the bundled fonts, the fixture seeded on the day of the frozen clock
-(2026-10-07; the calendar's unaired episode is seeded three days ahead) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
+one fresh database from current main with the bundled fonts, the frozen clock `FIXTURE_CLOCK` (2026-10-07) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
 Capture the web again after changing the fixtures or the web client.
 
 ## Design font (every native client must embed it)

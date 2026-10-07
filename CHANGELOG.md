@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fixtures: the upcoming episode's air date is computed from one absolute fixture instant (FIXTURE_CLOCK, shared with the parity capture) instead of the real clock at seed time, so the calendar references no longer drift from day to day.
 - Android TV: cards have the web drop shadows and lift when selected on Home, and the hero title uses the web font and the web's 9ch width.
 - tvOS: the player quality panel blurs the video behind it like the web, the player parity numbers mask the decoded video, and the season and title Download controls are focusable and explain that Apple TV keeps no offline copies.
 - tvOS: embeds Nunito Sans and JetBrains Mono (the files shared with iOS), shows the agenda release calendar and the profile display name, and the Apple parity workflow now diffs against the shared web references in both themes.
