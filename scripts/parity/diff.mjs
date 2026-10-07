@@ -3,12 +3,15 @@
 //
 //   node diff.mjs --ref <dir> --cand <dir> --layout tv|mobile [--theme light|dark|both] [--out <dir>]
 //                 [--screens id,id] [--threshold 0.1] [--max 1] [--fail]
+//                 [--mask-rect x,y,w,h[,screen-id]]... [--no-manifest-masks]
 //
 // Both directories hold <layout>/<theme>/<screen-id>.png (what capture-web.mjs writes). The candidate
 // directory may instead hold the legacy <layout>/<screen-id>.png, which is taken as the light theme.
 // Candidate images of another size are compared on the larger canvas; the missing area counts as
 // mismatch. Writes <out>/report.json, <out>/summary.md and <out>/report.html (reference, candidate and
-// diff overlays per screen, one section per theme). --fail exits 1 if any compared screen is over --max
+// diff overlays per screen, one section per theme). Ignored regions: --mask-rect (CSS px of the layout, repeatable,
+// optionally limited to one screen id) and the maskRects the reference manifest records for text that legitimately
+// differs per fixture instance (for example the server address); both images are blanked there before comparing. --fail exits 1 if any compared screen is over --max
 // or missing a candidate.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +39,41 @@ const out = resolve(opt("out", join(cand, `diff-${layout}`)));
 const threshold = Number(opt("threshold", spec.tolerance.pixelmatchThreshold));
 const maxPct = Number(opt("max", spec.tolerance.maxMismatchPercent));
 const only = opt("screens", "")?.split(",").filter(Boolean);
+const cliMasks = args.flatMap((a, i) => (a === "--mask-rect" && args[i + 1] ? [args[i + 1]] : [])).map((v) => {
+  const [x, y, w, h, screen] = v.split(",");
+  return { rect: [x, y, w, h].map(Number), screen };
+});
+const refManifest = (() => {
+  if (args.includes("--no-manifest-masks")) return [];
+  try {
+    return JSON.parse(readFileSync(join(ref, "manifest.json"), "utf8")).screens ?? [];
+  } catch {
+    return [];
+  }
+})();
+const dpr = spec.layouts[layout].dpr;
+function masksFor(theme, id) {
+  const fromManifest = refManifest
+    .filter((e) => e.layout === layout && e.theme === theme && e.id === id)
+    .flatMap((e) => e.maskRects ?? []);
+  const fromCli = cliMasks.filter((m) => !m.screen || m.screen === id).map((m) => m.rect);
+  return [...fromManifest, ...fromCli];
+}
+// Blank the rectangles (CSS px) to one opaque colour in an image, so they never count as mismatch.
+function blank(png, rects) {
+  for (const [x, y, w, h] of rects) {
+    const x0 = Math.max(0, Math.floor(x * dpr));
+    const y0 = Math.max(0, Math.floor(y * dpr));
+    const x1 = Math.min(png.width, Math.ceil((x + w) * dpr));
+    const y1 = Math.min(png.height, Math.ceil((y + h) * dpr));
+    for (let yy = y0; yy < y1; yy += 1) {
+      for (let xx = x0; xx < x1; xx += 1) {
+        const o = (yy * png.width + xx) * 4;
+        png.data[o] = 255; png.data[o + 1] = 0; png.data[o + 2] = 255; png.data[o + 3] = 255;
+      }
+    }
+  }
+}
 const screens = spec.screens.filter((s) => !only.length || only.includes(s.id));
 
 const read = (p) => PNG.sync.read(readFileSync(p));
@@ -69,6 +107,11 @@ for (const theme of themes) {
     }
     const a = read(rp);
     const b = read(cp);
+    const masks = masksFor(theme, s.id);
+    if (masks.length) {
+      blank(a, masks);
+      blank(b, masks);
+    }
     const w = Math.max(a.width, b.width);
     const h = Math.max(a.height, b.height);
     const diff = new PNG({ width: w, height: h });
@@ -86,6 +129,7 @@ for (const theme of themes) {
       reference: `${a.width}x${a.height}`,
       candidate: `${b.width}x${b.height}`,
       sizeMatch: a.width === b.width && a.height === b.height,
+      ...(masks.length ? { maskedRects: masks.length } : {}),
     });
   }
   report.themes[theme] = rows;

@@ -18,11 +18,17 @@ rasterisation).
 ## Files
 
 - `scripts/parity/screens.json`: the canonical screen list. Ids: `home`, `movies`, `series`, `film-detail`,
-  `series-detail`, `search`, `calendar`, `settings`, `player-controls`, `player-quality-menu`,
-  `profile-switcher`, `household-blocked`. Each has the web route, the fixture user (default `fx-viewer`, the
-  household screen uses `fx-child-locked`), the steps to reach the state and the layouts.
+  `series-detail`, `search`, `calendar`, `settings` (the Appearance panel), the settings section panels
+  `settings-avatar`, `settings-language`, `settings-player` (quality matrix), `settings-server`, `settings-lock` (PIN),
+  `settings-invite`, `settings-remote` (phone remote), `settings-latency` (request latency), `settings-your-data`, then
+  `player-controls`, `player-quality-menu`, `profile-switcher`, `household-blocked`. Each has the web route, the
+  fixture user (default `fx-viewer`, the household screen uses `fx-child-locked`), the steps to reach the state and
+  the layouts.
 - `scripts/parity/capture-web.mjs`: Playwright captures of the web reference.
-- `scripts/parity/diff.mjs`: pixelmatch diff, per-screen mismatch table and an HTML report.
+- `scripts/parity/diff.mjs`: pixelmatch diff, per-screen mismatch table and an HTML report. Ignored regions:
+  `--mask-rect x,y,w,h[,screen-id]` (CSS px of the layout, repeatable) and the `maskRects` the reference manifest
+  records for text that differs per fixture instance (the `settings-server` address, from `maskSelectors` in
+  `screens.json`); both images are blanked there before comparing. `--no-manifest-masks` turns the manifest ones off.
 - `docs/parity/web/<layout>/<theme>/<id>.png`: committed web reference captures (placeholder artwork only), plus
   `manifest.json`. (The earlier unthemed `<layout>/<id>.png` references are now `<layout>/light/<id>.png`.)
 

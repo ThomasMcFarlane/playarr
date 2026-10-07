@@ -82,6 +82,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Parity: the shared screen list and web references now include the settings section panels (avatar, language, player, server, PIN lock, invite, phone remote, request latency, your data) for both layouts and themes; diff.mjs gained --mask-rect and per-instance mask regions.
 - iOS: embeds the web's design fonts (Nunito Sans and JetBrains Mono, SIL Open Font License 1.1, variable builds) and draws the web-style screens with them at the exact CSS weights.
 - tvOS: Downloads, Watchlist and Requests pages on the web TV layout, with real watchlist and request data (PlayarrKit `listWatchlistItems`, `listMyRequests`).
 - iOS: a Request latency page in Settings, matching the web page (per-route HTTP latency for admins, with the "Admins only" state for other users), backed by a new `HttpLatencyClient` in PlayarrKit with unit tests.

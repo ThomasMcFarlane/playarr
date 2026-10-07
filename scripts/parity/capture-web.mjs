@@ -262,7 +262,16 @@ async function captureOnce(layoutId, layout, theme, screen) {
     );
     await page.waitForTimeout(800);
     await page.screenshot({ path: join(out, layoutId, theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
-    return errors.length;
+    // Regions whose text legitimately differs per fixture instance (for example a server address) are recorded as
+    // rectangles in CSS px; diff.mjs ignores them in both images. The reference screenshot itself is unmasked.
+    const maskRects = [];
+    for (const selector of screen.maskSelectors ?? []) {
+      for (const handle of await page.locator(selector).all()) {
+        const box = await handle.boundingBox();
+        if (box) maskRects.push([box.x, box.y, box.width, box.height].map((v) => Math.round(v * 100) / 100));
+      }
+    }
+    return { pageErrors: errors.length, maskRects };
   } finally {
     await browser.close().catch(() => {});
   }
@@ -279,8 +288,8 @@ for (const layoutId of layoutIds) {
       let lastError;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
-          const pageErrors = await captureOnce(layoutId, layout, theme, screen);
-          manifest.screens.push({ layout: layoutId, theme, id: screen.id, route: screen.route, user: screen.user ?? spec.user, file: `${layoutId}/${theme}/${screen.id}.png`, pageErrors });
+          const { pageErrors, maskRects } = await captureOnce(layoutId, layout, theme, screen);
+          manifest.screens.push({ layout: layoutId, theme, id: screen.id, route: screen.route, user: screen.user ?? spec.user, file: `${layoutId}/${theme}/${screen.id}.png`, pageErrors, ...(maskRects.length ? { maskRects } : {}) });
           console.log(`ok   ${layoutId}/${theme}/${screen.id}${attempt > 1 ? `  (attempt ${attempt})` : ""}`);
           lastError = undefined;
           break;
