@@ -127,6 +127,12 @@ def main() -> None:
                 t = 1 - fn(yy) / 95
                 px2[xx, yy] = (255, 255, 255, round(255 * max(t, 0) ** 1.4))
         img.save(IMAGES / f"{name}.png")
+    # Media-card focus shadow: a soft black rounded rectangle (card 220 x 124, radius 12) with 24 px of blur room on every side.
+    from PIL import ImageFilter
+    shadow = Image.new("RGBA", (268, 172), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).rounded_rectangle((24, 24, 244, 148), radius=12, fill=(0, 0, 0, 255))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(9))
+    shadow.save(IMAGES / "card-shadow.png")
     # Player scrim (.player-scrim): black fading in from the top of the bottom 48 % to .92 at the bottom edge.
     scrim = Image.new("RGBA", (4, 256), (255, 255, 255, 0))
     spx = scrim.load()

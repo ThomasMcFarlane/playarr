@@ -1,0 +1,1 @@
+- Roku: media cards show a soft shadow and a lift on focus instead of a ring, Up and Down between Home rails land on the card directly above or below, the library sorts like the web (200 titles per page, native sort), Filters and Calendar actions sit in one shell column on the right, and Customise Home moved from Home into Settings.

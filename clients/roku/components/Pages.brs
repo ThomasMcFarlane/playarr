@@ -5,40 +5,7 @@
 ' focusable controls moved with the D-pad. Geometry, sizes, weights and colours come from the web DOM at 1920x1080
 ' (scripts/parity/capture-web.mjs --dump-dom). Colours are theme roles (Theme.brs), never literals.
 
-' "Customise Home" pill (web .btn-secondary at the top right of Home), drawn in the home group.
-sub homePillInit()
-    holder = m.top.findNode("homeGroup")
-    m.homePill = CreateObject("roSGNode", "Group")
-    pgRound(m.homePill, 1781, 30, 62, 72, 14, "surfaceStrong", 199)
-    pgRound(m.homePill, 1781, 30, 62, 72, 14, "line", -1, true)
-    pgIcon(m.homePill, 1801, 45, 22, "tile-filters.png", "inkMuted")
-    pgLabel(m.homePill, 1781, 74, 62, 14, "Customise Home", 7, 800, "inkMuted", { horizAlign: "center" })
-    m.homePillRing = CreateObject("roSGNode", "Poster")
-    m.homePillRing.uri = "pkg:/images/round-ring-r12.9.png"
-    m.homePillRing.translation = [1778, 27]
-    m.homePillRing.width = 68
-    m.homePillRing.height = 78
-    ThemeSetRole(m.homePillRing, "focusRing")
-    m.homePillRing.blendColor = ThemeColor("focusRing")
-    m.homePillRing.visible = false
-    m.homePill.AppendChild(m.homePillRing)
-    holder.AppendChild(m.homePill)
-    m.homePillFocused = false
-end sub
-
-sub homePillFocus(on as Boolean)
-    m.homePillFocused = on
-    m.homePillRing.visible = on
-    if on
-        for each rail in m.visibleRails
-            rail.row.SetFocus(false)
-        end for
-        m.top.SetFocus(true)
-    end if
-end sub
-
 sub pagesInit()
-    homePillInit()
     browseChromeInit()
     edgeFadesInit()
     m.pageGroup = m.top.findNode("pageGroup")
@@ -182,6 +149,16 @@ function pgButton(parent as Object, x as Float, y as Float, h as Float, text as 
     pgLabel(parent, x, y, w, h, text, 15, 700, textRole, { horizAlign: "center", vertAlign: "center" })
     pgFocusable(x, y, w, h, h / 2, action, data)
     return w
+end function
+
+' App-shell action column: every button that opens a side panel or creates something is a tile in ONE column at the right of the
+' shell, stacked vertically (web .tv-filter-launcher stack); pages register their actions and never place them per page.
+function shellActionX() as Float
+    return 1781
+end function
+
+function shellActionY(slot as Integer) as Float
+    return 46 + 84 * slot
 end function
 
 ' Header action tile (web .tv-filter-launcher, the 30 September reference): 62 x 72, radius 14, a 1px line, an icon over a
@@ -652,8 +629,8 @@ sub renderCalendar()
     pgRound(m.pageHead, 1516.6, 56.2, 50, 50, 25, "line", -1, true)
     pgIcon(m.pageHead, 1534, 73, 15, "arrow-right.png", "inkSoft")
     pgFocusable(1516.6, 56.2, 50, 50, 25, "calNext")
-    pgTile(m.pageHead, 1707, 46, "Calendar link", "tile-bell.png", "calLink")
-    pgTile(m.pageHead, 1781, 46, "Filters", "tile-filters.png", "calFilters")
+    pgTile(m.pageHead, shellActionX(), shellActionY(0), "Calendar link", "tile-bell.png", "calLink")
+    pgTile(m.pageHead, shellActionX(), shellActionY(1), "Filters", "tile-filters.png", "calFilters")
 
     rangeLabel = pgLabel(m.pageBody, 174.6, 175, 0, 40, calendarRangeLabel(), 24, 600, "ink", { vertAlign: "center" })
     pgIcon(m.pageBody, 174.6 + rangeLabel.boundingRect().width + 12, 188, 14, "chevron-down.png", "ink")
@@ -995,14 +972,17 @@ sub browseChromeInit()
     pgRound(holder, 153.6, 56.3, 50, 50, 25, "line", -1, true)
     pgIcon(holder, 170, 73, 17, "arrow-left.png", "inkSoft")
     m.browseDivider = pgRect(holder, 348, 57, 1, 48, "line")
-    pgRound(holder, 1739, 56.2, 104.2, 50, 25, "surface", 179)
-    pgRound(holder, 1739, 56.2, 104.2, 50, 25, "line", -1, true)
-    pgIcon(holder, 1760, 73, 16, "tile-filters.png", "inkSoft")
+    tx = shellActionX()
+    ty = shellActionY(0)
+    pgRound(holder, tx, ty, 62, 72, 14, "surfaceStrong", 199)
+    pgRound(holder, tx, ty, 62, 72, 14, "line", -1, true)
+    pgIcon(holder, tx + 20, ty + 15, 22, "tile-filters.png", "inkMuted")
+    pgLabel(holder, tx, ty + 44, 62, 14, "Filters", 8, 800, "inkMuted", { horizAlign: "center" })
     m.browseFiltersRing = CreateObject("roSGNode", "Poster")
-    m.browseFiltersRing.uri = "pkg:/images/round-ring-r25.9.png"
-    m.browseFiltersRing.translation = [1736, 53]
-    m.browseFiltersRing.width = 110.2
-    m.browseFiltersRing.height = 56
+    m.browseFiltersRing.uri = "pkg:/images/round-ring-r12.9.png"
+    m.browseFiltersRing.translation = [tx - 3, ty - 3]
+    m.browseFiltersRing.width = 68
+    m.browseFiltersRing.height = 78
     ThemeSetRole(m.browseFiltersRing, "focusRing")
     m.browseFiltersRing.blendColor = ThemeColor("focusRing")
     m.browseFiltersRing.visible = false

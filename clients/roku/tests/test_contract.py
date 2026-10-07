@@ -593,9 +593,10 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         # Clock and date sit together near x=480 like .app-clock.
         self.assertIn('id="clockTime" translation="[481,', SCENE)
         card = (ROOT / "components" / "PosterCard.xml").read_text(encoding="utf-8")
-        self.assertIn('id="focusRing"', card)
+        self.assertIn('id="focusShadow"', card)
+        self.assertNotIn('id="focusRing"', card)
         card_brs = (ROOT / "components" / "PosterCard.brs").read_text(encoding="utf-8")
-        self.assertIn("m.focusRing.opacity", card_brs)
+        self.assertIn("m.focusShadow.opacity", card_brs)
 
     def test_home_right_from_first_card_moves_the_hero(self) -> None:
         self.assertIn("jumpToRowItem = [0, 1]", MAIN)

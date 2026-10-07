@@ -6,6 +6,7 @@ function AppConfig() as Object
         ' gains tv-roku. Keep this value aligned with backend/openapi.
         clientPlatform: "web"
         catalogPageSize: 50
+        libraryPageSize: 200
         maxBitrateBps: 20000000
         ' The same hosted TV-linking service tv-webos/tv-tizen already use to
         ' bootstrap onto a Playarr Server before they know its address --

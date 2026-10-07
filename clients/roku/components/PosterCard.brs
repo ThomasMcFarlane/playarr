@@ -4,9 +4,6 @@ sub init()
     for each id in ["cornerTL", "cornerTR", "cornerBL", "cornerBR"]
         ThemeSetRole(m.top.findNode(id), "surface")
     end for
-    for each id in ["ringTop", "ringBottom", "ringLeft", "ringRight"]
-        ThemeSetRole(m.top.findNode(id), "focusRing")
-    end for
     ThemeInitComponent()
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
@@ -15,7 +12,7 @@ sub init()
     m.cardRoot = m.top.findNode("cardRoot")
     m.artGroup = m.top.findNode("artGroup")
     m.focusAnim = m.top.findNode("focusAnim")
-    m.focusRing = m.top.findNode("focusRing")
+    m.focusShadow = m.top.findNode("focusShadow")
     m.liftInterp = m.top.findNode("liftInterp")
     m.scaleInterp = m.top.findNode("scaleInterp")
 end sub
@@ -87,12 +84,12 @@ end sub
 ' the art zooms in a touch further (scale(1.025)).
 sub onFocusChanged()
     effective = m.top.focusPercent * m.top.activeRailFactor
-    ringOpacity = effective
-    if ringOpacity > 1 then ringOpacity = 1
-    if ringOpacity < 0 then ringOpacity = 0
-    m.focusRing.opacity = ringOpacity
-    liftY = -10 * effective
-    artScale = 1 + (effective * 0.025)
+    shadowOpacity = effective
+    if shadowOpacity > 1 then shadowOpacity = 1
+    if shadowOpacity < 0 then shadowOpacity = 0
+    m.focusShadow.opacity = shadowOpacity * cardFocusShadowOpacity()
+    liftY = -cardFocusLift() * effective
+    artScale = 1 + (effective * cardFocusScale())
     m.liftInterp.key = [0, 1]
     m.liftInterp.keyValue = [m.cardRoot.translation, [0, liftY]]
     m.scaleInterp.key = [0, 1]
@@ -106,4 +103,18 @@ end sub
 function CapitalizeFirst(value as Dynamic) as String
     if value = invalid or value = "" then return ""
     return UCase(Left(value, 1)) + Right(value, Len(value) - 1)
+end function
+
+' Media-card focus values. Placeholders until the web layout worker pins the earlier card focus numbers in
+' docs/design/page-layout.md; change them here only.
+function cardFocusLift() as Float
+    return 10
+end function
+
+function cardFocusScale() as Float
+    return 0.025
+end function
+
+function cardFocusShadowOpacity() as Float
+    return 0.55
 end function

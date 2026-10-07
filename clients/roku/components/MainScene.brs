@@ -2138,7 +2138,7 @@ sub loadBrowseCatalog(append as Boolean)
         action = "browseCatalogMore"
     end if
     config = AppConfig()
-    path = "/api/v1/catalog?kind=" + m.browseKind + "&available_only=true&sort=" + m.browseSort + "&order=" + m.browseOrder + "&limit=" + config.catalogPageSize.ToStr() + "&offset=" + offset.ToStr()
+    path = "/api/v1/catalog?kind=" + m.browseKind + "&available_only=true&sort=" + m.browseSort + "&order=" + m.browseOrder + "&limit=" + config.libraryPageSize.ToStr() + "&offset=" + offset.ToStr()
     sendApi(action, "GET", path, invalid, true)
 end sub
 
@@ -2206,31 +2206,20 @@ function formatCountWithCommas(n as Dynamic) as String
     return s + out
 end function
 
-' Approximate web localeCompare({numeric:true}) for title sort.
+' Web Library.tsx orderWorks: Intl.Collator numeric + base sensitivity on sort_title || title. Keys are built once per item and
+' sorted with the native stable SortBy (a selection sort over 200 titles was slow on the device).
 function sortWorksByTitleNumeric(items as Object, order as String) as Object
     result = []
     if items = invalid then return result
     for each work in items
+        work.sortKeyTitle = sortTitleKey(work)
         result.Push(work)
     end for
-    direction = 1
-    if order = "desc" then direction = -1
-    for i = 0 to result.Count() - 2
-        bestIndex = i
-        for j = i + 1 to result.Count() - 1
-            a = sortTitleKey(result[j])
-            b = sortTitleKey(result[bestIndex])
-            cmp = 0
-            if a < b then cmp = -1
-            if a > b then cmp = 1
-            if cmp * direction < 0 then bestIndex = j
-        end for
-        if bestIndex <> i
-            temp = result[i]
-            result[i] = result[bestIndex]
-            result[bestIndex] = temp
-        end if
-    end for
+    if order = "desc"
+        result.SortBy("sortKeyTitle", "r")
+    else
+        result.SortBy("sortKeyTitle")
+    end if
     return result
 end function
 
@@ -3334,7 +3323,7 @@ function createHomeRail(contentTarget as Object) as Object
     row.rowHeights = [185]
     row.showRowLabel = false
     row.focusXOffset = [96]
-    row.rowFocusAnimationStyle = "fixedFocusWrap"
+    row.rowFocusAnimationStyle = "floatingFocus"
     ' Fully transparent: tv-web's real focus treatment is PosterCard's own
     ' lift+zoom (see PosterCard.xml/.brs), not RowList's native default
     ' focus-ring bitmap, which would otherwise draw an unwanted white
@@ -3731,7 +3720,7 @@ sub finishHomeLoad()
         isActiveRail = false
         if railIndex = 0 then isActiveRail = true
         buildRailContent(rail.row, rail.works, isActiveRail)
-        m.visibleRails.Push({ row: rail.row, works: rail.works })
+        m.visibleRails.Push({ row: rail.row, works: rail.works, first: 0, col: 0, last: 0, jumping: -1 })
         if rail.row.isSameNode(m.continueRow) then m.currentContinueWorks = rail.works
         ' 400 matched the OLD 220x340 tall-poster card's much taller row; the
         ' rebuilt 220x165 16:9 card (see PosterCard.xml) needs proportionally
@@ -3822,6 +3811,7 @@ sub onHomeItemFocused(event as Object)
     works = worksForRow(event.GetRoSGNode())
     if works = invalid or itemIndex < 0 or itemIndex >= works.Count() then return
     m.homeColIndex = itemIndex
+    homeRailTrack(event.GetRoSGNode(), itemIndex)
     homeFadesUpdate(itemIndex, works.Count())
     updateHeroFromWork(works[itemIndex])
     ' Column 0: hand focus to homeLeftProxy so Left can enter the dock
@@ -3829,6 +3819,31 @@ sub onHomeItemFocused(event as Object)
     if itemIndex = 0 and m.homeLeftProxy <> invalid and not m.navDockMode
         m.homeLeftProxy.SetFocus(true)
     end if
+end sub
+
+' The floating-focus RowList keeps the focused card in the first HOME_RAIL_FOCUS_MAX_COL + 1 slots and scrolls once it passes
+' the last of them, so each rail's first visible card and the focused card's on-screen column can be followed from the focus
+' events alone (the RowList exposes neither). Vertical moves use them to land on the card directly above or below.
+sub homeRailTrack(row as Object, idx as Integer)
+    for each rail in m.visibleRails
+        if rail.row.isSameNode(row)
+            if rail.jumping = idx
+                rail.jumping = -1
+            else
+                d = idx - rail.last
+                while d > 0
+                    if rail.col < 3 then rail.col = rail.col + 1 else rail.first = rail.first + 1
+                    d = d - 1
+                end while
+                while d < 0
+                    if rail.col > 0 then rail.col = rail.col - 1 else rail.first = rail.first - 1
+                    d = d + 1
+                end while
+            end if
+            rail.last = idx
+            return
+        end if
+    end for
 end sub
 
 sub onHomeItemSelected(event as Object)
@@ -3876,8 +3891,22 @@ function moveHomeFocus(delta as Integer) as Boolean
     end if
     m.homeFocusIndex = newIndex
     newRail = m.visibleRails[newIndex]
+    ' Geometric move: the card on screen above or below the focused one, never the target rail's remembered index and never
+    ' a scroll of the target rail (web: the rail scrolls only enough to unclip the chosen card).
+    column = 0
+    if oldIndex >= 0 and oldIndex < m.visibleRails.Count() then column = m.visibleRails[oldIndex].col
+    desired = newRail.first + column
+    if desired > newRail.works.Count() - 1 then desired = newRail.works.Count() - 1
+    if desired < 0 then desired = 0
+    if desired <> newRail.last
+        newRail.jumping = desired
+        newRail.col = desired - newRail.first
+        newRail.last = desired
+        newRail.row.jumpToRowItem = [0, desired]
+    end if
     buildRailContent(newRail.row, newRail.works, true)
     newRail.row.SetFocus(true)
+    if desired = 0 and m.homeLeftProxy <> invalid then m.homeLeftProxy.SetFocus(true)
     scrollHomeToFocusedRail()
     return true
 end function
@@ -5744,7 +5773,6 @@ sub showOnly(name as String)
     m.profilesGroup.visible = name = "profiles"
     m.settingsGroup.visible = name = "settings"
     m.pageGroup.visible = name = "page"
-    if m.homePillFocused = true and name <> "home" then m.homePillFocused = false : m.homePillRing.visible = false
     ' The shell clock sits further right on page-shell screens (web .app-clock follows the page header).
     if name = "page"
         m.clockTime.translation = [557, 68]
@@ -5778,21 +5806,6 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     state = m.top.screenState
     if state = "page"
         return pageOnKey(key)
-    else if state = "home" and m.homePillFocused = true and key = "down"
-        homePillFocus(false)
-        focusCurrentHomeRail()
-        return true
-    else if state = "home" and m.homePillFocused = true and key = "OK"
-        homePillFocus(false)
-        openPage("customise")
-        return true
-    else if state = "home" and m.homePillFocused = true and (key = "left" or key = "right" or key = "back")
-        if key = "back" then loadProfiles()
-        if key = "left"
-            homePillFocus(false)
-            enterNavDock()
-        end if
-        return true
     else if state = "endscreen"
         return onEndScreenKey(key)
     else if state = "playback"
@@ -6017,12 +6030,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return true
     else if state = "home" and key = "up"
-        ' Web TV: Up from the first rail reaches the "Customise Home" pill; Left reaches the dock.
-        if m.homePillFocused = true then return true
-        if m.homeFocusIndex = 0
-            homePillFocus(true)
-            return true
-        end if
+        ' Home has no action buttons (Customise Home lives in Settings): Up from the first rail stays put.
+        if m.homeFocusIndex = 0 then return true
         return moveHomeFocus(-1)
     else if state = "home" and key = "down"
         return moveHomeFocus(1)
