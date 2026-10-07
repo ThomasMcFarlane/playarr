@@ -11,8 +11,9 @@ class PlayarrPlayerInputTest {
         assertEquals(PlayarrPlayerSurfaceAction.TogglePlayback, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_CENTER))
         assertEquals(PlayarrPlayerSurfaceAction.TogglePlayback, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_ENTER))
         assertEquals(PlayarrPlayerSurfaceAction.TogglePlayback, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_SPACE))
-        assertEquals(PlayarrPlayerSurfaceAction.SeekBackward, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_LEFT))
-        assertEquals(PlayarrPlayerSurfaceAction.SeekForward, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_RIGHT))
+        // Arrows never seek from the surface: they only reveal (hidden) or restore focus.
+        assertEquals(PlayarrPlayerSurfaceAction.Reveal, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(PlayarrPlayerSurfaceAction.Reveal, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertEquals(PlayarrPlayerSurfaceAction.FocusBack, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_UP))
         assertEquals(PlayarrPlayerSurfaceAction.FocusSeek, playarrPlayerSurfaceAction(KeyEvent.KEYCODE_DPAD_DOWN))
         assertNull(playarrPlayerSurfaceAction(KeyEvent.KEYCODE_BACK))
@@ -32,7 +33,7 @@ class PlayarrPlayerInputTest {
     fun `coalesced target is clamped to the media bounds`() {
         assertEquals(0L, coalescedSeekTarget(2_000, null, -PLAYER_SEEK_STEP_MS, 60_000))
         assertEquals(60_000L, coalescedSeekTarget(58_000, null, PLAYER_SEEK_STEP_MS, 60_000))
-        assertEquals(63_000L, coalescedSeekTarget(58_000, null, PLAYER_SEEK_STEP_MS, 0))
+        assertEquals(58_000L + PLAYER_SEEK_STEP_MS, coalescedSeekTarget(58_000, null, PLAYER_SEEK_STEP_MS, 0))
         assertEquals(true, PLAYER_SEEK_COALESCE_MS in 400L..600L)
     }
 
@@ -120,5 +121,35 @@ class PlayarrPlayerInputTest {
     @Test
     fun `controls animation matches web 240ms`() {
         assertEquals(240, PLAYER_CONTROLS_ANIMATION_MS)
+    }
+
+    @Test
+    fun `scrubber step is ten seconds and accelerates while held`() {
+        assertEquals(10_000L, PLAYER_SEEK_STEP_MS)
+        assertEquals(10_000L, playarrSeekStepMs(0))
+        // The hold delay: first repeats do nothing, then 2 s and 5 s per repeat event.
+        assertEquals(0L, playarrSeekStepMs(1))
+        assertEquals(0L, playarrSeekStepMs(9))
+        assertEquals(2_000L, playarrSeekStepMs(10))
+        assertEquals(2_000L, playarrSeekStepMs(29))
+        assertEquals(5_000L, playarrSeekStepMs(30))
+    }
+
+    @Test
+    fun `controls auto-hide after five seconds`() {
+        assertEquals(5_000L, PLAYER_CONTROLS_TIMEOUT_MS)
+    }
+
+    @Test
+    fun `focus returns to the last control while it exists else play pause`() {
+        val tracker = PlayarrPlayerFocusTracker()
+        assertEquals(PLAYER_FOCUS_PLAY, tracker.restoreKey())
+        tracker.register("play"); tracker.register("quality"); tracker.register("seek")
+        tracker.last = "seek"
+        assertEquals("seek", tracker.restoreKey())
+        tracker.last = "quality"
+        assertEquals("quality", tracker.restoreKey())
+        tracker.unregister("quality")
+        assertEquals(PLAYER_FOCUS_PLAY, tracker.restoreKey())
     }
 }

@@ -4,8 +4,9 @@ import android.view.KeyEvent
 
 internal enum class PlayarrPlayerSurfaceAction {
     TogglePlayback,
-    SeekBackward,
-    SeekForward,
+
+    /** LEFT/RIGHT on the surface: never seeks. Reveals hidden controls, else returns focus to the last control. */
+    Reveal,
     FocusBack,
     FocusSeek,
 }
@@ -15,8 +16,9 @@ internal fun playarrPlayerSurfaceAction(keyCode: Int): PlayarrPlayerSurfaceActio
     KeyEvent.KEYCODE_ENTER,
     KeyEvent.KEYCODE_SPACE,
     -> PlayarrPlayerSurfaceAction.TogglePlayback
-    KeyEvent.KEYCODE_DPAD_LEFT -> PlayarrPlayerSurfaceAction.SeekBackward
-    KeyEvent.KEYCODE_DPAD_RIGHT -> PlayarrPlayerSurfaceAction.SeekForward
+    KeyEvent.KEYCODE_DPAD_LEFT,
+    KeyEvent.KEYCODE_DPAD_RIGHT,
+    -> PlayarrPlayerSurfaceAction.Reveal
     KeyEvent.KEYCODE_DPAD_UP -> PlayarrPlayerSurfaceAction.FocusBack
     KeyEvent.KEYCODE_DPAD_DOWN -> PlayarrPlayerSurfaceAction.FocusSeek
     else -> null
@@ -43,8 +45,33 @@ internal fun playarrQualityBitrateDetail(bps: Long?): String? {
 internal fun playarrQualityLabel(label: String, bps: Long?, includeBitrate: Boolean): String =
     if (includeBitrate) playarrQualityBitrateDetail(bps)?.let { "$label · $it" } ?: label else label
 
-/** D-pad LEFT/RIGHT step on the player surface. */
-internal const val PLAYER_SEEK_STEP_MS = 5_000L
+/** Scrubber LEFT/RIGHT step (web `SEEK_STEP`): 10 s per press. */
+internal const val PLAYER_SEEK_STEP_MS = 10_000L
+
+/** Controls hide after this long without input while playing. */
+internal const val PLAYER_CONTROLS_TIMEOUT_MS = 5_000L
+
+/**
+ * Seek step for one scrubber key event. A fresh press (repeatCount 0) steps 10 s; the first presses of a held key
+ * are ignored (hold delay), then the seek accelerates: 2 s per repeat event, and 5 s per event once held long.
+ */
+internal fun playarrSeekStepMs(repeatCount: Int): Long = when {
+    repeatCount <= 0 -> PLAYER_SEEK_STEP_MS
+    repeatCount < 10 -> 0L
+    repeatCount < 30 -> 2_000L
+    else -> 5_000L
+}
+
+/** Where focus goes when the controls reappear: the last focused control while it still exists, else play/pause. */
+internal const val PLAYER_FOCUS_PLAY = "play"
+
+internal class PlayarrPlayerFocusTracker {
+    var last: String = PLAYER_FOCUS_PLAY
+    private val keys = LinkedHashSet<String>()
+    fun register(key: String) { keys.add(key) }
+    fun unregister(key: String) { keys.remove(key) }
+    fun restoreKey(): String = if (last in keys) last else PLAYER_FOCUS_PLAY
+}
 
 /** Idle time after the last D-pad press before one seek is issued. */
 internal const val PLAYER_SEEK_COALESCE_MS = 500L

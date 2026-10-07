@@ -252,6 +252,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV player: D-pad arrows no longer seek while the controls are hidden (they only reveal them; only the dedicated media rewind and fast-forward keys seek). The scrubber steps 10 s per press, accelerates while the key is held and shows a target-time label. Revealing the controls puts focus on play/pause or the last focused control, and the scrubber's up and down neighbours are fixed (close button and play/pause). Controls auto-hide after 5 s. Minimise, close and play/pause show the white focus ring.
+- Android: pressing HOME or switching the screen off while a video plays pauses it and saves the position; coming back shows the controls with the video paused. Home refreshes its On deck row after a player exit.
 - Roku: rails, library grids and pages fade at the edges where content continues off-screen, the Home rail viewport shifts with focus like the web track, and header action buttons use the web filter tile look.
 - Roku: Home labels its first rail On deck like the web, the hero title uses the web size, and parity captures compare the device with the live web client on the same real account.
 - CI: the Fire TV client's typecheck and jest run on pull requests that touch the app or the shared code it imports (they never ran in CI before), and gate merges through `ci-required`.

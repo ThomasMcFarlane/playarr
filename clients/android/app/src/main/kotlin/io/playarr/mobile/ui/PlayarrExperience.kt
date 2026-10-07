@@ -798,6 +798,15 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         launchHome(silent = false)
     }
 
+    /** After a player exit: once the final progress write lands, re-read Home so On deck shows the new position. */
+    fun refreshHomeAfterPlayback(saved: Job?) {
+        viewModelScope.launch {
+            saved?.join()
+            refreshProgress()
+            refreshHome()
+        }
+    }
+
     /** Live-event / fallback refresh: rebuilds the rails in place, keeping the current ones until the new arrive. */
     fun refreshHome() {
         homeRefreshJob?.cancel()
@@ -1565,8 +1574,14 @@ internal fun PlayarrExperience(
         }
     }
 
+    // HOME / screen off while a video plays (full screen or mini player): pause and save progress. Returning
+    // restores it paused with the controls up. Not in Picture-in-Picture (the window keeps playing), music or casting.
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+        if (activePlaybackItem?.music == false && !PlayarrPictureInPicture.inPip.value) playerViewModel.pauseAndSaveForBackground()
+    }
+
     val closePlayback: () -> Unit = {
-        playerViewModel.stopPlayback()
+        viewModel.refreshHomeAfterPlayback(playerViewModel.stopPlayback())
         viewModel.clearPlayback()
         if (isPlayer) navController.popBackStack()
     }
@@ -2200,13 +2215,13 @@ private fun ExperienceNavHost(
                 onMovePlayback = viewModel::movePlayback,
                 onSelectPlayback = viewModel::selectPlayback,
                 onBack = {
-                    playerViewModel.stopPlayback()
+                    viewModel.refreshHomeAfterPlayback(playerViewModel.stopPlayback())
                     viewModel.clearPlayback()
                     navController.popBackStack()
                 },
                 onMinimise = navController::popBackStack,
                 onClosePictureInPicture = {
-                    playerViewModel.stopPlayback()
+                    viewModel.refreshHomeAfterPlayback(playerViewModel.stopPlayback())
                     viewModel.clearPlayback()
                     navController.popBackStack()
                 },
@@ -8174,13 +8189,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         if (shouldPlay) player.play()
     }
 
-    fun persistProgress(completed: Boolean = false, ensureCompletion: Boolean = false) {
-        val mediaFileId = activeMediaFileId ?: return
+    fun persistProgress(completed: Boolean = false, ensureCompletion: Boolean = false): Job? {
+        val mediaFileId = activeMediaFileId ?: return null
         val position = currentSourcePositionMs()
         val duration = currentSourceDurationMs()
-        if (duration <= 0L) return
+        if (duration <= 0L) return null
         val context = if (ensureCompletion) Dispatchers.IO + NonCancellable else Dispatchers.IO
-        viewModelScope.launch(context) {
+        return viewModelScope.launch(context) {
             // Buffers locally (see OfflineProgressRepository) rather than
             // silently dropping the update when this device has no
             // network right now -- the expected case while watching a
@@ -8198,19 +8213,28 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     /** True once this player has begun [mediaFileId] (a playback session exists), not merely still holds it. */
     fun hasActiveSessionFor(mediaFileId: String): Boolean = activeMediaFileId == mediaFileId && activeSessionId != null
 
-    fun stopPlayback() {
+    /** Leaving the app while a video plays (HOME, screen off): pause and save the position; not while in PiP. */
+    fun pauseAndSaveForBackground() {
+        if (castingMediaFileId.value != null) return
+        if (player.state.value.playWhenReady) player.pause()
+        persistProgress()
+    }
+
+    /** Stops playback; the returned job completes once the final progress write has finished (null when none). */
+    fun stopPlayback(): Job? {
         discardPrewarm()
         prepareJob?.cancel()
         switchJob?.cancel()
         prepareJob = null
         switchJob = null
-        persistProgress(ensureCompletion = true)
+        val saved = persistProgress(ensureCompletion = true)
         closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
         activeMediaFileId = null
         activeRequest = null
         activePlaybackUrl = ""
         automaticRecoveryUrl = null
+        return saved
     }
 
     fun togglePlayback() {
