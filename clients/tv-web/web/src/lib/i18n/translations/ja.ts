@@ -277,6 +277,8 @@ export const ja: Translations = {
   "lib.toast.dismiss": "{{message}}を閉じる",
 
   "pages.deviceLink.title": "テレビを連携",
+  "pages.deviceLink.openOnServer": "お使いのPlayarrサーバーはhttp://を使用しており、この安全なページからは接続できません。必要な対応は1つだけです。代わりにサーバー自身のページでコードを承認してください。",
+  "pages.deviceLink.openOnServerLink": "サーバーで開く",
   "pages.deviceLink.kicker": "テレビでサインイン",
   "pages.deviceLink.linkedHeading": "テレビが連携されました",
   "pages.deviceLink.linkedBody": "テレビの画面に戻ってください。Playarrが自動的にサインインを完了します。",

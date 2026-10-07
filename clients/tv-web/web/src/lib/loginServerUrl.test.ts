@@ -70,6 +70,18 @@ describe("initialLoginServerUrl", () => {
   });
 });
 
+describe("publicIpv4RelayUrl on a plain-http page", () => {
+  it("leaves the address as entered (the server-hosted /tv/ client)", () => {
+    expect(publicIpv4RelayUrl("http://11.22.33.44:8484", "http:")).toBe("http://11.22.33.44:8484");
+  });
+
+  it("still maps a public address to its secure name from an https page", () => {
+    expect(publicIpv4RelayUrl("http://11.22.33.44:8484", "https:")).toBe(
+      "https://v4-11-22-33-44.relay.playarr.app:8484"
+    );
+  });
+});
+
 describe("publicIpv4RelayUrl", () => {
   it.each([
     "11.22.33.44",

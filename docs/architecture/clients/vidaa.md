@@ -30,7 +30,18 @@ from `PLAYARR_TV_ASSETS_DIR`, default `web/tv/` beside the binary, shipped
 inside the image's and tarball's web directory). The page and the API then share
 one origin and scheme. The hosted sign-in shows a link to `http://<server>/tv/`
 whenever the page is HTTPS and the entered server is `http://`
-(`serverHostedEntryUrl`). Verified with the real server binary over plain
+(`serverHostedEntryUrl`). **TV pairing (QR) with an `http://` server:** when the TV
+asks the server directly for a device code, the server's default verification
+page is its own `/tv/link` when it serves the client (`device_verification_base_uri`;
+`PLAYARR_DEVICE_VERIFICATION_URI` still wins), so every native and web TV client that
+shows the server-supplied QR gets a page the phone can reach over `http://`. When the
+TV does not know a server yet it shows the hosted `https://playarr.app/link` QR; the
+phone's hosted page then hands off to `http://<server>/tv/link?user_code=...`, which
+calls the hosted `/api/link/session` and `/api/link/authorize` cross-origin (CORS
+now open on them; the one-time user code is the secret) and reports the approval
+back. The server-hosted client also uses an entered public IPv4 address as typed
+instead of the relay name (`publicIpv4RelayUrl` returns it unchanged on an `http:`
+page). Verified with the real server binary over plain
 `http://` in headless Chromium; not verified on a VIDAA television.
 
 An experimental fixed-purpose gateway under `infra/vidaa-gateway/` can give an

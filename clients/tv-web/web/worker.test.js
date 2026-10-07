@@ -391,16 +391,39 @@ describe("hosted device linking", () => {
     );
   });
 
-  it("keeps phone-side inspection and authorisation same-origin", async () => {
+  it("lets a server-hosted page (plain http) inspect and authorise a link", async () => {
     const env = environment();
     const preflight = await worker.fetch(
       new Request("https://playarr.app/api/link/authorize", {
         method: "OPTIONS",
-        headers: { Origin: "https://malicious.example" },
+        headers: {
+          Origin: "http://192.0.2.10:8484",
+          "Access-Control-Request-Headers": "content-type",
+          "Access-Control-Request-Method": "POST",
+        },
       }),
       env
     );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe("*");
 
+    const inspection = await worker.fetch(
+      new Request("https://playarr.app/api/link/session?user_code=ABCD-2345", {
+        headers: { Origin: "http://192.0.2.10:8484" },
+      }),
+      env
+    );
+    expect(inspection.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+
+  it("still answers 404 for unknown link paths without CORS", async () => {
+    const preflight = await worker.fetch(
+      new Request("https://playarr.app/api/link/other", {
+        method: "OPTIONS",
+        headers: { Origin: "https://malicious.example" },
+      }),
+      environment()
+    );
     expect(preflight.status).toBe(404);
     expect(preflight.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
@@ -428,7 +451,7 @@ describe("hosted device linking", () => {
       await expect(inspection.json()).resolves.toMatchObject({
         client_platform: clientPlatform,
       });
-      expect(inspection.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      expect(inspection.headers.get("Access-Control-Allow-Origin")).toBe("*");
     }
   );
 

@@ -8,6 +8,8 @@ import {
   useAuth,
   usePrimaryApiClient,
 } from "../lib/ApiClientProvider";
+import { PLAYARR_CLIENT_PLATFORM } from "../lib/clientPlatform";
+import { serverHostedEntryUrl } from "../lib/serverHostedEntry";
 import { isCompleteDeviceCode, normaliseDeviceCode } from "../lib/deviceCode";
 import { authoriseHostedLink, inspectHostedLink } from "../lib/hostedDeviceLink";
 import { createLocalNetworkFetch } from "../lib/localNetworkFetch";
@@ -37,6 +39,15 @@ export function DeviceLinkPage() {
   const [submitting, setSubmitting] = useState(false);
   const [linked, setLinked] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // This (https) page cannot call an http:// server: approve on the server's own /tv/link page instead,
+  // which is same-origin with the server and reports the approval back to playarr.app.
+  const serverHostedLinkUrl = serverHostedEntryUrl(
+    apiBaseUrl,
+    window.location.protocol,
+    PLAYARR_CLIENT_PLATFORM,
+    `link?user_code=${encodeURIComponent(normaliseDeviceCode(userCode))}`
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -138,6 +149,12 @@ export function DeviceLinkPage() {
             onChange={(event) => setUserCode(normaliseDeviceCode(event.target.value))}
             placeholder={t("pages.deviceLink.codePlaceholder")}
           />
+          {serverHostedLinkUrl ? (
+            <p className="hint auth-server-hint" role="status">
+              {t("pages.deviceLink.openOnServer")}{" "}
+              <a href={serverHostedLinkUrl}>{t("pages.deviceLink.openOnServerLink")}</a>
+            </p>
+          ) : null}
           {error && <p className="error-text auth-error">{error}</p>}
           <Button
             type="submit" variant="primary" className="auth-submit"

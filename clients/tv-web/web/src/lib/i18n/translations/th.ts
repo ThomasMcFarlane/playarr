@@ -278,6 +278,8 @@ export const th: Translations = {
   "lib.toast.dismiss": "ปิด {{message}}",
 
   "pages.deviceLink.title": "เชื่อมโยงทีวี",
+  "pages.deviceLink.openOnServer": "เซิร์ฟเวอร์ Playarr ของคุณใช้ http:// ซึ่งหน้าที่ปลอดภัยนี้เข้าถึงไม่ได้ ขั้นตอนเดียว: อนุมัติรหัสที่หน้าของเซิร์ฟเวอร์ของคุณแทน",
+  "pages.deviceLink.openOnServerLink": "เปิดบนเซิร์ฟเวอร์ของคุณ",
   "pages.deviceLink.kicker": "เข้าสู่ระบบทีวี",
   "pages.deviceLink.linkedHeading": "เชื่อมโยงทีวีแล้ว",
   "pages.deviceLink.linkedBody": "กลับไปที่ทีวีของคุณ Playarr จะเข้าสู่ระบบให้เสร็จสมบูรณ์โดยอัตโนมัติ",

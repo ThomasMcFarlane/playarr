@@ -28,10 +28,16 @@ chose, so nothing is mixed. This is the route for a plain `http://` server.
 1. Open the **Browser** application on the TV.
 2. Enter `http://<your-server>:<port>/tv/?platform=tv-vidaa` (use `https://` if
    your server has a certificate).
-3. Save it as a Browser favourite, then choose **Sign in manually** on the
-   sign-in screen and sign in. (The QR sign-in goes through `playarr.app`, which
-   cannot reach an `http://` server from the phone's browser either; manual
-   sign-in on the TV works.)
+3. Save it as a Browser favourite and sign in. The TV shows a QR code and a
+   short code: the QR points at the server's own `http://<your-server>/tv/link`
+   page, so the phone approves it over the same scheme (no mixed content). You
+   can also choose **Sign in manually** on the TV.
+
+If you start from the hosted TV page instead (QR to `https://playarr.app/link`)
+and your server is `http://`, the phone's page shows **Open on your server** with
+the code carried over (`http://<server>/tv/link?user_code=...`): approve there,
+and the result is reported back to the TV through `playarr.app` (the link
+endpoints allow cross-origin calls for exactly this).
 
 If you open `https://playarr.app` and enter an `http://` server address, the
 sign-in page now shows an **Open Playarr from your server instead** link to

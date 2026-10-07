@@ -52,6 +52,13 @@ if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobil
 if 'serverIsHttps' in read('clients/android/app/src/main/kotlin/io/playarr/mobile/ui/PlayarrExperience.kt'):
     errors.append('Android cast button must be offered for http:// servers')
 
+# TV QR pairing with an http:// server: the server's default verification page is its own /tv/link,
+# and the hosted /link page hands off to it.
+if '"/tv/link"' not in read('backend/src/main.rs'):
+    errors.append('server must default the device verification page to its own /tv/link when it serves the client')
+if 'serverHostedEntryUrl' not in read('clients/tv-web/web/src/pages/DeviceLink.tsx'):
+    errors.append('hosted /link page must offer the server-hosted /tv/link hand-off for http:// servers')
+
 if errors:
     print('\n'.join(errors)); sys.exit(1)
 print('cleartext policy ok')

@@ -258,6 +258,8 @@ export const en = {
   "pages.deviceLink.linkedHeading": "TV linked",
   "pages.deviceLink.linking": "Linking…",
   "pages.deviceLink.title": "Link a TV",
+  "pages.deviceLink.openOnServer": "Your Playarr Server uses http://, which this secure page cannot reach. One step: approve the code on your server's own page instead.",
+  "pages.deviceLink.openOnServerLink": "Open on your server",
   "pages.downloads.activeHeading": "Active",
   "pages.downloads.backToHome": "Back to Home",
   "pages.downloads.bytesOfTotal": "{{downloaded}} of {{total}}",

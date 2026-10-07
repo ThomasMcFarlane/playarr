@@ -5,10 +5,18 @@ import {
   inspectHostedLink,
   pollHostedDeviceLink,
   requestHostedDeviceLink,
+  hostedLinkApiBase,
   shouldUseHostedDeviceLink,
 } from "./hostedDeviceLink";
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("hostedLinkApiBase", () => {
+  it("is same-origin on playarr.app and absolute from the server-hosted client", () => {
+    expect(hostedLinkApiBase("production")).toBe("");
+    expect(hostedLinkApiBase("server")).toBe("https://playarr.app");
+  });
+});
 
 describe("hosted device linking", () => {
   it("keeps an operator-configured packaged TV on direct server linking", () => {

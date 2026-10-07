@@ -967,6 +967,23 @@ fn tv_assets_dir_from_env() -> Option<std::path::PathBuf> {
     candidate.join("index.html").is_file().then_some(candidate)
 }
 
+/// The page a TV's QR code / on-screen address points the approving phone at.
+/// `PLAYARR_DEVICE_VERIFICATION_URI` wins. Otherwise, when the server serves the
+/// web client itself (`/tv/`), the approval page is that server's own `/tv/link`,
+/// which is same-origin with the server and so works over plain `http://` (an
+/// https page cannot call an http server). Without the bundled client it stays
+/// `/link` as before.
+fn device_verification_base_uri(configured: Option<String>, tv_client_mounted: bool) -> String {
+    configured.unwrap_or_else(|| {
+        if tv_client_mounted {
+            "/tv/link"
+        } else {
+            "/link"
+        }
+        .to_string()
+    })
+}
+
 /// Resolves the operator's configured login trust tier
 /// (`PLAYARR_AUTH_MODE` -- `full-account` (the default as of this pass)
 /// or `trusted-network`, opt-in only) for `POST /api/v1/auth/login`.
@@ -1655,8 +1672,10 @@ async fn boot_api(
         DeviceFlowConfig {
             code_ttl: chrono::Duration::minutes(5),
             polling_interval: chrono::Duration::seconds(5),
-            verification_base_uri: std::env::var("PLAYARR_DEVICE_VERIFICATION_URI")
-                .unwrap_or_else(|_| "/link".to_string()),
+            verification_base_uri: device_verification_base_uri(
+                std::env::var("PLAYARR_DEVICE_VERIFICATION_URI").ok(),
+                tv_assets_dir_from_env().is_some(),
+            ),
             refresh_ttl: chrono::Duration::days(30),
         },
     ));
@@ -3348,6 +3367,16 @@ mod bootstrap_tests {
     use playarr_db::repo::{SqlxPolicyRepo, SqlxUserRepo};
     use playarr_db::{DbPool, PolicyRepo, UserRepo};
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn device_verification_uri_points_at_the_servers_own_link_page_when_it_serves_the_client() {
+        assert_eq!(device_verification_base_uri(None, true), "/tv/link");
+        assert_eq!(device_verification_base_uri(None, false), "/link");
+        assert_eq!(
+            device_verification_base_uri(Some("https://example.test/link".into()), true),
+            "https://example.test/link"
+        );
+    }
 
     #[test]
     fn transcode_resource_settings_require_positive_integers() {

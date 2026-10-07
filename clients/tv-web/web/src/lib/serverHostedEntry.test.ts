@@ -19,6 +19,15 @@ describe("serverHostedEntryUrl", () => {
     );
   });
 
+  it("can target the link page and keeps the TV's user code", () => {
+    expect(serverHostedEntryUrl("http://192.0.2.10:8484", "https:", "web", "link?user_code=ABCD-2345")).toBe(
+      "http://192.0.2.10:8484/tv/link?user_code=ABCD-2345"
+    );
+    expect(serverHostedEntryUrl("http://192.0.2.10:8484", "https:", "tv-vidaa", "/link?user_code=ABCD-2345")).toBe(
+      "http://192.0.2.10:8484/tv/link?user_code=ABCD-2345&platform=tv-vidaa"
+    );
+  });
+
   it("is null when there is no mixed content", () => {
     expect(serverHostedEntryUrl("https://server.example", "https:", "tv-vidaa")).toBeNull();
     expect(serverHostedEntryUrl("http://192.0.2.10:8484", "http:", "tv-vidaa")).toBeNull();

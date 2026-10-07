@@ -15,7 +15,9 @@ export const SERVER_HOSTED_PATH = "/tv/";
 export function serverHostedEntryUrl(
   serverUrl: string,
   pageProtocol: string,
-  platform: string
+  platform: string,
+  /** Optional page under /tv/ with its query, e.g. `link?user_code=ABCD-2345`. */
+  page = ""
 ): string | null {
   if (pageProtocol !== "https:") return null;
   const input = serverUrl.trim();
@@ -24,8 +26,11 @@ export function serverHostedEntryUrl(
   try {
     const url = new URL(candidate);
     if (url.protocol !== "http:") return null;
-    const query = platform === "tv-vidaa" ? "?platform=tv-vidaa" : "";
-    return `http://${url.host}${SERVER_HOSTED_PATH}${query}`;
+    const [pagePath, pageQuery = ""] = page.replace(/^\//, "").split("?");
+    const params = new URLSearchParams(pageQuery);
+    if (platform === "tv-vidaa") params.set("platform", "tv-vidaa");
+    const query = params.toString();
+    return `http://${url.host}${SERVER_HOSTED_PATH}${pagePath}${query ? `?${query}` : ""}`;
   } catch {
     return null;
   }

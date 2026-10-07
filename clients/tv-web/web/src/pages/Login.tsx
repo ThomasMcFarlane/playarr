@@ -60,7 +60,15 @@ export function LoginPage() {
 
   // An HTTPS page cannot reach an http:// server; the server serves this same
   // client at /tv/ over http, so offer that one-step route (never a dead end).
-  const serverHostedUrl = serverHostedEntryUrl(serverUrl, window.location.protocol, PLAYARR_CLIENT_PLATFORM);
+  // A sign-in that interrupted a TV link approval (`/link?user_code=...`) must carry the code over.
+  const resumePath = loginDestinationPath(state?.from);
+  const linkPage = resumePath?.startsWith("/link?") ? resumePath : "";
+  const serverHostedUrl = serverHostedEntryUrl(
+    serverUrl,
+    window.location.protocol,
+    PLAYARR_CLIENT_PLATFORM,
+    linkPage
+  );
 
   function finishLogin() {
     const destination = state?.from ?? "/";
