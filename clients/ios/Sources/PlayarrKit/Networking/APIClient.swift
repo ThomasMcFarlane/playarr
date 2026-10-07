@@ -186,6 +186,8 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     func fetchHouseholdStatus() async throws -> HouseholdStatus?
     /// `GET /api/v1/users/me/profile-avatar`: the server-backed avatar preset id (`nil` when none is set).
     func fetchProfileAvatarPreset() async throws -> String?
+    /// `GET /api/v1/catalog/{id}/resume-plan`: the episode a Start/Resume press plays (`nil` when none).
+    func fetchSeriesResumeTarget(seriesID: UUID) async throws -> SeriesResumeTarget?
     /// `GET /api/v1/watchlist`.
     func listWatchlistItems() async throws -> [WatchlistItem]
     /// `GET /api/v1/requests?mine=true`.
@@ -446,6 +448,11 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
 
     public func fetchHouseholdStatus() async throws -> HouseholdStatus? {
         try await get("/api/v1/household/status")
+    }
+
+    public func fetchSeriesResumeTarget(seriesID: UUID) async throws -> SeriesResumeTarget? {
+        let plan: SeriesResumePlan = try await get("/api/v1/catalog/\(seriesID.uuidString)/resume-plan")
+        return plan.target
     }
 
     public func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? {
@@ -1158,9 +1165,27 @@ public extension PlayarrAPIClient {
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
     func fetchHouseholdStatus() async throws -> HouseholdStatus? { nil }
     func fetchProfileAvatarPreset() async throws -> String? { nil }
+    func fetchSeriesResumeTarget(seriesID: UUID) async throws -> SeriesResumeTarget? { nil }
     func listWatchlistItems() async throws -> [WatchlistItem] { [] }
     func listMyRequests() async throws -> [RequestSummary] { [] }
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data { Data() }
+}
+
+/// The episode a series' resume plan points at (`ResumePlan.target`): what the page's Start/Resume button plays.
+public struct SeriesResumeTarget: Decodable, Sendable, Hashable {
+    public var episodeID: UUID
+    public var mediaFileID: UUID?
+    public var seasonNumber: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case episodeID = "episode_id"
+        case mediaFileID = "media_file_id"
+        case seasonNumber = "season_number"
+    }
+}
+
+struct SeriesResumePlan: Decodable, Sendable {
+    var target: SeriesResumeTarget?
 }
 
 /// The signed-in profile's household state (`allowed`, `outside_schedule`, `budget_exhausted`, ...).

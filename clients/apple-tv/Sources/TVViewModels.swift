@@ -134,6 +134,8 @@ final class TVWorkDetailViewModel {
     private(set) var similar: [Work] = []
     /// How long a series usually takes to appear after release.
     private(set) var availabilityLag: AvailabilityLag?
+    /// The episode the series' resume plan points at (the page opens focused on it).
+    private(set) var resumeTarget: SeriesResumeTarget?
     private let workID: UUID
     private let seedWork: Work?
     private let apiClient: PlayarrAPIClient
@@ -175,6 +177,7 @@ final class TVWorkDetailViewModel {
             similar = (try? await apiClient.fetchSimilarWorks(id: workID, limit: 12)) ?? []
             if loaded.work.kind == .series {
                 availabilityLag = (try? await apiClient.fetchAvailabilityLag(id: workID)) ?? nil
+                resumeTarget = (try? await apiClient.fetchSeriesResumeTarget(seriesID: workID)) ?? nil
             }
         } catch let error as APIError {
             state = .failed(error.displayMessage)

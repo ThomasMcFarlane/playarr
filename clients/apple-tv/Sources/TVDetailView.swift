@@ -480,36 +480,61 @@ struct TVWorkDetailView: View {
 
     // MARK: Right rail: series
 
+    /// The episode the series page opens on: the one the server's resume plan points at (the same plan as the
+    /// Start/Resume button), else the first playable episode, else the first episode (web `nextUpSelection`).
+    private func nextUpEpisodeID(_ ordered: [SeasonDetail]) -> UUID? {
+        let playable = ordered.flatMap { $0.episodes.filter { $0.mediaFileID != nil } }
+        if let target = viewModel.resumeTarget {
+            let match = playable.first { $0.episode.id == target.episodeID }
+                ?? playable.first { target.mediaFileID != nil && $0.mediaFileID == target.mediaFileID }
+            if let match { return match.episode.id }
+        }
+        return (playable.first ?? ordered.first?.episodes.first)?.episode.id
+    }
+
     private func seriesRail(_ detail: WorkDetail, seasons: [SeasonDetail]) -> some View {
         let ordered = seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+        let nextUp = nextUpEpisodeID(ordered)
+        // The focused episode (the next-up one until focus moves) decides which season is scrolled into view.
+        let activeID = frozen ? nextUp : (focusedEpisodeID ?? nextUp)
+        let activeSeason = ordered.firstIndex { season in season.episodes.contains { $0.episode.id == activeID } } ?? 0
+        let shift = max(0, 410 + CGFloat(activeSeason) * 314.3 + 270 - 1020)
         return ZStack(alignment: .topLeading) {
             TVRailPanelGradient(width: 1190.4)
-            ForEach(Array(ordered.enumerated()), id: \.element.season.id) { seasonIndex, season in
-                let top = 410 + CGFloat(seasonIndex) * 314.3
-                railHeading(
-                    season.season.title ?? "Season \(season.season.seasonNumber)",
-                    count: "\(season.episodes.count) episodes",
-                    y: top
-                )
-                Button { showDownloadNote = true } label: {
-                    Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                        .frame(width: 18.7, height: 24.2)
-                }
-                .buttonStyle(TVFocusableCardButtonStyle())
-                .accessibilityLabel("Download \(season.season.title ?? "Season \(season.season.seasonNumber)")")
-                .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
-                ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
-                    let selected = seasonIndex == 0 && index == 0
-                    episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)
-                        .scaleEffect(selected ? 1.025 : 1)
-                        .offset(y: selected ? -7.05 : 0)
-                        .placed(x: 881.6 + CGFloat(index) * 293, y: top + 80.7, w: 268, h: 190, alignment: .topLeading)
+            Group {
+                ForEach(Array(ordered.enumerated()), id: \.element.season.id) { seasonIndex, season in
+                    let top = 410 + CGFloat(seasonIndex) * 314.3
+                    railHeading(
+                        season.season.title ?? "Season \(season.season.seasonNumber)",
+                        count: "\(season.episodes.count) episodes",
+                        y: top
+                    )
+                    Button { showDownloadNote = true } label: {
+                        Image(systemName: "arrow.down.to.line")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                            .frame(width: 18.7, height: 24.2)
+                    }
+                    .buttonStyle(TVFocusableCardButtonStyle())
+                    .accessibilityLabel("Download \(season.season.title ?? "Season \(season.season.seasonNumber)")")
+                    .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
+                    ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
+                        let selected = episode.episode.id == activeID
+                        episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)
+                            .scaleEffect(selected ? 1.025 : 1)
+                            .offset(y: selected ? -7.05 : 0)
+                            .placed(x: 881.6 + CGFloat(index) * 293, y: top + 80.7, w: 268, h: 190, alignment: .topLeading)
+                    }
                 }
             }
+            .offset(y: -shift)
+            .animation(.easeOut(duration: 0.25), value: shift)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .task(id: nextUp) {
+            // Opening the page puts focus on the next item to play; going back keeps the last focus.
+            if !frozen, focusedEpisodeID == nil { focusedEpisodeID = nextUp }
+        }
     }
 
     @ViewBuilder
@@ -527,6 +552,9 @@ struct TVWorkDetailView: View {
             episodeArt(width: 268, height: 150.8, heavy: selected) {
                 TVWorkArt(work: detail.work, apiClient: apiClient)
             }
+            // The art grows to 1.025 over 240 ms (ease) when focused.
+            .scaleEffect(selected ? 1.025 : 1)
+            .animation(.easeInOut(duration: 0.24), value: selected)
             .overlay(alignment: .bottomTrailing) {
                 Text(String(format: "%02d", ep.episodeNumber))
                     .font(TVTheme.font(size: 19.2, weight: .semibold))
@@ -555,6 +583,10 @@ struct TVWorkDetailView: View {
                 .placed(x: 49.3, y: 155, w: 218.7, h: 17.3)
         }
         .frame(width: 268, height: 190, alignment: .topLeading)
+        // Media cards show focus as a soft shadow plus a lift, never a ring or fill (owner ruling). Pinned web values
+        // (page-layout spec, section 5 item 1a): the card rises 7 px over 260 ms, cubic-bezier(0.2, 0.8, 0.2, 1).
+        .offset(y: selected ? -7 : 0)
+        .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.26), value: selected)
         if let mediaFileID = episode.mediaFileID, !frozen {
             NavigationLink {
                 TVPlayerView(
