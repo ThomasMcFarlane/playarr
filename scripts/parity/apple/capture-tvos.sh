@@ -6,6 +6,8 @@ set -euo pipefail
 udid="$1"; bundle="$2"; screens="$3"; server="$4"; token="$5"; out="$6"
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$out"
+# The app freezes its clock at the fixture clock (scripts/fixtures/catalog.mjs), like the web capture.
+fixture_clock="$(node "$here/fixture-clock.mjs")"
 user_token() {
   node --input-type=module -e '
     import(process.argv[1]).then(async (m) => {
@@ -24,6 +26,7 @@ node -e '
   echo "token subject: $(echo "$tok" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | sed -E 's/.*"sub":"([^"]*)".*/\1/' | head -c 40)"
   xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl launch "$udid" "$bundle" \
+    -PlayarrParityNow "$fixture_clock" \
     -PlayarrServerURL "$server" -PlayarrAccessToken "$tok" -PlayarrParityRoute "$route" -PlayarrTheme "${PARITY_THEME:-dark}" >/dev/null
   # The player starts the real stream and pauses it at 2.0 s: give it longer.
   if [[ "$route" == player:* ]]; then sleep 14; else sleep "${PARITY_SETTLE_SECONDS:-10}"; fi

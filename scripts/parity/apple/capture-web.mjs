@@ -10,7 +10,10 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [screensFile, base, outDir] = process.argv.slice(2);
 const cfg = JSON.parse(fs.readFileSync(screensFile, "utf8"));
-const { FIXTURE_PASSWORD: password } = await import(path.join(here, "../../fixtures/catalog.mjs"));
+const catalog = await import(path.join(here, "../../fixtures/catalog.mjs"));
+const { FIXTURE_PASSWORD: password } = catalog;
+// The frozen clock is the fixture clock when the catalog exports it (screens file value otherwise).
+const FROZEN_TIME = catalog.FIXTURE_CLOCK instanceof Date ? catalog.FIXTURE_CLOCK.toISOString() : (catalog.FIXTURE_CLOCK || cfg.frozenTime);
 fs.mkdirSync(outDir, { recursive: true });
 
 const THEME = process.env.PARITY_THEME === "light" ? "light" : "dark";
@@ -62,7 +65,7 @@ async function contextFor(user) {
       localStorage.setItem("playarr-theme", theme);
     } catch { /* storage unavailable */ }
   }, { base, tok: t, deviceId, user, theme: THEME });
-  await context.clock.setFixedTime(new Date(cfg.frozenTime));
+  await context.clock.setFixedTime(new Date(FROZEN_TIME));
   return context;
 }
 
