@@ -8513,15 +8513,11 @@ private fun ExperiencePlayerScreen(
         }
     }
     // Video minimises to Picture-in-Picture; Back closes the player (progress recorded).
-    BackHandler(enabled = localVideoShown && !inPip) { onBack() }
+    BackHandler(enabled = (localVideoShown || state is ExperienceLoad.Loading) && !inPip) { onBack() }
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
         when (val current = state) {
-            ExperienceLoad.Loading -> PlayarrPlayerStatus(
-                loading = true,
-                kicker = playarrString(PlayarrString.PlayerOneMoment),
-                title = playarrString(PlayarrString.PlayerPreparingPlayback),
-                message = playarrString(PlayarrString.PlayerPreparingMessage),
-            )
+            // Play opens the player straight away: a black stage with only the standard buffering spinner.
+            ExperienceLoad.Loading -> CircularProgressIndicator(color = Color.White, modifier = Modifier.size(38.dp))
             is ExperienceLoad.Failed -> PlayarrPlayerStatus(
                 loading = false,
                 kicker = playarrString(PlayarrString.PlayerPlaybackUnavailable),
@@ -8614,6 +8610,9 @@ private fun ExperiencePlayerScreen(
                 },
             )
             if (showPlayOnDevice) PlayOnDeviceDialog(onDismiss = { showPlayOnDevice = false })
+        } else if (state is ExperienceLoad.Loading) {
+            // The normal chrome's close control (top right) is available while the session is negotiated.
+            PlayarrPlayerLoadingClose(isTelevision = isTelevision, onClose = onBack)
         } else {
             PlayarrIconButton(
                 onClick = onBack,

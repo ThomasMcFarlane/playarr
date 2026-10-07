@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Every page's Filters button and the Calendar's Filters and Calendar link buttons are one tile again, the look the library Filters launcher had on web on 30 September (owner ruling): a 14 px-radius tile with the glyph above a small bold label (icon only, 44 px, on phones), in the header action slot. Web's header pill from the shared page shell (4 October) is gone, and the header row centres on the taller tile. Focus draws the ring (white in dark, ink in light) with the 1.06 scale and never a fill; the open state keeps the ink fill. Android TV and phone, tvOS and iOS draw the same tile.
+- Android TV: the earlier calendar restyle (#154) had rebuilt the shared header button for every page and dropped its focus state; it is the tile above now.
+- The post-merge web deploy no longer fails at "Test web client": the web vitest config resolves `@playarr-tv/spatial-nav` from source, so tests run in a clean checkout without a build. Pull-request CI now runs the same web test command as the deploy, and the deploy job timeout is 30 minutes.
+- The web client now deploys after every merge to main, including merges landed by the merge train without a push event (CI started with `workflow_dispatch`); previously every post-merge deploy was skipped. The docs deploy gains the same dispatch trigger.
 - Web TV: the series detail page now shows the shared focus ring on every focused control and tile (play/resume, watchlist, playlist, season download, episodes, cast and similar titles), and opens focused on the next item to play (the episode the Play button resumes, in its season, scrolled into view) instead of the first episode. Returning to the page restores the last focus.
 - Fire TV client: poster and backdrop artwork now loads on a real device (the artwork URL had a double slash after the server address, which the server answered with 404, so every image stayed a grey box).
 - Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.
@@ -225,6 +229,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android: Play opens the player directly (black stage, close control, buffering spinner) instead of a full-screen "Preparing playback" page; the unused strings and translations are removed.
+- Android player: BACK closes the open panel first (returning focus to its opener), then the controls overlay, and only then exits.
+- Android TV player: the focused scrubber shows the web white ring with an enlarged thumb, SELECT toggles play/pause only, and focus no longer leaves the scrubber after a seek.
+- Android player: the controls scrim rises from the bottom edge and recedes downward (240 ms ease, as on web).
+- The single release workflow now also deploys playarr.app from the release commit after the GitHub Release is created. A failed web deploy fails the release, and the run summary reports the deployed version and commit.
 - Web and the legacy TV container: pressing Play opens the player at once (black stage, normal chrome, buffering spinner) instead of a full-screen "Preparing playback" page; errors still show inside the player.
 - Web player: BACK or Escape hides open controls first and a second press exits; menus and panels still close first. SELECT on the focused scrubber toggles play/pause without seeking, the scrubber shows the white focus ring with an enlarged thumb, and it keeps focus while a seek buffers. The controls scrim now rises from the bottom edge and recedes downward.
 - Fire TV client: the hosted-link broker origin (`PLAYARR_HOSTED_LINK_ORIGIN`) and a frozen app clock for parity captures (`PLAYARR_PARITY_CLOCK`) are build-time settings, so on-device captures need no source patch; the production defaults are unchanged.
@@ -2356,6 +2365,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Tests pin the Calendar's header buttons and every page's Filters button to one component per client: a web style rule check, an Android metrics and call-site test, and source guards for iOS and tvOS.
 - CI: the web layout guards (page header registry, button audit, drawer audit) now run on every pull request that touches `clients/tv-web`, through a new `lint` script in the web package, and `tv-web-check` also runs the affected packages' vitest suites. Both feed `ci-required`. The Household registry reason now matches the page.
 - Added `clients/tv-web/web/scripts/player-entry-e2e.mjs` (Playwright against the fixture server, TV and phone layouts) and unit tests for direct player mounting and the BACK sequence.
 - Web TV: unit tests for the next-up selection and source tests for the detail-page focus ring; the series-detail TV parity references were recaptured for the focus ring on the first tile.

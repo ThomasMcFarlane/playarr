@@ -1,1 +1,0 @@
-- The post-merge web deploy no longer fails at "Test web client": the web vitest config resolves `@playarr-tv/spatial-nav` from source, so tests run in a clean checkout without a build. Pull-request CI now runs the same web test command as the deploy, and the deploy job timeout is 30 minutes.

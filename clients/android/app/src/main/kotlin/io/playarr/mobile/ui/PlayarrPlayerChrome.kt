@@ -4,12 +4,20 @@ import io.playarr.shared.designsystem.component.PlayarrButton
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import io.playarr.shared.designsystem.component.PlayarrIconButton
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +59,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,8 +97,38 @@ import kotlinx.coroutines.delay
 
 private const val PLAYER_CONTROLS_TIMEOUT_MS = 3_500L
 
+/** CSS `ease`, as used by web's `.player-scrim` and `.player-controls` transitions. */
+private val PlayerEaseEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+private val PlayerScrimEnter = slideInVertically(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing)) { it } +
+    fadeIn(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing))
+private val PlayerScrimExit = slideOutVertically(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing)) { it } +
+    fadeOut(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing))
+internal val PlayerChromeFadeEnter = fadeIn(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing))
+internal val PlayerChromeFadeExit = fadeOut(tween(PLAYER_CONTROLS_ANIMATION_MS, easing = PlayerEaseEasing))
+
+/**
+ * The bottom scrim behind the controls. It rises from the bottom edge and recedes downward (web: translateY + opacity,
+ * 240ms ease); it never grows from the middle. Any top gradient fades separately.
+ */
+@Composable
+internal fun BoxScope.PlayarrPlayerScrim(visible: Boolean, fraction: Float = 0.48f) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = PlayerScrimEnter,
+        exit = PlayerScrimExit,
+        modifier = Modifier.align(Alignment.BottomCenter),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(fraction)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f)))),
+        )
+    }
+}
+
 internal enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
-private enum class PlayarrPlayerFocusTarget { Back, Seek }
+private enum class PlayarrPlayerFocusTarget { Back, Seek, Playlist, Quality }
 private enum class PlayarrCastDialogKind { Picker, Connected }
 
 /**
@@ -158,6 +197,8 @@ internal fun PlayarrPlayerChrome(
     val backFocusRequester = remember { FocusRequester() }
     val seekFocusRequester = remember { FocusRequester() }
     val interactionSource = remember { MutableInteractionSource() }
+    val playlistFocusRequester = remember { FocusRequester() }
+    val qualityFocusRequester = remember { FocusRequester() }
 
     fun showControls() {
         visible = true
@@ -172,6 +213,30 @@ internal fun PlayarrPlayerChrome(
     }
 
     LaunchedEffect(Unit) { surfaceFocusRequester.requestFocus() }
+
+    // BACK: an open panel closes first and focus returns to its opener, then the controls overlay, then the
+    // next BACK exits (the host's BackHandler). Dialog-based panels (options, health, cast) consume BACK themselves.
+    val qualityPopoverOpen = isTelevision && openMenu == PlayarrPlayerMenu.Quality
+    val backAction = playarrPlayerBackAction(playlistOpen, qualityPopoverOpen || (!isTelevision && openMenu != null), visible)
+    BackHandler(enabled = backAction != PlayarrPlayerBackAction.Exit) {
+        when (backAction) {
+            PlayarrPlayerBackAction.ClosePlaylist -> {
+                playlistOpen = false
+                showControls()
+                pendingFocusTarget = PlayarrPlayerFocusTarget.Playlist
+            }
+            PlayarrPlayerBackAction.CloseMenu -> {
+                openMenu = null
+                showControls()
+                pendingFocusTarget = if (isTelevision) PlayarrPlayerFocusTarget.Quality else null
+            }
+            PlayarrPlayerBackAction.HideControls -> {
+                visible = false
+                surfaceFocusRequester.requestFocus()
+            }
+            PlayarrPlayerBackAction.Exit -> Unit
+        }
+    }
     LaunchedEffect(visible, pendingFocusTarget) {
         val target = pendingFocusTarget ?: return@LaunchedEffect
         if (!visible) return@LaunchedEffect
@@ -179,6 +244,8 @@ internal fun PlayarrPlayerChrome(
         when (target) {
             PlayarrPlayerFocusTarget.Back -> backFocusRequester.requestFocus()
             PlayarrPlayerFocusTarget.Seek -> seekFocusRequester.requestFocus()
+            PlayarrPlayerFocusTarget.Playlist -> runCatching { playlistFocusRequester.requestFocus() }
+            PlayarrPlayerFocusTarget.Quality -> runCatching { qualityFocusRequester.requestFocus() }
         }
         pendingFocusTarget = null
     }
@@ -276,7 +343,7 @@ internal fun PlayarrPlayerChrome(
                 onActivity = { showControls() },
             )
         } else {
-        AnimatedVisibility(visible = visible && !isTelevision, modifier = Modifier.align(Alignment.TopStart)) {
+        AnimatedVisibility(visible = visible && !isTelevision, enter = PlayerChromeFadeEnter, exit = PlayerChromeFadeExit, modifier = Modifier.align(Alignment.TopStart)) {
             Row(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -328,7 +395,7 @@ internal fun PlayarrPlayerChrome(
             }
         }
 
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
+        AnimatedVisibility(visible = visible, enter = PlayerChromeFadeEnter, exit = PlayerChromeFadeExit, modifier = Modifier.align(Alignment.TopEnd)) {
             Row(
                 modifier = (if (isTelevision) Modifier.padding(top = 37.8.dp, end = 58.dp) else Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)),
                 horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 12.dp else 8.dp),
@@ -354,7 +421,8 @@ internal fun PlayarrPlayerChrome(
             }
         }
 
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.BottomCenter)) {
+        PlayarrPlayerScrim(visible = visible)
+        AnimatedVisibility(visible = visible, enter = PlayerChromeFadeEnter, exit = PlayerChromeFadeExit, modifier = Modifier.align(Alignment.BottomCenter)) {
             PlayarrPlayerControlBar(
                 playbackState = playbackState,
                 timeline = timeline,
@@ -362,6 +430,8 @@ internal fun PlayarrPlayerChrome(
                 isTelevision = isTelevision,
                 queue = queue,
                 seekFocusRequester = seekFocusRequester,
+                playlistFocusRequester = playlistFocusRequester,
+                qualityFocusRequester = qualityFocusRequester,
                 canPrevious = canPrevious,
                 canNext = canNext,
                 scrubPositionMs = scrubPositionMs ?: pendingSeekMs,
@@ -432,7 +502,6 @@ internal fun PlayarrPlayerChrome(
         }
 
         if (isTelevision && openMenu == PlayarrPlayerMenu.Quality) {
-            androidx.activity.compose.BackHandler { openMenu = null; showControls() }
             PlayarrQualityPopover(
                 controls = controls,
                 onSelect = { onQuality(it); openMenu = null; showControls() },
@@ -538,6 +607,28 @@ private fun PlayarrCastDialog(
     )
 }
 
+/** The player's X (top right) while the session is still being negotiated, before the full chrome has content. */
+@Composable
+internal fun BoxScope.PlayarrPlayerLoadingClose(isTelevision: Boolean, onClose: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .then(
+                if (isTelevision) Modifier.padding(top = 37.8.dp, end = 58.dp)
+                else Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
+            ),
+    ) {
+        PlayarrPlayerTopButton(
+            icon = if (isTelevision) WebIcons.Close else Icons.Outlined.Close,
+            label = playarrString(PlayarrString.PlayerCloseLabel),
+            accessibilityLabel = playarrString(PlayarrString.PlayerClosePlayer),
+            isTelevision = isTelevision,
+            onClick = onClose,
+            iconOnly = isTelevision,
+        )
+    }
+}
+
 @Composable
 private fun PlayarrPlayerTopButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -614,6 +705,8 @@ private fun PlayarrPlayerControlBar(
     isTelevision: Boolean,
     queue: PlayarrPlaybackQueue,
     seekFocusRequester: FocusRequester,
+    playlistFocusRequester: FocusRequester = FocusRequester(),
+    qualityFocusRequester: FocusRequester = FocusRequester(),
     canPrevious: Boolean,
     canNext: Boolean,
     scrubPositionMs: Long?,
@@ -649,6 +742,8 @@ private fun PlayarrPlayerControlBar(
             bufferedProgress = bufferedProgress,
             seekDescription = seekDescription,
             seekFocusRequester = seekFocusRequester,
+            playlistFocusRequester = playlistFocusRequester,
+            qualityFocusRequester = qualityFocusRequester,
             canPrevious = canPrevious,
             canNext = canNext,
             queue = queue,
@@ -847,7 +942,7 @@ private fun PlayarrPlayerControlBar(
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun PlayarrTelevisionControlBar(
+internal fun PlayarrTelevisionControlBar(
     playbackState: PlaybackState,
     controls: PlayarrPlaybackControls,
     displayedPositionMs: Long,
@@ -855,6 +950,8 @@ private fun PlayarrTelevisionControlBar(
     bufferedProgress: Float,
     seekDescription: String,
     seekFocusRequester: FocusRequester,
+    playlistFocusRequester: FocusRequester = FocusRequester(),
+    qualityFocusRequester: FocusRequester = FocusRequester(),
     canPrevious: Boolean,
     canNext: Boolean,
     queue: PlayarrPlaybackQueue,
@@ -874,16 +971,50 @@ private fun PlayarrTelevisionControlBar(
     Column(
         Modifier
             .fillMaxWidth()
-            // Web scrim: transparent about 500 px above the bottom edge, about 0.9 black at the edge.
-            .heightIn(min = 500.dp)
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
+            // The scrim behind the bar is drawn separately (PlayarrPlayerScrim) so it can rise from the bottom.
             .padding(start = 70.dp, end = 70.dp, bottom = 58.dp, top = 40.dp),
         verticalArrangement = Arrangement.Bottom,
     ) {
+        val scrubSource = remember { MutableInteractionSource() }
+        val scrubFocused by scrubSource.collectIsFocusedAsState()
         Box(Modifier.fillMaxWidth().height(15.dp), contentAlignment = Alignment.CenterStart) {
-            Box(Modifier.fillMaxWidth().height(6.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(3.dp)))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    // Web focus treatment: a 3 dp white ring around the track.
+                    .then(
+                        if (scrubFocused) {
+                            Modifier.drawBehind {
+                                val ring = 3.dp.toPx()
+                                drawRoundRect(
+                                    color = Color.White,
+                                    topLeft = androidx.compose.ui.geometry.Offset(-ring / 2f, -ring / 2f),
+                                    size = androidx.compose.ui.geometry.Size(size.width + ring, size.height + ring),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(ring + 1.5.dp.toPx()),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = ring),
+                                )
+                            }
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(3.dp)),
+            )
             Box(Modifier.fillMaxWidth(bufferedProgress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.34f), RoundedCornerShape(3.dp)))
             Box(Modifier.fillMaxWidth(progress).height(6.dp).background(WebKicker, RoundedCornerShape(3.dp)))
+            if (scrubFocused) {
+                // Enlarged, highlighted thumb (web: 24 px white disc with an accent ring) while the scrubber has focus.
+                Box(Modifier.fillMaxWidth(progress).height(24.dp), contentAlignment = Alignment.CenterEnd) {
+                    Box(
+                        Modifier
+                            .offset(x = 12.dp)
+                            .size(24.dp)
+                            .background(Color.White, CircleShape)
+                            .border(3.dp, WebKicker, CircleShape),
+                    )
+                }
+            }
             // The Slider stays for input and semantics (D-pad seek, scrub) but draws nothing of its own.
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp,
@@ -893,12 +1024,20 @@ private fun PlayarrTelevisionControlBar(
                     onValueChange = { onScrub(it.toLong()) },
                     onValueChangeFinished = onScrubFinished,
                     valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
-                    enabled = durationMs > 0L && !controls.switching,
+                    // Stays enabled while a source switch is in flight: a disabled Slider drops focus, and
+                    // re-enabling it never gives focus back, which threw focus off the scrubber after a seek.
+                    enabled = durationMs > 0L,
+                    interactionSource = scrubSource,
                     thumb = {},
                     track = {},
                     modifier = Modifier
                         .focusRequester(seekFocusRequester)
                         .onPreviewKeyEvent { event ->
+                            // SELECT toggles play/pause and nothing else.
+                            if (playarrScrubberSelectKey(event.nativeKeyEvent.keyCode)) {
+                                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onTogglePlayback()
+                                return@onPreviewKeyEvent true
+                            }
                             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (event.key) {
                                 Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
@@ -973,6 +1112,7 @@ private fun PlayarrTelevisionControlBar(
                 },
                 onClick = onTogglePlaylist,
                 enabled = !controls.switching,
+                modifier = Modifier.focusRequester(playlistFocusRequester),
             )
             if (controls.qualityOptions.isNotEmpty()) {
                 val active = controls.qualityOptions.firstOrNull { it.id == controls.activeQualityId }
@@ -987,6 +1127,7 @@ private fun PlayarrTelevisionControlBar(
                     shape = CircleShape,
                     modifier = Modifier
                         .height(56.dp)
+                        .focusRequester(qualityFocusRequester)
                         .playerFocusRing(source, CircleShape)
                         .semantics { contentDescription = qualityDescription },
                 ) {

@@ -58,3 +58,25 @@ internal fun coalescedSeekTarget(positionMs: Long, pendingMs: Long?, deltaMs: Lo
     val target = (pendingMs ?: positionMs) + deltaMs
     return if (durationMs > 0L) target.coerceIn(0L, durationMs) else target.coerceAtLeast(0L)
 }
+
+/** What one BACK press does in the player: panels close first (one level per press), then the controls, then exit. */
+internal enum class PlayarrPlayerBackAction { ClosePlaylist, CloseMenu, HideControls, Exit }
+
+internal fun playarrPlayerBackAction(playlistOpen: Boolean, menuOpen: Boolean, controlsVisible: Boolean): PlayarrPlayerBackAction = when {
+    playlistOpen -> PlayarrPlayerBackAction.ClosePlaylist
+    menuOpen -> PlayarrPlayerBackAction.CloseMenu
+    controlsVisible -> PlayarrPlayerBackAction.HideControls
+    else -> PlayarrPlayerBackAction.Exit
+}
+
+/** SELECT/OK/Enter on the focused scrubber only toggles play/pause: no scrub commit, nothing else. */
+internal fun playarrScrubberSelectKey(keyCode: Int): Boolean = when (keyCode) {
+    KeyEvent.KEYCODE_DPAD_CENTER,
+    KeyEvent.KEYCODE_ENTER,
+    KeyEvent.KEYCODE_NUMPAD_ENTER,
+    -> true
+    else -> false
+}
+
+/** Scrim / controls timing shared with web (`.player-scrim` transition: 240ms ease). */
+internal const val PLAYER_CONTROLS_ANIMATION_MS = 240
