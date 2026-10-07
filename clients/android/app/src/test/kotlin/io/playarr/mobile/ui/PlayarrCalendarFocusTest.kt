@@ -80,4 +80,21 @@ class PlayarrCalendarFocusTest {
         assertTrue(CalendarItem.Series("k", "S", listOf(have, have), "S01E01").isAvailable())
         assertFalse(CalendarItem.Series("k", "S", listOf(have, lack), "S01E01").isAvailable())
     }
+
+    @Test
+    fun monthChipsMoveAlongTheWeekRowAndThroughCells() {
+        // two weeks of seven cells; slots per cell
+        val slots = listOf(2, 0, 1, 3, 0, 0, 0, 1, 0, 0, 2, 0, 0, 0)
+        // Right skips the empty cell and clamps the slot
+        assertEquals(CalendarSlot(2, 0), calendarMonthChipNeighbour(slots, 7, CalendarSlot(0, 1), CalendarKey.Right))
+        // Left from the first populated cell has nowhere to go
+        assertNull(calendarMonthChipNeighbour(slots, 7, CalendarSlot(0, 0), CalendarKey.Left))
+        // Right never wraps to the next week
+        assertNull(calendarMonthChipNeighbour(slots, 7, CalendarSlot(3, 0), CalendarKey.Right))
+        // Down inside a cell, then on to the next populated cell in the column
+        assertEquals(CalendarSlot(3, 1), calendarMonthChipNeighbour(slots, 7, CalendarSlot(3, 0), CalendarKey.Down))
+        assertEquals(CalendarSlot(10, 0), calendarMonthChipNeighbour(slots, 7, CalendarSlot(3, 2), CalendarKey.Down))
+        assertEquals(CalendarSlot(3, 2), calendarMonthChipNeighbour(slots, 7, CalendarSlot(10, 0), CalendarKey.Up))
+        assertNull(calendarMonthChipNeighbour(slots, 7, CalendarSlot(0, 0), CalendarKey.Up))
+    }
 }

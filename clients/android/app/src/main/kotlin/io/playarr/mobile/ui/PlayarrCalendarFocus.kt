@@ -173,17 +173,44 @@ internal fun Modifier.calendarEdgeFades(edges: CalendarEdges): Modifier {
     val config = LocalConfiguration.current
     val vertical = (config.screenHeightDp * 0.04f).coerceIn(28f, 54f).dp
     val horizontal = (config.screenWidthDp * 0.036f).coerceIn(32f, 58f).dp
+    val scrimBand = (config.screenHeightDp * 0.08f).coerceIn(56f, 104f).dp
     return this
         .semantics { calendarEdges = edges }
         .drawWithContent {
             drawContent()
-            val v = vertical.toPx()
-            val h = horizontal.toPx()
-            if (edges.top) drawVerticalFade(top = true, v)
-            if (edges.bottom) drawVerticalFade(top = false, v)
-            if (edges.start) drawHorizontalFade(start = true, h)
-            if (edges.end) drawHorizontalFade(start = false, h)
+            if (webIsDark) {
+                // Dark: the radial shade would be near-black on near-black, so draw the page background fading over
+                // the content (web `--edge-scrim-size`, clamp(56, 8 vh, 104), at 0.96).
+                val size = scrimBand.toPx()
+                if (edges.top) drawScrim(Offset(0f, 0f), Offset(0f, size), size.coerceAtMost(this.size.height), horizontalBand = true)
+                if (edges.bottom) drawScrim(Offset(0f, this.size.height), Offset(0f, this.size.height - size), size.coerceAtMost(this.size.height), horizontalBand = true)
+                if (edges.start) drawScrim(Offset(0f, 0f), Offset(size, 0f), size.coerceAtMost(this.size.width), horizontalBand = false)
+                if (edges.end) drawScrim(Offset(this.size.width, 0f), Offset(this.size.width - size, 0f), size.coerceAtMost(this.size.width), horizontalBand = false)
+            } else {
+                val v = vertical.toPx()
+                val h = horizontal.toPx()
+                if (edges.top) drawVerticalFade(top = true, v)
+                if (edges.bottom) drawVerticalFade(top = false, v)
+                if (edges.start) drawHorizontalFade(start = true, h)
+                if (edges.end) drawHorizontalFade(start = false, h)
+            }
         }
+}
+
+/** Page background fading to clear from [from] (opaque) towards [to] over [length]; web dark `--edge-scrim-*`. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawScrim(from: Offset, to: Offset, length: Float, horizontalBand: Boolean) {
+    val bg = WebBackground
+    val brush = Brush.linearGradient(
+        0f to bg.copy(alpha = 0.96f), 0.4f to bg.copy(alpha = 0.96f * 0.6f), 1f to Color.Transparent,
+        start = from, end = to,
+    )
+    if (horizontalBand) {
+        val top = minOf(from.y, to.y)
+        drawRect(brush, topLeft = Offset(0f, top), size = androidx.compose.ui.geometry.Size(size.width, length))
+    } else {
+        val left = minOf(from.x, to.x)
+        drawRect(brush, topLeft = Offset(left, 0f), size = androidx.compose.ui.geometry.Size(length, size.height))
+    }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawVerticalFade(top: Boolean, band: Float) {
@@ -359,4 +386,57 @@ internal fun Modifier.calendarListRow(
             else focus.move(index, pressed)
         }
         .calendarFocusReveal(onFocused)
+}
+
+// ---- Month chips (web `.calendar-chip` grid) ------------------------------------------------------------
+
+/**
+ * Month chip grid: [slots] holds the focusable count of each cell (chips plus "+N more"), row-major with [columns]
+ * columns. [from] is a (cell, slot) pair as [CalendarSlot] (column = cell index, row = slot). LEFT/RIGHT stays on the week
+ * row, skipping empty cells, on the same slot or the last one; UP/DOWN moves through the cell's slots and then on to
+ * the next populated cell in that column (landing on its last/first slot).
+ */
+internal fun calendarMonthChipNeighbour(slots: List<Int>, columns: Int, from: CalendarSlot, key: CalendarKey): CalendarSlot? {
+    val cell = from.column
+    val rowStart = cell / columns * columns
+    return when (key) {
+        CalendarKey.Left, CalendarKey.Right -> {
+            val step = if (key == CalendarKey.Right) 1 else -1
+            generateSequence(cell + step) { it + step }
+                .takeWhile { it in rowStart until rowStart + columns }
+                .firstOrNull { slots[it] > 0 }
+                ?.let { CalendarSlot(it, from.row.coerceAtMost(slots[it] - 1)) }
+        }
+        CalendarKey.Up -> when {
+            from.row > 0 -> from.copy(row = from.row - 1)
+            else -> generateSequence(cell - columns) { it - columns }.takeWhile { it >= 0 }.firstOrNull { slots[it] > 0 }
+                ?.let { CalendarSlot(it, slots[it] - 1) }
+        }
+        CalendarKey.Down -> when {
+            from.row < slots[cell] - 1 -> from.copy(row = from.row + 1)
+            else -> generateSequence(cell + columns) { it + columns }.takeWhile { it < slots.size }.firstOrNull { slots[it] > 0 }
+                ?.let { CalendarSlot(it, 0) }
+        }
+    }
+}
+
+// ---- Nav rail to content ---------------------------------------------------------------------------------
+
+/** Where RIGHT from the navigation rail lands: the page's default focus target (web `data-tv-focus-default`). */
+internal class TvContentEntry {
+    var requester: FocusRequester? = null
+}
+
+internal val LocalTvContentEntry = androidx.compose.runtime.staticCompositionLocalOf { TvContentEntry() }
+
+/** Marks this element as the page's default focus target for entry from the navigation rail. */
+@Composable
+internal fun Modifier.tvContentDefaultFocus(): Modifier {
+    val entry = LocalTvContentEntry.current
+    val requester = remember { FocusRequester() }
+    androidx.compose.runtime.DisposableEffect(requester) {
+        entry.requester = requester
+        onDispose { if (entry.requester === requester) entry.requester = null }
+    }
+    return this.focusRequester(requester)
 }

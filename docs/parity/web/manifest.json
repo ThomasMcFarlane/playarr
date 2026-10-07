@@ -71,15 +71,6 @@
     {
       "layout": "mobile",
       "theme": "light",
-      "id": "calendar",
-      "route": "/calendar",
-      "user": "fx-viewer",
-      "file": "mobile/light/calendar.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "light",
       "id": "settings",
       "route": "/settings",
       "user": "fx-viewer",
@@ -174,15 +165,6 @@
       "route": "/search",
       "user": "fx-viewer",
       "file": "mobile/dark/search.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "mobile",
-      "theme": "dark",
-      "id": "calendar",
-      "route": "/calendar",
-      "user": "fx-viewer",
-      "file": "mobile/dark/calendar.png",
       "pageErrors": 0
     },
     {
@@ -287,15 +269,6 @@
     {
       "layout": "tv",
       "theme": "light",
-      "id": "calendar",
-      "route": "/calendar",
-      "user": "fx-viewer",
-      "file": "tv/light/calendar.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "light",
       "id": "settings",
       "route": "/settings",
       "user": "fx-viewer",
@@ -390,15 +363,6 @@
       "route": "/search",
       "user": "fx-viewer",
       "file": "tv/dark/search.png",
-      "pageErrors": 0
-    },
-    {
-      "layout": "tv",
-      "theme": "dark",
-      "id": "calendar",
-      "route": "/calendar",
-      "user": "fx-viewer",
-      "file": "tv/dark/calendar.png",
       "pageErrors": 0
     },
     {
@@ -956,6 +920,42 @@
       "route": "/requests",
       "user": "fx-viewer",
       "file": "mobile/dark/requests.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "tv/light/calendar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "tv/dark/calendar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "mobile/light/calendar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "calendar",
+      "route": "/calendar",
+      "user": "fx-viewer",
+      "file": "mobile/dark/calendar.png",
       "pageErrors": 0
     }
   ]

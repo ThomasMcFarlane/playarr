@@ -213,6 +213,19 @@ try {
     await context.close();
   }
 
+  // ---- Dark theme: the edge fade is a real scrim in the page background, clearly visible ----
+  {
+    const { context, page } = await open("agenda", { width: 1920, height: 500 }, "dark");
+    await page.waitForTimeout(500);
+    const dark = await page.evaluate(() => {
+      const win = document.querySelector(".calendar-list-scroll").closest(".tv-scroll-edge-window");
+      const after = getComputedStyle(win, "::after");
+      return { cls: win.className, opacity: Number(after.opacity), image: after.backgroundImage, height: parseFloat(after.height) };
+    });
+    check("dark: the bottom edge scrim is a background gradient at high opacity and at least 56px tall", /can-scroll-down/.test(dark.cls) && dark.opacity >= 0.9 && /linear-gradient/.test(dark.image) && dark.height >= 56, JSON.stringify(dark));
+    await context.close();
+  }
+
   // ---- Border colour: availability, never media kind or library ----
   for (const theme of ["light", "dark"]) {
     const { context, page } = await open("agenda", { width: 1920, height: 1080 }, theme);

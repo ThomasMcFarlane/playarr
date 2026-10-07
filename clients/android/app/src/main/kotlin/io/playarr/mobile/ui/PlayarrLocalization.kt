@@ -379,6 +379,7 @@ internal enum class PlayarrString(
     CalendarRangeClear("Clear dates", "ล้างวันที่", "日付をクリア"),
     CalendarMonitoredOnly("Monitored only", "เฉพาะที่ติดตาม", "監視中のみ"),
     CalendarClearFilters("Clear filters", "ล้างตัวกรอง", "フィルターをクリア"),
+    CalendarMore("+{{count}} more", "เพิ่มอีก {{count}}", "他{{count}}件"),
     CalendarGroupSummary("{{count}} episodes · {{codes}}", "{{count}} ตอน · {{codes}}", "{{count}}エピソード · {{codes}}"),
     CalendarOpen("Open", "เปิด", "開く"),
     CalendarOpenSeries("Open series", "เปิดซีรีส์", "シリーズを開く"),

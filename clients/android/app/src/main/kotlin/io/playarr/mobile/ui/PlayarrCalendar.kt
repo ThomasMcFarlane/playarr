@@ -107,13 +107,38 @@ import java.util.Locale
 
 private val CALENDAR_LIVE_INTEREST = setOf(io.playarr.shared.data.events.LiveTarget(io.playarr.shared.data.events.LiveArea.Calendar))
 
+/** No state layer: on TV the web focus state is the ring alone, never a background fill. */
+private object CalendarNoFocusFill : androidx.compose.foundation.IndicationNodeFactory {
+    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.node.DelegatableNode =
+        object : androidx.compose.ui.Modifier.Node() {}
+    override fun equals(other: Any?): Boolean = other === CalendarNoFocusFill
+    override fun hashCode(): Int = System.identityHashCode(this)
+}
+
 @Composable
-internal fun ExperienceCalendarScreen(
+internal fun ExperienceCalendarRoute(
     isTelevision: Boolean,
     onBack: () -> Unit,
     onOpenWork: (String) -> Unit,
     onPlay: (String) -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel(),
+) {
+    if (isTelevision) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.foundation.LocalIndication provides CalendarNoFocusFill,
+        ) { ExperienceCalendarScreen(isTelevision, onBack, onOpenWork, onPlay, viewModel) }
+    } else {
+        ExperienceCalendarScreen(isTelevision, onBack, onOpenWork, onPlay, viewModel)
+    }
+}
+
+@Composable
+private fun ExperienceCalendarScreen(
+    isTelevision: Boolean,
+    onBack: () -> Unit,
+    onOpenWork: (String) -> Unit,
+    onPlay: (String) -> Unit,
+    viewModel: CalendarViewModel,
 ) {
     val state by viewModel.calendar.state.collectAsState()
     LiveRefreshEffect(
@@ -230,6 +255,7 @@ internal fun ExperienceCalendarScreen(
                             state = state, entries = filtered, loading = loading, isTelevision = isTelevision, today = today,
                             zone = zone, locale = language.locale, onSelectDay = holder::selectDay,
                             onSelect = { holder.select(it.key) }, modifier = body,
+                            onMore = { holder.showDay(CalendarViewMode.Agenda, it) },
                         )
                     }
                 }
@@ -564,8 +590,8 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     val ink = WebInk
     val fill = WebSurfaceStrong
     Surface(
-        onClick = onClick,
-        modifier = modifier.padding(start = if (m === TvCalendarMetrics) 0.dp else 4.dp, end = if (m === TvCalendarMetrics) 0.dp else 8.dp).fillMaxWidth().height(m.entryHeight.dp).calendarAvailabilityBorder(item.isAvailable(), m.entryRadius.dp).then(
+        // Material's clickable Surface paints a focus state layer (a fill); web's focus state is the ring alone.
+        modifier = modifier.padding(start = if (m === TvCalendarMetrics) 0.dp else 4.dp, end = if (m === TvCalendarMetrics) 0.dp else 8.dp).fillMaxWidth().height(m.entryHeight.dp).calendarClick(remember { MutableInteractionSource() }, onClick).calendarAvailabilityBorder(item.isAvailable(), m.entryRadius.dp).then(
             if (selected) {
                 // `.calendar-entry.is-selected`: a 4 px left border and 1 px borders in ink, plus a 1 px inset ring, so the
                 // padding box has a rounder inner left edge than the outer shape.
@@ -624,9 +650,9 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
 @Composable
 private fun TvCalendarRound(glyph: String, description: String, onClick: () -> Unit) {
     androidx.compose.material3.Surface(
-        onClick = onClick, shape = CircleShape, color = WebSurface, contentColor = WebInkSoft,
+        shape = CircleShape, color = WebSurface, contentColor = WebInkSoft,
         border = BorderStroke(1.dp, WebPillBorder),
-        modifier = Modifier.size(50.dp).semantics { contentDescription = description },
+        modifier = Modifier.size(50.dp).calendarClick(remember { MutableInteractionSource() }, onClick).semantics { contentDescription = description },
     ) { Box(contentAlignment = Alignment.Center) { Text(glyph, fontSize = 13.sp, fontWeight = FontWeight(720)) } }
 }
 
@@ -634,11 +660,16 @@ private fun TvCalendarRound(glyph: String, description: String, onClick: () -> U
 @Composable
 private fun TvCalendarToday(label: String, onClick: () -> Unit) {
     val ring = WebInk
+    val source = remember { MutableInteractionSource() }
+    // The ring is the focus state: it shows on Today only while Today holds focus, never alongside another ring.
+    val focused by source.collectIsFocusedAsState()
     androidx.compose.material3.Surface(
-        onClick = onClick,
         modifier = Modifier.size(92.dp, 50.dp)
+            .tvContentDefaultFocus()
+            .calendarClick(source, onClick)
             .graphicsLayer { scaleX = 1.055f; scaleY = 1.055f }
             .drawBehind {
+                if (!focused) return@drawBehind
                 val grow = 3.5.dp.toPx()
                 drawRoundRect(
                     color = ring,
@@ -1183,15 +1214,14 @@ private fun CalendarItemRow(
         ?: playarrString(PlayarrString.CalendarAllDay)
     val description = playarrString(PlayarrString.CalendarEntryDescription, "title" to item.title, "detail" to subtitle, "state" to stateLabel)
     Surface(
-        onClick = onClick,
         color = if (selected) WebPink.copy(alpha = 0.18f) else WebSurfaceSoft.copy(alpha = 0.62f),
         shape = shape,
         border = if (selected) BorderStroke(1.5.dp, WebInk) else null,
-        interactionSource = source,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
             .calendarFocusRing(source, shape)
+            .calendarClick(source, onClick)
             .calendarAvailabilityBorder(item.isAvailable(), 12.dp)
             .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
@@ -1331,6 +1361,7 @@ internal fun CalendarMonth(
     onSelectDay: (LocalDate?) -> Unit,
     onSelect: (CalendarItem) -> Unit,
     modifier: Modifier,
+    onMore: (LocalDate) -> Unit = {},
 ) {
     val counts = remember(entries) { calendarEntryCountsByDay(entries, emptySet()) }
     val rows = remember(state.window) { calendarGridRows(state.window) }
@@ -1349,6 +1380,11 @@ internal fun CalendarMonth(
     val gridScroll = rememberScrollState()
     BoxWithConstraints(modifier) {
         val wide = isTelevision || maxWidth >= 840.dp
+        if (wide) {
+            // Web `.calendar-month`: chips inside the day cells, filling the space below the header.
+            CalendarMonthChips(state, entries, loading, today, zone, locale, onSelect, onMore, Modifier.fillMaxSize().padding(top = 8.dp))
+            return@BoxWithConstraints
+        }
         val grid: @Composable (Modifier) -> Unit = { gridModifier ->
             Column(gridModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth()) {
@@ -1437,6 +1473,137 @@ internal fun CalendarMonth(
     }
 }
 
+/**
+ * Month view as on web: seven columns, each day cell holds its entries as chips (availability border, one line of
+ * title) and as many as fit, then "+N more", which opens the agenda on that day. Chips and "+N more" are the focus
+ * stops; the rules are [calendarMonthChipNeighbour].
+ */
+@Composable
+private fun CalendarMonthChips(
+    state: CalendarUiState,
+    entries: List<CalendarEntry>,
+    loading: Boolean,
+    today: LocalDate,
+    zone: ZoneId,
+    locale: Locale,
+    onSelect: (CalendarItem) -> Unit,
+    onMore: (LocalDate) -> Unit,
+    modifier: Modifier,
+) {
+    val rows = remember(state.window) { calendarGridRows(state.window) }
+    val cells = remember(rows) { rows.flatten() }
+    val firstDay = remember(locale) { firstDayOfWeek(locale) }
+    val byDay = remember(entries, zone) {
+        entries.groupBy { it.date }.mapValues { (_, day) -> groupSeriesEpisodes(day.sortedBy { it.releaseAt }, zone) }
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val headerHeight = 26.dp
+        val cellHeight = (maxHeight - headerHeight) / rows.size
+        // Web: chips that fit = (cell height - 52) / 26, between 1 and 5; when more exist the last slot is "+N more".
+        val limit = ((cellHeight.value - 52f) / 26f).toInt().coerceIn(1, 5)
+        val visible = remember(cells, byDay, limit, loading) {
+            cells.map { day ->
+                val items = if (loading) emptyList() else byDay[day].orEmpty()
+                val shown = if (items.size > limit) items.take(maxOf(1, limit - 1)) else items
+                shown to (items.size - shown.size)
+            }
+        }
+        val slots = remember(visible) { visible.map { (shown, hidden) -> shown.size + if (hidden > 0) 1 else 0 } }
+        val requesters = remember(slots) { slots.map { n -> List(n) { FocusRequester() } } }
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(headerHeight)) {
+                calendarWeekdayLabels(firstDay, locale).forEach { label ->
+                    Text(label.uppercase(locale), color = WebInkMuted, fontSize = 12.sp, letterSpacing = 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                }
+            }
+            rows.forEachIndexed { rowIndex, week ->
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    week.forEachIndexed { columnIndex, day ->
+                        val cell = rowIndex * 7 + columnIndex
+                        val (shown, hidden) = visible[cell]
+                        val inMonth = day.month == state.anchor.month
+                        fun handleKey(slot: Int): (CalendarKey) -> Boolean = { key ->
+                            val target = calendarMonthChipNeighbour(slots, 7, CalendarSlot(cell, slot), key)
+                            if (target != null) {
+                                runCatching { requesters[target.column][target.row].requestFocus() }
+                                true
+                            } else {
+                                calendarConsumesAtEdge(key)
+                            }
+                        }
+                        Column(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .background(if (inMonth) Color.Transparent else WebSurfaceSoft.copy(alpha = 0.4f))
+                                .border(1.dp, WebPillBorder)
+                                .then(if (day == today) Modifier.border(2.dp, WebPink) else Modifier)
+                                .padding(5.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                day.dayOfMonth.toString(), color = if (inMonth) WebInk else WebInkMuted,
+                                fontSize = 13.sp, fontWeight = FontWeight(640), modifier = Modifier.padding(bottom = 3.dp),
+                            )
+                            shown.forEachIndexed { slot, item ->
+                                CalendarChip(
+                                    item, onClick = { onSelect(item) },
+                                    modifier = Modifier.focusRequester(requesters[cell][slot]).calendarDpad(handleKey(slot)).calendarFocusReveal(),
+                                )
+                            }
+                            if (hidden > 0) {
+                                val slot = shown.size
+                                val source = remember { MutableInteractionSource() }
+                                androidx.compose.runtime.CompositionLocalProvider(
+                                    androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+                                ) {
+                                Surface(
+                                    onClick = { onMore(day) }, color = Color.Transparent, contentColor = WebInkSoft,
+                                    shape = RoundedCornerShape(4.dp), interactionSource = source,
+                                    modifier = Modifier.fillMaxWidth().height(24.dp)
+                                        .focusRequester(requesters[cell][slot]).calendarDpad(handleKey(slot)).calendarFocusReveal()
+                                        .calendarFocusRing(source, RoundedCornerShape(4.dp)),
+                                ) {
+                                    Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+                                        Text(playarrString(PlayarrString.CalendarMore, "count" to hidden), fontSize = 12.sp, maxLines = 1)
+                                    }
+                                }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Web `.calendar-chip`: 24 dp, 3 dp availability border, one line of title (series groups read "Title · 3x"). */
+@Composable
+private fun CalendarChip(item: CalendarItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(4.dp)
+    val label = when (item) {
+        is CalendarItem.Series -> "${item.title} · ${item.entries.size}×"
+        is CalendarItem.Single -> item.title
+    }
+    // Material would grow a clickable surface to a 48 dp touch target; the web chip is 24 dp.
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+    ) {
+    Surface(
+        color = WebSurfaceSoft, contentColor = WebInk, shape = shape,
+        modifier = modifier.fillMaxWidth().height(24.dp)
+            .calendarFocusRing(source, shape)
+            .calendarClick(source, onClick)
+            .calendarAvailabilityBorder(item.isAvailable(), radius = 4.dp, width = 3.dp)
+            .semantics(mergeDescendants = true) { contentDescription = label },
+    ) {
+        Box(Modifier.padding(start = 9.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
+            Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+    }
+}
+
 @Composable
 private fun calendarKindLabel(kind: CalendarMediaKind): String = playarrString(
     when (kind) {
@@ -1486,6 +1653,10 @@ internal fun calendarLagText(seconds: Long): String {
     }
     return playarrString(key, "count" to lag.count)
 }
+
+/** Clickable without a state layer: web's calendar entries show the ring on focus and no fill. */
+private fun Modifier.calendarClick(source: MutableInteractionSource, onClick: () -> Unit): Modifier =
+    this.clickable(interactionSource = source, indication = null, onClick = onClick)
 
 /** Visible focus indicator for D-pad users; touch users never see it. */
 @Composable

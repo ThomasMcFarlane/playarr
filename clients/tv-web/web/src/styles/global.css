@@ -12854,3 +12854,71 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     width: 44px;
   }
 }
+
+/*
+ * Edge scrim (intentional visual change). In the dark theme the original radial shade (near-black on a
+ * near-black page) was invisible, so no scroll area read as continuing. Every shared fade now draws a real
+ * scrim: the page background fading out over the content, tall enough to read from a TV sofa. The light
+ * theme keeps its radial shade. One token set drives them all.
+ */
+:root[data-theme="dark"] {
+  --edge-scrim-size: clamp(56px, calc(8 * var(--viewport-unit)), 104px);
+  --edge-scrim-opacity: 0.96;
+}
+
+:root[data-theme="dark"] .tv-scroll-edge-window::before,
+:root[data-theme="dark"] .tv-scroll-edge-window::after,
+:root[data-theme="dark"] .tv-library-grid-panel::before,
+:root[data-theme="dark"] .tv-library-grid-panel::after {
+  height: var(--edge-scrim-size);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .tv-scroll-edge-window::before,
+:root[data-theme="dark"] .tv-library-grid-panel::before {
+  background: linear-gradient(to bottom, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
+}
+
+:root[data-theme="dark"] .tv-scroll-edge-window::after,
+:root[data-theme="dark"] .tv-library-grid-panel::after {
+  background: linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
+}
+
+:root[data-theme="dark"] .tv-scroll-edge-window.can-scroll-up::before,
+:root[data-theme="dark"] .tv-scroll-edge-window.can-scroll-down::after,
+:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-up::before,
+:root[data-theme="dark"] .tv-library-grid-panel.can-scroll-down::after {
+  opacity: var(--edge-scrim-opacity);
+}
+
+:root[data-theme="dark"] .tv-media-track-window::after {
+  width: var(--edge-scrim-size);
+  border-radius: 0;
+  box-shadow: none;
+  background: linear-gradient(to left, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
+}
+
+:root[data-theme="dark"] .tv-media-track-window.can-scroll-right::after {
+  opacity: var(--edge-scrim-opacity);
+}
+
+:root[data-theme="dark"] .calendar-edge-window-x::before,
+:root[data-theme="dark"] .calendar-edge-window-x::after {
+  width: var(--edge-scrim-size);
+  height: auto;
+  border-radius: 0;
+}
+
+:root[data-theme="dark"] .calendar-edge-window-x::before {
+  background: linear-gradient(to right, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
+}
+
+:root[data-theme="dark"] .calendar-edge-window-x::after {
+  background: linear-gradient(to left, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 40%, transparent 100%);
+}
+
+:root[data-theme="dark"] .calendar-edge-window-x.can-scroll-left::before,
+:root[data-theme="dark"] .calendar-edge-window-x.can-scroll-right::after {
+  opacity: var(--edge-scrim-opacity);
+}

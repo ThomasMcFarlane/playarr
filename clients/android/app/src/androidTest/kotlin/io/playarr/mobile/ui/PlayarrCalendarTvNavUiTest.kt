@@ -110,35 +110,42 @@ class PlayarrCalendarTvNavUiTest {
     }
 
     @Test
-    fun monthLeftRightMovesAcrossCellsDownMovesAWeekAndRightEntersTheList() {
+    fun monthChipsMoveByCellAndSlotAndMoreOpensTheDay() {
         val window = calendarWindow(CalendarViewMode.Month, LocalDate.parse("2026-10-01"), java.time.DayOfWeek.MONDAY)
-        val sunday = LocalDate.parse("2026-10-18")
-        val entries = listOf(entry(sunday, 0), entry(sunday, 1))
-        var selectedDay by androidx.compose.runtime.mutableStateOf<LocalDate?>(null)
+        fun day(d: Int) = LocalDate.parse("2026-10-%02d".format(d))
+        val entries = listOf(
+            entry(day(13), 0), entry(day(13), 1), entry(day(14), 0),
+            entry(day(15), 0), entry(day(15), 1), entry(day(15), 2),
+            entry(day(21), 0),
+        ) + List(9) { entry(day(16), it) }
+        var more: LocalDate? = null
         compose.setContent {
-            val state = CalendarUiState(CalendarViewMode.Month, LocalDate.parse("2026-10-01"), window, selectedDay = selectedDay)
+            val state = CalendarUiState(CalendarViewMode.Month, LocalDate.parse("2026-10-01"), window)
             CalendarMonth(state, entries, loading = false, isTelevision = true, today = monday, zone = zone, locale = Locale.ENGLISH,
-                onSelectDay = { selectedDay = it }, onSelect = {}, modifier = Modifier.fillMaxWidth().height(900.dp))
+                onSelectDay = {}, onSelect = {}, modifier = Modifier.fillMaxWidth().height(900.dp), onMore = { more = it })
         }
-        compose.onNodeWithText("13", substring = false).requestFocus()
+        // The test window is about 540 dp tall, so each cell fits one chip and then "+N more".
+        fun chip(d: Int, n: Int) = compose.onNodeWithText("Film ${day(d)} #$n", substring = true)
+        val moreFocused = hasText("more", substring = true) and isFocused()
+        chip(13, 0).requestFocus()
         press(Key.DirectionRight)
-        assertEquals(LocalDate.parse("2026-10-14"), selectedDay)
+        chip(14, 0).assertIsFocused()
         press(Key.DirectionLeft)
-        assertEquals(LocalDate.parse("2026-10-13"), selectedDay)
+        chip(13, 0).assertIsFocused()
         press(Key.DirectionDown)
-        assertEquals(LocalDate.parse("2026-10-20"), selectedDay)
-        press(listOf(Key.DirectionUp, Key.DirectionRight))
-        assertEquals(LocalDate.parse("2026-10-14"), selectedDay)
-        press(listOf(Key.DirectionRight, Key.DirectionRight, Key.DirectionRight, Key.DirectionRight))
-        assertEquals(sunday, selectedDay)
-        press(Key.DirectionRight)
+        compose.onNode(moreFocused).assertExists()
+        press(Key.DirectionRight) // slot clamps to the neighbour's last stop
+        chip(14, 0).assertIsFocused()
+        // Down from a cell's last stop reaches the next populated cell in the column.
+        press(Key.DirectionDown)
+        chip(21, 0).assertIsFocused()
+        press(Key.DirectionUp)
+        chip(14, 0).assertIsFocused()
+        press(listOf(Key.DirectionRight, Key.DirectionDown))
+        compose.onNode(moreFocused).assertExists()
+        press(Key.DirectionCenter)
         compose.waitForIdle()
-        compose.onNodeWithText("Film 2026-10-18 #0", substring = true).assertIsFocused()
-        press(Key.DirectionDown)
-        compose.onNodeWithText("Film 2026-10-18 #1", substring = true).assertIsFocused()
-        press(Key.DirectionLeft)
-        assertEquals(sunday, selectedDay)
-        compose.onNodeWithText("18", substring = false).assertIsFocused()
+        assertEquals(day(15), more)
     }
 
     @Test

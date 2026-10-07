@@ -104,6 +104,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -1645,6 +1650,7 @@ internal fun PlayarrExperience(
             LocalGlassBackdrop provides glassBackdrop,
             LocalDetailSection provides { detailSectionRoute = it },
             LocalTvNavEntry provides navEntryFocus,
+            LocalTvContentEntry provides remember { TvContentEntry() },
         ) {
         Box(modifier = Modifier.fillMaxSize().background(WebBackground).onFocusChanged { appFocusState.value = it.hasFocus }) {
             ExperienceNavHost(
@@ -1956,6 +1962,7 @@ private fun TelevisionNavigation(
     currentEntryFocus: FocusRequester?,
 ) {
     val groups = televisionDestinationGroups(destinations)
+    val contentEntry = LocalTvContentEntry.current
     Column(
         modifier = modifier.padding(start = 42.2.dp),
         verticalArrangement = Arrangement.spacedBy(13.6.dp),
@@ -1989,7 +1996,16 @@ private fun TelevisionNavigation(
                                 .scale(navScale)
                                 .webFocusRing(focused, radius = 16.dp, offset = 2.dp)
                                 .then(if (selected && currentEntryFocus != null) Modifier.focusRequester(currentEntryFocus) else Modifier)
-                                .onFocusChanged { focused = it.isFocused },
+                                .onFocusChanged { focused = it.isFocused }
+                                // RIGHT lands directly in the page's default target, as on web.
+                                .onPreviewKeyEvent { event ->
+                                    val target = contentEntry.requester
+                                    if (event.key == Key.DirectionRight && event.type == KeyEventType.KeyDown && target != null) {
+                                        runCatching { target.requestFocus() }.isSuccess
+                                    } else {
+                                        false
+                                    }
+                                },
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                 Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -2255,7 +2271,7 @@ private fun ExperienceNavHost(
             deepLinks = listOf(navDeepLink { uriPattern = "playarr://app/calendar?query={query}" }),
         ) {
             ExperienceOnlineGate(isOnline, isTelevision, "calendar") {
-                ExperienceCalendarScreen(
+                ExperienceCalendarRoute(
                     isTelevision = isTelevision,
                     onBack = { navController.openExperienceTopLevel("home") },
                     onOpenWork = { navController.navigate("experience-detail/$it") },
