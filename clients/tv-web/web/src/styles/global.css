@@ -10047,6 +10047,12 @@ html.is-native-scroll-root .profile-auth-scroll {
     top: var(--mobile-top-inset, 14px);
   }
 
+  /* One row with the logo: the theme and language selectors stay clear of the heading that starts 58px lower. */
+  .tv-stage-chrome-controls {
+    top: var(--mobile-top-inset, 14px);
+    gap: 8px;
+  }
+
   .tv-stage-chrome .tv-stage-chrome-heading {
     top: var(--mobile-top-inset, 14px);
     right: auto;
