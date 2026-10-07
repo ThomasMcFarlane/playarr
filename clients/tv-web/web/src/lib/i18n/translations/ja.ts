@@ -149,6 +149,7 @@ export const ja: Translations = {
   "components.player.controls.subtitlesError": "字幕エラー: {{error}}",
   "components.player.controls.subtitlesButtonLabel": "字幕: {{label}}",
   "components.playbackHealth.open": "再生の状態",
+  "components.playbackHealth.about": "このタイトルについて",
   "components.playbackHealth.title": "再生の状態",
   "components.playbackHealth.kicker": "再生方法の詳細",
   "components.playbackHealth.close": "再生の状態を閉じる",
@@ -434,6 +435,7 @@ export const ja: Translations = {
   "pages.player.couldNotStart": "このタイトルを再生できませんでした",
   "pages.player.tryAgain": "もう一度試す",
   "pages.player.backToDetails": "詳細に戻る",
+  "pages.player.close": "閉じる",
   "pages.player.maximiseTitle": "{{title}}を最大化",
 
   "pages.playlists.title": "プレイリスト",

@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web player: every focused control shows the white ring, controls auto-hide after 5 s, arrow keys only reveal the controls while hidden (j, l and media keys seek 10 s), failed starts retry silently with back-off and then show a readable error with Retry and Close, the Info panel shows the title and synopsis, the quality chip fits narrow phones, and double-tapping the left or right half seeks 10 s on touch.
 - iOS: leaving the player now delivers the resume point before returning (background task, awaited), flushes it when the app leaves the foreground, and never overwrites it with position 0 when playback did not start.
 - Fire TV: BACK now stops playback (audio and video), closes the session and saves progress, awaited with a short bound; it previously only hid the player and left it playing.
 - Fire TV: playback resumes from the server's resume point (falling back to the local session only when the server cannot be reached), and progress is never written for a start that never played, so a stalled start can no longer overwrite a resume point.

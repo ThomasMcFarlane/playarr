@@ -783,7 +783,7 @@ function PlayerPageInner({
                   </Button>
                 )}
                 <Button type="button" className="on-player" onClick={handleBack}>
-                  {t("pages.player.backToDetails")}
+                  {t("pages.player.close")}
                 </Button>
               </div>
             </div>

@@ -79,6 +79,8 @@ interface PlaybackHealthPanelProps {
   getSessionId: () => string | null;
   videoRef: RefObject<HTMLVideoElement>;
   capabilities: PlaybackCapabilities;
+  /** The title being played: shown above the stream details as the Info content. */
+  about?: { title: string; subtitle?: string; synopsis?: string };
   onClose: () => void;
 }
 
@@ -92,6 +94,7 @@ export function PlaybackHealthPanel({
   getSessionId,
   videoRef,
   capabilities,
+  about,
   onClose,
 }: PlaybackHealthPanelProps) {
   const { t } = useLanguage();
@@ -208,6 +211,13 @@ export function PlaybackHealthPanel({
         onClick: (event) => event.stopPropagation(),
       }}
     >
+      {about ? (
+        <section className="playback-info-about" aria-label={t("components.playbackHealth.about")}>
+          <h3>{about.title}</h3>
+          {about.subtitle ? <p className="playback-health-note">{about.subtitle}</p> : null}
+          {about.synopsis ? <p>{about.synopsis}</p> : null}
+        </section>
+      ) : null}
       {state.status === "loading" ? (
         <p role="status" className="playback-health-status">
           {t("components.playbackHealth.loading")}
