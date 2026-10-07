@@ -1,1 +1,0 @@
-- Fire TV client: the package now installs on a real Vega device (manifest module and OS-version declarations, icon under `assets/image`), the Profiles screen no longer crashes (default `LinearGradient` import), choosing a profile opens Home, and first launch no longer logs a storage hydration error or a missing `DOMException`.

@@ -56,6 +56,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -105,11 +107,11 @@ import io.playarr.mobile.R
 import io.playarr.shared.auth.TokenStore
 import io.playarr.shared.auth.DeviceAuthClient
 import io.playarr.shared.auth.HostedDeviceLinkClient
+import io.playarr.shared.auth.QrPairingFlow
+import io.playarr.shared.auth.QrPairingUpdate
 import io.playarr.shared.auth.KnownServerGroupStore
 import io.playarr.shared.auth.model.ClientPlatform
-import io.playarr.shared.auth.model.DevicePollResult
 import io.playarr.shared.auth.model.HostedLinkCodeResponse
-import io.playarr.shared.auth.model.HostedLinkPollResult
 import io.playarr.shared.auth.model.KnownServer
 import io.playarr.shared.auth.model.KnownServerGroup
 import io.playarr.shared.auth.model.LoginRequest
@@ -337,33 +339,26 @@ internal class LoginViewModel @Inject constructor(
 
     fun pairTelevision() {
         if (pairingJob?.isActive == true) return
+        val flow = QrPairingFlow(
+            hosted = hostedDeviceLinkClient,
+            device = deviceAuthClient,
+            clientPlatform = ClientPlatform.AndroidTv,
+            prepareServer = { claim ->
+                // The token poll goes to the server the phone chose; no URL is ever typed.
+                serverConfigStore.setBaseUrl(claim.serverUrl)
+                tokenStore.clearCurrent()
+            },
+        )
         val job = viewModelScope.launch {
-            _pairing.value = PairingState.Requesting
-            val code = try {
-                hostedDeviceLinkClient.requestCode(ClientPlatform.AndroidTv)
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                _pairing.value = PairingState.Failed(
-                    PairingFailure.Localized(PlayarrString.DeviceLoginStartFailed),
-                )
-                return@launch
-            }
-            _pairing.value = PairingState.Waiting(code)
-            hostedDeviceLinkClient.pollUntilResolved(code).collect { result ->
-                val waiting = _pairing.value as? PairingState.Waiting
-                if (waiting?.code?.deviceCode != code.deviceCode) return@collect
-                when (result) {
-                    HostedLinkPollResult.AuthorizationPending -> Unit
-                    HostedLinkPollResult.Expired -> {
-                        _pairing.value = PairingState.Failed(
-                            PairingFailure.Localized(PlayarrString.DeviceLoginSessionExpired),
-                        )
-                    }
-                    is HostedLinkPollResult.Failed -> {
-                        _pairing.value = PairingState.Failed(PairingFailure.Message(result.message))
-                    }
-                    is HostedLinkPollResult.Approved -> completeHostedPairing(result)
+            // Expiry, "session expired" and network blips renew the code inside the flow.
+            flow.run().collect { update ->
+                when (update) {
+                    QrPairingUpdate.Requesting -> _pairing.value = PairingState.Requesting
+                    is QrPairingUpdate.ShowCode -> _pairing.value = PairingState.Waiting(update.code)
+                    QrPairingUpdate.Declined -> _pairing.value = PairingState.Failed(
+                        PairingFailure.Localized(PlayarrString.DeviceLoginDeclined),
+                    )
+                    is QrPairingUpdate.Linked -> completeHostedPairing(update)
                 }
             }
         }
@@ -381,41 +376,19 @@ internal class LoginViewModel @Inject constructor(
         }
     }
 
-    private suspend fun completeHostedPairing(result: HostedLinkPollResult.Approved) {
-        val claim = result.claim
-        serverConfigStore.setBaseUrl(claim.serverUrl)
-        tokenStore.clearCurrent()
+    private suspend fun completeHostedPairing(linked: QrPairingUpdate.Linked) {
+        val claim = linked.claim
         val urls = (listOf(claim.serverUrl) + claim.serverUrls).distinct()
-        deviceAuthClient.pollUntilResolved(claim.serverDeviceCode, 1).collect { tokenResult ->
-            when (tokenResult) {
-                is DevicePollResult.Approved -> {
-                    tokenStore.save(tokenResult.token)
-                    knownServerGroupStore.rememberGroup(
-                        KnownServerGroup(
-                            servers = urls.map { KnownServer(url = it) },
-                            lastGoodUrl = claim.serverUrl,
-                        ),
-                    )
-                    val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
-                    current?.let { tokenStore.saveIdentity(it.id, it.displayName, claim.serverUrl) }
-                    _pairing.value = PairingState.Idle
-                }
-                DevicePollResult.AuthorizationPending, DevicePollResult.SlowDown -> Unit
-                DevicePollResult.Expired -> {
-                    _pairing.value = PairingState.Failed(
-                        PairingFailure.Localized(PlayarrString.DeviceLoginSessionExpired),
-                    )
-                }
-                DevicePollResult.Denied -> {
-                    _pairing.value = PairingState.Failed(
-                        PairingFailure.Localized(PlayarrString.DeviceLoginDeclined),
-                    )
-                }
-                is DevicePollResult.Failed -> {
-                    _pairing.value = PairingState.Failed(PairingFailure.Message(tokenResult.message))
-                }
-            }
-        }
+        tokenStore.save(linked.token)
+        knownServerGroupStore.rememberGroup(
+            KnownServerGroup(
+                servers = urls.map { KnownServer(url = it) },
+                lastGoodUrl = claim.serverUrl,
+            ),
+        )
+        val current = runCatching { api.listAvailableProfiles().firstOrNull { it.isCurrent } }.getOrNull()
+        current?.let { tokenStore.saveIdentity(it.id, it.displayName, claim.serverUrl) }
+        _pairing.value = PairingState.Idle
     }
 }
 
@@ -1034,8 +1007,13 @@ private fun TelevisionPairingScreen(
                                 textAlign = TextAlign.Center,
                                 fontSize = 15.sp,
                             )
+                            // Error/recovery state: D-pad focus lands on the primary action
+                            // (as on web TV), not on the theme dropdown in the stage chrome.
+                            val tryAgainFocus = remember { FocusRequester() }
+                            LaunchedEffect(Unit) { runCatching { tryAgainFocus.requestFocus() } }
                             PlayarrButton(
                                 onClick = onStart,
+                                modifier = Modifier.focusRequester(tryAgainFocus),
                                 containerColor = LocalAuthTokens.current.inkSoft,
                                 contentColor = LocalAuthTokens.current.surfaceStrong,
                             ) {

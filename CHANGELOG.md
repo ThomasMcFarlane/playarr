@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV: the QR sign-in screen no longer stops on "The Playarr Server session expired before it could be saved". When the code or the server's device code expires, it silently fetches a new code and QR and keeps polling, as the web client does. Network and server blips are retried with backoff (2 s doubling to 30 s) without an error, and the QR path never asks for a server URL. Only an explicit denial on the other device shows an error.
+- Fire TV: an expired link code now renews silently instead of showing an error and a Try again button.
+- Android TV: the QR sign-in recovery state focuses its Try again button instead of the theme dropdown.
+- Fire TV client: the package now installs on a real Vega device (manifest module and OS-version declarations, icon under `assets/image`), the Profiles screen no longer crashes (default `LinearGradient` import), choosing a profile opens Home, and first launch no longer logs a storage hydration error or a missing `DOMException`.
 - Roku: the pairing poll timer now starts (a Timer and a Label shared the id `pairingTimer`), so an approved code is picked up.
 - Roku: "Connect to Playarr Server" pairs against the typed server (`POST /api/v1/oauth/device/code`) instead of returning to the hosted broker; QR sign-in never needs a server address.
 - Roku: Home follows the web layout (hero fade, clock, server home rails, card focus ring, Right moves the hero) and the series detail screen has a Play button, season rails that no longer overlap their headings, episode stills and a reachable Similar Titles rail; the end-screen suggestions heading is no longer clipped.
@@ -2342,6 +2346,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Unit tests for the self-renewing QR sign-in state machine (`QrPairingFlowTest`): hosted code expiry, server device-code expiry, denial, request and poll blips, backoff cap; plus a Fire TV `LinkScreen` expiry-renewal test.
 - Roku: add `scripts/parity/roku/capture.mjs` (device screenshots through the dev installer, in the layout `diff.mjs` reads) and the first dark-theme parity table in `docs/parity/roku/`.
 - `PlayDistributionPolicyTest` now asserts the Play flavour allows cleartext, and `scripts/ci/check-cleartext-policy.sh` (run in CI) checks the Android, iOS, tvOS, Xbox and Tizen configuration.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.

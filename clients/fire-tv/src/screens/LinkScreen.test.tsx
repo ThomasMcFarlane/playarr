@@ -236,4 +236,47 @@ describe('<LinkScreen>', () => {
 
     expect(fetch.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
   });
+
+  it('renews an expired code on its own instead of showing an error', async () => {
+    let codeRequests = 0;
+    const fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url === 'https://playarr.app/api/link/code') {
+        codeRequests += 1;
+        return new Response(
+          JSON.stringify({
+            device_code: `hosted-secret-${codeRequests}`,
+            user_code: 'ABCD-2345',
+            verification_uri: 'https://playarr.app/link',
+            verification_uri_complete: 'https://playarr.app/link?user_code=ABCD-2345',
+            expires_in: 600,
+            interval: 0.05,
+          }),
+          {status: 200}
+        );
+      }
+      // The broker has dropped the code.
+      return new Response(null, {status: 404});
+    });
+    globalThis.fetch = fetch as unknown as typeof originalFetch;
+
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <ApiClientProvider>
+          <LinkScreen />
+        </ApiClientProvider>
+      );
+      await flush();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+
+    expect(codeRequests).toBeGreaterThanOrEqual(2);
+    expect(tree.root.findAllByProps({accessibilityRole: 'button'})).toHaveLength(0);
+    await act(async () => {
+      tree.unmount();
+    });
+  });
 });

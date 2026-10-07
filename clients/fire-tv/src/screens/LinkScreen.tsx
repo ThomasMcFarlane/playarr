@@ -50,6 +50,11 @@ type LinkState =
   | {status: 'ready'; code: HostedLinkCode}
   | {status: 'error'; message: string};
 
+/** tv-web `DeviceLogin.isExpiredCodeError`: an expired code renews silently instead of showing an error. */
+export function isExpiredCodeError(reason: unknown): boolean {
+  return reason instanceof Error && /\bexpired\b/i.test(reason.message);
+}
+
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
@@ -86,7 +91,15 @@ export function LinkScreen(): React.ReactElement {
       commitLinkedSession({token, claim, setApiBaseUrl});
       navigation.reset({index: 0, routes: [{name: ROUTES.profiles}]});
     })().catch((reason: unknown) => {
-      if (!cancelled) setState({status: 'error', message: errorMessage(reason)});
+      if (cancelled) return;
+      if (isExpiredCodeError(reason)) {
+        // Same as tv-web: fetch a fresh code and re-render the QR, no error, no button press.
+        cancelled = true;
+        controller.abort();
+        setAttempt((value) => value + 1);
+        return;
+      }
+      setState({status: 'error', message: errorMessage(reason)});
     });
 
     return () => {
