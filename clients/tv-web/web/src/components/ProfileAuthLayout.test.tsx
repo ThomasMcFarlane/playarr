@@ -41,7 +41,8 @@ describe("ProfileAuthLayout", () => {
     );
 
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
-    expect(css).toContain(".tv-library-heading {");
+    const layoutCss = readFileSync(new URL("../styles/page-layout.css", import.meta.url), "utf8");
+    expect(layoutCss).toContain(".tv-library-heading {");
     expect(css).toContain(".tv-stage-chrome-heading {");
   });
 

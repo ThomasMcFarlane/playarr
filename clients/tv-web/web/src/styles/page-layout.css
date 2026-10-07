@@ -1,0 +1,679 @@
+/*
+ * Page layout: the one place that styles page chrome (docs/design/page-layout.md).
+ *
+ * Owns the tokens, the page header (back, title, detail, actions), the action pill, the shell clock and the
+ * scroll-edge fade. `pageLayoutCss.test.ts` fails when a selector naming one of these classes appears in any
+ * other stylesheet, so a page can never restyle the header or its buttons again.
+ *
+ * Changing the look of anything in this file needs an explicit owner request that names the reference, and the
+ * PR body must carry `Layout-Change: owner request <date>, reference <id>` (scripts/ci/check-layout-owner-request.sh).
+ *
+ * Loaded after global.css (main.tsx), so rules moved here from there keep winning exactly as they did.
+ */
+
+:root {
+  --page-header-top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
+  --page-end: clamp(24px, calc(4 * var(--vw)), 96px);
+  --page-control-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
+  --action-pill-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
+  --action-pill-height: clamp(52px, calc(5.2 * var(--vw)), 72px);
+  --action-pill-radius: 14px;
+  --page-header-gap: clamp(14px, calc(1.2 * var(--vw)), 24px);
+  --page-actions-gap: clamp(8px, calc(0.8 * var(--vw)), 16px);
+  --page-header-divider-pad: 20px;
+  --page-body-top: clamp(104px, calc(15 * var(--viewport-unit)), 168px);
+  /* The profile chip lives bottom-left on every screen; pages must not render beneath it. */
+  --page-safe-bottom: clamp(92px, calc(11 * var(--viewport-unit)), 124px);
+  --page-icon-radius: 50%;
+  /* The header row holds Back, the title, the clock and navigation only (the action pills live in the shell column, Q1b). */
+  --page-header-height: var(--page-control-height);
+  /* Shell action column: where the 30 September launcher sat (commit 54224f36). */
+  --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
+  --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
+  --shell-action-column-top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
+  /* The focus indicator is a ring, never a fill: white in dark theme, the theme ink in light theme. */
+  --focus-ring-color: var(--ink);
+  --page-focus-ring-width: 3px;
+  --page-focus-ring-offset: 2px;
+  --page-focus-ring: var(--page-focus-ring-width) solid var(--focus-ring-color);
+  /* The scroll-edge fade (the rail-panel glow). */
+  --page-edge-fade-size: clamp(38px, calc(5.5 * var(--viewport-unit)), 64px);
+  --page-edge-fade-opacity: 0.62;
+}
+
+:root[data-theme="dark"] {
+  --focus-ring-color: #ffffff;
+  --page-edge-fade-opacity: 0.54;
+}
+
+.app-shell {
+  /* Left edge of page content: the right edge of the nav rail plus a gap (see --tv-nav-clearance). */
+  --page-start: max(clamp(102px, calc(8 * var(--vw)), 160px), var(--tv-nav-clearance));
+}
+
+@media (max-width: 760px) {
+  :root {
+    --page-header-top: calc(var(--mobile-top-inset) + 2px);
+    --page-end: 72px;
+    --action-pill-width: 44px;
+    --action-pill-height: 44px;
+    --page-header-gap: 10px;
+    --page-actions-gap: 8px;
+    --page-body-top: calc(var(--mobile-top-inset) + 72px);
+    --page-focus-ring-width: 2px;
+    --page-focus-ring-offset: 3px;
+  }
+
+  .app-shell {
+    --page-start: var(--mobile-page-gutter);
+  }
+}
+
+.app-clock {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: clamp(12px, calc(1.5 * var(--vw)), 28px);
+  white-space: nowrap;
+}
+
+.app-clock-time {
+  font-size: clamp(0.95rem, calc(1.25 * var(--vw)), 1.35rem);
+  font-weight: 520;
+  letter-spacing: -0.03em;
+}
+
+.app-clock-date {
+  color: var(--ink-muted);
+  font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.8rem);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .app-clock-date {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-clock {
+    display: none;
+  }
+}
+
+.app-clock {
+  pointer-events: auto;
+}
+
+.app-clock {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 0.7rem;
+  color: var(--ink);
+}
+
+.app-clock-time {
+  font-size: clamp(0.82rem, calc(0.9 * var(--vw)), 1.1rem);
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+
+.app-clock-date {
+  max-width: 10rem;
+  color: var(--ink-muted);
+  font-size: clamp(0.52rem, calc(0.58 * var(--vw)), 0.72rem);
+  font-weight: 640;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+
+/* -------------------------------------------------------------------------
+* Playarr TV library stage — grid rail + focus-driven editorial preview
+* ---------------------------------------------------------------------- */
+.app-clock {
+  position: absolute;
+  top: var(--page-header-top);
+  right: calc(65% + clamp(18px, calc(2 * var(--vw)), 38px));
+  bottom: auto;
+  left: auto;
+  height: var(--page-control-height);
+  transform: none;
+  align-content: center;
+  align-items: center;
+  justify-items: end;
+  text-align: right;
+}
+
+.tv-library-heading {
+  position: absolute;
+  z-index: 24;
+  top: var(--page-header-top);
+  left: var(--page-start);
+  display: flex;
+  align-items: center;
+  gap: var(--page-header-gap);
+}
+
+.tv-library-heading h1 {
+  font-size: clamp(1.2rem, calc(1.75 * var(--vw)), 2.35rem);
+  font-weight: 580;
+  letter-spacing: -0.045em;
+}
+
+.tv-library-heading > .page-header-title-block > .tv-detail-heading-item {
+  min-width: 0;
+  overflow: hidden;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.tv-library-heading > .page-header-title-block > span {
+  padding-left: var(--page-header-gap);
+  border-left: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
+  font-weight: 680;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.tv-page-back {
+  width: var(--page-control-height);
+  height: var(--page-control-height);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 66%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+  color: var(--ink-soft);
+  font-size: clamp(0.8rem, calc(0.9 * var(--vw)), 1.1rem);
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  transition:
+    transform 220ms ease,
+    background 220ms ease,
+    color 220ms ease;
+}
+
+/* Back stays round (owner decision Q10). Focus is the theme ring and the 1.1 scale, never a fill; hover follows focus. */
+.tv-page-back:hover,
+.tv-page-back:focus-visible {
+  outline: 0;
+  transform: scale(1.1);
+}
+
+.tv-page-back:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
+}
+
+@media (max-width: 1100px), (max-height: 700px) {
+  .tv-library-heading {
+    left: max(calc(7.5 * var(--vw)), var(--tv-nav-clearance));
+  }
+}
+
+@media (max-width: 760px) {
+  .app-clock {
+    display: none;
+  }
+  .tv-library-heading {
+    left: calc(5 * var(--vw));
+  }
+  .tv-library-heading > .page-header-title-block > span {
+    display: none;
+  }
+}
+
+
+@media (max-width: 760px),
+  (max-width: 920px) and (max-height: 500px) and (pointer: coarse) {
+  .tv-library-heading {
+    top: calc(var(--mobile-top-inset) + 2px);
+    right: 116px;
+    left: var(--mobile-page-gutter);
+    gap: 10px;
+  }
+  .tv-library-heading h1 {
+    overflow: hidden;
+    font-size: 1.35rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tv-library-heading > .page-header-title-block > span {
+    display: none;
+  }
+  .tv-page-back {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+  }
+}
+
+html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back {
+  backdrop-filter: blur(12px) saturate(112%);
+  -webkit-backdrop-filter: blur(12px) saturate(112%);
+}
+
+/* Shared page header actions + Filters button (components/shell). */
+.tv-library-heading.has-actions {
+  right: var(--page-end);
+}
+
+.tv-library-heading > .page-header-title-block > .page-header-detail {
+  min-width: 0;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--page-actions-gap);
+  margin-left: auto;
+}
+
+/*
+* The header launcher (Filters, Calendar link, ...) keeps the look the library Filters launcher had before the
+* shared page shell (owner ruling, 2026-10-07: "whatever was on Web a week ago"): a 14px-radius tile with the
+* glyph above a small bold label, glass fill and a soft shadow. Focus and the open state draw the ring (never
+* a fill), the same as Back and the other pills.
+*/
+.ui-btn.action-pill {
+  min-width: var(--action-pill-width);
+  min-height: var(--action-pill-height);
+  height: auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  color: var(--ink-muted);
+  font-size: clamp(0.38rem, calc(0.43 * var(--vw)), 0.52rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 14px 36px rgba(56, 38, 33, 0.08);
+  backdrop-filter: blur(22px) saturate(120%);
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.ui-btn.action-pill svg {
+  width: clamp(18px, calc(1.4 * var(--vw)), 24px);
+  height: clamp(18px, calc(1.4 * var(--vw)), 24px);
+  overflow: visible;
+  fill: var(--surface-strong);
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+/*
+* Focus (and hover) draw the ring and the 1.06 scale, never a fill. The open state (drawer shown) keeps the
+* ink fill. Dark theme: --ink is white, light theme: near-black ink.
+*/
+.ui-btn--secondary.action-pill:hover:not(:disabled),
+.ui-btn--secondary.action-pill:focus-visible {
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  border-color: color-mix(in srgb, var(--line) 68%, transparent);
+  color: var(--ink);
+  transform: scale(1.06);
+}
+
+.ui-btn.action-pill:focus-visible {
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
+}
+
+.ui-btn--secondary.action-pill.is-active {
+  background: var(--ink);
+  border-color: transparent;
+  color: var(--bg);
+}
+
+@media (max-width: 760px) {
+  /* The profile avatar floats top-right on phones; keep actions clear of it. */
+  .tv-library-heading.has-actions {
+    right: 72px;
+  }
+  .tv-library-heading .page-header-actions.is-stacked {
+    flex-direction: row;
+  }
+  .tv-library-heading.has-actions > .page-header-title-block > h1 {
+    font-size: 1.1rem;
+  }
+  .action-pill span {
+    display: none;
+  }
+  .ui-btn.action-pill {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 14px;
+  }
+}
+
+.page-header-actions.is-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+/* Long page titles must not run into the shell clock sitting at the stage divider. */
+.app-shell:has(.page-header) .app-clock {
+  right: calc(65% - clamp(10px, calc(2 * var(--vw)), 40px));
+}
+
+/* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
+   page title (Preferences, Release Calendar). The clock is already hidden on phones; hide it here too. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-shell:has(.page-header) .app-clock {
+    display: none;
+  }
+}
+
+/* The header row grows to fit the 72px action tile and everything centres vertically on it. */
+.tv-library-heading.has-actions {
+  align-items: center;
+}
+
+.tv-library-heading.has-actions > .page-header-title-block > h1 {
+  align-self: center;
+  min-height: var(--page-control-height);
+  display: flex;
+  align-items: center;
+}
+
+.tv-library-heading.has-actions > .tv-page-back {
+  align-self: center;
+}
+
+.tv-library-heading.has-actions > .page-header-title-block > .page-header-detail {
+  align-self: center;
+  min-height: var(--page-control-height);
+  display: flex;
+  align-items: center;
+}
+
+/* Header detail that cannot fit beside the title wraps beneath it with a horizontal rule. */
+.tv-library-heading > .page-header-title-block > .page-header-detail {
+  white-space: nowrap;
+}
+
+.tv-library-heading.is-detail-wrapped {
+  --page-header-divider-pad: 20px;
+  right: var(--page-end);
+  align-items: flex-start;
+}
+
+.page-header-title-block {
+  display: contents;
+}
+
+/* Wrapped: title over detail in a column exactly as wide as the wider of the two, so the rule matches it. */
+.tv-library-heading.is-detail-wrapped > .page-header-title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+  max-width: 100%;
+  gap: 0.35rem;
+}
+
+.tv-library-heading.is-detail-wrapped > .page-header-title-block > .page-header-detail {
+  max-width: none;
+  margin: 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px solid var(--line-strong);
+  border-left: 0;
+}
+
+.action-pill-count {
+  min-width: 1.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--accent, var(--ink));
+  color: var(--bg);
+  font-size: 0.8em;
+  text-align: center;
+}
+
+/* Remote / keyboard navigation: flat translucency instead of re-blurring glass over scrolling artwork. */
+body[data-input-mode="remote"] .tv-page-back {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/*
+ * Shell action column (owner ruling, 8 October 2026, Q1b): every page's side-panel and action pills (Filters, Create,
+ * Calendar link, ...) live in one column owned by the app shell, at the right edge where the 30 September
+ * `.tv-filter-launcher` sat (commit 54224f36), stacked vertically with Filters last. Pages never position them.
+ * On phones, as on 30 September, the column becomes a row left of the profile avatar.
+ */
+.shell-action-column {
+  position: absolute;
+  z-index: 32;
+  top: var(--shell-action-column-top);
+  right: var(--directory-controls-edge);
+  width: var(--directory-controls-width);
+}
+
+.shell-action-column:empty {
+  display: none;
+}
+
+.page-header-stack {
+  display: grid;
+  gap: clamp(10px, calc(1.2 * var(--viewport-unit)), 16px);
+}
+
+.shell-action-column .action-pill {
+  width: var(--directory-controls-width);
+}
+
+@media (max-width: 760px) {
+  .shell-action-column {
+    top: var(--mobile-top-inset, 14px);
+    right: 66px;
+    width: auto;
+  }
+
+  .page-header-stack {
+    display: flex;
+    gap: 8px;
+  }
+
+  .shell-action-column .action-pill {
+    width: 44px;
+  }
+}
+
+/* Navigation group (for example the calendar's previous, Today, next): round arrows and a text button, grouped. */
+.page-actions-navigation {
+  display: flex;
+  align-items: center;
+  gap: var(--page-actions-gap);
+}
+
+.page-actions-navigation .ui-btn--icon {
+  width: var(--page-control-height);
+  min-height: var(--page-control-height);
+  height: var(--page-control-height);
+}
+
+.page-actions-navigation .ui-btn:not(.ui-btn--icon) {
+  min-height: var(--page-control-height);
+}
+
+/* A non-interactive badge in the actions row (for example Downloads offline). */
+.page-actions-status {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+  font-size: clamp(0.42rem, calc(0.48 * var(--vw)), 0.58rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/*
+ * The scroll area: a real native scroller (the viewport) inside a window that draws the one edge fade, the
+ * rail-panel glow, on each side where content continues. Vertical areas fade top and bottom, horizontal areas
+ * left and right.
+ */
+.scroll-area {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scroll-area.is-vertical {
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll-area-viewport {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  scrollbar-width: none;
+}
+
+.scroll-area.is-vertical > .scroll-area-viewport {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.scroll-area.is-horizontal > .scroll-area-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.scroll-area-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-area::before,
+.scroll-area::after {
+  content: "";
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.scroll-area.is-vertical::before,
+.scroll-area.is-vertical::after {
+  right: 0;
+  left: 0;
+  height: var(--page-edge-fade-size);
+}
+
+.scroll-area.is-vertical::before {
+  top: 0;
+  border-radius: 0 0 48% 48%;
+  background: radial-gradient(
+    ellipse 92% 100% at 50% -28%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+  box-shadow: inset 0 18px 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.scroll-area.is-vertical::after {
+  bottom: 0;
+  border-radius: 48% 48% 0 0;
+  background: radial-gradient(
+    ellipse 92% 100% at 50% 128%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+  box-shadow: inset 0 -18px 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.scroll-area.is-horizontal::before,
+.scroll-area.is-horizontal::after {
+  top: 0;
+  bottom: 0;
+  width: var(--page-edge-fade-size);
+}
+
+.scroll-area.is-horizontal::before {
+  left: 0;
+  border-radius: 0 48% 48% 0;
+  background: radial-gradient(
+    ellipse 100% 92% at -28% 50%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+  box-shadow: inset 18px 0 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.scroll-area.is-horizontal::after {
+  right: 0;
+  border-radius: 48% 0 0 48%;
+  background: radial-gradient(
+    ellipse 100% 92% at 128% 50%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+  box-shadow: inset -18px 0 24px -22px rgba(31, 14, 20, 0.72);
+}
+
+.scroll-area.can-scroll-start::before,
+.scroll-area.can-scroll-end::after {
+  opacity: var(--page-edge-fade-opacity);
+}
+
+/* States render inside the page body, below the header (which stays up). */
+.page-layout-state {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+.loading-state {
+  display: grid;
+  place-content: center;
+  gap: 1rem;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.loading-state.is-page {
+  min-height: 100%;
+}
+
+.loading-state > p {
+  font-size: clamp(0.52rem, calc(0.6 * var(--vw)), 0.72rem);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.error-state {
+  display: grid;
+  justify-items: center;
+  gap: 1.4rem;
+}

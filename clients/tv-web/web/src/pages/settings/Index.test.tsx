@@ -133,10 +133,10 @@ describe("SettingsIndexPage", () => {
 
   it("moves the intact list left and gives both panels independent scrolling", () => {
     const markup = renderSettingsRoute("/settings/appearance");
-    const css = readFileSync(
-      new URL("../../styles/global.css", import.meta.url),
-      "utf8"
-    );
+    const css = [
+      readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8"),
+      readFileSync(new URL("../../styles/page-layout.css", import.meta.url), "utf8"),
+    ].join("\n");
 
     expect(css).toMatch(
       /\.tv-library,\s*\.tv-detail\s*\{[^}]*height:\s*var\(--viewport-height\)/s

@@ -271,6 +271,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: the shared page layout primitives (`PageLayout`, `PageActions`, `ActionPill`, `ScrollArea` with the edge fade built in, and the loading, empty and error states) and the page-layout stylesheet that now owns the header, Back, the action pill, the shell clock and the tokens. Pages are not moved onto them yet, so no page looks different, except that focus on Back and on every button is the theme ring (white in dark, ink in light) with no ink fill, and pointer hover on buttons follows focus.
 - Fire TV client: the release calendar (agenda view with the selected release's details and the unreadable-source banner), the household-blocked page (outside the schedule or over the daily budget, with the guardian request), and the action column at the right edge for the library Filters button.
 - Fire TV client: the player has the web's controls (close button, scrubber, play and pause, subtitles and the quality menu with the resolution matrix), and Back unwinds one layer per press (menu, then controls, then exit). The first key press with the controls hidden only shows them, the OK key on the scrubber toggles play and pause, and seeking settles before it is sent. A title the device cannot decode now offers a quality choice instead of a bare error.
 - tvOS parity run now captures a scrolled Home (rail moved right by four cards) in both themes and fails on a hard-cut rail edge, comparing it with the web at the same scroll offset.
@@ -2429,6 +2430,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- CI gate: a PR that changes a shared page layout look file (the page-layout stylesheet, the shared layout components, the layout references and pins, the Android page package and goldens) fails unless its body carries `Layout-Change: owner request <date>, reference <id>`.
+- Page layout guards: the page registry now ratchets (every page is `layout`, `unmigrated` or `exempt` with evidence, and the unmigrated list may only shrink), `pageLayoutAudit` and `pageLayoutCss` fail when a page or a stylesheet draws its own header, pill, scroll container or state, and a new `web layout parity` CI job diffs the canonical header and action pill against the committed 30 September reference and pins (and every page's pills and header band) at 0 pixels in both themes.
 - Android TV instrumented navigation tests cover the draw-only card lift (focus-target bounds unchanged), geometric vertical moves from a scrolled rail, and media cards drawing no ring or fill in both themes.
 - Parity tooling: the Android TV capture script takes scrolled states (Home rail, library grids) and fails a hard-cut scroll edge with `check-edge-fade.mjs`; `capture-web-scrolled.mjs` captures the same Home position on web for comparison.
 - Android TV D-pad navigation is covered by JVM tests of the web rules (`PlayarrTvNavigationTest`) and instrumented key-event tests across Home rails, the library grid and the series page, plus pixel checks that the focus ring draws no fill in both themes (`PlayarrTvNavigationUiTest`).

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync(new URL("./global.css", import.meta.url), "utf8");
+// The header and clock rules live in page-layout.css; the rest of the page frame is still in global.css.
+const css = [readFileSync(new URL("./global.css", import.meta.url), "utf8"), readFileSync(new URL("./page-layout.css", import.meta.url), "utf8")].join("\n");
 const calendarCss = readFileSync(new URL("../pages/Calendar.css", import.meta.url), "utf8");
 
 // The browser check is scripts/tablet-layout.mjs (820x1180 plus a 600 to 1100 px sweep). These guard its causes:

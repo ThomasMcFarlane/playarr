@@ -63,6 +63,7 @@ import {
   PrivacyPolicyPage,
   TermsPage,
 } from "./pages/Legal";
+import { LayoutHarnessPage } from "./pages/LayoutHarness";
 import { NavPerfHarnessPage } from "./pages/NavPerfHarness";
 import { UpdateToast } from "./components/UpdateToast";
 import { PageScrollRoot } from "./components/PageScrollRoot";
@@ -675,6 +676,10 @@ export function App() {
         <Route path="/__nav-perf" element={<NavPerfHarnessPage />} />
       ) : null}
       <Route element={<AppShell />}>
+        {/* The canonical page header for scripts/layout-parity.mjs (dev and --mode layout-harness builds only). */}
+        {import.meta.env.DEV || import.meta.env.MODE === "layout-harness" ? (
+          <Route path="/__layout/header" element={<LayoutHarnessPage />} />
+        ) : null}
         <Route path="/" element={<HomePage />} />
         <Route path="/customise-home" element={<Navigate to="/settings/home" replace />} />
         <Route path="/downloads" element={<DownloadsPage />} />
