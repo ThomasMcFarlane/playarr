@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import Observation
 import PlayarrKit
+import UIKit
 
 @MainActor
 @Observable
@@ -211,6 +212,9 @@ final class TVPlayerViewModel {
     @ObservationIgnored var onExit: () -> Void = {}
     @ObservationIgnored private var stateObservation: AnyCancellable?
     @ObservationIgnored private var lastMediaFileID: UUID?
+    /// Media file whose progress is being reported; nil once flushed on exit.
+    @ObservationIgnored private var activeMediaFileID: UUID?
+    @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
 
     // `PlayerEngine.avPlayer` was relaxed to `AVPlayer?` for the iOS Cast
     // sender build (a Cast-backed engine has no local `AVPlayer` at all) --
@@ -256,7 +260,11 @@ final class TVPlayerViewModel {
     private func handle(_ playback: PlayerPlaybackState) {
         isPlaying = playback == .playing
         switch playback {
-        case .ended: endOfPlayback.mediaEnded()
+        case .ended:
+            endOfPlayback.mediaEnded()
+            heartbeatTask?.cancel()
+            heartbeatTask = nil
+            flushProgress(completed: true)
         case .playing: endOfPlayback.playbackResumed()
         default: break
         }
@@ -265,15 +273,17 @@ final class TVPlayerViewModel {
     /// Restarts the finished item from the start (end card "Replay").
     func replay() async {
         guard let mediaFileID = lastMediaFileID else { return }
-        await play(mediaFileID: mediaFileID, title: currentTitle)
+        await play(mediaFileID: mediaFileID, title: currentTitle, startFromBeginning: true)
     }
 
-    func play(mediaFileID: UUID, title: String) async {
+    func play(mediaFileID: UUID, title: String, startFromBeginning: Bool = false) async {
         endOfPlayback.playbackResumed()
         currentTitle = title
         lastMediaFileID = mediaFileID
         state = .negotiating
         do {
+            // Resume from the server's saved position (web: getWatchProgress).
+            let saved = startFromBeginning ? nil : try? await apiClient.getWatchProgress(mediaFileID: mediaFileID)
             let info = try await apiClient.playbackInfo(
                 mediaFileID: mediaFileID,
                 containers: ["mp4", "mov", "m4v", "mkv"],
@@ -288,9 +298,14 @@ final class TVPlayerViewModel {
 
             playbackMode = info.mode
             applyQuality(info)
-            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title))
+            let resumeSeconds = saved.map {
+                Double(PlaybackQueueBuilder.resumeMS(positionMS: $0.positionMS, durationMS: $0.durationMS)) / 1_000
+            } ?? 0
+            try await engine.load(PlayableItem(id: mediaFileID, streamURL: streamURL, title: title, startPositionSeconds: resumeSeconds))
             engine.play()
             state = .ready
+            activeMediaFileID = mediaFileID
+            startHeartbeat()
         } catch let error as APIError {
             state = .failed(error.displayMessage)
         } catch {
@@ -301,8 +316,79 @@ final class TVPlayerViewModel {
     func setSubtitle(_ subtitle: String?) { currentSubtitle = subtitle }
 
     func togglePlay() {
-        if isPlaying { engine.pause() } else { engine.play() }
+        if isPlaying {
+            engine.pause()
+            flushProgress(completed: false)
+        } else {
+            engine.play()
+        }
     }
+
+    /// A zero position without completion means playback never started (or a
+    /// stalled resume); writing it would wipe the server's resume point.
+    nonisolated static func shouldWriteProgress(positionMS: Int64, completed: Bool) -> Bool {
+        completed || positionMS > 0
+    }
+
+    private func startHeartbeat() {
+        heartbeatTask?.cancel()
+        heartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled, let self else { return }
+                if self.isPlaying { await self.writeProgress(completed: false) }
+            }
+        }
+    }
+
+    /// The progress to report now, captured synchronously so a later
+    /// teardown cannot change it. Nil when nothing should be written.
+    private func progressSnapshot(completed: Bool) -> (UUID, UpdateWatchProgressRequest)? {
+        guard let mediaFileID = activeMediaFileID else { return nil }
+        let durationMS = Int64(max(0, duration) * 1_000)
+        let positionMS = completed ? durationMS : Int64(max(0, position) * 1_000)
+        guard durationMS > 0, Self.shouldWriteProgress(positionMS: positionMS, completed: completed) else { return nil }
+        return (mediaFileID, UpdateWatchProgressRequest(
+            positionMS: positionMS,
+            durationMS: durationMS,
+            completed: completed || positionMS >= durationMS - 30_000
+        ))
+    }
+
+    private func writeProgress(completed: Bool) async {
+        guard let (mediaFileID, body) = progressSnapshot(completed: completed) else { return }
+        _ = try? await apiClient.updateWatchProgress(mediaFileID: mediaFileID, body: body)
+    }
+
+    /// Writes the position under a UIKit background task so it survives
+    /// suspension and view teardown. The returned task completes once the
+    /// server has the write.
+    @discardableResult
+    private func flushProgress(completed: Bool) -> Task<Void, Never> {
+        let snapshot = progressSnapshot(completed: completed)
+        let client = apiClient
+        let app = UIApplication.shared
+        var taskID = UIBackgroundTaskIdentifier.invalid
+        taskID = app.beginBackgroundTask(withName: "playarr.progress-flush") {
+            app.endBackgroundTask(taskID)
+            taskID = .invalid
+        }
+        return Task { @MainActor in
+            if let (mediaFileID, body) = snapshot {
+                _ = try? await client.updateWatchProgress(mediaFileID: mediaFileID, body: body)
+            }
+            if taskID != .invalid { app.endBackgroundTask(taskID) }
+        }
+    }
+
+    /// App left the foreground: pause and flush.
+    func didEnterBackground() {
+        if isPlaying { engine.pause() }
+        flushProgress(completed: false)
+    }
+
+    /// Stops and returns only once the progress write has been delivered.
+    func stopAndFlush() async { await stop().value }
 
     func seek(by seconds: Double) {
         let target = min(max(0, position + seconds), duration > 0 ? duration : position + seconds)
@@ -339,12 +425,19 @@ final class TVPlayerViewModel {
         }
     }
 
-    func stop() {
+    @discardableResult
+    func stop() -> Task<Void, Never> {
         // Leaving the screen (including to a suggestion) is explicit: the
         // countdown stops and does not restart.
         endOfPlayback.cancelCountdown()
         endOfPlayback.stopTimer()
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        // The snapshot is taken before the engine resets the position.
+        let flush = flushProgress(completed: false)
         engine.stop()
+        activeMediaFileID = nil
         state = .idle
+        return flush
     }
 }
