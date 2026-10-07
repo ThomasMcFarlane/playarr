@@ -5,6 +5,7 @@ import {
   hasHorizontalNeighbourToRight,
   isRoughlyForward,
   pickBestDirectionalTarget,
+  pickNearestByEdgeDistance,
   scoreDirectionalCandidate,
   libraryExpandMountedEnd,
   libraryGridWindow,
@@ -163,5 +164,18 @@ describe("title grid index navigation", () => {
     expect(libraryExpandMountedEnd(40, 20, 200, 5)).toBe(40);
     expect(libraryExpandMountedEnd(40, 40, 200, 5)).toBe(111);
     expect(libraryExpandMountedEnd(40, 190, 200, 5)).toBe(200);
+  });
+});
+
+describe("pickNearestByEdgeDistance", () => {
+  it("picks the content item beside the control even when it is not strictly below it", () => {
+    const column = rect(1846, 237, 62, 70);
+    const agendaRow = rect(786, 275, 1049, 98);
+    const far = rect(154, 560, 400, 58);
+    expect(pickNearestByEdgeDistance(column, [{ item: "far", rect: far }, { item: "row", rect: agendaRow }])).toBe("row");
+  });
+
+  it("returns null without candidates", () => {
+    expect(pickNearestByEdgeDistance(rect(0, 0, 10, 10), [])).toBeNull();
   });
 });

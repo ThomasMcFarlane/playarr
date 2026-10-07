@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: the remote no longer dead-ends in the shell action column (Filters, Create, Calendar link): DOWN past the last button and LEFT reach the nearest content item (the alphabet first on Library pages), UP past the first button reaches the header, RIGHT stays put.
 - Android TV: playlist, album and similar-title tiles focus with the media-card shadow and a draw-only lift (no ring, no scale), and the profile picker's lift no longer shifts layout bounds.
 - Android TV: a rail brings a focused card into view by scrolling only as far as it takes to unclip it, so UP and DOWN between rails never drag the target rail to a matching offset.
 - Android TV: Settings opens with focus on the first section and the music artist page opens on the selected album.

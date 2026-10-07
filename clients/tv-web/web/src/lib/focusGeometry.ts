@@ -253,3 +253,29 @@ export function libraryWindowContains(
 ): boolean {
   return index >= window.start && index < window.end;
 }
+
+/**
+ * The candidate whose rectangle is closest to `from` (edge to edge, 0 when they overlap on an axis), ties broken
+ * towards the top and then the left. Used when a control sits beside the content rather than above it (the shell
+ * action column), so DOWN and LEFT find the nearest content item instead of stopping.
+ */
+export function pickNearestByEdgeDistance<T>(
+  from: FocusRect,
+  candidates: ReadonlyArray<{ item: T; rect: FocusRect }>
+): T | null {
+  let best: { item: T; rect: FocusRect; distance: number } | null = null;
+  for (const candidate of candidates) {
+    const dx = Math.max(0, candidate.rect.left - from.right, from.left - candidate.rect.right);
+    const dy = Math.max(0, candidate.rect.top - from.bottom, from.top - candidate.rect.bottom);
+    const distance = Math.hypot(dx, dy);
+    if (
+      !best ||
+      distance < best.distance - 0.5 ||
+      (Math.abs(distance - best.distance) <= 0.5 &&
+        (candidate.rect.top < best.rect.top || (candidate.rect.top === best.rect.top && candidate.rect.left < best.rect.left)))
+    ) {
+      best = { ...candidate, distance };
+    }
+  }
+  return best ? best.item : null;
+}

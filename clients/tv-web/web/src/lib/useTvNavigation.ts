@@ -19,6 +19,7 @@ import {
   focusRectFromDOMRect,
   hasHorizontalNeighbourToRight,
   pickBestDirectionalTarget,
+  pickNearestByEdgeDistance,
   titleGridNeighbourIndex,
 } from "./focusGeometry";
 
@@ -941,6 +942,66 @@ function scrollVerticalContainer(
   return false;
 }
 
+/**
+ * The shell action column (Filters, Create, Calendar link, stacked at the right edge) sits beside the content, not
+ * above it, so plain "strictly below" geometry dead-ended on it. Rules, on every page:
+ *   UP    previous button; from the first, the nearest header control (Today, the arrows, else Back).
+ *   DOWN  next button; from the last, the Library alphabet when there is one, else the nearest content item.
+ *   LEFT  the nearest content item.
+ *   RIGHT nothing (the column is the right edge).
+ */
+function focusFromShellActionColumn(
+  current: HTMLElement,
+  direction: Direction,
+  currentRect: FocusRect,
+  entries: ReadonlyArray<{ element: HTMLElement; rect: FocusRect }>
+): boolean {
+  const column = current.closest<HTMLElement>(".shell-action-column");
+  if (!column) return false;
+  const buttons = entries.map((entry) => entry.element).filter((element) => column.contains(element));
+  const index = buttons.indexOf(current);
+  const focus = (target: HTMLElement | null | undefined): boolean => {
+    if (!target) return false;
+    target.focus({ preventScroll: true });
+    markFocusableRectsDirty();
+    target.scrollIntoView({ behavior: remoteScrollBehavior(), block: "nearest", inline: "nearest" });
+    return true;
+  };
+  const nearest = (inHeader: boolean) =>
+    pickNearestByEdgeDistance(
+      currentRect,
+      entries
+        .filter(
+          (entry) =>
+            entry.element !== current &&
+            !column.contains(entry.element) &&
+            !entry.element.closest(".app-nav, .app-user-identity, .tv-alphabet") &&
+            Boolean(entry.element.closest(".page-header")) === inHeader
+        )
+        .map((entry) => ({ item: entry.element, rect: entry.rect }))
+    );
+  switch (direction) {
+    case "right":
+      return true;
+    case "left":
+      return focus(nearest(false)) || true;
+    case "up":
+      if (index > 0) return focus(buttons[index - 1]);
+      return focus(nearest(true)) || true;
+    case "down":
+      if (index >= 0 && index < buttons.length - 1) return focus(buttons[index + 1]);
+      return (
+        focus(
+          document.querySelector<HTMLElement>(".tv-alphabet button.is-active") ??
+            document.querySelector<HTMLElement>(".tv-alphabet button")
+        ) ||
+        focus(nearest(false)) ||
+        true
+      );
+  }
+  return false;
+}
+
 function focusActiveAlphabet(
   current: HTMLElement,
   direction: Direction,
@@ -951,7 +1012,7 @@ function focusActiveAlphabet(
     document.querySelector<HTMLElement>(".tv-alphabet button");
   if (!activeLetter) return false;
 
-  if (current.matches(".tv-filter-launcher") && direction === "down") {
+  if (current.closest(".shell-action-column") && direction === "down") {
     activeLetter.focus({ preventScroll: true });
     return true;
   }
@@ -1182,6 +1243,7 @@ function moveFocus(direction: Direction): void {
   const currentRect = rectFor(current, rectByElement);
 
   if (focusExplicitEdgeTarget(current, direction)) return;
+  if (focusFromShellActionColumn(current, direction, currentRect, entries)) return;
   if (focusActiveAlphabet(current, direction, currentRect)) return;
   if (focusWithinScrollContainer(current, direction)) return;
 

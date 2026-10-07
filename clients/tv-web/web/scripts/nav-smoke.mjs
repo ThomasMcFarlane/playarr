@@ -297,7 +297,7 @@ try {
   }
 
   // 8b. Late data must not steal the highlight: Home resolves "On Deck" through slow
-  // per-title detail calls; the focused card has to keep focus and its ring when they land.
+  // per-title detail calls; the focused card has to keep focus and its lift (soft shadow, no ring) when they land.
   {
     const slow = await startServer({ distDir: DIST, onDeck: 4, detailDelayMs: 1800 });
     const slowBase = `http://127.0.0.1:${slow.port}`;
@@ -319,13 +319,13 @@ try {
       if (!el || el === document.body || !el.classList.contains("tv-home-card")) return null;
       const art = el.querySelector(".tv-home-card-art");
       const shadow = art ? getComputedStyle(art).boxShadow : "";
-      return { href: el.getAttribute("href"), connected: el.isConnected, ring: /rgb/.test(shadow) && shadow.includes("0px 0px 0px 3px"), focused: document.activeElement === el, active: el.hasAttribute("data-remote-active") };
+      return { href: el.getAttribute("href"), connected: el.isConnected, lifted: shadow.includes("52px") && !shadow.includes("0px 0px 0px 3px"), focused: document.activeElement === el, active: el.hasAttribute("data-remote-active") };
     });
     const before = await marked();
     await page.waitForTimeout(3500); // detail calls (1.8 s) land and the hero text arrives
     const after = await marked();
     const hero = await page.evaluate(() => document.querySelector(".tv-home-feature")?.textContent ?? "");
-    check("home: highlighted card survives the hero detail load", Boolean(before && after && before.href === after.href && after.ring && (after.focused || after.active)), JSON.stringify({ before, after }));
+    check("home: highlighted card survives the hero detail load", Boolean(before && after && before.href === after.href && after.lifted && (after.focused || after.active)), JSON.stringify({ before, after }));
     check("home: hero description did load", hero.includes("Hero description") || hero.length > 0, hero.slice(0, 60));
     await context.close();
     await slow.close();
@@ -382,6 +382,54 @@ try {
     await settle(page);
     const onInput = await page.evaluate(() => document.activeElement?.tagName === "INPUT");
     check("search: Left past the first column returns to the input", onInput);
+    await context.close();
+  }
+
+  // 10. The shell action column (Filters, Calendar link, Create) must never dead-end the remote: DOWN past the last button
+  // and LEFT reach the nearest content item, UP from the first button reaches the header, RIGHT stays put.
+  for (const [route, contentSelector] of [
+    ["/calendar", ".calendar-page [data-navigation-focus-key], .calendar-page button:not(.page-filters-button)"],
+    ["/movies", "a.tv-title-card"],
+  ]) {
+    const { context, page } = await newPage(route);
+    await page.waitForSelector("[data-filters-button]", { timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    const where = () =>
+      page.evaluate((sel) => {
+        const el = document.querySelector("[data-remote-active]") ?? document.activeElement;
+        return {
+          inColumn: Boolean(el?.closest(".shell-action-column")),
+          inHeader: Boolean(el?.closest(".page-header")),
+          inContent: Boolean(el && el.matches(sel) && !el.closest(".shell-action-column, .page-header")),
+          label: el?.getAttribute("aria-label") || el?.textContent?.trim().slice(0, 20) || el?.tagName,
+        };
+      }, contentSelector);
+    const toFilters = async () => {
+      await page.evaluate(() => document.querySelector("[data-filters-button]").focus());
+      await page.keyboard.press("Shift");
+      await page.waitForTimeout(150);
+    };
+    const label = route.slice(1);
+    await toFilters();
+    await press(page, "ArrowLeft");
+    await settle(page);
+    const left = await where();
+    check(`${label}: LEFT from Filters reaches the nearest content item`, left.inContent, JSON.stringify(left));
+    await toFilters();
+    await press(page, "ArrowRight");
+    await settle(page);
+    const right = await where();
+    check(`${label}: RIGHT from Filters stays on the column`, right.inColumn, JSON.stringify(right));
+    await toFilters();
+    await press(page, "ArrowDown", 2);
+    await settle(page);
+    const down = await where();
+    check(`${label}: DOWN past the last column button leaves the column (alphabet or content)`, !down.inColumn && !down.inHeader, JSON.stringify(down));
+    await toFilters();
+    await press(page, "ArrowUp", 4);
+    await settle(page);
+    const up = await where();
+    check(`${label}: UP past the first column button reaches the header`, up.inHeader, JSON.stringify(up));
     await context.close();
   }
 } finally {
