@@ -190,7 +190,10 @@ class MainActivity : ComponentActivity() {
             PlayarrTheme(darkTheme = display.darkTheme) {
                 CompositionLocalProvider(LocalPlayarrDisplayPreferences provides display.value) {
                     androidx.compose.material3.ProvideTextStyle(
-                        androidx.compose.ui.text.TextStyle(fontFamily = io.playarr.mobile.ui.webFontFamily),
+                        androidx.compose.ui.text.TextStyle(
+                            fontFamily = io.playarr.mobile.ui.webFontFamily,
+                            textMotion = if (io.playarr.mobile.ui.webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
+                        ),
                     ) {
                         PlayarrApp(isTelevision = isTelevision)
                     }

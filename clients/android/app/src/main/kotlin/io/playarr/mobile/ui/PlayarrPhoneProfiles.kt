@@ -147,7 +147,7 @@ internal fun PhoneProfileChoice(
                 profile.displayName,
                 color = if (selected) WebInk else WebInkSoft, fontSize = 13.12.sp, lineHeight = 19.68.sp, fontWeight = FontWeight(680),
                 style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().offset(y = 1.dp),
             )
             Text(
                 playarrString(
@@ -159,7 +159,7 @@ internal fun PhoneProfileChoice(
                     },
                 ).uppercase(LocalPlayarrLanguage.current.locale),
                 color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, fontWeight = FontWeight(690),
-                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1,
+                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-1).dp),
             )
         }
         if (selected) {
@@ -224,12 +224,12 @@ internal fun PhoneAddProfileChoice(selected: Boolean, enabled: Boolean, onFocus:
             Text(
                 playarrString(PlayarrString.ProfilesSignIn),
                 color = if (selected) WebInk else WebInkSoft, fontSize = 13.12.sp, lineHeight = 19.68.sp, fontWeight = FontWeight(680),
-                style = WebTextStyle, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                style = WebTextStyle, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().offset(y = 1.dp),
             )
             Text(
                 playarrString(PlayarrString.ProfilesAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
                 color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, fontWeight = FontWeight(690),
-                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1,
+                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-1).dp),
             )
         }
     }

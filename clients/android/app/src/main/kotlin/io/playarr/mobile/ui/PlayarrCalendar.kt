@@ -282,7 +282,14 @@ private fun PhoneCalendarHeader(state: CalendarUiState, locale: Locale, holder: 
                     title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(640), textAlign = TextAlign.Center,
                     style = WebTextStyle, modifier = Modifier.width(131.5.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 )
-                Text("▾", color = WebInk, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle)
+                // The web draws a "▼" glyph from a fallback font: a solid 6 x 5.4 triangle.
+                val ink = WebInk
+                androidx.compose.foundation.Canvas(Modifier.padding(start = 1.dp).size(width = 6.1.dp, height = 5.4.dp)) {
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close()
+                    }
+                    drawPath(path, ink)
+                }
             }
         }
         Box(Modifier.width(159.5.dp).height(90.dp)) {
@@ -292,7 +299,7 @@ private fun PhoneCalendarHeader(state: CalendarUiState, locale: Locale, holder: 
             val ring = WebInk
             Surface(
                 onClick = holder::goToToday,
-                modifier = Modifier.offset(x = 46.dp, y = 0.dp).size(73.1.dp, 44.dp)
+                modifier = Modifier.offset(x = 46.dp, y = 0.dp).size(75.6.dp, 44.dp)
                     .graphicsLayer { scaleX = 1.055f; scaleY = 1.055f }
                     .drawBehind {
                         val grow = 3.5.dp.toPx()
@@ -512,7 +519,7 @@ private fun PhoneCalendarPill(label: String, glyph: String? = null, enabled: Boo
         contentColor = if (primary) (if (webIsDark) Color(0xFF151315) else Color.White) else WebInkSoft,
         border = if (primary) null else BorderStroke(1.dp, WebPillBorder), modifier = Modifier.height(44.dp),
     ) {
-        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = 21.7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (glyph != null) Text(glyph, color = WebInkSoft, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle)
             Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle, maxLines = 1)
         }

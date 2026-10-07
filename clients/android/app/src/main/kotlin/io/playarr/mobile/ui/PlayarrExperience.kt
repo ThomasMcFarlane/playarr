@@ -101,6 +101,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -1210,12 +1211,23 @@ internal val WebPillBorder: Color get() = webHairline(0.1527f, 0.1838f)
 internal val WebDivider: Color get() = webHairline(0.23f, 0.28f)
 internal val WebSearchBorder: Color get() = webHairline(0.1758f, 0.2116f)
 
-/** CSS puts half the line-height leading above and below the glyphs; this is Compose's equivalent. */
+/**
+ * CSS puts half the line-height leading above and below the glyphs. With the bundled Liberation Sans, Chromium sets the
+ * glyphs about 0.075 em higher in a 1.5 line than Compose's centred leading does, so the phone font uses a proportional
+ * split (0.3 above, 0.7 below, which is 0.075 em at 1.5 line height); other fonts keep the plain centre.
+ */
 internal val WebTextStyle: androidx.compose.ui.text.TextStyle
     get() = androidx.compose.ui.text.TextStyle(
     fontFamily = webFontFamily,
+    // Chromium lays glyphs out with unhinted, fractional advances; Compose's default hints them (about 4% narrower at
+    // 11 sp). The animated text motion turns hinting off and positions glyphs at subpixel offsets.
+    textMotion = if (webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
     lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        alignment = if (webFontFamily != null) {
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment(0.3f)
+        } else {
+            androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center
+        },
         trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
     ),
 )
@@ -2468,7 +2480,7 @@ private fun ExperienceHomeScreen(
                             top = if (isTelevision) 480.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 67.6.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 32.dp else 66.93.dp),
                     ) {
                         items(current.value, key = HomeRail::key) { rail ->
                             ExperienceMediaRail(
@@ -2789,8 +2801,11 @@ private fun ExperienceMediaRail(
             }
             Spacer(Modifier.height(8.dp))
         }
+        val railState = androidx.compose.foundation.lazy.rememberLazyListState()
+        Box {
         LazyRow(
-            modifier = Modifier.fillMaxWidth().then(if (isTelevision) Modifier.padding(top = 7.dp) else Modifier),
+            state = railState,
+            modifier = (if (isTelevision) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 7.dp) else Modifier),
             contentPadding = if (isTelevision) PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 24.dp else 12.dp),
         ) {
@@ -2832,7 +2847,63 @@ private fun ExperienceMediaRail(
                 )
             }
         }
+        if (!isTelevision && railState.canScrollForward) {
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) { PhoneRailEdgeFade() }
+        }
+        }
     }
+}
+
+/**
+ * `.tv-home-rail-window::after` on a phone: a 32 px fade at the rail window's right edge while the rail can scroll on
+ * (opacity 0.58, 0.5 in dark). An elliptical radial gradient centred 28% beyond the edge, rounded 48% on its left,
+ * plus the inset shadow along the edge.
+ */
+@Composable
+internal fun PhoneRailEdgeFade(modifier: Modifier = Modifier) {
+    val ink = Color(0xFF1F0E14)
+    val opacity = if (webIsDark) 0.5f else 0.58f
+    Box(
+        modifier
+            .width(32.dp)
+            .fillMaxHeight()
+            .graphicsLayer { alpha = opacity }
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val shape = androidx.compose.ui.graphics.Path().apply {
+                    addRoundRect(
+                        androidx.compose.ui.geometry.RoundRect(
+                            0f, 0f, w, h,
+                            topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
+                            topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                            bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                            bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
+                        ),
+                    )
+                }
+                drawContext.canvas.save()
+                drawContext.canvas.clipPath(shape)
+                // ellipse 100% 88% at 128% 50%: horizontal radius w, vertical radius 0.88 h, centre 28% past the edge.
+                val ry = 0.88f * h
+                val centre = Offset(1.28f * w, h / 2f)
+                withTransform({ scale(1f, ry / w, pivot = centre) }) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            0f to ink.copy(alpha = 0.5f), 0.46f to ink.copy(alpha = 0.18f), 0.78f to Color.Transparent,
+                            center = centre, radius = w,
+                        ),
+                        radius = w * 4f, center = centre,
+                    )
+                }
+                // inset -18px 0 24px -22px: the darkening that hugs the right edge.
+                drawRect(
+                    Brush.horizontalGradient(0f to Color.Transparent, 1f to ink.copy(alpha = 0.17f), startX = w - 14.dp.toPx(), endX = w),
+                    topLeft = Offset(w - 14.dp.toPx(), 0f), size = androidx.compose.ui.geometry.Size(14.dp.toPx(), h),
+                )
+                drawContext.canvas.restore()
+            },
+    )
 }
 
 @Composable
@@ -2964,12 +3035,12 @@ private fun ExperienceLandscapeCard(
             Text(
                 displayTitle, color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight(630),
                 style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 9.4.dp),
+                modifier = Modifier.padding(top = 10.4.dp),
             )
             Text(
                 resolvedSubtitle, color = WebInkMuted, fontSize = 9.92.sp, lineHeight = 14.88.sp,
                 style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 1.5.dp),
+                modifier = Modifier.padding(top = 0.5.dp),
             )
         } else if (webPhone && webSearch) {
             Text(
@@ -3818,10 +3889,36 @@ private fun PhoneSearchContent(
             Spacer(Modifier.height(76.dp))
             Column(Modifier.padding(horizontal = 16.dp)) {
                 val pillShape = CircleShape
+                // `.tv-search-form:focus-within`: rose border, a 4 px rose ring, a deeper shadow and 1.015x.
+                var fieldFocused by remember { mutableStateOf(false) }
+                val rose = Color(0xFFCF3157)
+                WebShadowedBox(
+                    shadows = listOf(
+                        if (fieldFocused) WebShadow(24.dp, 64.dp, Color(0xFF1F0E14).copy(alpha = 0.18f))
+                        else WebShadow(18.dp, 52.dp, Color(0xFF1F0E14).copy(alpha = 0.12f)),
+                    ),
+                    shape = pillShape,
+                    modifier = Modifier.fillMaxWidth()
+                        .graphicsLayer { if (fieldFocused) { scaleX = 1.015f; scaleY = 1.015f } }
+                        .drawBehind {
+                            if (fieldFocused) {
+                                val ring = 4.dp.toPx()
+                                drawRoundRect(
+                                    rose.copy(alpha = 0.16f),
+                                    topLeft = Offset(-ring / 2f, -ring / 2f),
+                                    size = androidx.compose.ui.geometry.Size(size.width + ring, size.height + ring),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius((size.height + ring) / 2f),
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(ring),
+                                )
+                            }
+                        },
+                    innerFill = false,
+                    innerWidthFill = true,
+                ) {
                 Row(
                     Modifier.fillMaxWidth().height(50.dp)
                         .background(WebSurfaceStrong.copy(alpha = 0.88f), pillShape)
-                        .border(1.dp, WebSearchBorder, pillShape)
+                        .border(1.dp, if (fieldFocused) rose.copy(alpha = 0.72f) else WebSearchBorder, pillShape)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -3830,7 +3927,7 @@ private fun PhoneSearchContent(
                     androidx.compose.foundation.text.BasicTextField(
                         value = query,
                         onValueChange = onQueryChange,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).onFocusChanged { fieldFocused = it.isFocused },
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = webFontFamily, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
@@ -3845,6 +3942,7 @@ private fun PhoneSearchContent(
                             }
                         },
                     )
+                }
                 }
                 Spacer(Modifier.height(10.dp))
                 androidx.compose.runtime.CompositionLocalProvider(
@@ -3861,7 +3959,7 @@ private fun PhoneSearchContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.4.dp),
                         ) {
-                            Icon(PlayarrWebIcons.FilterToggle, contentDescription = null, tint = WebPink, modifier = Modifier.size(18.4.dp))
+                            Icon(PlayarrWebIcons.FilterToggle, contentDescription = null, tint = WebKicker, modifier = Modifier.size(18.4.dp))
                             Text(playarrString(PlayarrString.SearchFilters), fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight(760), style = WebTextStyle, maxLines = 1)
                             Text(filterSummary, color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, style = WebTextStyle, maxLines = 1)
                         }
@@ -5015,7 +5113,7 @@ private fun PhoneVideoDetailBody(
                     Spacer(Modifier.height(10.dp))
                 }
                 Text(synopsis, color = WebInkMuted, fontSize = 11.52.sp, lineHeight = 16.704.sp, style = WebTextStyle, maxLines = 6, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(if (episode != null) 11.67.dp else 14.dp))
                 PhoneDetailActions(
                     work = work, episode = selectedEpisode, mediaFileId = mediaFileId, progress = progress, canDownload = canDownload,
                     posterUrl = posterUrl, launchSettings = launchSettings, onPlaybackSettings = onPlaybackSettings, onPlay = onPlay,
@@ -5025,7 +5123,7 @@ private fun PhoneVideoDetailBody(
         }
         item {
             Column(
-                Modifier.padding(top = 28.dp).fillMaxWidth().then(if (webIsDark) Modifier.background(webRailSurfaceBrush()) else Modifier),
+                Modifier.padding(top = 30.33.dp).fillMaxWidth().then(if (webIsDark) Modifier.background(webRailSurfaceBrush()) else Modifier),
             ) {
                 if (series != null) {
                     seasons.forEach { season ->
