@@ -1,0 +1,1 @@
+- Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.

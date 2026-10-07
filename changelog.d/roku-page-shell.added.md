@@ -1,0 +1,1 @@
+- Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).

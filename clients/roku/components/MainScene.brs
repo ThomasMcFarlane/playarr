@@ -76,7 +76,7 @@ sub init()
     m.navHighlights = []
     m.navIcons = []
     m.navLabels = []
-    for i = 0 to 6
+    for i = 0 to 9
         m.navHighlights.Push(m.top.findNode("navHighlight" + i.ToStr()))
         m.navIcons.Push(m.top.findNode("navIcon" + i.ToStr()))
         m.navLabels.Push(m.top.findNode("navLabel" + i.ToStr()))
@@ -88,7 +88,10 @@ sub init()
     hideAllResiduals()
     m.availableWorkKinds = invalid
     ' Sites (index 4) starts disabled until catalog/kinds proves access.
-    m.navEnabled = [true, true, true, true, false, true, true]
+    m.navEnabled = [true, true, true, true, false, true, true, true, true, true]
+    m.qualityPref = LoadQualityPreference()
+    m.subtitlePref = LoadSubtitlePreference()
+    pagesInit()
     m.browseTitle = m.top.findNode("browseTitle")
     m.browseCountLabel = m.top.findNode("browseCountLabel")
     m.browseKeyArt = m.top.findNode("browseKeyArt")
@@ -680,6 +683,17 @@ sub onApiResult(event as Object)
         acceptPlayerPreferences(result.data)
     else if action = "profilePin" or action = "profilePinSave"
         acceptProfilePinSetting(result.data)
+    else if action = "watchlist" or action = "requests" or action = "calendar" or action = "railPrefs"
+        acceptPageData(action, result.data)
+    else if action = "railPrefsReset"
+        sendApi("railPrefs", "GET", "/api/v1/home/rails/preferences?lang=en", invalid, true)
+    else if action = "watchlistRemove"
+        sendApi("watchlist", "GET", "/api/v1/watchlist", invalid, true)
+    else if action = "calendarFeed"
+        acceptCalendarFeed(result.data)
+    else if action = "avatarGet" or action = "avatarSave"
+        if result.data <> invalid and result.data.preference <> invalid then m.avatarPreset = result.data.preference.value
+        settingsRefresh()
     else if action = "watchProgress"
         acceptWatchProgress(result.data)
     else if action = "homeWorkDetail"
@@ -732,6 +746,10 @@ sub onApiResult(event as Object)
 end sub
 
 sub handleApiFailure(action as String, result as Object)
+    if action = "watchlist" or action = "requests" or action = "calendar" or action = "railPrefs"
+        acceptPageFailure(action, result)
+        return
+    end if
     if action = "deviceToken" and result.data <> invalid
         code = result.data.error
         if code = "authorization_pending"
@@ -1226,6 +1244,7 @@ sub onPairingLanguageDialogButton(event as Object)
     if m.top.dialog <> invalid then m.top.dialog.close = true
     m.languagePreference = PairingLanguagePreferenceFromIndex(index)
     SavePairingLanguagePreference(m.languagePreference)
+    settingsRefresh()
     refreshPairingCopy()
     applyProfilesChrome()
     if m.top.screenState = "profiles"
@@ -1556,6 +1575,9 @@ function profilesCurrentIndex() as Integer
 end function
 
 sub signOutFromProfiles()
+    ' A signed-out device shows the hosted QR code again; manual server entry stays a separate fallback.
+    m.directPairing = false
+    SaveDirectPairing(false)
     ClearSession(true)
     m.accessToken = ""
     m.refreshToken = ""
@@ -1786,6 +1808,10 @@ function settingsSectionLabels() as Object
 end function
 
 sub openSettings()
+    openPage("settings")
+end sub
+
+sub openLegacySettings()
     setListContent(m.settingsSectionList, settingsSectionLabels())
     m.settingsSectionIndex = 0
     renderSettingsSection(0)
@@ -1980,7 +2006,7 @@ end sub
 sub acceptPlayerPreferences(data as Object)
     if data = invalid or data.preferred_audio_language = invalid then return
     m.preferredAudioLanguage = data.preferred_audio_language
-    if m.settingsSectionIndex = 3 then renderPlayerSettings()
+    settingsRefresh()
 end sub
 
 sub enterLibrary(profileName as String)
@@ -3861,11 +3887,11 @@ end sub
 ' ---------------------------------------------------------------------------
 
 function navDockKindList() as Object
-    return ["search", "home", "series", "movie", "site", "artist", "playlist"]
+    return ["search", "home", "series", "movie", "site", "artist", "playlist", "watchlist", "requests", "calendar"]
 end function
 
 function navDockLabelList() as Object
-    return ["Search", "Home", "Series", "Movies", "Sites", "Music", "Playlists"]
+    return ["Search", "Home", "Series", "Movies", "Sites", "Music", "Playlists", "Watchlist", "Requests", "Calendar"]
 end function
 
 ' Map dock kind strings to WorkKind values from GET /api/v1/catalog/kinds.
@@ -3916,7 +3942,7 @@ end sub
 ' Also reflows enabled items so hidden slots do not leave empty gaps.
 sub applyNavDockKindFilter()
     kinds = navDockKindList()
-    if m.navEnabled = invalid then m.navEnabled = [true, true, true, true, false, true, true]
+    if m.navEnabled = invalid then m.navEnabled = [true, true, true, true, false, true, true, true, true, true]
     for i = 0 to kinds.Count() - 1
         workKind = navDockWorkKindForSlot(kinds[i])
         enabled = true
@@ -3952,19 +3978,16 @@ end sub
 ' Group PNGs include an 8px soft-shadow pad around the solid rounded face.
 sub layoutNavDock()
     if m.navIcons = invalid or m.navIcons.Count() = 0 then return
-    itemSize = 64
-    itemGap = 10
-    itemStep = itemSize + itemGap ' 74
-    groupPad = 8
-    groupGap = 14
-    shadowPad = 8
-    dockLeft = 32
-    contentLeft = dockLeft + groupPad ' face origin inside shadow pad
-    iconInset = 16 ' centres 32×32 icon in 64 cell
-    ' Three visual groups match tv-web NAV_GROUPS: search | libraries | playlists.
-    groupRanges = [[0, 0], [1, 5], [6, 6]]
-    ' Measure total dock height so we can vertically centre like
-    ' .app-nav { top:50%; transform:translateY(-50%) }.
+    ' Web .app-nav at 1920x1080: groups at x 42.2 (77.5 wide), items 67.2 square on a 73.6 pitch, 5.8 group padding,
+    ' 13.7 between groups, the whole dock centred vertically. Icons are 20 px, labels sit 41.6 px below the item top.
+    itemSize = 67
+    itemStep = 73.6
+    groupPad = 5.8
+    groupGap = 13.7
+    dockLeft = 42
+    ' Groups match web NAV_GROUPS: Downloads+Search | library kinds | Playlists, Watchlist, Requests, Calendar.
+    ' Downloads (offline storage) cannot exist on Roku, so the first group is Search alone.
+    groupRanges = [[0, 0], [1, 5], [6, 9]]
     totalH = 0
     visibleGroups = 0
     for g = 0 to groupRanges.Count() - 1
@@ -3975,63 +3998,42 @@ sub layoutNavDock()
         end for
         if n > 0
             if visibleGroups > 0 then totalH = totalH + groupGap
-            totalH = totalH + groupPad * 2 + n * itemSize + (n - 1) * itemGap
+            totalH = totalH + groupPad + n * itemStep
             visibleGroups = visibleGroups + 1
         end if
     end for
-    y = int((1080 - totalH) / 2)
-    if y < 160 then y = 160
-
+    y = (1080 - totalH) / 2
     for g = 0 to groupRanges.Count() - 1
         range = groupRanges[g]
         groupStartY = y
-        groupHasVisible = false
         visibleCount = 0
-        itemY = y + groupPad
+        itemY = y + groupPad / 2
         for i = range[0] to range[1]
             if m.navEnabled <> invalid and m.navEnabled[i]
-                groupHasVisible = true
                 visibleCount = visibleCount + 1
-                ' Highlight chip sits on the 64×64 cell; focus PNG is 80×80 with
-                ' 8px shadow pad and is offset in renderNavDockFocus.
-                if m.navHighlights[i] <> invalid
-                    m.navHighlights[i].translation = [contentLeft, itemY]
-                    m.navHighlights[i].width = 64
-                    m.navHighlights[i].height = 64
-                end if
-                if m.navIcons[i] <> invalid
-                    m.navIcons[i].translation = [contentLeft + iconInset, itemY + iconInset]
-                    m.navIcons[i].width = 32
-                    m.navIcons[i].height = 32
-                end if
-                if m.navLabels[i] <> invalid
-                    ' Label centred under icon. Pivot at local x=100
-                    ' (scaleRotateCenter); keep that pivot on the icon centre.
-                    m.navLabels[i].translation = [contentLeft + 32 - 100, itemY + 42]
-                end if
+                m.navHighlights[i].translation = [dockLeft + 5.2, itemY]
+                m.navHighlights[i].width = itemSize
+                m.navHighlights[i].height = itemSize
+                m.navIcons[i].translation = [dockLeft + 5.2 + 28.5, itemY + 16.5]
+                m.navIcons[i].width = 20
+                m.navIcons[i].height = 20
+                m.navLabels[i].translation = [dockLeft + 5.2 + 33.6 - 50, itemY + 41.6]
                 itemY = itemY + itemStep
             end if
         end for
         bg = m.top.findNode("navGroupBg" + g.ToStr())
         if bg <> invalid
-            if groupHasVisible
+            if visibleCount > 0
+                faceH = Int(groupPad + visibleCount * itemStep + 0.5)
                 bg.visible = true
-                ' Pre-rendered nav-group-N.png: content + 8px shadow pad each side.
-                n = visibleCount
-                if n < 1 then n = 1
-                if n > 5 then n = 5
-                faceH = groupPad * 2 + n * itemSize + (n - 1) * itemGap
-                bg.uri = "pkg:/images/nav-group-" + n.ToStr() + ".png"
-                bg.width = 80 + shadowPad * 2
-                bg.height = faceH + shadowPad * 2
-                bg.translation = [dockLeft - shadowPad, groupStartY - shadowPad]
-                y = groupStartY + faceH
+                bg.uri = "pkg:/images/nav-group-" + visibleCount.ToStr() + ".png"
+                bg.width = 78
+                bg.height = faceH
+                bg.translation = [dockLeft, groupStartY]
+                y = groupStartY + groupPad + visibleCount * itemStep + groupGap
             else
                 bg.visible = false
             end if
-        end if
-        if groupHasVisible and g < groupRanges.Count() - 1
-            y = y + groupGap
         end if
     end for
 end sub
@@ -4090,6 +4092,11 @@ function activeNavDockIndex() as Integer
     if state = "search" then return 0
     if state = "home" then return 1
     if state = "playlists" then return 6
+    if state = "page"
+        if m.pageKind = "watchlist" then return 7
+        if m.pageKind = "requests" then return 8
+        if m.pageKind = "calendar" then return 9
+    end if
     if state = "browse"
         if m.browseKind = "series" then return 2
         if m.browseKind = "movie" then return 3
@@ -4120,21 +4127,10 @@ sub renderNavDockFocus()
             if m.navHighlights[i] <> invalid
                 m.navHighlights[i].visible = showChip
                 if showChip
-                    ' Focus chip is 80×80 with 8px shadow pad; active is exact 64×64.
-                    ' Icon is inset 16px inside the 64 cell; chip top-left = icon - 16.
-                    if m.navIcons[i] <> invalid
-                        iconPos = m.navIcons[i].translation
-                        if isFocused
-                            m.navHighlights[i].uri = "pkg:/images/nav-item-focus.png"
-                            m.navHighlights[i].width = 80
-                            m.navHighlights[i].height = 80
-                            m.navHighlights[i].translation = [iconPos[0] - 24, iconPos[1] - 24]
-                        else
-                            m.navHighlights[i].uri = "pkg:/images/nav-item-active.png"
-                            m.navHighlights[i].width = 64
-                            m.navHighlights[i].height = 64
-                            m.navHighlights[i].translation = [iconPos[0] - 16, iconPos[1] - 16]
-                        end if
+                    if isFocused
+                        m.navHighlights[i].uri = "pkg:/images/nav-item-focus.png"
+                    else
+                        m.navHighlights[i].uri = "pkg:/images/nav-item-active.png"
                     end if
                 end if
             end if
@@ -4169,6 +4165,8 @@ sub selectNavDockItem()
         openSearch()
     else if kind = "playlist"
         openPlaylists()
+    else if kind = "watchlist" or kind = "requests" or kind = "calendar"
+        openPage(kind)
     else
         openBrowse(kind, labels[idx])
     end if
@@ -5032,7 +5030,7 @@ sub requestPlayback(mediaFileId as String)
     config = AppConfig()
     path = "/api/v1/playback/" + UrlEncode(mediaFileId)
     path += "?containers=mp4%2Cmkv%2Cm3u8&video_codecs=h264&audio_codecs=aac%2Cac3%2Ceac3"
-    path += "&max_bitrate_bps=" + config.maxBitrateBps.ToStr()
+    path += "&max_bitrate_bps=" + QualityMaxBitrate(m.qualityPref, config.maxBitrateBps).ToStr()
     ' Play opens the player directly: black stage, title, small spinner. No
     ' interstitial or fullscreen status page while the session negotiates.
     enterPlayerStage()
@@ -5641,6 +5639,16 @@ sub showOnly(name as String)
     m.pairingGroup.visible = name = "pairing"
     m.profilesGroup.visible = name = "profiles"
     m.settingsGroup.visible = name = "settings"
+    m.pageGroup.visible = name = "page"
+    if m.homePillFocused = true and name <> "home" then m.homePillFocused = false : m.homePillRing.visible = false
+    ' The shell clock sits further right on page-shell screens (web .app-clock follows the page header).
+    if name = "page"
+        m.clockTime.translation = [557, 68]
+        m.clockDate.translation = [612, 75]
+    else
+        m.clockTime.translation = [481, 68]
+        m.clockDate.translation = [535, 75]
+    end if
     m.libraryGroup.visible = name = "library"
     m.homeGroup.visible = name = "home"
     m.browseGroup.visible = name = "browse"
@@ -5664,7 +5672,24 @@ end sub
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
     state = m.top.screenState
-    if state = "endscreen"
+    if state = "page"
+        return pageOnKey(key)
+    else if state = "home" and m.homePillFocused = true and key = "down"
+        homePillFocus(false)
+        focusCurrentHomeRail()
+        return true
+    else if state = "home" and m.homePillFocused = true and key = "OK"
+        homePillFocus(false)
+        openPage("customise")
+        return true
+    else if state = "home" and m.homePillFocused = true and (key = "left" or key = "right" or key = "back")
+        if key = "back" then loadProfiles()
+        if key = "left"
+            homePillFocus(false)
+            enterNavDock()
+        end if
+        return true
+    else if state = "endscreen"
         return onEndScreenKey(key)
     else if state = "playback"
         ' Custom control-bar key handling (phase 5) -- see the "Custom
@@ -5884,9 +5909,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         end if
         return true
     else if state = "home" and key = "up"
-        ' Up from top rail also enters dock (backup to Left / homeLeftProxy).
+        ' Web TV: Up from the first rail reaches the "Customise Home" pill; Left reaches the dock.
+        if m.homePillFocused = true then return true
         if m.homeFocusIndex = 0
-            enterNavDock()
+            homePillFocus(true)
             return true
         end if
         return moveHomeFocus(-1)

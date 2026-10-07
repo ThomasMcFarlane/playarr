@@ -381,6 +381,27 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("sub setThemePreference", MAIN)
 
 
+class PageShellTests(unittest.TestCase):
+    def test_dock_has_the_web_entries_and_no_downloads(self) -> None:
+        for label in ("Watchlist", "Requests", "Calendar"):
+            self.assertIn(f'text="{label}"', SCENE)
+        self.assertNotIn('text="Downloads"', SCENE)
+        readme = (ROOT.parents[1] / "docs" / "parity" / "roku" / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Downloads", readme)
+        self.assertIn("justified exception", readme)
+
+    def test_pages_use_the_server_endpoints(self) -> None:
+        pages = (ROOT / "components" / "Pages.brs").read_text(encoding="utf-8")
+        for fragment in ('"/api/v1/watchlist"', '"/api/v1/requests"', "/api/v1/calendar?start=", "/api/v1/calendar/feed"):
+            self.assertIn(fragment, pages)
+
+    def test_settings_lists_every_web_section(self) -> None:
+        settings = (ROOT / "components" / "Settings.brs").read_text(encoding="utf-8")
+        for title in ("Appearance", "Profile avatar", "Language", "Player", "Server connection", "Profile lock",
+                      "Invite a friend", "Request latency", "Phone remote", "Your data"):
+            self.assertIn(f'title: "{title}"', settings)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -542,7 +563,7 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertIn('"homeRails", "GET", "/api/v1/home/rails"', MAIN)
         self.assertNotIn("takeUnusedWorks(m.homeMovies", MAIN)
         # Clock and date sit together near x=480 like .app-clock.
-        self.assertIn('id="clockTime" translation="[480,', SCENE)
+        self.assertIn('id="clockTime" translation="[481,', SCENE)
         card = (ROOT / "components" / "PosterCard.xml").read_text(encoding="utf-8")
         self.assertIn('id="focusRing"', card)
         card_brs = (ROOT / "components" / "PosterCard.brs").read_text(encoding="utf-8")

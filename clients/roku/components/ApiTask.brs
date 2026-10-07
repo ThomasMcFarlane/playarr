@@ -39,6 +39,9 @@ sub runRequest()
         ' for /api/v1/users/me/player-preferences).
         if method = "PUT" or method = "PATCH" then transfer.SetRequest(method)
         started = transfer.AsyncPostFromString(FormatJson(request.body))
+    else if method = "DELETE"
+        transfer.SetRequest("DELETE")
+        started = transfer.AsyncPostFromString("")
     else
         m.top.result = { ok: false, status: 0, error: "Unsupported HTTP method" }
         return

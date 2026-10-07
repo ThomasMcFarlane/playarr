@@ -578,16 +578,26 @@
       shows here is deliberately deferred (lower-impact than the structural
       nav-shape fix this pass targets).
     -->
+    <!-- Web page shell screens (Watchlist, Requests, Calendar, Preferences): built in Pages.brs and Settings.brs. -->
+    <Group id="pageGroup" visible="false">
+      <Rectangle id="pageBg" width="1920" height="1080" color="0x1B181BFF" />
+      <Poster id="pagePanelFade" translation="[730,0]" width="260" height="1080" uri="pkg:/images/page-fade.png" visible="false" />
+      <Rectangle id="pagePanel" translation="[990,0]" width="930" height="1080" color="0x1B181BFF" visible="false" />
+      <Group id="pageBody" />
+      <Group id="pageHead" />
+      <Poster id="pageRing" visible="false" uri="pkg:/images/round-ring-r12.9.png" />
+    </Group>
+
     <Group id="persistentHeader">
       <!-- Logo centred over the dock (.app-logo over - -tv-nav-centre-x).
            Dock left edge ~32, item centre ~32+8+32 = 72; logo 40x40 → x=52. -->
-      <Poster id="navLogo" translation="[52,36]" width="40" height="40" uri="pkg:/images/pairing-logo.png" />
+      <Poster id="navLogo" translation="[61,60]" width="42" height="42" uri="pkg:/images/pairing-logo.png" />
 
       <!-- Clock from .app-clock on TV stage: top band, mid-canvas
            (right: calc(65% + ~38px) ≈ x~600 at 1920). Time + date sit on one
            baseline row like web's grid-template-columns: auto auto. -->
-      <Label id="clockTime" translation="[480,72]" width="160" height="36" scale="[0.55,0.55]" color="0xF4F0F1FF" />
-      <Label id="clockDate" translation="[534,76]" width="360" height="28" scale="[0.36,0.36]" color="0x887A82FF" />
+      <Label id="clockTime" translation="[481,68]" width="160" height="36" scale="[0.54,0.54]" color="0xF4F0F1FF" />
+      <Label id="clockDate" translation="[535,75]" width="360" height="28" scale="[0.34,0.34]" color="0x887A82FF" />
 
       <!-- navDock: web-matched TV left rail (.app-nav / .app-nav-group /
            .app-nav-link). Three rounded group panels (pre-rendered PNGs —
@@ -595,46 +605,48 @@
            Item cells are 64×64 with 16px-radius active/focus chips.
            layoutNavDock repositions panels when Sites/Music hide. -->
       <Group id="navDock">
-        <Poster id="navGroupBg0" translation="[24,200]" width="96" height="96" uri="pkg:/images/nav-group-1.png" />
-        <Poster id="navGroupBg1" translation="[24,308]" width="96" height="318" uri="pkg:/images/nav-group-4.png" />
-        <Poster id="navGroupBg2" translation="[24,700]" width="96" height="96" uri="pkg:/images/nav-group-1.png" />
-
-        <!-- Per-item active/focus chip (.app-nav-link is-active / focus-visible). -->
-        <Poster id="navHighlight0" translation="[40,211]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon0" translation="[56,223]" width="32" height="32" uri="pkg:/images/nav-search.png" opacity="0.72" />
-        <Label id="navLabel0" translation="[-36,258]" width="200" height="20" text="Search" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
-
-        <Poster id="navHighlight1" translation="[40,319]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon1" translation="[56,331]" width="32" height="32" uri="pkg:/images/nav-home.png" opacity="0.72" />
-        <Label id="navLabel1" translation="[-36,366]" width="200" height="20" text="Home" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
-
-        <Poster id="navHighlight2" translation="[40,393]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon2" translation="[56,405]" width="32" height="32" uri="pkg:/images/nav-series.png" opacity="0.72" />
-        <Label id="navLabel2" translation="[-36,440]" width="200" height="20" text="Series" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
-
-        <Poster id="navHighlight3" translation="[40,467]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon3" translation="[56,479]" width="32" height="32" uri="pkg:/images/nav-movies.png" opacity="0.72" />
-        <Label id="navLabel3" translation="[-36,514]" width="200" height="20" text="Movies" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
-
-        <!-- Sites hidden until catalog/kinds proves this viewer has a site library. -->
-        <Poster id="navHighlight4" translation="[40,541]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon4" translation="[56,553]" width="32" height="32" uri="pkg:/images/nav-sites.png" opacity="0.72" visible="false" />
-        <Label id="navLabel4" translation="[-36,588]" width="200" height="20" text="Sites" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" visible="false" />
-
-        <Poster id="navHighlight5" translation="[40,615]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon5" translation="[56,627]" width="32" height="32" uri="pkg:/images/nav-music.png" opacity="0.72" />
-        <Label id="navLabel5" translation="[-36,662]" width="200" height="20" text="Music" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
-
-        <Poster id="navHighlight6" translation="[40,723]" width="64" height="64" uri="pkg:/images/nav-item-active.png" visible="false" />
-        <Poster id="navIcon6" translation="[56,735]" width="32" height="32" uri="pkg:/images/nav-playlists.png" opacity="0.72" />
-        <Label id="navLabel6" translation="[-36,770]" width="200" height="20" text="Playlists" horizAlign="center" numLines="1" scale="[0.30,0.30]" scaleRotateCenter="[100,10]" color="0x887A82FF" />
+        <Poster id="navGroupBg0" translation="[42,187]" width="78" height="153" uri="pkg:/images/nav-group-2.png" />
+        <Poster id="navGroupBg1" translation="[42,187]" width="78" height="153" uri="pkg:/images/nav-group-2.png" />
+        <Poster id="navGroupBg2" translation="[42,187]" width="78" height="153" uri="pkg:/images/nav-group-2.png" />
+        <Poster id="navGroupBg3" translation="[42,187]" width="78" height="153" uri="pkg:/images/nav-group-2.png" />
+        <Poster id="navHighlight0" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon0" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-search.png" opacity="0.72" />
+        <Label id="navLabel0" translation="[31,401]" width="100" height="12" text="Search" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight1" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon1" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-home.png" opacity="0.72" />
+        <Label id="navLabel1" translation="[31,401]" width="100" height="12" text="Home" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight2" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon2" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-series.png" opacity="0.72" />
+        <Label id="navLabel2" translation="[31,401]" width="100" height="12" text="Series" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight3" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon3" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-movies.png" opacity="0.72" />
+        <Label id="navLabel3" translation="[31,401]" width="100" height="12" text="Movies" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight4" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon4" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-sites.png" opacity="0.72" visible="false" />
+        <Label id="navLabel4" translation="[31,401]" width="100" height="12" text="Sites" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" visible="false" />
+        <Poster id="navHighlight5" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon5" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-music.png" opacity="0.72" />
+        <Label id="navLabel5" translation="[31,401]" width="100" height="12" text="Music" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight6" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon6" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-playlists.png" opacity="0.72" />
+        <Label id="navLabel6" translation="[31,401]" width="100" height="12" text="Playlists" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight7" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon7" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-watchlist.png" opacity="0.72" />
+        <Label id="navLabel7" translation="[31,401]" width="100" height="12" text="Watchlist" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight8" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon8" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-watchlist.png" opacity="0.72" />
+        <Label id="navLabel8" translation="[31,401]" width="100" height="12" text="Requests" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
+        <Poster id="navHighlight9" translation="[47,359]" width="67" height="67" uri="pkg:/images/nav-item-active.png" visible="false" />
+        <Poster id="navIcon9" translation="[71,376]" width="20" height="20" uri="pkg:/images/nav-calendar.png" opacity="0.72" />
+        <Label id="navLabel9" translation="[31,401]" width="100" height="12" text="Calendar" horizAlign="center" numLines="1" scale="[0.28,0.28]" scaleRotateCenter="[50,6]" color="0x887A82FF" />
       </Group>
 
-      <!-- .app-user-identity-cluster: capsule + avatar + name under the dock. -->
-      <Group id="userIdentity" translation="[12,1000]">
-        <Poster id="userPillBg" translation="[0,0]" width="236" height="60" uri="pkg:/images/nav-user-pill.png" />
-        <Poster id="userAvatar" translation="[14,12]" width="36" height="36" uri="pkg:/images/avatar-robot.png" />
-        <Label id="profileLabel" translation="[56,18]" width="320" height="28" numLines="1" scale="[0.42,0.42]" color="0xC5B8BDFF" />
+      <!-- .app-user-identity (143.5 x 48.2 pill at 58.5,997.3) and the build label under it. -->
+      <Group id="userIdentity" translation="[58,997]">
+        <Poster id="userPillBg" translation="[0,0]" width="144" height="48" uri="pkg:/images/nav-user-pill.png" />
+        <Poster id="userAvatar" translation="[7,7]" width="34" height="34" uri="pkg:/images/avatar-robot.png" />
+        <Label id="profileLabel" translation="[52,14]" width="320" height="28" numLines="1" scale="[0.35,0.35]" color="0xC5B8BDFF" />
+        <Label id="userVersion" translation="[8,53]" width="200" height="12" numLines="1" scale="[0.25,0.25]" color="0x887A82FF" />
       </Group>
     </Group>
 
@@ -739,5 +751,7 @@
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />
   <script type="text/brightscript" uri="pkg:/source/Api.brs" />
   <script type="text/brightscript" uri="pkg:/source/PairingPrefs.brs" />
+  <script type="text/brightscript" uri="pkg:/components/Pages.brs" />
+  <script type="text/brightscript" uri="pkg:/components/Settings.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
 </component>

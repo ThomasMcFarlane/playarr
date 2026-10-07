@@ -141,3 +141,43 @@ function PairingUiStrings(lang as String) as Object
         unavailable: "Playarr linking is unavailable right now."
     }
 end function
+
+' Playback defaults kept on this device (web stores the same choices locally): quality ("original" or "UHD:Low" ...)
+' and default subtitles ("off", "forced", "always").
+function LoadQualityPreference() as String
+    value = PairingPrefsRegistry().Read("quality")
+    if value = "" then return "original"
+    return value
+end function
+
+sub SaveQualityPreference(value as String)
+    section = PairingPrefsRegistry()
+    section.Write("quality", value)
+    section.Flush()
+end sub
+
+function LoadSubtitlePreference() as String
+    value = PairingPrefsRegistry().Read("subtitles")
+    if value = "forced" or value = "always" then return value
+    return "off"
+end function
+
+sub SaveSubtitlePreference(value as String)
+    section = PairingPrefsRegistry()
+    section.Write("subtitles", value)
+    section.Flush()
+end sub
+
+' Maximum bitrate (bits per second) for a quality choice; `fallback` when the choice is "original" or unknown.
+function QualityMaxBitrate(choice as String, fallback as Integer) as Integer
+    if choice = "original" then return 100000000
+    rows = { UHD: [12, 20, 35], FHD: [4, 8, 12], HD: [2, 4, 6], SD: [1, 2, 3] }
+    parts = choice.Split(":")
+    if parts.Count() <> 2 then return fallback
+    rates = rows[parts[0]]
+    if rates = invalid then return fallback
+    index = 1
+    if parts[1] = "Low" then index = 0
+    if parts[1] = "High" then index = 2
+    return rates[index] * 1000000
+end function
