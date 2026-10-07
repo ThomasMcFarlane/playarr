@@ -4384,7 +4384,7 @@ private fun TelevisionSearchBody(
                 onValueChange = onQuery,
                 singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 17.664.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(WebKicker),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Transparent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
                 modifier = Modifier

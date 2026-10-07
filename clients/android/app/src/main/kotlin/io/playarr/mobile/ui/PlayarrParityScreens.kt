@@ -3340,9 +3340,9 @@ private fun SettingsSectionContent(
                         onClick = { display.setPlayerQuality("original"); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
                         modifier = Modifier.fillMaxWidth().height(60.dp),
                         trailing = if (display.playerDefaults.qualityId == "original") "\u2713" else null,
-                        shape = qualityShape, bar = 3f, startPad = 10.92f, endPad = 13.95f,
+                        shape = qualityShape, bar = 4f, startPad = 10.92f, endPad = 13.95f,
                     ) {
-                        Text(playarrString(PlayarrString.SettingsQualityOriginal), color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                        Text(playarrString(PlayarrString.SettingsQualityOriginal), color = if (display.playerDefaults.qualityId == "original") WebInk else WebInkSoft, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
                         Spacer(Modifier.height(1.92.dp))
                         Text(playarrString(PlayarrString.SettingsQualityOriginalDetail), color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, style = cssLine())
                     }
@@ -3370,9 +3370,9 @@ private fun SettingsSectionContent(
                                     onClick = { display.setPlayerQuality(option.id); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
                                     modifier = Modifier.width(262.6.dp).height(60.dp),
                                     trailing = if (optionSelected) "\u2713" else null,
-                                    shape = qualityShape, bar = 3f, startPad = 10.92f, endPad = 13.95f,
+                                    shape = qualityShape, bar = 4f, startPad = 10.92f, endPad = 13.95f,
                                 ) {
-                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = if (optionSelected) WebInk else WebInkSoft, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
                                     Spacer(Modifier.height(1.92.dp))
                                     Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, style = cssLine())
                                 }
@@ -3488,22 +3488,31 @@ private fun SettingsSectionContent(
             SettingsSection.Lock -> {
                 var pin by remember { mutableStateOf("") }
                 if (LocalSettingsPlainPanel.current) {
-                    Box(Modifier.offset(y = (-2).dp)) { TvFieldLabel(playarrString(if (snapshot.pin.pinLocked) PlayarrString.SettingsProfileLockReplacePin else PlayarrString.SettingsProfileLockNewPin)) }
-                    Row(Modifier.offset(y = (-10).dp), verticalAlignment = Alignment.CenterVertically) {
-                        TvField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, "\u2022 \u2022 \u2022 \u2022", Modifier.width(330.dp), enabled = !pinBusy, password = true)
-                        TvPrimaryPill(
-                            playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockSaving; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockReplace; else -> PlayarrString.SettingsProfileLockSetPin }),
-                            onClick = { viewModel.savePin(pin) { pin = "" } }, enabled = pin.length == 4 && !pinBusy, height = 62,
+                    TvShiftUp(2) {
+                        Text(
+                            playarrString(if (snapshot.pin.pinLocked) PlayarrString.SettingsProfileLockReplacePin else PlayarrString.SettingsProfileLockNewPin).uppercase(LocalPlayarrLanguage.current.locale),
+                            color = WebInkMuted, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight(720), letterSpacing = 0.896.sp, style = cssLine(),
+                            modifier = Modifier.padding(bottom = 7.6.dp),
                         )
-                        if (snapshot.pin.pinLocked) {
-                            Spacer(Modifier.width(10.dp))
-                            TvOutlinedPill(playarrString(PlayarrString.SettingsProfileLockRemovePin), { viewModel.savePin(null) { pin = "" } }, height = 50)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.width(420.dp).background(TvSettingsPalette.joinedFill), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                                TvField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, "\u2022 \u2022 \u2022 \u2022", Modifier.width(325.5.dp), enabled = !pinBusy, password = true, joined = true)
+                                TvPrimaryPill(
+                                    playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockSaving; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockReplace; else -> PlayarrString.SettingsProfileLockSetPin }),
+                                    onClick = { viewModel.savePin(pin) { pin = "" } }, enabled = pin.length == 4 && !pinBusy, height = 62,
+                                    modifier = Modifier.widthIn(min = 93.5.dp),
+                                )
+                            }
+                            if (snapshot.pin.pinLocked) {
+                                Spacer(Modifier.width(10.dp))
+                                TvOutlinedPill(playarrString(PlayarrString.SettingsProfileLockRemovePin), { viewModel.savePin(null) { pin = "" } }, height = 50)
+                            }
                         }
+                        Text(
+                            playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockUpdating; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockOn; else -> PlayarrString.SettingsProfileLockOff }),
+                            color = WebInkMuted, fontSize = 19.2.sp, lineHeight = 28.8.sp, style = cssLine(), modifier = Modifier.padding(top = 33.dp),
+                        )
                     }
-                    Text(
-                        playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockUpdating; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockOn; else -> PlayarrString.SettingsProfileLockOff }),
-                        color = WebInkMuted, fontSize = 19.5.sp, modifier = Modifier.padding(top = 8.dp),
-                    )
                     return@SettingsCard
                 }
                 OutlinedTextField(
@@ -4017,7 +4026,7 @@ private fun PlayerLanguageChoices(
                         TvChoiceCell(
                             selected = option.code == selected, onClick = { onSelected(option.code) },
                             modifier = Modifier.width(491.5.dp).height(62.dp), trailing = option.code, startPad = 17f, endPad = 17f, trailingMono = true, trailingSize = 9.28f,
-                        ) { Text(option.label, color = WebInk, fontSize = 14.72.sp, fontWeight = FontWeight(680), style = cssLine()) }
+                        ) { Text(option.label, color = if (option.code == selected) WebInk else WebInkSoft, fontSize = 14.72.sp, fontWeight = FontWeight(680), style = cssLine()) }
                     }
                 }
             }
@@ -4337,7 +4346,7 @@ private fun TvChoiceCell(
     modifier: Modifier = Modifier,
     trailing: String? = null,
     shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
-    bar: Float = 4f,
+    bar: Float = 5f,
     startPad: Float = 15.4f,
     endPad: Float = 15.4f,
     trailingMono: Boolean = false,
@@ -4354,7 +4363,7 @@ private fun TvChoiceCell(
         border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) accent.copy(alpha = 0.76f) else TvSettingsPalette.cellBorder),
         modifier = modifier.webFocusRing(focused, radius = 0.dp, offset = (-3).dp).onFocusChanged { focused = it.isFocused },
     ) {
-        Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(bar.dp.toPx() - 1.dp.toPx(), size.height)) } else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(bar.dp.toPx(), size.height)) } else Modifier)) {
             Column(Modifier.align(Alignment.CenterStart).padding(start = (startPad - 1f).dp), verticalArrangement = Arrangement.Center, content = content)
             trailing?.let {
                 Text(
@@ -4469,7 +4478,7 @@ private fun <T> SettingChoiceOptions(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 choices.forEach { (value, choiceLabel) ->
                     TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(239.7.dp).height(68.dp)) {
-                        Text(choiceLabel, color = WebInk, fontSize = 14.08.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                        Text(choiceLabel, color = if (value == selected) WebInk else WebInkSoft, fontSize = 14.08.sp, fontWeight = FontWeight.Bold, style = cssLine())
                     }
                 }
             }
