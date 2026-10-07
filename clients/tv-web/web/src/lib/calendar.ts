@@ -262,6 +262,29 @@ export function entryState(entry: Pick<CalendarEntry, "has_file" | "monitored">)
   return entry.monitored ? "monitored" : "notMonitored";
 }
 
+/**
+ * Availability drives the coloured left border of every calendar entry: we have the item (a file in the
+ * library the viewer can play) versus not (upcoming, missing or not playable by this viewer). It is never
+ * the library or media kind. When the server listed actions, `play`/`resume` enabled is authoritative;
+ * servers that send none fall back to `has_file`.
+ */
+export function entryAvailable(
+  entry: Pick<CalendarEntry, "has_file"> & { actions?: readonly { action: string; enabled: boolean }[] }
+): boolean {
+  if (!entry.has_file) return false;
+  const actions = entry.actions;
+  if (!actions || actions.length === 0) return true;
+  return actions.some((a) => (a.action === "play" || a.action === "resume") && a.enabled);
+}
+
+export type EntryAvailability = "available" | "unavailable";
+
+/** A series group is available only when every folded episode is. */
+export function itemAvailability(item: CalendarItem): EntryAvailability {
+  const entries = item.kind === "single" ? [item.entry] : item.entries;
+  return entries.every(entryAvailable) ? "available" : "unavailable";
+}
+
 /** `S01E02`, or null for entries that are not episodes. */
 export function episodeCode(entry: CalendarEntry): string | null {
   if (entry.season_number == null || entry.episode_number == null) return null;

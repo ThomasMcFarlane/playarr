@@ -12454,6 +12454,14 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   gap: clamp(24px, 3vw, 64px);
 }
 
+.master-detail-pane-window {
+  min-height: 0;
+}
+
+.master-detail-pane-window > .master-detail-pane {
+  height: 100%;
+}
+
 .master-detail-pane {
   min-height: 0;
   overflow-y: auto;

@@ -11,7 +11,9 @@ import {
   defaultCalendarView,
   diffDays,
   entryLocalDay,
+  entryAvailable,
   entryState,
+  itemAvailability,
   episodeCode,
   failedSources,
   fetchWindow,
@@ -225,5 +227,31 @@ describe("human duration", () => {
   it("formats with Intl", () => {
     expect(formatHumanDuration(3 * 3600, "en-GB")).toBe("3 hours");
     expect(formatHumanDuration(3 * 86400, "en-GB")).toBe("3 days");
+  });
+});
+
+describe("entry availability (left border colour)", () => {
+  const play = { action: "play", enabled: true } as const;
+  it("is available only when a file exists and the viewer can play it", () => {
+    expect(entryAvailable(entry({ has_file: false }))).toBe(false);
+    expect(entryAvailable(entry({ has_file: true }))).toBe(true);
+    expect(entryAvailable(entry({ has_file: true, actions: [{ ...play }] as CalendarEntry["actions"] }))).toBe(true);
+    expect(entryAvailable(entry({ has_file: true, actions: [{ action: "resume", enabled: true }] as CalendarEntry["actions"] }))).toBe(true);
+    expect(entryAvailable(entry({ has_file: true, actions: [{ action: "play", enabled: false }] as CalendarEntry["actions"] }))).toBe(false);
+    expect(entryAvailable(entry({ has_file: true, actions: [{ action: "open", enabled: true }] as CalendarEntry["actions"] }))).toBe(false);
+  });
+
+  it("never depends on the media kind or the source library", () => {
+    for (const media_kind of ["episode", "movie", "album", "book"] as const) {
+      expect(entryAvailable(entry({ media_kind, has_file: true }))).toBe(true);
+      expect(entryAvailable(entry({ media_kind, has_file: false }))).toBe(false);
+    }
+  });
+
+  it("a series group is available only when every folded episode is", () => {
+    const a = entry({ id: "a", has_file: true });
+    const b = entry({ id: "b", has_file: false });
+    expect(itemAvailability({ kind: "series", key: "k", title: "S", entries: [a, a], codes: "S01E01" } as never)).toBe("available");
+    expect(itemAvailability({ kind: "series", key: "k", title: "S", entries: [a, b], codes: "S01E01" } as never)).toBe("unavailable");
   });
 });

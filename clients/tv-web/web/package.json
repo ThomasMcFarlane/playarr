@@ -21,6 +21,7 @@
     "smoke:header": "node scripts/header-parity.mjs",
     "smoke:profile-chip": "node scripts/profile-chip-settle.mjs",
     "smoke:calendar-layout": "node scripts/calendar-layout.mjs",
+    "smoke:calendar-nav": "node scripts/calendar-nav.mjs",
     "smoke:tablet-layout": "node scripts/tablet-layout.mjs"
   },
   "dependencies": {

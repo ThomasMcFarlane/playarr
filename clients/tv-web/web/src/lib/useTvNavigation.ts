@@ -652,6 +652,9 @@ function focusWithinScrollContainer(
   if (direction !== "left" && direction !== "right") return false;
   const container = current.closest<HTMLElement>('[data-tv-scroll-axis="horizontal"]');
   if (!container) return false;
+  // Two-dimensional layouts (calendar week and month) scroll sideways but are not rails: LEFT/RIGHT must
+  // move between days or cells by geometry, never step through the DOM order of every entry.
+  if (container.hasAttribute("data-tv-nav-geometric")) return false;
 
   // Local rail scan: only focusables inside this track, not the whole page.
   const nodes = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
@@ -1193,6 +1196,11 @@ function moveFocus(direction: Direction): void {
     const pageScrollLeft = pageScroller?.scrollLeft;
     next.focus({ preventScroll: true });
     markFocusableRectsDirty();
+    if (next.closest("[data-tv-nav-geometric]")) {
+      // Nested scrollers (a day column inside a sideways track): reveal the entry in every one of them.
+      next.scrollIntoView({ behavior: remoteScrollBehavior(), block: "nearest", inline: "nearest" });
+      return;
+    }
     const scrollContainer = next.closest<HTMLElement>("[data-tv-scroll-container]");
     if (scrollContainer) {
       const isVerticalRail = scrollContainer.dataset.tvScrollAxis === "vertical";

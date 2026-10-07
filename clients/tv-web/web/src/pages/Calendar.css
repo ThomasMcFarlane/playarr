@@ -217,17 +217,12 @@
   font-size: 0.8rem;
 }
 
-.calendar-kind-episode {
-  --kind: #5b7fd1;
+/* The left border shows availability: we have it (a playable file in the library) or not. */
+.calendar-availability-available {
+  --kind: var(--success);
 }
-.calendar-kind-movie {
-  --kind: #cf3157;
-}
-.calendar-kind-album {
-  --kind: #3f9d77;
-}
-.calendar-kind-book {
-  --kind: #c58a2d;
+.calendar-availability-unavailable {
+  --kind: var(--ink-muted);
 }
 
 .calendar-entry,
@@ -506,6 +501,7 @@
 .calendar-entry.is-selected,
 .calendar-chip.is-selected {
   border-color: var(--ink);
+  border-left-color: var(--kind);
   box-shadow: inset 0 0 0 1px var(--ink);
 }
 
@@ -744,4 +740,90 @@
 .calendar-scroll {
   overflow: hidden;
   padding: 0;
+}
+
+/*
+ * Edge fades: every scrollable calendar area sits in a window that reuses the shared
+ * .tv-scroll-edge-window top/bottom fade (same size, gradient and 0.58 opacity as the rails).
+ * Horizontal scrollers get the same fade turned through 90 degrees.
+ */
+.calendar-edge-window {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-edge-window > .calendar-edge-scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.calendar-edge-window-x::before,
+.calendar-edge-window-x::after {
+  top: 0;
+  bottom: 0;
+  left: auto;
+  right: auto;
+  width: clamp(32px, 3.6vw, 58px);
+  height: auto;
+}
+
+.calendar-edge-window-x::before {
+  left: 0;
+  border-radius: 0 48% 48% 0;
+  background: radial-gradient(
+    ellipse 100% 88% at -28% 50%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+}
+
+.calendar-edge-window-x::after {
+  right: 0;
+  border-radius: 48% 0 0 48%;
+  background: radial-gradient(
+    ellipse 100% 88% at 128% 50%,
+    rgba(31, 14, 20, 0.5),
+    rgba(31, 14, 20, 0.18) 46%,
+    transparent 78%
+  );
+}
+
+.calendar-edge-window-x.can-scroll-left::before,
+.calendar-edge-window-x.can-scroll-right::after {
+  opacity: 0.58;
+}
+
+.calendar-edge-window.calendar-day-window {
+  flex: 0 0 clamp(300px, 24vw, 440px);
+  height: 100%;
+}
+
+.master-detail-pane.calendar-edge-window {
+  display: flex;
+}
+
+.calendar-week-scroll .calendar-day-window {
+  flex: 0 0 clamp(300px, 24vw, 440px);
+  height: 100%;
+  scroll-snap-align: start;
+}
+
+.calendar-week-scroll .calendar-day-window > .calendar-day {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  scroll-snap-align: none;
+}
+
+@media (max-width: 760px) {
+  .calendar-week-scroll .calendar-day-window {
+    flex-basis: 82vw;
+  }
+}
+
+.calendar-month-scroll.calendar-edge-scroller,
+.calendar-week-scroll.calendar-edge-scroller {
+  min-width: 0;
 }

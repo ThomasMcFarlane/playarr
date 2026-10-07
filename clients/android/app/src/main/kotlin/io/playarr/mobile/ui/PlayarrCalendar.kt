@@ -39,6 +39,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -542,7 +545,7 @@ private fun PhoneCalendarPill(label: String, glyph: String? = null, enabled: Boo
 }
 
 @Composable
-private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: ZoneId, onClick: () -> Unit) {
+private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: ZoneId, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val entry = item.first
     val state = when (item) {
         is CalendarItem.Series -> item.entries.let { all ->
@@ -562,7 +565,7 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     val fill = WebSurfaceStrong
     Surface(
         onClick = onClick,
-        modifier = Modifier.padding(start = if (m === TvCalendarMetrics) 0.dp else 4.dp, end = if (m === TvCalendarMetrics) 0.dp else 8.dp).fillMaxWidth().height(m.entryHeight.dp).then(
+        modifier = modifier.padding(start = if (m === TvCalendarMetrics) 0.dp else 4.dp, end = if (m === TvCalendarMetrics) 0.dp else 8.dp).fillMaxWidth().height(m.entryHeight.dp).calendarAvailabilityBorder(item.isAvailable(), m.entryRadius.dp).then(
             if (selected) {
                 // `.calendar-entry.is-selected`: a 4 px left border and 1 px borders in ink, plus a 1 px inset ring, so the
                 // padding box has a rounder inner left edge than the outer shape.
@@ -651,7 +654,7 @@ private fun TvCalendarToday(label: String, onClick: () -> Unit) {
 
 /** Web TV agenda: the period label, the selected release's details at the left and the day list at the right. */
 @Composable
-private fun TvCalendarAgenda(
+internal fun TvCalendarAgenda(
     state: CalendarUiState,
     groups: List<CalendarDayGroup>,
     loading: Boolean,
@@ -665,7 +668,10 @@ private fun TvCalendarAgenda(
     onJump: () -> Unit,
 ) {
     androidx.compose.runtime.CompositionLocalProvider(LocalCalendarMetrics provides TvCalendarMetrics) {
-        Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Both panes end at the bottom of the screen; the offsets must not push them past it.
+            val detailsTop = 236.dp
+            val listTop = 240.dp
             val title = remember(state.window, state.mode, state.anchor, locale) { phoneCalendarRangeTitle(state.mode, state.anchor, state.window, locale) }
             Row(
                 Modifier.offset(x = 154.dp, y = 165.dp).height(56.dp).clip(CircleShape).clickable(onClick = onJump).padding(horizontal = 21.dp),
@@ -681,28 +687,62 @@ private fun TvCalendarAgenda(
                     drawPath(path, ink)
                 }
             }
-            Column(Modifier.offset(x = 154.dp, y = 236.dp).width(600.dp)) {
+            val detailScroll = rememberScrollState()
+            Column(
+                Modifier.offset(x = 154.dp, y = detailsTop).width(600.dp).height((maxHeight - detailsTop).coerceAtLeast(0.dp))
+                    .calendarEdgeFades(detailScroll.verticalEdges())
+                    .verticalScroll(detailScroll)
+                    .padding(bottom = 48.dp),
+            ) {
                 when {
                     loading -> CalendarDetailSkeleton()
                     selected != null -> PhoneCalendarDetails(selected, locale, zone, onOpenWork, onPlay, actions)
                     else -> Text(playarrString(PlayarrString.CalendarSelectPrompt), color = WebInkMuted)
                 }
             }
-            val today = remember { playarrToday() }
-            LazyColumn(Modifier.offset(x = 786.dp, y = 240.dp).width(1049.dp).fillMaxHeight()) {
+            val listState = rememberLazyListState()
+            // Flat row model: day headings and entries share one lazy list; focus moves between entries only.
+            val rows = remember(groups, zone) {
+                buildList<Pair<LocalDate?, CalendarItem?>> {
+                    groups.forEach { group ->
+                        add(group.date to null)
+                        groupSeriesEpisodes(group.entries, zone).forEach { add(null to it) }
+                    }
+                }
+            }
+            val entryKeys = remember(rows) { rows.mapNotNull { it.second?.let { item -> "agenda-${item.key}" } } }
+            val lazyIndex = remember(rows) { rows.withIndex().filter { it.value.second != null }.associate { "agenda-${it.value.second!!.key}" to it.index } }
+            val revealIndex = remember(rows) {
+                rows.withIndex().filter { it.value.second != null && it.index > 0 && rows[it.index - 1].first != null }
+                    .associate { "agenda-${it.value.second!!.key}" to it.index - 1 }
+            }
+            val focus = rememberCalendarListFocus(entryKeys, lazyIndex, revealIndex, listState)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.offset(x = 786.dp, y = listTop).width(1049.dp).height((maxHeight - listTop).coerceAtLeast(0.dp))
+                    .calendarEdgeFades(listState.verticalEdges()),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp),
+            ) {
                 if (loading) {
                     items(3) { Column(Modifier.padding(vertical = 4.dp)) { PlayarrSkeleton(Modifier.width(180.dp).height(18.dp)); Spacer(Modifier.height(8.dp)); CalendarRowSkeleton() } }
                 } else {
-                    groups.forEach { group ->
-                        item(key = "day-${group.date}") {
-                            Text(
-                                phoneCalendarDayHeading(group.date, locale), color = WebInk, fontSize = 18.7.sp, lineHeight = 28.sp, fontWeight = FontWeight(560),
-                                style = WebTextStyle, modifier = Modifier.padding(bottom = 6.dp).semantics { heading() },
-                            )
-                        }
-                        items(groupSeriesEpisodes(group.entries, zone), key = { "${group.date}-${it.key}" }) { item ->
-                            PhoneCalendarEntry(item, selected = item.key == selected?.key, zone = zone, onClick = { onSelect(item) })
-                            Spacer(Modifier.height(10.dp))
+                    rows.forEachIndexed { index, (day, item) ->
+                        if (day != null) {
+                            item(key = "day-$day") {
+                                Text(
+                                    phoneCalendarDayHeading(day, locale), color = WebInk, fontSize = 18.7.sp, lineHeight = 28.sp, fontWeight = FontWeight(560),
+                                    style = WebTextStyle, modifier = Modifier.padding(bottom = 6.dp).semantics { heading() },
+                                )
+                            }
+                        } else if (item != null) {
+                            item(key = "entry-$index-${item.key}") {
+                                PhoneCalendarEntry(
+                                    item, selected = item.key == selected?.key, zone = zone, onClick = { onSelect(item) },
+                                    // The details panel follows focus: UP/DOWN selects, SELECT is not needed.
+                                    modifier = Modifier.calendarListRow(focus, "agenda-${item.key}", onFocused = { onSelect(item) }),
+                                )
+                                Spacer(Modifier.height(10.dp))
+                            }
                         }
                     }
                 }
@@ -1010,9 +1050,13 @@ private fun CalendarAgenda(
     )
 }
 
-/** Week: wide day columns on a horizontally scrolling track (D-pad left/right moves between days). */
+/**
+ * Week: wide day columns on a sideways track. D-pad LEFT/RIGHT moves between days and UP/DOWN between the entries of a
+ * day (web `data-tv-nav-geometric`); the focused entry is always scrolled into view, and every side that continues
+ * shows the web edge fade.
+ */
 @Composable
-private fun CalendarWeek(
+internal fun CalendarWeek(
     groups: List<CalendarDayGroup>,
     loading: Boolean,
     isTelevision: Boolean,
@@ -1024,29 +1068,56 @@ private fun CalendarWeek(
     modifier: Modifier,
 ) {
     val columnWidth = if (isTelevision) 400.dp else 296.dp
-    val days = remember(groups) { groups }
-    val skeletonDays = remember(days) { if (days.isEmpty()) 7 else days.size }
-    LazyRow(modifier, horizontalArrangement = Arrangement.spacedBy(20.dp), contentPadding = PaddingValues(end = 24.dp)) {
-        if (loading) {
-            items(skeletonDays) { index ->
-                Column(Modifier.width(columnWidth), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
-                    PlayarrSkeleton(Modifier.width(160.dp).height(18.dp))
-                    repeat(1 + index % 2) { CalendarRowSkeleton() }
+    val skeletonDays = remember(groups) { if (groups.isEmpty()) 7 else groups.size }
+    val dayItems = remember(groups, zone) { groups.map { groupSeriesEpisodes(it.entries, zone) } }
+    val counts = remember(dayItems) { dayItems.map { it.size } }
+    val requesters = remember(dayItems) { dayItems.map { column -> column.map { FocusRequester() } } }
+    val track = rememberScrollState()
+    val columnScroll = remember(groups.size) { List(groups.size) { ScrollState(0) } }
+    Box(modifier.calendarEdgeFades(track.horizontalEdges())) {
+        Row(
+            Modifier.fillMaxSize().horizontalScroll(track).padding(end = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            if (loading) {
+                repeat(skeletonDays) { index ->
+                    Column(Modifier.width(columnWidth), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
+                        PlayarrSkeleton(Modifier.width(160.dp).height(18.dp))
+                        repeat(1 + index % 2) { CalendarRowSkeleton() }
+                    }
                 }
-            }
-        } else {
-            items(days, key = { "week-${it.date}" }) { group ->
-                LazyColumn(
-                    Modifier.width(columnWidth).fillMaxHeight(),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
-                ) {
-                    item { CalendarDayHeading(group.date, today, locale, isTelevision) }
-                    if (group.entries.isEmpty()) {
-                        item { Text(playarrString(PlayarrString.CalendarEmptyDay), color = WebInkMuted, fontSize = 12.sp) }
-                    } else {
-                        items(groupSeriesEpisodes(group.entries, zone), key = { it.key }) { item ->
-                            CalendarItemRow(item, selected = item.key == selectedKey, isTelevision = isTelevision, zone = zone, wrapTitle = true, onClick = { onSelect(item) })
+            } else {
+                groups.forEachIndexed { column, group ->
+                    val scroll = columnScroll[column]
+                    Column(
+                        Modifier.width(columnWidth).fillMaxHeight()
+                            .calendarEdgeFades(scroll.verticalEdges())
+                            .verticalScroll(scroll)
+                            .padding(top = 4.dp, bottom = 48.dp),
+                        verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+                    ) {
+                        CalendarDayHeading(group.date, today, locale, isTelevision)
+                        if (group.entries.isEmpty()) {
+                            Text(playarrString(PlayarrString.CalendarEmptyDay), color = WebInkMuted, fontSize = 12.sp)
+                        } else {
+                            dayItems[column].forEachIndexed { row, item ->
+                                CalendarItemRow(
+                                    item, selected = item.key == selectedKey, isTelevision = isTelevision, zone = zone, wrapTitle = true,
+                                    onClick = { onSelect(item) },
+                                    modifier = Modifier
+                                        .focusRequester(requesters[column][row])
+                                        .calendarDpad { key ->
+                                            val target = calendarWeekNeighbour(counts, CalendarSlot(column, row), key)
+                                            if (target != null) {
+                                                runCatching { requesters[target.column][target.row].requestFocus() }
+                                                true
+                                            } else {
+                                                calendarConsumesAtEdge(key)
+                                            }
+                                        }
+                                        .calendarFocusReveal(),
+                                )
+                            }
                         }
                     }
                 }
@@ -1091,6 +1162,7 @@ private fun CalendarItemRow(
     zone: ZoneId,
     onClick: () -> Unit,
     wrapTitle: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val source = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(12.dp)
@@ -1116,13 +1188,14 @@ private fun CalendarItemRow(
         shape = shape,
         border = if (selected) BorderStroke(1.5.dp, WebInk) else null,
         interactionSource = source,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
             .calendarFocusRing(source, shape)
+            .calendarAvailabilityBorder(item.isAvailable(), 12.dp)
             .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 14.dp, top = 10.dp, end = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             CalendarPoster(entry.posterUrl, Modifier.size(width = 44.dp, height = 64.dp))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -1247,7 +1320,7 @@ private fun CalendarItemDialog(
 }
 
 @Composable
-private fun CalendarMonth(
+internal fun CalendarMonth(
     state: CalendarUiState,
     entries: List<CalendarEntry>,
     loading: Boolean,
@@ -1266,6 +1339,14 @@ private fun CalendarMonth(
     val dayItems = remember(entries, selected) {
         selected?.let { day -> groupSeriesEpisodes(entries.filter { it.date == day }.sortedBy { it.releaseAt }, zone) }.orEmpty()
     }
+    val cells = remember(rows) { rows.flatten() }
+    val cellRequesters = remember(cells) { cells.map { FocusRequester() } }
+    val listState = rememberLazyListState()
+    val itemKeys = remember(dayItems) { dayItems.map { "month-${it.key}" } }
+    // Index 0 of the lazy list is the day heading, so entry i sits at i + 1.
+    val lazyIndex = remember(itemKeys) { itemKeys.withIndex().associate { it.value to it.index + 1 } }
+    val listFocus = rememberCalendarListFocus(itemKeys, lazyIndex, emptyMap(), listState)
+    val gridScroll = rememberScrollState()
     BoxWithConstraints(modifier) {
         val wide = isTelevision || maxWidth >= 840.dp
         val grid: @Composable (Modifier) -> Unit = { gridModifier ->
@@ -1275,9 +1356,10 @@ private fun CalendarMonth(
                         Text(label, color = WebInkMuted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                     }
                 }
-                rows.forEach { week ->
+                rows.forEachIndexed { rowIndex, week ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        week.forEach { day ->
+                        week.forEachIndexed { columnIndex, day ->
+                            val cell = rowIndex * 7 + columnIndex
                             CalendarDayCell(
                                 day = day,
                                 count = if (loading) 0 else counts[day] ?: 0,
@@ -1287,7 +1369,25 @@ private fun CalendarMonth(
                                 isTelevision = isTelevision,
                                 locale = locale,
                                 onClick = { onSelectDay(day) },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(cellRequesters[cell])
+                                    .calendarDpad { key ->
+                                        val target = calendarMonthNeighbour(cell, rows.size, 7, key)
+                                        when {
+                                            target != null -> {
+                                                runCatching { cellRequesters[target].requestFocus() }
+                                                true
+                                            }
+                                            // RIGHT from the last column enters the day's entries.
+                                            key == CalendarKey.Right && itemKeys.isNotEmpty() && selected != null -> {
+                                                listFocus.focus(itemKeys.first())
+                                                true
+                                            }
+                                            else -> calendarConsumesAtEdge(key)
+                                        }
+                                    }
+                                    .calendarFocusReveal(onFocused = { onSelectDay(day) }),
                             )
                         }
                     }
@@ -1297,18 +1397,39 @@ private fun CalendarMonth(
         val dayList: LazyListScope.() -> Unit = {
             if (selected != null) {
                 item(key = "month-day-heading") { CalendarDayHeading(selected, today, locale, isTelevision) }
-                items(dayItems, key = { it.key }) { item ->
-                    CalendarItemRow(item, selected = item.key == state.selectedKey, isTelevision = isTelevision, zone = zone, onClick = { onSelect(item) })
+                itemsIndexed(dayItems, key = { _, it -> it.key }) { _, item ->
+                    CalendarItemRow(
+                        item, selected = item.key == state.selectedKey, isTelevision = isTelevision, zone = zone, onClick = { onSelect(item) },
+                        modifier = Modifier.calendarListRow(
+                            listFocus, "month-${item.key}",
+                            // LEFT returns to the grid, on the selected day.
+                            onSide = { key ->
+                                if (key == CalendarKey.Left) {
+                                    val back = cells.indexOf(selected).takeIf { it >= 0 } ?: 0
+                                    runCatching { cellRequesters[back].requestFocus() }
+                                    true
+                                } else {
+                                    true
+                                }
+                            },
+                        ),
+                    )
                 }
             }
         }
         if (wide) {
             Row(Modifier.fillMaxSize().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                grid(Modifier.weight(1.4f).verticalScroll(rememberScrollState()))
-                LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) { dayList() }
+                grid(Modifier.weight(1.4f).fillMaxHeight().calendarEdgeFades(gridScroll.verticalEdges()).verticalScroll(gridScroll).padding(bottom = 48.dp))
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxSize().calendarEdgeFades(listState.verticalEdges()), state = listState,
+                    contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+                ) { dayList() }
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing)) {
+            LazyColumn(
+                Modifier.fillMaxSize().calendarEdgeFades(listState.verticalEdges()), state = listState,
+                contentPadding = PaddingValues(bottom = 24.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(CalendarRowSpacing),
+            ) {
                 item(key = "month-grid") { grid(Modifier.fillMaxWidth()) }
                 dayList()
             }
@@ -1370,7 +1491,7 @@ internal fun calendarLagText(seconds: Long): String {
 @Composable
 private fun Modifier.calendarFocusRing(source: MutableInteractionSource, shape: Shape): Modifier {
     val focused by source.collectIsFocusedAsState()
-    return if (focused) this.border(BorderStroke(3.dp, WebPink), shape) else this
+    return if (focused) this.border(BorderStroke(3.dp, WebInk), shape) else this
 }
 
 @Composable

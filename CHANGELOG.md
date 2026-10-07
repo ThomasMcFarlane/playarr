@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Calendar on TV: in the week view LEFT/RIGHT now moves between days and UP/DOWN between entries (web and Android TV), the focused entry always scrolls into view, every scrollable calendar area shows the edge fade where content continues, and in the agenda the details panel follows focus.
+- Calendar entries' coloured left border now shows availability (a playable file in the library, or not) instead of the media kind, on web and Android.
 - Web: Filters, Create and Calendar link sit in one shell-owned column at the right edge again, stacked vertically exactly where the 30 September Filters tile was (a row left of the avatar on phones), instead of in each page's header row.
 - Web TV layout: UP and DOWN between Home rails now land on the card visually above or below instead of the same index, and the target rail no longer scrolls to match.
 - Android: Home rails fade at their edges like the web client. Cards scrolled past the start line fade away over the gutter on the left (the card at rest stays fully visible) and a soft shadow shows on the right while more cards follow, in both themes, on television and phone.

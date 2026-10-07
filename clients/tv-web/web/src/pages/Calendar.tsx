@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   CalendarEntry,
@@ -32,6 +32,7 @@ import {
   buildWeekDays,
   defaultCalendarView,
   entryState,
+  itemAvailability,
   entryLocalDay,
   episodeCode,
   failedSources,
@@ -71,7 +72,46 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { captureNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { useScrollEdges } from "../lib/useScrollEdges";
 import "./Calendar.css";
+
+/**
+ * A scroll viewport inside the shared rail edge window: the web fade (`.tv-scroll-edge-window`) shows on each
+ * side where content continues. The scroller keeps its own element so native wheel, touch and focus
+ * scrolling are unchanged.
+ */
+export function EdgeScroller({
+  axis,
+  as: Tag = "div",
+  windowClassName = "",
+  refreshKey = "",
+  children,
+  className,
+  ...rest
+}: {
+  axis: "vertical" | "horizontal";
+  as?: "div" | "section";
+  windowClassName?: string;
+  refreshKey?: string | number;
+  children: ReactNode;
+} & HTMLAttributes<HTMLElement> & { "data-tv-scroll-container"?: boolean; "data-tv-scroll-axis"?: string; "data-tv-nav-geometric"?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(ref, axis, refreshKey);
+  const vertical = axis === "vertical";
+  const flags = vertical
+    ? `${edges.start ? " can-scroll-up" : ""}${edges.end ? " can-scroll-down" : ""}`
+    : `${edges.start ? " can-scroll-left" : ""}${edges.end ? " can-scroll-right" : ""}`;
+  return (
+    <div
+      className={`tv-scroll-edge-window calendar-edge-window${vertical ? "" : " calendar-edge-window-x"}${windowClassName ? ` ${windowClassName}` : ""}${flags}`}
+      data-edge-window={axis}
+    >
+      <Tag ref={ref as never} className={`calendar-edge-scroller${className ? ` ${className}` : ""}`} {...rest}>
+        {children}
+      </Tag>
+    </div>
+  );
+}
 
 type TFunction = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
@@ -195,6 +235,8 @@ function StateBadge({ entry, t }: { entry: CalendarEntry; t: TFunction }) {
 type SeriesGroup = Extract<CalendarItem, { kind: "series" }>;
 
 interface SelectHandlers {
+  /** Agenda: moving focus onto an entry selects it, so the details panel follows the remote. */
+  selectOnFocus?: boolean;
   selectedKey: string | null;
   onSelect: (item: CalendarItem, target: HTMLElement) => void;
 }
@@ -233,6 +275,7 @@ function ItemRow({
   locale,
   selectedKey,
   onSelect,
+  selectOnFocus,
 }: { item: CalendarItem; t: TFunction; locale: string } & SelectHandlers) {
   const first = itemEntry(item);
   const time = entryTime(first);
@@ -246,10 +289,11 @@ function ItemRow({
     <li>
       <button
         type="button"
-        className={`calendar-entry calendar-kind-${first.media_kind}${isGroup ? " calendar-entry-group" : ""}${selected ? " is-selected" : ""}`}
+        className={`calendar-entry calendar-availability-${itemAvailability(item)}${isGroup ? " calendar-entry-group" : ""}${selected ? " is-selected" : ""}`}
         data-navigation-focus-key={`calendar:${item.key}`}
         aria-pressed={selected}
         onClick={(event) => onSelect(item, event.currentTarget)}
+        onFocus={selectOnFocus && !selected ? (event) => onSelect(item, event.currentTarget) : undefined}
       >
         <Poster entry={first} />
         <span className="calendar-entry-body">
@@ -293,6 +337,7 @@ function DaySections({
   loading,
   selectedKey,
   onSelect,
+  selectOnFocus,
 }: {
   days: readonly { day: Day; entries: CalendarEntry[] }[];
   t: TFunction;
@@ -305,41 +350,61 @@ function DaySections({
     <div className={`calendar-days calendar-days-${showEmpty ? "week" : "agenda"}`}>
       {days
         .filter((group) => loading || showEmpty || group.entries.length > 0)
-        .map((group, index) => (
-          <section
-            key={group.day}
-            className={`calendar-day${group.day === today ? " is-today" : ""}`}
-            aria-label={formatDayHeading(group.day, locale)}
-            aria-busy={loading ? true : undefined}
-          >
-            <h3>
-              <time dateTime={group.day}>{formatDayHeading(group.day, locale)}</time>
-              {group.day === today ? <span className="calendar-today-tag">{t("pages.calendar.today")}</span> : null}
-            </h3>
-            {loading ? (
-              <ul>
-                {Array.from({ length: 1 + ((index + 1) % 2) }, (_, i) => (
-                  <SkeletonRow key={i} />
-                ))}
-              </ul>
-            ) : group.entries.length > 0 ? (
-              <ul>
-                {groupSeriesEpisodes(group.entries).map((item) => (
-                  <ItemRow
-                    key={item.key}
-                    item={item}
-                    t={t}
-                    locale={locale}
-                    selectedKey={selectedKey}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="muted calendar-day-empty">{t("pages.calendar.dayEmpty")}</p>
-            )}
-          </section>
-        ))}
+        .map((group, index) => {
+          const dayProps = {
+            className: `calendar-day${group.day === today ? " is-today" : ""}`,
+            "aria-label": formatDayHeading(group.day, locale),
+            "aria-busy": loading ? true : undefined,
+          };
+          const content = (
+            <>
+              <h3>
+                <time dateTime={group.day}>{formatDayHeading(group.day, locale)}</time>
+                {group.day === today ? <span className="calendar-today-tag">{t("pages.calendar.today")}</span> : null}
+              </h3>
+              {loading ? (
+                <ul>
+                  {Array.from({ length: 1 + ((index + 1) % 2) }, (_, i) => (
+                    <SkeletonRow key={i} />
+                  ))}
+                </ul>
+              ) : group.entries.length > 0 ? (
+                <ul>
+                  {groupSeriesEpisodes(group.entries).map((item) => (
+                    <ItemRow
+                      key={item.key}
+                      item={item}
+                      t={t}
+                      locale={locale}
+                      selectedKey={selectedKey}
+                      onSelect={onSelect}
+                      selectOnFocus={selectOnFocus}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted calendar-day-empty">{t("pages.calendar.dayEmpty")}</p>
+              )}
+            </>
+          );
+          // Week columns scroll on their own, so each one carries its own edge fade.
+          return showEmpty ? (
+            <EdgeScroller
+              key={group.day}
+              axis="vertical"
+              as="section"
+              windowClassName="calendar-day-window"
+              refreshKey={`${group.day}:${group.entries.length}:${loading}`}
+              {...dayProps}
+            >
+              {content}
+            </EdgeScroller>
+          ) : (
+            <section key={group.day} {...dayProps}>
+              {content}
+            </section>
+          );
+        })}
     </div>
   );
 }
@@ -347,14 +412,17 @@ function DaySections({
 /** Week view: one wide column per day on a horizontally scrolling, snapping track. */
 function WeekTrack(props: Parameters<typeof DaySections>[0]) {
   return (
-    <div
+    <EdgeScroller
+      axis="horizontal"
       className="calendar-week-scroll"
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="calendar:week-x"
+      data-tv-nav-geometric
+      refreshKey={props.days.length}
     >
       <DaySections {...props} />
-    </div>
+    </EdgeScroller>
   );
 }
 
@@ -404,12 +472,15 @@ function MonthGrid({
   }, [weeks.length]);
 
   return (
-    <div
+    <EdgeScroller
+      axis="horizontal"
       className="calendar-month-scroll"
       data-tv-scroll-container
       data-tv-scroll-axis="horizontal"
       data-navigation-scroll-key="calendar:month-x"
+      data-tv-nav-geometric
       aria-busy={loading ? true : undefined}
+      refreshKey={weeks.length}
     >
       <div className="calendar-month" role="grid" aria-label={formatRangeLabel("month", anchor, firstDay, locale)}>
         <div className="calendar-month-head" role="row">
@@ -452,7 +523,7 @@ function MonthGrid({
                           <li key={item.key}>
                             <button
                               type="button"
-                              className={`calendar-chip calendar-kind-${entry.media_kind}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
+                              className={`calendar-chip calendar-availability-${itemAvailability(item)}${item.kind === "series" ? " calendar-chip-group" : ""}${selectedKey === item.key ? " is-selected" : ""}`}
                               title={
                                 item.kind === "series"
                                   ? `${item.title} · ${t("pages.calendar.groupSummary", {
@@ -482,7 +553,7 @@ function MonthGrid({
           ))}
         </div>
       </div>
-    </div>
+    </EdgeScroller>
   );
 }
 
@@ -861,6 +932,7 @@ export function CalendarPage() {
     body = (
       <MasterDetail
         detailLabel={t("pages.calendar.detailsLabel")}
+        detailKey={`${detailItem?.key ?? ""}:${loading}`}
         detail={
           loading ? (
             <DetailsSkeleton />
@@ -871,11 +943,13 @@ export function CalendarPage() {
           )
         }
       >
-        <div
+        <EdgeScroller
+          axis="vertical"
           className="calendar-list-scroll"
           data-tv-scroll-container
           data-tv-scroll-axis="vertical"
           data-navigation-scroll-key="calendar:list"
+          refreshKey={`${items.length}:${loading}`}
         >
           <DaySections
             days={loading ? skeletonDays() : groups}
@@ -885,8 +959,9 @@ export function CalendarPage() {
             showEmpty={false}
             loading={loading}
             {...selectProps}
+            selectOnFocus
           />
-        </div>
+        </EdgeScroller>
       </MasterDetail>
     );
   }
