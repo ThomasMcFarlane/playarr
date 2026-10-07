@@ -197,20 +197,6 @@ internal fun PlayarrHeaderActions(
     panelActions: (@Composable RowScope.() -> Unit)? = null,
     trailingNav: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val shellColumn = LocalShellActionColumn.current
-    if (isTelevision && shellColumn != null) {
-        // Television: the buttons live in the shell action column, not in the header row. Only the period navigation stays.
-        RegisterShellActions(shellColumn, panelActions, filters)
-        if (trailingNav != null) {
-            Row(
-                modifier.padding(end = 76.8.dp + 62.dp + 12.48.dp, top = 56.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                content = trailingNav,
-            )
-        }
-        return
-    }
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
         modifier.padding(end = if (isTelevision) 76.8.dp else 72.dp, top = if (isTelevision) 56.dp else 2.dp),

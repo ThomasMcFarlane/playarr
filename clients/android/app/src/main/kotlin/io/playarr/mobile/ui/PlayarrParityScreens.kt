@@ -3069,8 +3069,6 @@ private enum class SettingsSection(val label: PlayarrString) {
     Invite(PlayarrString.SettingsInvite),
     Remote(PlayarrString.SettingsRemote),
     YourData(PlayarrString.SettingsYourData),
-    /** Web `/settings/home` (section 11): Customise Home moved here from the Home page. */
-    Home(PlayarrString.HomeCustomiseTitle),
     Legal(PlayarrString.SettingsLegal),
     /** Web lists it for everyone; the phone has no latency view, so it points to Playarr Web. */
     RequestLatency(PlayarrString.SettingsRequestLatency),
@@ -3088,7 +3086,6 @@ private val phoneSettingsIndex = listOf(
     SettingsSection.RequestLatency to PlayarrString.SettingsIndexRequestLatencyDescription,
     SettingsSection.Remote to PlayarrString.SettingsIndexRemoteDescription,
     SettingsSection.YourData to PlayarrString.SettingsYourDataDescription,
-    SettingsSection.Home to PlayarrString.HomeCustomiseDescription,
 )
 
 /** Two-digit section number as web `PRODUCT_SETTINGS_SECTIONS` prints it (01 ... 09, 10). */
@@ -3265,7 +3262,6 @@ private fun SettingsSectionContent(
         SettingsSection.Remote -> playarrString(PlayarrString.RemoteDescription)
         SettingsSection.YourData -> playarrString(PlayarrString.SettingsYourDataDescription)
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
-        SettingsSection.Home -> playarrString(PlayarrString.HomeCustomiseDescription)
         else -> null
     }
     if (isTelevision && section == SettingsSection.Appearance) {
@@ -3664,7 +3660,6 @@ private fun SettingsSectionContent(
             } else Text(playarrString(PlayarrString.SettingsRequestLatencyOnWeb), color = WebInkMuted)
             SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
-            SettingsSection.Home -> CustomiseHomeSettings(hiltViewModel())
             SettingsSection.Legal -> {
                 PlayarrButton(
                     onClick = { uriHandler.openUri(PLAYARR_PRIVACY_URL) },
