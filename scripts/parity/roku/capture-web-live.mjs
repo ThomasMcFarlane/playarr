@@ -3,12 +3,12 @@
 // account the device itself uses, so the Roku capture and this capture show the same data.
 //
 //   PLAYARR_DEVICE_TEST_USERNAME=<user> PLAYARR_DEVICE_TEST_PASSWORD=<password> \
-//     node scripts/parity/roku/capture-web-live.mjs --base https://<server> --out <dir> [--theme light|dark|both] [--screens a,b]
+//     node scripts/parity/roku/capture-web-live.mjs --base https://<server> [--web https://<web client origin>] --out <dir> [--theme light|dark|both] [--screens a,b]
 //
 // Writes <out>/tv/<theme>/<id>.png in the layout scripts/parity/diff.mjs reads (diff the Roku capture against it with the same
 // --mask-rect for the clock). Unlike capture-web.mjs nothing is frozen: the clock and rails are live, so mask them identically on
 // both sides. The credentials come from the environment and are never printed or written.
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -20,9 +20,17 @@ const opt = (n, d) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : d;
 };
 const base = (opt("base", "") ?? "").replace(/\/$/, "");
+// The page origin that serves the web client (default: the server itself; the hosted web app uses its own origin).
+const webBase = (opt("web", base) ?? "").replace(/\/$/, "");
 const out = resolve(opt("out", ""));
 const themeOpt = opt("theme", "both");
 const themes = themeOpt === "both" ? ["light", "dark"] : [themeOpt];
+// The hosted web client may predate the bundled typeface; --font renders every text run in the web's own Nunito Sans instance
+// (docs/parity/fonts/NunitoSans-wght-web.ttf), exactly as the committed references and the Roku channel draw it.
+const fontFile = opt("font", "");
+const fontCss = fontFile
+  ? `@font-face{font-family:"ParityFont";src:url(data:font/ttf;base64,${readFileSync(fontFile).toString("base64")});font-weight:100 1000}:root{--font:"ParityFont",sans-serif!important}*,*::before,*::after{font-family:"ParityFont",sans-serif!important}`
+  : "";
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const username = process.env.PLAYARR_DEVICE_TEST_USERNAME;
 const password = process.env.PLAYARR_DEVICE_TEST_PASSWORD;
@@ -54,7 +62,11 @@ async function login() {
 // The first film and first series in the A-Z library order the Roku shows.
 const first = async (kind, token) => {
   const items = (await api(`/api/v1/catalog?kind=${kind}&available_only=true&limit=200`, token)).items ?? [];
-  const key = (t) => (/^[0-9]/.test(t) ? "0" + t : t.toLowerCase());
+  // The Roku library sorts A-Z ignoring leading punctuation, numbers first.
+  const key = (t) => {
+    const clean = t.replace(/^[^A-Za-z0-9]+/, "");
+    return (/^[0-9]/.test(clean) ? "0" : "1") + clean.toLowerCase();
+  };
   return items.sort((a, b) => key(a.title).localeCompare(key(b.title), "en", { numeric: true }))[0];
 };
 const seed = await login();
@@ -103,11 +115,24 @@ try {
             localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "parity", apiBaseUrl: base, userId: s.user_id }));
           } catch {}
         }, { base, s, dev: DEVICE, theme });
+        if (fontCss) {
+          await context.addInitScript((css) => {
+            const add = () => {
+              if (document.getElementById("__parity_font")) return;
+              const el = document.createElement("style");
+              el.id = "__parity_font";
+              el.textContent = css;
+              (document.head || document.documentElement).appendChild(el);
+            };
+            if (document.documentElement) add();
+            else new MutationObserver((_, o) => { if (document.documentElement) { o.disconnect(); add(); } }).observe(document, { childList: true });
+          }, fontCss);
+        }
         const page = await context.newPage();
         await page.route(/\/api\/v1\/playback\/(progress|[^/]+\/progress|sessions\/[^/]+\/events)/, (route) =>
           route.request().method() === "GET" ? route.continue() : route.fulfill({ status: 204, body: "" })
         );
-        await page.goto(base + screen.route, { waitUntil: "load" });
+        await page.goto(webBase + screen.route, { waitUntil: "load" });
         await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}::-webkit-scrollbar{display:none}" });
         await page.evaluate(() => document.fonts.ready);
         await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});

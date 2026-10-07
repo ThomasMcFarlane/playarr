@@ -122,7 +122,7 @@
            same font-size-to-line-height ratio as Theme.brs's type scale
            (~1.42x, e.g. display 50/71) for 3 real lines: 86px * 1.42 = 122px
            visual line height * 3 lines = 366px visual / 2.69 scale = 136px. -->
-      <Label id="stageTitleLabel" translation="[0,34]" width="193" height="136" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.69,2.69]" color="0xF4F0F1FF" />
+      <Label id="stageTitleLabel" translation="[0,34]" width="173" height="136" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xF4F0F1FF" />
       <!-- from: .tv-title-meta font-size clamp(0.68rem,0.78vw,0.96rem) evaluated at
            1920px: 0.78vw = 14.976px -> 15px. Color: theme inkSoft. -->
       <Label id="stageMetaLabel" translation="[0,270]" width="518" height="40" scale="[0.47,0.47]" color="0xC5B8BDFF" />

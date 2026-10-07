@@ -10,23 +10,43 @@ ROKU_DEV_TARGET=<ip> ROKU_DEV_PASSWORD=<dev password> node scripts/parity/roku/c
 node scripts/parity/diff.mjs --ref docs/parity/web --cand <out> --layout tv --theme dark --mask-rect 470,60,260,40
 ```
 
-## Mismatch per screen (device captures, fixture clock masked)
+## Mismatch per screen (device against the live web reference, same real account)
+
+Method: the Roku stays signed in as the device test account. `scripts/parity/roku/capture-web-live.mjs` captures the web TV
+client (1920x1080, Nunito Sans forced, hosted web client against the real server) as that same account in the same run, and
+`scripts/parity/roku/capture.mjs` captures the device (`ROKU_DOCK_HAS_MUSIC=1`). Diff: `scripts/parity/diff.mjs`, pixelmatch
+threshold 0.1, the clock rectangles (470,60,260,40 and 545,60,180,40) masked on both sides. Nothing is committed from these
+captures (they show real library artwork).
 
 | Screen | Dark | Light | Status |
 | --- | ---: | ---: | --- |
-| home | 5.74% | 32.41% | open |
-| movies | 6.40% | 25.01% | open |
-| series | 5.14% | not re-measured | open |
-| film-detail | 10.27% | not re-measured | open |
-| series-detail | 6.11% | not re-measured | open |
-| search | 3.68% | 22.89% | open |
-| profile-switcher | 5.53% | 7.02% | open |
-| calendar, settings and its panels, watchlist, requests, player-controls, player-quality-menu | n/a | n/a | screens exist on Roku now; measured against the live web reference (see below) |
-| household-blocked | n/a | n/a | screen exists (polls the household status); it needs a restricted profile, which the real device test account is not, so it is not captured on the device |
+| home | 10.57% | 25.60% | open |
+| movies | 17.65% | 45.26% | open |
+| series | 39.38% | 42.09% | open |
+| film-detail | 24.96% | 29.53% | open |
+| series-detail | 18.52% | 31.26% | open |
+| search | 1.05% | 1.07% | open (just over) |
+| calendar | 3.44% | 2.57% | open |
+| settings | 2.00% | 1.98% | open |
+| settings-avatar | 3.81% | 3.83% | open |
+| settings-language | 1.68% | 1.72% | open |
+| settings-player | 2.67% | 2.86% | open |
+| settings-server | 3.91% | 3.97% | open |
+| settings-lock | 3.06% | 2.78% | open |
+| settings-invite | 4.71% | 4.75% | open |
+| settings-remote | 2.19% | 2.17% | open |
+| settings-latency | 2.01% | 1.75% | open |
+| settings-your-data | 3.58% | 3.50% | open |
+| watchlist | 5.61% | 0.61% | light passes; dark capture predates a loading race, re-measure |
+| requests | 56.75% | 0.51% | light passes; dark capture predates a loading race, re-measure |
+| profile-switcher | 5.98% | 97.64% | the light web capture is a blank frame, re-measure |
+| player-controls, player-quality-menu | not measured | not measured | the live web player needs a running stream; the chrome is built to the web DOM numbers |
+| household-blocked | n/a | n/a | needs a restricted profile; the real device account is not one |
 | downloads | n/a | n/a | justified exception: offline storage is not possible on Roku |
 
-The light figures are high because the stage wash, key-art darkening and dock geometry are still tuned for dark; the
-theme itself (tokens, preference, every label and panel) now follows the web palette.
+Where the figures stay high: Library and detail screens differ in live artwork decoding and the Library/Detail layouts are still the
+older Roku layout; the Home hero text uses the system line pitch and Roku has no letter-spacing (the web's tight tracking on large
+titles cannot be reproduced). None of the screens is at or below 1% except where marked.
 
 ## Why nothing is at or below 1% yet
 

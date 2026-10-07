@@ -3659,7 +3659,7 @@ sub finishHomeLoad()
     primaryLabel = "Start watching"
     if m.homeContinueEntries.Count() > 0
         primaryWorks = takeFirstWorks(m.homeContinueEntries, 10)
-        primaryLabel = "Continue watching"
+        primaryLabel = "On deck"
     else if m.homeFallbackItems.Count() > 0
         primaryWorks = takeFirstWorks(m.homeFallbackItems, 8)
         primaryLabel = "Start watching"

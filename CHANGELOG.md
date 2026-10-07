@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.
 - Roku: playback now resumes from the server's resume point and reports watch progress (periodically, on pause, on exit and at the end) through its own request tasks, so leaving the player no longer loses the position. Nothing is written when playback never started.
 - Fire TV client: playback works again on a real device. The app now loads Shaka Player for Vega (installed by `scripts/setup-shaka.sh`) with the navigator fields it needs, and advertises the containers and codecs the stick decodes so the server direct-plays instead of answering 503 for an on-demand transcode it has no capacity for.
 - Fire TV client: the access token is renewed before it expires and after a 401, instead of the raw stored token being used until the device was signed out about fifteen minutes after pairing (every request then failed with 401). When renewal is refused everywhere the app returns to the profile picker.
@@ -119,6 +120,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Fire TV client: light and dark themes with the web palettes (the Appearance screen now switches them live without resetting navigation; "System" is dark on a TV), and static Nunito Sans and JetBrains Mono instances, because Vega ignores font weight for variable fonts.
 - Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).
@@ -249,6 +251,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: Home labels its first rail On deck like the web, the hero title uses the web size, and parity captures compare the device with the live web client on the same real account.
 - CI: the Fire TV client's typecheck and jest run on pull requests that touch the app or the shared code it imports (they never ran in CI before), and gate merges through `ci-required`.
 - iOS and tvOS: Play opens the player directly instead of a full-screen "Preparing playback" screen; tvOS player BACK closes panels, then the controls, then exits, the scrubber shows the web focus ring and SELECT on it toggles play/pause, and the controls scrim rises from the bottom.
 - Android: Play opens the player directly (black stage, close control, buffering spinner) instead of a full-screen "Preparing playback" page; the unused strings and translations are removed.
