@@ -5,7 +5,7 @@ import UIKit
 
 struct SettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
-        case appearance, avatar, language, player, server, lock, invite, remote, data
+        case appearance, avatar, language, player, server, lock, invite, requestLatency, remote, data
         var id: String { rawValue }
         var number: String { String(format: "%02d", Self.allCases.firstIndex(of: self)! + 1) }
         var title: String {
@@ -18,6 +18,7 @@ struct SettingsView: View {
             case .server: "Server"
             case .lock: "Profile lock"
             case .invite: "Invite a friend"
+            case .requestLatency: "Request latency"
             case .data: "Your data"
             }
         }
@@ -31,6 +32,7 @@ struct SettingsView: View {
             case .server: "Review or change the connected Playarr Server."
             case .lock: "Protect this profile with a four-digit PIN."
             case .invite: "Request a one-use invitation for someone else."
+            case .requestLatency: "Per-route HTTP request latency for admins."
             case .data: "Export your watch progress, playlists and preferences, or import them from another Playarr Server."
             }
         }
@@ -44,6 +46,7 @@ struct SettingsView: View {
             case .server: "server.rack"
             case .lock: "lock"
             case .invite: "person.badge.plus"
+            case .requestLatency: "speedometer"
             case .data: "square.and.arrow.up.on.square"
             }
         }
@@ -220,6 +223,7 @@ struct SettingsView: View {
             case .server: serverContent
             case .lock: lockContent
             case .invite: inviteContent
+            case .requestLatency: RequestLatencyView(transport: environment.apiClient)
             case .data: YourDataView(transport: environment.apiClient)
             }
         }
