@@ -91,7 +91,13 @@ function isEpisodicKind(kind: Work["kind"]): boolean {
 function playlistFromWorkDetail(detail: WorkDetail, t: TFunc): PlayerPlaylistItem[] {
   if (detail.work.kind === "movie") {
     return detail.media_file_id
-      ? [{ mediaFileId: detail.media_file_id, title: detail.work.title }]
+      ? [
+          {
+            mediaFileId: detail.media_file_id,
+            title: detail.work.title,
+            synopsis: detail.work.overview ?? undefined,
+          },
+        ]
       : [];
   }
   if (typeof detail.children !== "object" || !("Series" in detail.children)) return [];
@@ -104,6 +110,7 @@ function playlistFromWorkDetail(detail: WorkDetail, t: TFunc): PlayerPlaylistIte
           episode.episode.title ??
           t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
         subtitle: detail.work.title,
+        synopsis: episode.episode.overview ?? detail.work.overview ?? undefined,
         episodeId: episode.episode.id,
         seasonNumber: season.season.season_number,
         episodeNumber: episode.episode.episode_number,
@@ -1678,6 +1685,7 @@ export function WorkDetailPage() {
                     mediaFileId,
                     title: episodeTitle,
                     subtitle: work.title,
+                    synopsis: episode.episode.overview ?? work.overview ?? undefined,
                     episodeId: episode.episode.id,
                     seasonNumber,
                     episodeNumber,

@@ -14,6 +14,7 @@ import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
 import { IS_TIZEN, type PlayarrWebPlatform } from "../../lib/clientPlatform";
 import { usesTenFootChrome } from "../../lib/productSurfaces";
+import { createDoubleTapDetector, DOUBLE_TAP_WINDOW_MS } from "../../lib/doubleTapSeek";
 import { isPlayerBackKey, resolvePlayerBack } from "../../lib/playerMounting";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
@@ -41,8 +42,8 @@ import {
 } from "./PlayerIcons";
 import { Button } from "../ui";
 
-const SEEK_STEP_SECONDS = 5;
-const AUTO_HIDE_MS = 3000;
+const SEEK_STEP_SECONDS = 10;
+const AUTO_HIDE_MS = 5000;
 /** Full bar count for desktop web; ten-foot TVs use fewer bars for readability. */
 export const MUSIC_VISUALISER_BAR_COUNT = 36;
 export const MUSIC_VISUALISER_BAR_COUNT_TEN_FOOT = 18;
@@ -226,6 +227,8 @@ export interface PlayerPlaylistItem {
   mediaFileId: string;
   title: string;
   subtitle?: string;
+  /** Synopsis shown in the player's Info panel. */
+  synopsis?: string;
   episodeId?: string;
   seasonNumber?: number;
   episodeNumber?: number;
@@ -562,6 +565,15 @@ export function PlayerSurface({
   // Those inputs only reveal hidden controls; they never toggle playback.
   const controlsVisibleRef = useRef(true);
   controlsVisibleRef.current = showControls;
+  // Whether the controls were visible before the key now being handled. The
+  // shell's capture handler reveals them, so a handler that runs later has to
+  // read this instead of `controlsVisibleRef`.
+  const visibleBeforeKeyRef = useRef(true);
+  const pointerTypeRef = useRef("mouse");
+  const doubleTapRef = useRef(createDoubleTapDetector());
+  const pendingTapToggleRef = useRef<number | undefined>(undefined);
+  // The control that last held focus inside the controls: revealing returns there.
+  const lastControlFocusRef = useRef<HTMLElement | null>(null);
   const hideFocusMoveRef = useRef(false);
   const clickGateRef = useRef(createRevealGate());
   const enterGateRef = useRef(createRevealGate());
@@ -840,14 +852,14 @@ export function PlayerSurface({
     onStop,
     onSeekBackward: () => {
       const current = engineStateRef.current;
-      seek(Math.max(0, current.currentTimeSeconds - SEEK_STEP_SECONDS * 2));
+      seek(Math.max(0, current.currentTimeSeconds - SEEK_STEP_SECONDS));
     },
     onSeekForward: () => {
       const current = engineStateRef.current;
       seek(
         Math.min(
           current.durationSeconds,
-          current.currentTimeSeconds + SEEK_STEP_SECONDS * 2
+          current.currentTimeSeconds + SEEK_STEP_SECONDS
         )
       );
     },
@@ -864,6 +876,7 @@ export function PlayerSurface({
     if (minimised) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       const enterMayToggle = enterGateRef.current.finish(controlsVisibleRef.current);
+      const wasVisible = visibleBeforeKeyRef.current;
       if (
         event.defaultPrevented ||
         isTypingTarget(event.target) ||
@@ -884,7 +897,27 @@ export function PlayerSurface({
         void activateMusicVisualiser();
       }
 
+      // Arrow and D-pad keys never seek or act while the controls are hidden:
+      // the first one only reveals them, focusing the control that last held
+      // focus (Play/pause the first time). Dedicated media keys, j and l seek.
+      if (!wasVisible && event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        const target =
+          lastControlFocusRef.current?.isConnected === true
+            ? lastControlFocusRef.current
+            : shellRef.current?.querySelector<HTMLElement>("[data-player-default-focus]");
+        target?.focus({ preventScroll: true });
+        handleActivity();
+        return;
+      }
+
       switch (event.key) {
+        case "j":
+          seek(Math.max(0, current.currentTimeSeconds - SEEK_STEP_SECONDS));
+          break;
+        case "l":
+          seek(Math.min(current.durationSeconds, current.currentTimeSeconds + SEEK_STEP_SECONDS));
+          break;
         case "Enter":
           event.preventDefault();
           // OK/Enter on hidden controls only reveals them (handleActivity
@@ -937,6 +970,14 @@ export function PlayerSurface({
     focusSeekControl,
     systemVolumeOnly,
   ]);
+
+  useEffect(() => {
+    const snapshot = () => {
+      visibleBeforeKeyRef.current = controlsVisibleRef.current;
+    };
+    window.addEventListener("keydown", snapshot, true);
+    return () => window.removeEventListener("keydown", snapshot, true);
+  }, []);
 
   // BACK closes the controls overlay first; only a BACK with the controls
   // hidden exits (handled by `Player.tsx`). Menus and panels consume BACK
@@ -1051,12 +1092,23 @@ export function PlayerSurface({
       onPointerDownCapture={
         minimised && !inlineMusic
           ? undefined
-          : () => {
+          : (event) => {
+              pointerTypeRef.current = event.pointerType;
               clickGateRef.current.begin(controlsVisibleRef.current);
               handleActivity();
               void activateMusicVisualiser();
             }
       }
+      onFocusCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof HTMLElement &&
+          target.closest(".player-controls, .player-close, .player-minimise") &&
+          !target.matches("video")
+        ) {
+          lastControlFocusRef.current = target;
+        }
+      }}
       onKeyDownCapture={
         minimised && !inlineMusic
           ? undefined
@@ -1091,7 +1143,34 @@ export function PlayerSurface({
           (event.target === event.currentTarget ||
             (event.target as HTMLElement).tagName === "VIDEO")
         ) {
-          togglePlayback();
+          if (pointerTypeRef.current === "touch" && !inlineMusic) {
+            // Touch: a second tap on the left/right half seeks 10 s; the toggle
+            // of a single tap waits out the double-tap window.
+            const rect = event.currentTarget.getBoundingClientRect();
+            const result = doubleTapRef.current.tap(
+              event.clientX - rect.left,
+              rect.width,
+              event.timeStamp
+            );
+            if (result) {
+              window.clearTimeout(pendingTapToggleRef.current);
+              pendingTapToggleRef.current = undefined;
+              const now = engineStateRef.current;
+              seek(
+                result === "backward"
+                  ? Math.max(0, now.currentTimeSeconds - SEEK_STEP_SECONDS)
+                  : Math.min(now.durationSeconds, now.currentTimeSeconds + SEEK_STEP_SECONDS)
+              );
+            } else {
+              window.clearTimeout(pendingTapToggleRef.current);
+              pendingTapToggleRef.current = window.setTimeout(() => {
+                pendingTapToggleRef.current = undefined;
+                togglePlayback();
+              }, DOUBLE_TAP_WINDOW_MS);
+            }
+          } else {
+            togglePlayback();
+          }
         }
       }}
     >
@@ -1463,6 +1542,11 @@ export function PlayerSurface({
           getSessionId={player.getSessionId}
           videoRef={videoRef}
           capabilities={WEB_PLAYBACK_CAPABILITIES}
+          about={{
+            title: activePlaylistItem?.title ?? title,
+            subtitle: activePlaylistItem?.subtitle,
+            synopsis: activePlaylistItem?.synopsis,
+          }}
           onClose={() => {
             setHealthOpen(false);
             window.requestAnimationFrame(() =>

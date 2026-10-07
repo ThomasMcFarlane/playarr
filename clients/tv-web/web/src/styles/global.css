@@ -12764,3 +12764,35 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
     outline: 0;
   }
 }
+
+/* Player focus: every focused control shows the white ring, not only a fill. */
+.player-close:focus-visible,
+.player-minimise:focus-visible,
+.player-btn:focus-visible,
+.player-quality-button:focus-visible,
+.player-quality-option:focus-visible,
+.quality-matrix.is-player .quality-matrix-choice:focus-visible,
+.player-playlist-panel > header button:focus-visible,
+.player-playlist-item:focus-visible,
+body[data-input-mode="remote"] .player-close:focus,
+body[data-input-mode="remote"] .player-minimise:focus,
+body[data-input-mode="remote"] .player-btn:focus,
+body[data-input-mode="remote"] .player-quality-button:focus,
+body[data-input-mode="remote"] .player-quality-option:focus,
+body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:focus {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .player-controls-row {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+  }
+
+  .player-quality-button {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 0.6rem;
+  }
+}

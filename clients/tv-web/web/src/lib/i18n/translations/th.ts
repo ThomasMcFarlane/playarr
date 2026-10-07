@@ -149,6 +149,7 @@ export const th: Translations = {
   "components.player.controls.subtitlesError": "ข้อผิดพลาดคำบรรยาย: {{error}}",
   "components.player.controls.subtitlesButtonLabel": "คำบรรยาย: {{label}}",
   "components.playbackHealth.open": "สถานะการเล่น",
+  "components.playbackHealth.about": "เกี่ยวกับเรื่องนี้",
   "components.playbackHealth.title": "สถานะการเล่น",
   "components.playbackHealth.kicker": "วิธีที่กำลังเล่นอยู่",
   "components.playbackHealth.close": "ปิดสถานะการเล่น",
@@ -437,6 +438,7 @@ export const th: Translations = {
   "pages.player.couldNotStart": "ไม่สามารถเริ่มเล่นเรื่องนี้ได้",
   "pages.player.tryAgain": "ลองอีกครั้ง",
   "pages.player.backToDetails": "กลับไปที่หน้ารายละเอียด",
+  "pages.player.close": "ปิด",
   "pages.player.maximiseTitle": "ขยาย {{title}} เต็มจอ",
 
   "pages.playlists.title": "เพลย์ลิสต์",

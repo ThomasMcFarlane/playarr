@@ -86,6 +86,7 @@ export function seriesPlaylist(detail: WorkDetail, t: TFunc): PlayerPlaylistItem
             episode.episode.title ??
             t("pages.workDetail.episodeNumber", { number: episode.episode.episode_number }),
           subtitle: detail.work.title,
+          synopsis: episode.episode.overview ?? detail.work.overview ?? undefined,
           episodeId: episode.episode.id,
           seasonNumber: season.season.season_number,
           episodeNumber: episode.episode.episode_number,

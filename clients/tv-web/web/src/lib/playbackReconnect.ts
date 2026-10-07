@@ -71,3 +71,43 @@ export function sessionCloseForEngineState(
   if (state === "error") return "error";
   return null;
 }
+
+/** Silent re-tries of a failed first negotiation (1 s, 2 s, 4 s) before the error view appears. */
+export const MAX_NEGOTIATION_AUTO_RETRIES = 3;
+
+/** True for failures worth retrying silently: the network dropped, or the server timed out or failed. */
+export function isTransientNegotiationError(err: unknown): boolean {
+  if (err && typeof err === "object" && "status" in err && typeof err.status === "number") {
+    const status = err.status;
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+  if (err instanceof Error) return err.name !== "AbortError";
+  return false;
+}
+
+const RAW_NETWORK_MESSAGE = /failed to fetch|networkerror|network request failed|load failed|fetch failed/i;
+
+/**
+ * Human wording for a failed negotiation, replacing raw exception text such as
+ * "Failed to fetch". `fallback` is the already-described API message for
+ * errors that carry a useful one (permission, household, sign-in).
+ */
+export function humanNegotiationMessage(err: unknown, fallback: string): string {
+  const status =
+    err && typeof err === "object" && "status" in err && typeof err.status === "number"
+      ? err.status
+      : undefined;
+  if (status === undefined) {
+    if (err instanceof Error && RAW_NETWORK_MESSAGE.test(err.message)) {
+      return "Can't reach the server. Check your connection and try again.";
+    }
+    return RAW_NETWORK_MESSAGE.test(fallback)
+      ? "Can't reach the server. Check your connection and try again."
+      : fallback;
+  }
+  if (status === 404) return "This title is no longer available on the server.";
+  if (status === 408 || status === 429 || status >= 500) {
+    return "The server had a problem starting this title. Try again in a moment.";
+  }
+  return /^API request failed/i.test(fallback) ? "Playback could not be started." : fallback;
+}

@@ -40,6 +40,9 @@ import { IS_TIZEN } from "./clientPlatform";
 import { DOWNLOADED_QUALITY_ID } from "./qualityIds";
 import {
   canReconnect,
+  humanNegotiationMessage,
+  isTransientNegotiationError,
+  MAX_NEGOTIATION_AUTO_RETRIES,
   isRecoverableConnectionError,
   isUnhandledEngineError,
   sessionCloseForEngineState,
@@ -297,6 +300,8 @@ export function usePlaybackEngine(
   const [reconnecting, setReconnecting] = useState(false);
   const reconnectingRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
+  // Silent re-tries of a failed first negotiation; reset on success and on every manual retry.
+  const negotiationAutoRetryRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [qualityError, setQualityError] = useState<string | undefined>();
   const [sourceAudioTracks, setSourceAudioTracks] = useState<PlaybackAudioTrack[]>([]);
@@ -596,6 +601,7 @@ export function usePlaybackEngine(
       reconnectTimerRef.current = null;
     }
     initialNegotiationRef.current = true;
+    negotiationAutoRetryRef.current = 0;
     userSelectedQualityRef.current = false;
     onDemandTranscodeRef.current = false;
     sourceOffsetSecondsRef.current = 0;
@@ -732,6 +738,7 @@ export function usePlaybackEngine(
         // by the dedicated effect above instead of here -- that keeps
         // resolving it (an async OPFS/IndexedDB read) from ever forcing
         // this whole negotiation to re-run.
+        negotiationAutoRetryRef.current = 0;
         setQualityOptions(info.quality_options);
         setActiveQualityId(info.selected_quality_id);
         applySourceTracks(info);
@@ -757,13 +764,29 @@ export function usePlaybackEngine(
           }, delay);
           return;
         }
+        if (
+          !forbidden &&
+          !reconnectingRef.current &&
+          isTransientNegotiationError(err) &&
+          negotiationAutoRetryRef.current < MAX_NEGOTIATION_AUTO_RETRIES
+        ) {
+          // Stay on the player (spinner) and try again with back-off; the
+          // stored request parameters resume at the same position.
+          const delay = reconnectDelayMs(negotiationAutoRetryRef.current);
+          negotiationAutoRetryRef.current += 1;
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            setRetryCount((count) => count + 1);
+          }, delay);
+          return;
+        }
         reconnectingRef.current = false;
         setReconnecting(false);
         pendingQualitySwitchRef.current = null;
         setNegotiation({
           kind: "error",
           forbidden,
-          message: describeApiError(err),
+          message: humanNegotiationMessage(err, describeApiError(err)),
         });
       });
 
@@ -1515,6 +1538,7 @@ export function usePlaybackEngine(
     });
   }, [stopActiveSession]);
   const retryNegotiation = useCallback(() => {
+    negotiationAutoRetryRef.current = 0;
     loadedForUrl.current = null;
     automaticRecoveryUrlRef.current = null;
     reconnectingRef.current = false;
