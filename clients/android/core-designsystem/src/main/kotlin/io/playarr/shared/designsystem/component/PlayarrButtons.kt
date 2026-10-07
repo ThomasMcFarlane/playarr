@@ -36,7 +36,7 @@ import io.playarr.shared.designsystem.theme.FocusMotion
 /*
  * The one Playarr button family. Screens use PlayarrButton / PlayarrIconButton and never the raw Material
  * Button, OutlinedButton, TextButton or IconButton; PlayarrButtonUsageTest (app module) enforces that.
- * Every variant is rounded, shows a visible focus ring and grows slightly on focus (television D-pad).
+ * Every variant is rounded, shows the web focus ring (a 3 px ring outside the button, no fill change) and grows slightly on focus (television D-pad).
  */
 
 enum class PlayarrButtonVariant { Primary, Secondary, Ghost }
@@ -95,9 +95,10 @@ fun PlayarrButton(
         shape = shape,
         color = containerColor ?: container,
         contentColor = finalContent.copy(alpha = if (enabled) 1f else 0.4f),
-        border = if (focused) BorderStroke(3.dp, scheme.primary) else border,
+        border = border,
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .playarrFocusRing(focused, LocalPlayarrFocusRing.current, offset = 2.dp)
             .defaultMinSize(minHeight = size.height),
     ) {
         ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)) {
@@ -134,10 +135,11 @@ fun PlayarrIconButton(
         shape = CircleShape,
         color = if (variant == PlayarrButtonVariant.Ghost) Color.Transparent else if (variant == PlayarrButtonVariant.Primary) scheme.primary else scheme.surfaceVariant.copy(alpha = 0.7f),
         contentColor = if (variant == PlayarrButtonVariant.Primary) scheme.onPrimary else scheme.onSurface,
-        border = if (focused) BorderStroke(3.dp, scheme.primary) else null,
+        border = null,
         modifier = modifier
             .size(size.height)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .playarrFocusRing(focused, LocalPlayarrFocusRing.current, offset = 2.dp)
             .semantics { this.contentDescription = contentDescription; this.role = Role.Button },
     ) {
         androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) { content() }

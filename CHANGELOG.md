@@ -13,6 +13,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV: pressing DOWN on Home moves down through the rails instead of bouncing sideways between the first two cards. Home rails, the Movies and Series grids and the series page follow the web TV's D-pad rules (same card column between rails, hard stop at the end of a rail, LEFT from the first card goes to the navigation rail, RIGHT in the last grid column goes to the alphabet strip).
+- Android TV: focus is a 3 px ring (white in the dark theme, ink in the light theme) with no background fill on cards, buttons, pills, navigation items and list rows; television no longer draws the Material focus overlay.
+- Android TV: a series page opens with focus on the next episode to play (the episode the Play button resumes, or the first episode when nothing was watched), and coming back from a title restores the last focus on Home, Movies and Series.
+- Android TV: Home opens with focus on the first content card instead of the first navigation item, and after playback or a detail page Home puts focus back on the card that was just opened or watched.
+- Web: the profile page no longer re-arms its keyboard, focus and observer wiring on every render, and avatar re-reads of unchanged storage no longer re-render the shell. Added `pnpm smoke:profile-chip`, which clicks the profile chip and the Clients link and asserts both settle within a request and DOM-mutation budget in desktop and TV layouts and both themes.
 - tvOS: the player now resumes from the server's saved position and reports progress while playing, on pause, at the end, when the app leaves the foreground and on exit (awaited), and never overwrites the resume point with position 0.
 - Web player: every focused control shows the white ring, controls auto-hide after 5 s, arrow keys only reveal the controls while hidden (j, l and media keys seek 10 s), failed starts retry silently with back-off and then show a readable error with Retry and Close, the Info panel shows the title and synopsis, the quality chip fits narrow phones, and double-tapping the left or right half seeks 10 s on touch.
 - iOS: leaving the player now delivers the resume point before returning (background task, awaited), flushes it when the app leaves the foreground, and never overwrites it with position 0 when playback did not start.
@@ -2378,6 +2383,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Android TV D-pad navigation is covered by JVM tests of the web rules (`PlayarrTvNavigationTest`) and instrumented key-event tests across Home rails, the library grid and the series page, plus pixel checks that the focus ring draws no fill in both themes (`PlayarrTvNavigationUiTest`).
 - Tests pin the Calendar's header buttons and every page's Filters button to one component per client: a web style rule check, an Android metrics and call-site test, and source guards for iOS and tvOS.
 - CI: the web layout guards (page header registry, button audit, drawer audit) now run on every pull request that touches `clients/tv-web`, through a new `lint` script in the web package, and `tv-web-check` also runs the affected packages' vitest suites. Both feed `ci-required`. The Household registry reason now matches the page.
 - Added `clients/tv-web/web/scripts/player-entry-e2e.mjs` (Playwright against the fixture server, TV and phone layouts) and unit tests for direct player mounting and the BACK sequence.
