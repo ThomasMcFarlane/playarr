@@ -2513,7 +2513,7 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         item.AddField("year", "string", false)
         if work.release_date <> invalid and work.release_date.Len() >= 4 then item.year = work.release_date.Left(4)
         item.description = JsonString(work.overview)
-        item.hdPosterUrl = artworkUrl(work)
+        item.hdPosterUrl = cardArtworkUrl(work)
         item.AddField("artHeaders", "assocarray", false)
         item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
         ' Grid screens (Library/Search/Playlists) render the real, larger
@@ -3042,7 +3042,7 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.description = JsonString(work.overview)
         ' Real catalog posters (same path as buildGridContent). Empty tiles
         ' were a residual-budget shortcut and made Home look unfinished.
-        item.hdPosterUrl = artworkUrl(work)
+        item.hdPosterUrl = cardArtworkUrl(work)
         item.AddField("artHeaders", "assocarray", false)
         item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
         item.AddField("activeRailFactor", "float", false)
@@ -3080,6 +3080,17 @@ function resolveImageUrl(work as Object, image as Object) as String
     if image = invalid or image.kind = invalid or image.kind = "" then return ""
     if work = invalid or work.id = invalid or work.id = "" then return ""
     return m.serverUrl + "/api/v1/artwork/work/" + UrlEncode(work.id) + "/" + UrlEncode(image.kind)
+end function
+
+' Card art in web's 16:9 title cards is the work's backdrop (the fixture and
+' real catalogues both carry one); the poster is only the fallback.
+function cardArtworkUrl(work as Object) as String
+    if work.images <> invalid
+        for each image in work.images
+            if image.kind = "backdrop" then return resolveImageUrl(work, image)
+        end for
+    end if
+    return artworkUrl(work)
 end function
 
 function artworkUrl(work as Object) as String

@@ -422,7 +422,7 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertIn('workKind = "site"', MAIN)
         self.assertIn('Lookup("site")', MAIN)
         # Home rails use real catalog artwork (not empty residual-budget tiles).
-        self.assertIn("item.hdPosterUrl = artworkUrl(work)", MAIN)
+        self.assertIn("item.hdPosterUrl = cardArtworkUrl(work)", MAIN)
         self.assertNotIn(
             "Leave artwork empty so PosterCard stays on surface-soft",
             MAIN,
@@ -504,3 +504,10 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertIn('return "mkv"', MAIN)
         # Never hard-code mp4 for every direct play any more.
         self.assertNotIn('content.streamFormat = "mp4"', MAIN)
+
+    def test_cards_prefer_the_backdrop_and_parity_capture_exists(self) -> None:
+        self.assertIn("function cardArtworkUrl(work as Object)", MAIN)
+        self.assertIn('image.kind = "backdrop"', MAIN)
+        capture = ROOT.parents[1] / "scripts" / "parity" / "roku" / "capture.mjs"
+        self.assertTrue(capture.is_file())
+        self.assertIn("plugin_inspect", capture.read_text(encoding="utf-8"))

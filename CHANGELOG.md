@@ -215,6 +215,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: Home, library and rail cards show the work's backdrop (web's 16:9 card art) instead of the poster, and the hero title line pitch follows web.
 - Parity: a committed Android TV capture script (scripts/parity/android-tv) clears the app data per theme, chooses the theme in the app, freezes the clock and waits for the artwork.
 - tvOS builds its fonts with the shared DesignFont helper (the same file iOS uses), with only the weight axis set on the web's exact Nunito Sans instance.
 - Android TV settings panels: web page tone behind the section list, web font kept inside the panel, and invite, lock, remote and player spacing tuned to the references.
@@ -2337,6 +2338,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Roku: add `scripts/parity/roku/capture.mjs` (device screenshots through the dev installer, in the layout `diff.mjs` reads) and the first dark-theme parity table in `docs/parity/roku/`.
 - `PlayDistributionPolicyTest` now asserts the Play flavour allows cleartext, and `scripts/ci/check-cleartext-policy.sh` (run in CI) checks the Android, iOS, tvOS, Xbox and Tizen configuration.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
