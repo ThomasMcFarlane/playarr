@@ -76,6 +76,7 @@ jobs:
       xbox: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.xbox == 'true' }}
       harmony: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.harmony == 'true' }}
       tv-web: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.tv-web == 'true' }}
+      firetv: ${{ steps.all.outputs.full == 'true' || steps.filter.outputs.firetv == 'true' }}
       tv_web_filters: ${{ steps.tvweb.outputs.tv_web_filters }}
     steps:
       - uses: actions/checkout@v4
@@ -171,6 +172,15 @@ jobs:
               - 'clients/harmony/**'
             tv-web:
               - 'clients/tv-web/**'
+            # The Fire TV app builds against the shared tv-web packages, the shared translations and the web
+            # stylesheet its token test reads, so a change to any of them can break its tests.
+            firetv:
+              - 'clients/fire-tv/**'
+              - 'clients/tv-web/packages/**'
+              - 'clients/tv-web/web/src/lib/i18n/**'
+              - 'clients/tv-web/web/src/styles/global.css'
+              - 'docs/parity/fonts/**'
+              - '.github/workflows/ci.yml'
 
   # ---------------------------------------------------------------------
   # Backend (Rust workspace under backend/)
@@ -482,6 +492,40 @@ jobs:
           bash scripts/openapi-diff-check.sh
 
   # ---------------------------------------------------------------------
+  # Fire TV (npm project under clients/fire-tv, React Native for Vega OS). Typecheck and jest only: the
+  # .vpkg build needs Amazon's Vega SDK and a device, so it stays a local step. Runs only when the app, the
+  # shared packages it imports, or this file change (the `changes` job above).
+  # ---------------------------------------------------------------------
+  firetv-check:
+    name: Fire TV typecheck & jest
+    needs: changes
+    if: needs.changes.outputs.firetv == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/fire-tv
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: clients/fire-tv/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Jest
+        run: npm test -- --ci
+
+  # ---------------------------------------------------------------------
   # Terminal aggregator -- see the file header comment for why this is the
   # only job that should be a required status check.
   # ---------------------------------------------------------------------
@@ -494,6 +538,7 @@ jobs:
       - xbox-check
       - harmony-check
       - tv-web-check
+      - firetv-check
       - openapi-contract-check
     if: always()
     runs-on: ubuntu-latest
@@ -506,7 +551,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check tv-web-check firetv-check openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

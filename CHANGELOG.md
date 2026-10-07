@@ -247,6 +247,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- CI: the Fire TV client's typecheck and jest run on pull requests that touch the app or the shared code it imports (they never ran in CI before), and gate merges through `ci-required`.
 - iOS and tvOS: Play opens the player directly instead of a full-screen "Preparing playback" screen; tvOS player BACK closes panels, then the controls, then exits, the scrubber shows the web focus ring and SELECT on it toggles play/pause, and the controls scrim rises from the bottom.
 - Android: Play opens the player directly (black stage, close control, buffering spinner) instead of a full-screen "Preparing playback" page; the unused strings and translations are removed.
 - Android player: BACK closes the open panel first (returning focus to its opener), then the controls overlay, and only then exits.
