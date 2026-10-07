@@ -33,9 +33,9 @@ theme itself (tokens, preference, every label and panel) now follows the web pal
   `clients/roku/fonts` and attaches them from BrightScript through the Font node (`uri` + `size`), which renders text on
   the device; a Font child in the XML does not. Roku has no letter-spacing, so the hero title's negative tracking is a
   justified remaining difference.
-- **Missing chrome.** The Roku has no Downloads, Watchlist, Requests or Calendar screens, so the left dock has four
-  fewer entries than web, and there is no "Customise Home" pill. Adding dead entries would be dishonest; they come with
-  the features (rows 133, 212, 415).
+- **Downloads (justified exception).** Offline storage is not possible on Roku (no persistent file storage the channel can fill and play from), so the dock has no Downloads entry and the first dock group is Search alone. It is not faked.
+- **Missing chrome (done).** The dock now has Watchlist, Requests and Calendar, Home has the "Customise Home" pill, and
+  Preferences has the web's ten sections on the page shell (`components/Pages.brs`, `Settings.brs`).
 - **Light theme (done).** `source/Theme.brs` holds both web palettes; `ThemeApplyTree` maps each authored literal to its
   token, the preference (System, Light, Dark; System resolves to dark because Roku has no appearance API) is set from
   the sign-in/profile dropdown and Settings, and capture.mjs selects it through that dropdown.

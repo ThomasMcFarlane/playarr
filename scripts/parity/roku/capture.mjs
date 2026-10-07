@@ -38,7 +38,16 @@ async function coldStart() {
   await sleep(9);
 }
 const toHome = async () => { await coldStart(); await press("Select", 10); };
-const dock = async (downs) => { await press("Up"); await presses(Array(downs).fill("Down"), 0.8); await press("Select", 8); };
+// Left from the first rail enters the dock (web TV); Down walks it: Search 0, Home 1, Series 2, Movies 3, Playlists 4,
+// Watchlist 5, Requests 6, Calendar 7 (no Sites or Music in the fixture, no Downloads on Roku).
+const dock = async (downs, wait = 8) => { await press("Left"); await presses(Array(downs).fill("Down"), 0.8); await press("Select", wait); };
+// Preferences opens from the profile picker's gear; the section rows are walked with Down and opened with Select.
+const settings = async (row) => {
+  await coldStart();
+  await presses(["Down", "Select"], 2);
+  await presses(Array(row).fill("Down"), 0.8);
+  if (row > 0) await press("Select", 3);
+};
 
 const screens = {
   "profile-switcher": async () => { await coldStart(); },
@@ -47,7 +56,20 @@ const screens = {
   movies: async () => { await toHome(); await dock(3); },
   "series-detail": async () => { await toHome(); await press("Select", 9); },
   "film-detail": async () => { await toHome(); await dock(3); await press("Select", 9); }, // first film of the A-Z library
-  search: async () => { await toHome(); await press("Up"); await press("Select", 3); },
+  search: async () => { await toHome(); await dock(0, 3); },
+  calendar: async () => { await toHome(); await dock(7, 6); },
+  watchlist: async () => { await toHome(); await dock(5, 6); },
+  requests: async () => { await toHome(); await dock(6, 6); },
+  settings: async () => { await settings(0); },
+  "settings-avatar": async () => { await settings(1); },
+  "settings-language": async () => { await settings(2); },
+  "settings-player": async () => { await settings(3); },
+  "settings-server": async () => { await settings(4); },
+  "settings-lock": async () => { await settings(5); },
+  "settings-invite": async () => { await settings(6); },
+  "settings-latency": async () => { await settings(7); },
+  "settings-remote": async () => { await settings(8); },
+  "settings-your-data": async () => { await settings(9); },
 };
 
 function shoot(id) {

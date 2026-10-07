@@ -42,6 +42,10 @@ function ThemeTokens(mode as String) as Object
             lineStrong: &h38262147
             ' Brand red (.tv-provider kicker, unwatched dot, player accent): the same in both themes.
             brand: &hCF3157FF
+            ' Right-hand content panel of the page shell (--surface blended with --surface-soft).
+            panel: &hEFEEEEFF
+            ' Status chip tint (.calendar-badge): rgba(91,127,209,.24), the same in both themes.
+            statusTint: &h5B7FD13D
         }
     end if
     return {
@@ -61,14 +65,18 @@ function ThemeTokens(mode as String) as Object
         line: &hDFDCDD1C
         lineStrong: &hDFDCDD3B
         brand: &hCF3157FF
+        panel: &h282227FF
+        statusTint: &h5B7FD13D
     }
 end function
 
 ' Colour of a token (role) with an alpha byte, for the active theme (m.global.themeMode).
-function ThemeColor(role as String, alpha = 255 as Integer) as Integer
+function ThemeColor(role as String, alpha = -1 as Integer) as Integer
     mode = "dark"
     if m.global <> invalid and m.global.themeMode <> invalid then mode = m.global.themeMode
-    return ThemeWithAlpha(ThemeTokens(mode)[role], alpha)
+    colour = ThemeTokens(mode)[role]
+    if alpha >= 0 then colour = ThemeWithAlpha(colour, alpha)
+    return colour
 end function
 
 function ThemeWithAlpha(rgba as Integer, alpha as Integer) as Integer
@@ -133,7 +141,7 @@ sub ThemeBindRole(node as Object, field as String, whiteIsInk = false as Boolean
 end sub
 
 ' Explicitly bind a node field to a token (images tinted through blendColor, runtime-built nodes).
-sub ThemeSetRole(node as Object, role as String, alpha = 255 as Integer)
+sub ThemeSetRole(node as Object, role as String, alpha = -1 as Integer)
     if not node.hasField("themeRole") then node.addFields({ themeRole: "" })
     node.themeRole = role + ":" + alpha.ToStr()
 end sub
@@ -145,7 +153,8 @@ sub ThemeApplyNode(node as Object, tokens as Object)
     sep = Instr(1, spec, ":")
     role = Left(spec, sep - 1)
     alpha = Val(Mid(spec, sep + 1), 10)
-    colour = ThemeWithAlpha(tokens[role], alpha)
+    colour = tokens[role]
+    if alpha >= 0 then colour = ThemeWithAlpha(colour, alpha)
     kind = node.subtype()
     if kind = "Poster"
         node.blendColor = colour

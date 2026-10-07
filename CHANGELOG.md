@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.
 - Android TV: the QR sign-in screen no longer stops on "The Playarr Server session expired before it could be saved". When the code or the server's device code expires, it silently fetches a new code and QR and keeps polling, as the web client does. Network and server blips are retried with backoff (2 s doubling to 30 s) without an error, and the QR path never asks for a server URL. Only an explicit denial on the other device shows an error.
 - Fire TV: an expired link code now renews silently instead of showing an error and a Try again button.
 - Android TV: the QR sign-in recovery state focuses its Try again button instead of the theme dropdown.
@@ -93,6 +94,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).
 - Roku: light theme. Both web palettes are tokens, and a System, Light or Dark preference (sign-in/profile dropdown and Settings) recolours every screen.
 - Fire TV: a native React Native client for Amazon Vega OS at `clients/fire-tv/`, reusing the `clients/tv-web/packages` logic as TypeScript source (hosted device linking, profiles, home, library, detail, search, playlists, settings and HLS playback). Not yet wired into CI or the client catalogue.
 - Parity: the shared screen list and web references now include the settings section panels (avatar, language, player, server, PIN lock, invite, phone remote, request latency, your data) for both layouts and themes; diff.mjs gained --mask-rect and per-instance mask regions.
