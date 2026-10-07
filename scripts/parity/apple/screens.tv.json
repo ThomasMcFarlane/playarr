@@ -1,166 +1,67 @@
 {
-  "viewport": {
-    "width": 1920,
-    "height": 1080
-  },
+  "$comment": "Native routes of the tvOS app per shared screen id (scripts/parity/screens.json). capture-tvos.sh reads id, native and user.",
   "user": "fx-viewer",
-  "frozenTime": "2026-10-07T12:00:00Z",
   "screens": [
     {
       "id": "home",
-      "web": {
-        "path": "/"
-      },
-      "native": "home",
-      "shared": true
+      "native": "home"
     },
     {
       "id": "movies",
-      "web": {
-        "path": "/movies"
-      },
-      "native": "movies",
-      "shared": true
+      "native": "movies"
     },
     {
       "id": "series",
-      "web": {
-        "path": "/series"
-      },
-      "native": "series",
-      "shared": true
+      "native": "series"
     },
     {
       "id": "film-detail",
-      "web": {
-        "work": {
-          "kind": "movie",
-          "title": "Test Movie A"
-        }
-      },
-      "native": "detail:movie:Test Movie A",
-      "shared": true
+      "native": "detail:movie:Test Movie A"
     },
     {
       "id": "series-detail",
-      "web": {
-        "work": {
-          "kind": "series",
-          "title": "Sample Series 1"
-        }
-      },
-      "native": "detail:series:Sample Series 1",
-      "shared": true
+      "native": "detail:series:Sample Series 1"
     },
     {
       "id": "search",
-      "web": {
-        "path": "/search?q=Sample"
-      },
-      "native": "search:Sample",
-      "shared": true
+      "native": "search:Sample"
     },
     {
       "id": "settings",
-      "web": {
-        "path": "/settings"
-      },
-      "native": "settings",
-      "shared": true
+      "native": "settings"
     },
     {
       "id": "calendar",
-      "web": {
-        "path": "/calendar"
-      },
-      "native": "calendar",
-      "shared": true
+      "native": "calendar"
     },
     {
       "id": "profile-switcher",
-      "web": {
-        "path": "/profiles"
-      },
-      "native": "profiles",
-      "shared": true
+      "native": "profiles"
     },
     {
       "id": "player-controls",
-      "web": {
-        "file": {
-          "title": "Test Movie A"
-        },
-        "steps": [
-          {
-            "type": "pauseAt",
-            "seconds": 2
-          },
-          {
-            "type": "hideVideo"
-          },
-          {
-            "type": "revealControls"
-          }
-        ]
-      },
-      "native": "player:Test Movie A",
-      "shared": true
+      "native": "player:Test Movie A"
     },
     {
       "id": "player-quality-menu",
-      "web": {
-        "file": {
-          "title": "Test Movie A"
-        },
-        "steps": [
-          {
-            "type": "pauseAt",
-            "seconds": 2
-          },
-          {
-            "type": "hideVideo"
-          },
-          {
-            "type": "revealControls"
-          },
-          {
-            "type": "openQualityMenu"
-          }
-        ]
-      },
-      "native": "player:Test Movie A:quality",
-      "shared": true
+      "native": "player:Test Movie A:quality"
     },
     {
       "id": "household-blocked",
-      "web": {
-        "path": "/"
-      },
       "native": "household-blocked",
-      "user": "fx-child-locked",
-      "shared": true
+      "user": "fx-child-locked"
     },
     {
       "id": "downloads",
-      "web": {
-        "path": "/downloads"
-      },
       "native": "downloads"
     },
     {
       "id": "watchlist",
-      "web": {
-        "path": "/watchlist"
-      },
       "native": "watchlist"
     },
     {
       "id": "requests",
-      "web": {
-        "path": "/requests"
-      },
       "native": "requests"
     }
-  ],
-  "userAgent": "Mozilla/5.0 (Linux; Android 12; BRAVIA) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PlayarrAndroidTV/1.0"
+  ]
 }

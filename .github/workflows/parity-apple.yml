@@ -3,7 +3,8 @@ name: Apple parity
 # Pixel parity of the Apple clients against the web client, on the fixture environment
 # (scripts/fixtures). One GitHub-hosted macOS job builds the fixture server and the web
 # client, captures the web reference, drives the simulator app to every screen in
-# scripts/parity/apple/screens.<layout>.json, diffs the captures and uploads the lot.
+# scripts/parity/apple/screens.<layout>.json (native routes per shared screen id), diffs the captures with the shared
+# scripts/parity/diff.mjs and uploads the lot.
 #
 # `platform` selects the client: tvos (1920x1080 TV layout) or ios (mobile layout; the
 # iOS parity work extends the `ios` branch of the steps below).
@@ -15,6 +16,8 @@ on:
     paths:
       - .github/workflows/parity-apple.yml
       - scripts/parity/apple/**
+      - scripts/parity/*.mjs
+      - scripts/parity/screens.json
       - clients/apple-tv/**
   workflow_dispatch:
     inputs:
@@ -97,12 +100,8 @@ jobs:
           pnpm --filter @playarr-tv/web... run build
 
       - name: Install the parity tools
-        working-directory: scripts/parity/apple
-        run: npm install --no-audit --no-fund && npx playwright-core install chromium
-
-      - name: Install the shared parity tools
         working-directory: scripts/parity
-        run: npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund && npx playwright-core install chromium
 
       - name: Start the fixture environment
         env:
@@ -127,15 +126,15 @@ jobs:
             exit 1
           fi
 
-      - name: Capture the web reference
+      - name: Capture the web reference (layout dump)
         env:
           # The runner's Google Chrome plays the H.264 fixture clips the player screens need.
           PARITY_CHROME_CHANNEL: chrome
         run: |
-          for theme in ${PARITY_THEMES:-dark light}; do
-            PARITY_THEME="$theme" node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
-              "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/$theme/reference"
-          done
+          # The committed references in docs/parity/web are what the native screens diff against; this fresh capture
+          # is kept in the artifact with the per-element layout dump (dom/<id>.json) for fixing the native layout.
+          node scripts/parity/capture-web.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
+            --out "$RUNNER_TEMP/parity/web" --layouts tv --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --dump-dom
 
       - name: Create the simulator (Apple TV at 1080p)
         id: simulator
@@ -194,26 +193,15 @@ jobs:
         run: |
           for theme in ${PARITY_THEMES:-dark light}; do
             [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
-            # Screens of the shared list diff against docs/parity/web (both themes' references are committed).
+            # Every screen id is in the shared list, so every native capture diffs against docs/parity/web.
             mkdir -p "$RUNNER_TEMP/parity/cand/tv/$theme"
-            for id in $(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(s.screens.filter(x=>x.shared).map(x=>x.id).join(" "))' "${{ steps.layout.outputs.screens }}"); do
-              cp "$RUNNER_TEMP/parity/$theme/native/$id.png" "$RUNNER_TEMP/parity/cand/tv/$theme/$id.png" 2>/dev/null || true
-            done
-            # The player screens compare chrome only: the decoded video is masked on both sides (as on Android).
-            node scripts/parity/apple/mask-video.mjs "docs/parity/web/tv/$theme" "$RUNNER_TEMP/parity/$theme/native" \
-              "$RUNNER_TEMP/parity/cand/tv/$theme" player-controls player-quality-menu || true
+            cp "$RUNNER_TEMP/parity/$theme/native/"*.png "$RUNNER_TEMP/parity/cand/tv/$theme/" 2>/dev/null || true
           done
           echo "### tvOS parity against the shared web references (tv layout)" | tee -a "$GITHUB_STEP_SUMMARY"
-          node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout tv --theme both \
+          # --chrome-only: the player screens compare the chrome only (the decoded video is masked on both sides, as on Android).
+          node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout tv \
+            --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --chrome-only \
             --out "$RUNNER_TEMP/parity/shared-diff" | tee -a "$GITHUB_STEP_SUMMARY" || true
-          # Screens only tvOS has a counterpart for (tabs the shared list lacks) diff against a local web capture.
-          for theme in ${PARITY_THEMES:-dark light}; do
-            [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
-            echo "### tvOS extra screens, $theme theme" | tee -a "$GITHUB_STEP_SUMMARY"
-            node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
-              "$RUNNER_TEMP/parity/$theme/reference" "$RUNNER_TEMP/parity/$theme/native" "$RUNNER_TEMP/parity/$theme/diff" \
-              | tee -a "$GITHUB_STEP_SUMMARY"
-          done
 
       - name: Stop the fixture environment and delete the simulator
         if: always()

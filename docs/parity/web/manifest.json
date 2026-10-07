@@ -849,6 +849,114 @@
       "user": "fx-viewer",
       "file": "mobile/dark/settings-your-data.png",
       "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "downloads",
+      "route": "/downloads",
+      "user": "fx-viewer",
+      "file": "tv/light/downloads.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "watchlist",
+      "route": "/watchlist",
+      "user": "fx-viewer",
+      "file": "tv/light/watchlist.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "requests",
+      "route": "/requests",
+      "user": "fx-viewer",
+      "file": "tv/light/requests.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "downloads",
+      "route": "/downloads",
+      "user": "fx-viewer",
+      "file": "tv/dark/downloads.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "watchlist",
+      "route": "/watchlist",
+      "user": "fx-viewer",
+      "file": "tv/dark/watchlist.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "requests",
+      "route": "/requests",
+      "user": "fx-viewer",
+      "file": "tv/dark/requests.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "downloads",
+      "route": "/downloads",
+      "user": "fx-viewer",
+      "file": "mobile/light/downloads.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "watchlist",
+      "route": "/watchlist",
+      "user": "fx-viewer",
+      "file": "mobile/light/watchlist.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "requests",
+      "route": "/requests",
+      "user": "fx-viewer",
+      "file": "mobile/light/requests.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "downloads",
+      "route": "/downloads",
+      "user": "fx-viewer",
+      "file": "mobile/dark/downloads.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "watchlist",
+      "route": "/watchlist",
+      "user": "fx-viewer",
+      "file": "mobile/dark/watchlist.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "requests",
+      "route": "/requests",
+      "user": "fx-viewer",
+      "file": "mobile/dark/requests.png",
+      "pageErrors": 0
     }
   ]
 }

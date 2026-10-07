@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Deterministic Playwright captures of the web client: the pixel reference for native parity.
 //
-//   node capture-web.mjs --base http://127.0.0.1:18484 [--layouts tv,mobile] [--theme light|dark|both] [--screens home,search]
+//   node capture-web.mjs --base http://127.0.0.1:18484 [--layouts tv,mobile] [--theme light|dark|both] [--screens home,search] [--dump-dom]
 //                        [--out docs/parity/web] [--clock 2026-10-07T12:00:00Z]
 //
 // --base is a fixture server (scripts/fixtures/up.sh) that also serves the built web client
 // (PLAYARR_WEB_ASSETS_DIR) or a Vite dev server proxying /api to it. Writes <out>/<layout>/<theme>/<id>.png
 // (tv 1920x1080 at 1x, mobile 390x844 at 3x = 1170x2532; theme is light or dark) and <out>/manifest.json.
+// --dump-dom also writes <out>/<layout>/<theme>/dom/<id>.json: the rect, font and colour of every visible element, so a
+// native layout can be fixed from numbers. PARITY_CHROME_CHANNEL=chrome launches the installed Google Chrome (it plays the
+// H.264 fixture clips on runners whose Chromium build cannot).
 // Determinism: fixed clock (Date frozen), reduced motion, animations and transitions off, caret hidden,
 // no artwork (the fixture serves none, so the web draws its title placeholder tiles), fixed locale and
 // time zone, fixed fixture users and device ids.
@@ -28,6 +31,7 @@ const themeOpt = opt("theme", opt("color-scheme", "both"));
 const themeIds = themeOpt === "both" ? spec.themes : themeOpt.split(",");
 for (const t of themeIds) if (!spec.themes.includes(t)) throw new Error(`unknown theme ${t} (use ${spec.themes.join("|")}|both)`);
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
+const dumpDom = args.includes("--dump-dom");
 const out = resolve(opt("out", join(here, "../../docs/parity/web")));
 // The shared fixture instant: the stub computes the upcoming episode's air date from the same constant.
 const FIXTURE_CLOCK = readFileSync(join(here, "../fixtures/catalog.mjs"), "utf8").match(/FIXTURE_CLOCK = "([^"]+)"/)[1];
@@ -133,6 +137,10 @@ async function runStep(page, step, layout) {
       await page.waitForTimeout(400);
       break;
     }
+    case "hideVideo":
+      // The video picture is a codec and scaler difference, not UI: compare the chrome on black.
+      await page.addStyleTag({ content: "video{visibility:hidden!important}" });
+      break;
     case "waitGone":
       await page.getByText(step.text).first().waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
       break;
@@ -171,7 +179,7 @@ const STEP_TIMEOUT_MS = 120000;
 async function captureOnce(layoutId, layout, theme, screen) {
   const user = screen.user ?? spec.user;
   const s = await login(user);
-  const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
+  const browser = await chromium.launch({ ...(process.env.PARITY_CHROME_CHANNEL ? { channel: process.env.PARITY_CHROME_CHANNEL } : {}), executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
   try {
     const context = await browser.newContext({
       // A layout may carry a platform identity (the TV layout is captured as a real TV client, so every
@@ -262,6 +270,29 @@ async function captureOnce(layoutId, layout, theme, screen) {
     );
     await page.waitForTimeout(800);
     await page.screenshot({ path: join(out, layoutId, theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
+    if (dumpDom) {
+      const dom = await page.evaluate(() => {
+        const rows = [];
+        for (const el of document.querySelectorAll("body *")) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight) continue;
+          const cs = getComputedStyle(el);
+          const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 60);
+          const painted = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.borderTopWidth !== "0px" || cs.backgroundImage !== "none";
+          if (!own && !painted && el.tagName !== "IMG" && el.tagName !== "svg") continue;
+          rows.push({
+            tag: el.tagName.toLowerCase(), cls: String(el.getAttribute("class") ?? "").slice(0, 80), text: own,
+            x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
+            font: own ? `${cs.fontSize}/${cs.fontWeight}/${cs.letterSpacing}/${cs.fontFamily.slice(0, 30)}` : undefined,
+            color: own ? cs.color : undefined, bg: cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : undefined,
+            radius: cs.borderTopLeftRadius !== "0px" ? cs.borderTopLeftRadius : undefined, opacity: cs.opacity !== "1" ? cs.opacity : undefined,
+          });
+        }
+        return rows;
+      });
+      mkdirSync(join(out, layoutId, theme, "dom"), { recursive: true });
+      writeFileSync(join(out, layoutId, theme, "dom", `${screen.id}.json`), JSON.stringify(dom));
+    }
     // Regions whose text legitimately differs per fixture instance (for example a server address) are recorded as
     // rectangles in CSS px; diff.mjs ignores them in both images. The reference screenshot itself is unmasked.
     const maskRects = [];
