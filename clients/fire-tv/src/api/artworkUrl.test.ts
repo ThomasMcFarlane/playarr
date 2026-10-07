@@ -1,6 +1,17 @@
 import type {ImageKind} from '@playarr-tv/api-client';
 import {albumArtworkUrl, artworkAuthHeaders, preferredArtworkKind, workArtworkUrl} from './artworkUrl';
 
+describe('artwork URLs and a trailing-slash base', () => {
+  it('never produces a double slash when the base ends in one (the Fire TV grey-box bug)', () => {
+    expect(workArtworkUrl('http://192.0.2.10:8484/', 'work-1', 'poster')).toBe(
+      'http://192.0.2.10:8484/api/v1/artwork/work/work-1/poster'
+    );
+    expect(albumArtworkUrl('http://192.0.2.10:8484//', 'artist-1', 'album-1', 'thumb')).toBe(
+      'http://192.0.2.10:8484/api/v1/artwork/album/artist-1/album-1/thumb'
+    );
+  });
+});
+
 describe('workArtworkUrl', () => {
   it('builds the exact path api-client/src/index.ts\'s getWorkArtwork uses', () => {
     expect(workArtworkUrl('http://192.168.1.20:8484', 'work-1', 'poster')).toBe(

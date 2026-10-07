@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fire TV client: poster and backdrop artwork now loads on a real device (the artwork URL had a double slash after the server address, which the server answered with 404, so every image stayed a grey box).
 - Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.
 - Android TV: the QR sign-in screen no longer stops on "The Playarr Server session expired before it could be saved". When the code or the server's device code expires, it silently fetches a new code and QR and keeps polling, as the web client does. Network and server blips are retried with backoff (2 s doubling to 30 s) without an error, and the QR path never asks for a server URL. Only an explicit denial on the other device shows an error.
 - Fire TV: an expired link code now renews silently instead of showing an error and a Try again button.

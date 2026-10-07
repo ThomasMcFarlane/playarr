@@ -25,9 +25,17 @@
  */
 import type {Album, ImageKind, Work} from '@playarr-tv/api-client';
 
+/**
+ * `client.resolveUrl('/')` ends in a slash, and a `//api/...` path is a 404 on the server (found on a real Fire TV:
+ * every poster rendered as a grey box because the native image loader got a double slash), so the base never keeps one.
+ */
+function trimBase(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '');
+}
+
 /** `GET /api/v1/artwork/work/{work_id}/{kind}` -- a work's own poster/backdrop/etc. */
 export function workArtworkUrl(baseUrl: string, workId: string, kind: ImageKind): string {
-  return `${baseUrl}/api/v1/artwork/work/${encodeURIComponent(workId)}/${encodeURIComponent(kind)}`;
+  return `${trimBase(baseUrl)}/api/v1/artwork/work/${encodeURIComponent(workId)}/${encodeURIComponent(kind)}`;
 }
 
 /** `GET /api/v1/artwork/album/{artist_work_id}/{album_id}/{kind}` -- an album's own artwork, scoped to the artist's visible library. */
@@ -37,7 +45,7 @@ export function albumArtworkUrl(
   albumId: string,
   kind: ImageKind
 ): string {
-  return `${baseUrl}/api/v1/artwork/album/${encodeURIComponent(artistWorkId)}/${encodeURIComponent(
+  return `${trimBase(baseUrl)}/api/v1/artwork/album/${encodeURIComponent(artistWorkId)}/${encodeURIComponent(
     albumId
   )}/${encodeURIComponent(kind)}`;
 }
