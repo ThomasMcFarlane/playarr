@@ -207,6 +207,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
+- Android TV: detail tiles, player scrim and seek bar, and the primary detail pill follow the web styling more closely.
+- Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
 - Parity: the native font files are now the exact instance the web renders (Nunito Sans with wdth 100, opsz 12 and YTLC 500 pinned, weight variable) in docs/parity/fonts.
 - Fixtures: the placeholder artwork titles are drawn with a bundled Nunito Sans Bold file instead of the host's default font, so the artwork is the same on every OS; the web parity references were re-captured.
 - Android phone calendar: the selected agenda entry draws the web's border, left bar and inset ring.

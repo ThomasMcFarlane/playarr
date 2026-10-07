@@ -109,3 +109,35 @@ calendar 0.69%, settings 1.39%, profile-switcher 1.45%, household-blocked 0.43%;
 (about 14 to 24% with the frame masked). The light theme is not re-measured here: the poster images in the emulator
 load only partly before a capture, which dominates its numbers, so it needs a capture run with decoded art.
 The Typeface bullet above is resolved by this change.
+
+### Detail pages, player chrome and light theme (image-idle captures)
+
+Captured with the debug image-idle signal (`PlayarrParity images inflight=0`), a fresh 60 s fixture, the player paused at
+exactly 2.0 s (`parity_pause_at_ms`) and the shared references. The player screens are compared chrome-only: the video
+is full bleed, so everything is masked except the Minimise and Close pills, the bottom control band and (quality menu)
+the popover panel.
+
+| Screen | Dark | Light |
+| --- | ---: | ---: |
+| home | 1.35% | 2.24% |
+| movies | 0.74% | 1.56% |
+| series | 0.66% | 1.37% |
+| film-detail | 0.91% | 1.29% |
+| series-detail | 1.49% | 3.25% |
+| search | 0.93% | 1.07% |
+| calendar | 0.69% | 2.03% |
+| settings | 1.39% | 3.33% |
+| player-controls (chrome only) | 0.68% | 0.68% |
+| player-quality-menu (chrome only) | 2.80% | 2.80% |
+| profile-switcher | 1.45% | 1.61% |
+| household-blocked | 0.43% | 0.42% |
+
+What this change fixed: the player bottom scrim (web: transparent about 500 px above the bottom edge, 0.9 black at the
+edge), the seek bar colours (crimson `#cf3157` progress, no thumb), the primary detail pill colour (crimson in both
+themes, not the neutral palette accent), the web episode tile treatment (`grayscale(.25)` and a 135deg 5% to 48% black
+gradient) and the series episode tiles, which now draw the series backdrop only, as the web does.
+
+Remaining player difference: the shared references are captured without the TV user agent, so they show the volume
+slider, the fullscreen button and the HD badge, and the quality popover sits 78 px further left because of the extra
+fullscreen button. Android TV (like the web with the TV user agent) has neither, which is why the quality menu stays at
+about 2.8%.

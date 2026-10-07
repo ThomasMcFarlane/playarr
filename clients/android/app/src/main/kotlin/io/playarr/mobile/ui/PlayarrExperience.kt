@@ -1290,6 +1290,42 @@ internal val WebTextStyle: androidx.compose.ui.text.TextStyle
     ),
 )
 
+/**
+ * Web `.tv-episode-art`: the picture is drawn with `filter: grayscale(0.25)` and a 135deg gradient from 5% to 48% black
+ * covers the tile (the episode number and progress bar sit above it).
+ */
+@Composable
+internal fun WebEpisodeArt(content: @Composable () -> Unit) {
+    val paint = remember {
+        androidx.compose.ui.graphics.Paint().apply {
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0.75f) },
+            )
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .drawWithContent {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), paint)
+                    drawContent()
+                    canvas.restore()
+                }
+                // CSS 135deg: the gradient line has length (w + h) / sqrt(2) through the centre.
+                val half = (size.width + size.height) / 4f
+                val centre = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                val d = 0.70710678f
+                drawRect(
+                    Brush.linearGradient(
+                        listOf(Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.48f)),
+                        start = androidx.compose.ui.geometry.Offset(centre.x - d * half * 1.4142f, centre.y - d * half * 1.4142f),
+                        end = androidx.compose.ui.geometry.Offset(centre.x + d * half * 1.4142f, centre.y + d * half * 1.4142f),
+                    ),
+                )
+            },
+    ) { content() }
+}
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
 private const val CAPABILITIES_POLL_MS = 60_000L
@@ -3257,7 +3293,7 @@ internal fun WebDetailPill(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        color = if (ink) WebInk else if (primary) WebPink else WebSurfaceStrong.copy(alpha = 0.72f),
+        color = if (ink) WebInk else if (primary) WebKicker else WebSurfaceStrong.copy(alpha = 0.72f),
         contentColor = if (ink) WebBackground else if (primary) Color.White else WebInk,
         modifier = modifier
             .height(64.dp)
@@ -3271,7 +3307,7 @@ internal fun WebDetailPill(
             horizontalArrangement = Arrangement.spacedBy(if (primary) 11.1.dp else 8.9.dp, Alignment.CenterHorizontally),
         ) {
             glyph?.let {
-                Text(it, color = if (ink) WebBackground else if (primary) Color.White else WebPink, fontSize = if (primary) 10.118.sp else 12.806.sp)
+                Text(it, color = if (ink) WebBackground else if (primary) Color.White else WebKicker, fontSize = if (primary) 10.118.sp else 12.806.sp)
             }
             Text(label, fontSize = if (primary) 11.904.sp else 11.136.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
@@ -6465,33 +6501,17 @@ private fun WebEpisodeDetailCard(
                 .clip(RoundedCornerShape(13.44.dp))
                 .background(WebSurfaceSoft),
         ) {
-            AuthenticatedArtwork(
-                work = work,
-                kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
-                serverUrl = serverUrl,
-                accessToken = accessToken,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            episode.mediaFileId?.let { mediaFileId ->
-                AuthenticatedMediaThumbnail(
-                    mediaFileId = mediaFileId,
+            WebEpisodeArt {
+                AuthenticatedArtwork(
+                    work = work,
+                    kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
                     serverUrl = serverUrl,
                     accessToken = accessToken,
-                    contentDescription = "",
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
-                    AuthenticatedMediaThumbnail(
-                        mediaFileId = mediaFileId,
-                        serverUrl = serverUrl,
-                        accessToken = accessToken,
-                        contentDescription = "",
-                        modifier = Modifier.fillMaxSize(),
-                        artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
-                    )
-                }
             }
+            // Web `WorkDetail` draws the series backdrop on every episode tile (`episodeArtwork = backdrop`): no frame thumbnail or still.
             Text(
                 episode.episode.episodeNumber.toString().padStart(2, '0'),
                 color = Color.White,
@@ -6778,7 +6798,7 @@ private fun WebEpisodeCard(
                 .background(WebSurfaceSoft)
                 .then(if (focused) Modifier.border(2.dp, WebInk.copy(alpha = 0.7f), RoundedCornerShape(13.44.dp)) else Modifier),
         ) {
-            art()
+            WebEpisodeArt { art() }
             badge?.let {
                 Text(
                     it,
