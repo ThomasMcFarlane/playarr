@@ -239,7 +239,9 @@ class SecretSafetyTests(unittest.TestCase):
 
     def test_first_launch_uses_hosted_link_not_a_typed_server_url(self) -> None:
         self.assertIn('hostedLinkOrigin: "https://playarr.app"', CONFIG)
-        self.assertIn("if m.serverUrl = \"\"\n        beginHostedLink()", MAIN)
+        # A signed-out device never needs a remembered server address: QR
+        # sign-in goes straight to the hosted code screen.
+        self.assertIn('if m.serverUrl = "" or (signedOut and m.directPairing <> true)', MAIN)
         self.assertIn('url: AppConfig().hostedLinkOrigin + "/api/link/code"', MAIN)
         self.assertIn(
             'url: AppConfig().hostedLinkOrigin + "/api/link/code/" + UrlEncode(m.hostedDeviceCode)',
@@ -425,3 +427,80 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
             "Leave artwork empty so PosterCard stays on surface-soft",
             MAIN,
         )
+
+
+class RokuDeviceBugfixTests(unittest.TestCase):
+    """Regressions found running the channel on a physical Roku."""
+
+    def test_scene_node_ids_are_unique(self) -> None:
+        # findNode returns the first match: a Timer sharing the pairing
+        # countdown Label's id meant the poll timer never fired.
+        import xml.etree.ElementTree as ET
+
+        for path in sorted((ROOT / "components").glob("*.xml")):
+            ids = [
+                el.attrib["id"]
+                for el in ET.parse(path).getroot().iter()
+                if "id" in el.attrib and el.tag != "field"
+            ]
+            dupes = {i for i in ids if ids.count(i) > 1}
+            with self.subTest(component=path.name):
+                self.assertFalse(dupes, f"duplicate node ids: {sorted(dupes)}")
+
+    def test_pairing_poll_timer_has_its_own_id(self) -> None:
+        self.assertIn('<Timer id="pairingPollTimer"', SCENE)
+        self.assertIn('m.pairingTimer = m.top.findNode("pairingPollTimer")', MAIN)
+        self.assertIn('m.pairingTimerLabel = m.top.findNode("pairingTimer")', MAIN)
+
+    def test_manual_server_entry_pairs_against_the_typed_server(self) -> None:
+        self.assertIn("sub beginDirectPairing()", MAIN)
+        self.assertIn('"deviceCode", "POST", "/api/v1/oauth/device/code"', MAIN)
+        self.assertIn("m.directPairing = true", MAIN)
+        self.assertIn("SaveDirectPairing(true)", MAIN)
+        self.assertRegex(MAIN, r"if m\.directPairing = true\n\s+beginDirectPairing\(\)\n\s+else\n\s+beginHostedLink\(\)")
+        # The hosted broker stays the default and clears the manual choice.
+        self.assertIn("SaveDirectPairing(false)", MAIN)
+        # Code expiry renews through the active mode, not always the broker.
+        self.assertRegex(MAIN, r"m\.pairingCodeExpiresAt = 0\n\s+beginPairing\(\)")
+
+    def test_qr_sign_in_never_requires_a_server_address(self) -> None:
+        self.assertIn("signedOut = ", MAIN)
+        self.assertIn("(signedOut and m.directPairing <> true)", MAIN)
+
+    def test_home_layout_matches_web_stage(self) -> None:
+        stage = (ROOT / "components" / "TvStage.xml").read_text(encoding="utf-8")
+        self.assertIn('id="keyArtFade"', stage)
+        self.assertTrue((ROOT / "images" / "stage-key-art-fade.png").is_file())
+        self.assertIn('translation="[882,430]"', stage)
+        # Rails are 319px apart (web) and use the server's home rails.
+        self.assertIn("y += 319", MAIN)
+        self.assertIn('"homeRails", "GET", "/api/v1/home/rails"', MAIN)
+        self.assertNotIn("takeUnusedWorks(m.homeMovies", MAIN)
+        # Clock and date sit together near x=480 like .app-clock.
+        self.assertIn('id="clockTime" translation="[480,', SCENE)
+        card = (ROOT / "components" / "PosterCard.xml").read_text(encoding="utf-8")
+        self.assertIn('id="focusRing"', card)
+        card_brs = (ROOT / "components" / "PosterCard.brs").read_text(encoding="utf-8")
+        self.assertIn("m.focusRing.opacity", card_brs)
+
+    def test_home_right_from_first_card_moves_the_hero(self) -> None:
+        self.assertIn("jumpToRowItem = [0, 1]", MAIN)
+
+    def test_series_detail_layout(self) -> None:
+        # Play button for series, label inside the row (not clipped above it),
+        # similar rail scrolled into view, stills through the server proxy.
+        self.assertIn('setListContent(m.detailActions, ["Play"])', MAIN)
+        self.assertIn("m.detailFirstPlayable", MAIN)
+        self.assertNotIn("m.detailContent.AppendChild(m.detailActions)", MAIN)
+        self.assertNotIn('rowLabelOffset="[[0,-30]]"', SCENE)
+        self.assertIn("sub layoutDetailRails()", MAIN)
+        self.assertIn("m.detailContent.translation = [882, 430 - scrollY]", MAIN)
+        self.assertIn('"/api/v1/artwork/episode/"', MAIN)
+        self.assertIn("m.detailStage.stageOverview = overview", MAIN)
+
+    def test_playback_stream_format_follows_the_negotiated_container(self) -> None:
+        self.assertIn("content.streamFormat = PlaybackStreamFormat(data)", MAIN)
+        self.assertIn('if mime.Instr("matroska") >= 0', MAIN)
+        self.assertIn('return "mkv"', MAIN)
+        # Never hard-code mp4 for every direct play any more.
+        self.assertNotIn('content.streamFormat = "mp4"', MAIN)

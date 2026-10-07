@@ -80,6 +80,13 @@
            greyscale + opacity + right fade). No client-side filter wash on
            the bitmap itself - - that used to fight a full-colour source. -->
       <Poster id="keyArt" translation="[0,-33]" width="998" height="1145" loadDisplayMode="scaleToZoom" />
+      <!-- Web masks the cropped image with linear-gradient(90deg, #000 72%,
+           transparent 100%). The server bakes that fade into the source
+           bitmap, but scaleToZoom crops the sides off, so the fade never
+           reaches the stage and the art ended in a hard edge at x=998.
+           Re-apply it here: a surface-coloured ramp over the last 28%
+           (x=718..998, from: 72% of 998). -->
+      <Poster id="keyArtFade" translation="[718,-33]" width="280" height="1145" uri="pkg:/images/stage-key-art-fade.png" loadDisplayMode="scaleToFill" />
       <!-- Soft stage wash only (left + vertical vignette). Pixel math for
            greyscale/contrast/brightness/opacity is baked server-side. -->
       <Group id="scrimLayer">
@@ -100,7 +107,7 @@
         left  = 7.5vw of 1920 = 144px (within the 44-150px clamp bounds)
         width = 27vw of 1920 = 518.4 -> 518px (under the 520px cap)
     -->
-    <Group id="titlePanel" translation="[144,335]" opacity="0">
+    <Group id="titlePanel" translation="[144,262]" opacity="0">
       <!-- from: .tv-provider/.tv-detail-kicker font-size clamp(0.58rem,0.64vw,0.78rem)
            evaluated at 1920px: 0.64vw = 12.288px -> 12px. Color: theme accent (#cf3157). -->
       <Label id="stageKickerLabel" translation="[0,0]" width="518" height="20" scale="[0.38,0.38]" color="0xCF3157FF" />
@@ -134,7 +141,7 @@
         left   = 1920 - width - right = 1920 - 864 - 73 = 983px
         height = 39% of 1080 = 421.2 -> 421px (min-height, content may exceed it)
     -->
-    <Group id="contentPanel" translation="[983,259]" opacity="0" />
+    <Group id="contentPanel" translation="[882,430]" opacity="0" />
 
     <!--
       Entrance animation: fades+translates keyArtLayer, titlePanel, and
@@ -163,14 +170,14 @@
       <FloatFieldInterpolator id="titleOpacityInterp" fieldToInterp="titlePanel.opacity"
         key="[0.0, 0.10, 0.789]" keyValue="[0.0, 0.0, 1.0]" />
       <Vector2DFieldInterpolator id="titleTranslateInterp" fieldToInterp="titlePanel.translation"
-        key="[0.0, 0.10, 0.789]" keyValue="[[110.0,335.0],[110.0,335.0],[144.0,335.0]]" />
+        key="[0.0, 0.10, 0.789]" keyValue="[[110.0,262.0],[110.0,262.0],[144.0,262.0]]" />
 
       <!-- content panel: hold hidden until 150/900 = 0.167, then fade+slide in
            over 700ms, finishing at (150+700)/900 = 0.944 -->
       <FloatFieldInterpolator id="contentOpacityInterp" fieldToInterp="contentPanel.opacity"
         key="[0.0, 0.167, 0.944]" keyValue="[0.0, 0.0, 1.0]" />
       <Vector2DFieldInterpolator id="contentTranslateInterp" fieldToInterp="contentPanel.translation"
-        key="[0.0, 0.167, 0.944]" keyValue="[[1043.0,259.0],[1043.0,259.0],[983.0,259.0]]" />
+        key="[0.0, 0.167, 0.944]" keyValue="[[942.0,430.0],[942.0,430.0],[882.0,430.0]]" />
     </Animation>
   </children>
   <script type="text/brightscript" uri="pkg:/source/Theme.brs" />

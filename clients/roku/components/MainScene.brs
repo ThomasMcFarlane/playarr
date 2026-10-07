@@ -156,7 +156,7 @@ sub init()
     ' right-hand content panel, mirroring how createHomeRail() below builds
     ' Home's rail content straight into m.homeContent.
     m.detailContent.AppendChild(m.detailOverview)
-    m.detailContent.AppendChild(m.detailActions)
+    ' detailActions stays in detailGroup: it is the left-hand Play/Resume button
     m.detailContent.AppendChild(m.detailEpisodes)
     m.detailContent.AppendChild(m.detailChapters)
     m.detailContent.AppendChild(m.detailSimilar)
@@ -178,7 +178,7 @@ sub init()
     m.endFocusIndex = 0
     m.endSuggestionWorks = []
     m.endCountdown = 0
-    m.pairingTimer = m.top.findNode("pairingTimer")
+    m.pairingTimer = m.top.findNode("pairingPollTimer")
     m.clockTime = m.top.findNode("clockTime")
     m.clockDate = m.top.findNode("clockDate")
     m.clockTimer = m.top.findNode("clockTimer")
@@ -294,6 +294,7 @@ sub init()
 
     m.detailActions.ObserveField("itemSelected", "onDetailActionSelected")
     m.detailEpisodes.ObserveField("rowItemSelected", "onDetailEpisodeSelected")
+    m.detailEpisodes.ObserveField("rowItemFocused", "onDetailEpisodeFocused")
     m.detailChapters.ObserveField("rowItemSelected", "onDetailChapterSelected")
     m.detailSimilar.ObserveField("rowItemSelected", "onDetailSimilarSelected")
     m.pairingTimer.ObserveField("fire", "pollDeviceToken")
@@ -323,6 +324,7 @@ sub init()
     m.serverAddresses = m.session.serverUrls
     m.serverIndex = 0
     m.serverUrl = ""
+    m.directPairing = m.session.directPairing
     if m.serverAddresses.Count() > 0 then m.serverUrl = m.serverAddresses[0]
     m.accessToken = m.session.accessToken
     m.refreshToken = m.session.refreshToken
@@ -334,7 +336,12 @@ sub init()
     updateClock()
     m.clockTimer.control = "start"
 
-    if m.serverUrl = ""
+    ' QR sign-in never needs a server address: a signed-out device (no stored
+    ' tokens) that has not chosen manual entry goes straight to the hosted
+    ' code/QR screen, even if a stale server address is remembered. The
+    ' pairing claim delivers the server address and token.
+    signedOut = m.refreshToken = invalid or m.refreshToken = "" or m.deviceId = invalid or m.deviceId = ""
+    if m.serverUrl = "" or (signedOut and m.directPairing <> true)
         beginHostedLink()
     else
         connectToServer()
@@ -411,6 +418,8 @@ sub onServerDialogButton(event as Object)
     m.serverIndex = 0
     m.serverUrl = candidates[0]
     SaveServerAddresses(candidates)
+    m.directPairing = true
+    SaveDirectPairing(true)
     m.top.dialog.close = true
     connectToServer()
 end sub
@@ -524,6 +533,8 @@ sub acceptHostedLinkClaim(data as Object)
     m.serverIndex = 0
     m.serverUrl = data.server_url
     SaveServerAddresses(m.serverAddresses)
+    m.directPairing = false
+    SaveDirectPairing(false)
     hidePairingQr()
     m.deviceCode = data.server_device_code
     m.pollInterval = 2
@@ -678,7 +689,9 @@ sub onApiResult(event as Object)
             m.homeFallbackItems.Push(work)
         end for
         m.homeFallbackItems = takeFirstWorks(sortWorksByAddedAtDesc(m.homeFallbackItems), 8)
-        loadHomeMovies()
+        loadHomeRails()
+    else if action = "homeRails"
+        acceptHomeRails(result.data)
     else if action = "homeMovies"
         m.homeMovies = filterHomePrimaryKinds(itemsFromCatalog(result.data))
         loadHomeSeries()
@@ -863,6 +876,11 @@ sub handleApiFailure(action as String, result as Object)
         return
     else if action = "homeFallbackSeries"
         m.homeFallbackItems = takeFirstWorks(m.homeFallbackItems, 8)
+        loadHomeRails()
+        return
+    else if action = "homeRails"
+        ' Older server without GET /api/v1/home/rails: legacy per-kind chain.
+        m.homeRailLabels = []
         loadHomeMovies()
         return
     else if action = "homeMovies"
@@ -937,7 +955,20 @@ sub beginPairing()
     ' hosted `/api/link/qr` renderer (it only encodes playarr.app links).
     m.pairingTimer.control = "stop"
     m.hostedLinkTimer.control = "stop"
-    beginHostedLink()
+    ' A server address typed through "Connect to Playarr Server" pairs against
+    ' that server directly (RFC 8628 on its own /api/v1/oauth/device/code), so a
+    ' self-hoster who never uses the hosted broker can still sign in.
+    if m.directPairing = true
+        beginDirectPairing()
+    else
+        beginHostedLink()
+    end if
+end sub
+
+sub beginDirectPairing()
+    m.deviceCode = ""
+    showPairingBusy("Connecting…", "Requesting a sign-in code from " + m.serverUrl + "…")
+    sendApi("deviceCode", "POST", "/api/v1/oauth/device/code", {client_platform: AppConfig().clientPlatform}, false)
 end sub
 
 function pairingHasSession() as Boolean
@@ -1205,7 +1236,7 @@ sub updatePairingCountdown()
     ' Auto-renew once when the code expires (same as web renewCode).
     if remaining = 0 and m.top.screenState = "pairing"
         m.pairingCodeExpiresAt = 0
-        beginHostedLink()
+        beginPairing()
     end if
 end sub
 
@@ -3193,7 +3224,7 @@ function createHomeRail(contentTarget as Object) as Object
     ' Card dimensions rebuilt against the real live .tv-home-card (16:9
     ' landscape thumbnail, 220x124 art + 220x165 total card, 24px gap) --
     ' see PosterCard.xml's header comment for the full measurement notes.
-    row.itemSize = [860, 185]
+    row.itemSize = [1038, 185]
     row.rowItemSize = [[220, 165]]
     row.rowItemSpacing = [[24, 0]]
     row.rowHeights = [185]
@@ -3205,7 +3236,7 @@ function createHomeRail(contentTarget as Object) as Object
     ' focus-ring bitmap, which would otherwise draw an unwanted white
     ' outline with no basis in tv-web's actual CSS.
     row.focusBitmapBlendColor = &h00000000
-    row.translation = [0, 34]
+    row.translation = [0, 48]
     group.AppendChild(row)
 
     contentTarget.AppendChild(group)
@@ -3223,6 +3254,7 @@ sub enterHome(profileName as String)
     m.homeSeries = []
     m.homeMoreMovies = []
     m.homeMoreSeries = []
+    m.homeRailLabels = []
     ' Authenticated shell stays up while rails load (no fullscreen Loading UI).
     ' Reveal settled stage chrome immediately so the viewer never sits on
     ' opacity-0 content (left nav only) while catalogKinds → rails chain runs.
@@ -3404,6 +3436,44 @@ sub finishContinueWatching()
     sendApi("homeFallback", "GET", "/api/v1/catalog?kind=movie&available_only=true&sort=recent&limit=8&offset=0", invalid, true)
 end sub
 
+' Web Home renders the server's own rail list (GET /api/v1/home/rails:
+' "Recently Added in Movies", "Recently Added in Series", ...). The Roku
+' home has four slots after the primary rail; the first four non-empty server
+' rails fill them in order, keeping the server's titles. Rails may repeat a
+' title already shown above, exactly as on web.
+sub loadHomeRails()
+    sendApi("homeRails", "GET", "/api/v1/home/rails", invalid, true)
+end sub
+
+sub acceptHomeRails(data as Dynamic)
+    m.homeMovies = []
+    m.homeSeries = []
+    m.homeMoreMovies = []
+    m.homeMoreSeries = []
+    m.homeRailLabels = []
+    slots = []
+    if data <> invalid and data.rails <> invalid
+        for each rail in data.rails
+            if rail.items <> invalid and rail.items.Count() > 0 and slots.Count() < 4
+                slots.Push(rail)
+            end if
+        end for
+    end if
+    if slots.Count() = 0
+        loadHomeMovies()
+        return
+    end if
+    names = ["homeMovies", "homeSeries", "homeMoreMovies", "homeMoreSeries"]
+    for i = 0 to slots.Count() - 1
+        items = takeFirstWorks(filterHomePrimaryKinds(slots[i].items), 12)
+        m[names[i]] = items
+        title = slots[i].title
+        if title = invalid then title = ""
+        m.homeRailLabels.Push(title)
+    end for
+    finishHomeLoad()
+end sub
+
 sub loadHomeMovies()
     sendApi("homeMovies", "GET", "/api/v1/catalog?kind=movie&sort=recent&limit=12&offset=0&available_only=true", invalid, true)
 end sub
@@ -3494,36 +3564,41 @@ end function
 ' Rail membership matches tv-web Home.tsx takeUnused (on-deck/start first,
 ' then new/more movies and series without repeating ids).
 sub finishHomeLoad()
-    usedIds = CreateObject("roAssociativeArray")
     primaryWorks = []
     primaryLabel = "Start watching"
     if m.homeContinueEntries.Count() > 0
-        primaryWorks = takeUnusedWorks(m.homeContinueEntries, usedIds, 10)
+        primaryWorks = takeFirstWorks(m.homeContinueEntries, 10)
         primaryLabel = "Continue watching"
     else if m.homeFallbackItems.Count() > 0
-        primaryWorks = takeUnusedWorks(m.homeFallbackItems, usedIds, 8)
+        primaryWorks = takeFirstWorks(m.homeFallbackItems, 8)
         primaryLabel = "Start watching"
     end if
-    newMovies = takeUnusedWorks(m.homeMovies, usedIds, 12)
-    newSeries = takeUnusedWorks(m.homeSeries, usedIds, 12)
-    moreMovies = takeUnusedWorks(m.homeMoreMovies, usedIds, 12)
-    moreSeries = takeUnusedWorks(m.homeMoreSeries, usedIds, 12)
+    newMovies = takeFirstWorks(m.homeMovies, 12)
+    newSeries = takeFirstWorks(m.homeSeries, 12)
+    moreMovies = takeFirstWorks(m.homeMoreMovies, 12)
+    moreSeries = takeFirstWorks(m.homeMoreSeries, 12)
+    labels = ["New movies", "New series", "More movies", "More series"]
+    if m.homeRailLabels <> invalid
+        for i = 0 to m.homeRailLabels.Count() - 1
+            if m.homeRailLabels[i] <> "" then labels[i] = m.homeRailLabels[i]
+        end for
+    end if
 
     candidates = []
     if primaryWorks.Count() > 0
         candidates.Push({ group: m.continueRailGroup, title: m.continueTitle, row: m.continueRow, label: primaryLabel, works: primaryWorks })
     end if
     if newMovies.Count() > 0
-        candidates.Push({ group: m.moviesRailGroup, title: m.moviesTitle, row: m.moviesRow, label: "New movies", works: newMovies })
+        candidates.Push({ group: m.moviesRailGroup, title: m.moviesTitle, row: m.moviesRow, label: labels[0], works: newMovies })
     end if
     if newSeries.Count() > 0
-        candidates.Push({ group: m.seriesRailGroup, title: m.seriesTitle, row: m.seriesRow, label: "New series", works: newSeries })
+        candidates.Push({ group: m.seriesRailGroup, title: m.seriesTitle, row: m.seriesRow, label: labels[1], works: newSeries })
     end if
     if moreMovies.Count() > 0
-        candidates.Push({ group: m.moreMoviesRailGroup, title: m.moreMoviesTitle, row: m.moreMoviesRow, label: "More movies", works: moreMovies })
+        candidates.Push({ group: m.moreMoviesRailGroup, title: m.moreMoviesTitle, row: m.moreMoviesRow, label: labels[2], works: moreMovies })
     end if
     if moreSeries.Count() > 0
-        candidates.Push({ group: m.moreSeriesRailGroup, title: m.moreSeriesTitle, row: m.moreSeriesRow, label: "More series", works: moreSeries })
+        candidates.Push({ group: m.moreSeriesRailGroup, title: m.moreSeriesTitle, row: m.moreSeriesRow, label: labels[3], works: moreSeries })
     end if
 
     if candidates.Count() = 0
@@ -3556,7 +3631,7 @@ sub finishHomeLoad()
         ' less vertical rhythm per rail, confirmed live that leaving this at
         ' 400 left huge dead gaps and pushed the 4th/5th rails off the
         ' bottom of the screen entirely with no way to scroll to them.
-        y += 210
+        y += 319
         railIndex = railIndex + 1
     end for
 
@@ -3565,7 +3640,7 @@ sub finishHomeLoad()
     ' scrollHomeToFocusedRail) -- the entrance animation only plays once
     ' ever (m.homeShown below), so a return trip to Home would otherwise
     ' keep whatever scroll position Back left it at.
-    m.homeContent.translation = [983, 259]
+    m.homeContent.translation = [882, 430]
     showOnly("home")
     m.top.screenState = "home"
     ' Reveal rails/hero first, then load key-art. Key-art used to block the
@@ -3710,13 +3785,13 @@ end function
 sub scrollHomeToFocusedRail()
     ' homeContent IS TvStage's own contentPanel node (see TvStage.xml's
     ' contentTarget field), whose settled post-entrance translation is a
-    ' fixed [983,259] (TvStage.xml's own documented contentPanel geometry),
+    ' fixed [882,430] (TvStage.xml's own documented contentPanel geometry),
     ' NOT [0,0] -- overwriting it outright rather than preserving that base
     ' would yank all of Home's rail content to the screen's top-left corner.
     keepVisible = 2
     scrollOffset = 0
-    if m.homeFocusIndex > keepVisible then scrollOffset = (m.homeFocusIndex - keepVisible) * 210
-    m.homeContent.translation = [983, 259 - scrollOffset]
+    if m.homeFocusIndex > keepVisible then scrollOffset = (m.homeFocusIndex - keepVisible) * 319
+    m.homeContent.translation = [882, 430 - scrollOffset]
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -4146,6 +4221,7 @@ sub showDetail(detail as Object)
     overview = JsonString(work.overview)
     if overview = "" then overview = "No description is available."
     m.detailOverview.text = overview
+    m.detailStage.stageOverview = overview
 
     isSeriesShaped = work.kind = "series" or work.kind = "site"
     isArtistShaped = work.kind = "artist"
@@ -4176,6 +4252,9 @@ sub showDetail(detail as Object)
     ' concurrently the way tv-web's own two independent effects do.
     m.detailChapters.visible = false
     m.detailSimilar.visible = false
+    m.detailContent.translation = [882, 430]
+    m.detailEpisodeActive = false
+    layoutDetailRails()
     if m.currentMediaFileId <> ""
         loadDetailChapters(m.currentMediaFileId)
     else
@@ -4195,12 +4274,10 @@ sub showDetail(detail as Object)
     ' newly selected title. callFunc() (not dot-call) per the platform bug
     ' documented on TvStage.xml's playEntrance interface function.
     m.detailStage.callFunc("playEntrance")
-    m.detailFocusIndex = 0
-    if (isSeriesShaped or isArtistShaped) and m.detailSeasons.Count() > 0 and m.detailEpisodes.visible
-        m.detailEpisodes.SetFocus(true)
-    else
-        m.detailActions.SetFocus(true)
-    end if
+    ' Focus starts on the left-hand Play button (web's primary action); Right
+    ' moves into the season/chapter/similar rails, Left comes back.
+    m.detailFocusIndex = -1
+    m.detailActions.SetFocus(true)
 end sub
 
 ' Chapters/Similar Titles load in asynchronously after showDetail already
@@ -4215,27 +4292,99 @@ end sub
 ' this is implemented by hand the same way moveHomeFocus is: bounds-checked
 ' against whichever of the 3 slots actually has visible content, with no
 ' wraparound, matching every other multi-list focus chain in this file.
-function moveDetailFocus(delta as Integer) as Boolean
-    slots = [detailFocusTopControl()]
+function detailRightSlots() as Object
+    slots = []
+    if m.detailEpisodes.visible then slots.Push(m.detailEpisodes)
     if m.detailChapters.visible then slots.Push(m.detailChapters)
     if m.detailSimilar.visible then slots.Push(m.detailSimilar)
+    return slots
+end function
+
+' Re-skins the active-ring flag on every right-hand rail (RowList always
+' paints its selected item at full focus, so inactive rails are rebuilt with
+' activeRailFactor 0) and scrolls the content panel so a rail lower than the
+' first screenful (Similar Titles) is brought fully into view.
+sub setDetailFocusIndex(newIndex as Integer)
+    slots = detailRightSlots()
+    m.detailFocusIndex = newIndex
+    m.detailEpisodeActive = false
+    chaptersActive = false
+    similarActive = false
+    if newIndex >= 0 and newIndex < slots.Count()
+        slot = slots[newIndex]
+        if slot.isSameNode(m.detailEpisodes) then m.detailEpisodeActive = true
+        if slot.isSameNode(m.detailChapters) then chaptersActive = true
+        if slot.isSameNode(m.detailSimilar) then similarActive = true
+    end if
+    if m.detailEpisodes.visible then rebuildDetailEpisodes()
+    if m.detailChapters.visible then buildDetailChaptersRail(chaptersActive)
+    if m.detailSimilar.visible then buildDetailSimilarRail(similarActive)
+    scrollY = 0
+    if newIndex > 0 and newIndex < slots.Count() then scrollY = slots[newIndex].translation[1]
+    m.detailContent.translation = [882, 430 - scrollY]
+    ' Rails scrolled above the top edge must not bleed into view.
+    for i = 0 to slots.Count() - 1
+        if scrollY > 0 and i <> newIndex
+            slots[i].opacity = 0
+        else
+            slots[i].opacity = 1
+        end if
+    end for
+    if newIndex < 0
+        m.detailActions.SetFocus(true)
+    else if newIndex < slots.Count()
+        slots[newIndex].SetFocus(true)
+    end if
+end sub
+
+function moveDetailFocus(delta as Integer) as Boolean
+    if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
+    if m.detailFocusIndex < 0 then return true
+    slots = detailRightSlots()
     newIndex = m.detailFocusIndex + delta
     if newIndex < 0 or newIndex >= slots.Count() then return true
-    oldSlot = slots[m.detailFocusIndex]
-    if oldSlot.isSameNode(m.detailChapters) then buildDetailChaptersRail(false)
-    if oldSlot.isSameNode(m.detailSimilar) then buildDetailSimilarRail(false)
-    m.detailFocusIndex = newIndex
-    newSlot = slots[newIndex]
-    if newSlot.isSameNode(m.detailChapters) then buildDetailChaptersRail(true)
-    if newSlot.isSameNode(m.detailSimilar) then buildDetailSimilarRail(true)
-    newSlot.SetFocus(true)
+    setDetailFocusIndex(newIndex)
     return true
 end function
 
-function detailFocusTopControl() as Object
-    if m.detailEpisodes.visible then return m.detailEpisodes
-    return m.detailActions
+' Left/Right between the Play button column and the rails.
+function moveDetailFocusHorizontal(delta as Integer) as Boolean
+    if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
+    slots = detailRightSlots()
+    if slots.Count() = 0 then return false
+    if delta > 0 and m.detailFocusIndex < 0
+        setDetailFocusIndex(0)
+        return true
+    else if delta < 0 and m.detailFocusIndex >= 0
+        setDetailFocusIndex(-1)
+        return true
+    end if
+    return false
 end function
+
+' Lays the right-hand rails out top to bottom inside the content panel:
+' episodes (one ~315px row per season, two visible), then Chapters, then
+' Similar Titles, each ~330px, 20px apart. Called whenever a rail's
+' visibility or size changes.
+sub layoutDetailRails()
+    y = 0
+    if m.detailEpisodes.visible
+        m.detailEpisodes.translation = [0, 0]
+        visibleRows = m.detailSeasons.Count()
+        if visibleRows > 2 then visibleRows = 2
+        if visibleRows < 1 then visibleRows = 1
+        m.detailEpisodes.itemSize = [1038, visibleRows * 315]
+        m.detailEpisodes.numRows = visibleRows
+        y += visibleRows * 315 + 20
+    end if
+    if m.detailChapters.visible
+        m.detailChapters.translation = [0, y]
+        y += 350
+    end if
+    if m.detailSimilar.visible
+        m.detailSimilar.translation = [0, y]
+    end if
+end sub
 
 ' Movie path: unchanged shape from phase 3, just factored out of showDetail
 ' and reading WorkDetailSchema's own `media_file_id`/`runtime_ms` directly
@@ -4272,12 +4421,14 @@ sub acceptDetailChapters(chapters as Object)
     if chapters = invalid or chapters.Count() = 0
         m.detailChapterList = []
         m.detailChapters.visible = false
+        layoutDetailRails()
         loadSimilarTitles(m.selectedDetail.work)
         return
     end if
     m.detailChapterList = chapters
-    buildDetailChaptersRail(true)
+    buildDetailChaptersRail(false)
     m.detailChapters.visible = true
+    layoutDetailRails()
     loadSimilarTitles(m.selectedDetail.work)
 end sub
 
@@ -4359,8 +4510,9 @@ sub acceptSimilarPrimary(data as Object)
             if i >= 20 then exit for
             m.similarWorks.Push(visible[i])
         end for
-        buildDetailSimilarRail(true)
+        buildDetailSimilarRail(false)
         m.detailSimilar.visible = true
+        layoutDetailRails()
         return
     end if
     startSimilarGenreFallback()
@@ -4496,10 +4648,12 @@ sub finishSimilarTitles()
     end for
     if m.similarWorks.Count() = 0
         m.detailSimilar.visible = false
+        layoutDetailRails()
         return
     end if
-    buildDetailSimilarRail(true)
+    buildDetailSimilarRail(false)
     m.detailSimilar.visible = true
+    layoutDetailRails()
 end sub
 
 sub onDetailSimilarSelected(event as Object)
@@ -4594,14 +4748,27 @@ sub renderGroupedDetailActions(groups as Object, kind as String)
     if leafTotal <> 1 then suffix += "s"
     m.detailStage.stageMeta = m.detailStage.stageMeta + "  •  " + suffix
 
+    m.detailFirstPlayable = invalid
+    flatIndex = 0
+    for each group in groups
+        for each leaf in groupLeaves(group, kind)
+            if m.detailFirstPlayable = invalid and leaf.media_file_id <> invalid and leaf.media_file_id <> ""
+                m.detailFirstPlayable = { mediaFileId: leaf.media_file_id, flatIndex: flatIndex }
+            end if
+            flatIndex += 1
+        end for
+    end for
+    m.detailActions.visible = true
     if playableTotal = 0
         m.detailEpisodes.visible = false
-        m.detailActions.visible = true
         m.currentMediaFileId = ""
         setListContent(m.detailActions, ["Not available to play"])
     else
-        m.detailActions.visible = false
+        ' Web shows a Play button for a series as well (starts the first
+        ' playable episode), with the seasons rails to its right.
+        setListContent(m.detailActions, ["Play"])
         m.detailEpisodes.visible = true
+        m.detailEpisodeActive = false
         buildEpisodeContent(groups, kind)
     end if
 end sub
@@ -4628,9 +4795,25 @@ end function
 ' a second near-identical function for albums/tracks -- the two shapes only
 ' differ in row-title vocabulary and which nested schema (Episode vs Track)
 ' backs each leaf item.
+sub rebuildDetailEpisodes()
+    if m.detailSeasons = invalid or m.detailSeasons.Count() = 0 then return
+    buildEpisodeContent(m.detailSeasons, m.detailGroupKind)
+    if m.detailEpisodePos <> invalid and (m.detailEpisodePos[0] > 0 or m.detailEpisodePos[1] > 0)
+        m.detailEpisodes.jumpToRowItem = m.detailEpisodePos
+    end if
+end sub
+
+sub onDetailEpisodeFocused(event as Object)
+    position = event.GetData()
+    if position = invalid or position.Count() < 2 then return
+    m.detailEpisodePos = [position[0], position[1]]
+end sub
+
 sub buildEpisodeContent(groups as Object, kind as String)
     root = CreateObject("roSGNode", "ContentNode")
     headers = ClientHeaders(m.accessToken)
+    episodeActive = 0.0
+    if m.detailEpisodeActive = true then episodeActive = 1.0
     for each group in groups
         rowNode = root.CreateChild("ContentNode")
         if kind = "artist"
@@ -4649,6 +4832,7 @@ sub buildEpisodeContent(groups as Object, kind as String)
                 item.hdPosterUrl = artworkUrl(album)
                 item.AddField("artHeaders", "assocarray", false)
                 item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
+                addEpisodeCardFields(item, episodeActive)
             end for
         else
             season = group.season
@@ -4663,21 +4847,45 @@ sub buildEpisodeContent(groups as Object, kind as String)
                 if ep.title <> invalid and ep.title <> "" then label += "  " + ep.title
                 item.title = label
                 item.description = JsonString(ep.overview)
-                item.hdPosterUrl = episodeArtworkUrl(ep)
+                item.hdPosterUrl = episodeArtworkUrl(ep, epDetail.media_file_id)
                 item.AddField("artHeaders", "assocarray", false)
                 item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
+                addEpisodeCardFields(item, episodeActive)
             end for
         end if
     end for
-    m.detailEpisodes.numRows = groups.Count()
+    rowHeights = []
+    for i = 1 to groups.Count()
+        rowHeights.Push(315)
+    end for
+    m.detailEpisodes.rowHeights = rowHeights
     m.detailEpisodes.content = root
+    layoutDetailRails()
 end sub
 
-function episodeArtworkUrl(ep as Object) as String
-    if ep.images = invalid then return ""
-    for each image in ep.images
-        return AbsoluteUrl(m.serverUrl, image.url)
-    end for
+' Episode cards use the larger web episode size (cardScale 1.25 = 275x206)
+' and the same per-rail active flag as the other rails.
+sub addEpisodeCardFields(item as Object, activeFactor as Float)
+    item.AddField("activeRailFactor", "float", false)
+    item.activeRailFactor = activeFactor
+    item.AddField("cardScale", "float", false)
+    item.cardScale = 1.25
+end sub
+
+' Episode still, always through the server proxy (the catalog's own image
+' URLs point at the metadata provider, which the Roku must not fetch
+' directly and which is often unreachable from the living room). Mirrors web:
+' an episode with a stored still uses the episode artwork route, otherwise a
+' frame generated from the media file; blank only when neither exists.
+function episodeArtworkUrl(ep as Object, mediaFileId = invalid as Dynamic) as String
+    seriesId = ""
+    if m.selectedDetail <> invalid and m.selectedDetail.work <> invalid then seriesId = JsonString(m.selectedDetail.work.id)
+    if ep.images <> invalid and ep.images.Count() > 0 and seriesId <> "" and ep.id <> invalid
+        return m.serverUrl + "/api/v1/artwork/episode/" + UrlEncode(seriesId) + "/" + UrlEncode(ep.id) + "/thumb"
+    end if
+    if mediaFileId <> invalid and mediaFileId <> ""
+        return m.serverUrl + "/api/v1/media/" + UrlEncode(mediaFileId) + "/thumbnail?position_ms=1000"
+    end if
     return ""
 end function
 
@@ -4710,6 +4918,14 @@ end function
 
 sub onDetailActionSelected(event as Object)
     if event.GetData() <> 0 then return
+    if m.detailGroupKind <> "" and m.detailFirstPlayable <> invalid
+        ' Series/album Play: start the first playable episode/track with the
+        ' adjacent-item list the player's Previous/Next buttons walk.
+        m.playbackEpisodeList = flattenEpisodes(m.detailSeasons)
+        m.playbackEpisodeIndex = m.detailFirstPlayable.flatIndex
+        requestPlayback(m.detailFirstPlayable.mediaFileId)
+        return
+    end if
     if m.currentMediaFileId = invalid or m.currentMediaFileId = "" then return
     ' Movie playback has no adjacent-episode concept, so the player's
     ' Previous/Next buttons must render dimmed/no-op (see
@@ -4791,8 +5007,7 @@ sub startPlayback(data as Object)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = AbsoluteUrl(m.serverUrl, data.url)
     content.title = m.selectedDetail.work.title
-    content.streamFormat = "mp4"
-    if data.mode = "hls" then content.streamFormat = "hls"
+    content.streamFormat = PlaybackStreamFormat(data)
     content.httpHeaders = contentHeadersForUrl(content.url)
     content.httpCertificatesFile = "common:/certs/ca-bundle.crt"
     m.playbackSessionId = data.session_id
@@ -5414,6 +5629,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         return false
+    else if state = "detail" and key = "right"
+        return moveDetailFocusHorizontal(1)
+    else if state = "detail" and key = "left"
+        return moveDetailFocusHorizontal(-1)
     else if state = "detail" and key = "down"
         return moveDetailFocus(1)
     else if state = "detail" and key = "up"
@@ -5564,8 +5783,14 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         enterNavDock()
         return true
     else if state = "home" and key = "right" and m.homeLeftProxy <> invalid and m.homeLeftProxy.IsInFocusChain()
-        ' From leftmost proxy, Right returns into the focused rail at col 0.
+        ' From the leftmost proxy, Right returns into the focused rail and
+        ' moves on to the second card (the proxy only exists so Left can reach
+        ' the dock, so one Right press must still move the hero selection).
         focusCurrentHomeRail()
+        idx = m.homeFocusIndex
+        if idx >= 0 and idx < m.visibleRails.Count()
+            if m.visibleRails[idx].works.Count() > 1 then m.visibleRails[idx].row.jumpToRowItem = [0, 1]
+        end if
         return true
     else if state = "home" and key = "OK" and m.homeLeftProxy <> invalid and m.homeLeftProxy.IsInFocusChain()
         ' Select the leftmost card of the focused rail.
@@ -5739,4 +5964,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         return true
     end if
     return false
+end function
+
+' Roku's Video node does not sniff the container: streamFormat must name it.
+' A direct-play response for a Matroska file (mime_type video/x-matroska, a
+' URL with no file extension) played as "mp4" fails with "MP4: no playable
+' tracks". Map the negotiated mode and mime type to the Roku format keyword.
+function PlaybackStreamFormat(data as Object) as String
+    mime = ""
+    if data.mime_type <> invalid then mime = LCase(JsonString(data.mime_type))
+    if data.mode = "hls" or mime.Instr("mpegurl") >= 0 then return "hls"
+    if mime.Instr("matroska") >= 0 or mime.Instr("x-mkv") >= 0 then return "mkv"
+    if mime.Instr("mp2t") >= 0 or mime.Instr("mpegts") >= 0 then return "ts"
+    return "mp4"
 end function

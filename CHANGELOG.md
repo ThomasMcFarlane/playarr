@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: the pairing poll timer now starts (a Timer and a Label shared the id `pairingTimer`), so an approved code is picked up.
+- Roku: "Connect to Playarr Server" pairs against the typed server (`POST /api/v1/oauth/device/code`) instead of returning to the hosted broker; QR sign-in never needs a server address.
+- Roku: Home follows the web layout (hero fade, clock, server home rails, card focus ring, Right moves the hero) and the series detail screen has a Play button, season rails that no longer overlap their headings, episode stills and a reachable Similar Titles rail; the end-screen suggestions heading is no longer clipped.
+- Roku: direct play of Matroska media sets the Roku stream format from the negotiated mime type instead of always `mp4` (which failed with "MP4: no playable tracks").
 - Fire TV: the Metro bundle step now resolves the shared `@playarr-tv/*` packages from their TypeScript source instead of failing on the unbuilt `dist/` of `@playarr-tv/design-tokens`, and bundles the shared i18n tables.
 - Recently added now follows when the *arr app added a title (Radarr, Sonarr, Whisparr, Lidarr and Readarr `added`) instead of the first sync time, so a fresh install or a newly connected library no longer gives every title the same date; an already-synced title is corrected once if it was stamped later than the source's date, and never moved later. Unusable dates fall back to the sync time.
 - Fixtures: the stub serves an explicit `added` per title and the helper that pinned `added_at` through the sqlite3 CLI is removed.
