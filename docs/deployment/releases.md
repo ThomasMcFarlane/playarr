@@ -27,6 +27,7 @@ applied by the multi-arch server publisher; the regional publisher uses immutabl
 | Regional image | `regional-image.yml` | `ghcr.io/<owner>/playarr:<sha8>` |
 | Android APK | `android-ci.yml` | signed sideload `playarr-android.apk` and its update manifest `playarr-android.json` |
 | TV packages | `tv-web-ci.yml` | `playarr-webos-<version>.ipk`, `playarr-tizen-<version>-unsigned.zip` (Tizen package root; a `.wgt` needs the owner's Samsung certificate profile) |
+| Web (playarr.app) | `web-ci.yml` | the web client and Worker deployed from the release commit, after the GitHub Release exists; a failed deploy fails the release and the summary reports the version and commit (the post-merge auto-deploy of every `main` merge stays on as well) |
 | Roku | inline | `playarr-roku-<version>.zip` (sideload channel) |
 | Xbox | `xbox-ci.yml` | `playarr-xbox-<version>-x64-unsigned.appx` (no signing certificate yet) |
 | HarmonyOS | `harmony-ci.yml` | `playarr-harmony-<version>-unsigned.hap` (no AppGallery signing material yet) |

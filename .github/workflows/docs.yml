@@ -29,6 +29,8 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
+  # The merge train (token mode) lands main without a push event and dispatches this workflow.
+  workflow_dispatch:
   # Build-only check (no deploy) so a broken link fails the PR instead of main.
   pull_request:
     paths:
@@ -91,7 +93,7 @@ jobs:
         run: mkdocs build --strict --site-dir _site
 
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.PAGES_ENABLED == 'true'
         with:
           path: _site
 
@@ -101,7 +103,7 @@ jobs:
     # Deploying is opt-in: enable Pages (Source = GitHub Actions) and set the
     # repository variable PAGES_ENABLED=true. Until then this workflow is the
     # strict MkDocs build check.
-    if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
