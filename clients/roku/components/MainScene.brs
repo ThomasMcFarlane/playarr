@@ -2561,7 +2561,7 @@ sub onBrowseKeyArtTimer()
         m.browseKeyArt.visible = false
         return
     end if
-    ' roUrlTransfer cannot be created on the render thread, so the poster loads the art itself with the auth headers.
+    ' URL transfers cannot be created on the render thread, so the poster loads the art itself with the auth headers.
     agent = CreateObject("roHttpAgent")
     agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
     agent.InitClientCertificates()
