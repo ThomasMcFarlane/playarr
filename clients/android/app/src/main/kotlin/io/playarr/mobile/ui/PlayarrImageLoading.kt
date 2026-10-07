@@ -4,9 +4,14 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.intercept.Interceptor
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.EventListener
 import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.crossfade
 import coil3.request.ImageResult
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -63,10 +68,48 @@ internal fun newPlayarrImageLoader(context: PlatformContext): ImageLoader {
         .connectTimeout(IMAGE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(IMAGE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
+    val parity = isParityCaptureBuild(context)
     return ImageLoader.Builder(context)
+        .apply {
+            if (parity) {
+                // Debug builds only: pixel-parity captures wait for this signal instead of guessing a settle time.
+                crossfade(false)
+                eventListenerFactory(EventListener.Factory { PlayarrParityImageCounter })
+            }
+        }
         .components {
             add(OkHttpNetworkFetcherFactory(callFactory = { client }))
             add(PlayarrFrameThumbnailInterceptor())
         }
         .build()
+}
+
+
+private fun isParityCaptureBuild(context: PlatformContext): Boolean =
+    (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+/**
+ * Counts in-flight image requests and logs every change as `PlayarrParity images inflight=N failed=M`
+ * (tag `PlayarrParity`), so a capture script can wait for `inflight=0` after the screen settles.
+ * Only installed by [newPlayarrImageLoader] in debuggable builds.
+ */
+internal object PlayarrParityImageCounter : EventListener() {
+    private val inFlight = AtomicInteger(0)
+    private val failed = AtomicInteger(0)
+
+    override fun onStart(request: ImageRequest) = report(inFlight.incrementAndGet())
+    override fun onSuccess(request: ImageRequest, result: SuccessResult) = report(inFlight.decrementAndGet())
+    override fun onCancel(request: ImageRequest) = report(inFlight.decrementAndGet())
+    override fun onError(request: ImageRequest, result: ErrorResult) {
+        failed.incrementAndGet()
+        report(inFlight.decrementAndGet())
+    }
+
+    internal fun inFlightCount(): Int = inFlight.get()
+    internal fun failedCount(): Int = failed.get()
+    internal fun reset() { inFlight.set(0); failed.set(0) }
+
+    private fun report(now: Int) {
+        runCatching { android.util.Log.i("PlayarrParity", "images inflight=$now failed=${failed.get()}") }
+    }
 }
