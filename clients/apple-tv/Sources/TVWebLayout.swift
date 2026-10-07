@@ -376,7 +376,8 @@ enum TVVideoFrameColour {
         filter.gVector = CIVector(x: 0.094, y: 0.847, z: 0.055, w: 0)
         filter.bVector = CIVector(x: 0, y: 0, z: 1, w: 0)
         filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
-        let context = CIContext()
+        // No colour management: the matrix is fitted on gamma-encoded values.
+        let context = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
         guard let output = filter.outputImage,
               let cg = context.createCGImage(output, from: output.extent) else { return data }
         return UIImage(cgImage: cg).pngData() ?? data

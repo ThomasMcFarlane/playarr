@@ -202,6 +202,19 @@ struct TVHomeView: View {
                     .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
                 }
                 homeRails(viewModel: viewModel, size: geo.size)
+                if TVParityLaunch.isLive {
+                    // Web `a.btn-secondary` in the page header: "Customise Home" at (1740.6, 32).
+                    Text("Customise Home")
+                        .font(TVTheme.font(size: 11.52, css: 720))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .frame(width: 131.4, height: 38)
+                        .background(
+                            Capsule()
+                                .fill(DesignTokens.Color.backgroundElevated)
+                                .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
+                        )
+                        .placed(x: 1740.6, y: 32, w: 131.4, h: 38)
+                }
             }
         }
         .ignoresSafeArea()
