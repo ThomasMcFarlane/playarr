@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fire TV: BACK now stops playback (audio and video), closes the session and saves progress, awaited with a short bound; it previously only hid the player and left it playing.
+- Fire TV: playback resumes from the server's resume point (falling back to the local session only when the server cannot be reached), and progress is never written for a start that never played, so a stalled start can no longer overwrite a resume point.
+- Fire TV: progress is also flushed when the app goes to the background.
 - Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.
 - Fire TV client: the signed-in session, device id and server address now survive an app restart (the storage allowlist still used the old `streamarr:` prefix, so nothing the shared packages wrote under `playarr:` was saved), and a device that holds a session opens on the profile picker instead of pairing again on every launch.
 - Harmony player now resumes from the server's saved position, saves progress (awaited) on exit, error and when backgrounded, and never writes position 0 before playback has started.
