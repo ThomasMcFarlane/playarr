@@ -7771,6 +7771,16 @@ internal class ExperiencePlayerViewModel @Inject constructor(
     private var automaticRecoveryUrl: String? = null
     private var activeDirectPlay = false
     private var decoderFallbackAttempted = false
+
+    /** True once this media actually played; until then closing must not write progress (see PlayarrProgressGuard). */
+    private var playbackReached = false
+    private var autoRetryAttempts = 0
+    private var stallJob: Job? = null
+    private var retryJob: Job? = null
+    private val _notice = MutableStateFlow<PlayarrString?>(null)
+
+    /** A transient explanation for an automatic change, such as the converted-stream fallback. */
+    val notice: StateFlow<PlayarrString?> = _notice.asStateFlow()
     private var prepareJob: Job? = null
     private var switchJob: Job? = null
     private var previousPlayerState = player.state.value
@@ -7782,6 +7792,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                 val previous = previousPlayerState
                 val currentError = current.error
                 previousPlayerState = current
+                if (current.isPlaying) {
+                    playbackReached = true
+                    autoRetryAttempts = 0
+                    stallJob?.cancel()
+                }
                 if (activeSessionId == null) return@collect
 
                 when {
@@ -7807,17 +7822,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
                         ) {
                             decoderFallbackAttempted = true
                             fallBackToTranscode(currentError.message)
-                        } else {
-                            persistProgress()
-                            closeActiveSession(PlaybackStopReason.Error, currentError.message)
-                            _state.value = ExperienceLoad.Failed(
-                                PlayarrMessage.Localized(
-                                    PlayarrString.ErrorPlaybackFailed,
-                                    mapOf(
-                                        "message" to currentError.message.replace('_', ' ').lowercase(),
-                                    ),
-                                ),
-                            )
+                        } else if (!scheduleAutoRetry(currentError.message)) {
+                            failPlayback(currentError.message)
                         }
                     }
                     previous.isPlaying && !current.isPlaying && !current.isBuffering -> checkpoint()
@@ -7932,6 +7938,8 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             if (activeMediaFileId != null) persistProgress(ensureCompletion = true)
             closeActiveSessionAndWait(PlaybackStopReason.UserStopped)
             activeMediaFileId = mediaFileId
+            playbackReached = false
+            _notice.value = null
             activeServerUrl = serverAccessResolver.forMedia(mediaFileId).serverUrl
             activeDefaults = defaults
             activeSourceOffsetMs = 0L
@@ -7957,6 +7965,7 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             if (localFile != null) {
                 player.prepare(Uri.fromFile(localFile).toString(), StreamFormat.Direct, resumePosition)
                 player.play()
+                armStartStallWatchdog()
                 _state.value = ExperienceLoad.Ready(Unit)
                 return@launch
             }
@@ -8240,6 +8249,59 @@ internal class ExperiencePlayerViewModel @Inject constructor(
             selectedSubtitleTrackId = selectedSubtitleId,
         )
         if (shouldPlay) player.play()
+        armStartStallWatchdog()
+    }
+
+    private fun failPlayback(rawMessage: String) {
+        Log.w(PLAYBACK_STATS_TAG, "event=playback_failed message=$rawMessage")
+        stallJob?.cancel()
+        retryJob?.cancel()
+        persistProgress()
+        closeActiveSession(PlaybackStopReason.Error, rawMessage)
+        _state.value = ExperienceLoad.Failed(PlayarrMessage.Localized(PlayarrString.PlayerStartStalled))
+    }
+
+    /**
+     * Retries the same title with backoff (resuming where it got to) before the error shows. Returns false
+     * once the attempts are used up.
+     */
+    private fun scheduleAutoRetry(reason: String): Boolean {
+        val mediaFileId = activeMediaFileId ?: return false
+        val delayMs = playarrAutoRetryDelayMs(autoRetryAttempts) ?: return false
+        autoRetryAttempts += 1
+        Log.i(PLAYBACK_STATS_TAG, "event=auto_retry attempt=$autoRetryAttempts delay_ms=$delayMs reason=$reason")
+        stallJob?.cancel()
+        retryJob?.cancel()
+        val resumeAt = if (playbackReached) currentSourcePositionMs() else null
+        val launchSettings = activeRequest?.launchSettings
+        _state.value = ExperienceLoad.Loading
+        retryJob = viewModelScope.launch {
+            delay(delayMs)
+            if (activeMediaFileId != mediaFileId) return@launch
+            play(mediaFileId, activeDefaults, resumeAt, launchSettings, force = true)
+        }
+        return true
+    }
+
+    /** A start that buffers with no frame played for too long is treated as an error. */
+    private fun armStartStallWatchdog() {
+        stallJob?.cancel()
+        val mediaFileId = activeMediaFileId ?: return
+        stallJob = viewModelScope.launch {
+            delay(PLAYER_START_STALL_TIMEOUT_MS)
+            if (activeMediaFileId == mediaFileId && !playbackReached && !player.state.value.isPlaying) {
+                if (!scheduleAutoRetry("start_stalled")) failPlayback("start_stalled")
+            }
+        }
+    }
+
+    /** Background: pause and write progress so the title comes back paused at the same place. */
+    fun pauseForBackground() {
+        if (activeMediaFileId == null || castingMediaFileId.value != null) return
+        player.pause()
+        persistProgress(ensureCompletion = true)
+        val sessionId = activeSessionId ?: return
+        recordEvent(sessionId, PlaybackEventRequest.heartbeat(currentSourcePositionMs()))
     }
 
     fun persistProgress(completed: Boolean = false, ensureCompletion: Boolean = false): Job? {
@@ -8247,6 +8309,13 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         val position = currentSourcePositionMs()
         val duration = currentSourceDurationMs()
         if (duration <= 0L) return null
+        if (!shouldPersistPlayarrProgress(
+                positionMs = position,
+                playbackReached = playbackReached,
+                sourceSwitching = _controls.value.switching,
+                completed = completed,
+            )
+        ) return null
         val context = if (ensureCompletion) Dispatchers.IO + NonCancellable else Dispatchers.IO
         return viewModelScope.launch(context) {
             // Buffers locally (see OfflineProgressRepository) rather than
@@ -8280,10 +8349,14 @@ internal class ExperiencePlayerViewModel @Inject constructor(
         switchJob?.cancel()
         prepareJob = null
         switchJob = null
+        stallJob?.cancel()
+        retryJob?.cancel()
+        autoRetryAttempts = 0
         val saved = persistProgress(ensureCompletion = true)
         closeActiveSession(PlaybackStopReason.UserStopped)
         player.pause()
         activeMediaFileId = null
+        playbackReached = false
         activeRequest = null
         activePlaybackUrl = ""
         automaticRecoveryUrl = null
@@ -8352,6 +8425,11 @@ internal class ExperiencePlayerViewModel @Inject constructor(
      * at the same position instead of surfacing "decoding failed".
      */
     private fun fallBackToTranscode(errorMessage: String) {
+        _notice.value = PlayarrString.PlayerStreamConverted
+        viewModelScope.launch {
+            delay(PLAYER_NOTICE_MS)
+            _notice.value = null
+        }
         switchNegotiatedPlayback(
             profile = DECODE_FALLBACK_PROFILE,
             forceTranscode = true,
@@ -8553,6 +8631,7 @@ private fun ExperiencePlayerScreen(
     val playerDefaults = LocalPlayarrDisplayPreferences.current.playerDefaults
     val state by viewModel.state.collectAsState()
     val controls by viewModel.effectiveControls.collectAsState()
+    val playerNotice by viewModel.notice.collectAsState()
     val playbackState by viewModel.player.state.collectAsState()
     val castConnection by viewModel.castConnection.collectAsState()
     val castError by viewModel.castError.collectAsState()
@@ -8663,6 +8742,10 @@ private fun ExperiencePlayerScreen(
     }
     val latestViewModel by rememberUpdatedState(viewModel)
     val latestClose by rememberUpdatedState(onClosePictureInPicture)
+    // Leaving the app (Home, screen off) pauses and saves, unless the video continues in Picture-in-Picture.
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+        if (!PlayarrPictureInPicture.inPip.value) latestViewModel.pauseForBackground()
+    }
     DisposableEffect(Unit) {
         PlayarrPictureInPicture.onControl = { control ->
             when (control) {
@@ -8771,6 +8854,7 @@ private fun ExperiencePlayerScreen(
                     onStopCasting = viewModel::stopCasting,
                 ),
                 onPlayOnDevice = { showPlayOnDevice = true },
+                notice = playerNotice,
                 health = remember(viewModel, healthContext) {
                     viewModel.playbackHealth(playarrDisplayHdrFormats(healthContext))
                 },
@@ -8780,20 +8864,8 @@ private fun ExperiencePlayerScreen(
             // The normal chrome's close control (top right) is available while the session is negotiated.
             PlayarrPlayerLoadingClose(isTelevision = isTelevision, onClose = onBack)
         } else {
-            PlayarrIconButton(
-                onClick = onBack,
-                contentDescription = playarrString(PlayarrString.PlayerBackToDetails),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.62f), CircleShape),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = null,
-                    tint = Color.White)
-            }
+            // Errors show inside the player with the same X close at the top right.
+            PlayarrPlayerLoadingClose(isTelevision = isTelevision, onClose = onBack)
         }
         if (state is ExperienceLoad.Ready && !inPip) {
             PlayarrEndOfPlaybackHost(

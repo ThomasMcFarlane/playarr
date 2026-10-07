@@ -921,6 +921,16 @@ internal enum class PlayarrString(
         "ไม่สามารถเริ่มเล่นเรื่องนี้ได้",
         "このタイトルを再生できませんでした",
     ),
+    PlayerStartStalled(
+        "The video did not start. Check your connection and try again.",
+        "วิดีโอไม่เริ่มเล่น ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
+        "動画が開始されませんでした。接続を確認して、もう一度お試しください。",
+    ),
+    PlayerStreamConverted(
+        "This device could not play the original, so a converted stream is playing.",
+        "อุปกรณ์นี้เล่นไฟล์ต้นฉบับไม่ได้ จึงกำลังเล่นสตรีมที่แปลงแล้ว",
+        "この端末では元の映像を再生できないため、変換されたストリームを再生しています。",
+    ),
 
     DownloadsTitle("Downloads", "ดาวน์โหลด", "ダウンロード"),
     DownloadsOffline("Offline", "ออฟไลน์", "オフライン"),

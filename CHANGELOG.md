@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: closing the player while it was still buffering no longer resets the saved resume point to the start. Progress is only written once playback has actually started.
+- Android: a start that stalls (or a playback error) now retries automatically with backoff and then shows an in-player error with Try again and the X close, in plain language instead of an exception name.
+- Android: controls hide after 5 seconds, double-tapping the left or right half of the phone player seeks 10 seconds, leaving the app pauses and saves progress, and returning shows the paused player with its controls.
+- Android: when the device cannot play the original and a converted stream is used instead, the player now says so.
 - Web: a focused media card (poster, thumbnail, episode, cast and similar-title tile) lifts with a soft shadow again and shows no ring or outline, including the TV D-pad marker. Buttons, pills and Back keep the ring.
 - Android TV: a focused media card (Home, Movies, Series, search results, episode tiles, similar titles) now shows a soft shadow and lifts, animated, with no ring and no fill; buttons, pills and Back keep the ring. The lift is drawn inside the card, so it never changes the bounds D-pad focus search measures.
 - Android TV: UP and DOWN between Home rails land on the card visually above or below (closest on-screen centre), never on the same index of a rail scrolled elsewhere.

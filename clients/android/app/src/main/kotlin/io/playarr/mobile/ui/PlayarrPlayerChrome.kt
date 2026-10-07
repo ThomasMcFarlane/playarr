@@ -13,6 +13,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +78,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.key.KeyEventType
@@ -201,9 +203,11 @@ internal fun PlayarrPlayerChrome(
     cast: PlayarrPlayerCastState = PlayarrPlayerCastState(),
     onPlayOnDevice: (() -> Unit)? = null,
     health: PlayarrPlayerHealth? = null,
+    notice: PlayarrString? = null,
     modifier: Modifier = Modifier,
 ) {
     var visible by remember { mutableStateOf(true) }
+    val latestTimeline = androidx.compose.runtime.rememberUpdatedState(timeline)
     var activityEpoch by remember { mutableLongStateOf(0L) }
     var openMenu by remember { mutableStateOf<PlayarrPlayerMenu?>(null) }
     var playlistOpen by remember { mutableStateOf(false) }
@@ -246,6 +250,9 @@ internal fun PlayarrPlayerChrome(
     }
 
     LaunchedEffect(Unit) { surfaceFocusRequester.requestFocus() }
+
+    // Coming back from the background: the title is paused and the controls are up.
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { showControls() }
 
     // BACK: an open panel closes first and focus returns to its opener, then the controls overlay, then the
     // next BACK exits (the host's BackHandler). Dialog-based panels (options, health, cast) consume BACK themselves.
@@ -327,15 +334,54 @@ internal fun PlayarrPlayerChrome(
                         null -> false
                     }
                 }
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                ) {
-                    val wasVisible = visible
-                    showControls()
-                    if (playarrSurfaceSelectTogglesPlayback(wasVisible)) onTogglePlayback()
-                },
+                .then(
+                    if (isTelevision) {
+                        Modifier.clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                        ) {
+                            val wasVisible = visible
+                            showControls()
+                            if (playarrSurfaceSelectTogglesPlayback(wasVisible)) onTogglePlayback()
+                        }
+                    } else {
+                        // Phone: a tap reveals hidden controls (and toggles only when they were up); a double
+                        // tap on the left or right half seeks 10 s back or forward.
+                        // Keyed on the controls state only and reading the timeline through state: the position ticks many
+                        // times a second and restarting the detector would drop the second tap.
+                        Modifier.pointerInput(visible) {
+                            detectTapGestures(
+                                onTap = {
+                                    val wasVisible = visible
+                                    showControls()
+                                    if (playarrSurfaceSelectTogglesPlayback(wasVisible)) onTogglePlayback()
+                                },
+                                onDoubleTap = { offset ->
+                                    showControls()
+                                    val delta = playarrDoubleTapSeekDeltaMs(offset.x, size.width.toFloat())
+                                    onSeek(
+                                        coalescedSeekTarget(latestTimeline.value.positionMs, null, delta, latestTimeline.value.durationMs),
+                                    )
+                                },
+                            )
+                        }
+                    },
+                ),
         )
+
+        notice?.let { key ->
+            Text(
+                playarrString(key),
+                color = Color.White,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(top = 72.dp, start = 24.dp, end = 24.dp)
+                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
 
         if (!isTelevision) {
             PhonePlayerOverlay(
