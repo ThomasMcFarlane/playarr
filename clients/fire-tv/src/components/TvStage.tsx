@@ -45,7 +45,7 @@
  */
 import React, {useEffect, useRef} from 'react';
 import {Animated, Dimensions, Easing, StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
-import {LinearGradient} from '@amazon-devices/react-linear-gradient';
+import LinearGradient from '@amazon-devices/react-linear-gradient';
 import {colour} from '../theme/tokens';
 import {
   TV_STAGE_EASING,

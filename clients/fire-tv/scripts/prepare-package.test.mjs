@@ -19,7 +19,7 @@ function manifestToml({version = '0.1.0', componentId = 'com.streamarr.firetv.ma
 }
 
 async function validProjectTree(root, overrides = {}) {
-  await mkdir(path.join(root, 'assets'), {recursive: true});
+  await mkdir(path.join(root, 'assets', 'image'), {recursive: true});
   await Promise.all([
     writeFile(path.join(root, 'manifest.toml'), manifestToml(overrides)),
     writeFile(
@@ -33,8 +33,8 @@ async function validProjectTree(root, overrides = {}) {
         displayName: 'Playarr',
       })
     ),
-    writeFile(path.join(root, 'assets', 'PlayarrIcon.png'), fakePng(512, 512)),
-    writeFile(path.join(root, 'assets', 'PlayarrLargeIcon.png'), fakePng(1280, 720)),
+    writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(512, 512)),
+    writeFile(path.join(root, 'assets', 'image', 'PlayarrLargeIcon.png'), fakePng(1280, 720)),
   ]);
 }
 
@@ -90,7 +90,7 @@ test('rejects a component id that does not match app.json\'s registered name', a
 test('rejects a non-square PlayarrIcon.png', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-icon-'));
   await validProjectTree(root);
-  await writeFile(path.join(root, 'assets', 'PlayarrIcon.png'), fakePng(512, 480));
+  await writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(512, 480));
 
   await assert.rejects(preparePackage({sourceRoot: root}), /must be square/);
 });
@@ -98,7 +98,7 @@ test('rejects a non-square PlayarrIcon.png', async () => {
 test('rejects a too-small PlayarrIcon.png', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-icon-small-'));
   await validProjectTree(root);
-  await writeFile(path.join(root, 'assets', 'PlayarrIcon.png'), fakePng(64, 64));
+  await writeFile(path.join(root, 'assets', 'image', 'PlayarrIcon.png'), fakePng(64, 64));
 
   await assert.rejects(preparePackage({sourceRoot: root}), /too small/);
 });
@@ -106,7 +106,7 @@ test('rejects a too-small PlayarrIcon.png', async () => {
 test('rejects a PlayarrLargeIcon.png that is not 16:9', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'playarr-fire-tv-largeicon-'));
   await validProjectTree(root);
-  await writeFile(path.join(root, 'assets', 'PlayarrLargeIcon.png'), fakePng(1280, 1280));
+  await writeFile(path.join(root, 'assets', 'image', 'PlayarrLargeIcon.png'), fakePng(1280, 1280));
 
   await assert.rejects(preparePackage({sourceRoot: root}), /must be 16:9/);
 });

@@ -19,7 +19,7 @@
  */
 import React from 'react';
 import {StyleSheet, View, type StyleProp, type ViewStyle} from 'react-native';
-import {LinearGradient} from '@amazon-devices/react-linear-gradient';
+import LinearGradient from '@amazon-devices/react-linear-gradient';
 import Svg, {Circle, Path} from '@amazon-devices/react-native-svg';
 import {pickProfileAvatarPreset, type ProfileAvatarPresetId} from './profileAvatarPresets';
 

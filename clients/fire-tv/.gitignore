@@ -18,3 +18,4 @@ build/
 
 # Watchman, if run from inside this directory rather than the SDK container.
 .watchmanconfig.local
+buildinfo.json

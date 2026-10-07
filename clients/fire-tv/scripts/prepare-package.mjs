@@ -151,15 +151,15 @@ export async function preparePackage({sourceRoot = projectRoot} = {}) {
     throw new Error(`manifest.toml's [package] icon must be an "@image/…" reference (received ${JSON.stringify(iconField)})`);
   }
   const iconFileName = iconField.slice('@image/'.length);
-  const iconPath = path.join(sourceRoot, 'assets', iconFileName);
+  const iconPath = path.join(sourceRoot, 'assets', 'image', iconFileName);
   const iconContents = await readFile(iconPath).catch(() => {
-    throw new Error(`manifest.toml references assets/${iconFileName}, but that file does not exist`);
+    throw new Error(`manifest.toml references assets/image/${iconFileName}, but that file does not exist`);
   });
   assertSquareIcon(iconFileName, readPngDimensions(iconContents, iconFileName));
 
-  const largeIconPath = path.join(sourceRoot, 'assets', 'PlayarrLargeIcon.png');
+  const largeIconPath = path.join(sourceRoot, 'assets', 'image', 'PlayarrLargeIcon.png');
   const largeIconContents = await readFile(largeIconPath).catch(() => {
-    throw new Error('assets/PlayarrLargeIcon.png does not exist');
+    throw new Error('assets/image/PlayarrLargeIcon.png does not exist');
   });
   assertWidescreenIcon('PlayarrLargeIcon.png', readPngDimensions(largeIconContents, 'PlayarrLargeIcon.png'));
 

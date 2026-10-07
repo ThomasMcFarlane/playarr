@@ -104,3 +104,17 @@ if (typeof patchable.window === 'undefined') {
     existingWindow.fetch = patchable.fetch as typeof fetch;
   }
 }
+
+// DOMException: Hermes has none, and the abort paths in the hosted-link
+// poller reject with `new DOMException('Aborted', 'AbortError')`. Without
+// this, cancelling a pending link request (leaving the Link screen) throws
+// a ReferenceError instead of an AbortError.
+if (typeof patchable.DOMException === 'undefined') {
+  class PolyfilledDomException extends Error {
+    constructor(message = '', name = 'Error') {
+      super(message);
+      this.name = name;
+    }
+  }
+  patchable.DOMException = PolyfilledDomException;
+}

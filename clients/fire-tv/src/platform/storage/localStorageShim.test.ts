@@ -48,6 +48,16 @@ describe('localStorageShim', () => {
     resetLocalStorageShimForTests();
   });
 
+  it('does not call multiGet with an empty key list on a first launch', async () => {
+    const {fake} = createFakeAsyncStorage();
+    const multiGet = jest.fn(fake.multiGet);
+    multiGet.mockRejectedValue(new Error('At least one key is needed for this operation'));
+
+    await expect(hydrateLocalStorage({...fake, multiGet})).resolves.toBeUndefined();
+
+    expect(multiGet).not.toHaveBeenCalled();
+  });
+
   it('hydrates persisted-prefix keys from AsyncStorage and exposes them synchronously', async () => {
     const {fake} = createFakeAsyncStorage({
       'streamarr:session': '{"accessToken":"a"}',
