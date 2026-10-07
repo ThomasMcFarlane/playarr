@@ -683,7 +683,7 @@ internal fun PlaylistCard(
             .background(WebSurfaceStrong)
             .border(1.dp, if (focused || selected) WebInkSoft else WebInkMuted.copy(alpha = 0.18f), RoundedCornerShape(18.dp)),
     ) {
-        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(WebPink.copy(alpha = 0.22f), WebSurfaceStrong)))) {
+        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(WebAccent.copy(alpha = 0.22f), WebSurfaceStrong)))) {
             if (coverWorks.isEmpty() || serverUrl.isBlank()) {
                 Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, contentDescription = null, tint = WebAccent, modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(38.dp))
             } else {

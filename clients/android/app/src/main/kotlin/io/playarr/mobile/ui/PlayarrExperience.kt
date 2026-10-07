@@ -7360,7 +7360,7 @@ private fun MusicAlbumCard(
             shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(12.dp)) else Modifier),
+                .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
             innerModifier = Modifier.background(WebSurfaceStrong),
         ) {
             AuthenticatedAlbumArtwork(
