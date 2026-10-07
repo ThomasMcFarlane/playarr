@@ -50,6 +50,10 @@ pub struct WhisparrSeries {
     /// -- see `playarr_arr_sync::arr_client::map_whisparr`.
     #[serde(default, rename = "firstAired")]
     pub first_aired: Option<DateTime<Utc>>,
+    /// When the *arr app itself added this entry. Lenient: absent, null or
+    /// unparseable becomes `None`. Seeds `Work::added_at`.
+    #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]
+    pub added: Option<DateTime<Utc>>,
 }
 
 /// A single entry from a Whisparr resource's `images` array (poster,
