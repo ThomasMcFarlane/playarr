@@ -10,9 +10,8 @@ import type { TranslationKey } from "../lib/i18n/translations";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
 import { useOnlineStatus } from "../lib/useOnlineStatus";
 import { EditKeepUntilDrawer } from "../components/EditKeepUntilDrawer";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { PageHeader } from "../components/shell";
-import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { EmptyState, PageLayout, ScrollArea } from "../components/shell";
+import { TvRailSurface } from "../components/tv/TvStage";
 import { NotFoundPage } from "./NotFound";
 import type { Work, WorkDetail } from "@playarr-tv/api-client";
 
@@ -324,18 +323,13 @@ export function DownloadsPage() {
   // in flight means it's too early to decide.
   if (canDownload === null || downloadStorageAvailable === null) {
     return (
-      <div
-        className="tv-library tv-compact-loading"
-        aria-label={t("pages.downloads.loadingLabel")}
-        role="status"
-      >
-        <div className="tv-orbit-loader" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </div>
-        <p>{t("pages.downloads.preparingLabel")}</p>
-      </div>
+      <PageLayout
+        pageId="downloads"
+        className="tv-library tv-downloads"
+        ariaLabel={t("pages.downloads.title")}
+        header={{ title: t("pages.downloads.title"), back: { label: t("pages.downloads.backToHome"), to: "/" } }}
+        state={{ kind: "loading", label: t("pages.downloads.preparingLabel") }}
+      />
     );
   }
 
@@ -351,35 +345,34 @@ export function DownloadsPage() {
   }
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="downloads"
       className="tv-library tv-downloads"
       ariaLabel={t("pages.downloads.title")}
-      artworkKey={focused?.id}
-      artwork={
-        focusedPreview?.detail ? (
+      backdrop={{
+        artKey: focused?.id,
+        art: focusedPreview?.detail ? (
           <CachedArtworkImage
             work={focusedPreview.detail.work}
             kinds={["backdrop", "poster"]}
             alt=""
             fallback={<span>{focusedPreview.detail.work.title}</span>}
           />
-        ) : undefined
-      }
-    >
-      <PageHeader
-        title={t("pages.downloads.title")}
-        backLabel={t("pages.downloads.backToHome")}
-        detail={
+        ) : undefined,
+      }}
+      header={{
+        title: t("pages.downloads.title"),
+        back: { label: t("pages.downloads.backToHome"), to: "/" },
+        detail:
           storageSupported && storageUsage
             ? t("pages.downloads.storageUsed", {
                 used: formatBytes(storageUsage.usageBytes),
                 quota: formatBytes(storageUsage.quotaBytes),
               })
-            : null
-        }
-        actions={!online ? <span className="tv-downloads-offline-badge">{t("pages.downloads.offline")}</span> : null}
-      />
-
+            : null,
+        actions: online ? [] : [{ kind: "status", id: "offline", label: t("pages.downloads.offline") }],
+      }}
+    >
       {focused ? (
         <aside className="tv-library-preview tv-downloads-preview" key={`preview-${focused.id}`}>
           {focusedPreview?.detail ? (
@@ -459,11 +452,10 @@ export function DownloadsPage() {
             ) : null}
           </div>
         ) : null}
-        <div className="tv-downloads-content" data-tv-scroll-container data-tv-scroll-axis="vertical" data-navigation-scroll-key="downloads:list">
+        <ScrollArea axis="vertical" scrollKey="downloads:list" className="tv-downloads-content" refreshKey={downloads.length}>
           {downloads.length === 0 ? (
-            <TvEmptyState
+            <EmptyState
               graphic="details"
-              variant="page"
               title={t("pages.downloads.emptyTitle")}
               description={t("pages.downloads.emptyDescription")}
             />
@@ -529,7 +521,7 @@ export function DownloadsPage() {
               </section>
             </>
           )}
-        </div>
+        </ScrollArea>
       </TvRailSurface>
 
       {editingRecord ? (
@@ -541,6 +533,6 @@ export function DownloadsPage() {
           onConfirm={confirmEditKeepUntil}
         />
       ) : null}
-    </TvStageShell>
+    </PageLayout>
   );
 }

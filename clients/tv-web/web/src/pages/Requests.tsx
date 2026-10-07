@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { describeApiError, type RequestView } from "@playarr-tv/api-client";
-import { PageHeader } from "../components/shell";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { EmptyState, ErrorState, LoadingState, PageLayout, ScrollArea } from "../components/shell";
+import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
@@ -38,35 +37,30 @@ export function RequestsPage() {
   }, [client]);
 
   return (
-    <TvStageShell className="tv-library tv-downloads tv-watchlist" ariaLabel={t("pages.requests.title")}>
-      <PageHeader title={t("pages.requests.title")} backLabel={t("pages.requests.backToHome")} />
+    <PageLayout
+      pageId="requests"
+      className="tv-library tv-downloads tv-watchlist"
+      ariaLabel={t("pages.requests.title")}
+      header={{ title: t("pages.requests.title"), back: { label: t("pages.requests.backToHome"), to: "/" } }}
+    >
       <TvRailSurface
         className="tv-rail-panel tv-library-grid-panel tv-downloads-panel"
         mode="content"
         ariaLabel={t("pages.requests.title")}
       >
-        <div
+        <ScrollArea
+          axis="vertical"
+          scrollKey="requests:list"
           className="tv-downloads-content"
-          data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
-          data-navigation-scroll-key="requests:list"
+          refreshKey={state.status === "ready" ? state.items.length : state.status}
         >
           {state.status === "loading" ? (
-            <p className="tv-discovery-note" role="status">
-              {t("pages.requests.loading")}
-            </p>
+            <LoadingState size="inline" label={t("pages.requests.loading")} />
           ) : state.status === "error" ? (
-            <TvEmptyState
-              graphic="details"
-              variant="page"
-              tone="error"
-              title={t("pages.requests.errorTitle")}
-              description={state.message}
-            />
+            <ErrorState graphic="details" title={t("pages.requests.errorTitle")} description={state.message} />
           ) : state.items.length === 0 ? (
-            <TvEmptyState
+            <EmptyState
               graphic="details"
-              variant="page"
               title={t("pages.requests.emptyTitle")}
               description={t("pages.requests.emptyDescription")}
             />
@@ -77,9 +71,9 @@ export function RequestsPage() {
               ))}
             </ul>
           )}
-        </div>
+        </ScrollArea>
       </TvRailSurface>
-    </TvStageShell>
+    </PageLayout>
   );
 }
 
