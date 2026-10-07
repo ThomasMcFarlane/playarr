@@ -1974,7 +1974,7 @@ private fun TelevisionNavigation(
 private fun ExperienceClock(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     val locale = LocalPlayarrLanguage.current.locale
-    val dateFormatter = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMMM", locale) }
+    val dateFormatter = remember(locale) { PlayarrDateFormat("MMMMEEEd", locale) }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(30_000)
@@ -1990,7 +1990,7 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
             letterSpacing = (-0.518).sp,
         )
         Text(
-            now.format(dateFormatter).uppercase(locale),
+            dateFormatter.format(now.toLocalDate()).uppercase(locale),
             color = WebInkMuted,
             fontSize = 11.136.sp,
             fontWeight = FontWeight(640),
@@ -5509,7 +5509,7 @@ private fun PhoneVideoDetailBody(
     val episode = selectedEpisode?.episode
     val seasonNumber = selectedSeason?.season?.seasonNumber
     val episodeCode = episode?.let { "S${(seasonNumber ?: 0).toString().padStart(2, '0')} · E${it.episodeNumber.toString().padStart(2, '0')}" }
-    val dateFormat = remember(language) { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale) }
+    val dateFormat = remember(language) { PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC) }
     val metaItems = buildList {
         if (episode != null) {
             add(playarrString(PlayarrString.DetailSeasonNumber, "number" to (seasonNumber ?: 0)))
@@ -5523,7 +5523,7 @@ private fun PhoneVideoDetailBody(
         if (episode != null) {
             episode.airDate?.let { add(playarrString(PlayarrString.DetailAired, "date" to dateFormat.format(it))) }
         } else {
-            work.releaseDate?.let { add(playarrString(PlayarrString.DetailReleased, "date" to dateFormat.format(it.atZone(java.time.ZoneOffset.UTC)))) }
+            work.releaseDate?.let { add(playarrString(PlayarrString.DetailReleased, "date" to dateFormat.format(it))) }
         }
         addAll(work.genres.take(3))
     }.filter(String::isNotBlank)
@@ -5834,7 +5834,7 @@ private fun VideoDetailCopy(
     val year = work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year
     if (isTelevision) {
         // Web `.tv-detail-copy` (455 dp column at y 259.2): kicker, 9ch title, meta chips, synopsis.
-        val dateFormat = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale).withZone(java.time.ZoneOffset.UTC)
+        val dateFormat = PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC)
         val seasonLabel = playarrString(PlayarrString.DetailSeasonNumber, "number" to (seasonNumber ?: 0))
         val chips = buildList {
             add(if (episodeNumber != null) seasonLabel else playarrString(PlayarrString.DetailKindMovie))
@@ -5848,7 +5848,7 @@ private fun VideoDetailCopy(
                 work.releaseDate != null -> add(
                     playarrString(
                         if (episodeNumber != null) PlayarrString.DetailPremiered else PlayarrString.DetailReleased,
-                        "date" to dateFormat.format(work.releaseDate),
+                        "date" to dateFormat.format(work.releaseDate!!),
                     ),
                 )
                 else -> add(playarrString(PlayarrString.DetailAdded, "date" to dateFormat.format(work.addedAt)))
@@ -5958,8 +5958,7 @@ private fun VideoDetailCopy(
             }
             year?.let { add(it.toString()) }
             episode?.episode?.airDate?.let {
-                val date = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale)
-                    .format(it)
+                val date = PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC).format(it)
                 add(playarrString(PlayarrString.DetailAired, "date" to date))
             }
             if (episodeNumber != null) addAll(work.genres.take(1)) else add(work.genres.take(3).joinToString(" · "))

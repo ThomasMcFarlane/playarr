@@ -102,7 +102,8 @@ class PlayarrCalendarLogicTest {
         assertEquals("octobre 2026", calendarWindowTitle(CalendarViewMode.Month, d("2026-10-01"), window, Locale.FRANCE))
         val agenda = calendarWindow(CalendarViewMode.Agenda, d("2026-10-04"), DayOfWeek.MONDAY)
         val title = calendarWindowTitle(CalendarViewMode.Agenda, d("2026-10-04"), agenda, Locale.UK)
-        assertTrue(title, title.startsWith("4 Oct 2026") && title.endsWith("3 Nov 2026"))
+        // Web `formatRangeLabel`: short start, dated end, plain spaces around the en dash.
+        assertEquals("4 Oct \u2013 3 Nov 2026", title)
     }
 
     @Test

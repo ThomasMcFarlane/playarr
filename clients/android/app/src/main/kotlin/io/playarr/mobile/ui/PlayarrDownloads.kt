@@ -1045,7 +1045,7 @@ private fun KeepUntilChoiceRow(label: String, selected: Boolean, onClick: () -> 
 }
 
 private fun formatDate(epochMillis: Long, locale: Locale): String =
-    SimpleDateFormat("d MMM yyyy", locale).format(Date(epochMillis))
+    PlayarrDateFormat("yMMMd", locale).format(epochMillis)
 
 private fun formatDownloadSize(bytes: Long, isEstimate: Boolean): String {
     val prefix = if (isEstimate) "~" else ""

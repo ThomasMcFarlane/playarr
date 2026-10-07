@@ -199,11 +199,12 @@ internal fun PlayarrHeaderActions(
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
         modifier.padding(end = if (isTelevision) playarrPageEnd(true) else 72.dp, top = if (isTelevision) 56.dp else 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 0.dp),
+        // Web TV: the period arrows sit 25 px before the panel pills, which touch the Filters pill.
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (trailingNav != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = trailingNav)
-        if (panelActions != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = panelActions)
+        if (trailingNav != null) Row(Modifier.padding(end = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = trailingNav)
+        if (panelActions != null) Row(horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 0.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, content = panelActions)
         if (filters != null) {
             PlayarrHeaderButton(
                 label = filters.label,
@@ -381,15 +382,18 @@ internal fun PlayarrHeaderButton(
         }
         return
     }
-    PlayarrButton(
+    // Web TV `.ui-btn`: an outlined 50 px pill with a 14 px line icon and a 14.4 px bold label.
+    androidx.compose.material3.Surface(
         onClick = onClick,
-        modifier = modifier,
-        variant = PlayarrButtonVariant.Secondary,
-        size = if (isTelevision) PlayarrButtonSize.Medium else PlayarrButtonSize.Small,
-        active = active,
+        modifier = modifier.height(50.dp),
+        shape = CircleShape,
+        color = if (active) WebSurfaceStrong else WebSurface,
+        contentColor = WebInkSoft,
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(label, fontSize = if (isTelevision) 14.sp else 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+      Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+        Text(label, fontSize = 14.4.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         if (badge > 0) {
             Surface(color = WebPink, shape = CircleShape) {
                 Text(
@@ -401,6 +405,7 @@ internal fun PlayarrHeaderButton(
                 )
             }
         }
+      }
     }
 }
 

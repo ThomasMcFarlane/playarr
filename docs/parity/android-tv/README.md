@@ -163,3 +163,15 @@ row filled, arrow at the right), the header rule with the section eyebrow and ca
 section's panel at x 774 (headings, square segmented controls, a divider), with the back button focused on entry. The
 other sections reuse their existing content in the same panel. Measured against the shared references with the theme
 preference chosen in the app to match (the references set it explicitly): dark 0.92%, light 0.97%.
+
+### Calendar follows the web TV agenda
+
+Android TV's calendar agenda is the web layout: the range label ("7 Oct – 5 Nov 2026"), the selected release's details at
+the left (eyebrow, title, subtitle, RELEASE, STATUS and REPORTED BY blocks, the Play / Open series / Add to watchlist row,
+no poster) and the bordered day card at the right, with the period arrows as outlined circles, Today holding the focus ring
+and the bell on Calendar link. The header pills are now the outlined web pills on every TV page. Light 0.65%, dark 0.58%
+(captured with the emulator on en-GB and UTC, like the references).
+
+Dates everywhere on Android (phone and TV) now go through `PlayarrDateFormat`, which uses the same CLDR skeletons as the
+web's `Intl.DateTimeFormat` ("7 Oct 2026" in en-GB, "Oct 7, 2026" in en-US) instead of hard-coded patterns, and the
+range label is built as the web builds it (short start, dated end, plain spaces around the en dash).
