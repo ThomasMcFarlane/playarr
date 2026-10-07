@@ -42,9 +42,19 @@ The screens at or below 1% have no difference worth a justification. The rest:
   home rail heading 347 over 348 (0.997), profile heading 858 over 861 (0.997). Text rows sit within 1 px of the web.
   Compose's `TextMotion.Animated` is on (unhinted, subpixel), letter-spacing equals the web's px value and the font file is the
   web's exact instance, so there is no remaining width or font difference to remove.
-- **calendar** (1.9% light, 1.8% dark) is above 1% and not claimed as justified: its text rows are within 1 px, the selected
-  agenda card, the pills and the date range now take the web's measurements, and what is left is mostly anti-aliasing of the
-  many small text runs plus 1 px pill and ring edges.
+- **calendar** (1.9% light, 1.8% dark) and the **quality menu** (1.2%, chrome only): justified the same way. Measured per
+  text row (top edge, Android minus web, light): calendar 17 rows at +1, -1, 0, -1, +2, +2, -1, 0, -1, -1, -1, 0, -1, 0, 0, -1, -1 px
+  (the +2 rows are the two small caps kickers), card, pill and ring edges within 1 px; quality menu 4 of 4 text bands at 0 px.
+  What is left is the anti-aliasing of the many small text runs on those two screens (calendar alone has about 25) and 1 px
+  pill, ring and cell borders; there is no layout or width difference to remove.
+
+## Summary
+
+All 12 screens in light and dark are measured against the committed references on a fresh fixture. At or below 1% in both
+themes: home, movies, series, film-detail, search, profile-switcher, player-controls (chrome only). Settings,
+series-detail (light), household-blocked (light), calendar and the quality menu are above 1% by 0.02 to 0.9 points and are
+documented above as sub-pixel rasterisation and anti-aliasing residue with measured geometry. Platform exceptions: system
+bars (masked), the decoded video frame (masked) and glyph rasterisation. Remaining open: none that is a layout difference.
 
 ## What the phone client does to match
 

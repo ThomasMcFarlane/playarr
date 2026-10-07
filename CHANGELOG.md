@@ -2331,6 +2331,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone parity README: calendar and quality-menu residue recorded with measurements, final summary.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
