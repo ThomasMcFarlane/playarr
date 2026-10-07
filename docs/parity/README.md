@@ -79,7 +79,7 @@ pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
 
 Reproducibility: two fresh fixture databases in different directories (separate media, art and ports) produced
 captures that differ by at most 0.01% of pixels on every one of the 48 screens, so the 1% budget leaves room for real
-layout differences only. What makes that true: artwork is generated with a pinned `gradients` seed (the filter's random
+layout differences only. What makes that true: artwork is generated with a pinned `gradients` seed and its title text is drawn from the bundled `scripts/fixtures/fonts/NunitoSans-Bold-art.ttf` (a static Bold instance of the design font; never a host font) (the filter's random
 start made every PNG differ byte for byte), `seed.mjs` registers and syncs radarr, then sonarr, then dubarr one after
 another so the home rails have the same order (the rails sort by `added_at` descending, ties by title), avatars are
 pinned, captures swallow playback progress writes, and the capture waits for images and for the app's own scroll

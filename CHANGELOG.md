@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fixtures: the placeholder artwork titles are drawn with a bundled Nunito Sans Bold file instead of the host's default font, so the artwork is the same on every OS; the web parity references were re-captured.
 - Android phone calendar: the selected agenda entry draws the web's border, left bar and inset ring.
 - Android TV uses the bundled Nunito Sans and JetBrains Mono, as the web and the phone do.
 - Fixtures: artwork is generated with a pinned gradient seed and media or artwork is regenerated when its generator changes, so two fresh fixture databases produce identical parity captures; the web reference captures were refreshed (bundled fonts, display name, settled scroll).
