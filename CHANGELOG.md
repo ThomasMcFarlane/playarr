@@ -215,6 +215,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV: profile avatar ring and scale, soft glass pill shadows, episode and chapter tile shadows, crimson selected quality choice, one-line search Filters pill.
 - Roku: Home, library and rail cards show the work's backdrop (web's 16:9 card art) instead of the poster, and the hero title line pitch follows web.
 - Parity: a committed Android TV capture script (scripts/parity/android-tv) clears the app data per theme, chooses the theme in the app, freezes the clock and waits for the artwork.
 - tvOS builds its fonts with the shared DesignFont helper (the same file iOS uses), with only the weight axis set on the web's exact Nunito Sans instance.

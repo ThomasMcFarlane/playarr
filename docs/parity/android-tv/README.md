@@ -219,3 +219,14 @@ fixture lists six stale offline devices that the reference does not), player 2.1
 This pass added the page's horizontal tone change behind the section list (the page is darker at the left and fades to the
 panel tone between x 680 and 1150), kept the web font inside the panel (the nested Material theme was resetting it to the
 platform font), and tuned the invite, lock, remote and player rhythm to the references.
+
+### Residue pass (committed capture script, shared diff with `--chrome-only`)
+
+Measured with `scripts/parity/android-tv/capture.sh` on a fresh session per theme and the shared `diff.mjs --chrome-only`. Dark / light:
+home 1.15 / 1.30, movies 0.61 / 0.67, series 0.56 / 0.60, film-detail 0.79 / 0.99, series-detail 0.82 / 0.93, search 0.95 / 1.13, calendar
+0.74 / 0.81, downloads 0.52 / 0.86, watchlist 0.47 / 0.47, requests 0.40 / 0.40, settings 0.91 / 1.00, profile-switcher 0.91 / 0.92,
+player controls 0.76 / 0.76, quality menu 1.26 / 1.26, household 0.40 / 0.39. Settings sections: language 0.74, latency 0.78, invite 0.94,
+avatar 1.27, lock 1.52, player 2.1, remote 1.3 to 2.3 (it lists every device the fixture has seen: start a fresh fixture per run), your data 2.7,
+server 2.8 to 3.7. This pass fixed the profile avatar (the scale and the ring came after a clipping shadow modifier), the glass pills'
+shadow, the theme and language selects, episode tile shadows (series detail 1.6 to 0.9 in light), chapter tile shadows, the quality
+menu's selected state (crimson) and header alignment, and the TV search Filters pill and preview position.

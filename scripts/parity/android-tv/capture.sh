@@ -5,9 +5,8 @@
 #   node scripts/parity/diff.mjs --ref docs/parity/web --cand <out-dir> --layout tv --theme dark --chrome-only
 #
 # Needs: adb on PATH (ANDROID_SERIAL picks the device), the sideload DEBUG APK installed (debug builds honour the parity
-# extras and log image loading), an emulator or box at 1920x1080 / 160 dpi on en-GB and UTC
-#   adb shell cmd alarm set-timezone UTC; adb shell cmd locale set-app-locales io.playarr.mobile --locales en-GB
-# and the fixture server (scripts/fixtures/up.sh --fresh, PLAYARR_FIXTURE_CLIP_SECONDS=60, PLAYARR_FIXTURE_PUBLIC_HOST=10.0.2.2).
+# extras and log image loading), an emulator or box at 1920x1080 / 160 dpi (the script sets en-GB and UTC after clearing
+# the app data, because the references are captured in en-GB and UTC), and the fixture server (scripts/fixtures/up.sh --fresh, PLAYARR_FIXTURE_CLIP_SECONDS=60, PLAYARR_FIXTURE_PUBLIC_HOST=10.0.2.2).
 # Environment: PARITY_SERVER (default http://10.0.2.2:18660), PARITY_PASSWORD (the fixture password),
 # PLAYARR_FIXTURE_DB (optional: the fixture's SQLite file, whose watch_progress is cleared before each run).
 #
@@ -54,6 +53,9 @@ sign_in() { # from the QR sign-in screen: Sign in manually against the fixture s
 
 fresh_session() { # $1 = user
   adb shell pm clear $pkg >/dev/null
+  # Clearing the data also clears the app language and the zone is a device setting: set both after every clear.
+  adb shell cmd alarm set-timezone UTC >/dev/null 2>&1 || true
+  adb shell cmd locale set-app-locales $pkg --locales en-GB >/dev/null 2>&1 || true
   adb shell am start -n $pkg/.MainActivity >/dev/null; sleep 8
   sign_in "$1"
   adb shell am force-stop $pkg

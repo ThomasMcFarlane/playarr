@@ -2262,7 +2262,7 @@ private fun ProfilesChromeTrigger(
             .scale(if (expanded) 1.02f else 1f),
     ) {
         Row(
-            Modifier.padding(horizontal = 18.dp),
+            (if (webPhone) Modifier else Modifier.fillMaxWidth()).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -2275,7 +2275,7 @@ private fun ProfilesChromeTrigger(
                 fontWeight = if (webPhone) FontWeight(720) else FontWeight.Bold,
                 style = if (webPhone) WebTextStyle else androidx.compose.ui.text.TextStyle.Default,
                 maxLines = 1,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f, fill = !webPhone),
             )
             Canvas(Modifier.size(12.dp).rotate(if (expanded) 180f else 0f)) {
                 val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -2342,19 +2342,26 @@ private fun ProfilesGlassPill(
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
+    // Web `.profile-update-button` / `.profile-clients-link`: `box-shadow: 0 14px 38px rgba(31, 14, 20, .09)`.
+    WebShadowedBox(
+        shadows = listOf(WebShadow(14.dp, 38.dp, Color(0xFF1F0E14).copy(alpha = 0.09f))),
         shape = CircleShape,
-        color = WebSurfaceStrong.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
-        shadowElevation = 3.dp,
         modifier = modifier.heightIn(min = 44.dp),
+        innerFill = false,
     ) {
-        Box(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            contentAlignment = Alignment.Center,
-        ) { content() }
+        Surface(
+            onClick = onClick,
+            enabled = enabled,
+            shape = CircleShape,
+            color = WebSurfaceStrong.copy(alpha = 0.72f),
+            border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
+            modifier = Modifier.heightIn(min = 44.dp),
+        ) {
+            Box(
+                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+        }
     }
 }
 
@@ -2395,18 +2402,8 @@ private fun ProfileChoice(
             modifier = Modifier
                 .size(avatarSize)
                 .semantics { contentDescription = avatarDescription }
-                .then(
-                    if (selected) {
-                        Modifier.shadow(
-                            elevation = 22.dp,
-                            shape = CircleShape,
-                            ambientColor = Color(0x2E1F0E14),
-                            spotColor = Color(0x2E1F0E14),
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
+                // Order matters: the scale and the ring come before the shadow, which clips everything after it.
+                .scale(if (selected) 1.035f else 1f)
                 .then(
                     if (selected) {
                         // Web `box-shadow: 0 0 0 4px rose 42%`: the ring sits outside the avatar, over the page.
@@ -2417,10 +2414,21 @@ private fun ProfileChoice(
                             )
                         }
                     } else {
-                        Modifier.border(1.dp, WebInkMuted.copy(alpha = 0.35f), CircleShape)
+                        Modifier
                     },
                 )
-                .scale(if (selected) 1.075f else 1f),
+                .then(
+                    if (selected) {
+                        Modifier.shadow(
+                            elevation = 22.dp,
+                            shape = CircleShape,
+                            ambientColor = Color(0x2E1F0E14),
+                            spotColor = Color(0x2E1F0E14),
+                        )
+                    } else {
+                        Modifier.border(1.dp, WebInkMuted.copy(alpha = 0.35f), CircleShape)
+                    },
+                ),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 PlayarrProfileAvatar(
