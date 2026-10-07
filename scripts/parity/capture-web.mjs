@@ -169,6 +169,9 @@ async function captureOnce(layoutId, layout, theme, screen) {
   const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
   try {
     const context = await browser.newContext({
+      // A layout may carry a platform identity (the TV layout is captured as a real TV client, so every
+      // ten-foot branch applies: player chrome, popovers, spacing), detected by the web from the user agent.
+      ...(layout.userAgent ? { userAgent: layout.userAgent } : {}),
       viewport: { width: layout.width, height: layout.height },
       deviceScaleFactor: layout.dpr,
       isMobile: layoutId === "mobile",

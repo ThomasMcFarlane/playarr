@@ -874,16 +874,16 @@ private fun PlayarrTelevisionControlBar(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
+            // Web scrim: transparent about 500 px above the bottom edge, about 0.9 black at the edge.
+            .heightIn(min = 500.dp)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))))
             .padding(start = 70.dp, end = 70.dp, bottom = 58.dp, top = 40.dp),
+        verticalArrangement = Arrangement.Bottom,
     ) {
         Box(Modifier.fillMaxWidth().height(15.dp), contentAlignment = Alignment.CenterStart) {
             Box(Modifier.fillMaxWidth().height(6.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(3.dp)))
             Box(Modifier.fillMaxWidth(bufferedProgress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.34f), RoundedCornerShape(3.dp)))
-            Box(Modifier.fillMaxWidth(progress).height(6.dp).background(WebPink, RoundedCornerShape(3.dp)))
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(15.dp)) {
-                Box(Modifier.padding(start = (maxWidth - 15.dp) * progress).size(15.dp).background(WebPink, CircleShape))
-            }
+            Box(Modifier.fillMaxWidth(progress).height(6.dp).background(WebKicker, RoundedCornerShape(3.dp)))
             // The Slider stays for input and semantics (D-pad seek, scrub) but draws nothing of its own.
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp,

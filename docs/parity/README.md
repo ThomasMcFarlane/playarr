@@ -5,7 +5,7 @@ Web is the source of truth: fix the native client, not the web reference. If the
 
 | Layout | CSS viewport | DPR | Device pixels | Reference for |
 | --- | --- | --- | --- | --- |
-| `tv` | 1920x1080 | 1 | 1920x1080 | Android TV, tvOS |
+| `tv` | 1920x1080 | 1 | 1920x1080 | Android TV, tvOS (captured as an Android TV client, see below) |
 | `mobile` | 390x844 | 3 | 1170x2532 | iOS, Android phone |
 
 Every screen is captured and diffed in both themes, `light` and `dark`. A native client must match both,
@@ -56,6 +56,12 @@ Themes: each page is opened with `prefers-color-scheme` emulation set to the the
 explicit choice stored (`localStorage` key `playarr-theme` set to `light` or `dark`, see
 `clients/tv-web/web/src/lib/theme.tsx`), so the result is the same whether a user follows the system or picked
 the theme. The theme list and storage key are in `screens.json`.
+
+The `tv` layout is captured as a real TV client, not just at a 1920x1080 viewport: `screens.json` gives it the Android TV
+user agent (`PlayarrAndroidTV/1.0`), which the web resolves to the `android-tv` platform, so every ten-foot branch
+applies. Compared with a plain desktop capture at the same size, the player drops the volume slider, fullscreen button
+and HD badge, the quality popover sits 78 px differently, and the calendar is the agenda list instead of the month grid;
+the other TV screens are unchanged. The `mobile` layout is a plain phone capture.
 
 Platform profile options (off by default): `--safe-area top,bottom[,left,right]` emulates system bars as CSS
 safe-area insets and `--font <file>` renders all text with one font file, for comparing against a client whose

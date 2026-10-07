@@ -1,7 +1,7 @@
 {
   "$comment": "Canonical parity screen list. Web (capture-web.mjs) is the reference; native clients reach the same screen with the same fixture data. Placeholders in route: {movie:<title>} and {series:<title>} resolve to a catalogue work id, {file:<title>} to the first media file id of that work.",
   "layouts": {
-    "tv": { "width": 1920, "height": 1080, "dpr": 1, "device": "Android TV, tvOS", "deviceWidthPx": 1920, "deviceHeightPx": 1080 },
+    "tv": { "width": 1920, "height": 1080, "dpr": 1, "platform": "android-tv", "userAgent": "Mozilla/5.0 (Linux; Android 12; BRAVIA) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PlayarrAndroidTV/1.0", "device": "Android TV, tvOS", "deviceWidthPx": 1920, "deviceHeightPx": 1080 },
     "mobile": { "width": 390, "height": 844, "dpr": 3, "device": "iOS, Android phone", "deviceWidthPx": 1170, "deviceHeightPx": 2532 }
   },
   "themes": ["light", "dark"],
