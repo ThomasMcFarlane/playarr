@@ -147,13 +147,14 @@ internal fun ExperienceCalendarScreen(
             )
     }
     val phonePanelActions: @Composable RowScope.() -> Unit = {
-        // Web phone: the subscription bell is an icon-only pill beside Filters.
-        PlayarrPhoneHeaderPill(
-            onClick = { holder.openPanel(CalendarPanel.Subscription) },
-            contentDescription = playarrString(PlayarrString.CalendarLinkTitle),
-            width = 44.dp,
+        // Web phone: the subscription bell is the same icon-only launcher as Filters, beside it.
+        PlayarrHeaderButton(
+            label = playarrString(PlayarrString.CalendarLinkTitle),
+            icon = PlayarrWebIcons.Bell,
+            isTelevision = false,
             active = state.panel == CalendarPanel.Subscription,
-        ) { Icon(PlayarrWebIcons.Bell, contentDescription = null, modifier = Modifier.size(12.4.dp)) }
+            onClick = { holder.openPanel(CalendarPanel.Subscription) },
+        )
     }
     val navigation: @Composable RowScope.() -> Unit = {
         TvCalendarRound("\u2190", playarrString(PlayarrString.CalendarPrevious), holder::previous)

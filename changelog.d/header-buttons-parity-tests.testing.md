@@ -1,0 +1,1 @@
+- Tests pin the Calendar's header buttons and every page's Filters button to one component per client: a web style rule check, an Android metrics and call-site test, and source guards for iOS and tvOS.

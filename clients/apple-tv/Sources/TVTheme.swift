@@ -824,3 +824,37 @@ enum TVFontLoader {
         return font
     }
 }
+
+/// The one header action tile (Filters, Calendar link, ...): web `.page-filters-button`, the 30 September
+/// `.tv-filter-launcher` look. A 14 pt-radius tile at least 62 x 72 pt with the glyph above an 8.26 pt bold label.
+/// Focus draws the ring (white in dark, ink in light) and never fills the tile; the open state keeps the ink fill.
+/// Every page header uses this view so the calendar buttons and the library Filters button cannot drift apart
+/// (the web `headerButtonParity` test pins both call sites to it).
+struct TVHeaderPill: View {
+    let label: String
+    let symbol: String
+    let width: CGFloat
+
+    static let height: CGFloat = 72
+
+    var body: some View {
+        VStack(spacing: 5.6) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .regular))
+            Text(label)
+                .font(TVTheme.font(size: 8.256, css: 700))
+                .tracking(0.165)
+                .lineLimit(1)
+        }
+        .foregroundStyle(DesignTokens.Stage.inkMuted)
+        .frame(width: width, height: Self.height)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(DesignTokens.Color.borderDefault.opacity(0.68), lineWidth: 1)
+                )
+        )
+    }
+}

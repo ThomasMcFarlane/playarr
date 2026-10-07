@@ -32,14 +32,16 @@ struct TVCalendarView: View {
 
     @ViewBuilder
     private func content(_ model: CalendarViewModel) -> some View {
+        // The header row centres on the 72 pt action tile (web: the row grows to fit it).
         TVPageHeader(title: "Release Calendar")
+            .offset(y: 11)
 
         // Period controls: previous, Today (focused ring), next, Calendar link, Filters.
-        roundControl("\u{2190}", x: 1367.4, y: 56.2, size: 50) { Task { await model.step(-1) } }
-        todayControl(x: 1423.1, y: 54.8) { Task { await model.goToToday() } }
-        roundControl("\u{2192}", x: 1516.5, y: 56.2, size: 50) { Task { await model.step(1) } }
-        pill("Calendar link", symbol: "bell", x: 1591.5, width: 147.5)
-        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1739, width: 104.2)
+        roundControl("\u{2190}", x: 1494.2, y: 67.2, size: 50) { Task { await model.step(-1) } }
+        todayControl(x: 1549.9, y: 65.8) { Task { await model.goToToday() } }
+        roundControl("\u{2192}", x: 1643.3, y: 67.2, size: 50) { Task { await model.step(1) } }
+        pill("Calendar link", symbol: "bell", x: 1718.3, width: 62.9)
+        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1781.2, width: 62)
 
         // Month button.
         HStack(spacing: 0) {
@@ -385,19 +387,7 @@ struct TVCalendarView: View {
     }
 
     private func pill(_ label: String, symbol: String, x: CGFloat, width: CGFloat) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .regular))
-            Text(label)
-                .font(TVTheme.font(size: 13.44, weight: .semibold))
-        }
-        .foregroundStyle(DesignTokens.Color.textSecondary)
-        .frame(width: width, height: 50)
-        .background(
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.7))
-                .overlay(Capsule().stroke(DesignTokens.Stage.inkMuted.opacity(0.35), lineWidth: 1))
-        )
-        .placed(x: x, y: 56.2, w: width, h: 50)
+        TVHeaderPill(label: label, symbol: symbol, width: width)
+            .placed(x: x, y: 56.2, w: width, h: TVHeaderPill.height)
     }
 }
