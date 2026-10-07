@@ -250,7 +250,8 @@ struct TVProfileAddLabel: View {
 
     /// Muted end of the plate (surface-heavy, slight rose) — not a solid pink disc.
     private var fillEnd: Color {
-        Color.tvMix(palette.surfaceStrong, palette.brandPink, amount: 0.08)
+        // Web `.profile-avatar` default end colour.
+        Color(red: 0xa8 / 255, green: 0x26 / 255, blue: 0x55 / 255)
     }
 
     var body: some View {
@@ -261,17 +262,17 @@ struct TVProfileAddLabel: View {
                     .fill(
                         LinearGradient(
                             colors: [fillStart, fillEnd],
-                            startPoint: UnitPoint(x: 0.18, y: 0.0),
-                            endPoint: UnitPoint(x: 0.82, y: 1.0)
+                            startPoint: UnitPoint(x: 0.1006, y: -0.0705),
+                            endPoint: UnitPoint(x: 0.8994, y: 1.0705)
                         )
                     )
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [.white.opacity(0.22), .clear],
+                            colors: [.white.opacity(0.28), .white.opacity(0)],
                             center: UnitPoint(x: 0.34, y: 0.26),
                             startRadius: 0,
-                            endRadius: avatarSize * 0.36
+                            endRadius: avatarSize * 0.267
                         )
                     )
                 // Dashed plate edge — web `.profile-add .profile-avatar { border-style: dashed }`.
