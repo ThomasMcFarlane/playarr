@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: a focused media card (poster, thumbnail, episode, cast and similar-title tile) lifts with a soft shadow again and shows no ring or outline, including the TV D-pad marker. Buttons, pills and Back keep the ring.
 - Android TV: a focused media card (Home, Movies, Series, search results, episode tiles, similar titles) now shows a soft shadow and lifts, animated, with no ring and no fill; buttons, pills and Back keep the ring. The lift is drawn inside the card, so it never changes the bounds D-pad focus search measures.
 - Android TV: UP and DOWN between Home rails land on the card visually above or below (closest on-screen centre), never on the same index of a rail scrolled elsewhere.
 - Android TV: coming back from a detail page or the player puts focus on the card you opened, not on the first navigation item.

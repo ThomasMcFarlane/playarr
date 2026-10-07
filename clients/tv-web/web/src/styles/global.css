@@ -6455,8 +6455,20 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
  */
 body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result),
 body[data-input-mode="remote"] :is(.tv-title-card-art, .tv-home-card-art, .tv-search-result-art) {
-  transition: none !important;
   animation: none !important;
+}
+/* Owner ruling 2026-10-08 (Q13): a focused media card lifts with a soft shadow, animated, and has no ring. */
+body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card) {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+body[data-input-mode="remote"] .tv-search-result {
+  transition: transform 230ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+body[data-input-mode="remote"] :is(.tv-title-card-art, .tv-home-card-art) {
+  transition: box-shadow 240ms ease, transform 240ms ease !important;
+}
+body[data-input-mode="remote"] .tv-search-result-art {
+  transition: box-shadow 220ms ease, transform 230ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 body[data-input-mode="remote"] :is(.tv-title-card, .tv-search-result):not([data-remote-active]),
 body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card:not([data-remote-active]) {
@@ -6475,25 +6487,36 @@ body[data-input-mode="remote"] .tv-search-result:not([data-remote-active]) .tv-s
   box-shadow: 0 12px 34px rgba(31, 14, 20, 0.16) !important;
 }
 /*
- * No z-index on the marker: changing z-index of a grid/flex item makes the
- * parent re-lay out (about 0.25 ms per toggle at 200 cards, and it grows with
- * the item count), which dominated the per-key frame cost. The ring and shadow
- * are painted by the card art instead.
+ * No z-index on the marker: changing z-index of a grid/flex item makes the parent re-lay out (about 0.25 ms per
+ * toggle at 200 cards), which dominated the per-key frame cost. The lift is a transform and a shadow only.
+ * The lift values are the 17 July redesign values (commit de371253), the same as the :focus-visible rules.
  */
 body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result)[data-remote-active] {
   outline: 0;
 }
-body[data-input-mode="remote"] :is(.tv-title-card, .tv-search-result)[data-remote-active],
-body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card[data-remote-active] {
-  transform: none !important;
+body[data-input-mode="remote"] .tv-title-card[data-remote-active] {
+  transform: translateY(-7px) !important;
 }
-body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-result)[data-remote-active]
-  :is(.tv-title-card-art, .tv-home-card-art, .tv-search-result-art) {
-  transform: none !important;
-  box-shadow:
-    0 0 0 var(--focus-ring-width) var(--focus-ring-color),
-    0 18px 36px rgba(56, 38, 33, 0.28),
-    0 8px 16px rgba(56, 38, 33, 0.16) !important;
+body[data-input-mode="remote"] .tv-title-grid .tv-title-card[data-remote-active] {
+  transform: translateY(-5px) scale(1.015) !important;
+}
+body[data-input-mode="remote"] .tv-home:not(.is-cover-view) .tv-home-card[data-remote-active] {
+  transform: translateY(-6px) !important;
+}
+body[data-input-mode="remote"] .tv-search-result[data-remote-active] {
+  transform: translateY(-6px) scale(1.015) !important;
+}
+body[data-input-mode="remote"] .tv-title-card[data-remote-active] .tv-title-card-art {
+  transform: scale(1.025) !important;
+  box-shadow: 0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2) !important;
+}
+body[data-input-mode="remote"] .tv-home-card[data-remote-active] .tv-home-card-art {
+  transform: scale(1.025) !important;
+  box-shadow: 0 26px 52px rgba(56, 38, 33, 0.32), 0 11px 22px rgba(56, 38, 33, 0.22) !important;
+}
+body[data-input-mode="remote"] .tv-search-result[data-remote-active] .tv-search-result-art {
+  transform: scale(1.025) !important;
+  box-shadow: 0 22px 52px rgba(31, 14, 20, 0.28) !important;
 }
 .tv-title-grid .tv-title-card {
   /* Isolate each card's layout/style. (No content-visibility: toggling display
@@ -12731,17 +12754,10 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 }
 
 /*
- * Title detail focus ring. The detail rules above reset `outline: 0` and rely on a lift or an
- * inversion, which left the focused control without the ring Home and Library show. Cards paint
- * the ring around their artwork (outlines follow the art's rounded corners and the card's
- * overflow is not clipped); every other control paints it on itself. Same tokens as the
- * remote-active card ring: --focus-ring-color and --focus-ring-width.
+ * Title detail focus. Controls paint the ring on themselves. Media cards (episode, cast and similar-title tiles, all
+ * `.tv-episode-card`) never take a ring: they lift with a soft shadow (owner ruling 2026-10-08, Q13). The ring tokens
+ * are --focus-ring-color and --focus-ring-width.
  */
-.tv-episode-card:focus-visible .tv-episode-art {
-  outline: var(--focus-ring-width) solid var(--focus-ring-color);
-  outline-offset: 2px;
-}
-
 .tv-detail :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: 4px;
@@ -12749,10 +12765,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 
 /* Touch layouts: autofocus (programmatic focus reports :focus-visible) must not look focused. */
 @media (max-width: 760px) and (hover: none) {
-  body:not([data-input-mode="remote"]) .tv-episode-card:focus-visible .tv-episode-art {
-    outline: 0;
-  }
-
   body:not([data-input-mode="remote"])
     .tv-detail
     :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {

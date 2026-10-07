@@ -343,8 +343,15 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
    - 3px of `--focus-ring-color`, offset 2px. The colour is white (`#ffffff`) in dark theme and the theme's `--ink` token (near-black) in light theme.
    - Width, offset and the 1.06 scale are the same in both themes. There is no fill.
    - Phone, mobile and pointer use 2px with a 3px offset.
-   - It is used everywhere: Back, action pills, the navigation group and content cards. **No ink fill on focus.** The fills web has today go, which affects Back, `.page-filters-button`, `.tv-page-back` and `.ui-btn` hover/focus.
+   - It is used on controls: Back, action pills, the navigation group, buttons, the scrubber. **No ink fill on focus.** Media cards are the exception (item 1a). The fills web has today go, which affects Back, `.page-filters-button`, `.tv-page-back` and `.ui-btn` hover/focus.
    - Light theme: a white ring would vanish on `--bg` `#f5f3f2` and `--surface-strong` `#ffffff`, so light uses the ink ring (Q11). Every place that used a literal white ring reads `--focus-ring-color` instead.
+1a. **Media cards lift, they do not ring** (owner ruling Q13, 8 October 2026). Posters, thumbnails, episode tiles, cast and similar-title cards and every other content card show, on FOCUS (`:focus-visible`, the TV D-pad marker, keyboard), a soft shadow and an animated lift, with no outline and no fill. Mouse hover is unchanged. The reference is web's card focus from the 17 July redesign (commit `de371253`), which the 3 October remote marker (`0f971b3b`, PR 27) and the 7 October episode ring (`89f293ea`, #192) had replaced with a ring. Pinned values:
+   - Card (title and episode rails): `transform: translateY(-7px)`; transition `transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)`.
+   - Card (library grid): `translateY(-5px) scale(1.015)`. Home card: `translateY(-6px)`. Search result: `translateY(-6px) scale(1.015)`, transition `230ms cubic-bezier(0.16, 1, 0.3, 1)`.
+   - Art, on focus: `transform: scale(1.025)`; transition `box-shadow 240ms ease, transform 240ms ease` (search: `220ms ease` and `230ms cubic-bezier(0.16, 1, 0.3, 1)`).
+   - Art shadow, rest: `0 10px 20px rgba(56, 38, 33, 0.14), 0 3px 8px rgba(56, 38, 33, 0.1)` (home `0 10px 22px 0.16, 0 3px 9px 0.1`; search `0 12px 34px rgba(31, 14, 20, 0.16)`).
+   - Art shadow, focused: `0 24px 48px rgba(56, 38, 33, 0.3), 0 10px 20px rgba(56, 38, 33, 0.2)` (home `0 26px 52px 0.32, 0 11px 22px 0.22`; search `0 22px 52px rgba(31, 14, 20, 0.28)`).
+   - The lift is a draw-time transform (no layout change, no z-index change), so spatial and focus search see the same bounds. Buttons, pills, Back and the scrubber keep the ring.
 2. **D-pad order:**
    - nav rail → Back → (Right) navigation items → secondary pills → Filters.
    - **Down** from any header control enters the content. It goes to the restored focus key if there is one, otherwise to the first item.
@@ -528,6 +535,7 @@ Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
 | # | Question | Decision | Effect on this spec |
 |---|---|---|---|
 | Q1 | Reference look (confirmed) | **Owner, confirmed:** the 30 September `.tv-filter-launcher` tile (commit `54224f36`) is the reference look for every header action pill on every client. | Section 2.1 stands. |
+| Q13 | Media card focus | **Owner (8 October):** a focused media card shows a soft shadow plus the animated lift ("jump"), with no white or ink outline and no fill. Focus only, not hover. Overrides Q2 for media cards. | Section 5, item 1a: values pinned from commit `de371253`. Web CSS and guards updated; native clients copy the values. |
 | Q1b | Position of the side-panel buttons | **Owner (8 October):** position is part of Q1 ("whatever was on web a week ago"). The app shell owns one fixed right-hand column where the 30 September launcher sat, and every page's side-panel and action buttons stack vertically in it. This overrides the coordinator default that put the pills in the header row. | Rule 2.3, section 2.1 and the `ShellActionColumn` component. Header row = Back, title, detail, clock, navigation. 30 September history: only Library (Filters) and Playlists (Create above Filters) had such buttons; the phone layout was a row left of the avatar. |
 | Q3b | Customise Home | **Owner (8 October), overrides Q3:** Customise Home is not a pill in the header or the column. It is removed from Home and moves into Settings. | Recorded here; delivered in its own PR. |
 | Q9 | Header row height | **Owner:** the header row grows to fit the tile, and all items centre vertically on the tile. | Rule 2.2 and the `--page-header-height` token. Back, title, clock and actions centre on the tile height. Each page's ⚑ list states the shift. |
