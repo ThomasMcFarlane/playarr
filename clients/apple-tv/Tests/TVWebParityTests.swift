@@ -44,3 +44,51 @@ final class TVWebParityTests: XCTestCase {
         XCTAssertGreaterThan(lines.count, 1)
     }
 }
+
+/// Player remote behaviour: BACK sequence, SELECT on the scrubber, focus across seeks, direct mount.
+final class TVPlayerInteractionTests: XCTestCase {
+    func testBackClosesMenuThenControlsThenExits() {
+        var state = TVPlayerInteraction()
+        state.openQualityMenu()
+        XCTAssertEqual(state.back(), .closedMenu)
+        XCTAssertEqual(state.focus, .quality, "focus returns to the control that opened the panel")
+        XCTAssertTrue(state.controlsVisible)
+        XCTAssertEqual(state.back(), .hidControls)
+        XCTAssertEqual(state.back(), .exit)
+    }
+
+    func testBackWithControlsOpenHidesThemFirst() {
+        var state = TVPlayerInteraction()
+        XCTAssertEqual(state.back(), .hidControls)
+        XCTAssertFalse(state.controlsVisible)
+        XCTAssertEqual(state.back(), .exit)
+    }
+
+    func testSelectOnScrubberOnlyTogglesPlayPause() {
+        var state = TVPlayerInteraction(focus: .scrubber)
+        XCTAssertEqual(state.select(), .togglePlayPause)
+        XCTAssertEqual(state.focus, .scrubber)
+        XCTAssertFalse(state.menuOpen)
+    }
+
+    func testSelectWithHiddenControlsOnlyRevealsThem() {
+        var state = TVPlayerInteraction(focus: .scrubber, controlsVisible: false)
+        XCTAssertNil(state.select())
+        XCTAssertTrue(state.controlsVisible)
+    }
+
+    func testScrubberKeepsFocusAcrossRepeatedSeeks() {
+        var state = TVPlayerInteraction(focus: .scrubber)
+        for _ in 0..<20 {
+            state.seeked()
+            XCTAssertEqual(state.focus, .scrubber)
+        }
+    }
+
+    func testPlayMountsTheChromeDirectlyWithOnlyASpinnerWhileNegotiating() {
+        XCTAssertEqual(TVPlayerStage.resolve(.idle), .chrome(videoAttached: false, spinner: true))
+        XCTAssertEqual(TVPlayerStage.resolve(.negotiating), .chrome(videoAttached: false, spinner: true))
+        XCTAssertEqual(TVPlayerStage.resolve(.ready), .chrome(videoAttached: true, spinner: false))
+        XCTAssertEqual(TVPlayerStage.resolve(.failed("x")), .failed("x"))
+    }
+}

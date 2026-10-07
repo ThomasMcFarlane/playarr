@@ -13,7 +13,8 @@ struct TVPlayerView: View {
     @State private var suggestions: [Work] = []
     /// Parity route: draw the chrome statically at this position over a black stage.
     let parity: (position: Double, duration: Double, menuOpen: Bool)?
-    @State private var menuOpen = false
+    @State private var interaction = TVPlayerInteraction()
+    @FocusState private var focusedControl: TVPlayerControl?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -81,14 +82,23 @@ struct TVPlayerView: View {
             // The stage is black behind the video, as on the web.
             Color.black.ignoresSafeArea()
 
-            switch viewModel.state {
-            case .idle, .negotiating:
-                ProgressView("Preparing \(title)…")
-                    .tint(DesignTokens.Color.brandPrimary)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-            case .ready:
-                TVVideoSurface(player: viewModel.player)
+            // Play opens the player directly: a black stage with the normal chrome and at most a small
+            // buffering spinner while the session and stream are negotiated. No interstitial page.
+            switch TVPlayerStage.resolve(viewModel.state) {
+            case .chrome(let videoAttached, let spinner):
+                if videoAttached {
+                    TVVideoSurface(player: viewModel.player)
+                        .ignoresSafeArea()
+                }
+                ZStack {
+                // While the controls are hidden this catches SELECT and moves to reveal them again.
+                Color.clear
                     .ignoresSafeArea()
+                    .focusable(!interaction.controlsVisible)
+                    .onTapGesture {
+                        interaction.reveal()
+                        focusedControl = interaction.focus
+                    }
                 TVPlayerChrome(
                     state: TVPlayerChromeState(
                         position: viewModel.position,
@@ -96,20 +106,42 @@ struct TVPlayerView: View {
                         isPlaying: viewModel.isPlaying,
                         qualityLabel: viewModel.qualityLabel,
                         selectedQualityID: viewModel.selectedQualityID,
-                        menuOpen: menuOpen
+                        menuOpen: interaction.menuOpen
                     ),
                     onClose: { dismiss() },
-                    onTogglePlay: { viewModel.togglePlay() },
-                    onToggleQualityMenu: { menuOpen.toggle() }
+                    onTogglePlay: { handleSelect() },
+                    onToggleQualityMenu: { handleSelect() },
+                    controlsVisible: interaction.controlsVisible,
+                    focus: $focusedControl
                 )
-                .onPlayPauseCommand { viewModel.togglePlay() }
-                .onExitCommand { if menuOpen { menuOpen = false } else { dismiss() } }
+                }
+                .onPlayPauseCommand { viewModel.togglePlay(); interaction.reveal() }
+                .onExitCommand {
+                    switch interaction.back() {
+                    case .closedMenu: focusedControl = interaction.focus
+                    case .hidControls: break
+                    case .exit: dismiss()
+                    }
+                }
                 .onMoveCommand { direction in
+                    interaction.reveal()
                     switch direction {
-                    case .left: viewModel.seek(by: -10)
-                    case .right: viewModel.seek(by: 10)
+                    case .left:
+                        viewModel.seek(by: -10)
+                        interaction.seeked()
+                    case .right:
+                        viewModel.seek(by: 10)
+                        interaction.seeked()
                     default: break
                     }
+                    // A seek never moves focus: keep it on the control the user left it on.
+                    if focusedControl == nil { focusedControl = interaction.focus }
+                }
+                .onChange(of: focusedControl) { _, control in
+                    if let control { interaction.focus = control }
+                }
+                if spinner {
+                    ProgressView().tint(.white).controlSize(.large)
                 }
             case .failed(let message):
                 TVErrorView(title: "Playback failed", message: message) {
@@ -157,6 +189,17 @@ struct TVPlayerView: View {
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.stop()
+        }
+    }
+
+    /// SELECT: the scrubber and Play toggle play/pause only; Quality opens its panel.
+    private func handleSelect() {
+        interaction.focus = focusedControl ?? interaction.focus
+        switch interaction.select() {
+        case .togglePlayPause: viewModel.togglePlay()
+        case .openQualityMenu: break
+        case .close: dismiss()
+        case nil: break
         }
     }
 }

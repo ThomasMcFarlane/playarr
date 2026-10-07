@@ -232,6 +232,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- iOS and tvOS: Play opens the player directly instead of a full-screen "Preparing playback" screen; tvOS player BACK closes panels, then the controls, then exits, the scrubber shows the web focus ring and SELECT on it toggles play/pause, and the controls scrim rises from the bottom.
 - Android: Play opens the player directly (black stage, close control, buffering spinner) instead of a full-screen "Preparing playback" page; the unused strings and translations are removed.
 - Android player: BACK closes the open panel first (returning focus to its opener), then the controls overlay, and only then exits.
 - Android TV player: the focused scrubber shows the web white ring with an enlarged thumb, SELECT toggles play/pause only, and focus no longer leaves the scrubber after a seek.
