@@ -186,6 +186,10 @@ public protocol PlayarrAPIClient: PlayarrRequestTransport {
     func fetchHouseholdStatus() async throws -> HouseholdStatus?
     /// `GET /api/v1/users/me/profile-avatar`: the server-backed avatar preset id (`nil` when none is set).
     func fetchProfileAvatarPreset() async throws -> String?
+    /// `GET /api/v1/watchlist`.
+    func listWatchlistItems() async throws -> [WatchlistItem]
+    /// `GET /api/v1/requests?mine=true`.
+    func listMyRequests() async throws -> [RequestSummary]
     /// `GET /api/v1/media/{id}/thumbnail`: a frame of the media file (chapter and episode stills).
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data
     func fetchWork(id: UUID) async throws -> WorkDetail
@@ -423,6 +427,15 @@ public final class APIClient: PlayarrAPIClient, PlayarrUploadTransport {
     public func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data {
         let query = positionMs.map { [URLQueryItem(name: "position_ms", value: String($0))] } ?? []
         return try await authenticatedData(path: "/api/v1/media/\(mediaFileID.uuidString)/thumbnail", query: query)
+    }
+
+    public func listWatchlistItems() async throws -> [WatchlistItem] {
+        let response: WatchlistItemsResponse = try await get("/api/v1/watchlist")
+        return response.items
+    }
+
+    public func listMyRequests() async throws -> [RequestSummary] {
+        try await get("/api/v1/requests", query: [URLQueryItem(name: "mine", value: "true")])
     }
 
     public func fetchProfileAvatarPreset() async throws -> String? {
@@ -1145,6 +1158,8 @@ public extension PlayarrAPIClient {
     func fetchAvailabilityLag(id: UUID) async throws -> AvailabilityLag? { nil }
     func fetchHouseholdStatus() async throws -> HouseholdStatus? { nil }
     func fetchProfileAvatarPreset() async throws -> String? { nil }
+    func listWatchlistItems() async throws -> [WatchlistItem] { [] }
+    func listMyRequests() async throws -> [RequestSummary] { [] }
     func fetchMediaThumbnail(mediaFileID: UUID, positionMs: Int?) async throws -> Data { Data() }
 }
 
@@ -1169,4 +1184,43 @@ struct ProfileAvatarSettingResponse: Decodable, Sendable {
         let value: String
     }
     let preference: Preference?
+}
+
+/// One watchlist entry (the title it points at; discovery titles need not be in the library).
+public struct WatchlistItem: Decodable, Sendable, Identifiable, Equatable {
+    public let title: String
+    public let year: Int?
+    public var id: String { "\(title)-\(year.map(String.init) ?? "")" }
+
+    private struct Inner: Decodable {
+        let title: String
+        let year: Int?
+    }
+
+    enum CodingKeys: String, CodingKey { case title }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let inner = try container.decode(Inner.self, forKey: .title)
+        title = inner.title
+        year = inner.year
+    }
+}
+
+struct WatchlistItemsResponse: Decodable, Sendable {
+    let items: [WatchlistItem]
+}
+
+/// One title request and where it stands.
+public struct RequestSummary: Decodable, Sendable, Identifiable, Equatable {
+    public let id: String
+    public let title: String
+    public let year: Int?
+    public let status: String
+    public let statusNote: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, year, status
+        case statusNote = "status_note"
+    }
 }
