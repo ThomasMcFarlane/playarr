@@ -106,13 +106,15 @@ The web uses the weight axis only; the width, optical-size and `YTLC` axes stay 
 820 (Nunito Sans starts at 200, so 100 renders as 200). Weights are used as fractional values, so embed the variable
 font and set the weight axis; a static family at 400/600/700/800 is only an approximation.
 
-Embed these (also in `docs/parity/fonts/`, with the licences): `NunitoSans[YTLC,opsz,wdth,wght].ttf` and
-`JetBrainsMono[wght].ttf`, both unmodified upstream builds. Note that the upstream default of the `wght` axis in the
-Nunito Sans file is 200: always set the weight explicitly. Glyphs outside Latin, Vietnamese and Cyrillic (for
-example CJK) fall back to the platform font, as on the web.
+Embed these, from `docs/parity/fonts/` (see the README there): `NunitoSans-wght-web.ttf` and `JetBrainsMono[wght].ttf`.
+`NunitoSans-wght-web.ttf` is the upstream Nunito Sans with the axes the web bakes in pinned (`wdth` 100, `opsz` 12,
+`YTLC` 500) and only the weight axis left variable, so every client renders the web's exact instance. Do not embed the
+upstream full-axis file in the same folder: its defaults give slightly different glyph widths. The weight axis of
+`NunitoSans-wght-web.ttf` defaults to 200, so always set the weight explicitly. Glyphs outside Latin, Vietnamese and
+Cyrillic (for example CJK) fall back to the platform font, as on the web.
 
-Platforms without variable-font support can generate static instances of the weights they need from these files with
-`fonttools varLib.instancer`, pinning `wdth=100 opsz=12 YTLC=500`. The `--font <file>` option of `capture-web.mjs` is
+Platforms without variable-font support can generate static instances of the weights they need with
+`fonttools varLib.instancer NunitoSans-wght-web.ttf wght=<weight>`. The `--font <file>` option of `capture-web.mjs` is
 no longer needed to match fonts: the committed references use the bundled fonts.
 
 ## Canonical web mobile bottom navigation

@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Parity: the native font files are now the exact instance the web renders (Nunito Sans with wdth 100, opsz 12 and YTLC 500 pinned, weight variable) in docs/parity/fonts.
 - Fixtures: the placeholder artwork titles are drawn with a bundled Nunito Sans Bold file instead of the host's default font, so the artwork is the same on every OS; the web parity references were re-captured.
 - Android phone calendar: the selected agenda entry draws the web's border, left bar and inset ring.
 - Android TV uses the bundled Nunito Sans and JetBrains Mono, as the web and the phone do.
