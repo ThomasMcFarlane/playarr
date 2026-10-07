@@ -1613,6 +1613,7 @@ internal fun ExperienceProfilesScreen(
     val switchingProfileId by viewModel.switchingProfileId.collectAsState()
     val updateControl = rememberProfilesUpdateControl(isTelevision)
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var clientsUrl by remember { mutableStateOf<String?>(null) }
     var pinProfile by remember { mutableStateOf<AvailableProfile?>(null) }
     var pinAction by remember { mutableStateOf(ProfileAction.Select) }
     var pin by remember { mutableStateOf("") }
@@ -1676,12 +1677,18 @@ internal fun ExperienceProfilesScreen(
                     end = Offset.Infinite,
                 ),
             )
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(ProfilesBrandRose.copy(alpha = 0.13f), Color.Transparent),
-                    radius = 900f,
-                ),
-            ),
+            .drawBehind {
+                // Web `radial-gradient(circle at 50% 48%, rose 13%, transparent 34%)`: 34 % of the farthest-corner radius.
+                val centre = Offset(size.width * 0.5f, size.height * 0.48f)
+                val farthest = kotlin.math.hypot(maxOf(centre.x, size.width - centre.x), maxOf(centre.y, size.height - centre.y))
+                drawRect(
+                    Brush.radialGradient(
+                        colors = listOf(ProfilesBrandRose.copy(alpha = 0.13f), Color.Transparent),
+                        center = centre,
+                        radius = 0.34f * farthest,
+                    ),
+                )
+            },
     ) {
         // Web `::before` edge fades.
         Box(
@@ -1694,9 +1701,10 @@ internal fun ExperienceProfilesScreen(
                     ),
                 )
                 .background(
+                    // `linear-gradient(0deg, bg 90%, transparent 26%)`: the fade is at the bottom edge.
                     Brush.verticalGradient(
-                        0f to WebBackground.copy(alpha = 0.90f),
-                        0.26f to Color.Transparent,
+                        0.74f to Color.Transparent,
+                        1f to WebBackground.copy(alpha = 0.90f),
                     ),
                 ),
         )
@@ -1717,6 +1725,20 @@ internal fun ExperienceProfilesScreen(
                         ?: AddProfileId
                 }
                 if (isTelevision) {
+                    clientsUrl?.let { url ->
+                        PlayarrPanel(
+                            onDismissRequest = { clientsUrl = null },
+                            title = { Text(playarrString(PlayarrString.ProfilesClients)) },
+                            text = {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                                    PlayarrQrCode(value = url, contentDescription = playarrString(PlayarrString.YourDataTransferQrLabel), modifier = Modifier.size(220.dp))
+                                    Text(playarrString(PlayarrString.ProfilesClientsScanHint), color = WebInkMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                                    Text(url, color = WebInkSoft, fontSize = 12.sp, textAlign = TextAlign.Center)
+                                }
+                            },
+                            confirmButton = { PlayarrButton(onClick = { clientsUrl = null }) { Text(playarrString(PlayarrString.CommonClose)) } },
+                        )
+                    }
                     TelevisionProfilesStage(
                         profiles = profiles,
                         selectedId = selectedId,
@@ -1734,6 +1756,7 @@ internal fun ExperienceProfilesScreen(
                         onSettings = { requestAction(it, ProfileAction.Settings) },
                         onSignOut = { viewModel.signOut(it) },
                         onAddProfile = onAddProfile,
+                        onClients = { viewModel.openClients { clientsUrl = it } },
                     )
                 } else {
                     MobileProfilesStage(
@@ -1858,9 +1881,17 @@ private fun TelevisionProfilesStage(
     onSettings: (AvailableProfile) -> Unit,
     onSignOut: (String) -> Unit,
     onAddProfile: () -> Unit,
+    onClients: () -> Unit,
 ) {
     val language = LocalPlayarrLanguage.current
     Box(Modifier.fillMaxSize()) {
+        // `.profile-clients-link`: the glass pill bottom right (web shows it on every TV client).
+        ProfilesGlassPill(onClick = onClients, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 50.dp, bottom = 34.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(playarrString(PlayarrString.ProfilesClients), color = WebInkSoft, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("\u2192", color = WebInkSoft, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
         // `.profiles-heading`
         Column(
             modifier = Modifier
@@ -1885,7 +1916,7 @@ private fun TelevisionProfilesStage(
                 fontWeight = FontWeight.Medium,
                 letterSpacing = (-5.806).sp,
                 lineHeight = 76.6.sp,
-                modifier = Modifier.padding(top = 7.2.dp),
+                modifier = Modifier.padding(top = 7.2.dp).offset(y = (-16).dp),
             )
         }
 
@@ -2307,6 +2338,7 @@ private fun ProfilesGlobeIcon(color: Color) {
 @Composable
 private fun ProfilesGlassPill(
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
@@ -2316,8 +2348,8 @@ private fun ProfilesGlassPill(
         shape = CircleShape,
         color = WebSurfaceStrong.copy(alpha = 0.72f),
         border = BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.35f)),
-        shadowElevation = 8.dp,
-        modifier = Modifier.heightIn(min = 44.dp),
+        shadowElevation = 3.dp,
+        modifier = modifier.heightIn(min = 44.dp),
     ) {
         Box(
             Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -2375,16 +2407,20 @@ private fun ProfileChoice(
                         Modifier
                     },
                 )
-                .border(
-                    width = if (selected) 4.dp else 1.dp,
-                    color = if (selected) {
-                        ProfilesBrandRose.copy(alpha = 0.42f)
+                .then(
+                    if (selected) {
+                        // Web `box-shadow: 0 0 0 4px rose 42%`: the ring sits outside the avatar, over the page.
+                        Modifier.drawBehind {
+                            drawCircle(
+                                ProfilesBrandRose.copy(alpha = 0.42f), radius = size.minDimension / 2f + 2.dp.toPx(),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx()),
+                            )
+                        }
                     } else {
-                        WebInkMuted.copy(alpha = 0.35f)
+                        Modifier.border(1.dp, WebInkMuted.copy(alpha = 0.35f), CircleShape)
                     },
-                    shape = CircleShape,
                 )
-                .scale(if (selected) 1.035f else 1f),
+                .scale(if (selected) 1.075f else 1f),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 PlayarrProfileAvatar(
@@ -2443,7 +2479,7 @@ private fun ProfileChoice(
         if (selected) {
             // Web `.profile-actions`
             Row(
-                modifier = Modifier.padding(top = if (isTelevision) 21.2.dp else 18.dp),
+                modifier = Modifier.padding(top = if (isTelevision) 11.2.dp else 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 8.8.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

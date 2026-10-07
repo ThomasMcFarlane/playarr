@@ -351,7 +351,7 @@ internal class CalendarViewModel @Inject constructor(
     val calendar = CalendarStateHolder(
         scope = viewModelScope,
         repository = repository,
-        today = { LocalDate.now() },
+        today = { playarrToday() },
         firstDay = firstDayOfWeek(Locale.getDefault()),
         initialUrlState = savedState.get<String>(QUERY_KEY)?.let(::parseCalendarQuery),
     )

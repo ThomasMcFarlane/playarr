@@ -27,7 +27,7 @@ targets:
         buildPhase: resources
       - path: Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
-      - path: Resources/Fonts/NunitoSans-Variable.ttf
+      - path: Resources/Fonts/NunitoSans-wght-web.ttf
         buildPhase: resources
       - path: Resources/Fonts/JetBrainsMono-Variable.ttf
         buildPhase: resources

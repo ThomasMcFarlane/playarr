@@ -1689,6 +1689,11 @@ internal enum class PlayarrString(
     ProfilesSignIn("Sign in", "เข้าสู่ระบบ", "サインイン"),
     ProfilesAddAnother("Add another profile", "เพิ่มโปรไฟล์อื่น", "プロフィールを追加"),
     ProfilesClients("Clients", "ไคลเอนต์", "クライアント"),
+    ProfilesClientsScanHint(
+        "Scan with your phone to see every Playarr client.",
+        "สแกนด้วยโทรศัพท์เพื่อดูไคลเอนต์ Playarr ทั้งหมด",
+        "スマートフォンでスキャンすると、Playarrのすべてのクライアントを確認できます。",
+    ),
     ProfilesSwitchProfile("Switch profile", "สลับโปรไฟล์", "プロフィールを切り替え"),
     ProfilesEnterPin("Enter four-digit PIN", "ป้อน PIN 4 หลัก", "4桁のPINを入力"),
     ProfilesPinNotAccepted(
