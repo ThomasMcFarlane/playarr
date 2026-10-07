@@ -419,6 +419,20 @@ jobs:
           args=(); for f in $FILTERS; do args+=(--filter "$f"); done
           pnpm -r "${args[@]}" run typecheck
 
+      # Unit tests for the same affected set (packages that define a `test` script
+      # are selected with their dependents, exactly like lint and typecheck). The web
+      # package's own `lint` script already runs the layout guards (pageHeaderRegistry,
+      # buttonAudit, drawerAudit); this step runs its whole vitest suite too, so the
+      # guards gate every PR that touches clients/tv-web before merge, not only the
+      # post-merge deploy workflow.
+      - name: Test (vitest)
+        env:
+          FILTERS: ${{ needs.changes.outputs.tv_web_filters }}
+        run: |
+          if [ -z "$FILTERS" ]; then pnpm -r --if-present run test; exit; fi
+          args=(); for f in $FILTERS; do args+=(--filter "$f"); done
+          pnpm -r "${args[@]}" --if-present run test
+
   # ---------------------------------------------------------------------
   # OpenAPI contract: regenerate the utoipa-derived spec and diff it
   # against the committed copy. Delegates to scripts/openapi-diff-check.sh

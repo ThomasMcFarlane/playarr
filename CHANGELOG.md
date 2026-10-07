@@ -2356,6 +2356,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- CI: the web layout guards (page header registry, button audit, drawer audit) now run on every pull request that touches `clients/tv-web`, through a new `lint` script in the web package, and `tv-web-check` also runs the affected packages' vitest suites. Both feed `ci-required`. The Household registry reason now matches the page.
 - Added `clients/tv-web/web/scripts/player-entry-e2e.mjs` (Playwright against the fixture server, TV and phone layouts) and unit tests for direct player mounting and the BACK sequence.
 - Web TV: unit tests for the next-up selection and source tests for the detail-page focus ring; the series-detail TV parity references were recaptured for the focus ring on the first tile.
 - Unit tests for the self-renewing QR sign-in state machine (`QrPairingFlowTest`): hosted code expiry, server device-code expiry, denial, request and poll blips, backoff cap; plus a Fire TV `LinkScreen` expiry-renewal test.

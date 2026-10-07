@@ -60,7 +60,7 @@ export const PAGE_HEADER_COVERAGE: readonly PageHeaderCoverage[] = [
   { file: "Signup.tsx", mode: "exempt", routes: ["signup"], reason: "Pre-auth profile layout." },
   { file: "DeviceLink.tsx", mode: "exempt", routes: ["device-link"], reason: "Pre-auth profile layout." },
   { file: "Profiles.tsx", mode: "exempt", routes: ["profiles"], reason: "Profile picker chrome (TvStageChrome)." },
-  { file: "Household.tsx", mode: "exempt", routes: [], reason: "Profile picker chrome (TvStageChrome)." },
+  { file: "Household.tsx", mode: "exempt", routes: [], reason: "Household gate with its own bare page layout." },
   { file: "Clients.tsx", mode: "exempt", routes: ["clients"], reason: "Public install landing (TvStageChrome)." },
   { file: "Legal.tsx", mode: "exempt", routes: [], reason: "Public legal documents with their own article layout." },
 ];

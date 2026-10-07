@@ -9,6 +9,7 @@
     "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build && node scripts/copy-cast-receiver.mjs",
     "build:server": "node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build --mode server && node scripts/rewrite-server-manifest.mjs",
     "deploy:cloudflare": "pnpm --filter @playarr-tv/web... run build && esbuild worker.js --bundle --format=esm --platform=browser --target=es2022 --external:cloudflare:sockets --outfile=dist-worker.mjs && node scripts/deploy-cloudflare-api.mjs",
+    "lint": "vitest run src/lib/*Audit.test.ts src/lib/*Registry.test.ts",
     "test": "vitest run",
     "perf:nav": "node scripts/nav-perf.mjs",
     "smoke:nav": "node scripts/nav-smoke.mjs",
