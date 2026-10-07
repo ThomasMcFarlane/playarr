@@ -259,6 +259,8 @@ export function commitLinkedSession(options: CommitLinkedSessionOptions): Linked
 export interface EnsureFireTvAccessTokenOptions {
   /** Forces a refresh even when the stored access token has not yet reached its renewal window -- see `ensureAccessToken`'s own `forceRefresh`. */
   forceRefresh?: boolean;
+  /** With `forceRefresh`: the access token the server just rejected (see `ensureAccessToken`). */
+  rejectedAccessToken?: string;
 }
 
 /**
@@ -301,6 +303,7 @@ export function ensureFireTvAccessToken(
 
   return ensureAccessToken(client, store, identity, {
     forceRefresh: options.forceRefresh,
+    rejectedAccessToken: options.rejectedAccessToken,
     serverGroup,
     // Retry candidates never need a bearer token of their own -- both
     // `.refresh()` and the credential-less `.login()` fallback

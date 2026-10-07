@@ -26,6 +26,8 @@ import type {ApiClient} from '@playarr-tv/api-client';
 import {TokenStore} from '@playarr-tv/device-auth';
 import {DEFAULT_API_BASE_URL, getStoredApiBaseUrl, setStoredApiBaseUrl} from '@playarr-tv/domain';
 import {createApiClient} from './client';
+import {ensureFireTvAccessToken} from '../auth/session';
+import {createSessionTokenProvider} from './sessionToken';
 
 const tokenStore = new TokenStore();
 
@@ -48,22 +50,16 @@ interface ApiClientContextValue {
 
 const ApiClientContext = createContext<ApiClientContextValue | undefined>(undefined);
 
-function buildClient(baseUrl: string): ApiClient {
-  return createApiClient(baseUrl, {
-    // Deliberately the simplest correct thing today: the raw stored access
-    // token, not expiry-checked or refreshed here. A paired TV session's
-    // access token is short-lived by design (server-side JwtIssuer::
-    // access_ttl) and WILL eventually expire mid-session; silently
-    // re-authenticating when that happens is `ensureAccessToken`'s job
-    // (`@playarr-tv/device-auth`, already fully implemented, reused
-    // verbatim per design doc §5.5) -- wiring its retry-across-server-group
-    // behaviour needs a `KnownServerGroup`/device id that only exist once
-    // `src/auth/**` (a later step) has actually linked a server. Until
-    // then, an expired token means the next protected call 401s and
-    // whatever called it sees an `ApiError` -- a real, if unpolished,
-    // failure mode, not a silent hang.
-    getAccessToken: () => tokenStore.get()?.accessToken,
+function buildClient(baseUrl: string, onAuthFailed: () => void): ApiClient {
+  const client: ApiClient = createApiClient(baseUrl, {
+    getAccessToken: createSessionTokenProvider({
+      store: tokenStore,
+      getClient: () => client,
+      onAuthFailed,
+      ensure: ensureFireTvAccessToken,
+    }),
   });
+  return client;
 }
 
 /**
@@ -95,7 +91,7 @@ export function ApiClientProvider({children}: {children: ReactNode}): JSX.Elemen
   // is a shell-mounted singleton wrapping a single secure decoder instance
   // (design doc §6.3); a new ApiClient identity on every render would be
   // harmless in itself, but there is no reason to manufacture the churn.
-  const client = useMemo(() => buildClient(apiBaseUrl), [apiBaseUrl]);
+  const client = useMemo(() => buildClient(apiBaseUrl, () => setAuthFailed(true)), [apiBaseUrl]);
 
   function setApiBaseUrl(value: string): void {
     setStoredApiBaseUrl(value);
