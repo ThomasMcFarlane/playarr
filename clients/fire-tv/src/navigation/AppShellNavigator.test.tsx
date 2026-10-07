@@ -34,6 +34,13 @@ jest.mock('@amazon-devices/react-native-svg', () => ({
   Path: 'Path',
   Circle: 'Circle',
   Rect: 'Rect',
+  G: 'G',
+  Defs: 'Defs',
+  Stop: 'Stop',
+  Line: 'Line',
+  Polyline: 'Polyline',
+  Polygon: 'Polygon',
+  LinearGradient: 'SvgLinearGradient',
 }));
 
 jest.mock('@amazon-devices/react-native-kepler', () => ({

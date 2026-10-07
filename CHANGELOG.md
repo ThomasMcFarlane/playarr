@@ -260,6 +260,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the shell chrome (left rail, clock, profile chip), Home, the library grid and the settings workspace now follow the web TV layout in light and dark, with the web focus ring, and the capture driver refuses to press a key unless Playarr is the foreground app.
 - Web: Customise Home moved from a button on Home into Settings as its own section (`/settings/home`, same controls); the old `/customise-home` link redirects there and Home no longer has an action button.
 - tvOS Preferences shows the nine web panels (profile avatar, language, player, server connection, profile lock, invite, request latency, phone remote, your data) laid out like the web TV, with a hairline under the heading and the uppercase heading detail.
 - Roku: media cards show a soft shadow and a lift on focus instead of a ring, Up and Down between Home rails land on the card directly above or below, the library sorts like the web (200 titles per page, native sort), Filters and Calendar actions sit in one shell column on the right, and Customise Home moved from Home into Settings.

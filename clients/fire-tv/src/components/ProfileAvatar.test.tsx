@@ -12,7 +12,7 @@
  * file exists specifically to close that gap: it does not assert much
  * about the six presets' own artwork (`profileAvatarPresets.test.ts`
  * already covers the deterministic hash/colour pairing in full), it just
- * has to actually call `renderer.create(<ProfileAvatar ... />)` and not
+ * has to actually call `renderer.create(<ApiClientProvider><ProfileAvatar ... /></ApiClientProvider>)` and not
  * throw.
  *
  * Same `jest.mock()` posture as `QrCode.test.tsx`'s own doc comment
@@ -27,6 +27,9 @@ jest.mock('@amazon-devices/react-native-svg', () => ({
   default: 'Svg',
   Circle: 'Circle',
   Path: 'Path',
+  Defs: 'Defs',
+  Stop: 'Stop',
+  RadialGradient: 'RadialGradient',
 }));
 jest.mock('@amazon-devices/react-linear-gradient', () => ({
   __esModule: true,
@@ -35,6 +38,7 @@ jest.mock('@amazon-devices/react-linear-gradient', () => ({
 
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
+import {ApiClientProvider} from '../api/ApiClientProvider';
 import {ProfileAvatar} from './ProfileAvatar';
 import {pickProfileAvatarPreset} from './profileAvatarPresets';
 
@@ -43,7 +47,7 @@ describe('<ProfileAvatar>', () => {
     let tree!: renderer.ReactTestRenderer;
     expect(() => {
       act(() => {
-        tree = renderer.create(<ProfileAvatar profileId="a-real-profile-id" />);
+        tree = renderer.create(<ApiClientProvider><ProfileAvatar profileId="a-real-profile-id" /></ApiClientProvider>);
       });
     }).not.toThrow();
     expect(tree.toJSON()).not.toBeNull();
@@ -55,7 +59,7 @@ describe('<ProfileAvatar>', () => {
 
     let tree!: renderer.ReactTestRenderer;
     act(() => {
-      tree = renderer.create(<ProfileAvatar profileId={profileId} />);
+      tree = renderer.create(<ApiClientProvider><ProfileAvatar profileId={profileId} /></ApiClientProvider>);
     });
 
     const gradient = tree.root.findByType('LinearGradient' as never);
@@ -65,11 +69,14 @@ describe('<ProfileAvatar>', () => {
   it('renders at a custom size', () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => {
-      tree = renderer.create(<ProfileAvatar profileId="sized-profile" size={64} />);
+      tree = renderer.create(<ApiClientProvider><ProfileAvatar profileId="sized-profile" size={64} /></ApiClientProvider>);
     });
 
-    const svg = tree.root.findByType('Svg' as never);
-    expect(svg.props.width).toBe(64);
-    expect(svg.props.height).toBe(64);
+    // The glyph is drawn at 86% of the disc (the web's `.profile-avatar > svg`), and the sheen fills it.
+    const [glyph, sheen] = tree.root.findAllByType('Svg' as never);
+    expect(glyph.props.width).toBeCloseTo(64 * 0.86);
+    expect(glyph.props.height).toBeCloseTo(64 * 0.86);
+    expect(sheen.props.width).toBe(64);
+    expect(sheen.props.height).toBe(64);
   });
 });

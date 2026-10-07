@@ -68,3 +68,14 @@ export function preferredArtworkKind(
 ): ImageKind | null {
   return kinds.find((kind) => work.images.some((image) => image.kind === kind)) ?? null;
 }
+
+/** A frame extracted from a media file (the web's `getMediaThumbnail`); the server defaults to 30 s in. */
+export function mediaThumbnailUrl(baseUrl: string, mediaFileId: string, positionMs?: number): string {
+  const path = `${trimBase(baseUrl)}/api/v1/media/${encodeURIComponent(mediaFileId)}/thumbnail`;
+  return positionMs === undefined ? path : `${path}?position_ms=${positionMs}`;
+}
+
+/** An episode's own still (the web's `getEpisodeArtwork`). */
+export function episodeArtworkUrl(baseUrl: string, seriesWorkId: string, episodeId: string, kind: ImageKind = 'thumb'): string {
+  return `${trimBase(baseUrl)}/api/v1/artwork/episode/${encodeURIComponent(seriesWorkId)}/${encodeURIComponent(episodeId)}/${encodeURIComponent(kind)}`;
+}

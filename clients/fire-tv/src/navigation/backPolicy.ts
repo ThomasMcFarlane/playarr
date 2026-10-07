@@ -162,7 +162,7 @@ export function useTvBackNavigation(fallbackBackTo?: RouteName): void {
     if (target === -1) {
       navigation.goBack();
     } else {
-      navigation.navigate(target);
+      (navigation.navigate as unknown as (name: string) => void).call(navigation, target);
     }
     return true;
   });

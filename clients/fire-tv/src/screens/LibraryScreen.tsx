@@ -38,9 +38,22 @@
  * results open `MusicDetailScreen`, everything else opens `WorkDetailScreen`
  * (design doc §7: "WorkDetail backs /series/:id, /movies/:id, ...").
  */
-import React, {useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, FlatList, Image, Pressable, Text, View} from 'react-native';
-import type {ApiClient, Work, WorkKind} from '@playarr-tv/api-client';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {ActivityIndicator, Animated, Easing, FlatList, Image, Pressable, Text, View} from 'react-native';
+import type {ApiClient, WatchProgress, Work, WorkKind} from '@playarr-tv/api-client';
+import {ArtworkImage} from '../components/ArtworkImage';
+import {useLanguage} from '../i18n/LanguageProvider';
+import {useTvBackNavigation} from '../navigation/backPolicy';
+import {mix} from '../theme/color';
+import {useTheme} from '../theme/ThemeProvider';
+import {Icon} from '../shell/icons';
+import {Box, T, u} from '../tv/kit';
+import {PageHeader} from '../tv/PageHeader';
+import {Preview} from '../tv/Preview';
+import {RailFrost, Stage} from '../tv/Stage';
+import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
+import {cardArtUrl, stageArtUrl} from '../tv/ArtOfWork';
+import {workYear} from './HomeScreen';
 import {useCatalogBrowse} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
 import {artworkAuthHeaders, preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
@@ -201,59 +214,298 @@ export function PosterCard({
   );
 }
 
+const GRID_COLUMNS = 3;
+const CARD_W = 327.2;
+const CARD_H = 184;
+const COL_PITCH = 353.05;
+const ROW_PITCH = 240.4;
+const GRID_X = 783.4;
+const GRID_Y = 162;
+const PAGE_SIZE = 200;
+const ALPHABET = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'] as const;
+
+export function letterOf(title: string): string {
+  const first = title
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .charAt(0)
+    .toUpperCase();
+  return first >= 'A' && first <= 'Z' ? first : '#';
+}
+
+const COLLATOR: {compare: (a: string, b: string) => number} | null =
+  typeof Intl !== 'undefined' && typeof Intl.Collator === 'function' ? new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'}) : null;
+
+/** The web's title order: case-insensitive with digit runs compared as numbers ("9" before "10"). */
+export function compareTitles(a: string, b: string): number {
+  if (COLLATOR) return COLLATOR.compare(a, b);
+  const chunk = /(\d+)|(\D+)/g;
+  const left = a.toLowerCase().match(chunk) ?? [];
+  const right = b.toLowerCase().match(chunk) ?? [];
+  for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+    const x = left[index]!;
+    const y = right[index]!;
+    if (x === y) continue;
+    const numeric = /^\d/.test(x) && /^\d/.test(y);
+    if (numeric) return Number(x) - Number(y) || x.length - y.length;
+    return x < y ? -1 : 1;
+  }
+  return left.length - right.length;
+}
+
+export function orderWorksByTitle(items: readonly Work[]): Work[] {
+  return [...items].sort((a, b) => compareTitles(a.sort_title || a.title, b.sort_title || b.title));
+}
+
+function workLetter(work: Work): string {
+  return letterOf(work.sort_title || work.title);
+}
+
 export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Element {
   const client = useApiClient();
   const accessToken = useAccessToken(client);
-  const state = useCatalogBrowse(client, {kind, sort: 'title', order: 'asc', limit: PAGE_LIMIT});
-
-  const label = KIND_LABEL[kind];
+  const baseUrl = client.resolveUrl('/');
+  const {colour, scheme} = useTheme();
+  const {t} = useLanguage();
+  const [items, setItems] = useState<Work[] | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
+  const [progressRows, setProgressRows] = useState<WatchProgress[] | null>(null);
+  const loadingMore = useRef(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const detailRoute = kind === 'artist' ? ROUTES.musicDetail : ROUTES.workDetail;
+  const label = KIND_LABEL[kind];
+  const noun = kind === 'movie' ? 'titles' : kind === 'series' ? 'titles' : kind === 'artist' ? 'artists' : 'titles';
 
-  const items = useMemo(() => (state.status === 'ready' ? state.data.items : []), [state]);
+  useTvBackNavigation();
 
-  function openWork(work: Work): void {
-    navigation.navigate(detailRoute, {workId: work.id});
-  }
+  useEffect(() => {
+    let cancelled = false;
+    setItems(null);
+    setFailed(false);
+    client
+      .browseCatalog({kind, available_only: true, sort: 'title', order: 'asc', limit: PAGE_SIZE, offset: 0})
+      .then((page) => {
+        if (cancelled) return;
+        setItems(orderWorksByTitle(page.items as Work[]));
+        setTotal(page.total ?? page.items.length);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    client
+      .listWatchProgress()
+      .then((rows) => {
+        if (!cancelled) setProgressRows(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, kind]);
+
+  const progressByWork = useMemo(() => indexWatchProgressByWork(progressRows ?? []), [progressRows]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore.current || items === null || total === null || items.length >= total) return;
+    loadingMore.current = true;
+    client
+      .browseCatalog({kind, available_only: true, sort: 'title', order: 'asc', limit: PAGE_SIZE, offset: items.length})
+      .then((page) => setItems((current) => [...(current ?? []), ...orderWorksByTitle(page.items as Work[])]))
+      .catch(() => undefined)
+      .finally(() => {
+        loadingMore.current = false;
+      });
+  }, [client, items, kind, total]);
+
+  const selected = items?.[focusIndex] ?? items?.[0];
+  const row = Math.floor(focusIndex / GRID_COLUMNS);
+  useEffect(() => {
+    // Keep the focused row inside the panel: the web scrolls the grid so the row stays visible.
+    const rowTop = GRID_Y + row * ROW_PITCH;
+    const target = Math.max(0, rowTop - 300);
+    Animated.timing(scrollY, {toValue: -target, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true}).start();
+    if (items && focusIndex > items.length - GRID_COLUMNS * 4) loadMore();
+  }, [row, focusIndex, items, loadMore, scrollY]);
+
+  const dark = scheme === 'dark';
+  const activeLetter = selected ? workLetter(selected) : null;
+  const visible = items === null ? [] : items.slice(Math.max(0, (row - 2) * GRID_COLUMNS), (row + 5) * GRID_COLUMNS);
+  const firstVisible = Math.max(0, (row - 2) * GRID_COLUMNS);
 
   return (
-    <View style={layout.appScreen}>
-      <Text style={[text.title, {color: colour.ink, marginBottom: sh(20)}]}>{label}</Text>
-
-      {state.status === 'loading' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <ActivityIndicator size="large" color={colour.accent} />
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(12)}]}>Loading {label.toLowerCase()}</Text>
-        </View>
-      ) : state.status === 'error' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <Text style={[text.subtitle, {color: colour.ink}]}>The {label.toLowerCase()} library could not be loaded</Text>
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(8)}]}>{state.message}</Text>
-        </View>
-      ) : state.status === 'empty' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <Text style={[text.subtitle, {color: colour.ink}]}>No playable {label.toLowerCase()} yet</Text>
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(8), textAlign: 'center', maxWidth: sw(560)}]}>
-            Titles appear here once they finish syncing from a connected library.
-          </Text>
-        </View>
-      ) : state.status === 'ready' ? (
-        <FlatList
-          data={items}
-          key={kind}
-          keyExtractor={(work) => work.id}
-          numColumns={5}
-          showsVerticalScrollIndicator={false}
-          renderItem={({item, index}) => (
-            <PosterCard
-              work={item}
-              baseUrl={client.resolveUrl('/')}
-              accessToken={accessToken}
-              onSelect={openWork}
-              autoFocus={index === 0}
-            />
-          )}
+    <Stage artUri={stageArtUrl(baseUrl, selected)} accessToken={accessToken}>
+      <PageHeader title={label} detail={items === null ? undefined : `${(total ?? items.length).toLocaleString('en-GB')} ${noun}`} onBack={() => navigation.navigate(ROUTES.home)} />
+      <Filters />
+      {selected ? (
+        <Preview
+          kicker={selected.genres[0]}
+          title={selected.title}
+          meta={[releaseYearOf(selected), selected.genres.join(' \u00b7 ')].filter((run): run is string => Boolean(run))}
+          overview={selected.overview}
         />
       ) : null}
-    </View>
+      <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} />
+      {failed ? (
+        <Box x={783} y={200} w={600}>
+          <T size={17} weight={610} color={colour.ink}>
+            {t('pages.library.errorTitle', {plural: label.toLowerCase()})}
+          </T>
+        </Box>
+      ) : null}
+      <Box x={0} y={0} w={1920} h={1080} style={{overflow: 'hidden'}} pointerEvents="box-none">
+        <Animated.View style={{transform: [{translateY: scrollY}]}} pointerEvents="box-none">
+          {visible.map((work, offset) => {
+            const index = firstVisible + offset;
+            const col = index % GRID_COLUMNS;
+            const rowIndex = Math.floor(index / GRID_COLUMNS);
+            return (
+              <LibraryCard
+                key={work.id}
+                work={work}
+                x={GRID_X + col * COL_PITCH}
+                y={GRID_Y + rowIndex * ROW_PITCH}
+                baseUrl={baseUrl}
+                token={accessToken}
+                selected={index === focusIndex}
+                first={index === 0}
+                progress={progressByWork.get(work.id)}
+                progressReady={progressRows !== null}
+                onFocus={() => setFocusIndex(index)}
+                onPress={() => navigation.navigate(detailRoute, {workId: work.id})}
+              />
+            );
+          })}
+        </Animated.View>
+      </Box>
+      <Alphabet active={activeLetter} onJump={(letter) => jumpTo(letter)} />
+    </Stage>
+  );
+
+  function jumpTo(letter: string): void {
+    if (!items) return;
+    const index = items.findIndex((work) => workLetter(work) === letter);
+    if (index >= 0) setFocusIndex(index);
+  }
+}
+
+function releaseYearOf(work: Pick<Work, 'release_date'>): string | undefined {
+  const year = workYear(work);
+  return year === null ? undefined : String(year);
+}
+
+function Filters(): React.ReactElement {
+  const {colour} = useTheme();
+  const {t} = useLanguage();
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('pages.library.filters')}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        position: 'absolute',
+        left: u(1739),
+        top: u(56.2),
+        width: u(104.2),
+        height: u(50),
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: mix(colour.lineStrong, 0.7),
+        backgroundColor: focused ? colour.ink : mix(colour.surfaceStrong, 0.7),
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingLeft: u(20),
+      }}
+    >
+      <Icon name="filters" size={u(14)} color={focused ? colour.bg : '#cf3157'} />
+      <View style={{marginLeft: u(11)}}>
+        <T size={13.44} weight={680} color={focused ? colour.bg : colour.inkSoft} lh={20.2}>
+          {t('pages.library.filters')}
+        </T>
+      </View>
+    </Pressable>
+  );
+}
+
+function LibraryCard(props: {
+  work: Work;
+  x: number;
+  y: number;
+  baseUrl: string;
+  token: string | undefined;
+  selected: boolean;
+  first: boolean;
+  progress: WatchProgress | undefined;
+  progressReady: boolean;
+  onFocus: () => void;
+  onPress: () => void;
+}): React.ReactElement {
+  const {work, x, y, baseUrl, token, selected, first, progress, progressReady, onFocus, onPress} = props;
+  const {colour} = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={work.title}
+      hasTVPreferredFocus={first}
+      onFocus={onFocus}
+      onPress={onPress}
+      style={{position: 'absolute', left: u(x), top: u(y), width: u(CARD_W), transform: [{translateY: selected ? u(-3.6) : 0}]}}
+    >
+      <View
+        style={{
+          width: u(CARD_W),
+          height: u(CARD_H),
+          borderRadius: u(12.48),
+          overflow: 'hidden',
+          backgroundColor: colour.surfaceSoft,
+          transform: selected ? [{translateY: u(-1.6)}, {scale: 1.0403}] : [],
+        }}
+      >
+        <ArtworkImage uri={cardArtUrl(baseUrl, work)} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+        <WatchState progress={progress} showUnwatched={progressReady} />
+      </View>
+      <View style={{marginTop: u(11.5), paddingHorizontal: u(1.9)}}>
+        <T size={11.904} weight={610} ls={-0.1786} lh={17.9} color={colour.ink} lines={1}>
+          {work.title}
+        </T>
+      </View>
+    </Pressable>
+  );
+}
+
+function Alphabet({active, onJump}: {active: string | null; onJump: (letter: string) => void}): React.ReactElement {
+  const {colour} = useTheme();
+  return (
+    <>
+      {ALPHABET.map((letter, index) => {
+        const on = letter === active;
+        return (
+          <Pressable
+            key={letter}
+            accessibilityRole="button"
+            accessibilityLabel={letter}
+            onPress={() => onJump(letter)}
+            style={{
+              position: 'absolute',
+              left: u(1864.5),
+              top: u(269.8 + index * 25.62),
+              width: u(24),
+              height: u(24),
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {on ? <View style={{position: 'absolute', width: u(18.2), height: u(18.2), borderRadius: 999, backgroundColor: mix(colour.ink, 0.78)}} /> : null}
+            <T size={9.216} weight={400} color={on ? colour.bg : colour.inkMuted} lh={11}>
+              {letter}
+            </T>
+          </Pressable>
+        );
+      })}
+    </>
   );
 }

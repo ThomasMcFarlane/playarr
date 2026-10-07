@@ -29,6 +29,7 @@ export interface TvFocusScopeProps {
   trap?: ReadonlyArray<FocusDirection>;
   /** Explicit focus destinations, for the rare case Vega's default nearest-neighbour resolution picks the wrong descendant. */
   destinations?: ReadonlyArray<React.RefObject<unknown>>;
+  style?: React.ComponentProps<typeof TVFocusGuideView>['style'];
   children: React.ReactNode;
 }
 
@@ -40,9 +41,10 @@ export interface TvFocusScopeProps {
  * rather than importing `TVFocusGuideView` itself.
  */
 export function TvFocusScope(props: TvFocusScopeProps): React.ReactElement {
-  const {autoFocus, trap, destinations, children} = props;
+  const {autoFocus, trap, destinations, style, children} = props;
   return (
     <TVFocusGuideView
+      style={style}
       autoFocus={autoFocus}
       trapFocusUp={trap?.includes('up')}
       trapFocusDown={trap?.includes('down')}

@@ -37,6 +37,7 @@ export const ROUTES = {
   // Pre-authentication / profile selection
   link: 'Link',
   profiles: 'Profiles',
+  householdBlocked: 'HouseholdBlocked',
 
   // Primary content (AppShellNavigator's content stack)
   home: 'Home',
@@ -46,6 +47,11 @@ export const ROUTES = {
   sites: 'Sites',
   music: 'Music',
   playlists: 'Playlists',
+  downloads: 'Downloads',
+  watchlist: 'Watchlist',
+  requests: 'Requests',
+  calendar: 'Calendar',
+  homeCustomise: 'HomeCustomise',
 
   // Detail screens -- one route each covers several tv-web source routes:
   // WorkDetail backs /series/:id, /movies/:id, /search/:id (a search result
@@ -61,6 +67,11 @@ export const ROUTES = {
   settingsPlayer: 'SettingsPlayer',
   settingsServer: 'SettingsServer',
   settingsProfileLock: 'SettingsProfileLock',
+  settingsAvatar: 'SettingsAvatar',
+  settingsInvite: 'SettingsInvite',
+  settingsRemote: 'SettingsRemote',
+  settingsLatency: 'SettingsLatency',
+  settingsYourData: 'SettingsYourData',
 
   // Fallback
   notFound: 'NotFound',

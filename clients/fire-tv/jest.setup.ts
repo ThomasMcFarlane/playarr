@@ -49,3 +49,32 @@ jest.mock('@amazon-devices/react-native-async-storage__async-storage', () => {
     },
   };
 });
+
+// Native modules the shared components (artwork, shell, gradients) reach on import. Under Jest there is no Kepler host to
+// register them against, so each gets a plain double; a test that needs different behaviour mocks the module itself.
+jest.mock('@amazon-devices/react-native-device-info', () => ({
+  __esModule: true,
+  getModel: () => 'Fire TV Stick 4K Select',
+  getSystemVersion: () => '1.2',
+}));
+
+jest.mock('@amazon-devices/react-linear-gradient', () => ({
+  __esModule: true,
+  default: 'LinearGradient',
+}));
+
+jest.mock('@amazon-devices/react-native-svg', () => ({
+  __esModule: true,
+  default: 'Svg',
+  Circle: 'Circle',
+  Path: 'Path',
+  Rect: 'Rect',
+  G: 'G',
+  Defs: 'Defs',
+  Stop: 'Stop',
+  Line: 'Line',
+  Polyline: 'Polyline',
+  Polygon: 'Polygon',
+  LinearGradient: 'SvgLinearGradient',
+  RadialGradient: 'RadialGradient',
+}));

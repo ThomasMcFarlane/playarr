@@ -87,8 +87,11 @@ import {
 } from '@amazon-devices/react-navigation__native';
 import type {WorkKind} from '@playarr-tv/api-client';
 import {useApiClient, useAuthFailed} from '../api/ApiClientProvider';
-import {NAV_GROUPS} from '../components/navGroups';
-import {NavRail} from '../components/NavRail';
+import {APP_CONFIG} from '../config/appConfig';
+import {findCurrentProfile, listViewerProfiles, type ViewerProfile} from '../auth/profiles';
+import {ShellChrome, type RailTarget} from '../shell/ShellChrome';
+import {PlaceholderScreen} from '../screens/PlaceholderScreen';
+import {StyleSheet} from 'react-native';
 import {
   createCatalogKindsCacheScope,
   readCachedCatalogKinds,
@@ -101,13 +104,8 @@ import {MusicDetailScreen} from '../screens/MusicDetailScreen';
 import {NotFoundScreen} from '../screens/NotFoundScreen';
 import {PlaylistsScreen} from '../screens/PlaylistsScreen';
 import {SearchScreen} from '../screens/SearchScreen';
+import {SettingsScreen, type SettingsSectionId} from '../screens/SettingsScreen';
 import {WorkDetailScreen} from '../screens/WorkDetailScreen';
-import {AppearanceScreen} from '../screens/settings/AppearanceScreen';
-import {LanguageScreen} from '../screens/settings/LanguageScreen';
-import {PlayerSettingsScreen} from '../screens/settings/PlayerSettingsScreen';
-import {ProfileLockScreen} from '../screens/settings/ProfileLockScreen';
-import {ServerScreen} from '../screens/settings/ServerScreen';
-import {SettingsIndexScreen} from '../screens/settings/SettingsIndexScreen';
 import {useTvBackNavigation} from './backPolicy';
 import {ROUTES, type RouteName} from './routes';
 import {colour} from '../theme/tokens';
@@ -141,7 +139,9 @@ const ContentStack = createStackNavigator();
 function navigateAdapter(navigation: NavigationProp<ParamListBase>): {
   navigate: (route: RouteName, params?: Record<string, unknown>) => void;
 } {
-  return {navigate: (route, params) => navigation.navigate(route, params)};
+  // A string-typed call: TypeScript 4.9 cannot resolve `navigate` against a union of this many route names.
+  const navigate = navigation.navigate as unknown as (name: string, params?: object) => void;
+  return {navigate: (route, params) => navigate.call(navigation, route, params)};
 }
 
 function LibraryKindScreen({kind}: {kind: LibraryKind}): React.ReactElement {
@@ -162,6 +162,25 @@ function SitesScreen(): React.ReactElement {
 function MusicLibraryScreen(): React.ReactElement {
   return <LibraryKindScreen kind="artist" />;
 }
+
+function settingsRoute(initial: SettingsSectionId): () => React.ReactElement {
+  return function SettingsRoute(): React.ReactElement {
+    return <SettingsScreen initial={initial} />;
+  };
+}
+const SettingsRoutes = {
+  settings: settingsRoute('appearance'),
+  appearance: settingsRoute('appearance'),
+  avatar: settingsRoute('profile-avatar'),
+  language: settingsRoute('language'),
+  player: settingsRoute('player'),
+  server: settingsRoute('server'),
+  lock: settingsRoute('profile-lock'),
+  invite: settingsRoute('invite'),
+  latency: settingsRoute('request-latency'),
+  remote: settingsRoute('remote'),
+  yourData: settingsRoute('your-data'),
+};
 
 function SearchScreenScreen(): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -328,10 +347,37 @@ export function AppShellNavigator(): React.ReactElement {
   }
 
   const activeRoute = (getFocusedRouteNameFromRoute(ownRoute) as RouteName | undefined) ?? ROUTES.home;
+  const [profile, setProfile] = useState<ViewerProfile | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    listViewerProfiles(client)
+      .then((profiles) => {
+        if (!cancelled) setProfile(findCurrentProfile(profiles) ?? profiles[0]);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const railRoutes: Record<RailTarget, RouteName> = {
+    downloads: ROUTES.downloads,
+    search: ROUTES.search,
+    home: ROUTES.home,
+    series: ROUTES.series,
+    movies: ROUTES.movies,
+    sites: ROUTES.sites,
+    music: ROUTES.music,
+    playlists: ROUTES.playlists,
+    watchlist: ROUTES.watchlist,
+    requests: ROUTES.requests,
+    calendar: ROUTES.calendar,
+  };
+  const activeTarget = (Object.keys(railRoutes) as RailTarget[]).find((target) => railRoutes[target] === activeRoute) ?? null;
 
   return (
     <View style={{flex: 1, backgroundColor: colour.bg}}>
-      <ContentStack.Navigator screenOptions={{headerShown: false}}>
+      <ContentStack.Navigator screenOptions={{headerShown: false, animationEnabled: false}}>
         <ContentStack.Screen name={ROUTES.home} component={HomeScreen} />
         <ContentStack.Screen name={ROUTES.search} component={SearchScreenScreen} />
         <ContentStack.Screen name={ROUTES.series} component={SeriesScreen} />
@@ -339,17 +385,36 @@ export function AppShellNavigator(): React.ReactElement {
         <ContentStack.Screen name={ROUTES.sites} component={SitesScreen} />
         <ContentStack.Screen name={ROUTES.music} component={MusicLibraryScreen} />
         <ContentStack.Screen name={ROUTES.playlists} component={PlaylistsScreenScreen} />
+        <ContentStack.Screen name={ROUTES.downloads} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.watchlist} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.requests} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.calendar} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.homeCustomise} component={PlaceholderScreen} />
         <ContentStack.Screen name={ROUTES.workDetail} component={WorkDetailScreenScreen} />
         <ContentStack.Screen name={ROUTES.musicDetail} component={MusicDetailScreenScreen} />
-        <ContentStack.Screen name={ROUTES.settings} component={SettingsIndexScreen} />
-        <ContentStack.Screen name={ROUTES.settingsAppearance} component={AppearanceScreen} />
-        <ContentStack.Screen name={ROUTES.settingsLanguage} component={LanguageScreen} />
-        <ContentStack.Screen name={ROUTES.settingsPlayer} component={PlayerSettingsScreen} />
-        <ContentStack.Screen name={ROUTES.settingsServer} component={ServerScreen} />
-        <ContentStack.Screen name={ROUTES.settingsProfileLock} component={ProfileLockScreen} />
+        <ContentStack.Screen name={ROUTES.settings} component={SettingsRoutes.settings} />
+        <ContentStack.Screen name={ROUTES.settingsAppearance} component={SettingsRoutes.appearance} />
+        <ContentStack.Screen name={ROUTES.settingsLanguage} component={SettingsRoutes.language} />
+        <ContentStack.Screen name={ROUTES.settingsPlayer} component={SettingsRoutes.player} />
+        <ContentStack.Screen name={ROUTES.settingsServer} component={SettingsRoutes.server} />
+        <ContentStack.Screen name={ROUTES.settingsProfileLock} component={SettingsRoutes.lock} />
+        <ContentStack.Screen name={ROUTES.settingsAvatar} component={SettingsRoutes.avatar} />
+        <ContentStack.Screen name={ROUTES.settingsInvite} component={SettingsRoutes.invite} />
+        <ContentStack.Screen name={ROUTES.settingsRemote} component={SettingsRoutes.remote} />
+        <ContentStack.Screen name={ROUTES.settingsLatency} component={SettingsRoutes.latency} />
+        <ContentStack.Screen name={ROUTES.settingsYourData} component={SettingsRoutes.yourData} />
         <ContentStack.Screen name={ROUTES.notFound} component={NotFoundScreenScreen} />
       </ContentStack.Navigator>
-      <NavRail availableWorkKinds={availableWorkKinds} activeRoute={activeRoute} onNavigate={navRailNavigate} groups={NAV_GROUPS} />
+      <ShellChrome
+        active={activeTarget}
+        profileId={profile?.id}
+        profileName={profile?.displayName ?? ''}
+        version={APP_CONFIG.clientVersion}
+        availableWorkKinds={availableWorkKinds}
+        clockRight={activeRoute === ROUTES.home ? 633.6 : 710.4}
+        onSelect={(target) => navRailNavigate(railRoutes[target])}
+        onOpenProfiles={() => navigation.navigate(ROUTES.profiles)}
+      />
     </View>
   );
 }

@@ -61,9 +61,21 @@ import {TvFocusScope, useBackHandler} from '../platform';
 import {colour} from '../theme/tokens';
 import {layout, text as textStyle} from '../theme/styles';
 import {sw} from '../theme/scale';
+import LinearGradient from '@amazon-devices/react-linear-gradient';
+import Svg, {Circle as SvgCircle, Defs, RadialGradient, Stop} from '@amazon-devices/react-native-svg';
+import {TokenStore} from '@playarr-tv/device-auth';
+import {useApiBaseUrl, useAuthFailed} from '../api/ApiClientProvider';
+import {useLanguage} from '../i18n/LanguageProvider';
+import {mix} from '../theme/color';
+import {useTheme, type ThemePreference} from '../theme/ThemeProvider';
+import {Icon} from '../shell/icons';
+import {PlayarrLogo} from '../shell/Logo';
+import {Dropdown} from '../tv/Dropdown';
+import {Box, T, u} from '../tv/kit';
 import {ROUTES, type RouteName} from '../navigation/routes';
 import {APP_SHELL_ROUTE} from '../navigation/AppShellNavigator';
-import {ProfileAvatar} from '../components/ProfileAvatar';
+import {AvatarHighlight, ProfileAvatar} from '../components/ProfileAvatar';
+import {syncAvatarPreset} from '../lib/profileAvatarPref';
 import {TvEmptyState} from '../components/TvEmptyState';
 
 type LoadState = {status: 'loading'} | {status: 'ready'} | {status: 'error'; message: string};
@@ -81,71 +93,6 @@ function safeFourDigitPin(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    ...layout.appScreen,
-  },
-  kicker: {
-    ...textStyle.caption,
-    color: colour.inkMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  heading: {
-    ...textStyle.display,
-    marginTop: sw(8),
-    marginBottom: sw(40),
-  },
-  row: {
-    flexDirection: 'row',
-    gap: sw(28),
-    alignItems: 'flex-start',
-  },
-  choice: {
-    alignItems: 'center',
-    width: sw(140),
-  },
-  choiceFocused: {
-    transform: [{scale: 1.08}],
-  },
-  avatarFocusRing: {
-    borderWidth: 3,
-    borderColor: colour.focusRing,
-    borderRadius: 999,
-  },
-  name: {
-    ...textStyle.bodyEmphasis,
-    marginTop: sw(12),
-    textAlign: 'center',
-  },
-  status: {
-    ...textStyle.caption,
-    color: colour.inkMuted,
-    marginTop: sw(2),
-    textAlign: 'center',
-  },
-  addGlyph: {
-    ...textStyle.display,
-    color: colour.inkMuted,
-  },
-  addTile: {
-    width: 96,
-    height: 96,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colour.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: sw(10),
-    marginTop: sw(24),
-  },
-  loadingLabel: {
-    ...textStyle.caption,
-    color: colour.inkMuted,
-  },
   pinBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.72)',
@@ -194,58 +141,165 @@ const styles = StyleSheet.create({
   },
 });
 
+
+/** `.profile-avatar-button` + its avatar: lifts and scales when selected, with the web's pink 4px ring. */
 function ProfileChoice({
   profile,
+  selected,
   onSelect,
+  onFocus,
 }: {
   profile: AvailableProfile;
+  selected: boolean;
   onSelect: (profile: AvailableProfile) => void;
+  onFocus: () => void;
 }) {
-  const [focused, setFocused] = useState(false);
-
+  const {colour} = useTheme();
+  const {t} = useLanguage();
   return (
     <Pressable
-      style={[styles.choice, focused ? styles.choiceFocused : null]}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      hasTVPreferredFocus={profile.is_current}
+      onFocus={onFocus}
       onPress={() => onSelect(profile)}
       accessibilityRole="button"
       accessibilityLabel={profile.display_name || profile.username}
+      style={{width: u(244), alignItems: 'center', transform: selected ? [{translateY: u(-8)}, {scale: 1.045}] : []}}
     >
-      <View style={focused ? styles.avatarFocusRing : null}>
-        <ProfileAvatar profileId={profile.id} />
+      <View
+        style={{
+          width: u(244),
+          height: u(244),
+          borderRadius: 999,
+          transform: selected ? [{scale: 1.035}] : [],
+          borderWidth: selected ? u(4) : 0,
+          borderColor: mix('#cf3157', 0.42),
+        }}
+      >
+        <ProfileAvatar profileId={profile.id} size={selected ? u(236) : u(244)} style={selected ? undefined : undefined} />
       </View>
-      <Text style={styles.name} numberOfLines={1}>
-        {profile.display_name || profile.username}
-      </Text>
-      <Text style={styles.status}>
-        {profile.is_current ? 'Current' : profile.pin_locked ? 'PIN required' : 'Sign in required'}
-      </Text>
+      <View style={{marginTop: u(8.8)}}>
+        <T size={17.28} weight={680} color={selected ? colour.ink : colour.inkSoft} lh={27.1} lines={1}>
+          {profile.display_name || profile.username}
+        </T>
+      </View>
+      <View style={{marginTop: u(8.8), minHeight: u(14.7)}}>
+        <T size={9.408} weight={690} ls={0.423} color={colour.inkMuted} upper lh={14.7}>
+          {profile.is_current ? t('pages.profiles.statusCurrent') : profile.pin_locked ? 'PIN required' : ''}
+        </T>
+      </View>
     </Pressable>
   );
 }
 
-function AddProfileTile({onPress}: {onPress: () => void}) {
+function AddProfileTile({selected, onFocus, onPress}: {selected: boolean; onFocus: () => void; onPress: () => void}) {
+  const {colour} = useTheme();
+  const {t} = useLanguage();
+  return (
+    <Pressable
+      onFocus={onFocus}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t('pages.profiles.signIn')}
+      style={{width: u(244), alignItems: 'center', transform: selected ? [{translateY: u(-8)}, {scale: 1.045}] : []}}
+    >
+      <View
+        style={{
+          width: u(244),
+          height: u(244),
+          borderRadius: 999,
+          borderWidth: selected ? u(4) : 1,
+          borderStyle: selected ? 'solid' : 'dashed',
+          borderColor: selected ? mix('#cf3157', 0.42) : mix(colour.lineStrong, 0.66),
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0}}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          colors={[blendToward(colour.surfaceStrong, '#cf3157', 0.16), '#a82655']}
+        />
+        <AvatarHighlight size={u(244)} />
+        <T size={76.8} weight={300} color={colour.inkSoft} lh={115.2}>
+          +
+        </T>
+      </View>
+      <View style={{marginTop: u(8.8)}}>
+        <T size={17.28} weight={680} color={selected ? colour.ink : colour.inkSoft} lh={25.9}>
+          {t('pages.profiles.signIn')}
+        </T>
+      </View>
+      <View style={{marginTop: u(8.8)}}>
+        <T size={9.408} weight={690} ls={0.423} color={colour.inkMuted} upper lh={14.1}>
+          {t('pages.profiles.addAnotherProfile')}
+        </T>
+      </View>
+    </Pressable>
+  );
+}
+
+function blendToward(a: string, b: string, fraction: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (shift: number) => Math.round(((pa >> shift) & 255) * (1 - fraction) + ((pb >> shift) & 255) * fraction);
+  return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
+}
+
+/** `.profile-action-button`: a round button that fills with the ink colour on focus. */
+function ActionButton({
+  w,
+  x,
+  y,
+  children,
+  label,
+  onPress,
+  danger,
+}: {
+  w: number;
+  x: number;
+  y: number;
+  children: (ink: string) => React.ReactNode;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  const {colour} = useTheme();
   const [focused, setFocused] = useState(false);
   return (
     <Pressable
-      style={[styles.choice, focused ? styles.choiceFocused : null]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Sign in with another account"
+      style={{
+        position: 'absolute',
+        left: u(x),
+        top: u(y),
+        width: u(w),
+        height: u(44),
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: mix(colour.lineStrong, 0.7),
+        backgroundColor: focused ? (danger ? colour.danger : mix(colour.ink, 0.88)) : mix(colour.surfaceStrong, 0.64),
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transform: [{scale: focused ? 1.07 : 1}],
+      }}
     >
-      <View style={[styles.addTile, focused ? styles.avatarFocusRing : null]}>
-        <Text style={styles.addGlyph}>+</Text>
-      </View>
-      <Text style={styles.name}>Sign in</Text>
+      {children(focused ? (danger ? '#ffffff' : colour.bg) : colour.inkSoft)}
     </Pressable>
   );
 }
 
+const THEME_OPTIONS = ['system', 'light', 'dark'] as const;
+
 export function ProfilesScreen(): React.ReactElement {
   const client = useApiClient();
+  const [apiBaseUrl] = useApiBaseUrl();
   const navigation = useNavigation<ProfilesNavigation>();
   const [profiles, setProfiles] = useState<AvailableProfile[]>([]);
   const [loadState, setLoadState] = useState<LoadState>({status: 'loading'});
@@ -267,6 +321,8 @@ export function ProfilesScreen(): React.ReactElement {
         if (cancelled) return;
         setProfiles(available);
         setLoadState({status: 'ready'});
+        const signedIn = available.find((profile) => profile.is_current);
+        if (signedIn) void syncAvatarPreset(client, apiBaseUrl, signedIn.id).catch(() => undefined);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -344,34 +400,150 @@ export function ProfilesScreen(): React.ReactElement {
     }
   }, [client, pin, pinTarget, pinSubmitting, closePinPrompt, proceedWithProfile]);
 
+  const {colour, preference, setPreference} = useTheme();
+  const {t, preference: languagePreference} = useLanguage();
+  const {markAuthFailed} = useAuthFailed();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const current = profiles.find((profile) => profile.is_current);
+  const activeId = selectedId ?? current?.id ?? null;
+  const themeLabel = (value: string): string =>
+    value === 'light' ? t('components.themeDropdown.optionLight') : value === 'dark' ? t('components.themeDropdown.optionDark') : t('components.themeDropdown.optionSystem');
+  const count = profiles.length + 1;
+  const rowWidth = count * 244 + (count - 1) * 42.24;
+  const rowX = 960 - rowWidth / 2;
+  const background = colour.bg;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.kicker}>Playarr</Text>
-      <Text style={styles.heading}>Who's watching?</Text>
+    <View style={{flex: 1, backgroundColor: background}}>
+      <LinearGradient
+        style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0}}
+        start={{x: 0.2033, y: -0.2532}}
+        end={{x: 0.7967, y: 1.2532}}
+        colors={[colour.surface, colour.bg, colour.bg]}
+        locations={[0, 0.72, 1]}
+      />
+      <Svg width={u(1920)} height={u(1080)} style={{position: 'absolute', left: 0, top: 0}}>
+        <Defs>
+          <RadialGradient id="profiles-glow" cx={u(960)} cy={u(518.4)} r={u(378)} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor="#cf3157" stopOpacity={0.13} />
+            <Stop offset="1" stopColor="#cf3157" stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <SvgCircle cx={u(960)} cy={u(518.4)} r={u(378)} fill="url(#profiles-glow)" />
+      </Svg>
+      <LinearGradient
+        style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0}}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 0}}
+        colors={[mix(colour.bg, 0.94), mix(colour.bg, 0)]}
+        locations={[0, 0.25]}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        style={{position: 'absolute', left: 0, top: 0, right: 0, bottom: 0}}
+        start={{x: 0, y: 1}}
+        end={{x: 0, y: 0}}
+        colors={[mix(colour.bg, 0.9), mix(colour.bg, 0)]}
+        locations={[0, 0.26]}
+        pointerEvents="none"
+      />
+
+      <Box x={60.6} y={60.2} w={42} h={42}>
+        <PlayarrLogo size={u(42)} />
+      </Box>
+      <Dropdown
+        x={1551.8}
+        y={49.7}
+        w={144}
+        icon="theme"
+        label={themeLabel(preference)}
+        options={THEME_OPTIONS.map((id) => ({id, label: themeLabel(id)}))}
+        selectedId={preference}
+        onSelect={(id) => setPreference(id as ThemePreference)}
+        accessibilityLabel={t('components.themeDropdown.label')}
+      />
+      <Dropdown
+        x={1709.8}
+        y={49.7}
+        w={168}
+        icon="sites"
+        label={languagePreference === 'system' ? t('settings.language.optionSystem') : String(languagePreference)}
+        options={[{id: 'system', label: t('settings.language.optionSystem')}]}
+        selectedId="system"
+        onSelect={() => undefined}
+        accessibilityLabel="Language"
+      />
+
+      <View style={{position: 'absolute', left: 0, right: 0, top: u(162), alignItems: 'center'}} pointerEvents="none">
+        <T size={10.368} weight={820} ls={1.348} color="#cf3157" upper lh={15.6}>
+          {t('pages.profiles.title')}
+        </T>
+        <View style={{marginTop: u(7.2)}}>
+          <T size={80.64} weight={500} ls={-5.806} lh={76.6} color={colour.ink}>
+            {t('pages.profiles.heading')}
+          </T>
+        </View>
+      </View>
 
       {loadState.status === 'error' ? (
-        <TvEmptyState
-          variant="page"
-          tone="error"
-          graphic="details"
-          title="Could not load profiles"
-          description={loadState.message}
-        />
+        <Box x={560} y={420} w={800}>
+          <TvEmptyState variant="page" tone="error" graphic="details" title="Could not load profiles" description={loadState.message} />
+        </Box>
       ) : (
         <TvFocusScope autoFocus>
-          <View style={styles.row}>
-            {profiles.map((profile) => (
-              <ProfileChoice key={profile.id} profile={profile} onSelect={selectProfile} />
+          <View style={{position: 'absolute', left: u(rowX), top: u(382.4), flexDirection: 'row'}}>
+            {profiles.map((profile, index) => (
+              <View key={profile.id} style={{marginRight: u(42.24)}}>
+                <ProfileChoice profile={profile} selected={activeId === profile.id} onSelect={selectProfile} onFocus={() => setSelectedId(profile.id)} />
+              </View>
             ))}
-            <AddProfileTile onPress={() => navigation.navigate(ROUTES.link)} />
+            <AddProfileTile selected={activeId === null && selectedId === 'add'} onFocus={() => setSelectedId('add')} onPress={() => navigation.navigate(ROUTES.link)} />
           </View>
         </TvFocusScope>
       )}
 
+      {current ? (
+        <>
+          <ActionButton
+            x={rowX + (profiles.findIndex((profile) => profile.id === current.id) * (244 + 42.24)) + 122 - 77}
+            y={704}
+            w={44}
+            label="Preferences"
+            onPress={() => navigation.navigate(APP_SHELL_ROUTE, {screen: ROUTES.settings})}
+          >
+            {() => <Icon name="settings" size={u(18)} color="#cf3157" strokeWidth={1.7} />}
+          </ActionButton>
+          <ActionButton
+            x={rowX + (profiles.findIndex((profile) => profile.id === current.id) * (244 + 42.24)) + 122 - 77 + 52.8}
+            y={704}
+            w={101.2}
+            danger
+            label={t('settings.account.signOut')}
+            onPress={() => {
+              new TokenStore().clear();
+              markAuthFailed();
+              navigation.navigate(ROUTES.link);
+            }}
+          >
+            {(ink) => (
+              <>
+                <Icon name="signOut" size={u(18)} color={ink} strokeWidth={1.7} />
+                <View style={{marginLeft: u(7.2)}}>
+                  <T size={10.752} weight={720} color={ink} lh={16.1}>
+                    {t('settings.account.signOut')}
+                  </T>
+                </View>
+              </>
+            )}
+          </ActionButton>
+        </>
+      ) : null}
+
       {loadState.status === 'loading' ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator color={colour.ink} />
-          <Text style={styles.loadingLabel}>Loading profiles…</Text>
+        <View style={{position: 'absolute', left: 0, right: 0, top: u(1010), alignItems: 'center'}}>
+          <T size={9.28} color={colour.inkMuted}>
+            {t('pages.profiles.loading')}
+          </T>
         </View>
       ) : null}
 
