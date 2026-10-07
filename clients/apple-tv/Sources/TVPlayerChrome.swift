@@ -43,6 +43,10 @@ struct TVPlayerChrome: View {
     var onToggleQualityMenu: () -> Void = {}
     /// Static drawing for the parity route (no focus effects).
     var frozen = false
+    /// What the quality panel blurs. The parity route passes its own copy of the video frame so the blur
+    /// is the web's `blur(24px) saturate(120%)`; playback leaves it nil and the panel uses the system material
+    /// over the live video.
+    var menuBackdrop: AnyView?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -188,10 +192,30 @@ struct TVPlayerChrome: View {
         ("SD", "480p", [1, 2, 3]),
     ]
 
+    @ViewBuilder
+    private var panelBackdrop: some View {
+        if let menuBackdrop {
+            menuBackdrop
+                .blur(radius: 24)
+                .saturation(1.2)
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
+
     private var qualityMenu: some View {
         let white54 = Color.white.opacity(0.54)
         let columns: [(String, CGFloat)] = [("Low", 1203.3), ("Medium", 1365.9), ("High", 1528.5)]
         return ZStack(alignment: .topLeading) {
+            panelBackdrop
+                .placed(x: 0, y: 0, w: 1920, h: 1080, alignment: .topLeading)
+                .frame(width: 1920, height: 1080, alignment: .topLeading)
+                .mask(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .frame(width: 620, height: 408)
+                        .position(x: 1074.8 + 310, y: 540 + 204)
+                        .frame(width: 1920, height: 1080, alignment: .topLeading)
+                )
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(red: 18 / 255, green: 14 / 255, blue: 17 / 255).opacity(0.9))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
