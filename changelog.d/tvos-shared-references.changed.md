@@ -1,1 +1,1 @@
-- tvOS: embeds Nunito Sans and JetBrains Mono (the files shared with iOS), shows the month calendar grid and the profile display name, and the Apple parity workflow now diffs against the shared web references in both themes.
+- tvOS: embeds Nunito Sans and JetBrains Mono (the files shared with iOS), shows the agenda release calendar and the profile display name, and the Apple parity workflow now diffs against the shared web references in both themes.
