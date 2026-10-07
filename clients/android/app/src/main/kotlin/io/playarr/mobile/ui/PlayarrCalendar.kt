@@ -544,7 +544,7 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     val shape = RoundedCornerShape(12.dp)
     Surface(
         onClick = onClick,
-        modifier = Modifier.padding(horizontal = 4.dp).fillMaxWidth().height(90.dp),
+        modifier = Modifier.padding(start = 4.7.dp, end = 7.7.dp).fillMaxWidth().height(90.dp),
         shape = shape, color = WebSurfaceStrong,
         border = if (selected) BorderStroke(2.dp, WebInk) else BorderStroke(1.dp, WebPillBorder),
     ) {
@@ -552,7 +552,9 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
             CalendarPoster(entry.posterUrl, Modifier.size(width = 40.dp, height = 60.dp).clip(RoundedCornerShape(4.dp)))
             Column(Modifier.weight(1f).padding(start = 14.4.dp)) {
                 Text(item.title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(640), style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.6.dp))
                 Text(calendarItemSubtitle(item), color = WebInkSoft, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(1.3.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(time, color = WebInkMuted, fontSize = 12.8.sp, lineHeight = 19.2.sp, style = WebTextStyle)
                     Text(calendarReleaseTypeLabel(entry.releaseType), color = WebInkMuted, fontSize = 12.8.sp, lineHeight = 19.2.sp, style = WebTextStyle)

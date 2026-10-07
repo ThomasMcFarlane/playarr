@@ -238,7 +238,7 @@ private fun PhoneHouseholdBlocked(
                 ) {
                     androidx.compose.material3.Icon(PlayarrWebIcons.EmptyDetails, contentDescription = null, tint = icon)
                 }
-                Column(Modifier.widthIn(max = 141.5.dp)) {
+                Column(Modifier.widthIn(max = 156.dp)) {
                     Text(title, color = ink, fontSize = 14.4.sp, lineHeight = 21.6.sp, fontWeight = FontWeight(650), letterSpacing = (-0.288).sp, style = WebTextStyle)
                     androidx.compose.foundation.layout.Spacer(Modifier.height(7.2.dp))
                     Text(description, color = WebInkMuted, fontSize = 7.68.sp, lineHeight = 11.52.sp, style = WebTextStyle)
