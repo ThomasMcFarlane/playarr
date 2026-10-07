@@ -285,7 +285,7 @@ private fun PhoneCalendarHeader(state: CalendarUiState, locale: Locale, holder: 
                 )
                 // The web draws a "▼" glyph from a fallback font: a solid 6 x 5.4 triangle.
                 val ink = WebInk
-                androidx.compose.foundation.Canvas(Modifier.padding(start = 1.dp).size(width = 6.1.dp, height = 5.4.dp)) {
+                androidx.compose.foundation.Canvas(Modifier.padding(start = 0.5.dp).size(width = 7.6.dp, height = 6.8.dp)) {
                     val path = androidx.compose.ui.graphics.Path().apply {
                         moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close()
                     }
@@ -300,7 +300,7 @@ private fun PhoneCalendarHeader(state: CalendarUiState, locale: Locale, holder: 
             val ring = WebInk
             Surface(
                 onClick = holder::goToToday,
-                modifier = Modifier.offset(x = 46.dp, y = 0.dp).size(75.6.dp, 44.dp)
+                modifier = Modifier.offset(x = 46.dp, y = 0.dp).size(73.1.dp, 44.dp)
                     .graphicsLayer { scaleX = 1.055f; scaleY = 1.055f }
                     .drawBehind {
                         val grow = 3.5.dp.toPx()
@@ -344,6 +344,8 @@ private fun phoneCalendarRangeTitle(mode: CalendarViewMode, anchor: LocalDate, w
     val format = android.icu.text.DateIntervalFormat.getInstance("yMMMd", locale)
     format.timeZone = android.icu.util.TimeZone.getTimeZone("UTC")
     return format.format(android.icu.util.DateInterval(millis(window.start), millis(if (mode == CalendarViewMode.Agenda) window.end.minusDays(1) else window.end)), StringBuffer(), java.text.FieldPosition(0)).toString()
+        // CLDR 46 (the web's ICU) separates the range with an ordinary space; the device's older data uses a thin space.
+        .replace('\u2009', ' ').replace('\u202f', ' ')
 }
 
 /** Web phone agenda: the selected release's details first, then the day list. */
@@ -450,11 +452,11 @@ private fun PhoneCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneI
                             withStyle(androidx.compose.ui.text.SpanStyle(color = WebInkMuted)) { append("(${source.sourceKind})") }
                         }
                     },
-                    color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle,
+                    color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle, modifier = Modifier.offset(y = 1.33.dp),
                 )
             }
         }
-        Spacer(Modifier.height(14.4.dp))
+        Spacer(Modifier.height(15.1.dp))
         val holderState by actions.state.collectAsState()
         val snapshot = entry.snapshot
         val request = entry.action(io.playarr.shared.data.model.CalendarAction.REQUEST)
@@ -508,7 +510,7 @@ private fun PhoneCalendarBadge(label: String, size: androidx.compose.ui.unit.Tex
             .background(Color(0xFF5B7FD1).copy(alpha = 0.24f), CircleShape).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = WebInk, fontSize = size, lineHeight = 19.sp, fontWeight = FontWeight(640), style = WebTextStyle, maxLines = 1)
+        Text(label, color = WebInk, fontSize = size, lineHeight = 19.sp, fontWeight = FontWeight(640), style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-1.33).dp))
     }
 }
 
@@ -520,7 +522,7 @@ private fun PhoneCalendarPill(label: String, glyph: String? = null, enabled: Boo
         contentColor = if (primary) (if (webIsDark) Color(0xFF151315) else Color.White) else WebInkSoft,
         border = if (primary) null else BorderStroke(1.dp, WebPillBorder), modifier = Modifier.height(44.dp),
     ) {
-        Row(Modifier.padding(horizontal = 21.7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(horizontal = 20.6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (glyph != null) Text(glyph, color = WebInkSoft, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle)
             Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(if (glyph != null) 900 else 720), style = WebTextStyle, maxLines = 1)
         }
@@ -547,7 +549,7 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
     val fill = WebSurfaceStrong
     Surface(
         onClick = onClick,
-        modifier = Modifier.padding(start = 4.7.dp, end = 7.7.dp).fillMaxWidth().height(90.dp).then(
+        modifier = Modifier.padding(start = 4.dp, end = 8.dp).fillMaxWidth().height(90.dp).then(
             if (selected) {
                 // `.calendar-entry.is-selected`: a 4 px left border and 1 px borders in ink, plus a 1 px inset ring, so the
                 // padding box has a rounder inner left edge than the outer shape.

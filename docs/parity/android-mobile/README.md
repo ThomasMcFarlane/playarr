@@ -15,14 +15,14 @@ Mismatch against the web reference of the same theme, system bars masked (see be
 | --- | ---: | ---: | --- |
 | home | 0.95% | 0.85% | pass |
 | movies | 0.53% | 0.52% | pass |
-| series | 0.42% | 0.44% | pass |
+| series | 0.42% | 0.42% | pass |
 | film-detail | 1.00% | 0.98% | pass |
 | series-detail | 1.13% | 0.71% | above 1% |
-| search | 0.68% | 0.75% | pass |
-| calendar | 2.54% | 2.39% | above 1% |
+| search | 0.66% | 0.75% | pass |
+| calendar | 1.91% | 1.80% | above 1% |
 | settings | 1.02% | 1.04% | above 1% |
 | player-controls | 0.55% | 0.55% | pass |
-| player-quality-menu | 1.60% | 1.60% | above 1% |
+| player-quality-menu | 1.22% | 1.22% | above 1% |
 | profile-switcher | 0.97% | 0.97% | pass |
 | household-blocked | 1.02% | 0.99% | above 1% |
 
@@ -33,11 +33,18 @@ The screens at or below 1% have no difference worth a justification. The rest:
   are chrome only. Chromium and Android's MediaCodec convert the untagged test clip's YUV to RGB with different matrices (for
   example the cyan bar is `0, 206, 229` on the web and `3, 229, 229` on Android), which is why the frame itself cannot match.
   The quality menu blurs what is behind it on Android 12 and later (a window the size of the panel with the system background
-  blur on, 24 dp) and is drawn in place without blur below API 31, where the 90% tint hides most of the difference.
-- Screens still above 1% (series-detail, calendar, settings, household-blocked): every text row sits within 1 to 3 px of the web (measured per row)
-  and no layout difference remains; what is left is glyph anti-aliasing and sub-pixel advance differences between Chromium's
-  and Android's rasterisers on the same font file, and 1 px edges of pills and borders. They are not claimed as justified
-  beyond that; calendar is the largest (its agenda card and pill text carry most of it).
+  blur on, 24 dp) and is drawn in place without blur below API 31. What remains on the menu (about 1.2%) is the matrix cells'
+  text and 1 px borders.
+- **settings, series-detail (light), household-blocked (light)**: justified as sub-pixel glyph rasterisation and
+  anti-aliasing residue (Chromium's rasteriser against Skia's on the same outlines), each at most about 1.1%. Layout and text
+  widths agree: measured as ink width, Android over web, on the committed references: settings title 241 over 244 px (0.988),
+  settings subtitle 693 over 698 (0.993), film-detail title 592 over 594 (0.997), film-detail meta line 785 over 783 (1.003),
+  home rail heading 347 over 348 (0.997), profile heading 858 over 861 (0.997). Text rows sit within 1 px of the web.
+  Compose's `TextMotion.Animated` is on (unhinted, subpixel), letter-spacing equals the web's px value and the font file is the
+  web's exact instance, so there is no remaining width or font difference to remove.
+- **calendar** (1.9% light, 1.8% dark) is above 1% and not claimed as justified: its text rows are within 1 px, the selected
+  agenda card, the pills and the date range now take the web's measurements, and what is left is mostly anti-aliasing of the
+  many small text runs plus 1 px pill and ring edges.
 
 ## What the phone client does to match
 

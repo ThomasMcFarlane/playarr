@@ -62,8 +62,8 @@
         "id": "search",
         "title": "Search with results",
         "status": "pass",
-        "mismatchPercent": 0.676,
-        "mismatchedPixels": 20025,
+        "mismatchPercent": 0.664,
+        "mismatchedPixels": 19668,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -72,8 +72,8 @@
         "id": "calendar",
         "title": "Calendar",
         "status": "fail",
-        "mismatchPercent": 2.541,
-        "mismatchedPixels": 75279,
+        "mismatchPercent": 1.906,
+        "mismatchedPixels": 56466,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
@@ -102,8 +102,8 @@
         "id": "player-quality-menu",
         "title": "Player quality menu open",
         "status": "fail",
-        "mismatchPercent": 1.597,
-        "mismatchedPixels": 47318,
+        "mismatchPercent": 1.219,
+        "mismatchedPixels": 36120,
         "reference": "1170x2532",
         "candidate": "1170x2532",
         "sizeMatch": true
