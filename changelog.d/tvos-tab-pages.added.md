@@ -1,0 +1,1 @@
+- tvOS: Downloads, Watchlist and Requests pages on the web TV layout, with real watchlist and request data (PlayarrKit `listWatchlistItems`, `listMyRequests`).
