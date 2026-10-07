@@ -22,21 +22,23 @@ Diff: pixelmatch threshold 0.1 through `scripts/parity/diff.mjs`. Native capture
 | Screen | Dark before | Dark now | Light now | Status |
 | --- | ---: | ---: | ---: | --- |
 | home | 2.66% | 1.35% | 2.16% | open |
-| movies | 3.03% | 0.64% | 1.46% | dark passes |
-| series | 1.22% | 0.64% | 1.36% | dark passes |
-| film-detail | 5.36% | 3.00% | 3.62% | open |
-| series-detail | 2.19% | 7.00% | 9.44% | open (new web reference, see below) |
+| movies | 3.03% | 0.66% | 1.46% | dark passes |
+| series | 1.22% | 0.64% | 1.32% | dark passes |
+| film-detail | 5.36% | 3.01% | 3.32% | open |
+| series-detail | 2.19% | 1.89% | 3.60% | open |
 | search | 1.06% | 0.96% | 1.17% | dark passes |
 | calendar | 5.78% | 1.27% | 1.39% | open |
 | settings | 1.72% | 1.60% | 3.54% | open |
-| player-controls | 92.94% | 52.47% | 52.39% | video exception, controls open |
-| player-quality-menu | 65.52% | 55.71% | 55.67% | video exception, controls open |
+| player-controls | 92.94% | 13.68% | 13.17% | video frame masked, chrome open |
+| player-quality-menu | 65.52% | 12.91% | 12.57% | video frame masked, chrome open |
 | profile-switcher | 6.20% | 1.46% | 1.66% | open |
-| household-blocked | 1.08% | 0.38% | 0.37% | passes in both themes |
+| household-blocked | 1.08% | 0.39% | 0.38% | passes in both themes |
 
-"Dark before" is the table from the first Android TV parity change. Its references were measured without the TV
-user agent and with a stale web build, so the "before" and "now" columns are not strictly comparable; the direction is.
-Light was not measured before this change.
+"Dark before" is the table from the first Android TV parity change. Its references were measured without the TV user agent
+and with a stale web build, so "before" and "now" are not strictly comparable; the direction is. The player rows now mask the
+video area (y 100 to 900, and around the quality popover): the clip has a running timestamp and is scaled by different
+decoders, so only the chrome around the frame is compared. What remains in those rows is the video behind the bottom control bar
+and the top buttons, which cannot be masked without hiding the chrome.
 
 ## What changed
 
@@ -47,6 +49,8 @@ Light was not measured before this change.
 - Library grid and A-Z rail follow web (card 327 dp, 25.92 x 27 gaps, the selected title's letter highlighted).
 - Detail: web pills (Download, Playback, Play, Add to watchlist), web meta chips (Movie, runtime, year, Released ..., genres),
   and the Chapters and Similar Titles tracks at x 881.6 starting at y 540.
+- Series detail: web episode rail (heading block 46 dp with the Download button at x 1828, cards on a 314.8 dp track pitch, selected card lifted 7 dp), availability note between meta and synopsis, ink Start pill.
+- Quality menu: web popover (620 x 408 at x 1074.8, y 540) with the Original choice over the Low, Medium and High matrix instead of a side panel.
 - Player: icon-only 48 dp close circle and labelled Minimise pill at y 37.8, web bottom bar (6 dp seek track, 64 dp round controls),
   Playback health and Play on another device moved from the top-left pills to the bottom bar where web puts them
   (cast, when available, sits with them).
@@ -58,11 +62,9 @@ Light was not measured before this change.
 
 ## Remaining differences
 
-- series-detail: the episode rail pitch and the season track offsets differ, and the Android download buttons on episode cards
-  have no web counterpart on the TV layout.
-- film-detail and series-detail: pill glyphs come from a different system symbol font; the Android-only "Add to Playlist" pill
-  follows the web pills (web adds to playlists from the context menu).
+- series-detail: small offsets in the left column and the card art; web now also has the Add to Playlist pill and the season Download button (web PR for row 473), so those match.
+- film-detail and series-detail: pill glyphs. Web draws them as text characters (a down arrow, a trigram, a play triangle and a plus)
+  from whatever symbol font the browser falls back to; Android draws the same characters with its own fallback font.
+  There is no web SVG for them to port.
 - calendar, settings and home: small spacing and icon differences.
-- Player: the video area cannot match (running timestamp, different decoders); the quality menu is a side panel on
-  Android and a popover grid on web.
-- Android-only: the profile screen "Clients" link exists on web only as a link to a downloads page; Android shows the same chip.
+- Player: the video area cannot match (running timestamp, different decoders).

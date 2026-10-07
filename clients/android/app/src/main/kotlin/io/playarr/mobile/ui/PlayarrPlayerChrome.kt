@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -386,6 +388,15 @@ internal fun PlayarrPlayerChrome(
             )
         }
 
+        if (isTelevision && openMenu == PlayarrPlayerMenu.Quality) {
+            androidx.activity.compose.BackHandler { openMenu = null; showControls() }
+            PlayarrQualityPopover(
+                controls = controls,
+                onSelect = { onQuality(it); openMenu = null; showControls() },
+                modifier = Modifier.align(Alignment.TopStart).offset(x = 1074.8.dp, y = 540.dp),
+            )
+        }
+
         if (controls.switching || playbackState.isBuffering) {
             CircularProgressIndicator(
                 color = Color.White,
@@ -394,7 +405,7 @@ internal fun PlayarrPlayerChrome(
         }
     }
 
-    openMenu?.let { menu ->
+    openMenu?.takeUnless { isTelevision && it == PlayarrPlayerMenu.Quality }?.let { menu ->
         PlayarrPlayerOptionsDialog(
             menu = menu,
             controls = controls,
@@ -1118,6 +1129,125 @@ private fun PlayerMenuButton(
     } else {
         PlayarrIconButton(onClick = onClick, contentDescription = accessibilityLabel ?: label, enabled = enabled) {
             Icon(icon, contentDescription = null, tint = Color.White)
+        }
+    }
+}
+
+/**
+ * Web `.player-quality-menu` (620 x 408 at x 1074.8, y 540): the Original choice over a Low / Medium / High matrix
+ * of UHD, FHD, HD and SD, 156.6 x 60 cells on a 162.6 pitch, instead of a side panel.
+ */
+@Composable
+private fun PlayarrQualityPopover(
+    controls: PlayarrPlaybackControls,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val available = remember(controls.qualityOptions) { controls.qualityOptions.map { it.id }.toSet() }
+    val original = controls.qualityOptions.firstOrNull { it.id == "original" }
+    val selectedFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { selectedFocus.requestFocus() } }
+    Column(
+        modifier
+            .size(620.dp, 408.dp)
+            .background(Color(0xE6120E11), RoundedCornerShape(18.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(18.dp))
+            .padding(9.8.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(28.9.dp), contentAlignment = Alignment.CenterStart) {
+            Text(
+                playarrString(PlayarrString.PlayerQualityHeading).uppercase(LocalPlayarrLanguage.current.locale),
+                color = Color.White.copy(alpha = 0.56f),
+                fontSize = 8.64.sp,
+                fontWeight = FontWeight(760),
+                letterSpacing = 1.296.sp,
+            )
+        }
+        if (original != null) {
+            QualityChoice(
+                label = playarrQualityLabel(original.label, original.videoBitrateBps, true),
+                detail = playarrString(PlayarrString.PlayerQualitySource),
+                selected = original.id == controls.activeQualityId,
+                modifier = Modifier.fillMaxWidth().height(60.dp).focusRequester(selectedFocus),
+                onClick = { onSelect(original.id) },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.height(27.5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(118.7.dp))
+            listOf(PlayarrString.SettingsQualityLow, PlayarrString.SettingsQualityMedium, PlayarrString.SettingsQualityHigh).forEachIndexed { i, key ->
+                Text(
+                    playarrString(key).uppercase(LocalPlayarrLanguage.current.locale),
+                    color = Color.White.copy(alpha = 0.54f),
+                    fontSize = 10.24.sp,
+                    fontWeight = FontWeight(760),
+                    letterSpacing = 0.819.sp,
+                    modifier = Modifier.width(156.6.dp).padding(start = 0.dp),
+                )
+                if (i < 2) Spacer(Modifier.width(6.dp))
+            }
+        }
+        playarrQualityTiers.forEach { tier ->
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.height(60.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.width(118.7.dp).padding(start = 4.dp), verticalArrangement = Arrangement.Center) {
+                    Text(tier.label, color = Color.White, fontSize = 12.16.sp, fontWeight = FontWeight(760), lineHeight = 18.2.sp)
+                    Text(tier.resolution, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.9.sp)
+                }
+                tier.options.forEachIndexed { i, option ->
+                    if (option.id in available) {
+                        QualityChoice(
+                            label = playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps),
+                            detail = playarrString(qualityLevelString(option.level)),
+                            selected = option.id == controls.activeQualityId,
+                            modifier = Modifier.width(156.6.dp).height(60.dp),
+                            onClick = { onSelect(option.id) },
+                        )
+                    } else {
+                        Box(Modifier.width(156.6.dp).height(60.dp), contentAlignment = Alignment.Center) {
+                            Text("\u2014", color = Color.White.copy(alpha = 0.3f), fontSize = 12.sp)
+                        }
+                    }
+                    if (i < 2) Spacer(Modifier.width(6.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun qualityLevelString(level: String): PlayarrString = when (level.lowercase()) {
+    "low" -> PlayarrString.SettingsQualityLow
+    "medium" -> PlayarrString.SettingsQualityMedium
+    else -> PlayarrString.SettingsQualityHigh
+}
+
+/** Web `.quality-matrix-choice`: a 10 dp card, white .055 fill and .1 ring, .15 and .24 plus a pink check when selected. */
+@Composable
+private fun QualityChoice(
+    label: String,
+    detail: String,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = Color.White.copy(alpha = if (selected) 0.15f else 0.055f),
+        contentColor = Color.White,
+        border = androidx.compose.foundation.BorderStroke(
+            if (focused) 2.dp else 1.dp,
+            if (focused) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = if (selected) 0.24f else 0.1f),
+        ),
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+    ) {
+        Row(Modifier.padding(horizontal = 9.92.dp, vertical = 8.8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text(label, fontSize = 12.48.sp, fontWeight = FontWeight.Bold, lineHeight = 18.7.sp, maxLines = 1)
+                Text(detail, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.9.sp, maxLines = 1)
+            }
+            if (selected) Text("\u2713", color = WebKicker, fontSize = 11.84.sp)
         }
     }
 }

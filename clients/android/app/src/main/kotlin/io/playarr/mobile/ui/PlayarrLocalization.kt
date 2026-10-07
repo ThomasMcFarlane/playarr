@@ -861,6 +861,7 @@ internal enum class PlayarrString(
     PlayerChannelsStereo("Stereo", "สเตอริโอ", "ステレオ"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
+    PlayerQualitySource("Source quality", "คุณภาพต้นฉบับ", "元の画質"),
     PlayerPlaylistLabelSingular(
         "Playlist: {{count}} item",
         "เพลย์ลิสต์: {{count}} รายการ",
