@@ -1,0 +1,106 @@
+# Vega OS app manifest -- describes the package to the device/Appstore, not
+# to Metro or npm. Schema and field names verified against Amazon's own
+# "Vega App Manifest File Overview" and "Setting Runtime Modules in Your App
+# Manifest" documentation pages (developer.amazon.com/docs/vega/0.22/), not
+# guessed; see design doc §1.1 and §6.4 for the parts that came from there
+# directly.
+#
+# [package].version and package.json's "version" are kept in lockstep by
+# hand for now -- both read "0.1.0", matching the "0.1.0" already published
+# for the "tv-fire" ClientPlatform in
+# backend/config/client-compatibility.toml. Whether manifest.toml's version
+# or the CLI's own `--build-version` flag actually wins at build time is
+# open (design doc §9.1 R6); scripts/prepare-package.mjs's job is to catch
+# the day the two drift apart, not to resolve which one wins.
+schema-version = 1
+
+[package]
+id = "com.streamarr.firetv"
+title = "Playarr"
+version = "0.1.0"
+icon = "@image/PlayarrIcon.png"
+
+[components]
+# id MUST match index.js's AppRegistry.registerComponent name (app.json's
+# "name") exactly -- that string is how the Vega runtime tells the
+# KeplerScript runtime-module which registered React component to mount.
+[[components.interactive]]
+id = "com.streamarr.firetv.main"
+runtime-module = "/com.amazon.kepler.keplerscript.runtime.loader_2@IKeplerScript_2_0"
+categories = ["com.amazon.category.main"]
+launch-type = "singleton"
+
+[needs]
+# LAN reachability for the known-server-group fallback (design doc §5.5) --
+# @amazon-devices/keplerscript-netmgr-lib is the NetInfo equivalent this
+# privilege backs.
+[[needs.privilege]]
+id = "com.amazon.network.privilege.net-info"
+
+[wants]
+# --- Remote control + on-screen keyboard -------------------------------
+[[wants.service]]
+id = "com.amazon.inputd.service"      # useTVEventHandler's remote-key stream
+
+[[wants.service]]
+id = "com.amazon.inputmethod.service" # on-screen keyboard for SearchScreen
+
+[[wants.service]]
+id = "com.amazon.network.service"
+
+[[wants.privilege]]
+id = "com.amazon.devconf.privilege.accessibility"
+
+# --- Playback (design doc §6.4 -- verified list; DRM entries deliberately
+# omitted, see docs/architecture/clients/fire-tv.md's DRM section: v1 only
+# ever plays a user's own unencrypted library, so the
+# com.amazon.drm.key/com.amazon.drm.crypto/HW_SECURE_ALL robustness split
+# has nothing to protect yet) -------------------------------------------
+[[wants.service]]
+id = "com.amazon.media.server"
+
+[[wants.service]]
+id = "com.amazon.mediametrics.service"
+
+[[wants.service]]
+id = "com.amazon.media.playersession.service"
+
+[[wants.service]]
+id = "com.amazon.mediabuffer.service"
+
+[[wants.service]]
+id = "com.amazon.mediatransform.service"
+
+[[wants.service]]
+id = "com.amazon.audio.stream"
+
+[[wants.service]]
+id = "com.amazon.audio.control"
+
+[[wants.service]]
+id = "com.amazon.audio.system"
+
+[[wants.service]]
+id = "com.amazon.gipc.uuid.*"
+
+[offers]
+[[offers.service]]
+id = "com.amazon.gipc.uuid.*"
+
+[[offers.interaction]]
+id = "com.streamarr.firetv.main"
+
+# Required, not a v2 deep-linking feature -- confirmed against Amazon's own
+# published vega-video-sample/manifest.toml, which marks the equivalent
+# block "[required]" and ships it even though that sample has no custom
+# incoming-URI handling either. This declares who may invoke this app's own
+# main component ("*" -- anyone, matching every real Amazon sample seen --
+# so the Launcher/Appstore/Alexa can start Playarr) and confirms only
+# Playarr itself ever receives that message. A real deep-link SCHEME (e.g.
+# resuming a specific title from a "playarr://work/{id}" URI) is still
+# deferred to v2 per design doc §1.1 -- that is a distinct, additional
+# [[message]] entry this one does not imply.
+[[message]]
+uri = "pkg://com.streamarr.firetv.main"
+sender-privileges = ["*"]
+receiver-privileges = ["self"]

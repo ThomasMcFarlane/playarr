@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fire TV: the Metro bundle step now resolves the shared `@playarr-tv/*` packages from their TypeScript source instead of failing on the unbuilt `dist/` of `@playarr-tv/design-tokens`, and bundles the shared i18n tables.
 - Recently added now follows when the *arr app added a title (Radarr, Sonarr, Whisparr, Lidarr and Readarr `added`) instead of the first sync time, so a fresh install or a newly connected library no longer gives every title the same date; an already-synced title is corrected once if it was stamped later than the source's date, and never moved later. Unusable dates fall back to the sync time.
 - Fixtures: the stub serves an explicit `added` per title and the helper that pinned `added_at` through the sqlite3 CLI is removed.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
@@ -84,6 +85,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Fire TV: a native React Native client for Amazon Vega OS at `clients/fire-tv/`, reusing the `clients/tv-web/packages` logic as TypeScript source (hosted device linking, profiles, home, library, detail, search, playlists, settings and HLS playback). Not yet wired into CI or the client catalogue.
 - Parity: the shared screen list and web references now include the settings section panels (avatar, language, player, server, PIN lock, invite, phone remote, request latency, your data) for both layouts and themes; diff.mjs gained --mask-rect and per-instance mask regions.
 - iOS: embeds the web's design fonts (Nunito Sans and JetBrains Mono, SIL Open Font License 1.1, variable builds) and draws the web-style screens with them at the exact CSS weights.
 - tvOS: Downloads, Watchlist and Requests pages on the web TV layout, with real watchlist and request data (PlayarrKit `listWatchlistItems`, `listMyRequests`).
