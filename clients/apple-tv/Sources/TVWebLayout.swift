@@ -275,7 +275,7 @@ struct TVKeyArt: View {
                 )
                 .offset(x: -20, y: -22.9)
             }
-            keyArtAfter
+            keyArtAfter.frame(width: 1920, height: 1080)
         }
         // The picture is taller than the stage: pin the layout to the stage so nothing shifts.
         .frame(width: 1920, height: 1080, alignment: .topLeading)
