@@ -447,11 +447,12 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
                             pairing.scopes.joinToString(", ") + "  ·  " + if (pairing.status == "pending") {
                             playarrString(PlayarrString.RemotePairingPending)
                         } else {
-                            val fmt = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+                            val locale = LocalPlayarrLanguage.current.locale
+                            val zone = java.time.ZoneId.systemDefault()
                             playarrString(
                                 PlayarrString.RemotePairedOn,
-                                "date" to fmt.format(java.util.Date(pairing.createdMs)),
-                                "expires" to fmt.format(java.util.Date(pairing.expiresMs)),
+                                "date" to playarrLocaleDate(pairing.createdMs, zone, locale),
+                                "expires" to playarrLocaleDate(pairing.expiresMs, zone, locale),
                             )
                         },
                         color = WebInkMuted,

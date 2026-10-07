@@ -172,8 +172,9 @@ class PlayarrCalendarLogicTest {
         val timed = entry("1", "2026-10-05", releaseAt = "2026-10-05T23:30:00Z")
         val london = timed.localReleaseTime(ZoneId.of("Europe/London"), Locale.UK)
         val tokyo = timed.localReleaseTime(ZoneId.of("Asia/Tokyo"), Locale.UK)
-        assertTrue(london, london!!.contains("6 Oct 2026") && london.contains("00:30"))
-        assertTrue(tokyo, tokyo!!.contains("6 Oct 2026") && tokyo.contains("08:30"))
+        // Web `{ timeStyle: "short" }`: the time of day only (the rows are already grouped by day).
+        assertEquals("00:30", london)
+        assertEquals("08:30", tokyo)
         assertNull(entry("2", "2026-10-05").localReleaseTime(ZoneId.of("UTC"), Locale.UK))
     }
 

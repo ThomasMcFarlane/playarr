@@ -49,6 +49,10 @@ internal class PlayarrDateFormat(private val skeleton: String, private val local
         "MMMMEEEEd" -> java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM")
         "MMMMEEEd" -> java.time.format.DateTimeFormatter.ofPattern("EEE d MMMM")
         "EEEd" -> java.time.format.DateTimeFormatter.ofPattern("EEE d")
+        "yMd" -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.SHORT)
+        "yMdjms" -> java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT, java.time.format.FormatStyle.MEDIUM)
+        "jms" -> java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.MEDIUM)
+        "jm" -> java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
         else -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
     }.withLocale(locale)
 }
@@ -59,3 +63,24 @@ internal fun playarrRangeLabel(start: LocalDate, end: LocalDate, locale: Locale)
 
 /** `{ day: numeric, month: short, year: numeric }`: detail pages, resume options, downloads. */
 internal fun playarrShortDate(locale: Locale) = PlayarrDateFormat("yMMMd", locale)
+
+/**
+ * Web `Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" })`: "Saturday, 10 October 2026 at 01:00" in en-GB.
+ * The web's CLDR 46 writes the comma after the weekday for en-GB; the device's older data drops it, so it is restored here.
+ */
+internal fun playarrFullDateTime(instant: Instant, zone: ZoneId, locale: Locale): String {
+    val text = runCatching {
+        DateFormat.getDateTimeInstance(DateFormat.FULL, DateFormat.SHORT, locale).also { it.timeZone = TimeZone.getTimeZone(zone.id) }
+            .format(Date.from(instant))
+    }.getOrElse {
+        java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.FULL, java.time.format.FormatStyle.SHORT)
+            .withLocale(locale).format(ZonedDateTime.ofInstant(instant, zone))
+    }
+    return if (locale.language == "en" && locale.country == "GB") text.replaceFirst(Regex("^(\\p{L}+) (\\d)"), "$1, $2") else text
+}
+
+/** Web `toLocaleString()`, `toLocaleDateString()`, `toLocaleTimeString()` and `{ timeStyle: "short" }`, in the app language. */
+internal fun playarrLocaleDateTime(instant: Instant, zone: ZoneId, locale: Locale) = PlayarrDateFormat("yMdjms", locale, zone).format(instant)
+internal fun playarrLocaleDate(epochMillis: Long, zone: ZoneId, locale: Locale) = PlayarrDateFormat("yMd", locale, zone).format(epochMillis)
+internal fun playarrLocaleTime(instant: Instant, zone: ZoneId, locale: Locale) = PlayarrDateFormat("jms", locale, zone).format(instant)
+internal fun playarrShortTime(instant: Instant, zone: ZoneId, locale: Locale) = PlayarrDateFormat("jm", locale, zone).format(instant)

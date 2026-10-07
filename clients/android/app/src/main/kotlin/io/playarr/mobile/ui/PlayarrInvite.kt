@@ -87,10 +87,7 @@ internal fun PlayarrInviteDialog(
     var copied by remember(invite.link) { mutableStateOf(false) }
     val expiry = remember(invite.expiresAt, language.locale) {
         runCatching {
-            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
-                .withLocale(language.locale)
-                .withZone(ZoneId.systemDefault())
-                .format(Instant.parse(invite.expiresAt))
+            playarrLocaleDateTime(Instant.parse(invite.expiresAt), ZoneId.systemDefault(), language.locale)
         }.getOrNull()
     }
     PlayarrPanel(

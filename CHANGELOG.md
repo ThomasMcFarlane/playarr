@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android: the remaining dates (invite expiry, household blocks, remote pairing, data transfer expiry, calendar times, calendar detail) use the shared locale-aware formatter, matching the web's Intl output.
 - tvOS parity captures freeze the app and the local web capture at the fixture clock read from scripts/fixtures/catalog.mjs (FIXTURE_CLOCK) instead of a second hard-coded copy.
 - Fixtures: the upcoming episode's air date is computed from one absolute fixture instant (FIXTURE_CLOCK, shared with the parity capture) instead of the real clock at seed time, so the calendar references no longer drift from day to day.
 - Android TV: cards have the web drop shadows and lift when selected on Home, and the hero title uses the web font and the web's 9ch width.

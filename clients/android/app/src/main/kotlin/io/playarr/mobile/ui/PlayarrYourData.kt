@@ -626,8 +626,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
 /** Local wall-clock time of an ISO-8601 instant, for "stops working at ..."; blank when unparseable. */
 internal fun expiryClock(iso: String?, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
     runCatching {
-        java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
-            .format(java.time.Instant.parse(iso).atZone(zone))
+        playarrLocaleTime(java.time.Instant.parse(iso), zone, java.util.Locale.getDefault())
     }.getOrDefault("")
 
 internal fun formatTransferSize(bytes: Long?): String = when {

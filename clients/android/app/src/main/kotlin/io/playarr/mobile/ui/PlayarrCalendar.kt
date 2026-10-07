@@ -412,12 +412,8 @@ private fun PhoneCalendarDetails(item: CalendarItem, locale: Locale, zone: ZoneI
     val kindLabel = if (kind == CalendarMediaKind.Episode) playarrString(PlayarrString.CalendarDetailKindEpisode) else kind?.let { calendarKindLabel(it) } ?: entry.mediaKind
     val allDay = playarrString(PlayarrString.CalendarAllDay)
     val whenText = remember(entry.releaseAt, locale, zone, allDay) {
-        entry.releaseAt?.let {
-            java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.FULL, java.time.format.FormatStyle.SHORT)
-                .withLocale(locale).format(java.time.ZonedDateTime.ofInstant(it, zone))
-                // CLDR 46 (the web's ICU) writes "Friday, 9 October 2026 at 01:00" for en-GB; the device's older data drops the comma.
-                .let { text -> if (locale.language == "en" && locale.country == "GB") text.replaceFirst(Regex("^(\\p{L}+) (\\d)"), "$1, $2") else text }
-        } ?: "${formatCalendarDay(entry.date, locale)} · $allDay"
+        entry.releaseAt?.let { playarrFullDateTime(it, zone, locale) }
+        ?: "${formatCalendarDay(entry.date, locale)} · $allDay"
     }
     val state = when (item) {
         is CalendarItem.Series -> item.entries.let { all ->

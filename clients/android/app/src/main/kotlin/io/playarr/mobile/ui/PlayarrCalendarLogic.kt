@@ -136,11 +136,7 @@ internal fun failedCalendarSources(sources: List<CalendarSourceStatus>): List<Ca
 
 /** Release instant in the device zone and locale, or null for all-day entries. */
 internal fun CalendarEntry.localReleaseTime(zone: ZoneId, locale: Locale): String? =
-    releaseAt?.let {
-        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-            .withLocale(locale)
-            .format(ZonedDateTime.ofInstant(it, zone))
-    }
+    releaseAt?.let { playarrShortTime(it, zone, locale) }
 
 internal fun formatCalendarDay(day: LocalDate, locale: Locale): String =
     PlayarrDateFormat("yMMMMEEEEd", locale).format(day)
