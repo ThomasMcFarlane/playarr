@@ -1,5 +1,5 @@
 import { usePanelParam } from "../lib/usePanelParam";
-import { Drawer, FiltersDrawer, PageHeader } from "../components/shell";
+import { Drawer, FiltersDrawer, PageLayout } from "../components/shell";
 import {
   useCallback,
   useEffect,
@@ -47,7 +47,6 @@ import {
 import {
   TvMediaTrack,
   TvRailSurface,
-  TvStageShell,
 } from "../components/tv/TvStage";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
 import { MoviesIcon, MusicIcon } from "../components/NavIcons";
@@ -1064,7 +1063,8 @@ export function PlaylistsPage() {
     : null;
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="playlists"
       className={`tv-home tv-playlists${
         isDetail ? " is-playlist-detail" : " is-playlist-directory"
       }`}
@@ -1073,39 +1073,66 @@ export function PlaylistsPage() {
           ? selectedPlaylist?.playlist.name ?? t("pages.playlists.playlistFallback")
           : t("pages.playlists.title")
       }
-      artworkKey={selectedWork?.id}
-      artwork={
-        selectedWork ? (
+      backdrop={{
+        artKey: selectedWork?.id,
+        art: selectedWork ? (
           <CachedArtworkImage
             work={selectedWork}
             kinds={["backdrop", "poster"]}
             alt=""
             fallback={<span>{selectedWork.title}</span>}
           />
-        ) : undefined
-      }
-    >
-      <PageHeader
-        className="tv-playlists-heading"
-        filters={
-          !isDetail
-            ? {
-                label: t("pages.playlists.filters"),
-                open: drawer === "filters",
-                onToggle: () => openDrawer("filters"),
-                controls: "playlist-filter-drawer",
-                buttonRef: filterButtonRef,
-                buttonProps: { "data-navigation-focus-key": "playlists:filters" },
-              }
-            : undefined
-        }
-        panelButtons={
-          !isDetail || fixedParentPlaylist
+        ) : undefined,
+      }}
+      header={{
+        title: selectedPlaylist?.playlist.name ?? t("pages.playlists.title"),
+        back: isDetail
+          ? { label: t("pages.playlists.backToPlaylists"), onBack: leavePlaylistDetail }
+          : { label: t("pages.playlists.backToHome"), to: "/" },
+        backProps: isDetail
+          ? {
+              "data-tv-focus-default": !selectedPlaylist ? true : undefined,
+              "data-tv-edge-target-right": activeContentSelector,
+            }
+          : undefined,
+        detail: isDetail
+          ? `${
+              selectedPlaylist
+                ? t(playlistMediaTypeKey(selectedPlaylist.playlist.media_type))
+                : ""
+            } · ${t(
+              detailTracks.length === 1
+                ? "pages.playlists.trackCountOne"
+                : "pages.playlists.trackCountOther",
+              { count: detailTracks.length }
+            )}`
+          : t(
+              rootTracks.length === 1
+                ? "pages.playlists.playlistCountOne"
+                : "pages.playlists.playlistCountOther",
+              { count: rootTracks.length.toLocaleString() }
+            ),
+        actions: [
+          ...(!isDetail
             ? [
                 {
+                  kind: "filters" as const,
+                  label: t("pages.playlists.filters"),
+                  open: drawer === "filters",
+                  onToggle: () => openDrawer("filters"),
+                  controls: "playlist-filter-drawer",
+                  buttonRef: filterButtonRef,
+                  buttonProps: { "data-navigation-focus-key": "playlists:filters" },
+                },
+              ]
+            : []),
+          ...(!isDetail || fixedParentPlaylist
+            ? [
+                {
+                  kind: "panel" as const,
                   id: "create",
                   label: t("pages.playlists.create"),
-                  icon: "add",
+                  icon: "add" as const,
                   open: drawer === "create",
                   onToggle: () => openDrawer("create"),
                   controls: "playlist-create-drawer",
@@ -1121,40 +1148,10 @@ export function PlaylistsPage() {
                   },
                 },
               ]
-            : undefined
-        }
-        title={selectedPlaylist?.playlist.name ?? t("pages.playlists.title")}
-        backLabel={isDetail ? t("pages.playlists.backToPlaylists") : t("pages.playlists.backToHome")}
-        onBack={isDetail ? leavePlaylistDetail : undefined}
-        backProps={
-          isDetail
-            ? {
-                "data-tv-focus-default": !selectedPlaylist ? true : undefined,
-                "data-tv-edge-target-right": activeContentSelector,
-              }
-            : undefined
-        }
-        detail={
-          isDetail
-            ? `${
-                selectedPlaylist
-                  ? t(playlistMediaTypeKey(selectedPlaylist.playlist.media_type))
-                  : ""
-              } · ${t(
-                detailTracks.length === 1
-                  ? "pages.playlists.trackCountOne"
-                  : "pages.playlists.trackCountOther",
-                { count: detailTracks.length }
-              )}`
-            : t(
-                rootTracks.length === 1
-                  ? "pages.playlists.playlistCountOne"
-                  : "pages.playlists.playlistCountOther",
-                { count: rootTracks.length.toLocaleString() }
-              )
-        }
-      />
-
+            : []),
+        ],
+      }}
+    >
       <aside
         className="tv-home-feature tv-playlist-feature"
         key={`playlist-feature-${selectedDetailItem?.id ?? featureTrack?.playlist.id}`}
@@ -1491,7 +1488,7 @@ export function PlaylistsPage() {
           </section>
       </FiltersDrawer>
       {playlistContext.contextMenu}
-    </TvStageShell>
+    </PageLayout>
   );
 }
 

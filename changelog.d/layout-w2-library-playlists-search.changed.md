@@ -1,0 +1,1 @@
+- Web: Library, Playlists and Search now render through the shared page layout (one header, one scroll area with the edge fade); no visible change other than the shared fade on the Search results.

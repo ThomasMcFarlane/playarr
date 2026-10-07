@@ -14,7 +14,13 @@ export interface ScrollAreaProps {
   /** The scrolling element, for pages that need to read or set its scroll position. */
   scrollRef?: Ref<HTMLDivElement>;
   onScroll?: UIEventHandler<HTMLDivElement>;
-  viewportProps?: DataAttributes & { "aria-label"?: string; role?: string; tabIndex?: number };
+  viewportProps?: DataAttributes & {
+    "aria-label"?: string;
+    "aria-live"?: "off" | "polite" | "assertive";
+    "aria-busy"?: boolean;
+    role?: string;
+    tabIndex?: number;
+  };
   children: ReactNode;
 }
 

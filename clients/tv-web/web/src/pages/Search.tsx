@@ -25,8 +25,8 @@ import {
   WatchStateOverlay,
 } from "../components/WatchStateOverlay";
 import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { PageHeader } from "../components/shell";
-import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { PageLayout, ScrollArea } from "../components/shell";
+import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
 import { CachedArtworkImage } from "../lib/artwork";
@@ -35,7 +35,6 @@ import { useLanguage } from "../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../lib/i18n/translations";
 import { useNavigationLayer } from "../lib/navigationLayer";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { useScrollEdges } from "../lib/useScrollEdges";
 
 const SEARCH_LIMIT = 60;
 const SEARCH_DEBOUNCE_MS = 320;
@@ -311,7 +310,6 @@ export function SearchPage() {
   );
   const [selectedId, setSelectedId] = useState<string | null>(requestedFocusId);
   const [watchProgress, setWatchProgress] = useState<WatchProgress[] | null>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const backButtonRef = useRef<HTMLAnchorElement>(null);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
@@ -319,13 +317,6 @@ export function SearchPage() {
   const requestGenerationRef = useRef(0);
   const focusResultsAfterSearchRef = useRef(false);
   const enterReleasedRef = useRef(true);
-  const scrollEdges = useScrollEdges(
-    resultsRef,
-    "vertical",
-    `${requestedQuery}:${requestedMediaType}:${requestedLibraryId ?? "all"}:${
-      state.status === "ready" ? state.results.length : 0
-    }`
-  );
   const visibleSearchTypes = useMemo(
     () =>
       SEARCH_TYPES.filter(
@@ -739,43 +730,40 @@ export function SearchPage() {
     selected?.type === "playlist" ? selected.playlist : null;
 
   return (
-    <TvStageShell
+    <PageLayout
+      pageId="search"
       className="tv-search"
       ariaLabel={t("pages.search.ariaSearchPlayarr")}
-      artworkKey={selectedWork?.id}
-      artwork={
-        selectedWork ? (
+      backdrop={{
+        artKey: selectedWork?.id,
+        art: selectedWork ? (
           <CachedArtworkImage
             work={selectedWork}
             kinds={["backdrop", "poster"]}
             alt=""
             fallback={<span>{selectedWork.title}</span>}
           />
-        ) : undefined
-      }
+        ) : undefined,
+      }}
+      header={{
+        title: t("pages.search.title"),
+        back: { label: t("pages.search.backToHome"), to: "/" },
+        backRef: backButtonRef,
+        backProps: { onKeyDown: handleBackKeyDown },
+        detail: requestedQuery
+          ? state.status === "ready"
+            ? t(
+                results.length === 1
+                  ? "pages.search.resultCountOne"
+                  : "pages.search.resultCountOther",
+                { count: results.length.toLocaleString() }
+              )
+            : state.status === "loading"
+              ? t("pages.search.searching")
+              : t("pages.search.zeroResults")
+          : null,
+      }}
     >
-      <PageHeader
-        className="tv-search-heading"
-        title={t("pages.search.title")}
-        backLabel={t("pages.search.backToHome")}
-        backRef={backButtonRef}
-        backProps={{ onKeyDown: handleBackKeyDown }}
-        detail={
-          requestedQuery ? (
-            state.status === "ready"
-              ? t(
-                  results.length === 1
-                    ? "pages.search.resultCountOne"
-                    : "pages.search.resultCountOther",
-                  { count: results.length.toLocaleString() }
-                )
-              : state.status === "loading"
-                ? t("pages.search.searching")
-                : t("pages.search.zeroResults")
-          ) : null
-        }
-      />
-
       <div className="tv-search-copy">
         <div className="tv-search-form" role="search">
           <span className="tv-search-input-icon" aria-hidden="true">
@@ -943,95 +931,89 @@ export function SearchPage() {
         ariaLabel={t("pages.search.resultsAriaLabel")}
         className="tv-search-rail-surface"
       >
-        <div
-          className={`tv-scroll-edge-window tv-search-results-window${
-            scrollEdges.start ? " can-scroll-up" : ""
-          }${scrollEdges.end ? " can-scroll-down" : ""}`}
+        <ScrollArea
+          axis="vertical"
+          scrollKey="search:results"
+          className="tv-search-results tv-search-rail-scroll"
+          refreshKey={`${requestedQuery}:${requestedMediaType}:${requestedLibraryId ?? "all"}:${
+            state.status === "ready" ? state.results.length : 0
+          }`}
+          viewportProps={{ "aria-live": "polite", "aria-busy": state.status === "loading" }}
         >
-          <div
-            ref={resultsRef}
-            className="tv-search-results tv-search-rail-scroll"
-            data-tv-scroll-container
-            data-tv-scroll-axis="vertical"
-            data-navigation-scroll-key="search:results"
-            aria-live="polite"
-            aria-busy={state.status === "loading"}
-          >
-            {state.status === "loading" ? (
-              <div className="tv-search-state" role="status">
-                <span className="tv-mini-loader" aria-hidden="true" />
-                <p>{t("pages.search.loadingEllipsis")}</p>
-              </div>
-            ) : state.status === "error" ? (
-              <TvEmptyState
-                announce={false}
-                graphic="search"
-                tone="error"
-                variant="rail"
-                title={t("pages.search.errorTitle")}
-                description={state.message}
-              />
-            ) : state.status === "idle" ? (
-              <TvEmptyState
-                announce={false}
-                graphic="search"
-                title={t("pages.search.idleTitle")}
-                variant="rail"
-              />
-            ) : results.length === 0 && requestedMediaType === "game" ? null : results.length === 0 ? (
-              <TvEmptyState
-                announce={false}
-                graphic="search"
-                title={t("pages.search.noResultsTitle")}
-                description={t("pages.search.noResultsDescription")}
-                variant="rail"
-              />
-            ) : (
-              <div
-                className="tv-search-results-grid tv-search-rail-grid"
-                onFocus={handleResultsFocus}
-                data-tv-grid
-                data-tv-grid-edge-left=".tv-search input"
-              >
-                {results.map((result, index) => (
-                  <SearchResultCard
-                    key={resultKey(result)}
-                    result={result}
-                    isFirst={index === 0}
-                    isSelected={selectedId === resultKey(result)}
-                    requestedQuery={requestedQuery}
-                    requestedMediaType={requestedMediaType}
-                    requestedLibraryId={requestedLibraryId}
-                    requestedFocusId={requestedFocusId}
-                    playlists={playlists}
-                    progress={
-                      result.type === "work" ? progressByWork.get(result.work.id) : undefined
-                    }
-                    showUnwatched={watchProgress !== null}
-                    navigationOrigin={navigationLayer.origin}
-                    onCapture={navigationLayer.captureLink}
-                    itemProps={mediaContext.itemProps}
-                    registerRef={registerResultRef}
-                  />
-                ))}
-              </div>
-            )}
-            {state.status === "ready" &&
-            (requestedMediaType === "game" ||
-              (!requestedLibraryId &&
-                (requestedMediaType === "all" ||
-                  requestedMediaType === "movie" ||
-                  requestedMediaType === "series"))) ? (
-              <DiscoveryExtras
-                query={requestedQuery}
-                gamesOnly={requestedMediaType === "game"}
-              />
-            ) : null}
-          </div>
-        </div>
+          {state.status === "loading" ? (
+            <div className="tv-search-state" role="status">
+              <span className="tv-mini-loader" aria-hidden="true" />
+              <p>{t("pages.search.loadingEllipsis")}</p>
+            </div>
+          ) : state.status === "error" ? (
+            <TvEmptyState
+              announce={false}
+              graphic="search"
+              tone="error"
+              variant="rail"
+              title={t("pages.search.errorTitle")}
+              description={state.message}
+            />
+          ) : state.status === "idle" ? (
+            <TvEmptyState
+              announce={false}
+              graphic="search"
+              title={t("pages.search.idleTitle")}
+              variant="rail"
+            />
+          ) : results.length === 0 && requestedMediaType === "game" ? null : results.length === 0 ? (
+            <TvEmptyState
+              announce={false}
+              graphic="search"
+              title={t("pages.search.noResultsTitle")}
+              description={t("pages.search.noResultsDescription")}
+              variant="rail"
+            />
+          ) : (
+            <div
+              className="tv-search-results-grid tv-search-rail-grid"
+              onFocus={handleResultsFocus}
+              data-tv-grid
+              data-tv-grid-edge-left=".tv-search input"
+            >
+              {results.map((result, index) => (
+                <SearchResultCard
+                  key={resultKey(result)}
+                  result={result}
+                  isFirst={index === 0}
+                  isSelected={selectedId === resultKey(result)}
+                  requestedQuery={requestedQuery}
+                  requestedMediaType={requestedMediaType}
+                  requestedLibraryId={requestedLibraryId}
+                  requestedFocusId={requestedFocusId}
+                  playlists={playlists}
+                  progress={
+                    result.type === "work" ? progressByWork.get(result.work.id) : undefined
+                  }
+                  showUnwatched={watchProgress !== null}
+                  navigationOrigin={navigationLayer.origin}
+                  onCapture={navigationLayer.captureLink}
+                  itemProps={mediaContext.itemProps}
+                  registerRef={registerResultRef}
+                />
+              ))}
+            </div>
+          )}
+          {state.status === "ready" &&
+          (requestedMediaType === "game" ||
+            (!requestedLibraryId &&
+              (requestedMediaType === "all" ||
+                requestedMediaType === "movie" ||
+                requestedMediaType === "series"))) ? (
+            <DiscoveryExtras
+              query={requestedQuery}
+              gamesOnly={requestedMediaType === "game"}
+            />
+          ) : null}
+        </ScrollArea>
       </TvRailSurface>
 
       {mediaContext.contextMenu}
-    </TvStageShell>
+    </PageLayout>
   );
 }
