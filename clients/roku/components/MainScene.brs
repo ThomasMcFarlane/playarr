@@ -218,29 +218,17 @@ sub init()
     m.playlistsGrid.ObserveField("itemSelected", "onPlaylistDirectoryItemSelected")
     m.playlistItemsGrid.ObserveField("itemSelected", "onPlaylistItemSelected")
 
-    ' 5 rails total, matching the real Home page exactly (confirmed live:
-    ' Continue/Start watching, New movies, New series, More movies, More
-    ' series -- there is no "New Sites" rail there at all).
-    continueRail = createHomeRail(m.homeContent)
-    moviesRail = createHomeRail(m.homeContent)
-    seriesRail = createHomeRail(m.homeContent)
-    moreMoviesRail = createHomeRail(m.homeContent)
-    moreSeriesRail = createHomeRail(m.homeContent)
-    m.continueRailGroup = continueRail.group : m.continueTitle = continueRail.title : m.continueRow = continueRail.row
-    m.moviesRailGroup = moviesRail.group : m.moviesTitle = moviesRail.title : m.moviesRow = moviesRail.row
-    m.seriesRailGroup = seriesRail.group : m.seriesTitle = seriesRail.title : m.seriesRow = seriesRail.row
-    m.moreMoviesRailGroup = moreMoviesRail.group : m.moreMoviesTitle = moreMoviesRail.title : m.moreMoviesRow = moreMoviesRail.row
-    m.moreSeriesRailGroup = moreSeriesRail.group : m.moreSeriesTitle = moreSeriesRail.title : m.moreSeriesRow = moreSeriesRail.row
-    m.continueRow.ObserveField("rowItemFocused", "onHomeItemFocused")
-    m.continueRow.ObserveField("rowItemSelected", "onHomeItemSelected")
-    m.moviesRow.ObserveField("rowItemFocused", "onHomeItemFocused")
-    m.moviesRow.ObserveField("rowItemSelected", "onHomeItemSelected")
-    m.seriesRow.ObserveField("rowItemFocused", "onHomeItemFocused")
-    m.seriesRow.ObserveField("rowItemSelected", "onHomeItemSelected")
-    m.moreMoviesRow.ObserveField("rowItemFocused", "onHomeItemFocused")
-    m.moreMoviesRow.ObserveField("rowItemSelected", "onHomeItemSelected")
-    m.moreSeriesRow.ObserveField("rowItemFocused", "onHomeItemFocused")
-    m.moreSeriesRow.ObserveField("rowItemSelected", "onHomeItemSelected")
+    ' Home draws the server's own rail list (GET /api/v1/home/rails) after the On deck / Start watching rail, so the rail
+    ' RowLists come from a pool; finishHomeLoad shows as many as it has rails for.
+    m.homeRailPool = []
+    for poolIndex = 1 to 12
+        rail = createHomeRail(m.homeContent)
+        rail.works = []
+        rail.row.ObserveField("rowItemFocused", "onHomeItemFocused")
+        rail.row.ObserveField("rowItemSelected", "onHomeItemSelected")
+        m.homeRailPool.Push(rail)
+    end for
+    m.homeServerRails = []
     m.homeShown = false
     m.homeMovies = []
     m.homeSeries = []
@@ -2592,6 +2580,8 @@ sub buildGridContent(grid as Object, works as Object, cardScale = 1.5 as Float)
         item.AddField("year", "string", false)
         if work.release_date <> invalid and work.release_date.Len() >= 4 then item.year = work.release_date.Left(4)
         item.description = JsonString(work.overview)
+        item.AddField("subtitleOverride", "string", false)
+        applyWatchState(item, work)
         item.hdPosterUrl = cardArtworkUrl(work)
         item.AddField("artHeaders", "assocarray", false)
         item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
@@ -3120,9 +3110,19 @@ sub buildRailContent(row as Object, works as Object, isActive as Boolean, cardSc
         item.AddField("year", "string", false)
         if work.release_date <> invalid and work.release_date.Len() >= 4 then item.year = work.release_date.Left(4)
         item.description = JsonString(work.overview)
+        item.AddField("subtitleOverride", "string", false)
+        if work.onDeckTitle <> invalid
+            item.title = work.onDeckTitle
+            item.subtitleOverride = work.onDeckSubtitle
+        end if
+        applyWatchState(item, work)
         ' Real catalog posters (same path as buildGridContent). Empty tiles
         ' were a residual-budget shortcut and made Home look unfinished.
         item.hdPosterUrl = cardArtworkUrl(work)
+        ' On deck episodes show the media frame (web MediaThumbnailArtwork), not the series artwork.
+        if work.onDeckTitle <> invalid and work.onDeckMediaFileId <> invalid and work.onDeckMediaFileId <> ""
+            item.hdPosterUrl = m.serverUrl + "/api/v1/media/" + UrlEncode(work.onDeckMediaFileId) + "/thumbnail"
+        end if
         item.AddField("artHeaders", "assocarray", false)
         item.artHeaders = artworkHeaders(item.hdPosterUrl, headers)
         item.AddField("activeRailFactor", "float", false)
@@ -3341,6 +3341,7 @@ sub enterHome(profileName as String)
     m.profileLabel.text = profileName
     m.currentProfileName = profileName
     m.homeContinueEntries = []
+    m.homeServerRails = []
     m.homeWorkQueue = []
     m.homeFallbackItems = []
     m.homeMovies = []
@@ -3391,6 +3392,7 @@ end function
 sub acceptWatchProgress(data as Dynamic)
     rows = data
     if rows = invalid then rows = []
+    indexWatchProgress(rows)
     resumable = []
     for each row in rows
         if row.state = "part_watched" then resumable.Push(row)
@@ -3469,29 +3471,84 @@ sub acceptHomeWorkDetail(data as Object)
     progress = m.pendingHomeProgress
     m.pendingHomeProgress = invalid
     if data <> invalid and data.work <> invalid
-        kind = data.work.kind
-        if kind <> "artist" and kind <> "author"
-            accept = false
-            if isEpisodicKind(kind)
-                ' Prefer web rule (progress media_file_id must resolve in the
-                ' season/episode tree). Fall back to any playable id so a
-                ' renamed/missing episode does not empty the whole on-deck rail.
-                if findFirstMediaFileId(data) <> ""
-                    if progress = invalid or progress.media_file_id = invalid or progress.media_file_id = ""
-                        accept = true
-                    else if mediaFileIdInDetail(data, progress.media_file_id)
-                        accept = true
-                    else
-                        accept = true
-                    end if
-                end if
-            else if kind = "movie"
-                if findFirstMediaFileId(data) <> "" then accept = true
+        work = data.work
+        kind = work.kind
+        mediaFileId = ""
+        if progress <> invalid and progress.media_file_id <> invalid then mediaFileId = progress.media_file_id
+        accept = false
+        if isEpisodicKind(kind)
+            ' Web On deck: an episodic title shows the episode the progress row points at (its title, season and episode).
+            episode = findOnDeckEpisode(data, mediaFileId)
+            if episode <> invalid
+                work.onDeckTitle = episode.title
+                work.onDeckSubtitle = work.title + " · S" + episode.season + " E" + episode.number
+                work.onDeckMediaFileId = mediaFileId
+                accept = true
             end if
-            if accept then m.homeContinueEntries.Push(data.work)
+        else if kind = "artist" or kind = "author"
+            work.onDeckMediaFileId = mediaFileId
+            accept = true
+        else if kind = "movie"
+            if findFirstMediaFileId(data) <> "" then accept = true
         end if
+        if accept then m.homeContinueEntries.Push(work)
     end if
     processNextHomeWork()
+end sub
+
+' Finds the episode with this media file id in a WorkDetail season tree: { title, season, number } (two-digit strings).
+function findOnDeckEpisode(detail as Object, mediaFileId as String) as Dynamic
+    if mediaFileId = "" or detail.children = invalid or detail.children.Series = invalid then return invalid
+    for each season in detail.children.Series
+        for each entry in season.episodes
+            if entry.media_file_id = mediaFileId and entry.episode <> invalid
+                title = JsonString(entry.episode.title)
+                number = entry.episode.episode_number
+                if title = "" then title = "Episode " + number.ToStr()
+                return { title: title, season: twoDigits(season.season.season_number), number: twoDigits(number) }
+            end if
+        end for
+    end for
+    return invalid
+end function
+
+function twoDigits(n as Dynamic) as String
+    text = Int(n).ToStr()
+    if Len(text) < 2 then text = "0" + text
+    return text
+end function
+
+' Web indexWatchProgressByWork: one row per work, part watched over watched over unseen.
+sub indexWatchProgress(rows as Object)
+    m.progressByWork = {}
+    for each row in rows
+        priority = 0
+        if row.state = "part_watched" then priority = 2
+        if row.state = "watched" then priority = 1
+        row.priority = priority
+        current = m.progressByWork[row.work_id]
+        if current = invalid or priority > current.priority then m.progressByWork[row.work_id] = row
+    end for
+end sub
+
+' Web WatchStateOverlay: a progress bar for part watched, the unwatched dot for unseen or no row, nothing for watched.
+sub applyWatchState(item as Object, work as Object)
+    item.AddField("watchState", "string", false)
+    item.AddField("progressPct", "float", false)
+    item.watchState = ""
+    if m.progressByWork = invalid then return
+    row = m.progressByWork[work.id]
+    if row = invalid or row.state = "unseen"
+        item.watchState = "unseen"
+    else if row.state = "part_watched"
+        item.watchState = "part"
+        if row.duration_ms <> invalid and row.duration_ms > 0
+            pct = 100 * row.position_ms / row.duration_ms
+            if pct > 100 then pct = 100
+            if pct < 0 then pct = 0
+            item.progressPct = pct
+        end if
+    end if
 end sub
 
 ' True when mediaFileId appears anywhere under a WorkDetail response tree.
@@ -3521,13 +3578,8 @@ function mediaFileIdInDetail(root as Dynamic, mediaFileId as String) as Boolean
 end function
 
 sub finishContinueWatching()
-    if m.homeContinueEntries.Count() > 0
-        loadHomeMovies()
-        return
-    end if
-    ' Start Watching fallback: recent movies only first page; series merge
-    ' happens after both load (web uses mergeRecent series+movie+site, no artists).
-    sendApi("homeFallback", "GET", "/api/v1/catalog?kind=movie&available_only=true&sort=recent&limit=8&offset=0", invalid, true)
+    ' Web Home draws the server's rail list under On deck; "Start watching" (no On deck entries) is taken from those rails.
+    loadHomeRails()
 end sub
 
 ' Web Home renders the server's own rail list (GET /api/v1/home/rails:
@@ -3545,26 +3597,38 @@ sub acceptHomeRails(data as Dynamic)
     m.homeMoreMovies = []
     m.homeMoreSeries = []
     m.homeRailLabels = []
-    slots = []
+    m.homeServerRails = []
+    recent = []
     if data <> invalid and data.rails <> invalid
         for each rail in data.rails
-            if rail.items <> invalid and rail.items.Count() > 0 and slots.Count() < 4
-                slots.Push(rail)
+            if rail.items <> invalid and rail.items.Count() > 0
+                title = rail.title
+                if title = invalid then title = ""
+                m.homeServerRails.Push({ title: title, items: rail.items })
+                for each work in rail.items
+                    work.sortKeyAdded = JsonString(work.added_at)
+                    recent.Push(work)
+                end for
             end if
         end for
     end if
-    if slots.Count() = 0
+    if m.homeServerRails.Count() = 0
         loadHomeMovies()
         return
     end if
-    names = ["homeMovies", "homeSeries", "homeMoreMovies", "homeMoreSeries"]
-    for i = 0 to slots.Count() - 1
-        items = takeFirstWorks(filterHomePrimaryKinds(slots[i].items), 12)
-        m[names[i]] = items
-        title = slots[i].title
-        if title = invalid then title = ""
-        m.homeRailLabels.Push(title)
-    end for
+    if m.homeContinueEntries.Count() = 0
+        ' Web mergeRecent: newest first across every rail, each title once.
+        recent.SortBy("sortKeyAdded", "r")
+        seen = {}
+        m.homeFallbackItems = []
+        for each work in recent
+            if seen[work.id] = invalid and work.kind <> "artist" and work.kind <> "author"
+                seen[work.id] = true
+                m.homeFallbackItems.Push(work)
+                if m.homeFallbackItems.Count() >= 8 then exit for
+            end if
+        end for
+    end if
     finishHomeLoad()
 end sub
 
@@ -3669,33 +3733,23 @@ sub finishHomeLoad()
         primaryWorks = takeFirstWorks(m.homeFallbackItems, 8)
         primaryLabel = "Start watching"
     end if
-    newMovies = takeFirstWorks(m.homeMovies, 12)
-    newSeries = takeFirstWorks(m.homeSeries, 12)
-    moreMovies = takeFirstWorks(m.homeMoreMovies, 12)
-    moreSeries = takeFirstWorks(m.homeMoreSeries, 12)
-    labels = ["New movies", "New series", "More movies", "More series"]
-    if m.homeRailLabels <> invalid
-        for i = 0 to m.homeRailLabels.Count() - 1
-            if m.homeRailLabels[i] <> "" then labels[i] = m.homeRailLabels[i]
+    candidates = []
+    if primaryWorks.Count() > 0 then candidates.Push({ label: primaryLabel, works: primaryWorks })
+    serverRails = m.homeServerRails
+    if serverRails.Count() = 0
+        ' Older server without GET /api/v1/home/rails: the legacy per-kind catalog chain fills four rails.
+        labels = ["New movies", "New series", "More movies", "More series"]
+        legacy = [m.homeMovies, m.homeSeries, m.homeMoreMovies, m.homeMoreSeries]
+        serverRails = []
+        for i = 0 to 3
+            serverRails.Push({ title: labels[i], items: takeFirstWorks(legacy[i], 12) })
         end for
     end if
-
-    candidates = []
-    if primaryWorks.Count() > 0
-        candidates.Push({ group: m.continueRailGroup, title: m.continueTitle, row: m.continueRow, label: primaryLabel, works: primaryWorks })
-    end if
-    if newMovies.Count() > 0
-        candidates.Push({ group: m.moviesRailGroup, title: m.moviesTitle, row: m.moviesRow, label: labels[0], works: newMovies })
-    end if
-    if newSeries.Count() > 0
-        candidates.Push({ group: m.seriesRailGroup, title: m.seriesTitle, row: m.seriesRow, label: labels[1], works: newSeries })
-    end if
-    if moreMovies.Count() > 0
-        candidates.Push({ group: m.moreMoviesRailGroup, title: m.moreMoviesTitle, row: m.moreMoviesRow, label: labels[2], works: moreMovies })
-    end if
-    if moreSeries.Count() > 0
-        candidates.Push({ group: m.moreSeriesRailGroup, title: m.moreSeriesTitle, row: m.moreSeriesRow, label: labels[3], works: moreSeries })
-    end if
+    for each rail in serverRails
+        if rail.items.Count() > 0 and candidates.Count() < m.homeRailPool.Count()
+            candidates.Push({ label: rail.title, works: rail.items })
+        end if
+    end for
 
     if candidates.Count() = 0
         ' Every rail source came back empty -- fall back to the legacy flat
@@ -3704,29 +3758,24 @@ sub finishHomeLoad()
         return
     end if
 
-    allGroups = [m.continueRailGroup, m.moviesRailGroup, m.seriesRailGroup, m.moreMoviesRailGroup, m.moreSeriesRailGroup]
-    for each group in allGroups
-        group.visible = false
+    for each pooled in m.homeRailPool
+        pooled.group.visible = false
     end for
 
     m.visibleRails = []
-    m.currentContinueWorks = []
     y = 0
     railIndex = 0
-    for each rail in candidates
+    for each candidate in candidates
+        rail = m.homeRailPool[railIndex]
+        rail.works = candidate.works
         rail.group.visible = true
         rail.group.translation = [0, y]
-        rail.title.text = rail.label
+        rail.title.text = candidate.label
         isActiveRail = false
         if railIndex = 0 then isActiveRail = true
         buildRailContent(rail.row, rail.works, isActiveRail)
         m.visibleRails.Push({ row: rail.row, works: rail.works, first: 0, col: 0, last: 0, jumping: -1 })
-        if rail.row.isSameNode(m.continueRow) then m.currentContinueWorks = rail.works
-        ' 400 matched the OLD 220x340 tall-poster card's much taller row; the
-        ' rebuilt 220x165 16:9 card (see PosterCard.xml) needs proportionally
-        ' less vertical rhythm per rail, confirmed live that leaving this at
-        ' 400 left huge dead gaps and pushed the 4th/5th rails off the
-        ' bottom of the screen entirely with no way to scroll to them.
+        ' Rails sit 319 px apart (web .tv-home-rail rhythm).
         y += 319
         railIndex = railIndex + 1
     end for
@@ -3796,11 +3845,9 @@ end sub
 ' comparison chain is clearer here than a node-keyed lookup table (Roku's
 ' roAssociativeArray keys must be strings, not nodes).
 function worksForRow(row as Object) as Dynamic
-    if row.isSameNode(m.continueRow) then return m.currentContinueWorks
-    if row.isSameNode(m.moviesRow) then return m.homeMovies
-    if row.isSameNode(m.seriesRow) then return m.homeSeries
-    if row.isSameNode(m.moreMoviesRow) then return m.homeMoreMovies
-    if row.isSameNode(m.moreSeriesRow) then return m.homeMoreSeries
+    for each rail in m.homeRailPool
+        if rail.row.isSameNode(row) then return rail.works
+    end for
     return invalid
 end function
 

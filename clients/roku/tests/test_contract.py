@@ -590,6 +590,10 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertIn("y += 319", MAIN)
         self.assertIn('"homeRails", "GET", "/api/v1/home/rails"', MAIN)
         self.assertNotIn("takeUnusedWorks(m.homeMovies", MAIN)
+        # Home shows every server rail from a RowList pool and On deck resolves episodes, artists and watch progress.
+        self.assertIn("m.homeRailPool", MAIN)
+        self.assertIn("findOnDeckEpisode", MAIN)
+        self.assertIn("applyWatchState", MAIN)
         # Clock and date sit together near x=480 like .app-clock.
         self.assertIn('id="clockTime" translation="[481,', SCENE)
         card = (ROOT / "components" / "PosterCard.xml").read_text(encoding="utf-8")

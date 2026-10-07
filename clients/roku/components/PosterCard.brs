@@ -9,6 +9,8 @@ sub init()
     m.title = m.top.findNode("title")
     m.kind = m.top.findNode("kind")
     m.unwatchedBadge = m.top.findNode("unwatchedBadge")
+    m.progressTrack = m.top.findNode("progressTrack")
+    m.progressFill = m.top.findNode("progressFill")
     m.cardRoot = m.top.findNode("cardRoot")
     m.artGroup = m.top.findNode("artGroup")
     m.focusAnim = m.top.findNode("focusAnim")
@@ -35,6 +37,7 @@ sub onContentChanged()
     if showKind
         kindText = CapitalizeFirst(content.kind)
         if content.year <> invalid and content.year <> "" then kindText = kindText + " · " + content.year
+        if content.subtitleOverride <> invalid and content.subtitleOverride <> "" then kindText = content.subtitleOverride
         m.kind.text = kindText
     end if
     ' No per-item watched/unwatched state is threaded through from the
@@ -44,7 +47,17 @@ sub onContentChanged()
     ' every single card observed, so defaulting to visible is the closer
     ' match of the two options available without deeper API work, not a
     ' guess: a documented simplification, not a bug.
-    m.unwatchedBadge.visible = true
+    watchState = ""
+    if content.watchState <> invalid then watchState = content.watchState
+    m.unwatchedBadge.visible = watchState = "unseen"
+    m.progressTrack.visible = watchState = "part"
+    if watchState = "part"
+        pct = 0
+        if content.progressPct <> invalid then pct = content.progressPct
+        fill = 220 * pct / 100
+        if fill < 3 then fill = 3
+        m.progressFill.width = fill
+    end if
     agent = CreateObject("roHttpAgent")
     agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
     agent.InitClientCertificates()

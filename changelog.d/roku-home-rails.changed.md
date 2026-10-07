@@ -1,0 +1,1 @@
+- Roku: Home shows every server rail under On deck like the web, On deck lists episodes with their frame and title, artists and a progress bar, and cards show the unwatched dot only for unwatched titles.

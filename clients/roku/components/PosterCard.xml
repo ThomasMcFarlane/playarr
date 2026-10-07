@@ -115,6 +115,10 @@
              the literal brand pink, not a themed token, same colour in
              both light and dark). 11px inset from the art's own top/right
              edges (measured top:10.56/right:10.56 on the real element). -->
+        <!-- Watch progress (web .tv-watch-progress): a 3 px track along the bottom of the art, brand-pink fill (min 3 px). -->
+        <Rectangle id="progressTrack" translation="[0,121]" width="220" height="3" color="0xFFFFFF33" visible="false">
+          <Rectangle id="progressFill" width="3" height="3" color="0xCF3157FF" />
+        </Rectangle>
         <Poster id="unwatchedBadge" translation="[196,11]" width="13" height="13" uri="pkg:/images/badge-unwatched.png" visible="false" />
       </Group>
       <!-- Title + kind sit BELOW the art box entirely, on the page's own
