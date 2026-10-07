@@ -283,3 +283,22 @@ jobs:
             Container image: `${{ env.IMAGE }}:${{ env.VERSION }}` (`${{ needs.build.outputs.digest }}`)
 
             Downloads: https://playarr.app/clients/server
+
+      # Event-driven trigger for the cluster release gate; its hourly cron is only a backstop.
+      # Needs a repository secret CLUSTER_DISPATCH_TOKEN (fine-grained token, Contents: write on
+      # ThomasMcFarlane/.cluster). Without it the step is skipped and the backstop applies.
+      - name: Notify cluster release gate
+        if: env.PRERELEASE != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.CLUSTER_DISPATCH_TOKEN }}
+          CLUSTER_REPO: ${{ vars.CLUSTER_REPO || 'ThomasMcFarlane/.cluster' }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::CLUSTER_DISPATCH_TOKEN is not set; relying on the hourly backstop."
+            exit 0
+          fi
+          gh api "repos/$CLUSTER_REPO/dispatches" \
+            -f event_type=playarr-released \
+            -f "client_payload[tag]=$RELEASE_TAG"
