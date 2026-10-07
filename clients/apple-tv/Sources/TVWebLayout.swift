@@ -33,7 +33,7 @@ struct TVRailPanelGradient: View {
         if scheme == .light {
             let frost = Color(red: 239.6 / 255, green: 238.2 / 255, blue: 238.7 / 255)
             return [
-                .init(color: .clear, location: 0),
+                .init(color: frost.opacity(0), location: 0),
                 .init(color: frost.opacity(0.68), location: 0.12),
                 .init(color: frost.opacity(0.88), location: 0.34),
                 .init(color: frost.opacity(0.96), location: 0.62),
@@ -41,7 +41,7 @@ struct TVRailPanelGradient: View {
             ]
         }
         return [
-            .init(color: .clear, location: 0),
+            .init(color: DesignTokens.Color.backgroundRaised.opacity(0), location: 0),
             .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
             .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
             .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
@@ -288,8 +288,8 @@ struct TVKeyArt: View {
             LinearGradient(
                 stops: [
                     .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 1),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.22),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 1),
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -297,8 +297,8 @@ struct TVKeyArt: View {
             LinearGradient(
                 stops: [
                     .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 0.82),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.22),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.82),
                     .init(color: DesignTokens.Color.backgroundElevated, location: 1),
                 ],
                 startPoint: .bottom,
@@ -316,7 +316,7 @@ struct TVStageWash: View {
             LinearGradient(
                 stops: [
                     .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
-                    .init(color: .clear, location: 0.31),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.31),
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -324,7 +324,7 @@ struct TVStageWash: View {
             LinearGradient(
                 stops: [
                     .init(color: DesignTokens.Color.backgroundElevated.opacity(0.50), location: 0),
-                    .init(color: .clear, location: 0.34),
+                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0), location: 0.34),
                 ],
                 startPoint: .trailing,
                 endPoint: .leading

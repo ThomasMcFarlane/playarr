@@ -165,6 +165,7 @@ struct TVWorkDetailView: View {
             actionPill("Playback", symbol: "square.grid.2x2.fill", x: 311.6, y: buttonsY, width: 142)
             moviePlay(detail, x: 469.6, y: buttonsY)
             actionPill("Add to watchlist", glyph: "+", x: 153.6, y: buttonsY + 76, width: 142)
+            actionPill("Add to Playlist", glyph: "+", x: 311.6, y: buttonsY + 76, width: 142)
         }
     }
 
