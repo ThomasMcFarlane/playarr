@@ -146,21 +146,15 @@ struct TVPlayerChrome: View {
                 .font(TVTheme.font(size: 10.88, weight: .regular))
                 .foregroundStyle(Color.white)
                 .placed(x: 340.2, y: 981.8, w: 30, h: 16.3)
-            icon("speaker.wave.2.fill", x: 398)
-            // Volume slider: 130 x 5 with a pink fill and knob.
-            Capsule().fill(Color.white.opacity(0.2)).placed(x: 450, y: 987.5, w: 130, h: 5)
-            Capsule().fill(DesignTokens.Color.brandPrimary).placed(x: 450, y: 987.5, w: 122, h: 5)
-            Circle().fill(DesignTokens.Color.brandPrimary).placed(x: 564.5, y: 983, w: 14, h: 14)
         }
     }
 
     private var rightGroup: some View {
         ZStack(alignment: .topLeading) {
-            icon("speaker.wave.2.fill", x: 1240)
-            icon("captions.bubble", x: 1317.6)
-            icon("list.bullet", x: 1395.2)
+            icon("captions.bubble", x: 1323.5)
+            icon("list.bullet", x: 1401.1)
             Button(action: onToggleQualityMenu) {
-                HStack(spacing: 7) {
+                HStack(spacing: 11.8) {
                     Text("HD")
                         .font(TVTheme.font(size: 7.68, weight: .bold))
                         .tracking(0.31)
@@ -173,15 +167,14 @@ struct TVPlayerChrome: View {
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 15.5)
-                .frame(width: 179.8, height: 60.5, alignment: .leading)
+                .frame(width: 173.4, height: 60.5, alignment: .leading)
                 .background(Capsule().fill(Color.white.opacity(state.menuOpen ? 0.15 : 0)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
             .focusable(!frozen)
-            .placed(x: 1444.1, y: 959.8, w: 179.8, h: 60.5)
-            icon("info.circle", x: 1652.8)
-            icon("airplayvideo", x: 1730.4)
-            icon("arrow.up.left.and.arrow.down.right", x: 1808)
+            .placed(x: 1527.8, y: 959.8, w: 173.4, h: 60.5)
+            icon("info.circle", x: 1730.4)
+            icon("airplayvideo", x: 1808)
         }
     }
 
@@ -196,36 +189,36 @@ struct TVPlayerChrome: View {
 
     private var qualityMenu: some View {
         let white54 = Color.white.opacity(0.54)
-        let columns: [(String, CGFloat)] = [("Low", 1125.7), ("Medium", 1288.3), ("High", 1450.9)]
+        let columns: [(String, CGFloat)] = [("Low", 1203.3), ("Medium", 1365.9), ("High", 1528.5)]
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(red: 18 / 255, green: 14 / 255, blue: 17 / 255).opacity(0.9))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                .placed(x: 997.2, y: 540, w: 620, h: 408)
+                .placed(x: 1074.8, y: 540, w: 620, h: 408)
             Text("QUALITY")
                 .font(TVTheme.font(size: 8.64, weight: .heavy))
                 .tracking(1.3)
                 .foregroundStyle(Color.white.opacity(0.56))
-                .placed(x: 1007, y: 549.8, w: 600, h: 28.9)
+                .placed(x: 1084.6, y: 549.8, w: 600, h: 28.9)
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(DesignTokens.Color.brandPrimary.opacity(0.22))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(DesignTokens.Color.brandPrimary.opacity(0.55), lineWidth: 1)
                 )
-                .placed(x: 1007, y: 578.7, w: 600.4, h: 60)
+                .placed(x: 1084.6, y: 578.7, w: 600.4, h: 60)
             Text(state.qualityLabel)
                 .font(TVTheme.font(size: 12.48, weight: .bold))
                 .foregroundStyle(Color.white)
-                .placed(x: 1017.9, y: 591.4, w: 300, h: 18.7)
+                .placed(x: 1095.5, y: 591.4, w: 300, h: 18.7)
             Text("Source quality")
                 .font(TVTheme.font(size: 9.28, weight: .regular))
                 .foregroundStyle(white54)
-                .placed(x: 1017.9, y: 612, w: 300, h: 13.9)
+                .placed(x: 1095.5, y: 612, w: 300, h: 13.9)
             Text("\u{2713}")
                 .font(TVTheme.font(size: 11.84, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.brandPrimary)
-                .placed(x: 1580.5, y: 599.8, w: 16, h: 17.8)
+                .placed(x: 1658.1, y: 599.8, w: 16, h: 17.8)
             ForEach(columns, id: \.0) { column in
                 Text(column.0.uppercased())
                     .font(TVTheme.font(size: 10.24, weight: .heavy))
@@ -238,11 +231,11 @@ struct TVPlayerChrome: View {
                 Text(tier.name)
                     .font(TVTheme.font(size: 12.16, weight: .heavy))
                     .foregroundStyle(Color.white)
-                    .placed(x: 1011, y: top + 13, w: 104.7, h: 18.2)
+                    .placed(x: 1088.6, y: top + 13, w: 104.7, h: 18.2)
                 Text(tier.height)
                     .font(TVTheme.font(size: 9.28, weight: .regular))
                     .foregroundStyle(white54)
-                    .placed(x: 1011, y: top + 33.1, w: 104.7, h: 13.9)
+                    .placed(x: 1088.6, y: top + 33.1, w: 104.7, h: 13.9)
                 ForEach(Array(columns.enumerated()), id: \.offset) { column, spec in
                     ZStack(alignment: .topLeading) {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
