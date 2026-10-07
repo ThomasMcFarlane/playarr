@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 // This app's own version, baked into the bundle at build time and read back
@@ -24,14 +25,35 @@ function workspaceSourceAliases(): Record<string, string> {
   return aliases;
 }
 
+// The debug-mode screen mirror (src/debug/) is test tooling for devices without screenshots. It is
+// compiled in only for `--mode debug-mirror`, which writes to its own output directory. This guard
+// fails any other build whose output mentions the mirror's sentinel, so it cannot ship by accident.
+const MIRROR_SENTINEL = "PLAYARR_DEBUG_MIRROR_SENTINEL";
+function mirrorGuard(mode: string): Plugin {
+  return {
+    name: "playarr-debug-mirror-guard",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      if (mode === "debug-mirror") return;
+      for (const [name, item] of Object.entries(bundle)) {
+        const code = item.type === "chunk" ? item.code : typeof item.source === "string" ? item.source : "";
+        if (code.includes(MIRROR_SENTINEL) || /__mirror\/frame/.test(code)) {
+          throw new Error(`debug screen mirror code found in ${name}; it must only be built with --mode debug-mirror`);
+        }
+      }
+    },
+  };
+}
+
 // `--mode server` builds the client for hosting by Playarr Server itself under /tv/
 // (so a TV that can only reach an http:// server avoids mixed content).
 export default defineConfig(({ mode }) => ({
   base: mode === "server" ? "/tv/" : "/",
-  plugins: [react()],
+  plugins: [react(), mirrorGuard(mode)],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
     __PLAYARR_PLATFORM__: JSON.stringify(null),
+    __PLAYARR_DEBUG_MIRROR__: JSON.stringify(mode === "debug-mirror"),
   },
   server: {
     port: 5173,
@@ -54,7 +76,7 @@ export default defineConfig(({ mode }) => ({
     alias: workspaceSourceAliases(),
   },
   build: {
-    outDir: mode === "server" ? "dist-server" : "dist",
+    outDir: mode === "server" ? "dist-server" : mode === "debug-mirror" ? "dist-debug-mirror" : "dist",
     target: "es2020",
   },
 }));

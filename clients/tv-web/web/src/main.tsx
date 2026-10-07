@@ -34,6 +34,19 @@ import {
 import "./styles/fonts.css";
 import "./styles/global.css";
 
+// Debug builds only (`--mode debug-mirror`): the constant is false in every other build, so the
+// bundler drops this branch and the mirror module never reaches a production bundle.
+if (__PLAYARR_DEBUG_MIRROR__) {
+  // Capture the token from the launch URL now: the router may rewrite the query before the chunk loads.
+  try {
+    const launchToken = new URLSearchParams(window.location.search).get("mirrorToken");
+    if (launchToken) window.sessionStorage.setItem("playarr.debugMirrorToken", launchToken);
+  } catch {
+    // sessionStorage unavailable: the mirror falls back to the URL
+  }
+  void import("./debug/mirror").then((m) => m.startDebugMirror());
+}
+
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("#root element not found -- check index.html");

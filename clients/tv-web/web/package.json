@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && vite",
     "build": "node scripts/sync-vidaa-store.mjs && node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build && node scripts/copy-cast-receiver.mjs",
+    "build:debug-mirror": "node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build --mode debug-mirror",
     "build:server": "node scripts/generate-build-manifest.mjs && tsc -p tsconfig.json --noEmit && vite build --mode server && node scripts/rewrite-server-manifest.mjs",
     "deploy:cloudflare": "pnpm --filter @playarr-tv/web... run build && esbuild worker.js --bundle --format=esm --platform=browser --target=es2022 --external:cloudflare:sockets --outfile=dist-worker.mjs && node scripts/deploy-cloudflare-api.mjs",
     "lint": "vitest run src/lib/*Audit.test.ts src/lib/*Registry.test.ts",
@@ -48,6 +49,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "esbuild": "0.21.5",
+    "html-to-image": "1.11.13",
     "playwright-core": "^1.63.0",
     "typescript": "catalog:",
     "vite": "catalog:",
