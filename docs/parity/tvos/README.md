@@ -62,5 +62,6 @@ All 24 shared captures are at or under 1%.
 
 ## Not covered / follow-ups
 
-- Downloads on the detail pages: web PR #117 added a season Download button and a title Download button (there is no\n  per-episode button). tvOS draws both and makes them focusable; they explain that Apple TV keeps no offline copies.
+- Downloads on the detail pages: web PR #117 added a season Download button and a title Download button (there is no
+  per-episode button). tvOS draws both and makes them focusable; they explain that Apple TV keeps no offline copies.
 - The calendar Play button shows only for entries whose media is on disk, as on the web.
