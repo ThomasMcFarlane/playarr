@@ -37,7 +37,9 @@ if (!base || !user || !password) {
 }
 const themeOpt = opt("theme", "both");
 const themes = themeOpt === "both" ? spec.themes : themeOpt.split(",");
-const dumpDom = args.includes("--dump-dom");
+const dumpDom = args.includes("--dump-dom") || args.includes("--dump-all");
+// --dump-all also records the elements below the fold (the detail pages stack their tracks vertically).
+const dumpAll = args.includes("--dump-all");
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const out = resolve(opt("out", "parity-live"));
 const webDist = resolve(opt("web-dist", ""));
@@ -69,6 +71,10 @@ const SCREENS = [
   { id: "film-detail", path: "/movies", click: ".tv-title-card" },
   { id: "series-detail", path: "/series", click: ".tv-title-card" },
   { id: "calendar", path: "/calendar" },
+  { id: "search", path: "/search", type: { selector: "input[type=search], input[type=text]", text: "fast" } },
+  { id: "downloads", path: "/downloads" },
+  { id: "watchlist", path: "/watchlist" },
+  { id: "requests", path: "/requests" },
   { id: "settings", path: "/settings" },
   { id: "settings-avatar", path: "/settings/profile-avatar" },
   { id: "settings-language", path: "/settings/language" },
@@ -79,9 +85,6 @@ const SCREENS = [
   { id: "settings-remote", path: "/settings/remote" },
   { id: "settings-latency", path: "/settings/request-latency" },
   { id: "settings-your-data", path: "/settings/your-data" },
-  { id: "downloads", path: "/downloads" },
-  { id: "watchlist", path: "/watchlist" },
-  { id: "requests", path: "/requests" },
   { id: "profile-switcher", path: "/profiles", waitGone: "Loading profiles" },
 ];
 
@@ -143,6 +146,11 @@ async function capture(theme, screen) {
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
     await page.locator(".tv-compact-loading, .tv-orbit-loader").first().waitFor({ state: "detached", timeout: 30000 }).catch(() => {});
     if (screen.waitGone) await page.getByText(screen.waitGone).first().waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+    if (screen.type) {
+      await page.locator(screen.type.selector).first().fill(screen.type.text);
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+    }
     if (screen.click) {
       await page.locator(screen.click).first().click();
       await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
@@ -152,11 +160,11 @@ async function capture(theme, screen) {
     await page.waitForTimeout(1200);
     await page.screenshot({ path: join(out, "tv", theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
     if (dumpDom) {
-      const dom = await page.evaluate(() => {
+      const dom = await page.evaluate((all) => {
         const rows = [];
         for (const el of document.querySelectorAll("body *")) {
           const r = el.getBoundingClientRect();
-          if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight) continue;
+          if (r.width < 1 || r.height < 1 || (!all && (r.bottom < 0 || r.top > innerHeight))) continue;
           const cs = getComputedStyle(el);
           const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 60);
           const painted = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.borderTopWidth !== "0px" || cs.backgroundImage !== "none";
@@ -170,7 +178,7 @@ async function capture(theme, screen) {
           });
         }
         return rows;
-      });
+      }, dumpAll);
       mkdirSync(join(out, "tv", theme, "dom"), { recursive: true });
       writeFileSync(join(out, "tv", theme, "dom", `${screen.id}.json`), JSON.stringify(dom));
     }

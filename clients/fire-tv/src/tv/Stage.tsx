@@ -32,9 +32,12 @@ export function Stage({artUri, accessToken, children}: StageProps): React.ReactE
   return (
     <View style={[StyleSheet.absoluteFill, {backgroundColor: surface, overflow: 'hidden'}]}>
       {artUri ? (
-        <Box x={-20} y={-22.9} w={1038.3} h={1190.6} style={{overflow: 'hidden', opacity: dark ? 0.72 : 0.4}}>
-          <ArtworkImage uri={artUri} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" />
-          <Fill style={{backgroundColor: dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.1)'}} />
+        <Box x={-20} y={-22.9} w={1038.3} h={1190.6} style={{overflow: 'hidden'}}>
+          {/* Opacity applies to the art and its veil only; the edge gradient stays outside it so it ends on the exact page colour. */}
+          <View style={[StyleSheet.absoluteFill, {opacity: dark ? 0.72 : 0.4}]}>
+            <ArtworkImage uri={artUri} accessToken={accessToken} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+            <Fill style={{backgroundColor: dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.1)'}} />
+          </View>
           <LinearGradient
             style={StyleSheet.absoluteFill}
             start={{x: 0, y: 0}}

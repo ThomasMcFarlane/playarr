@@ -21,7 +21,8 @@ export type IconName =
   | 'settings'
   | 'signOut'
   | 'theme'
-  | 'chevronDown';
+  | 'chevronDown'
+  | 'play';
 
 export interface IconProps {
   name: IconName;
@@ -163,6 +164,9 @@ export function Icon({name, size, color, strokeWidth = 1.8}: IconProps): React.R
       break;
     case 'chevronDown':
       body = <Path {...line} d="m6 9 6 6 6-6" />;
+      break;
+    case 'play':
+      body = <Path {...solid} d="M6.5 3.5v17l14-8.5z" />;
       break;
     case 'back':
       body = <Path {...line} d="M19 12H5M11 6l-6 6 6 6" />;

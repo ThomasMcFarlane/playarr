@@ -8,9 +8,10 @@
  */
 import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
-import {ActivityIndicator, Text, TextInput} from 'react-native';
+import {Text, TextInput} from 'react-native';
 import type {Work} from '@playarr-tv/api-client';
 import {ApiClientProvider} from '../api/ApiClientProvider';
+import {LanguageProvider} from '../i18n/LanguageProvider';
 import {SearchScreen, type SearchScreenNavigation} from './SearchScreen';
 import {ROUTES} from '../navigation/routes';
 
@@ -40,7 +41,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function mockSearchFetch(respond: () => Response | Promise<Response>): jest.SpyInstance {
-  return jest.spyOn(global, 'fetch').mockImplementation(async () => respond());
+  // Only the catalogue search answers with the canned response; the progress lookup the cards use gets an empty list.
+  return jest.spyOn(global, 'fetch').mockImplementation(async (input: unknown) => {
+    const url = input instanceof Request ? input.url : String(input);
+    return url.includes('/search') ? respond() : jsonResponse([]);
+  });
+}
+
+function searchCalls(fetchMock: jest.SpyInstance): number {
+  return fetchMock.mock.calls.filter(([input]) => String(input instanceof Request ? input.url : input).includes('/search')).length;
 }
 
 function fakeNavigation(): SearchScreenNavigation & {navigate: jest.Mock} {
@@ -73,7 +82,9 @@ describe('SearchScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <SearchScreen navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <SearchScreen navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
     });
@@ -88,7 +99,9 @@ describe('SearchScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <SearchScreen navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <SearchScreen navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
     });
@@ -111,14 +124,14 @@ describe('SearchScreen', () => {
     });
 
     // No request yet -- every keystroke above reset the debounce timer.
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(searchCalls(fetchMock)).toBe(0);
 
     await act(async () => {
       jest.advanceTimersByTime(400);
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(searchCalls(fetchMock)).toBe(1);
     expect(allText(renderer)).toContain('Test Movie A');
   });
 
@@ -129,7 +142,9 @@ describe('SearchScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <SearchScreen navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <SearchScreen navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
     });
@@ -145,40 +160,6 @@ describe('SearchScreen', () => {
     expect(allText(renderer)).toContain('No matching titles or playlists.');
   });
 
-  it('shows a loading indicator while a search is in flight', async () => {
-    let resolveFetch!: (response: Response) => void;
-    mockSearchFetch(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveFetch = resolve;
-        })
-    );
-
-    let renderer!: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(
-        <ApiClientProvider>
-          <SearchScreen navigation={fakeNavigation()} />
-        </ApiClientProvider>
-      );
-    });
-
-    act(() => {
-      renderer.root.findByType(TextInput).props.onChangeText('dune');
-    });
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-      await Promise.resolve();
-    });
-
-    expect(renderer.root.findAllByType(ActivityIndicator)).toHaveLength(1);
-    expect(allText(renderer)).toContain('Searching…');
-
-    await act(async () => {
-      resolveFetch(jsonResponse({items: []}));
-    });
-  });
-
   it('opens a search result on the correct detail screen by kind', async () => {
     mockSearchFetch(() => jsonResponse({items: [work({id: 'a1', title: 'A Band', kind: 'artist'})]}));
     const navigation = fakeNavigation();
@@ -187,7 +168,9 @@ describe('SearchScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <SearchScreen navigation={navigation} />
+          <LanguageProvider>
+            <SearchScreen navigation={navigation} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
     });
@@ -201,9 +184,9 @@ describe('SearchScreen', () => {
     });
 
     act(() => {
-      renderer.root.findByProps({accessibilityLabel: 'Open A Band'}).props.onPress();
+      renderer.root.findByProps({accessibilityLabel: 'A Band'}).props.onPress();
     });
 
-    expect(navigation.navigate).toHaveBeenCalledWith(ROUTES.musicDetail, {workId: 'a1'});
+    expect(navigation.navigate).toHaveBeenCalledWith(ROUTES.musicDetail, {workId: 'a1', backTo: ROUTES.search});
   });
 });

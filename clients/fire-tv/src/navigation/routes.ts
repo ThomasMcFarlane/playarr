@@ -51,7 +51,6 @@ export const ROUTES = {
   watchlist: 'Watchlist',
   requests: 'Requests',
   calendar: 'Calendar',
-  homeCustomise: 'HomeCustomise',
 
   // Detail screens -- one route each covers several tv-web source routes:
   // WorkDetail backs /series/:id, /movies/:id, /search/:id (a search result
@@ -72,6 +71,7 @@ export const ROUTES = {
   settingsRemote: 'SettingsRemote',
   settingsLatency: 'SettingsLatency',
   settingsYourData: 'SettingsYourData',
+  settingsCustomiseHome: 'SettingsCustomiseHome',
 
   // Fallback
   notFound: 'NotFound',

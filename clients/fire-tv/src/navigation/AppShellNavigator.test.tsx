@@ -122,6 +122,7 @@ import {createStackNavigator} from '@amazon-devices/react-navigation__stack';
 import {NavigationContainer} from '@amazon-devices/react-navigation__native';
 import type {Work, WorkDetail} from '@playarr-tv/api-client';
 import {ApiClientProvider} from '../api/ApiClientProvider';
+import {LanguageProvider} from '../i18n/LanguageProvider';
 import {AppShellNavigator, APP_SHELL_ROUTE} from './AppShellNavigator';
 import {PlayerHandleContext} from './PlayerHandleContext';
 import type {PlayerScreenHandle} from '../screens/PlayerScreen';
@@ -161,6 +162,8 @@ function mockShellFetch(detail: WorkDetail): jest.SpyInstance {
     if (url.includes('/catalog/kinds')) return jsonResponse(['movie']);
     if (url.includes('/credits')) return jsonResponse({cast: [], crew: []});
     if (url.includes('/similar')) return jsonResponse([]);
+    // Only the catalogue lookup of the work itself answers with the detail; progress, chapters and the rest are empty lists.
+    if (!/\/catalog\/[^/]+$/.test(url.split('?')[0]!)) return jsonResponse([]);
     return jsonResponse(detail);
   });
 }
@@ -190,6 +193,7 @@ async function renderShellOn(
   await act(async () => {
     tree = renderer.create(
       <ApiClientProvider>
+        <LanguageProvider>
         <PlayerHandleContext.Provider value={playerHandleRef}>
           <NavigationContainer
             initialState={{
@@ -201,6 +205,7 @@ async function renderShellOn(
             </Stack.Navigator>
           </NavigationContainer>
         </PlayerHandleContext.Provider>
+        </LanguageProvider>
       </ApiClientProvider>
     );
     await Promise.resolve();
@@ -231,7 +236,7 @@ describe('AppShellNavigator player wiring', () => {
       tree.root.findByProps({accessibilityLabel: 'Play'}).props.onPress();
     });
 
-    expect(show).toHaveBeenCalledWith('mf-1');
+    expect(show).toHaveBeenCalledWith('mf-1', {title: 'The First Film'});
 
     await act(async () => {
       tree.unmount();

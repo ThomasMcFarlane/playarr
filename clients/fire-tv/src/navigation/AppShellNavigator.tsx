@@ -91,6 +91,7 @@ import {APP_CONFIG} from '../config/appConfig';
 import {findCurrentProfile, listViewerProfiles, type ViewerProfile} from '../auth/profiles';
 import {ShellChrome, type RailTarget} from '../shell/ShellChrome';
 import {PlaceholderScreen} from '../screens/PlaceholderScreen';
+import {DownloadsScreen, RequestsScreen, WatchlistScreen} from '../screens/ListPages';
 import {StyleSheet} from 'react-native';
 import {
   createCatalogKindsCacheScope,
@@ -180,6 +181,7 @@ const SettingsRoutes = {
   latency: settingsRoute('request-latency'),
   remote: settingsRoute('remote'),
   yourData: settingsRoute('your-data'),
+  customiseHome: settingsRoute('customise-home'),
 };
 
 function SearchScreenScreen(): React.ReactElement {
@@ -223,7 +225,7 @@ function WorkDetailScreenScreen(): React.ReactElement {
     <WorkDetailScreen
       route={{params: {workId: params.workId}}}
       navigation={navigateAdapter(navigation)}
-      onPlay={(mediaFileId) => playerHandle?.current?.show(mediaFileId)}
+      onPlay={(mediaFileId, options) => playerHandle?.current?.show(mediaFileId, options)}
     />
   );
 }
@@ -385,11 +387,10 @@ export function AppShellNavigator(): React.ReactElement {
         <ContentStack.Screen name={ROUTES.sites} component={SitesScreen} />
         <ContentStack.Screen name={ROUTES.music} component={MusicLibraryScreen} />
         <ContentStack.Screen name={ROUTES.playlists} component={PlaylistsScreenScreen} />
-        <ContentStack.Screen name={ROUTES.downloads} component={PlaceholderScreen} />
-        <ContentStack.Screen name={ROUTES.watchlist} component={PlaceholderScreen} />
-        <ContentStack.Screen name={ROUTES.requests} component={PlaceholderScreen} />
+        <ContentStack.Screen name={ROUTES.downloads} component={DownloadsScreen} />
+        <ContentStack.Screen name={ROUTES.watchlist} component={WatchlistScreen} />
+        <ContentStack.Screen name={ROUTES.requests} component={RequestsScreen} />
         <ContentStack.Screen name={ROUTES.calendar} component={PlaceholderScreen} />
-        <ContentStack.Screen name={ROUTES.homeCustomise} component={PlaceholderScreen} />
         <ContentStack.Screen name={ROUTES.workDetail} component={WorkDetailScreenScreen} />
         <ContentStack.Screen name={ROUTES.musicDetail} component={MusicDetailScreenScreen} />
         <ContentStack.Screen name={ROUTES.settings} component={SettingsRoutes.settings} />
@@ -403,6 +404,7 @@ export function AppShellNavigator(): React.ReactElement {
         <ContentStack.Screen name={ROUTES.settingsRemote} component={SettingsRoutes.remote} />
         <ContentStack.Screen name={ROUTES.settingsLatency} component={SettingsRoutes.latency} />
         <ContentStack.Screen name={ROUTES.settingsYourData} component={SettingsRoutes.yourData} />
+        <ContentStack.Screen name={ROUTES.settingsCustomiseHome} component={SettingsRoutes.customiseHome} />
         <ContentStack.Screen name={ROUTES.notFound} component={NotFoundScreenScreen} />
       </ContentStack.Navigator>
       <ShellChrome

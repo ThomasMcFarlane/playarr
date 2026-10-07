@@ -7,11 +7,14 @@
  */
 import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
-import {ActivityIndicator, Text} from 'react-native';
+import {Text} from 'react-native';
 import type {Work, WorkDetail} from '@playarr-tv/api-client';
 import {ApiClientProvider} from '../api/ApiClientProvider';
+import {LanguageProvider} from '../i18n/LanguageProvider';
 import {WorkDetailScreen, type WorkDetailScreenNavigation} from './WorkDetailScreen';
 import {ROUTES} from '../navigation/routes';
+
+// The screen registers no BACK policy of its own (the shell's route wrapper does), so there is nothing to mock for it.
 
 // See LibraryScreen.test.tsx's own comment for exactly why this is needed.
 (globalThis as unknown as {React: typeof React}).React = React;
@@ -61,6 +64,8 @@ function mockDetailFetch(options: {
     const url = input instanceof Request ? input.url : String(input);
     if (url.includes('/credits')) return jsonResponse(options.credits ?? {cast: [], crew: []});
     if (url.includes('/similar')) return jsonResponse(options.similar ?? []);
+    // Progress, chapters, resume plans and the watchlist lookups are not under test: empty answers keep them quiet.
+    if (!/\/catalog\/[^/]+$/.test(url.split('?')[0]!)) return jsonResponse([]);
     const status = 'error' in options.work ? 404 : 200;
     return jsonResponse(options.work, status);
   });
@@ -71,7 +76,9 @@ async function renderDetail(navigation: WorkDetailScreenNavigation, workId = 'w1
   await act(async () => {
     renderer = create(
       <ApiClientProvider>
-        <WorkDetailScreen route={{params: {workId}}} navigation={navigation} />
+        <LanguageProvider>
+          <WorkDetailScreen route={{params: {workId}}} navigation={navigation} />
+        </LanguageProvider>
       </ApiClientProvider>
     );
     await Promise.resolve();
@@ -111,7 +118,7 @@ describe('WorkDetailScreen', () => {
     expect(allText(renderer)).toContain('This title could not be loaded');
   });
 
-  it('lists episodes for a series and lets the play button follow the selected one', async () => {
+  it('lists the playable episodes of a series under their season', async () => {
     mockDetailFetch({
       work: {
         available_on: [],
@@ -170,9 +177,10 @@ describe('WorkDetailScreen', () => {
 
     const renderer = await renderDetail(fakeNavigation(), 'w2');
 
+    expect(allText(renderer)).toContain('Season 1');
     expect(allText(renderer)).toContain('Pilot');
-    expect(allText(renderer)).toContain('Second Episode');
-    expect(allText(renderer)).toContain('Unavailable');
+    // An episode with no file is not playable, so the season track leaves it out (the web's `playableEpisodes`).
+    expect(allText(renderer)).not.toContain('Second Episode');
   });
 
   it('opens a similar title on the correct detail screen by kind', async () => {
@@ -190,7 +198,7 @@ describe('WorkDetailScreen', () => {
 
     const renderer = await renderDetail(navigation);
     await act(async () => {
-      renderer.root.findByProps({accessibilityLabel: 'Open A Related Film'}).props.onPress();
+      renderer.root.findByProps({accessibilityLabel: 'A Related Film'}).props.onPress();
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith(ROUTES.workDetail, {workId: 'w3'});
@@ -212,7 +220,9 @@ describe('WorkDetailScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <WorkDetailScreen route={{params: {workId: 'w1'}}} navigation={fakeNavigation()} onPlay={onPlay} />
+          <LanguageProvider>
+            <WorkDetailScreen route={{params: {workId: 'w1'}}} navigation={fakeNavigation()} onPlay={onPlay} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
       await Promise.resolve();
@@ -223,7 +233,7 @@ describe('WorkDetailScreen', () => {
       renderer.root.findByProps({accessibilityLabel: 'Play'}).props.onPress();
     });
 
-    expect(onPlay).toHaveBeenCalledWith('mf-1');
+    expect(onPlay).toHaveBeenCalledWith('mf-1', {title: 'The First Film'});
   });
 
   it('shows a loading indicator before the work resolves', async () => {
@@ -239,13 +249,15 @@ describe('WorkDetailScreen', () => {
     await act(async () => {
       renderer = create(
         <ApiClientProvider>
-          <WorkDetailScreen route={{params: {workId: 'w1'}}} navigation={fakeNavigation()} />
+          <LanguageProvider>
+            <WorkDetailScreen route={{params: {workId: 'w1'}}} navigation={fakeNavigation()} />
+          </LanguageProvider>
         </ApiClientProvider>
       );
       await Promise.resolve();
     });
 
-    expect(renderer.root.findAllByType(ActivityIndicator).length).toBeGreaterThan(0);
+    expect(allText(renderer)).toContain('Loading');
 
     await act(async () => {
       resolveFetch(

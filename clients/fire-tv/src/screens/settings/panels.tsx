@@ -654,3 +654,98 @@ export function YourDataPanel(): React.ReactElement {
     </ScrollView>
   );
 }
+
+// Customise Home (owner ruling 2026-10-08): the rail order and visibility the web keeps on its own page, as a settings panel.
+type RailEntry = {id: string; title: string; hidden: boolean};
+
+function moveRail(entries: RailEntry[], id: string, direction: -1 | 1): RailEntry[] {
+  const index = entries.findIndex((entry) => entry.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= entries.length) return entries;
+  const next = [...entries];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return next;
+}
+
+export function CustomiseHomePanel(): React.ReactElement {
+  const client = useApiClient();
+  const {language, t} = useLanguage();
+  const {colour} = useTheme();
+  const [rails, setRails] = useState<RailEntry[] | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getRailPreferences(language)
+      .then((prefs) => {
+        if (!cancelled) setRails(prefs.rails as RailEntry[]);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, language]);
+
+  const save = useCallback(
+    (next: RailEntry[]) => {
+      setRails(next);
+      setError(false);
+      client
+        .saveRailPreferences({order: next.map((entry) => entry.id), hidden: next.filter((entry) => entry.hidden).map((entry) => entry.id)})
+        .catch(() => setError(true));
+    },
+    [client],
+  );
+
+  const reset = useCallback(() => {
+    setError(false);
+    client
+      .resetRailPreferences()
+      .then(() => client.getRailPreferences(language))
+      .then((prefs) => setRails(prefs.rails as RailEntry[]))
+      .catch(() => setError(true));
+  }, [client, language]);
+
+  return (
+    <PanelBox>
+      <Muted>{t('pages.home.customise.hint')}</Muted>
+      <Gap h={16} />
+      {rails === null && !error ? (
+        <T size={13.12} weight={400} color={colour.inkMuted}>
+          {t('pages.home.customise.loading')}
+        </T>
+      ) : null}
+      {(rails ?? []).map((rail, index) => (
+        <View key={rail.id} style={{flexDirection: 'row', alignItems: 'center', height: u(48), opacity: rail.hidden ? 0.55 : 1}}>
+          <View style={{width: u(420)}}>
+            <T size={15.36} weight={560} color={colour.ink} lines={1}>
+              {rail.title}
+            </T>
+          </View>
+          <Button
+            variant="secondary"
+            w={84}
+            label={rail.hidden ? t('pages.home.customise.show') : t('pages.home.customise.hide')}
+            onPress={() => save(rails!.map((entry) => (entry.id === rail.id ? {...entry, hidden: !entry.hidden} : entry)))}
+          />
+          <View style={{width: u(12)}} />
+          <Button variant="secondary" w={44} label={'↑'} disabled={index === 0} onPress={() => save(moveRail(rails!, rail.id, -1))} />
+          <View style={{width: u(12)}} />
+          <Button variant="secondary" w={44} label={'↓'} disabled={index === rails!.length - 1} onPress={() => save(moveRail(rails!, rail.id, 1))} />
+        </View>
+      ))}
+      <Gap h={20} />
+      <Button variant="secondary" label={t('pages.home.customise.reset')} onPress={reset} />
+      {error ? (
+        <View style={{marginTop: u(12)}}>
+          <T size={13.12} weight={400} color={colour.accent}>
+            {t('pages.home.error.title')}
+          </T>
+        </View>
+      ) : null}
+    </PanelBox>
+  );
+}

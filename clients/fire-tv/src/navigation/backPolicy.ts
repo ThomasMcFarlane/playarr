@@ -25,6 +25,7 @@
  * about at all, so unlike directional movement, this app still owns 100% of
  * deciding what a Back press does.
  */
+import {useEffect, useRef} from 'react';
 import {useNavigation, useRoute, type NavigationProp, type ParamListBase} from '@amazon-devices/react-navigation__native';
 import {useBackHandler} from '../platform';
 import {ROUTES, type RouteName} from './routes';
@@ -146,6 +147,26 @@ export function tvBackNavigationTarget(
  * OWN screen's incoming `backTo` param automatically, it does not invent
  * one.
  */
+const backLayers: Array<() => void> = [];
+
+/**
+ * An open drawer, menu or dialog owns Back while it is `active` (web's layered Back): the press closes the topmost layer
+ * and the screen's own Back policy does not run.
+ */
+export function useBackLayer(active: boolean, onBack: () => void): void {
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  useEffect(() => {
+    if (!active) return undefined;
+    const layer = (): void => onBackRef.current();
+    backLayers.push(layer);
+    return () => {
+      const index = backLayers.lastIndexOf(layer);
+      if (index >= 0) backLayers.splice(index, 1);
+    };
+  }, [active]);
+}
+
 export function useTvBackNavigation(fallbackBackTo?: RouteName): void {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute();
@@ -153,6 +174,11 @@ export function useTvBackNavigation(fallbackBackTo?: RouteName): void {
   const routeBackTo = (route.params as {backTo?: RouteName} | undefined)?.backTo;
 
   useBackHandler(() => {
+    const layer = backLayers[backLayers.length - 1];
+    if (layer) {
+      layer();
+      return true;
+    }
     const target = tvBackNavigationTarget(
       routeName,
       routeBackTo ?? fallbackBackTo,

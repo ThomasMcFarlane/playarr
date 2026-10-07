@@ -265,6 +265,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the film and series title pages, search, watchlist, requests and downloads follow the web TV layout; Home and the library grid fade at their scroll edges; media cards lift with the web's pinned shadow instead of a ring; UP and DOWN between Home rails land on the card directly above or below; and Customise Home moves from Home into Settings.
 - Edge fades are now clearly visible in the dark theme on web and Android (a scrim in the page background over the content); the light theme is unchanged.
 - Android TV Calendar month view now shows chips inside the day cells, as on web, and RIGHT from the navigation rail lands directly in the page content.
 - Fire TV client: the shell chrome (left rail, clock, profile chip), Home, the library grid and the settings workspace now follow the web TV layout in light and dark, with the web focus ring, and the capture driver refuses to press a key unless Playarr is the foreground app.

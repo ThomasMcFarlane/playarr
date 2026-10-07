@@ -1,6 +1,6 @@
 /**
  * Home, drawn at the web TV layout's measurements (`clients/tv-web/web/src/pages/Home.tsx`): the stage with the focused
- * title's key art, the title panel on the left, the Customise Home button, and the vertical stack of rails on the right
+ * title's key art, the title panel on the left, and the vertical stack of rails on the right
  * (the merged "Start watching" rail first, then the server's rails, then the sites rails).
  */
 import React, {useEffect, useMemo, useRef, useState} from 'react';
@@ -16,7 +16,9 @@ import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
 import {loadOnDeck, type OnDeckEntry} from '../lib/onDeck';
-import {Box, T, u} from '../tv/kit';
+import {EdgeFade, TRACK_GUTTER} from '../tv/EdgeFade';
+import {MediaFocus} from '../tv/mediaFocus';
+import {BalancedT, Box, T, u} from '../tv/kit';
 import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
 import {RailFrost, Stage} from '../tv/Stage';
 import {useAccessToken} from './LibraryScreen';
@@ -143,11 +145,15 @@ export function HomeScreen(): React.ReactElement {
   const selected = rails[focus.rail]?.items[focus.item] ?? rails[0]?.items[0];
 
   const railY = useRef(new Animated.Value(0)).current;
-  const scrollX = useRef(rails.map(() => new Animated.Value(0))).current;
+  // The rails scroll through their LEFT offset (JS-driven), not a transform: Vega's focus engine measures layout frames and
+  // ignores transforms, so a transform made UP and DOWN land on the same index instead of the card visually above or below.
+  const railLeft = u(RAIL_X - 729.6);
+  const scrollX = useRef(rails.map(() => new Animated.Value(railLeft))).current;
   useEffect(() => {
     Animated.timing(railY, {toValue: -focus.rail * RAIL_PITCH, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true}).start();
   }, [focus.rail, railY]);
   const scrollTargets = useRef<number[]>([]);
+  const [scrolled, setScrolled] = useState<number[]>([]);
   function focusItem(rail: number, item: number): void {
     setFocus({rail, item});
     const visible = 1920 - RAIL_X;
@@ -156,8 +162,13 @@ export function HomeScreen(): React.ReactElement {
     if (left + CARD_W + 46 > target + visible) target = left + CARD_W + 46 - visible;
     if (left < target + 8) target = Math.max(0, left - 8);
     scrollTargets.current[rail] = target;
-    while (scrollX.length <= rail) scrollX.push(new Animated.Value(0));
-    Animated.timing(scrollX[rail], {toValue: -target, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true}).start();
+    setScrolled((current) => {
+      const next = [...current];
+      next[rail] = target;
+      return next;
+    });
+    while (scrollX.length <= rail) scrollX.push(new Animated.Value(railLeft));
+    Animated.timing(scrollX[rail], {toValue: railLeft - u(target), duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false}).start();
   }
 
   const homeSettled =
@@ -186,10 +197,10 @@ export function HomeScreen(): React.ReactElement {
         <T size={12.288} weight={820} ls={0.983} color="#cf3157" upper lh={18.4}>
           {kicker}
         </T>
-        <View style={{marginTop: u(25.9), width: u(373.2)}}>
-          <T size={69.12} weight={560} ls={-4.9766} lh={62.2} color={colour.ink}>
+        <View style={{marginTop: u(25.9)}}>
+          <BalancedT key={featureTitle} width={373.2} size={69.12} weight={560} ls={-4.9766} lh={62.2} color={colour.ink}>
             {featureTitle}
-          </T>
+          </BalancedT>
         </View>
         <View style={{marginTop: u(21.6), width: u(324)}}>
           <T size={12.864} weight={400} lh={20.3} color={colour.inkMuted} lines={5}>
@@ -199,29 +210,6 @@ export function HomeScreen(): React.ReactElement {
       </Box>
 
       <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} />
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('pages.home.customise.open')}
-        onPress={() => navigation.navigate(ROUTES.homeCustomise)}
-        style={{
-          position: 'absolute',
-          left: u(1750.1),
-          top: u(32),
-          width: u(121.9),
-          height: u(38),
-          borderRadius: 999,
-          backgroundColor: colour.surface,
-          borderWidth: 1,
-          borderColor: colour.line,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <T size={11.52} weight={720} color={colour.inkSoft}>
-          {t('pages.home.customise.open')}
-        </T>
-      </Pressable>
 
       <Box x={729.6} y={0} w={1190.4} h={1080} style={{overflow: 'hidden'}} pointerEvents="box-none">
         <Animated.View style={{transform: [{translateY: railY}]}} pointerEvents="box-none">
@@ -245,10 +233,9 @@ export function HomeScreen(): React.ReactElement {
                 <Animated.View
                   style={{
                     position: 'absolute',
-                    left: u(RAIL_X - 729.6),
+                    left: scrollX[railIndex] ?? railLeft,
                     top: u(headingY + 26.5 + 17.28 + 18),
                     flexDirection: 'row',
-                    transform: [{translateX: scrollX[railIndex] ?? 0}],
                   }}
                 >
                   {rail.items.map((work, itemIndex) => {
@@ -279,6 +266,25 @@ export function HomeScreen(): React.ReactElement {
                     );
                   })}
                 </Animated.View>
+                <EdgeFade
+                  kind="gutter"
+                  tint
+                  side="left"
+                  active={(scrolled[railIndex] ?? 0) > 0}
+                  x={0}
+                  y={headingY + 26.5}
+                  w={1190.4}
+                  h={230}
+                  size={TRACK_GUTTER}
+                />
+                <EdgeFade
+                  side="right"
+                  active={rail.items.length * CARD_PITCH - (scrolled[railIndex] ?? 0) > 1920 - RAIL_X + 8}
+                  x={0}
+                  y={headingY + 26.5}
+                  w={1190.4}
+                  h={230}
+                />
               </View>
             );
           })}
@@ -314,21 +320,14 @@ function HomeCard(props: {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
-      style={{width: u(CARD_W), marginRight: u(CARD_PITCH - CARD_W), transform: [{translateY: selected ? u(-6) : 0}]}}
+      style={{width: u(CARD_W), marginRight: u(CARD_PITCH - CARD_W)}}
     >
-      <View
-        style={{
-          width: u(CARD_W),
-          height: u(123.13),
-          borderRadius: u(12.48),
-          overflow: 'hidden',
-          backgroundColor: colour.surfaceSoft,
-          transform: [{scale: selected ? 1.025 : 1}],
-        }}
-      >
-        <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
-        <WatchState progress={progress} showUnwatched={progressReady} />
-      </View>
+      <MediaFocus variant="home" focused={selected} width={CARD_W} height={123.13} radius={12.48}>
+        <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
+          <ArtworkImage uri={uri} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+          <WatchState progress={progress} showUnwatched={progressReady} />
+        </View>
+      </MediaFocus>
       <View style={{marginTop: u(9.9)}}>
         <T size={11.328} weight={630} color={colour.ink} lh={17} lines={1}>
           {title}

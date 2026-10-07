@@ -1,57 +1,43 @@
 /**
- * RN port of `clients/tv-web/web/src/pages/Search.tsx` -- narrowed heavily,
- * for reasons worth stating rather than leaving implicit: tv-web's version
- * is 987 lines because a mouse-and-keyboard user can comfortably drive a
- * library/type filter drawer, a `?q=`/`?type=`/`?library=` URL-synced query
- * string, and a manual scroll-edge-fade rail, on top of the actual search.
- * None of that is this screen's job on a remote-first TV surface, and none
- * of it is required for "type a query, see matching titles, open one" to
- * genuinely work end to end -- which is what this screen does.
+ * Search, drawn at the web TV layout's measurements (`clients/tv-web/web/src/pages/Search.tsx`): the search pill, the
+ * focused result's key art and details on the left, and a three-column grid of results on the right.
  *
- * Two features are deliberately NOT ported, both for reasons specific to
- * what exists in THIS worktree today rather than being judged unimportant:
- *
- *  - Playlist results (tv-web's `SEARCH_TYPES` includes a "Playlists"
- *    filter, backed by a client-side substring match over
- *    `client.listPlaylists()`, since `/api/v1/catalog/search` only searches
- *    `Work`s). `PlaylistsScreen.tsx` (this same task's own scope) is a
- *    dedicated, browsable list of every playlist already -- duplicating a
- *    second, filtered path to the same data here is not obviously worth
- *    the extra round trip and extra UI surface for a first TV pass.
- *  - Library/type filter chips gated on `availableWorkKinds` -- that value
- *    comes from `AppShellOutletContext`, supplied by `AppShellNavigator`
- *    (design doc §2's navigation layer, a concurrent/later task this
- *    screen has no access to yet). Filtering client-side over the
- *    unfiltered result set once that context exists is a additive,
- *    non-breaking follow-up to this screen, not a rewrite of it.
- *
- * What IS ported faithfully: the `AsyncState` shape search actually needs
- * (`idle` before the first keystroke settles, distinct from `loading` once
- * a query is in flight -- unlike `LibraryScreen`'s browse, which never
- * really has a meaningful idle state, search genuinely does), and
- * debouncing keystrokes into one request rather than one per character,
- * which tv-web achieves via a `setSearchParams` + routing round trip and
- * this screen achieves with a plain `useEffect` timer -- a legitimate
- * `useEffect` use per the repo's React rule (CLAUDE.md): synchronising
- * local input state with an external system (the network) after a pause,
- * not chaining one React state update off another.
+ * Not on this platform yet: the type and library filter drawer and playlist results (see the board row).
  */
-import React, {useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, FlatList, Text, TextInput, View} from 'react-native';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {Animated, Easing, Pressable, TextInput, View} from 'react-native';
+import type {WatchProgress, Work} from '@playarr-tv/api-client';
 import {useAsyncData} from '@playarr-tv/api-client/react';
 import {useApiClient} from '../api/ApiClientProvider';
-import {colour} from '../theme/tokens';
-import {layout, text} from '../theme/styles';
-import {sh, sw} from '../theme/scale';
-import {PosterCard, useAccessToken} from './LibraryScreen';
+import {preferredArtworkKind, workArtworkUrl} from '../api/artworkUrl';
+import {ArtworkImage} from '../components/ArtworkImage';
+import {useLanguage} from '../i18n/LanguageProvider';
 import {ROUTES, type RouteName} from '../navigation/routes';
-import type {Work} from '@playarr-tv/api-client';
+import {Icon} from '../shell/icons';
+import {mix} from '../theme/color';
+import {sans} from '../theme/fonts';
+import {useTheme} from '../theme/ThemeProvider';
+import {EdgeFade} from '../tv/EdgeFade';
+import {BalancedT, Box, T, u} from '../tv/kit';
+import {MediaFocus} from '../tv/mediaFocus';
+import {PageHeader} from '../tv/PageHeader';
+import {RailFrost, Stage} from '../tv/Stage';
+import {indexWatchProgressByWork, WatchState} from '../tv/WatchState';
+import {useAccessToken} from './LibraryScreen';
 
-/** Matches tv-web's own `SEARCH_LIMIT` -- generous enough for a single results screen with no pagination. */
+/** Matches the web's `SEARCH_LIMIT`: one results screen, no pagination. */
 const SEARCH_LIMIT = 60;
-
-/** How long to wait after the last keystroke before actually searching -- long enough that fast typing on an on-screen/Bluetooth keyboard doesn't fire a request per character, short enough that the result still feels responsive. */
+/** How long to wait after the last keystroke before searching. */
 const DEBOUNCE_MS = 350;
+
+const COLUMNS = 3;
+const GRID_X = 825.6;
+const GRID_Y = 172.8;
+const COL_PITCH = 346.6;
+const ROW_PITCH = 247.45;
+const ART_W = 320.6;
+const ART_H = 180.3;
+const GRID_CLIP_TOP = 150;
 
 export interface SearchScreenNavigation {
   navigate: (route: RouteName, params?: Record<string, unknown>) => void;
@@ -61,105 +47,243 @@ export interface SearchScreenProps {
   navigation: SearchScreenNavigation;
 }
 
-export function SearchScreen({navigation}: SearchScreenProps): JSX.Element {
+export function SearchScreen({navigation}: SearchScreenProps): React.ReactElement {
   const client = useApiClient();
-  const accessToken = useAccessToken(client);
+  const token = useAccessToken(client);
+  const baseUrl = client.resolveUrl('/');
+  const {t} = useLanguage();
+  const {colour, scheme} = useTheme();
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [focusIndex, setFocusIndex] = useState(0);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [cardFocused, setCardFocused] = useState(false);
+  const scrollY = useRef(new Animated.Value(u(-GRID_CLIP_TOP))).current;
 
   useEffect(() => {
-    const trimmed = query.trim();
-    const timer = setTimeout(() => setDebouncedQuery(trimmed), DEBOUNCE_MS);
+    const timer = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [query]);
 
-  const state = useAsyncData(() => client.searchCatalog(debouncedQuery, SEARCH_LIMIT), [client, debouncedQuery], {
-    enabled: debouncedQuery.length > 0,
+  const state = useAsyncData(() => client.searchCatalog(debounced, SEARCH_LIMIT), [client, debounced], {
+    enabled: debounced.length > 0,
     isEmpty: (results) => results.length === 0,
   });
+  const progress = useAsyncData(() => client.listWatchProgress(), [client]);
+  const progressByWork = useMemo(() => indexWatchProgressByWork(progress.status === 'ready' ? progress.data : []), [progress]);
+  const results: Work[] = state.status === 'ready' ? state.data : [];
+  const selected = results[Math.min(focusIndex, Math.max(0, results.length - 1))];
+  const row = Math.floor(focusIndex / COLUMNS);
 
-  function openWork(work: Work): void {
-    navigation.navigate(work.kind === 'artist' ? ROUTES.musicDetail : ROUTES.workDetail, {workId: work.id});
-  }
+  useEffect(() => {
+    setFocusIndex(0);
+  }, [debounced]);
 
-  const resultCountLabel = useMemo(() => {
-    if (state.status !== 'ready') return null;
-    const count = state.data.length;
-    return count === 1 ? '1 result' : `${count} results`;
-  }, [state]);
+  useEffect(() => {
+    const target = Math.max(0, row * ROW_PITCH - 120);
+    Animated.timing(scrollY, {toValue: u(-GRID_CLIP_TOP) - u(target), duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false}).start();
+  }, [row, scrollY]);
+
+  const kindLabel = (work: Work): string =>
+    work.kind === 'series' ? t('pages.search.kindSeries') : work.kind === 'artist' ? t('pages.search.kindArtist') : work.kind === 'site' ? t('pages.search.kindSite') : t('pages.search.kindMovie');
+  const year = (work: Work): string | null => (work.release_date ? String(new Date(work.release_date).getUTCFullYear()) : null);
+  const open = (work: Work): void => navigation.navigate(work.kind === 'artist' ? ROUTES.musicDetail : ROUTES.workDetail, {workId: work.id, backTo: ROUTES.search});
+
+  const detail =
+    state.status === 'ready' ? (results.length === 1 ? t('pages.search.resultCountOne', {count: 1}) : t('pages.search.resultCountOther', {count: results.length})) : state.status === 'empty' ? t('pages.search.zeroResults') : undefined;
+  const artKind = selected ? preferredArtworkKind(selected, ['backdrop', 'poster']) : undefined;
+  const dark = scheme === 'dark';
+  const visibleFrom = Math.max(0, (row - 1) * COLUMNS);
+  const visibleTo = (row + 4) * COLUMNS;
 
   return (
-    <View style={layout.appScreen}>
-      <Text style={[text.title, {color: colour.ink, marginBottom: sh(20)}]}>Search</Text>
+    <Stage artUri={selected && artKind ? workArtworkUrl(baseUrl, selected.id, artKind) : undefined} accessToken={token}>
+      <PageHeader title={t('pages.search.title')} detail={detail} onBack={() => navigation.navigate(ROUTES.home)} />
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search your libraries and playlists"
-        placeholderTextColor={colour.inkMuted}
+      {/* The search pill. A focused TextInput opens the system keyboard at once, which is how this platform's own search behaves. */}
+      <View
         style={{
-          borderWidth: 2,
-          borderColor: colour.line,
-          borderRadius: 8,
-          paddingHorizontal: sw(20),
-          paddingVertical: sh(14),
-          color: colour.ink,
-          fontSize: sw(24),
-          marginBottom: sh(24),
-          backgroundColor: colour.surface,
+          position: 'absolute',
+          left: u(149.2),
+          top: u(172.2),
+          width: u(598.8),
+          height: u(77.1),
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: inputFocused ? mix('#cf3157', 0.72) : mix(colour.lineStrong, 0.76),
+          backgroundColor: mix(colour.surfaceStrong, 0.88),
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingLeft: u(24),
+          transform: [{scale: inputFocused ? 1.015 : 1}],
         }}
-        // AGENTS.md's TV text-input rule (design doc §4.4) is about vertical
-        // arrows escaping to spatial nav once the IME closes, which is
-        // `components/TvTextInput.tsx`'s job (a components-phase task, not
-        // this screen's) -- a plain `TextInput` is used here directly
-        // because that wrapper does not exist yet in this worktree, and a
-        // search box with no way to type into it at all would not be a
-        // smaller gap than a search box missing that one polish detail.
-        returnKeyType="search"
-      />
-
-      {resultCountLabel ? (
-        <Text style={[text.caption, {color: colour.inkMuted, marginBottom: sh(12)}]}>{resultCountLabel}</Text>
-      ) : null}
-
-      {state.status === 'idle' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <Text style={[text.body, {color: colour.inkMuted}]}>Start typing to search.</Text>
-        </View>
-      ) : state.status === 'loading' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <ActivityIndicator size="large" color={colour.accent} />
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(12)}]}>Searching…</Text>
-        </View>
-      ) : state.status === 'error' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <Text style={[text.subtitle, {color: colour.ink}]}>Search could not be completed</Text>
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(8)}]}>{state.message}</Text>
-        </View>
-      ) : state.status === 'empty' ? (
-        <View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-          <Text style={[text.subtitle, {color: colour.ink}]}>No matching titles or playlists.</Text>
-          <Text style={[text.body, {color: colour.inkSoft, marginTop: sh(8)}]}>
-            Try another title or adjust your search.
-          </Text>
-        </View>
-      ) : state.status === 'ready' ? (
-        <FlatList
-          data={state.data}
-          keyExtractor={(work) => work.id}
-          numColumns={5}
-          showsVerticalScrollIndicator={false}
-          renderItem={({item, index}) => (
-            <PosterCard
-              work={item}
-              baseUrl={client.resolveUrl('/')}
-              accessToken={accessToken}
-              onSelect={openWork}
-              autoFocus={index === 0}
-            />
-          )}
+      >
+        <Icon name="search" size={u(24)} color={colour.inkMuted} strokeWidth={1.8} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          onFocus={() => {
+            setInputFocused(true);
+            setCardFocused(false);
+          }}
+          onBlur={() => setInputFocused(false)}
+          placeholder={t('pages.search.searchPlaceholder')}
+          placeholderTextColor={colour.inkMuted}
+          returnKeyType="search"
+          hasTVPreferredFocus
+          accessibilityLabel={t('pages.search.ariaSearchPlayarr')}
+          style={{flex: 1, marginLeft: u(13), padding: 0, height: u(60), color: colour.ink, fontSize: u(17.28), textAlignVertical: 'center', ...sans(400)}}
         />
+        {query.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('pages.search.clear')}
+            onPress={() => setQuery('')}
+            style={{width: u(68.3), height: u(54.8), marginRight: u(8), borderRadius: 999, alignItems: 'center', justifyContent: 'center'}}
+          >
+            <T size={10.944} weight={740} color={colour.inkMuted}>
+              {t('pages.search.clear')}
+            </T>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {selected ? (
+        <Box x={153.6} y={362} w={552.6}>
+          <T size={9.984} weight={800} ls={0.7987} lh={15} color="#cf3157" upper>
+            {`${kindLabel(selected)}${year(selected) ? ` · ${year(selected)}` : ''}`}
+          </T>
+          <View style={{marginTop: u(8.8)}}>
+            <BalancedT key={selected.id} width={374.4} size={48} weight={560} ls={-2.88} lh={47} color={colour.ink}>
+              {selected.title}
+            </BalancedT>
+          </View>
+          <View style={{marginTop: u(14.4), flexDirection: 'row'}}>
+            {year(selected) ? (
+              <View style={{marginRight: u(11.6)}}>
+                <T size={10.368} weight={400} lh={15.6} color={colour.inkMuted}>
+                  {year(selected)}
+                </T>
+              </View>
+            ) : null}
+            {selected.genres.length > 0 ? (
+              <T size={10.368} weight={400} lh={15.6} color={colour.inkMuted}>
+                {selected.genres.slice(0, 2).join(' · ')}
+              </T>
+            ) : null}
+          </View>
+          <View style={{marginTop: u(17.6), width: u(552.6)}}>
+            <T size={12.288} weight={400} lh={19} color={colour.inkMuted} lines={4}>
+              {selected.overview ?? t('pages.search.noSynopsis')}
+            </T>
+          </View>
+        </Box>
       ) : null}
-    </View>
+
+      <RailFrost dark={dark} soft={colour.surfaceSoft} strong={colour.surfaceStrong} />
+
+      {debounced.length === 0 ? (
+        <Box x={826} y={172} w={700}>
+          <T size={17.664} weight={610} color={colour.ink}>
+            {t('pages.search.idleTitle')}
+          </T>
+          <View style={{marginTop: u(6)}}>
+            <T size={12} weight={400} color={colour.inkMuted}>
+              {t('pages.search.emptyPrompt')}
+            </T>
+          </View>
+        </Box>
+      ) : state.status === 'error' ? (
+        <Box x={1304} y={350} w={500}>
+          <T size={17.664} weight={610} color={colour.accent}>
+            {t('pages.search.errorTitle')}
+          </T>
+        </Box>
+      ) : state.status === 'empty' ? (
+        <Box x={826} y={172} w={700}>
+          <T size={17.664} weight={610} color={colour.ink}>
+            {t('pages.search.noResultsTitle')}
+          </T>
+          <View style={{marginTop: u(6)}}>
+            <T size={12} weight={400} color={colour.inkMuted}>
+              {t('pages.search.noResultsDescription')}
+            </T>
+          </View>
+        </Box>
+      ) : null}
+
+      <Box x={GRID_X - 20} y={GRID_CLIP_TOP} w={1920 - GRID_X + 20} h={1080 - GRID_CLIP_TOP} style={{overflow: 'hidden'}} pointerEvents="box-none">
+        <Animated.View style={{position: 'absolute', left: u(-(GRID_X - 20)), top: scrollY, width: u(1920)}} pointerEvents="box-none">
+          {results.slice(visibleFrom, visibleTo).map((work, offset) => {
+            const index = visibleFrom + offset;
+            return (
+              <ResultCard
+                key={work.id}
+                work={work}
+                x={GRID_X + (index % COLUMNS) * COL_PITCH}
+                y={GRID_Y + Math.floor(index / COLUMNS) * ROW_PITCH}
+                baseUrl={baseUrl}
+                token={token}
+                label={`${kindLabel(work)}${year(work) ? ` · ${year(work)}` : ''}`}
+                selected={cardFocused && index === focusIndex}
+                progress={progressByWork.get(work.id)}
+                progressReady={progress.status === 'ready'}
+                onFocus={() => {
+                  setFocusIndex(index);
+                  setCardFocused(true);
+                }}
+                onPress={() => open(work)}
+              />
+            );
+          })}
+        </Animated.View>
+      </Box>
+      <EdgeFade side="top" active={row > 0} x={GRID_X - 20} y={GRID_CLIP_TOP} w={1920 - GRID_X + 20} h={1080 - GRID_CLIP_TOP} />
+      <EdgeFade side="bottom" active={Math.ceil(results.length / COLUMNS) > row + 3} x={GRID_X - 20} y={GRID_CLIP_TOP} w={1920 - GRID_X + 20} h={1080 - GRID_CLIP_TOP} />
+    </Stage>
+  );
+}
+
+function ResultCard(props: {
+  work: Work;
+  x: number;
+  y: number;
+  baseUrl: string;
+  token: string | undefined;
+  label: string;
+  selected: boolean;
+  progress: WatchProgress | undefined;
+  progressReady: boolean;
+  onFocus: () => void;
+  onPress: () => void;
+}): React.ReactElement {
+  const {colour} = useTheme();
+  const {work} = props;
+  const kind = preferredArtworkKind(work, ['backdrop', 'poster']);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={work.title}
+      onFocus={props.onFocus}
+      onPress={props.onPress}
+      style={{position: 'absolute', left: u(props.x), top: u(props.y), width: u(ART_W)}}
+    >
+      <MediaFocus variant="search" focused={props.selected} width={ART_W} height={ART_H} radius={12.48}>
+        <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceStrong}}>
+          {kind ? <ArtworkImage uri={workArtworkUrl(props.baseUrl, work.id, kind)} accessToken={props.token} style={{width: '100%', height: '100%'}} resizeMode="cover" /> : null}
+          <WatchState progress={props.progress} showUnwatched={props.progressReady} />
+        </View>
+      </MediaFocus>
+      <View style={{marginTop: u(11.2), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: u(1.6)}}>
+        <View style={{width: u(253.5)}}>
+          <T size={12.288} weight={650} lh={18.4} color={colour.ink} lines={1}>
+            {work.title}
+          </T>
+        </View>
+        <T size={8.448} weight={720} lh={12.7} color={colour.inkMuted} upper>
+          {props.label}
+        </T>
+      </View>
+    </Pressable>
   );
 }

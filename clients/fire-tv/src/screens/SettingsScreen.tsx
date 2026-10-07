@@ -11,6 +11,7 @@ import {useTvBackNavigation} from '../navigation/backPolicy';
 import {ROUTES, type RouteName} from '../navigation/routes';
 import {useTheme} from '../theme/ThemeProvider';
 import {Box, T, u} from '../tv/kit';
+import {EdgeFade} from '../tv/EdgeFade';
 import {BackButton} from '../tv/PageHeader';
 import {RailFrost, Stage} from '../tv/Stage';
 import type {TranslationKey} from '../../../tv-web/web/src/lib/i18n/translations';
@@ -25,6 +26,7 @@ import {
   RemotePanel,
   ServerPanel,
   YourDataPanel,
+  CustomiseHomePanel,
 } from './settings/panels';
 
 export type SettingsSectionId =
@@ -37,7 +39,8 @@ export type SettingsSectionId =
   | 'invite'
   | 'request-latency'
   | 'remote'
-  | 'your-data';
+  | 'your-data'
+  | 'customise-home';
 
 interface Section {
   id: SettingsSectionId;
@@ -59,10 +62,13 @@ export const SETTINGS_SECTIONS: readonly Section[] = [
   {id: 'request-latency', number: '08', titleKey: 'settings.index.requestLatency.title', descriptionKey: 'settings.index.requestLatency.description', route: ROUTES.settingsLatency},
   {id: 'remote', number: '09', titleKey: 'settings.index.remote.title', descriptionKey: 'settings.index.remote.description', route: ROUTES.settingsRemote},
   {id: 'your-data', number: '10', titleKey: 'settings.index.yourData.title', descriptionKey: 'settings.index.yourData.description', route: ROUTES.settingsYourData},
+  {id: 'customise-home', number: '11', titleKey: 'pages.home.customise.title', descriptionKey: 'pages.home.customise.hint', route: ROUTES.settingsCustomiseHome},
 ];
 
 const ROW_PITCH = 91.9;
 const LIST_TOP = 162;
+/** The list scrolls under the header: it is clipped below the title block (web `.tv-scroll-edge-window`). */
+const LIST_CLIP_TOP = 150;
 
 function Panel({id}: {id: SettingsSectionId}): React.ReactElement {
   switch (id) {
@@ -86,6 +92,8 @@ function Panel({id}: {id: SettingsSectionId}): React.ReactElement {
       return <RemotePanel />;
     case 'your-data':
       return <YourDataPanel />;
+    case 'customise-home':
+      return <CustomiseHomePanel />;
   }
 }
 
@@ -100,10 +108,12 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
   const activeSection = SETTINGS_SECTIONS[activeIndex] ?? SETTINGS_SECTIONS[0];
   useTvBackNavigation(ROUTES.home);
 
+  const [scrollOffset, setScrollOffset] = useState(0);
   useEffect(() => {
     const row = focusedRow ?? activeIndex;
     const bottom = LIST_TOP + (row + 1) * ROW_PITCH;
     const target = bottom > 1040 ? bottom - 1040 : 0;
+    setScrollOffset(target);
     Animated.timing(scroll, {toValue: -target, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true}).start();
   }, [focusedRow, activeIndex, scroll]);
 
@@ -127,8 +137,8 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
         </View>
       </View>
 
-      <Box x={0} y={0} w={672} h={1080} style={{overflow: 'hidden'}} pointerEvents="box-none">
-        <Animated.View style={{transform: [{translateY: scroll}]}} pointerEvents="box-none">
+      <Box x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} style={{overflow: 'hidden'}} pointerEvents="box-none">
+        <Animated.View style={{position: 'absolute', top: u(-LIST_CLIP_TOP), left: 0, width: u(672), transform: [{translateY: scroll}]}} pointerEvents="box-none">
           {SETTINGS_SECTIONS.map((section, index) => (
             <Row
               key={section.id}
@@ -145,6 +155,8 @@ export function SettingsScreen({initial = 'appearance'}: {initial?: SettingsSect
         </Animated.View>
       </Box>
 
+      <EdgeFade side="top" active={scrollOffset > 0} x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} />
+      <EdgeFade side="bottom" active={LIST_TOP + SETTINGS_SECTIONS.length * ROW_PITCH - scrollOffset > 1040} x={0} y={LIST_CLIP_TOP} w={672} h={1080 - LIST_CLIP_TOP} />
       <Box x={0} y={0} w={1920} h={1080} pointerEvents="box-none">
         <Panel id={active} />
       </Box>

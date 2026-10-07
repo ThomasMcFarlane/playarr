@@ -47,6 +47,8 @@ import {useTvBackNavigation} from '../navigation/backPolicy';
 import {mix} from '../theme/color';
 import {useTheme} from '../theme/ThemeProvider';
 import {Icon} from '../shell/icons';
+import {EdgeFade} from '../tv/EdgeFade';
+import {MediaFocus} from '../tv/mediaFocus';
 import {Box, T, u} from '../tv/kit';
 import {PageHeader} from '../tv/PageHeader';
 import {Preview} from '../tv/Preview';
@@ -221,6 +223,8 @@ const COL_PITCH = 353.05;
 const ROW_PITCH = 240.4;
 const GRID_X = 783.4;
 const GRID_Y = 162;
+/** The grid scrolls under the page header: clipped below it, with the web's edge fades. */
+const GRID_CLIP_TOP = 150;
 const PAGE_SIZE = 200;
 const ALPHABET = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'] as const;
 
@@ -355,8 +359,8 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
           </T>
         </Box>
       ) : null}
-      <Box x={0} y={0} w={1920} h={1080} style={{overflow: 'hidden'}} pointerEvents="box-none">
-        <Animated.View style={{transform: [{translateY: scrollY}]}} pointerEvents="box-none">
+      <Box x={GRID_X - 24} y={GRID_CLIP_TOP} w={1920 - GRID_X + 24} h={1080 - GRID_CLIP_TOP} style={{overflow: 'hidden'}} pointerEvents="box-none">
+        <Animated.View style={{position: 'absolute', left: u(-(GRID_X - 24)), top: u(-GRID_CLIP_TOP), width: u(1920), transform: [{translateY: scrollY}]}} pointerEvents="box-none">
           {visible.map((work, offset) => {
             const index = firstVisible + offset;
             const col = index % GRID_COLUMNS;
@@ -380,6 +384,15 @@ export function LibraryScreen({kind, navigation}: LibraryScreenProps): JSX.Eleme
           })}
         </Animated.View>
       </Box>
+      <EdgeFade side="top" active={row > 0} x={GRID_X - 24} y={GRID_CLIP_TOP} w={1920 - GRID_X + 24} h={1080 - GRID_CLIP_TOP} />
+      <EdgeFade
+        side="bottom"
+        active={items !== null && Math.ceil((total ?? items.length) / GRID_COLUMNS) > row + 4}
+        x={GRID_X - 24}
+        y={GRID_CLIP_TOP}
+        w={1920 - GRID_X + 24}
+        h={1080 - GRID_CLIP_TOP}
+      />
       <Alphabet active={activeLetter} onJump={(letter) => jumpTo(letter)} />
     </Stage>
   );
@@ -453,21 +466,14 @@ function LibraryCard(props: {
       hasTVPreferredFocus={first}
       onFocus={onFocus}
       onPress={onPress}
-      style={{position: 'absolute', left: u(x), top: u(y), width: u(CARD_W), transform: [{translateY: selected ? u(-3.6) : 0}]}}
+      style={{position: 'absolute', left: u(x), top: u(y), width: u(CARD_W)}}
     >
-      <View
-        style={{
-          width: u(CARD_W),
-          height: u(CARD_H),
-          borderRadius: u(12.48),
-          overflow: 'hidden',
-          backgroundColor: colour.surfaceSoft,
-          transform: selected ? [{translateY: u(-1.6)}, {scale: 1.0403}] : [],
-        }}
-      >
-        <ArtworkImage uri={cardArtUrl(baseUrl, work)} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
-        <WatchState progress={progress} showUnwatched={progressReady} />
-      </View>
+      <MediaFocus variant="library" focused={selected} width={CARD_W} height={CARD_H} radius={12.48}>
+        <View style={{width: '100%', height: '100%', backgroundColor: colour.surfaceSoft}}>
+          <ArtworkImage uri={cardArtUrl(baseUrl, work)} accessToken={token} style={{width: '100%', height: '100%'}} resizeMode="cover" />
+          <WatchState progress={progress} showUnwatched={progressReady} />
+        </View>
+      </MediaFocus>
       <View style={{marginTop: u(11.5), paddingHorizontal: u(1.9)}}>
         <T size={11.904} weight={610} ls={-0.1786} lh={17.9} color={colour.ink} lines={1}>
           {work.title}
