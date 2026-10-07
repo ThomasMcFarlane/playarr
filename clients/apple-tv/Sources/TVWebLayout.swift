@@ -220,20 +220,27 @@ struct TVWebProfileChip: View {
     var userID: String = ""
     var presetName: String? = nil
 
+    /// Width of the name at 11.14px / 690 with 0.22px tracking (the capsule grows with it).
+    private var nameWidth: CGFloat {
+        let font = TVFontLoader.uiFont(mono: false, size: 11.14, weight: 690)
+        return ceil((name as NSString).size(withAttributes: [.font: font, .kern: 0.22]).width)
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Capsule()
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.66))
                 .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
-                .placed(x: 58.5, y: 997.3, w: 104.3, h: 48.2)
+                .placed(x: 58.5, y: 997.3, w: 64.9 + nameWidth, h: 48.2)
             TVProfileAvatar(userID: userID, size: 34, presetName: presetName)
                 .placed(x: 65.6, y: 1004.4, w: 34, h: 34)
             Text(name)
-                .font(TVTheme.font(size: 11.14, weight: .bold))
+                .font(TVTheme.font(size: 11.14, css: 690))
                 .tracking(0.22)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .lineLimit(1)
-                .placed(x: 110, y: 1013, w: 48, h: 16.7)
+                .fixedSize()
+                .placed(x: 110, y: 1013, w: nameWidth, h: 16.7)
             Text(version)
                 .font(TVTheme.mono(size: 8, css: 700))
                 .tracking(0.32)
