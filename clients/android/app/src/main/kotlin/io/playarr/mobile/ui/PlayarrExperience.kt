@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1987,7 +1989,7 @@ private fun ProfileControl(
             }
         }
         Box(
-            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = 5.dp, start = if (isTelevision) 7.8.dp else 0.dp),
+            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = if (isTelevision) 5.dp else 3.8.dp, start = if (isTelevision) 7.8.dp else 0.dp),
             contentAlignment = if (isTelevision) Alignment.CenterStart else Alignment.Center,
         ) {
             Text(
@@ -5094,7 +5096,7 @@ private fun PhoneVideoDetailBody(
                     Text(
                         work.title, color = WebInk, fontSize = 39.sp, lineHeight = 36.66.sp, fontWeight = FontWeight(560), letterSpacing = (-2.808).sp,
                         style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.graphicsLayer { translationY = -5.3.dp.toPx() },
+                        modifier = Modifier.graphicsLayer { translationY = -9.3.dp.toPx() },
                     )
                 }
                 if (episode != null) {
@@ -5106,8 +5108,8 @@ private fun PhoneVideoDetailBody(
                         modifier = Modifier.graphicsLayer { translationY = -1.7.dp.toPx() },
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Spacer(Modifier.height(if (episode != null) 8.dp else 12.dp))
+                FlowRow(Modifier.offset(y = (-1.3).dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     metaItems.forEachIndexed { index, item ->
                         Text(
                             item, color = if (index == 0) WebInkSoft else WebInkMuted, fontSize = 10.24.sp, lineHeight = 15.36.sp,
@@ -5147,6 +5149,19 @@ private fun PhoneVideoDetailBody(
                         PhoneDetailRail(
                             title = season.season.title ?: playarrString(PlayarrString.DetailSeasonNumber, "number" to season.season.seasonNumber),
                             subtitle = playarrString(PlayarrString.DetailEpisodeCount, "count" to season.episodes.size),
+                            action = if (canDownload) ({
+                                val candidates = season.episodes.mapNotNull { ep ->
+                                    ep.mediaFileId?.let {
+                                        DownloadCandidate(it, work.id, ep.episode.title ?: playarrString(PlayarrString.DetailEpisodeNumber, "number" to ep.episode.episodeNumber), work.title, posterUrl, "episode")
+                                    }
+                                }
+                                Box(
+                                    Modifier.size(36.dp).clip(CircleShape).clickable(enabled = candidates.isNotEmpty()) { onDownload(candidates) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(PlayarrWebIcons.Downloads, contentDescription = playarrString(PlayarrString.DetailDownloadButton), tint = WebInkMuted, modifier = Modifier.size(13.dp))
+                                }
+                            }) else null,
                         ) {
                             items(season.episodes, key = { it.episode.id }) { ep ->
                                 EpisodeDetailCard(
@@ -5186,12 +5201,23 @@ private fun PhoneVideoDetailBody(
 
 /** Web phone rail heading (24 px title, 10.56 px count) above a row of 179.4 px cards 12 px apart. */
 @Composable
-private fun PhoneDetailRail(title: String, subtitle: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+private fun PhoneDetailRail(
+    title: String,
+    subtitle: String,
+    action: (@Composable () -> Unit)? = null,
+    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(top = 21.3.dp, bottom = 20.dp)) {
-        Text(
-            title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(610), letterSpacing = (-0.48).sp,
-            style = WebTextStyle, maxLines = 1, modifier = Modifier.padding(start = 16.dp),
-        )
+        Box(Modifier.fillMaxWidth().height(24.dp)) {
+            Text(
+                title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(610), letterSpacing = (-0.48).sp,
+                style = WebTextStyle, maxLines = 1, modifier = Modifier.padding(start = 16.dp),
+            )
+            // Web `.tv-season-download`: an icon-only button on the heading line (it overflows the 24 px line, as in CSS).
+            if (action != null) {
+                Box(Modifier.align(Alignment.CenterEnd).padding(end = 9.dp).wrapContentSize(unbounded = true).offset(y = 1.dp)) { action() }
+            }
+        }
         Text(
             subtitle, color = WebInkMuted, fontSize = 10.56.sp, lineHeight = 15.84.sp, style = WebTextStyle, maxLines = 1,
             modifier = Modifier.padding(start = 16.dp, top = 4.dp),
@@ -5296,6 +5322,11 @@ private fun PhoneDetailActions(
                 Text(playLabel, color = WebBackground, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
             }
             WatchlistToggleButton(work, webPhone = true)
+            PhonePill(onClick = { onAddToPlaylist(episode?.episode?.id) }, container = pillColor) {
+                Text("+", color = WebKicker, fontSize = 9.2.sp, lineHeight = 13.8.sp, style = WebTextStyle)
+                Spacer(Modifier.width(10.dp))
+                Text(playarrString(PlayarrString.ContextAddToPlaylist), color = WebInk, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            }
         }
         return
     }
@@ -5326,6 +5357,11 @@ private fun PhoneDetailActions(
                 Text(playLabel, color = Color.White, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
             }
             WatchlistToggleButton(work, webPhone = true)
+            PhonePill(onClick = { onAddToPlaylist(episode?.episode?.id) }, container = pillColor) {
+                Text("+", color = WebKicker, fontSize = 9.2.sp, lineHeight = 13.8.sp, style = WebTextStyle)
+                Spacer(Modifier.width(10.dp))
+                Text(playarrString(PlayarrString.ContextAddToPlaylist), color = WebInk, fontSize = 8.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
+            }
         }
     }
 }

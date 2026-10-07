@@ -98,7 +98,7 @@ internal fun PhoneProfilesHeading(kicker: String, title: String) {
                 title,
                 color = WebInk, fontSize = 42.9.sp, lineHeight = 40.755.sp, fontWeight = FontWeight.Medium,
                 letterSpacing = (-3.0888).sp, textAlign = TextAlign.Center, style = WebTextStyle, maxLines = 1, softWrap = false,
-                modifier = Modifier.wrapContentHeight(align = Alignment.Top, unbounded = true).offset(y = (-5.67).dp),
+                modifier = Modifier.wrapContentHeight(align = Alignment.Top, unbounded = true).offset(y = (-10).dp),
             )
         }
     }
@@ -147,7 +147,7 @@ internal fun PhoneProfileChoice(
                 profile.displayName,
                 color = if (selected) WebInk else WebInkSoft, fontSize = 13.12.sp, lineHeight = 19.68.sp, fontWeight = FontWeight(680),
                 style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().offset(y = 1.dp),
+                modifier = Modifier.fillMaxWidth().offset(y = (-0.3).dp),
             )
             Text(
                 playarrString(
@@ -159,7 +159,7 @@ internal fun PhoneProfileChoice(
                     },
                 ).uppercase(LocalPlayarrLanguage.current.locale),
                 color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, fontWeight = FontWeight(690),
-                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-1).dp),
+                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-0.33).dp),
             )
         }
         if (selected) {
@@ -224,12 +224,12 @@ internal fun PhoneAddProfileChoice(selected: Boolean, enabled: Boolean, onFocus:
             Text(
                 playarrString(PlayarrString.ProfilesSignIn),
                 color = if (selected) WebInk else WebInkSoft, fontSize = 13.12.sp, lineHeight = 19.68.sp, fontWeight = FontWeight(680),
-                style = WebTextStyle, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().offset(y = 1.dp),
+                style = WebTextStyle, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().offset(y = (-0.3).dp),
             )
             Text(
                 playarrString(PlayarrString.ProfilesAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
                 color = WebInkMuted, fontSize = 6.72.sp, lineHeight = 10.08.sp, fontWeight = FontWeight(690),
-                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-1).dp),
+                letterSpacing = 0.3024.sp, style = WebTextStyle, maxLines = 1, modifier = Modifier.offset(y = (-0.33).dp),
             )
         }
     }
