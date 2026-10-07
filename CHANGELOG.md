@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android: Home rails fade at their edges like the web client. Cards scrolled past the start line fade away over the gutter on the left (the card at rest stays fully visible) and a soft shadow shows on the right while more cards follow, in both themes, on television and phone.
 - Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.
 - Roku: playback now resumes from the server's resume point and reports watch progress (periodically, on pause, on exit and at the end) through its own request tasks, so leaving the player no longer loses the position. Nothing is written when playback never started.
 - Fire TV client: playback works again on a real device. The app now loads Shaka Player for Vega (installed by `scripts/setup-shaka.sh`) with the navigator fields it needs, and advertises the containers and codecs the stick decodes so the server direct-plays instead of answering 503 for an on-demand transcode it has no capacity for.

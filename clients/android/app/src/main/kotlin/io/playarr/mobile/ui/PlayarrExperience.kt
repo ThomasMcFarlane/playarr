@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import io.playarr.shared.designsystem.component.PlayarrFadeKind
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.boundsInRoot
@@ -2615,10 +2616,13 @@ private fun ExperienceHomeScreen(
                         if (isTelevision && index >= 0) railsState.animateScrollToItem(index)
                     }
                     Box(Modifier.fillMaxSize()) {
+                    // Television: the list reaches left over the rail gutter so each rail's viewport can (see ExperienceMediaRail).
+                    val railGutter = if (isTelevision) tvTrackGutter() else 0.dp
                     LazyColumn(
                         state = railsState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = if (isTelevision) Modifier.fillMaxSize().extendStart(railGutter) else Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
+                            start = railGutter,
                             top = if (isTelevision) 422.9.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
@@ -3045,11 +3049,16 @@ internal fun ExperienceMediaRail(
         }
         val railState = rails?.rowState(railIndex) ?: androidx.compose.foundation.lazy.rememberLazyListState()
         Box {
-        LazyRow(
+        // Web `.tv-media-track`: the rail's scroll viewport reaches left into a gutter (`--tv-track-left-fade`, 88 to 152 px on
+        // television, the 16 dp page gutter on a phone) ahead of the content start line. A card at rest sits on that line;
+        // scrolled-past cards fade away over the gutter only.
+        val trackGutter = if (isTelevision) tvTrackGutter() else 16.dp
+        PlayarrLazyRow(
             state = railState,
-            // Television: the 3 px focus ring sits outside the first card, so the row starts 4 dp early and pads 4 dp back.
-            modifier = (if (isTelevision) Modifier.fillMaxWidth().offset(x = (-4).dp) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
-            contentPadding = if (isTelevision) PaddingValues(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
+            fade = if (isTelevision) PlayarrFadeKind.Rail else PlayarrFadeKind.PhoneRail,
+            startGutter = trackGutter,
+            modifier = (if (isTelevision) Modifier.fillMaxWidth().extendStart(trackGutter) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
+            contentPadding = if (isTelevision) PaddingValues(start = trackGutter, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
         ) {
             itemsIndexed(rail.works, key = { _, work -> work.id }) { itemIndex, work ->
@@ -3092,63 +3101,8 @@ internal fun ExperienceMediaRail(
                 )
             }
         }
-        if (!isTelevision && railState.canScrollForward) {
-            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) { PhoneRailEdgeFade() }
-        }
         }
     }
-}
-
-/**
- * `.tv-home-rail-window::after` on a phone: a 32 px fade at the rail window's right edge while the rail can scroll on
- * (opacity 0.58, 0.5 in dark). An elliptical radial gradient centred 28% beyond the edge, rounded 48% on its left,
- * plus the inset shadow along the edge.
- */
-@Composable
-internal fun PhoneRailEdgeFade(modifier: Modifier = Modifier) {
-    val ink = Color(0xFF1F0E14)
-    val opacity = if (webIsDark) 0.5f else 0.58f
-    Box(
-        modifier
-            .width(32.dp)
-            .fillMaxHeight()
-            .graphicsLayer { alpha = opacity }
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val shape = androidx.compose.ui.graphics.Path().apply {
-                    addRoundRect(
-                        androidx.compose.ui.geometry.RoundRect(
-                            0f, 0f, w, h,
-                            topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
-                            topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
-                            bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
-                            bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
-                        ),
-                    )
-                }
-                drawContext.canvas.save()
-                drawContext.canvas.clipPath(shape)
-                // ellipse 100% 88% at 128% 50%: horizontal radius w, vertical radius 0.88 h, centre 28% past the edge.
-                val ry = 0.88f * h
-                val centre = Offset(1.28f * w, h / 2f)
-                withTransform({ scale(1f, ry / w, pivot = centre) }) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            0f to ink.copy(alpha = 0.5f), 0.46f to ink.copy(alpha = 0.18f), 0.78f to Color.Transparent,
-                            center = centre, radius = w,
-                        ),
-                        radius = w * 4f, center = centre,
-                    )
-                }
-                // inset -18px 0 24px -22px: the darkening that hugs the right edge.
-                drawRect(
-                    Brush.horizontalGradient(0f to Color.Transparent, 1f to ink.copy(alpha = 0.17f), startX = w - 14.dp.toPx(), endX = w),
-                    topLeft = Offset(w - 14.dp.toPx(), 0f), size = androidx.compose.ui.geometry.Size(14.dp.toPx(), h),
-                )
-                drawContext.canvas.restore()
-            },
-    )
 }
 
 @Composable
