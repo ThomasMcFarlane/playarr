@@ -29,10 +29,10 @@ film; it is not a regression of the layout.
 
 ## Why nothing is at or below 1% yet
 
-- **Typeface.** Web uses Nunito Sans (`docs/parity/fonts`). The Roku channel draws every label with the system font
-  scaled to size: an earlier on-device attempt to attach a custom `Font` child rendered no text at all (see
-  `source/Theme.brs`), and the Roku font loader has no variable weight axis, so static instances of the web font would have
-  to be generated and verified on the device first. Text edges alone account for a large share of every figure above.
+- **Typeface (done).** Web uses Nunito Sans (`docs/parity/fonts`). The channel bundles static instances in
+  `clients/roku/fonts` and attaches them from BrightScript through the Font node (`uri` + `size`), which renders text on
+  the device; a Font child in the XML does not. Roku has no letter-spacing, so the hero title's negative tracking is a
+  justified remaining difference.
 - **Missing chrome.** The Roku has no Downloads, Watchlist, Requests or Calendar screens, so the left dock has four
   fewer entries than web, and there is no "Customise Home" pill. Adding dead entries would be dishonest; they come with
   the features (rows 133, 212, 415).

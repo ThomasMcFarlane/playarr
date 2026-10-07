@@ -7,6 +7,7 @@
 ' SceneGraph substitution notes).
 
 sub init()
+    PlayarrFontifyTree(m.top)
     m.keyArtLayer = m.top.findNode("keyArtLayer")
     m.keyArt = m.top.findNode("keyArt")
     m.titlePanel = m.top.findNode("titlePanel")

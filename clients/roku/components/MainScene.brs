@@ -1,4 +1,5 @@
 sub init()
+    PlayarrFontifyTree(m.top)
     m.statusGroup = m.top.findNode("statusGroup")
     m.spinner = m.top.findNode("spinner")
     m.statusTitle = m.top.findNode("statusTitle")
@@ -2205,9 +2206,8 @@ sub buildAlphabetStrip()
         label.height = 24
         label.text = letter
         label.horizAlign = "center"
-        label.scale = [0.42, 0.42]
-        label.scaleRotateCenter = [20, 12]
         label.color = &hA9B7C9FF
+        label.font = PlayarrMakeFont(600, 13)
         m.browseAlphabet.AppendChild(label)
         m.alphabetLabels.Push(label)
         y += 26
@@ -3210,12 +3210,12 @@ function createHomeRail(contentTarget as Object) as Object
 
     title = CreateObject("roSGNode", "Label")
     title.translation = [0, 0]
-    title.width = 800
     title.height = 30
     ' size 18 -> scale 0.56 (Theme.type.subtitle); left-aligned, so no
     ' scaleRotateCenter compensation is needed (top-left pivot already
     ' matches a left-aligned box's origin).
-    title.scale = [0.56, 0.56]
+    title.width = 1400
+    title.font = PlayarrMakeFont(500, 18)
     title.color = &hF4F0F1FF
     group.AppendChild(title)
 

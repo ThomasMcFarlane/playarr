@@ -180,6 +180,7 @@
         key="[0.0, 0.167, 0.944]" keyValue="[[942.0,430.0],[942.0,430.0],[882.0,430.0]]" />
     </Animation>
   </children>
+  <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
   <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
   <script type="text/brightscript" uri="pkg:/components/TvStage.brs" />
 </component>

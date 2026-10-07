@@ -1,4 +1,5 @@
 sub init()
+    PlayarrFontifyTree(m.top)
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
     m.kind = m.top.findNode("kind")

@@ -322,7 +322,7 @@ class SecretSafetyTests(unittest.TestCase):
         self.assertIn("pollDeviceToken()", MAIN)
 
     def test_repository_contains_no_baked_server_or_token(self) -> None:
-        binary_suffixes = {".png", ".jpg", ".jpeg", ".zip", ".ico"}
+        binary_suffixes = {".png", ".jpg", ".jpeg", ".zip", ".ico", ".ttf"}
         all_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in ROOT.rglob("*")
@@ -334,6 +334,22 @@ class SecretSafetyTests(unittest.TestCase):
         )
         self.assertNotRegex(all_text, r"https?://(?:192\.168|10\.|172\.(?:1[6-9]|2\d|3[01]))")
         self.assertNotRegex(all_text, r"Bearer ey[A-Za-z0-9_-]{10,}")
+
+
+class FontTests(unittest.TestCase):
+    def test_bundled_static_fonts_are_packaged_and_attached_from_brightscript(self) -> None:
+        fonts = (ROOT / "source" / "Fonts.brs").read_text(encoding="utf-8")
+        package = (ROOT / "scripts" / "package.sh").read_text(encoding="utf-8")
+        self.assertIn("images fonts", package)
+        for weight in (300, 400, 500, 600, 700, 800):
+            self.assertTrue((ROOT / "fonts" / f"NunitoSans-{weight}.ttf").is_file())
+        for weight in (400, 700):
+            self.assertTrue((ROOT / "fonts" / f"JetBrainsMono-{weight}.ttf").is_file())
+        self.assertIn('CreateObject("roSGNode", "Font")', fonts)
+        # A Font child in component XML renders no text on the device.
+        for xml in (ROOT / "components").glob("*.xml"):
+            text = re.sub(r"<!--.*?-->", "", xml.read_text(encoding="utf-8"), flags=re.S)
+            self.assertNotRegex(text, r"<Font[\s/>]", xml.name)
 
 
 if __name__ == "__main__":

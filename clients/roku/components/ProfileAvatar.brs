@@ -1,4 +1,5 @@
 sub init()
+    PlayarrFontifyTree(m.top)
     m.circleGroup = m.top.findNode("circleGroup")
     m.focusRing = m.top.findNode("focusRing")
     m.avatarImage = m.top.findNode("avatarImage")
