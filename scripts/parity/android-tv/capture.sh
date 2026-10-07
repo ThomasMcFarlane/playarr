@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Capture the Android TV parity screens in one theme.
 #   capture.sh <out-dir> <light|dark> [screen-id ...]      (default: every screen below)
+# The scrolled screens (home-scrolled, movies-scrolled, series-scrolled) run check-edge-fade.mjs and make the script exit 1 on a
+# hard-cut edge; capture the web counterpart with scripts/parity/capture-web-scrolled.mjs and compare both at the same position.
 # Writes <out-dir>/tv/<theme>/<screen-id>.png, the layout diff.mjs reads, e.g.
 #   node scripts/parity/diff.mjs --ref docs/parity/web --cand <out-dir> --layout tv --theme dark --chrome-only
 #
@@ -72,7 +74,7 @@ rail() { # rail entries (x 81): downloads search home series movies playlists wa
 screens=("$@")
 [ ${#screens[@]} -eq 0 ] && screens=(home series series-detail movies film-detail calendar search downloads watchlist requests \
   profile-switcher settings settings-avatar settings-language settings-player settings-server settings-lock settings-invite \
-  settings-latency settings-remote settings-your-data player-controls player-quality-menu household-blocked)
+  settings-latency settings-remote settings-your-data player-controls player-quality-menu home-scrolled movies-scrolled series-scrolled household-blocked)
 
 [ -n "${PLAYARR_FIXTURE_DB:-}" ] && sqlite3 "$PLAYARR_FIXTURE_DB" "delete from watch_progress"
 need_viewer=0
@@ -93,10 +95,31 @@ section_row() { # settings list row for a section
     settings-remote) echo 8 ;; settings-your-data) echo 9 ;; esac
 }
 
+fade_failed=0
 for id in "${screens[@]}"; do
   case $id in
     home|series|movies|calendar|downloads|watchlist|requests)
       rail "$id"; shoot "$id" 3 ;;
+    home-scrolled|movies-scrolled|series-scrolled)
+      # Scrolled states, mandatory in every parity run: the rail (or grid) is dragged so cards continue past its edges, then the
+      # edge fade is checked (check-edge-fade.mjs fails a hard-cut edge). The fixture has few titles; a container that cannot
+      # scroll is reported, not silently passed.
+      case $id in
+        home-scrolled) rail home; sleep 3; shoot home-before-scroll 1
+          adb shell input swipe 1750 568 650 568 500; sleep 1.5
+          shoot home-scrolled 1
+          # Left gutter of the first rail (x 730 to 882 at 1920 px, `--tv-track-left-fade`), rows of its cards.
+          node "$(dirname "$0")/../check-edge-fade.mjs" "$dest/home-scrolled.png" --edge left --band 730,500,882,640 \
+            --bg "$([ "$theme" = dark ] && echo '#151315' || echo '#f5f3f2')" --max-ratio 0.35 || fade_failed=1 ;;
+        movies-scrolled|series-scrolled) rail "${id%-scrolled}"; sleep 3; shoot "${id%-scrolled}-before-scroll" 1
+          adb shell input swipe 1300 800 1300 200 500; sleep 1.5; shoot "$id" 1
+          if cmp -s "$dest/${id%-scrolled}-before-scroll.png" "$dest/$id.png"; then
+            echo "NOTE: $id: the grid did not scroll with this fixture (too few titles); no edge to check" >&2
+          else
+            node "$(dirname "$0")/../check-edge-fade.mjs" "$dest/$id.png" --edge top --band 900,150,1700,230 \
+              --bg "$([ "$theme" = dark ] && echo '#151315' || echo '#f5f3f2')" --max-ratio 0.75 || fade_failed=1
+          fi ;;
+      esac ;;
     search) # the reference has the query "Sample" typed and its results shown
       rail search; sleep 3; tap 450 210; sleep 1; adb shell input text Sample; sleep 4; key BACK; sleep 2; shoot search 1 ;;
     series-detail) rail series; sleep 3; tap 888 262; sleep 4; shoot series-detail 1; key BACK; sleep 2 ;;
@@ -110,3 +133,4 @@ for id in "${screens[@]}"; do
     *) echo "unknown screen: $id" >&2; exit 2 ;;
   esac
 done
+[ $fade_failed = 0 ] || { echo "FAIL: a scrolled capture has a hard-cut edge (see check-edge-fade.mjs lines above)" >&2; exit 1; }
