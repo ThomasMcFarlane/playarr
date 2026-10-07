@@ -26,5 +26,6 @@
     <Label id="status" translation="[0,300]" width="280" height="28" horizAlign="center" numLines="1" scale="[0.40,0.40]" scaleRotateCenter="[140,14]" color="0x887A82FF" />
   </children>
   <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
   <script type="text/brightscript" uri="pkg:/components/ProfileAvatar.brs" />
 </component>

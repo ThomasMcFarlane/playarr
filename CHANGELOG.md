@@ -89,6 +89,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Roku: light theme. Both web palettes are tokens, and a System, Light or Dark preference (sign-in/profile dropdown and Settings) recolours every screen.
 - Fire TV: a native React Native client for Amazon Vega OS at `clients/fire-tv/`, reusing the `clients/tv-web/packages` logic as TypeScript source (hosted device linking, profiles, home, library, detail, search, playlists, settings and HLS playback). Not yet wired into CI or the client catalogue.
 - Parity: the shared screen list and web references now include the settings section panels (avatar, language, player, server, PIN lock, invite, phone remote, request latency, your data) for both layouts and themes; diff.mjs gained --mask-rect and per-instance mask regions.
 - iOS: embeds the web's design fonts (Nunito Sans and JetBrains Mono, SIL Open Font License 1.1, variable builds) and draws the web-style screens with them at the exact CSS weights.

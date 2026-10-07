@@ -62,6 +62,16 @@ function shoot(id) {
   rmSync(jpg);
 }
 
+// The theme preference lives in the channel's registry; the profile picker's theme dropdown (System, Light, Dark) sets it.
+async function setTheme() {
+  await coldStart();
+  await press("Up");
+  await press("Select", 2);
+  await presses(Array(theme === "light" ? 1 : 2).fill("Down"), 0.6);
+  await press("Select", 3);
+}
+await setTheme();
+
 for (const id of Object.keys(screens)) {
   if (only.length && !only.includes(id)) continue;
   console.log(`capturing ${id} (${theme})`);
