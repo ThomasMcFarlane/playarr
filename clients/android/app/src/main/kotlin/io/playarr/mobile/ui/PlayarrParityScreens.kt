@@ -4244,6 +4244,27 @@ internal fun TvPrimaryPill(label: String, onClick: () -> Unit, modifier: Modifie
     ) { Box(Modifier.padding(horizontal = 21.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 14.72.sp, fontWeight = FontWeight(720), maxLines = 1) } }
 }
 
+/** Chrome's native checkbox (13 px, `accent-color` auto) as the references draw it: the dark theme's pale blue, the light theme's blue. */
+@Composable
+internal fun TvNativeCheckbox(checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val dark = webIsDark
+    val fill = when { checked && dark -> Color(0xFF99C8FF); checked -> Color(0xFF0075FF); dark -> Color(0xFF3B3B3B); else -> Color.White }
+    val border = if (checked) null else androidx.compose.foundation.BorderStroke(1.dp, if (dark) Color(0xFF858585) else Color(0xFF767676))
+    val tick = if (dark) Color(0xFF3B3B3B) else Color.White
+    Box(
+        modifier.size(13.dp).clip(RoundedCornerShape(2.dp)).background(fill).then(if (border != null) Modifier.border(border, RoundedCornerShape(2.dp)) else Modifier)
+            .clickable(onClick = onToggle),
+    ) {
+        if (checked) androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val w = 1.9.dp.toPx()
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(3.1.dp.toPx(), 6.6.dp.toPx()); lineTo(5.4.dp.toPx(), 9.0.dp.toPx()); lineTo(9.9.dp.toPx(), 3.9.dp.toPx())
+            }
+            drawPath(path, tick, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        }
+    }
+}
+
 /** Web `.btn-secondary` at the 58 px size: a surface pill with a line border and 14.72 px text. */
 @Composable
 internal fun TvSecondaryPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, height: Int = 58) {

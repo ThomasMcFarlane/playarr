@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -301,7 +305,17 @@ internal class RemoteViewModel @Inject constructor(
 
 /** Settings > Phone remote: opt-in hosting, pairing, the on-screen remote and revocation. */
 @Composable
-internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltViewModel()) {
+internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltViewModel(), shifted: Boolean = false) {
+    if (LocalSettingsPlainPanel.current && !shifted) {
+        // On television the panel content starts at the web's y 210, two pixels above where the other sections were tuned.
+        androidx.compose.foundation.layout.Column(
+            androidx.compose.ui.Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, placeable.height) { placeable.place(0, -2) }
+            },
+        ) { RemoteSettingsPanel(viewModel, shifted = true) }
+        return
+    }
     val targets by viewModel.targets.collectAsState()
     val pairings by viewModel.pairings.collectAsState()
     val pending by viewModel.pending.collectAsState()
@@ -352,18 +366,20 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     }
 
     val tv = LocalSettingsPlainPanel.current
-    val headingSize = if (tv) 22.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified
+    val tvHeading: @Composable (PlayarrString) -> Unit = {
+        Text(playarrString(it), color = WebInk, fontSize = 22.464.sp, lineHeight = 33.7.sp, fontWeight = FontWeight.Bold, style = cssLine())
+    }
+    val tvBody: @Composable (PlayarrString) -> Unit = {
+        Text(playarrString(it), color = WebInkMuted, fontSize = 19.2.sp, lineHeight = 28.8.sp, style = cssLine(), modifier = Modifier.padding(top = 30.24.dp))
+    }
     if (tv) {
-        // Web TV `.settings-remote`: bold 16 px headings, a native checkbox row, and wide gaps between the three groups.
-        Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontSize = headingSize, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            androidx.compose.material3.Checkbox(
-                checked = hostEnabled, onCheckedChange = viewModel.controller::setHostEnabled,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(playarrString(PlayarrString.RemoteHostToggle), color = WebInk, fontSize = 19.5.sp)
+        // Web TV `.settings-remote`: 22.464 px bold headings, 30.24 px between blocks, a 13 px native checkbox, 96 px between groups.
+        tvHeading(PlayarrString.RemoteHostTitle)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().height(28.8.dp).padding(start = 4.dp).offset(y = 30.24.dp)) {
+            TvNativeCheckbox(hostEnabled, { viewModel.controller.setHostEnabled(!hostEnabled) })
+            Text(playarrString(PlayarrString.RemoteHostToggle), color = WebInk, fontSize = 19.2.sp, lineHeight = 28.8.sp, style = cssLine(), modifier = Modifier.padding(start = 14.8.dp))
         }
-        Text(playarrString(PlayarrString.RemoteHostHint), color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp, bottom = 80.dp))
+        Text(playarrString(PlayarrString.RemoteHostHint), color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp, style = cssLine(), modifier = Modifier.padding(top = 60.48.dp, bottom = 96.dp))
     } else {
         Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -373,9 +389,9 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
         Text(playarrString(PlayarrString.RemoteHostHint), color = WebInkMuted, fontSize = 11.sp)
     }
 
-    Text(playarrString(PlayarrString.RemoteTargetsTitle), color = WebInk, fontSize = headingSize, fontWeight = if (tv) FontWeight.Bold else FontWeight.SemiBold)
+    if (tv) tvHeading(PlayarrString.RemoteTargetsTitle) else Text(playarrString(PlayarrString.RemoteTargetsTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
     val others = targets.filterNot { it.isSelf }
-    if (others.isEmpty()) Text(playarrString(PlayarrString.RemoteTargetsEmpty), color = WebInkMuted, fontSize = if (tv) 19.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 32.dp) else Modifier)
+    if (others.isEmpty()) { if (tv) tvBody(PlayarrString.RemoteTargetsEmpty) else Text(playarrString(PlayarrString.RemoteTargetsEmpty), color = WebInkMuted) }
     val controllerName = viewModel.controller.deviceName()
     others.forEach { target ->
         val existing = viewModel.activePairingFor(target.deviceId)
@@ -406,9 +422,10 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     }
     if (controlPairing == null) error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }
 
-    Text(playarrString(PlayarrString.RemotePairingsTitle), color = WebInk, fontSize = headingSize, fontWeight = if (tv) FontWeight.Bold else FontWeight.SemiBold, modifier = if (tv) Modifier.padding(top = 80.dp) else Modifier)
+    if (tv) Spacer(Modifier.height(124.1.dp))
+    if (tv) tvHeading(PlayarrString.RemotePairingsTitle) else Text(playarrString(PlayarrString.RemotePairingsTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
     val live = pairings.filter { it.status == "active" || it.status == "pending" }
-    if (live.isEmpty()) Text(playarrString(PlayarrString.RemotePairingsEmpty), color = WebInkMuted, fontSize = if (tv) 19.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 32.dp) else Modifier)
+    if (live.isEmpty()) { if (tv) tvBody(PlayarrString.RemotePairingsEmpty) else Text(playarrString(PlayarrString.RemotePairingsEmpty), color = WebInkMuted) }
     var renaming by remember { mutableStateOf<Pair<String, String>?>(null) }
     live.forEach { pairing ->
         val editing = renaming?.takeIf { it.first == pairing.id }

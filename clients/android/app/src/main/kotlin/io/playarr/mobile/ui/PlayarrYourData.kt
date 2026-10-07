@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -503,15 +504,15 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
     val heading: @Composable (String) -> Unit = { text ->
         Text(text, color = WebInk, fontSize = 22.464.sp, lineHeight = 33.7.sp, fontWeight = FontWeight.Bold, style = cssLine())
     }
-    val body: @Composable (String) -> Unit = { text ->
-        Text(text, color = WebInkMuted, fontSize = 19.2.sp, lineHeight = 28.8.sp, style = cssLine(), modifier = Modifier.requiredWidth(995.dp).padding(top = gap))
+    val body: @Composable (String, Boolean) -> Unit = { text, tight ->
+        Text(text, color = WebInkMuted, fontSize = 19.2.sp, lineHeight = if (tight) 28.sp else 28.8.sp, style = cssLine(), modifier = Modifier.requiredWidth(995.dp).padding(top = gap, bottom = if (tight) 1.6.dp else 0.dp))
     }
     Column(Modifier.layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         layout(placeable.width, placeable.height) { placeable.place(0, -2) }
     }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
         heading(playarrString(PlayarrString.YourDataExportTitle))
-        body(playarrString(PlayarrString.YourDataExportDescription))
+        body(playarrString(PlayarrString.YourDataExportDescription), false)
         Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp, style = cssLine(), modifier = Modifier.padding(top = gap - 1.dp))
         Box(Modifier.padding(top = gap + 1.dp)) {
             TvPrimaryPill(
@@ -549,11 +550,12 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
 
         Spacer(Modifier.height(96.dp))
         heading(playarrString(PlayarrString.YourDataImportTitle))
-        body(playarrString(PlayarrString.YourDataImportDescription))
+        body(playarrString(PlayarrString.YourDataImportDescription), true)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = gap)) {
             TvPrimaryPill(
                 playarrString(if (state.session != null) PlayarrString.YourDataTransferNewCode else PlayarrString.YourDataTransferStartUpload),
                 onClick = viewModel::startSession, enabled = !state.sessionBusy && state.session?.status != "uploading", height = 58,
+                modifier = Modifier.widthIn(min = 236.7.dp),
             )
             if (state.session != null) {
                 PlayarrButton(onClick = viewModel::cancelSession, variant = PlayarrButtonVariant.Secondary) {
@@ -603,11 +605,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
             )
         }
         Row(Modifier.padding(top = 39.4.dp).clickable { viewModel.setIncludePreferences(!state.includePreferences) }, verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.padding(start = 2.dp, end = 8.5.dp).size(13.dp)
-                    .border(1.dp, androidx.compose.ui.graphics.Color(0xFF767676), RoundedCornerShape(2.dp))
-                    .then(if (state.includePreferences) Modifier.background(WebInk, RoundedCornerShape(2.dp)) else Modifier),
-            )
+            TvNativeCheckbox(state.includePreferences, { viewModel.setIncludePreferences(!state.includePreferences) }, Modifier.padding(start = 0.dp, end = 10.5.dp))
             Text(
                 playarrString(PlayarrString.YourDataIncludePreferences).uppercase(LocalPlayarrLanguage.current.locale),
                 color = WebInkMuted, fontSize = 11.2.sp, lineHeight = 20.8.sp, fontWeight = FontWeight(720), letterSpacing = 0.896.sp, style = cssLine(),
