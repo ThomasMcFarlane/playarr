@@ -7277,25 +7277,23 @@ private fun MusicAlbumCard(
     onPlay: () -> Unit,
 ) {
     var focused by remember(album.album.id) { mutableStateOf(false) }
-    val albumScale = rememberPlayarrFocusScale(
-        focused = focused,
-        focusedScale = FocusMotion.navSelectedScale,
-        label = "albumFocus",
-    )
+    // A media card: shadow and a draw-only lift on the content inside the focus target, no ring and no scale.
+    Box(
+        Modifier
+            .width(if (isTelevision) 200.dp else 142.dp)
+            .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
+            .clickable(onClick = onPlay),
+    ) {
     Column(
-        modifier = Modifier.width(if (isTelevision) 200.dp else 142.dp),
+        modifier = Modifier.fillMaxWidth().mediaCardLift(focused),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Surface(
-            onClick = onPlay,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .scale(albumScale)
-                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
-                .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
+        WebShadowedBox(
+            shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.dp),
-            color = WebSurfaceStrong,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(12.dp)) else Modifier),
+            innerModifier = Modifier.background(WebSurfaceStrong),
         ) {
             AuthenticatedAlbumArtwork(
                 artistWork = artist,
@@ -7312,6 +7310,7 @@ private fun MusicAlbumCard(
             fontSize = 10.sp,
             maxLines = 1,
         )
+    }
     }
 }
 
