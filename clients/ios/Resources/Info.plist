@@ -22,7 +22,7 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>NunitoSans-Variable.ttf</string>
+		<string>NunitoSans-wght-web.ttf</string>
 		<string>JetBrainsMono-Variable.ttf</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>

@@ -4,8 +4,9 @@ import UIKit
 /// The web's design fonts, Nunito Sans and JetBrains Mono (SIL Open Font License 1.1, variable builds in
 /// `Resources/Fonts`, registered through `UIAppFonts`), built at an exact CSS weight like the web does.
 enum DesignFont {
-    /// Axes the web leaves at: width 100, optical size 12, `YTLC` 500.
-    static let nunitoAxes: [String: Double] = ["wdth": 100, "opsz": 12, "YTLC": 500]
+    /// `NunitoSans-wght-web.ttf` is the web's exact Nunito Sans instance with the width, optical-size
+    /// and `YTLC` axes already baked in, so only the weight is set (its default is 200).
+    static let nunitoAxes: [String: Double] = [:]
 
     private static func tag(_ name: String) -> NSNumber {
         var value: UInt32 = 0
@@ -13,23 +14,38 @@ enum DesignFont {
         return NSNumber(value: value)
     }
 
-    static func uiFont(family: String, size: CGFloat, weight: Int, fixedAxes: [String: Double]) -> UIFont? {
+    /// PostScript name of the web-instance file's default face (`NunitoSans-wght-web.ttf`); the
+    /// typographic family is "Nunito Sans 12pt", so the face is requested by this exact name.
+    static let nunitoPostScriptName = "NunitoSans-12ptExtraLight"
+
+    /// Builds the face and sets the weight axis. `postScriptName` (when given) selects the file's face
+    /// exactly; otherwise `family` does. Returns nil, never a substitute, when the bundled font is not
+    /// registered.
+    static func uiFont(
+        family: String,
+        postScriptName: String? = nil,
+        size: CGFloat,
+        weight: Int,
+        fixedAxes: [String: Double]
+    ) -> UIFont? {
         let variation = NSMutableDictionary()
         variation[tag("wght")] = NSNumber(value: Double(max(200, min(1000, weight))))
         for (name, value) in fixedAxes { variation[tag(name)] = NSNumber(value: value) }
-        let descriptor = UIFontDescriptor(fontAttributes: [
-            .family: family,
+        var attributes: [UIFontDescriptor.AttributeName: Any] = [
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): variation,
-        ])
-        let font = UIFont(descriptor: descriptor, size: size)
-        return font.familyName == family ? font : nil
+        ]
+        if let postScriptName { attributes[.name] = postScriptName } else { attributes[.family] = family }
+        let font = UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
+        // An unregistered name makes UIKit answer with a substitute (system font or Helvetica).
+        // The typographic family may carry an optical-size suffix ("Nunito Sans 12pt").
+        return font.familyName.hasPrefix(family) ? font : nil
     }
 }
 
 extension DesignFont {
     /// UI text: Nunito Sans at the CSS `weight`, falling back to Avenir Next when the face is unavailable.
     static func font(_ size: CGFloat, _ weight: Int = 400) -> Font {
-        if let face = uiFont(family: "Nunito Sans", size: size, weight: weight, fixedAxes: nunitoAxes) {
+        if let face = uiFont(family: "Nunito Sans", postScriptName: nunitoPostScriptName, size: size, weight: weight, fixedAxes: nunitoAxes) {
             return Font(face as CTFont)
         }
         return .custom("Avenir Next", fixedSize: size)
