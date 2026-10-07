@@ -209,6 +209,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Parity: Downloads, Watchlist and Requests screens added to the shared list and references; diff.mjs gained --chrome-only/--keep-rect, capture-web.mjs --dump-dom and the hideVideo step, and the Apple workflow now uses the shared capture and diff tools instead of its private copies (removed).
+- Parity: the web calendar references (both layouts and themes) are recaptured. The upcoming episode has no file, so the detail offers only "Open series" and "Add to watchlist" (play only for an episode with its own file); the old references still showed a Play button.
 - Android TV profile page: web background glow, positions, avatar ring and a Clients pill that shows a QR code for the clients page.
 - iOS: embeds the web's exact Nunito Sans instance (`NunitoSans-wght-web.ttf`, only the weight axis free) instead of the full-axis upstream font, so glyph widths match the web; the shared `DesignFont` sets only the weight.
 - Android debug builds accept a frozen parity clock so pixel-parity captures do not depend on the real date.

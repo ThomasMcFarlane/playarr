@@ -1,1 +1,0 @@
-- Parity: Downloads, Watchlist and Requests screens added to the shared list and references; diff.mjs gained --chrome-only/--keep-rect, capture-web.mjs --dump-dom and the hideVideo step, and the Apple workflow now uses the shared capture and diff tools instead of its private copies (removed).
