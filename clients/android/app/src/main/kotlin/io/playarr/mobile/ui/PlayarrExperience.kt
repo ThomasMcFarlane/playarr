@@ -1711,7 +1711,7 @@ internal fun PlayarrExperience(
                         modifier = Modifier.align(Alignment.TopStart).padding(start = 59.dp, top = 60.dp),
                     )
                     // Web `.app-clock` is right-aligned to x = 710.4 (its left edge moves with the text width).
-                    Box(Modifier.align(Alignment.TopStart).padding(top = 68.2.dp).width(710.4.dp), contentAlignment = Alignment.TopEnd) { ExperienceClock() }
+                    Box(Modifier.align(Alignment.TopStart).padding(top = 68.2.dp).width(if (activeNavRoute == "home") 634.dp else 710.4.dp), contentAlignment = Alignment.TopEnd) { ExperienceClock() }
                 }
             }
 
@@ -2674,10 +2674,10 @@ private fun ExperienceHomeScreen(
                         modifier = if (isTelevision) Modifier.fillMaxSize().extendStart(railGutter) else Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = railGutter,
-                            top = if (isTelevision) 422.9.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
+                            top = if (isTelevision) 424.9.dp else 78.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(),
                             bottom = if (isTelevision) 120.dp else 98.dp,
                         ),
-                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 78.6.dp else 66.93.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 77.6.dp else 66.93.dp),
                     ) {
                         itemsIndexed(current.value, key = { _, rail -> rail.key }) { railIndex, rail ->
                             ExperienceMediaRail(
@@ -3079,6 +3079,7 @@ internal fun ExperienceMediaRail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isTelevision && railIndex > 0) Modifier.padding(bottom = 2.dp) else Modifier)
             .onFocusChanged { if (it.hasFocus) onRailFocused() }
     ) {
         if (isTelevision) {
@@ -3108,7 +3109,7 @@ internal fun ExperienceMediaRail(
             state = railState,
             fade = if (isTelevision) PlayarrFadeKind.Rail else PlayarrFadeKind.PhoneRail,
             startGutter = trackGutter,
-            modifier = (if (isTelevision) Modifier.fillMaxWidth().extendStart(trackGutter) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
+            modifier = (if (isTelevision) Modifier.fillMaxWidth().extendStart(trackGutter) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = if (railIndex == 0) 30.4.dp else 28.4.dp) else Modifier),
             contentPadding = if (isTelevision) PaddingValues(start = trackGutter, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
         ) {
