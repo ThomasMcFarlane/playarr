@@ -1,0 +1,1 @@
+- The web client now deploys after every merge to main, including merges landed by the merge train without a push event (CI started with `workflow_dispatch`); previously every post-merge deploy was skipped. The docs deploy gains the same dispatch trigger.

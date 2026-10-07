@@ -1,0 +1,1 @@
+- The single release workflow now also deploys playarr.app from the release commit after the GitHub Release is created. A failed web deploy fails the release, and the run summary reports the deployed version and commit.

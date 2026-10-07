@@ -19,6 +19,8 @@
 #
 #   play      android-play-internal.yml   Google Play closed testing (alpha)
 #   apple     ios-release.yml             iOS and tvOS to TestFlight
+#   web       web-ci.yml                  playarr.app (Cloudflare Worker) from the release commit;
+#                                         a failed deploy fails the release, the summary reports the version
 #
 # The server and Android APK are required (playarr.app/downloads serves them from the release); any
 # other platform that fails is left out of the release and reported in the summary. `dry_run` builds
@@ -359,9 +361,22 @@ jobs:
       platform: both
       dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
 
+  web:
+    name: Deploy playarr.app
+    needs: [prepare, release]
+    # Runs once the GitHub Release exists (playarr.app/downloads serves from it). Deploys the release
+    # commit; the guard skips only when a newer commit is already live. A dry run builds and tests only.
+    if: always() && needs.prepare.result == 'success' && needs.release.result == 'success'
+    uses: ./.github/workflows/web-ci.yml
+    permissions:
+      contents: read
+    secrets: inherit
+    with:
+      dry_run: ${{ needs.prepare.outputs.dry_run == 'true' }}
+
   summary:
     name: Summary
-    needs: [prepare, server, regional, android, tv, roku, xbox, harmony, release, play, apple]
+    needs: [prepare, server, regional, android, tv, roku, xbox, harmony, release, play, apple, web]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -375,6 +390,8 @@ jobs:
           RELEASE_URL: ${{ needs.release.outputs.url }}
           APPLE_BUILD: ${{ needs.prepare.outputs.apple_build }}
           ANDROID_CODE: ${{ needs.prepare.outputs.android_code }}
+          WEB_DEPLOYED: ${{ needs.web.outputs.deployed }}
+          WEB_SHA: ${{ needs.web.outputs.sha }}
           PLAY_CODE: ${{ needs.play.outputs.version_code || needs.prepare.outputs.play_code }}
         run: |
           set -euo pipefail
@@ -398,11 +415,12 @@ jobs:
             echo "| Roku | $(mark "$(result roku)") | GitHub Release | sideload zip |"
             echo "| Xbox | $(mark "$(result xbox)") | GitHub Release | unsigned .appx (no signing certificate) |"
             echo "| HarmonyOS | $(mark "$(result harmony)") | GitHub Release | unsigned HAP (no AppGallery signing material) |"
+            echo "| playarr.app (web) | $(mark "$(result web)") | https://playarr.app | version $VERSION, commit ${WEB_SHA:0:8}, deployed: ${WEB_DEPLOYED:-n/a} (false: a newer commit was already live, or dry run) |"
             echo "| GitHub Release | $(mark "$(result release)") | ${RELEASE_URL:-} | |"
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
           # Fail the run if anything required or any store publish failed, so it is visible.
-          for job in prepare server android release play apple; do
+          for job in prepare server android release play apple web; do
             r="$(result "$job")"
             if [[ "$r" != success ]]; then echo "::error::$job: $r"; failed=1; fi
           done
