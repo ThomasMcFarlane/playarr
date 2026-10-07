@@ -15,41 +15,182 @@
 ' left in a comment next to the value so it can be re-derived if the web
 ' tokens change.
 '
-' Roku SceneGraph has no concept of light/dark OS theme -- TV apps default to
-' a single dark presentation, so this file only ports the DARK theme values
-' from global.css (`:root[data-theme="dark"]`), not the default (light)
-' `:root` block.
+' Both palettes of global.css are ported: `:root` (light) and `:root[data-theme="dark"]`. Roku has no OS
+' appearance API, so the preference (System, Light, Dark) is stored in the registry (PairingPrefs.brs) and "System"
+' resolves to dark. ThemeTokens(mode) returns the palette; ThemeApplyTree recolours the authored (dark) literals.
+
+function ThemeTokens(mode as String) as Object
+    if mode = "light"
+        return {
+            ' :root --bg, --surface, --surface-strong, --surface-soft, --ink, --ink-soft, --ink-muted
+            bg: &hF5F3F2FF
+            surface: &hFBFAF9FF
+            surfaceStrong: &hFFFFFFFF
+            surfaceSoft: &hDFDCDDFF
+            ink: &h382621FF
+            inkSoft: &h675961FF
+            inkMuted: &hA5969EFF
+            ' --accent, --accent-soft, --on-accent
+            accent: &h675961FF
+            accentSoft: &hC5B8BDFF
+            onAccent: &hFFFFFFFF
+            ' --danger, --success
+            danger: &hA8464CFF
+            success: &h347559FF
+            ' --line rgba(56,38,33,.14), --line-strong rgba(56,38,33,.28)
+            line: &h38262124
+            lineStrong: &h38262147
+            ' Brand red (.tv-provider kicker, unwatched dot, player accent): the same in both themes.
+            brand: &hCF3157FF
+        }
+    end if
+    return {
+        bg: &h151315FF
+        surface: &h1B181BFF
+        surfaceStrong: &h211D21FF
+        surfaceSoft: &h312A30FF
+        ink: &hF4F0F1FF
+        inkSoft: &hC5B8BDFF
+        inkMuted: &h887A82FF
+        accent: &hDFDCDDFF
+        accentSoft: &h675961FF
+        onAccent: &h211D21FF
+        danger: &hEE9297FF
+        success: &h7FC09DFF
+        ' --line rgba(223,220,221,.11), --line-strong rgba(223,220,221,.23)
+        line: &hDFDCDD1C
+        lineStrong: &hDFDCDD3B
+        brand: &hCF3157FF
+    }
+end function
+
+' Colour of a token (role) with an alpha byte, for the active theme (m.global.themeMode).
+function ThemeColor(role as String, alpha = 255 as Integer) as Integer
+    mode = "dark"
+    if m.global <> invalid and m.global.themeMode <> invalid then mode = m.global.themeMode
+    return ThemeWithAlpha(ThemeTokens(mode)[role], alpha)
+end function
+
+function ThemeWithAlpha(rgba as Integer, alpha as Integer) as Integer
+    ' &hRRGGBBAA: keep the colour bytes, replace the alpha byte.
+    return (rgba and &hFFFFFF00) or alpha
+end function
+
+' Authored (dark) literal -> token. The XML and the few literals in BrightScript were written for the dark theme;
+' ThemeApplyTree resolves each one through this table, so a node follows the active theme.
+function ThemeRoleForLiteral(rgb as String) as String
+    roles = {
+        "151315": "bg"
+        "0B0A0B": "bg"
+        "1B181B": "surface"
+        "211D21": "surfaceStrong"
+        "262126": "surfaceStrong"
+        "312A30": "surfaceSoft"
+        "2A262C": "surfaceSoft"
+        "3A343C": "surfaceSoft"
+        "F4F0F1": "ink"
+        "DCE5F0": "ink"
+        "C5B8BD": "inkSoft"
+        "A9B7C9": "inkSoft"
+        "887A82": "inkMuted"
+        "5C6B80": "inkMuted"
+        "EE9297": "danger"
+        "7FC09D": "success"
+        "CF3157": "brand"
+    }
+    role = roles[rgb]
+    if role = invalid then return ""
+    return role
+end function
+
+function ThemeHex2(value as Integer) as String
+    return Right("0" + StrI(value and 255, 16), 2)
+end function
+
+' Split an authored colour into "RRGGBB" and its alpha byte.
+function ThemeSplitLiteral(rgba as Integer) as Object
+    r = (rgba >> 24) and 255
+    g = (rgba >> 16) and 255
+    b = (rgba >> 8) and 255
+    a = rgba and 255
+    return { rgb: UCase(ThemeHex2(r) + ThemeHex2(g) + ThemeHex2(b)), alpha: a }
+end function
+
+' Remember which token a node's colour field stands for (once, from its authored dark literal).
+sub ThemeBindRole(node as Object, field as String, whiteIsInk = false as Boolean)
+    if not node.hasField("themeRole")
+        node.addFields({ themeRole: "" })
+    end if
+    if node.themeRole <> "" then return
+    parts = ThemeSplitLiteral(node[field])
+    role = ThemeRoleForLiteral(parts.rgb)
+    if role = "" and whiteIsInk and parts.rgb = "FFFFFF" then role = "ink"
+    if role = "" then
+        node.themeRole = "-"
+    else
+        node.themeRole = role + ":" + parts.alpha.ToStr()
+    end if
+end sub
+
+' Explicitly bind a node field to a token (images tinted through blendColor, runtime-built nodes).
+sub ThemeSetRole(node as Object, role as String, alpha = 255 as Integer)
+    if not node.hasField("themeRole") then node.addFields({ themeRole: "" })
+    node.themeRole = role + ":" + alpha.ToStr()
+end sub
+
+sub ThemeApplyNode(node as Object, tokens as Object)
+    if not node.hasField("themeRole") then return
+    spec = node.themeRole
+    if spec = "" or spec = "-" then return
+    sep = Instr(1, spec, ":")
+    role = Left(spec, sep - 1)
+    alpha = Val(Mid(spec, sep + 1), 10)
+    colour = ThemeWithAlpha(tokens[role], alpha)
+    kind = node.subtype()
+    if kind = "Poster"
+        node.blendColor = colour
+    else
+        node.color = colour
+    end if
+end sub
+
+' Recolour a subtree for `mode`. Labels and Rectangles are bound on first sight; Posters only when ThemeSetRole bound them.
+sub ThemeApplyTree(root as Object, mode as String)
+    tokens = ThemeTokens(mode)
+    ThemeApplyWalk(root, tokens)
+end sub
+
+sub ThemeApplyWalk(node as Object, tokens as Object)
+    kind = node.subtype()
+    if kind = "Label"
+        ThemeBindRole(node, "color", true)
+        ThemeApplyNode(node, tokens)
+    else if kind = "Rectangle"
+        ThemeBindRole(node, "color")
+        ThemeApplyNode(node, tokens)
+    else if kind = "Poster"
+        ThemeApplyNode(node, tokens)
+    end if
+    n = node.getChildCount()
+    for i = 0 to n - 1
+        child = node.getChild(i)
+        if child <> invalid then ThemeApplyWalk(child, tokens)
+    end for
+end sub
+
+' Components that are instantiated by the scene or by a list (PosterCard, TvStage, ProfileAvatar) follow the scene's theme.
+sub ThemeInitComponent()
+    ThemeApplyTree(m.top, m.global.themeMode)
+    m.global.observeField("themeMode", "onGlobalThemeChanged")
+end sub
+
+sub onGlobalThemeChanged()
+    ThemeApplyTree(m.top, m.global.themeMode)
+end sub
 
 function Theme() as object
     return {
-        colors: {
-            ' from: :root[data-theme="dark"] --bg: #151315
-            bg: &h151315FF
-            ' from: :root[data-theme="dark"] --surface: #1b181b
-            surface: &h1B181BFF
-            ' from: :root[data-theme="dark"] --surface-strong: #211d21
-            surfaceStrong: &h211D21FF
-            ' from: :root[data-theme="dark"] --surface-soft: #312a30 (bonus: needed for
-            ' TvStage's stacked-Rectangle scrim approximation of the CSS gradients)
-            surfaceSoft: &h312A30FF
-            ' from: :root[data-theme="dark"] --ink: #f4f0f1
-            ink: &hF4F0F1FF
-            ' from: :root[data-theme="dark"] --ink-soft: #c5b8bd
-            inkSoft: &hC5B8BDFF
-            ' from: :root[data-theme="dark"] --ink-muted: #887a82
-            inkMuted: &h887A82FF
-            ' from: .tv-provider / .tv-detail-kicker color, and .player-page
-            ' --player-accent: #cf3157 (Playarr's own red identity/kicker highlight --
-            ' NOT the same as the generic dark-theme --accent: #dfdcdd, which is used
-            ' for lower-emphasis UI chrome. Roku uses this narrow "kicker/highlight" role.)
-            accent: &hCF3157FF
-            ' from: :root[data-theme="dark"] --danger: #ee9297
-            danger: &hEE9297FF
-            ' from: :root[data-theme="dark"] --success: #7fc09d
-            success: &h7FC09DFF
-            ' from: .player-page --player-accent: #cf3157
-            playerAccent: &hCF3157FF
-        }
+        colors: ThemeTokens("dark")
 
         spacing: {
             ' from: design-tokens spacing scale (packages/design-tokens/src/index.ts)

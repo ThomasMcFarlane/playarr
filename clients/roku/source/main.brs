@@ -3,6 +3,7 @@ sub Main()
     port = CreateObject("roMessagePort")
     screen.SetMessagePort(port)
 
+    screen.getGlobalNode().addFields({ themeMode: ResolvePairingTheme(LoadPairingThemePreference()) })
     scene = screen.CreateScene("MainScene")
     screen.Show()
     scene.SetFocus(true)

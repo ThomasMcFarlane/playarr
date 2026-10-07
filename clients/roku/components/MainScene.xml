@@ -727,6 +727,7 @@
     <Timer id="browseKeyArtTimer" duration="0.5" repeat="false" />
   </children>
   <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />
   <script type="text/brightscript" uri="pkg:/source/Api.brs" />

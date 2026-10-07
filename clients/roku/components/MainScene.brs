@@ -334,6 +334,7 @@ sub init()
     m.profileLabel.text = m.session.profileName
     setListContent(m.detailActions, ["Play"])
 
+    applyAppTheme()
     updateClock()
     m.clockTimer.control = "start"
 
@@ -1056,14 +1057,10 @@ sub applyPairingChrome()
     if m.pairingLangIcon <> invalid then m.pairingLangIcon.uri = iconLang
     if m.pairingThemeChevron <> invalid then m.pairingThemeChevron.uri = iconChev
     if m.pairingLangChevron <> invalid then m.pairingLangChevron.uri = iconChev
-    ink = &hF4F0F1FF
-    inkSoft = &hC5B8BDFF
-    inkMuted = &h887A82FF
-    if isLight
-        ink = &h382621FF
-        inkSoft = &h675961FF
-        inkMuted = &hA5969EFF
-    end if
+    tokens = ThemeTokens(theme)
+    ink = tokens.ink
+    inkSoft = tokens.inkSoft
+    inkMuted = tokens.inkMuted
     if m.pairingKicker <> invalid then m.pairingKicker.color = inkMuted
     if m.pairingTitle <> invalid then m.pairingTitle.color = ink
     if m.pairingDescription <> invalid then m.pairingDescription.color = inkSoft
@@ -1181,13 +1178,38 @@ sub openPairingLanguagePicker()
     m.top.dialog = dialog
 end sub
 
+' Persist the theme preference (System, Light, Dark) and repaint every screen for it.
+sub setThemePreference(preference as String)
+    m.themePreference = preference
+    SavePairingThemePreference(preference)
+    applyAppTheme()
+    applyPairingChrome()
+    applyProfilesChrome()
+end sub
+
+' Recolour the whole scene for the resolved theme. The XML is authored with the dark literals; ThemeApplyTree maps each
+' to its token. Images that are drawn as white masks are tinted through blendColor.
+sub applyAppTheme()
+    mode = ResolvePairingTheme(m.themePreference)
+    m.global.themeMode = mode
+    ' Dock images are white masks (alpha carries the shape), tinted by their token.
+    for i = 0 to 4
+        bg = m.top.findNode("navGroupBg" + i.ToStr())
+        if bg <> invalid then ThemeSetRole(bg, "surface")
+    end for
+    ThemeSetRole(m.top.findNode("userPillBg"), "surface")
+    for i = 0 to m.navHighlights.Count() - 1
+        ThemeSetRole(m.navHighlights[i], "ink")
+        ThemeSetRole(m.navIcons[i], "ink")
+    end for
+    ThemeApplyTree(m.top, mode)
+    m.top.backgroundColor = ThemeColor("bg")
+end sub
+
 sub onPairingThemeDialogButton(event as Object)
     index = event.GetData()
     if m.top.dialog <> invalid then m.top.dialog.close = true
-    m.themePreference = PairingThemePreferenceFromIndex(index)
-    SavePairingThemePreference(m.themePreference)
-    applyPairingChrome()
-    applyProfilesChrome()
+    setThemePreference(PairingThemePreferenceFromIndex(index))
     if m.top.screenState = "profiles"
         if m.profilesThemeHit <> invalid then m.profilesThemeHit.SetFocus(true)
         applyProfilesChromeFocus()
@@ -1399,12 +1421,9 @@ sub applyProfilesChrome()
             m.profilesAuthBg.uri = "pkg:/images/pairing-auth-bg.png"
         end if
     end if
-    ink = &hF4F0F1FF
-    inkSoft = &hC5B8BDFF
-    if isLight
-        ink = &h382621FF
-        inkSoft = &h675961FF
-    end if
+    tokens = ThemeTokens(theme)
+    ink = tokens.ink
+    inkSoft = tokens.inkSoft
     if m.profilesThemeLabel <> invalid
         m.profilesThemeLabel.color = ink
         m.profilesThemeLabel.text = PairingThemeChromeLabel(m.themePreference, lang)
@@ -1810,7 +1829,8 @@ end sub
 
 sub renderAppearanceSettings()
     m.settingsDetail.text = "Colour theme" + Chr(10) + "Dark (Roku)" + Chr(10) + Chr(10) + "Home screen artwork" + Chr(10) + "Thumbnails"
-    setListContent(m.settingsActionList, ["Theme: Dark", "Artwork: Thumbnails"])
+    m.settingsDetail.text = "Colour theme" + Chr(10) + PairingThemeChromeLabel(m.themePreference, "en") + Chr(10) + Chr(10) + "Home screen artwork" + Chr(10) + "Thumbnails"
+    setListContent(m.settingsActionList, ["Theme: " + PairingThemeChromeLabel(m.themePreference, "en"), "Artwork: Thumbnails"])
 end sub
 
 sub renderServerSettings()
@@ -1922,7 +1942,13 @@ sub onSettingsActionSelected(event as Object)
     index = event.GetData()
     if index = invalid or index < 0 then return
     ' Indices match settingsSectionLabels / tv-web Preferences order.
-    if m.settingsSectionIndex = 3
+    if m.settingsSectionIndex = 0
+        if index = 0
+            options = ["system", "light", "dark"]
+            setThemePreference(options[(PairingThemeIndex(m.themePreference) + 1) mod 3])
+            renderAppearanceSettings()
+        end if
+    else if m.settingsSectionIndex = 3
         if index >= 0 and index < m.audioLanguageCodes.Count()
             saveAudioLanguage(m.audioLanguageCodes[index])
         end if
@@ -2037,7 +2063,7 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersButtonFocused = false
     m.browseFiltersMode = false
     m.browseFiltersPanel.visible = false
-    m.browseFiltersButton.color = &hA9B7C9FF
+    m.browseFiltersButton.color = ThemeColor("inkSoft")
     renderBrowseAlphabetFocus()
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
     m.browseTitle.text = label
@@ -2206,7 +2232,7 @@ sub buildAlphabetStrip()
         label.height = 24
         label.text = letter
         label.horizAlign = "center"
-        label.color = &hA9B7C9FF
+        label.color = ThemeColor("inkSoft")
         label.font = PlayarrMakeFont(600, 13)
         m.browseAlphabet.AppendChild(label)
         m.alphabetLabels.Push(label)
@@ -2239,9 +2265,9 @@ end function
 sub renderBrowseAlphabetFocus()
     for i = 0 to m.alphabetLabels.Count() - 1
         if m.browseAlphabetMode and i = m.browseAlphabetIndex
-            m.alphabetLabels[i].color = &hCF3157FF
+            m.alphabetLabels[i].color = ThemeColor("brand")
         else
-            m.alphabetLabels[i].color = &hA9B7C9FF
+            m.alphabetLabels[i].color = ThemeColor("inkSoft")
         end if
     end for
 end sub
@@ -2305,12 +2331,12 @@ sub focusBrowseFiltersButton()
     m.browseAlphabetMode = false
     renderBrowseAlphabetFocus()
     m.browseFiltersButtonFocused = true
-    m.browseFiltersButton.color = &hCF3157FF
+    m.browseFiltersButton.color = ThemeColor("brand")
 end sub
 
 sub focusBrowseAlphabetFromButton()
     m.browseFiltersButtonFocused = false
-    m.browseFiltersButton.color = &hA9B7C9FF
+    m.browseFiltersButton.color = ThemeColor("inkSoft")
     m.browseAlphabetMode = true
     m.browseAlphabetIndex = 0
     renderBrowseAlphabetFocus()
@@ -2357,9 +2383,9 @@ sub renderBrowseFiltersOptionsFocus()
     for i = 0 to m.browseFilterOptions.Count() - 1
         isSelected = (i = 0 and m.browseSort = "title") or (i = 1 and m.browseSort = "date_added") or (i = 2 and m.browseOrder = "asc") or (i = 3 and m.browseOrder = "desc") or (i = selectedSizeIndex)
         if i = m.browseFiltersIndex or isSelected
-            m.browseFilterOptions[i].color = &hCF3157FF
+            m.browseFilterOptions[i].color = ThemeColor("brand")
         else
-            m.browseFilterOptions[i].color = &hA9B7C9FF
+            m.browseFilterOptions[i].color = ThemeColor("inkSoft")
         end if
     end for
 end sub
@@ -2578,7 +2604,7 @@ sub openSearch()
     m.searchTitle.text = "Search"
     if m.searchFieldLabel <> invalid
         m.searchFieldLabel.text = "Search your libraries and playlists"
-        m.searchFieldLabel.color = &h887A82FF
+        m.searchFieldLabel.color = ThemeColor("inkMuted")
     end if
     showSearchEmptyState(true)
     buildGridContent(m.searchGrid, m.searchDisplayItems, 1.5)
@@ -2636,7 +2662,7 @@ sub performSearch(query as String)
     m.searchTitle.text = "Search"
     if m.searchFieldLabel <> invalid
         m.searchFieldLabel.text = query
-        m.searchFieldLabel.color = &hF4F0F1FF
+        m.searchFieldLabel.color = ThemeColor("ink")
     end if
     showSearchEmptyState(false)
     buildGridContent(m.searchGrid, m.searchDisplayItems, 1.5)
@@ -2767,9 +2793,9 @@ sub renderSearchFilterFocus()
     for i = 0 to m.searchFilterLabels.Count() - 1
         label = m.searchFilterLabels[i]
         if i = m.searchFilterIndex
-            label.color = &hCF3157FF
+            label.color = ThemeColor("brand")
         else
-            label.color = &hA9B7C9FF
+            label.color = ThemeColor("inkSoft")
         end if
     end for
 end sub
@@ -3216,7 +3242,8 @@ function createHomeRail(contentTarget as Object) as Object
     ' matches a left-aligned box's origin).
     title.width = 1400
     title.font = PlayarrMakeFont(500, 18)
-    title.color = &hF4F0F1FF
+    title.color = ThemeColor("ink")
+    ThemeSetRole(title, "ink")
     group.AppendChild(title)
 
     row = CreateObject("roSGNode", "RowList")
@@ -4110,13 +4137,13 @@ sub renderNavDockFocus()
             end if
             if isFocused
                 m.navIcons[i].opacity = 1
-                m.navLabels[i].color = &hF4F0F1FF
+                m.navLabels[i].color = ThemeColor("ink")
             else if isActive
                 m.navIcons[i].opacity = 1
-                m.navLabels[i].color = &hF4F0F1FF
+                m.navLabels[i].color = ThemeColor("ink")
             else
                 m.navIcons[i].opacity = 0.72
-                m.navLabels[i].color = &h887A82FF
+                m.navLabels[i].color = ThemeColor("inkMuted")
             end if
         end if
     end for
@@ -5236,14 +5263,14 @@ sub renderPlayerEpisodeNav()
     hasPrev = m.playbackEpisodeList.Count() > 0 and m.playbackEpisodeIndex > 0
     hasNext = m.playbackEpisodeList.Count() > 0 and m.playbackEpisodeIndex < m.playbackEpisodeList.Count() - 1
     if hasPrev
-        m.playerPreviousLabel.color = &hA9B7C9FF
+        m.playerPreviousLabel.color = ThemeColor("inkSoft")
     else
-        m.playerPreviousLabel.color = &h5C6B80FF
+        m.playerPreviousLabel.color = ThemeColor("inkMuted")
     end if
     if hasNext
-        m.playerNextLabel.color = &hA9B7C9FF
+        m.playerNextLabel.color = ThemeColor("inkSoft")
     else
-        m.playerNextLabel.color = &h5C6B80FF
+        m.playerNextLabel.color = ThemeColor("inkMuted")
     end if
 end sub
 
@@ -5437,9 +5464,9 @@ sub focusEndButton(index as Integer)
             b.label.visible = true
             b.label.text = m.endActions[i].text
             if i = index
-                b.bg.color = &hCF3157FF
+                b.bg.color = ThemeColor("brand")
             else
-                b.bg.color = &h2A262CFF
+                b.bg.color = ThemeColor("surfaceSoft")
             end if
         else
             b.bg.visible = false

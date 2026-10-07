@@ -10,22 +10,22 @@ ROKU_DEV_TARGET=<ip> ROKU_DEV_PASSWORD=<dev password> node scripts/parity/roku/c
 node scripts/parity/diff.mjs --ref docs/parity/web --cand <out> --layout tv --theme dark --mask-rect 470,60,260,40
 ```
 
-## Mismatch per screen (dark theme)
+## Mismatch per screen (device captures, fixture clock masked)
 
-| Screen | Before this change | Now | Light | Status |
-| --- | ---: | ---: | --- | --- |
-| home | 7.32% | 5.75% | not supported | open |
-| movies | 7.50% | 6.27% | not supported | open |
-| series | 5.47% | 5.01% | not supported | open |
-| film-detail | 8.33% | 10.14% | not supported | open |
-| series-detail | 6.15% | 6.08% | not supported | open |
-| search | 3.69% | 3.69% | not supported | open |
-| profile-switcher | 5.63% | 5.63% | not supported | open |
-| calendar, settings and its panels, downloads, watchlist, requests, player-controls, player-quality-menu, household-blocked | n/a | n/a | n/a | no Roku screen / not captured |
+| Screen | Dark | Light | Status |
+| --- | ---: | ---: | --- |
+| home | 5.74% | 32.41% | open |
+| movies | 6.40% | 25.01% | open |
+| series | 5.14% | not re-measured | open |
+| film-detail | 10.27% | not re-measured | open |
+| series-detail | 6.11% | not re-measured | open |
+| search | 3.68% | 22.89% | open |
+| profile-switcher | 5.53% | 7.02% | open |
+| calendar, settings and its panels, watchlist, requests, player-controls, player-quality-menu, household-blocked | n/a | n/a | no Roku screen / not captured |
+| downloads | n/a | n/a | justified exception: offline storage is not possible on Roku |
 
-"Before" is the capture of the build before the Roku bugfix PR (row 758) except film-detail, whose earlier capture was a
-different title. film-detail got worse than the first figure only because the earlier capture did not land on the same
-film; it is not a regression of the layout.
+The light figures are high because the stage wash, key-art darkening and dock geometry are still tuned for dark; the
+theme itself (tokens, preference, every label and panel) now follows the web palette.
 
 ## Why nothing is at or below 1% yet
 
@@ -36,8 +36,9 @@ film; it is not a regression of the layout.
 - **Missing chrome.** The Roku has no Downloads, Watchlist, Requests or Calendar screens, so the left dock has four
   fewer entries than web, and there is no "Customise Home" pill. Adding dead entries would be dishonest; they come with
   the features (rows 133, 212, 415).
-- **Light theme.** The channel is dark only (the sign-in screen has its own light variant). Every colour is a literal
-  in the SceneGraph files, so light needs a token pass over all screens first.
+- **Light theme (done).** `source/Theme.brs` holds both web palettes; `ThemeApplyTree` maps each authored literal to its
+  token, the preference (System, Light, Dark; System resolves to dark because Roku has no appearance API) is set from
+  the sign-in/profile dropdown and Settings, and capture.mjs selects it through that dropdown.
 - **Player.** The video plane is a hardware surface that the screenshot endpoint returns black, so the player screens
   can only be compared on their chrome, which is not captured yet.
 - **Calendar, settings, lists.** Not implemented on Roku.

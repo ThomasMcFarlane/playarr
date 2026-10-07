@@ -8,6 +8,8 @@
 
 sub init()
     PlayarrFontifyTree(m.top)
+    ThemeSetRole(m.top.findNode("keyArtFade"), "bg")
+    ThemeInitComponent()
     m.keyArtLayer = m.top.findNode("keyArtLayer")
     m.keyArt = m.top.findNode("keyArt")
     m.titlePanel = m.top.findNode("titlePanel")

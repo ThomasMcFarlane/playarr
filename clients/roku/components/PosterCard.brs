@@ -1,5 +1,10 @@
 sub init()
     PlayarrFontifyTree(m.top)
+    ThemeSetRole(m.top.findNode("posterBg"), "surfaceSoft")
+    for each id in ["cornerTL", "cornerTR", "cornerBL", "cornerBR"]
+        ThemeSetRole(m.top.findNode(id), "surface")
+    end for
+    ThemeInitComponent()
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
     m.kind = m.top.findNode("kind")

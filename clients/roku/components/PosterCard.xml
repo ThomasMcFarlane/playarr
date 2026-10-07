@@ -137,5 +137,6 @@
     </Animation>
   </children>
   <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
   <script type="text/brightscript" uri="pkg:/components/PosterCard.brs" />
 </component>

@@ -352,6 +352,35 @@ class FontTests(unittest.TestCase):
             self.assertNotRegex(text, r"<Font[\s/>]", xml.name)
 
 
+class ThemeTests(unittest.TestCase):
+    def test_every_authored_colour_literal_is_a_theme_token(self) -> None:
+        theme = (ROOT / "source" / "Theme.brs").read_text(encoding="utf-8")
+        tokens = set(re.findall(r'"([0-9A-F]{6})": "', theme))
+        # Transparent hit areas, white label/track fills (ink / player chrome) are theme-neutral.
+        neutral = {"000000", "FFFFFF"}
+        for xml in sorted((ROOT / "components").glob("*.xml")):
+            text = re.sub(r"<!--.*?-->", "", xml.read_text(encoding="utf-8"), flags=re.S)
+            for match in re.finditer(r'\w+="0x([0-9A-Fa-f]{6})[0-9A-Fa-f]{2}"', text):
+                with self.subTest(file=xml.name, literal=match.group(1)):
+                    self.assertIn(match.group(1).upper(), tokens | neutral)
+
+    def test_brightscript_uses_tokens_not_colour_literals(self) -> None:
+        for path in sorted((ROOT / "components").glob("*.brs")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if line.lstrip().startswith("'") or "focusBitmapBlendColor" in line:
+                    continue
+                with self.subTest(file=path.name, line=number):
+                    self.assertNotRegex(line, r"&h[0-9A-Fa-f]{8}")
+
+    def test_both_palettes_and_the_preference_exist(self) -> None:
+        theme = (ROOT / "source" / "Theme.brs").read_text(encoding="utf-8")
+        prefs = (ROOT / "source" / "PairingPrefs.brs").read_text(encoding="utf-8")
+        for token in ("&hF5F3F2FF", "&h382621FF", "&h151315FF", "&hF4F0F1FF"):
+            self.assertIn(token, theme)
+        self.assertIn('"system"', prefs)
+        self.assertIn("sub setThemePreference", MAIN)
+
+
 if __name__ == "__main__":
     unittest.main()
 
