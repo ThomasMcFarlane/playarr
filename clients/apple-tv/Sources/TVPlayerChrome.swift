@@ -209,6 +209,10 @@ struct TVPlayerChrome: View {
                 .placed(x: 1007, y: 549.8, w: 600, h: 28.9)
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(DesignTokens.Color.brandPrimary.opacity(0.22))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(DesignTokens.Color.brandPrimary.opacity(0.55), lineWidth: 1)
+                )
                 .placed(x: 1007, y: 578.7, w: 600.4, h: 60)
             Text(state.qualityLabel)
                 .font(TVTheme.font(size: 12.48, weight: .bold))
@@ -243,6 +247,10 @@ struct TVPlayerChrome: View {
                     ZStack(alignment: .topLeading) {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Color.white.opacity(0.055))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            )
                             .frame(width: 156.6, height: 60)
                         Text("\(tier.mbps[column]) Mbps")
                             .font(TVTheme.font(size: 12.48, weight: .bold))

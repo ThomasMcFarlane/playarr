@@ -141,7 +141,7 @@ struct TVAuthedImage<Placeholder: View>: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().interpolation(.high).scaledToFill()
             } else {
                 placeholder()
             }
