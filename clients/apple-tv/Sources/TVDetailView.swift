@@ -447,10 +447,18 @@ struct TVWorkDetailView: View {
     ) -> some View {
         ZStack {
             DesignTokens.Color.backgroundRaised
-            content().frame(width: width, height: height).clipped()
+            content().frame(width: width, height: height).clipped().saturation(0.75)
+            // Web `.tv-episode-art::after`: a diagonal darkening wash over the picture.
+            LinearGradient(
+                colors: [Color.black.opacity(0.05), Color.black.opacity(0.48)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: 13.44, style: .continuous))
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(0.14), radius: 10, y: 10)
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(0.1), radius: 4, y: 3)
     }
 
     // MARK: Right rail: series
