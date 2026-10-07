@@ -14,9 +14,8 @@ targets:
     sources:
       - path: Sources
       - path: Supporting/Assets.xcassets
-      - path: ../ios/Resources/Fonts
-        excludes:
-          - "*.txt"
+      - path: ../../docs/parity/fonts/NunitoSans-wght-web.ttf
+      - path: ../ios/Resources/Fonts/JetBrainsMono-Variable.ttf
     info:
       path: Supporting/Info.plist
       properties:
@@ -25,7 +24,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.entertainment
         UIAppFonts:
-          - NunitoSans-Variable.ttf
+          - NunitoSans-wght-web.ttf
           - JetBrainsMono-Variable.ttf
         ITSAppUsesNonExemptEncryption: false
         NSLocalNetworkUsageDescription: Playarr connects to the Playarr Server on your network.

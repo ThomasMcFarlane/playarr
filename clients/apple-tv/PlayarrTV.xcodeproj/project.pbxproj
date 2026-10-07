@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D5D8CCEC4B9EE0A241E641D8 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */; };
-		527D38FBD08A9D6AB4DB9662 /* NunitoSans-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1F8293A518A131F6C8AB8B00 /* NunitoSans-Variable.ttf */; };
+		527D38FBD08A9D6AB4DB9662 /* NunitoSans-wght-web.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */; };
 		3201749E36E7348E4A0FA92F /* TVTabPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8BF202016884CD7FA850E7 /* TVTabPages.swift */; };
 		961AC215D2B847594E40F409 /* TVWebParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCD1E46A5ADF7B172FAFF25 /* TVWebParityTests.swift */; };
 		BF9CAF96E70B19E3D37E3D2A /* TVPlayerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */; };
@@ -50,7 +50,7 @@
 
 /* Begin PBXFileReference section */
 		E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = JetBrainsMono-Variable.ttf; path = ../ios/Resources/Fonts/JetBrainsMono-Variable.ttf; sourceTree = "<group>"; };
-		1F8293A518A131F6C8AB8B00 /* NunitoSans-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = NunitoSans-Variable.ttf; path = ../ios/Resources/Fonts/NunitoSans-Variable.ttf; sourceTree = "<group>"; };
+		1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = NunitoSans-wght-web.ttf; path = ../../docs/parity/fonts/NunitoSans-wght-web.ttf; sourceTree = "<group>"; };
 		1A8BF202016884CD7FA850E7 /* TVTabPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVTabPages.swift; sourceTree = "<group>"; };
 		0CCD1E46A5ADF7B172FAFF25 /* TVWebParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVWebParityTests.swift; sourceTree = "<group>"; };
 		2ADEC224002C0409017A7669 /* TVPlayerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerChrome.swift; sourceTree = "<group>"; };
@@ -157,7 +157,7 @@
 				C58245455747F1533147EFAD /* Sources */,
 				6A1B2C3D4E5F60718293A4E0 /* Assets.xcassets */,
 				E40640D7CABD3A28B1050F05 /* JetBrainsMono-Variable.ttf */,
-				1F8293A518A131F6C8AB8B00 /* NunitoSans-Variable.ttf */,
+				1F8293A518A131F6C8AB8B00 /* NunitoSans-wght-web.ttf */,
 				66A396CCE97C43937D7A9BD7 /* Tests */,
 				3C10A307C8E1D18D0055C05D /* Products */,
 			);
@@ -245,7 +245,7 @@
 			files = (
 				6A1B2C3D4E5F60718293A4E1 /* Assets.xcassets in Resources */,
 				D5D8CCEC4B9EE0A241E641D8 /* JetBrainsMono-Variable.ttf in Resources */,
-				527D38FBD08A9D6AB4DB9662 /* NunitoSans-Variable.ttf in Resources */,
+				527D38FBD08A9D6AB4DB9662 /* NunitoSans-wght-web.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

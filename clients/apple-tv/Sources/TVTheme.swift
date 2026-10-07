@@ -811,12 +811,8 @@ enum TVFontLoader {
         let key = "\(mono)-\(size)-\(weight)"
         if let cached = cache[key] { return cached }
         let family = mono ? "JetBrains Mono" : "Nunito Sans"
-        var axes: [NSNumber: Any] = [wght: weight]
-        if !mono {
-            axes[wdth] = 100
-            axes[opsz] = 12
-            axes[ytlc] = 500
-        }
+        // `NunitoSans-wght-web.ttf` has the web's width, optical size and YTLC baked in: only the weight is free.
+        let axes: [NSNumber: Any] = [wght: weight]
         let base = UIFontDescriptor(fontAttributes: [.family: family])
         let descriptor = base.addingAttributes([
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
