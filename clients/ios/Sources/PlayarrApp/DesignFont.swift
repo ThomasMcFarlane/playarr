@@ -14,23 +14,37 @@ enum DesignFont {
         return NSNumber(value: value)
     }
 
-    static func uiFont(family: String, size: CGFloat, weight: Int, fixedAxes: [String: Double]) -> UIFont? {
+    /// PostScript name of the web-instance file's default face (`NunitoSans-wght-web.ttf`); the
+    /// typographic family is "Nunito Sans 12pt", so the face is requested by this exact name.
+    static let nunitoPostScriptName = "NunitoSans-12ptExtraLight"
+
+    /// Builds the face and sets the weight axis. `postScriptName` (when given) selects the file's face
+    /// exactly; otherwise `family` does. Returns nil, never a substitute, when the bundled font is not
+    /// registered.
+    static func uiFont(
+        family: String,
+        postScriptName: String? = nil,
+        size: CGFloat,
+        weight: Int,
+        fixedAxes: [String: Double]
+    ) -> UIFont? {
         let variation = NSMutableDictionary()
         variation[tag("wght")] = NSNumber(value: Double(max(200, min(1000, weight))))
         for (name, value) in fixedAxes { variation[tag(name)] = NSNumber(value: value) }
-        let descriptor = UIFontDescriptor(fontAttributes: [
-            .family: family,
+        var attributes: [UIFontDescriptor.AttributeName: Any] = [
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): variation,
-        ])
-        let font = UIFont(descriptor: descriptor, size: size)
-        return font.familyName.hasPrefix(family) ? font : nil
+        ]
+        if let postScriptName { attributes[.name] = postScriptName } else { attributes[.family] = family }
+        let font = UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
+        // An unregistered name makes UIKit answer with the system font.
+        return font.familyName == UIFont.systemFont(ofSize: size).familyName ? nil : font
     }
 }
 
 extension DesignFont {
     /// UI text: Nunito Sans at the CSS `weight`, falling back to Avenir Next when the face is unavailable.
     static func font(_ size: CGFloat, _ weight: Int = 400) -> Font {
-        if let face = uiFont(family: "Nunito Sans", size: size, weight: weight, fixedAxes: nunitoAxes) {
+        if let face = uiFont(family: "Nunito Sans", postScriptName: nunitoPostScriptName, size: size, weight: weight, fixedAxes: nunitoAxes) {
             return Font(face as CTFont)
         }
         return .custom("Avenir Next", fixedSize: size)
