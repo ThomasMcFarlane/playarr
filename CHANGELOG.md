@@ -13,6 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Recently added now follows when the *arr app added a title (Radarr, Sonarr, Whisparr, Lidarr and Readarr `added`) instead of the first sync time, so a fresh install or a newly connected library no longer gives every title the same date; an already-synced title is corrected once if it was stamped later than the source's date, and never moved later. Unusable dates fall back to the sync time.
+- Fixtures: the stub serves an explicit `added` per title and the helper that pinned `added_at` through the sqlite3 CLI is removed.
 - iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - Web: after a session restore the profile name is resolved from the server's display name instead of staying the typed username or the Viewer placeholder.
 - The merge train now restores a PR branch to its pre-fold head whenever it blocks the PR or main moves after the fold, so folded TASKS/CHANGELOG commits no longer stay on branches and conflict on the next merge of main.
@@ -207,6 +209,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android debug builds accept a frozen parity clock so pixel-parity captures do not depend on the real date.
 - Android: the remaining dates (invite expiry, household blocks, remote pairing, data transfer expiry, calendar times, calendar detail) use the shared locale-aware formatter, matching the web's Intl output.
 - tvOS parity captures freeze the app and the local web capture at the fixture clock read from scripts/fixtures/catalog.mjs (FIXTURE_CLOCK) instead of a second hard-coded copy.
 - Fixtures: the upcoming episode's air date is computed from one absolute fixture instant (FIXTURE_CLOCK, shared with the parity capture) instead of the real clock at seed time, so the calendar references no longer drift from day to day.

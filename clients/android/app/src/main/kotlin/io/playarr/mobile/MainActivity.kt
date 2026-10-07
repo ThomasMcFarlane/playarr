@@ -180,6 +180,9 @@ class MainActivity : ComponentActivity() {
         io.playarr.mobile.ui.parityNoInsets = !isTelevision &&
             (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 &&
             intent.getBooleanExtra("parity_no_insets", false)
+        io.playarr.mobile.ui.parityClock = intent.getStringExtra("parity_clock")?.takeIf {
+            (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        }?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
         io.playarr.mobile.ui.parityPauseAtMs = intent.getLongExtra("parity_pause_at_ms", -1L).takeIf {
             it >= 0L && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         }
