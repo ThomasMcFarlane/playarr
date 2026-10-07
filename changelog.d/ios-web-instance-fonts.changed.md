@@ -1,1 +1,0 @@
-- iOS: embeds the web's exact Nunito Sans instance (`NunitoSans-wght-web.ttf`, only the weight axis free) instead of the full-axis upstream font, so glyph widths match the web; the shared `DesignFont` sets only the weight.

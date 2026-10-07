@@ -209,6 +209,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV profile page: web background glow, positions, avatar ring and a Clients pill that shows a QR code for the clients page.
+- iOS: embeds the web's exact Nunito Sans instance (`NunitoSans-wght-web.ttf`, only the weight axis free) instead of the full-axis upstream font, so glyph widths match the web; the shared `DesignFont` sets only the weight.
 - Android debug builds accept a frozen parity clock so pixel-parity captures do not depend on the real date.
 - Android: the remaining dates (invite expiry, household blocks, remote pairing, data transfer expiry, calendar times, calendar detail) use the shared locale-aware formatter, matching the web's Intl output.
 - tvOS parity captures freeze the app and the local web capture at the fixture clock read from scripts/fixtures/catalog.mjs (FIXTURE_CLOCK) instead of a second hard-coded copy.

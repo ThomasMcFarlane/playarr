@@ -202,3 +202,11 @@ profile-switcher 1.68%, household-blocked 0.42%, player controls 0.62%, quality 
 
 Debuggable builds accept `--es parity_clock 2026-10-07T12:00:00Z` on launch (the shared `FIXTURE_CLOCK`): "today" in the
 calendar and the clock in the chrome then read that instant instead of the real date, so the agenda always shows 7 Oct 2026.
+
+### Profile page
+
+The TV profile page now has the web's background (the rose glow is a 13% circle at 50% / 48% that fades by 34% of the corner
+distance, and the edge fade runs along the left and the bottom), the heading and the Sign out row at the web's heights, the
+selected avatar lifted and scaled with its 4 px rose ring outside the avatar, a lighter shadow on the glass pills, and the
+Clients pill at the bottom right. Clients opens a dialog with a QR code and the address of the server's clients page, since
+Android TV has no browser to hand it to. Dark 1.04%, light 1.35%.
