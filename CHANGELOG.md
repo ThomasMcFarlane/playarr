@@ -78,6 +78,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- tvOS: Downloads, Watchlist and Requests pages on the web TV layout, with real watchlist and request data (PlayarrKit `listWatchlistItems`, `listMyRequests`).
 - iOS: a Request latency page in Settings, matching the web page (per-route HTTP latency for admins, with the "Admins only" state for other users), backed by a new `HttpLatencyClient` in PlayarrKit with unit tests.
 - Apple parity workflow: captures both themes, a web layout dump per screen, a player screen pair (controls, quality menu) with the video hidden, and the household blocked screen (fx-child-locked).
 - PlayarrKit: Home rails, availability lag, household status, profile avatar preset and media thumbnail calls; runtime on work and episode details.
