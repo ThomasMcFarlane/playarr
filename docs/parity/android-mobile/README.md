@@ -14,12 +14,12 @@ Mismatch against the web reference of the same theme, system bars masked (see be
 | Screen | Light | Dark | Status |
 | --- | ---: | ---: | --- |
 | home | 0.95% | 0.85% | pass |
-| movies | 0.52% | 0.52% | pass |
-| series | 0.41% | 0.43% | pass |
+| movies | 0.53% | 0.52% | pass |
+| series | 0.42% | 0.44% | pass |
 | film-detail | 1.00% | 0.98% | pass |
 | series-detail | 1.13% | 0.71% | above 1% |
-| search | 0.64% | 0.74% | pass |
-| calendar | 2.58% | 2.43% | above 1% |
+| search | 0.68% | 0.75% | pass |
+| calendar | 2.54% | 2.39% | above 1% |
 | settings | 1.02% | 1.04% | above 1% |
 | player-controls | 0.55% | 0.55% | pass |
 | player-quality-menu | 1.60% | 1.60% | above 1% |
@@ -42,8 +42,9 @@ The screens at or below 1% have no difference worth a justification. The rest:
 ## What the phone client does to match
 
 - **Fonts.** The phone client embeds the web's fonts: Nunito Sans (text) and JetBrains Mono (monospace labels), the same
-  variable files the web bundles (`docs/parity/fonts`, SIL OFL; licences in `clients/android/licenses`). Every weight the web
-  CSS asks for is a variation of the one file. Television keeps the platform font.
+  files `docs/parity/fonts` documents for native clients (`NunitoSans-wght-web.ttf`, the web's exact wght-only instance, default
+  weight 200 so the weight is always set explicitly, and `JetBrainsMono[wght].ttf`; SIL OFL, licences in
+  `clients/android/licenses`). Every weight the web CSS asks for is a variation of the one file. Television keeps the platform font.
 - **Text rendering.** Compose's default hints glyph advances, which makes 11 sp text about 4% narrower than Chromium's
   unhinted layout. The phone text style uses `TextMotion.Animated` (subpixel positioning, no hinting), so line breaks and
   widths match, and splits leading the way Chromium does for these fonts.
