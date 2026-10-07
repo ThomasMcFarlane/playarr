@@ -230,8 +230,12 @@ struct TVRootView: View {
                 )
             case .calendar:
                 TVCalendarView()
-            case .downloads, .watchlist, .requests:
-                TVNotYetOnTVView(title: tab.title)
+            case .downloads:
+                TVDownloadsView()
+            case .watchlist:
+                TVWatchlistView()
+            case .requests:
+                TVRequestsView()
             case .playlists:
                 TVLibraryKindView(
                     kindLabel: "Playlists",
