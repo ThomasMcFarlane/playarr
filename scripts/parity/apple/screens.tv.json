@@ -127,6 +127,27 @@
       },
       "native": "household-blocked",
       "user": "fx-child-locked"
+    },
+    {
+      "id": "downloads",
+      "web": {
+        "path": "/downloads"
+      },
+      "native": "downloads"
+    },
+    {
+      "id": "watchlist",
+      "web": {
+        "path": "/watchlist"
+      },
+      "native": "watchlist"
+    },
+    {
+      "id": "requests",
+      "web": {
+        "path": "/requests"
+      },
+      "native": "requests"
     }
   ]
 }
