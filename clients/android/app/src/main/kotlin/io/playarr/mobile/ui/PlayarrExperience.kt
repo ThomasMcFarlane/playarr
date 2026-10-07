@@ -291,20 +291,36 @@ internal var webIsDark: Boolean = true
     private set
 
 /**
- * The web client's font stack ("Avenir Next", Avenir, "Segoe UI", Helvetica, Arial) resolves to Liberation Sans, the
- * metric-compatible Arial, where no earlier family exists, which is what the shared parity references render. The phone
- * client bundles it so its text has the web's glyphs and advance widths. Television keeps the platform font.
+ * The web client's own fonts (`--font` Nunito Sans, `--mono` JetBrains Mono, SIL OFL, licences in clients/android/licenses),
+ * embedded as the same variable files the web bundles (`docs/parity/fonts`): every weight the web CSS asks for (200 to 1000
+ * for Nunito Sans) is a variation of the one file, as in the browser, with the other axes at their defaults. Television
+ * keeps the platform font.
  */
 internal var webFontFamily: androidx.compose.ui.text.font.FontFamily? = null
+internal var webMonoFamily: androidx.compose.ui.text.font.FontFamily? = null
+
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private fun variableFamily(resId: Int, range: IntProgression): androidx.compose.ui.text.font.FontFamily =
+    androidx.compose.ui.text.font.FontFamily(
+        range.map { weight ->
+            androidx.compose.ui.text.font.Font(
+                resId = resId,
+                weight = FontWeight(weight),
+                variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
+                    FontWeight(weight),
+                    androidx.compose.ui.text.font.FontStyle.Normal,
+                ),
+            )
+        },
+    )
 
 internal fun setPlayarrWebFont(enabled: Boolean) {
-    webFontFamily = if (enabled) {
-        androidx.compose.ui.text.font.FontFamily(
-            androidx.compose.ui.text.font.Font(io.playarr.mobile.R.font.liberation_sans_regular, FontWeight.Normal),
-            androidx.compose.ui.text.font.Font(io.playarr.mobile.R.font.liberation_sans_bold, FontWeight.Bold),
-        )
-    } else {
-        null
+    if (enabled && webFontFamily == null) {
+        webFontFamily = variableFamily(io.playarr.mobile.R.font.nunito_sans, 200..1000 step 10)
+        webMonoFamily = variableFamily(io.playarr.mobile.R.font.jetbrains_mono, 100..800 step 10)
+    } else if (!enabled) {
+        webFontFamily = null
+        webMonoFamily = null
     }
 }
 
@@ -1981,6 +1997,7 @@ private fun ProfileControl(
                 lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else 6.08.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = if (isTelevision) 0.32.sp else 0.2432.sp,
+                fontFamily = if (isTelevision) null else webMonoFamily,
                 modifier = Modifier.clearAndSetSemantics { },
             )
         }
