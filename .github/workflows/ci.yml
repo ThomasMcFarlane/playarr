@@ -97,6 +97,15 @@ jobs:
       - name: Require cleartext HTTP to user-entered servers
         run: scripts/ci/check-cleartext-policy.sh
 
+      # Owner rule: public screenshots come from scripts/showcase (open-movie demo library), not the parity fixture.
+      - name: Require showcase-made public screenshots
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: scripts/ci/check-public-screenshots.sh
+
+      - name: Public screenshot guard tests
+        run: scripts/ci/test-check-public-screenshots.sh
+
       # Owner rule: no Co-authored-by trailers on any commit of a PR.
       - name: Reject Co-authored-by trailers
         if: github.event_name == 'pull_request'

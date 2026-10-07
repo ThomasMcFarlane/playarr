@@ -2392,6 +2392,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- README, project site and Play listing screenshots show the open-movie demo library on the current UI again (retaken, with the README attribution tables and CC BY credits restored). They are produced by the new `scripts/showcase` setup, which is separate from the parity fixture, and a CI check rejects public screenshots that were not made with it.
 - Page layout spec (docs/design/page-layout.md): an audit of page chrome on web and Android, one canonical page anatomy with its component API and tokens, TV focus rules, enforcement through source guards, header-band parity and an owner-request gate, and the per-client migration plan.
 - Android phone parity README: calendar and quality-menu residue recorded with measurements, final summary.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.

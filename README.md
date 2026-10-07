@@ -36,19 +36,16 @@
 <td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-series-detail.png" alt="Series detail page listing a season of episodes" width="420"><br><sub><b>Series detail</b><br>Seasons, episodes and one-click resume.</sub></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-calendar.png" alt="Calendar page listing an upcoming episode" width="420"><br><sub><b>Calendar</b><br>Upcoming episodes and releases from your source apps.</sub></td>
 <td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-movies-library.png" alt="Movies library grid with alphabet scrubber" width="420"><br><sub><b>Movies library</b><br>Artwork grid with an A to Z scrubber and filters.</sub></td>
-</tr>
-<tr>
 <td width="50%" align="center"><img src="docs/assets/readme/screenshots/tv-movie-detail.png" alt="Ten-foot television layout of a movie detail page" width="420"><br><sub><b>TV, ten-foot view</b><br>The same detail page laid out for a remote and a sofa.</sub></td>
-<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-mobile-detail.png" alt="Phone-sized movie detail page with a bottom navigation bar" width="280"><br><sub><b>Mobile</b><br>Responsive layout with a bottom navigation bar.</sub></td>
 </tr>
 <tr>
-<td colspan="2" align="center"><img src="docs/assets/readme/screenshots/admin-library.png" alt="Playarr Server admin library browser" width="860"><br><sub><b>Server admin</b><br>Library browser in the Playarr Server admin UI.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/web-mobile-home.png" alt="Phone-sized home screen with an on-deck rail" width="200"> <img src="docs/assets/readme/screenshots/web-mobile-detail.png" alt="Phone-sized movie detail page with a bottom navigation bar" width="200"><br><sub><b>Mobile</b><br>Responsive layout with a bottom navigation bar.</sub></td>
+<td width="50%" align="center"><img src="docs/assets/readme/screenshots/admin-library.png" alt="Playarr Server admin library browser" width="420"><br><sub><b>Server admin</b><br>Library browser in the Playarr Server admin UI.</sub></td>
 </tr>
 </table>
 
-<p align="center"><sub>The demo library is a placeholder library with generated artwork; no real titles or artwork are shown.</sub></p>
+<p align="center"><sub>The demo library uses openly licensed films; see <a href="#third-party-media">Third-party media</a> for the full attribution.</sub></p>
 
 # Playarr Server / Playarr
 
@@ -271,8 +268,33 @@ Big Buck Bunny, (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org,
 is licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
 (see <https://peach.blender.org/about/>). It is not distributed in the app. The
 licence does not cover Blender or Big Buck Bunny logos or trademarks, and none are
-used. Every screenshot in this repository is taken against a placeholder library
-with generated artwork.
+used.
+
+The screenshots in this repository (this README, the project site and the Play store
+listing) are taken against a demo library built only from openly licensed Blender
+films. These titles appear only in screenshots and are not distributed in the app. Each
+is used under the licence shown, with credit to the holder. The library and the capture
+steps are reproducible with [`scripts/showcase`](scripts/showcase), which is separate
+from the parity fixture.
+
+<details>
+<summary>Films and series (Blender Foundation and Blender Studio)</summary>
+
+| Title | Credit | Licence | Source |
+|---|---|---|---|
+| Big Buck Bunny (2008) | (c) copyright 2008, Blender Foundation, www.bigbuckbunny.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm) |
+| Sintel (2010) | (c) copyright Blender Foundation, www.sintel.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Sintel_movie_4K.webm) |
+| Tears of Steel (2012) | (CC) Blender Foundation, mango.blender.org | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tears_of_Steel_1080p.webm) |
+| Elephants Dream (2006) | (c) copyright 2006, Blender Foundation / Netherlands Media Art Institute, www.elephantsdream.org; poster by Bassam Kurdali, Andy Goralczyk and the Blender Foundation (CC BY 4.0) | [CC BY 2.5](https://creativecommons.org/licenses/by/2.5/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm) |
+| Spring (2019) | (c) Blender Studio, studio.blender.org; poster by Francesco Siddi | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spring_-_Blender_Open_Movie.webm) |
+| Sprite Fright (2021) | (c) Blender Studio, studio.blender.org | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Sprite_Fright_-_Open_Movie_by_Blender_Studio.webm) |
+| Charge (2022) | (c) Blender Studio, studio.blender.org | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Charge_-_Blender_Open_Movie-full_movie.webm) |
+| Caminandes: Llama Drama, Gran Dillama and Llamigos (series, 2013 onwards) | (c) Blender Foundation, www.caminandes.com (Pablo Vazquez, Beorn Leonard, Francesco Siddi) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [Llama Drama](https://commons.wikimedia.org/wiki/File:Caminandes-_Llama_Drama_-_Short_Movie.ogv), [Gran Dillama](https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip), [Llamigos](https://commons.wikimedia.org/wiki/File:Caminandes_3_-_Llamigos_-_Blender_Animated_Short.webm) |
+
+Posters and backdrops are the project posters or single frames taken from the films. The
+showcase library uses small re-encodes, and episode air dates in the demo catalogue are approximate.
+
+</details>
 
 ## Licence
 
