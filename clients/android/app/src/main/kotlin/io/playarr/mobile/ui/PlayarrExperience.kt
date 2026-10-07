@@ -748,6 +748,14 @@ internal class PlayarrExperienceViewModel @Inject constructor(
         loadAvailableKinds()
         loadHome()
         viewModelScope.launch {
+            // Saved sessions from before the display name was resolved hold the typed username.
+            syncProfileDisplayName(
+                savedName = tokenStore.currentUserName.first(),
+                listProfiles = { api.listAvailableProfiles() },
+                saveIdentity = { id, name -> tokenStore.saveIdentity(id, name) },
+            )
+        }
+        viewModelScope.launch {
             while (isActive) {
                 refreshCapabilities()
                 delay(CAPABILITIES_POLL_MS)
