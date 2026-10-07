@@ -78,6 +78,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Apple parity workflow: captures both themes, a web layout dump per screen, a player screen pair (controls, quality menu) with the video hidden, and the household blocked screen (fx-child-locked).
+- PlayarrKit: Home rails, availability lag, household status, profile avatar preset and media thumbnail calls; runtime on work and episode details.
 - Web title detail: an Add to Playlist pill beside Add to watchlist, and a Download button in each season heading of a series (shown when downloads are allowed); both open the existing playlist picker and download quality drawer.
 - iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
 - iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
@@ -197,6 +199,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- tvOS: Home, Library, title detail, Search, Settings, Release Calendar, profile switcher, the household blocked screen and the player now follow the web TV layout (1920x1080) in light and dark, with the web's nav tabs, preset profile avatars, key art treatment and a web-style player with quality matrix.
 - Every client now allows cleartext `http://` connections to the self-hosted Playarr Server the user enters: the Android Google Play flavour no longer denies cleartext, iOS sets `NSAllowsArbitraryLoads`, and the Xbox package declares `privateNetworkClientServer` for home-network servers. HTTPS remains supported and preferred.
 - Android phone: header, navigation, home rails, library grid, search, settings index, title detail pages and calendar follow the web mobile layout in light and dark themes.
 - Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.

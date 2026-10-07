@@ -6,6 +6,7 @@ import UIKit
 
 struct TVRootView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var selectedTab: TVNavTab = .home
     /// Shared focus so the shell can move between nav and stage with arrows.
     @FocusState private var shellFocus: TVShellFocus?
@@ -51,7 +52,11 @@ struct TVRootView: View {
         ZStack {
             TVStageBackground()
 
-            if TVParityLaunch.isLive {
+            if TVParityLaunch.livePlayer != nil {
+                TVParityLivePlayerView()
+            } else if TVParityLaunch.route == "profiles" {
+                TVProfilesView(onLinkTV: {}, onManual: {})
+            } else if TVParityLaunch.isLive {
                 signedInShell
             } else if TVParityLaunch.requestedScreen == .deviceCodePairing {
                 // Fixture device-code chrome (do not hit live ATS / network).
@@ -77,8 +82,11 @@ struct TVRootView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(TVParityLaunch.theme ?? displayPreferences.colorScheme)
         .tint(DesignTokens.Color.brandPrimary)
+        .task(id: isSignedIn) {
+            if isSignedIn { await environment.refreshShellState() }
+        }
         .onAppear {
             if let forced = parityForcedTab {
                 selectedTab = forced
@@ -86,7 +94,15 @@ struct TVRootView: View {
             if let live = TVParityLaunch.liveTab {
                 selectedTab = live
             }
+            if let theme = TVParityLaunch.theme {
+                displayPreferences.themePreference = theme == .light ? .light : .dark
+            }
         }
+    }
+
+    private var isSignedIn: Bool {
+        if case .signedIn = environment.pairingState { return true }
+        return false
     }
 
     private var signedInShell: some View {
@@ -95,7 +111,7 @@ struct TVRootView: View {
 
     private func signedInShell(forcedSelection: TVNavTab?, detailWork: Work? = nil) -> some View {
         let tab = forcedSelection ?? selectedTab
-        let parity = TVParityLaunch.requestedScreen != nil
+        let parity = TVParityLaunch.frozen
         let navBinding = Binding(
             get: { forcedSelection ?? selectedTab },
             set: { if forcedSelection == nil { selectedTab = $0 } }
@@ -143,21 +159,26 @@ struct TVRootView: View {
                 selection: nav,
                 suppressFocusChrome: true,
                 showSettings: false,
-                externalFocus: $shellFocus
+                externalFocus: $shellFocus,
+                browseKinds: environment.catalogKinds
             )
             .padding(.leading, DesignTokens.Shell.navEdge)
             .frame(maxHeight: .infinity, alignment: .center)
             .zIndex(50)
 
-            TVShellHeader(frozenClock: true)
-                .frame(maxWidth: .infinity, alignment: .top)
+            TVShellHeader(frozenClock: true, clockLeading: TVParityLaunch.isLive ? (tab == .home ? 492.4 : 568.8) : nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .allowsHitTesting(false)
                 .zIndex(80)
 
+            if TVParityLaunch.isLive {
+                TVWebProfileChip(name: "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset)
+                    .zIndex(50)
+            } else {
             VStack {
                 Spacer()
                 HStack {
-                    TVProfileChip(name: "Test User A", version: "v0.1.0")
+                    TVProfileChip(name: TVParityLaunch.isLive ? "Viewer" : "Test User A", version: TVParityLaunch.isLive ? "v0.1.0" : "v0.1.0")
                         .padding(.leading, DesignTokens.Shell.navEdge - 4)
                         .padding(.bottom, 36)
                     Spacer()
@@ -165,13 +186,16 @@ struct TVRootView: View {
             }
             .allowsHitTesting(false)
             .zIndex(50)
+            }
         }
         .ignoresSafeArea()
     }
 
     @ViewBuilder
     private func stageContent(tab: TVNavTab, detailWork: Work?) -> some View {
-        if TVParityLaunch.liveDetail != nil {
+        if environment.householdBlocked {
+            TVHouseholdBlockedView()
+        } else if TVParityLaunch.liveDetail != nil {
             TVParityLiveDetailView()
         } else if let detailWork {
             TVWorkDetailView(work: detailWork, apiClient: environment.apiClient)
@@ -204,6 +228,10 @@ struct TVRootView: View {
                     workKind: .artist,
                     collectionNoun: "ARTISTS"
                 )
+            case .calendar:
+                TVCalendarView()
+            case .downloads, .watchlist, .requests:
+                TVNotYetOnTVView(title: tab.title)
             case .playlists:
                 TVLibraryKindView(
                     kindLabel: "Playlists",
@@ -225,6 +253,7 @@ private struct TVProductionShell<Stage: View>: View {
     var shellFocus: FocusState<TVShellFocus?>.Binding
     @ViewBuilder var stageContent: () -> Stage
 
+    @Environment(TVAppEnvironment.self) private var environment
     @Namespace private var shellFocusNamespace
     @State private var preferNavDefault = false
     @Environment(\.resetFocus) private var resetFocus
@@ -244,7 +273,8 @@ private struct TVProductionShell<Stage: View>: View {
                     showSettings: true,
                     externalFocus: shellFocus,
                     focusNamespace: shellFocusNamespace,
-                    preferDefaultFocus: preferNavDefault
+                    preferDefaultFocus: preferNavDefault,
+                    browseKinds: environment.catalogKinds
                 )
                 .frame(width: navColumn)
                 .focusSection()
@@ -545,21 +575,24 @@ struct TVProfilesView: View {
                     Color.clear.frame(height: 162 * s)
 
                     Text("PROFILES")
-                        .font(.system(size: 11 * s, weight: .heavy))
-                        .tracking(1.6 * s)
+                        .font(TVTheme.font(size: 10.37 * s, weight: .heavy))
+                        .tracking(1.35 * s)
                         .foregroundStyle(palette.brandPink)
+                        .frame(height: 15.6 * s)
 
-                    Text("Who's watching?")
-                        .font(.system(size: 54 * s, weight: .medium))
-                        .tracking(-2.2 * s)
+                    Text("Who\u{2019}s watching?")
+                        .font(TVTheme.font(size: 80.64 * s, weight: .medium))
+                        .tracking(-5.8 * s)
                         .foregroundStyle(palette.ink)
-                        .padding(.top, 8 * s)
+                        .lineLimit(1)
+                        .frame(height: 76.6 * s)
+                        .padding(.top, 7.2 * s)
 
                     // Always paint the track (including the dashed + add tile).
                     // Never gate the empty household on isLoading — a spinner
                     // over the plate looked like a broken focus ornament.
                     profileRow(scale: s, avatarSize: size)
-                        .padding(.top, 88 * s)
+                        .padding(.top, 120 * s)
                         .opacity(isLoading && profiles.isEmpty ? 0.92 : 1)
 
                     if let loadError {
@@ -689,9 +722,11 @@ struct TVProfilesView: View {
                                     endRadius: size * 0.42
                                 )
                             )
-                        Text(profileInitials(profile))
-                            .font(.system(size: size * 0.28, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.95))
+                        TVProfileAvatar(
+                            userID: profile.id.uuidString.lowercased(),
+                            size: size,
+                            presetName: profile.isCurrent ? environment.currentAvatarPreset : nil
+                        )
                         if busy {
                             ProgressView().tint(.white)
                         }
@@ -705,11 +740,15 @@ struct TVProfilesView: View {
                         }
                     }
                     .frame(width: size, height: size)
+                    // Web: the selected avatar is 268 wide; the button style already scales
+                    // and lifts the whole label (1.045, -8), so the avatar adds the rest.
+                    .scaleEffect(active ? 1.05 : 1)
                     .overlay(
                         Circle().stroke(
                             palette.lineStrong.opacity(0.66),
                             lineWidth: 1
                         )
+                        .scaleEffect(active ? 1.05 : 1)
                     )
                     .overlay {
                         if active {
@@ -727,16 +766,18 @@ struct TVProfilesView: View {
                     )
 
                     Text(profile.displayName.isEmpty ? profile.username : profile.displayName)
-                        .font(.system(size: 16 * s, weight: .semibold))
+                        .font(TVTheme.font(size: 17.28 * s, weight: .semibold))
                         .foregroundStyle(active ? palette.ink : palette.inkSoft)
                         .lineLimit(1)
+                        .offset(y: active ? 4.6 : 0)
 
                     Text(statusLabel(for: profile, busy: busy))
-                        .font(.system(size: 9 * s, weight: .bold))
-                        .tracking(0.6 * s)
+                        .font(TVTheme.font(size: 9.41 * s, weight: .bold))
+                        .tracking(0.42 * s)
                         .textCase(.uppercase)
                         .foregroundStyle(palette.inkMuted)
                         .frame(minHeight: 12 * s)
+                        .offset(y: active ? 4.6 : 0)
                 }
                 .frame(width: size)
             }

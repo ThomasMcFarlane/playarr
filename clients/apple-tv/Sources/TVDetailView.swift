@@ -1,12 +1,16 @@
 import PlayarrKit
 import SwiftUI
 
+/// Title detail (film or series), laid out on the web TV grid: header, copy column on the left,
+/// chapters and similar titles (film) or season tracks (series) on the right.
 struct TVWorkDetailView: View {
     let work: Work
     let apiClient: PlayarrAPIClient
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVWorkDetailViewModel
     @FocusState private var focusedEpisodeID: UUID?
+
+    private var frozen: Bool { TVParityLaunch.frozen }
 
     init(work: Work, apiClient: PlayarrAPIClient) {
         self.work = work
@@ -15,8 +19,7 @@ struct TVWorkDetailView: View {
             initialValue: TVWorkDetailViewModel(
                 workID: work.id,
                 apiClient: apiClient,
-                // Always seed the opened work so parity fixtures (and any
-                // offline open) can render without a live fetch.
+                // Parity fixtures (and any offline open) render the opened work without a fetch.
                 seedWork: work
             )
         )
@@ -42,683 +45,516 @@ struct TVWorkDetailView: View {
                 }
             }
         }
+        .ignoresSafeArea()
         .task {
             if viewModel.state == .idle { await viewModel.load() }
         }
     }
 
+    // MARK: Layout
+
     private func detailContent(_ detail: WorkDetail) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                DesignTokens.Color.backgroundElevated
-                // SPA `.tv-key-art img`: width 52%, height 106%, object-position center 20%,
-                // dark filter grayscale + contrast(0.82) + brightness(0.6), opacity 0.72,
-                // mask solid→72% then fade, scale 1.04.
-                detailKeyArt(detail: detail, size: geo.size)
-                    .zIndex(0)
+        GeometryReader { _ in
+        ZStack(alignment: .topLeading) {
+            DesignTokens.Color.backgroundElevated
+            keyArt(detail.work)
+            TVStageWash()
 
-                // SPA `.tv-key-art::after` dual gradient wash.
-                detailKeyArtAfterOverlay
-                    .zIndex(1)
+            TVPageHeader(
+                title: detail.work.kind == .series ? "Series" : "Movies",
+                detail: detail.work.title,
+                detailGap: 47,
+                uppercaseDetail: false
+            )
 
-                // SPA `.tv-stage-wash`.
-                detailStageWash
-                    .zIndex(2)
-
-                if TVParityLaunch.requestedScreen != nil, detail.work.kind == .movie {
-                    HStack(spacing: 20) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(
-                                width: DesignTokens.Shell.searchBackSize,
-                                height: DesignTokens.Shell.searchBackSize
-                            )
-                            .background(
-                                Circle()
-                                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
-                                    .overlay(
-                                        Circle().stroke(
-                                            DesignTokens.Color.borderDefault.opacity(0.45),
-                                            lineWidth: 1
-                                        )
-                                    )
-                            )
-                        Text("Movies")
-                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .medium))
-                            .tracking(-1.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                        Text(detail.work.title)
-                            .font(TVTheme.font(size: DesignTokens.Shell.libraryCountSize, weight: .heavy))
-                            .foregroundStyle(DesignTokens.Color.textDisabled)
-                            .lineLimit(1)
-                    }
-                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
-                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
-                    .zIndex(20)
-                }
-
-                // Left copy column (SPA `.tv-detail-copy` / h1 max-width 9ch).
-                VStack(alignment: .leading, spacing: 0) {
-                    Text((detail.work.genres.first ?? detail.work.kind.rawValue).uppercased())
-                        .font(TVTheme.font(size: 12, weight: .heavy))
-                        .tracking(1.2)
-                        .foregroundStyle(DesignTokens.Color.brandPrimary)
-                    // SPA: max-width 9ch, ~69pt, line-height 0.9 (gaps ~12–15).
-                    // SwiftUI Text keeps a tall line box (gaps ~42); use a tight
-                    // VStack of soft-wrapped lines. full51 spacing −20 → gaps 22;
-                    // −30 targets SPA ~12–15 without the cast-y overshoot.
-                    detailTitleBlock(detail.work.title)
-                        .padding(.top, 10)
-                    // Meta line: kind · runtime · year · genres
-                    HStack(spacing: 10) {
-                        Text(detail.work.kind.rawValue.capitalized)
-                        if detail.work.kind == .movie {
-                            Text("1h 44m")
-                            Text("2017")
-                            Text("Released 15 Oct 2017")
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                        }
-                        ForEach(detail.work.genres.prefix(3), id: \.self) { g in
-                            Text(g)
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                        }
-                    }
-                    .font(TVTheme.font(size: 12, weight: .medium))
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .padding(.top, 16)
-                    if let overview = detail.work.overview, !overview.isEmpty {
-                        Text(overview)
-                            .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
-                            .foregroundStyle(DesignTokens.Color.textDisabled)
-                            .frame(
-                                maxWidth: DesignTokens.Shell.featureOverviewMaxWidth,
-                                alignment: .leading
-                            )
-                            .lineLimit(5)
-                            .lineSpacing(4)
-                            .padding(.top, 18)
-                    }
-
-                    // SPA `.tv-detail-actions` gap clamp(10, 0.9vw, 16) → 16;
-                    // margin-top clamp(24, 3.5vh, 46) → 38 @ 1080.
-                    HStack(spacing: DesignTokens.Shell.detailActionGap) {
-                        // Parity: plain chrome only (no NavigationLink focus ghosts).
-                        // SPA suite ref includes both secondary Playback + primary Play.
-                        if TVParityLaunch.requestedScreen != nil {
-                            detailChromeLabel("Playback", primary: false)
-                            detailChromeLabel("Play", primary: true)
-                        } else if detail.work.kind == .movie, let mediaFileID = detail.mediaFileID {
-                            detailChromeLabel("Playback", primary: false)
-                            NavigationLink {
-                                TVPlayerView(
-                                    mediaFileID: mediaFileID,
-                                    title: detail.work.title,
-                                    apiClient: apiClient,
-                                    suggestionsWorkID: work.id
-                                )
-                            } label: {
-                                detailChromeLabel("Play", primary: true)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            detailChromeLabel("Playback", primary: false)
-                            detailChromeLabel("Play", primary: true)
-                        }
-                    }
-                    .padding(.top, DesignTokens.Shell.detailActionTopGap)
-
-                    // Music/author children stay under copy; series seasons
-                    // live in the right rail (SPA `.tv-series-browser`).
-                    if TVParityLaunch.requestedScreen == nil {
-                        switch detail.children {
-                        case .series:
-                            EmptyView()
-                        default:
-                            children(detail.children)
-                                .padding(.top, 28)
-                        }
-                    }
-                }
-                .padding(.leading, DesignTokens.Shell.titlePanelLeft)
-                .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                .padding(.trailing, 80)
-                .padding(.bottom, 80)
-                .zIndex(5)
-
-                // SPA `.tv-rail-surface` (right 62%): seasons/episodes for series,
-                // chapters/cast fixtures for movie parity.
-                if detail.work.kind == .movie, TVParityLaunch.requestedScreen != nil {
-                    detailMovieRailSurface(size: geo.size)
-                        .zIndex(6)
-                } else if TVParityLaunch.requestedScreen == nil, case .series(let seasons) = detail.children {
-                    detailSeriesRailSurface(seasons: seasons, size: geo.size)
-                        .zIndex(6)
-                }
+            switch detail.children {
+            case .series(let seasons):
+                seriesCopy(detail, seasons: seasons)
+                seriesRail(detail, seasons: seasons)
+            default:
+                movieCopy(detail)
+                movieRail(detail)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
     }
 
-    /// SPA `.tv-key-art img` with dark-theme filter chain.
-    ///
-    /// Parity fixtures are pre-baked with CSS `grayscale + contrast(0.82) +
-    /// brightness` and opacity-over-base already applied (see Fixtures/), so
-    /// re-running SwiftUI filters would double-darken. Live API art still gets
-    /// the full CSS-equivalent chain with multiplicative brightness via
-    /// `colorMultiply` (SwiftUI `.brightness` is additive and was too dark).
-    @ViewBuilder
-    private func detailKeyArt(detail: WorkDetail, size: CGSize) -> some View {
-        let keyW = size.width * DesignTokens.Shell.keyArtWidthFraction
-        let keyH = size.height * DesignTokens.Shell.keyArtHeightFraction
-        let useParityFixture = TVParityLaunch.requestedScreen != nil
-            && (TVParityArtwork.libraryHero(kind: detail.work.kind) != nil
-                || TVParityArtwork.heroImage != nil)
-        Group {
-            if let fixture = TVParityArtwork.libraryHero(kind: detail.work.kind)
-                ?? TVParityArtwork.heroImage,
-               useParityFixture || backdropURL(for: detail.work) == nil {
-                // SPA-matched media fixture already carries CSS look; no re-filter.
-                fixture
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFill()
-            } else if let url = backdropURL(for: detail.work) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        (TVParityArtwork.heroImage ?? Image(systemName: "film"))
-                            .resizable()
-                            .scaledToFill()
-                    }
-                }
-            } else {
-                DesignTokens.Color.backgroundElevated
-            }
-        }
-        .frame(
-            width: keyW,
-            height: useParityFixture ? size.height : keyH,
-            alignment: Alignment(horizontal: .center, vertical: .top)
-        )
-        .clipped()
-        .modifier(TVKeyArtFilterModifier(prebaked: useParityFixture, skipOpacity: useParityFixture))
-        .scaleEffect(useParityFixture ? 1 : DesignTokens.Shell.keyArtScale)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: DesignTokens.Shell.keyArtMaskSolidEnd),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .offset(y: useParityFixture ? 0 : -(keyH - size.height) * DesignTokens.Shell.keyArtObjectPositionY)
+    // MARK: Key art
+
+    private func keyArt(_ work: Work) -> some View {
+        TVKeyArt(url: backdropURL(for: work))
     }
 
-    /// SPA `.tv-key-art::after`.
-    private var detailKeyArtAfterOverlay: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 0.82),
-                    .init(color: DesignTokens.Color.backgroundElevated, location: 1),
-                ],
-                startPoint: .bottom,
-                endPoint: .top
-            )
-        }
-        .allowsHitTesting(false)
+    // MARK: Copy column
+
+    private func titleLines(_ title: String) -> [String] {
+        TVTextWrap.lines(title, fontName: "AvenirNext-DemiBold", size: 69.12, kern: -4.98, width: 379.5)
     }
 
-    /// SPA `.tv-stage-wash`.
-    private var detailStageWash: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.94), location: 0),
-                    .init(color: .clear, location: 0.31),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            LinearGradient(
-                stops: [
-                    .init(color: DesignTokens.Color.backgroundElevated.opacity(0.50), location: 0),
-                    .init(color: .clear, location: 0.34),
-                ],
-                startPoint: .trailing,
-                endPoint: .leading
-            )
-        }
-        .allowsHitTesting(false)
+    private func kicker(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(TVTheme.font(size: 12.29, weight: .heavy))
+            .tracking(0.98)
+            .foregroundStyle(DesignTokens.Color.brandPrimary)
+            .placed(x: 153.6, y: 259.2, w: 455, h: 18.4)
     }
 
-    /// SPA `.tv-rail-surface.is-vertical-tracks.tv-movie-browser`.
-    private func detailMovieRailSurface(size: CGSize) -> some View {
-        detailRailSurfaceChrome(size: size) {
-            detailSideRails
-        }
-    }
-
-    /// SPA `.tv-rail-surface.tv-series-browser`: one horizontal episode track
-    /// per season (Season 1, Season 2, …) on the right half of the stage.
-    private func detailSeriesRailSurface(seasons: [SeasonDetail], size: CGSize) -> some View {
-        let ordered = seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
-        return detailRailSurfaceChrome(size: size) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: DesignTokens.Shell.detailMediaTrackGap) {
-                    ForEach(ordered, id: \.season.id) { season in
-                        seriesSeasonTrack(season)
-                    }
-                }
-                .padding(.bottom, 80)
-            }
-        }
-    }
-
-    /// Next episodes in series order (rest of season, then later seasons).
-    private func episodeFollowing(_ episodeID: UUID) -> [PlaybackQueueEntry] {
-        guard let detail = viewModel.detail, case .series(let seasons) = detail.children else { return [] }
-        return PlaybackQueueBuilder.episodes(after: episodeID, seriesTitle: work.title, seasons: seasons)
-    }
-
-    private func seriesSeasonTrack(_ season: SeasonDetail) -> some View {
-        let episodes = season.episodes.filter { $0.mediaFileID != nil }
-        let playable = episodes.isEmpty ? season.episodes : episodes
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(season.season.title ?? "Season \(season.season.seasonNumber)")
-                .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-            Text("\(playable.count) episodes")
-                .font(TVTheme.font(size: 11, weight: .medium))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                    ForEach(Array(playable.enumerated()), id: \.element.episode.id) { index, episode in
-                        seriesEpisodeCard(
-                            episode,
-                            seasonNumber: season.season.seasonNumber,
-                            isLeading: index == 0,
-                            following: episodeFollowing(episode.id)
-                        )
-                    }
-                }
-            }
-            // No focusSection trap: Left on the leading episode must reach the dock.
-        }
-    }
-
-    private func seriesEpisodeCard(
-        _ episode: EpisodeDetail,
-        seasonNumber: Int32,
-        isLeading: Bool = false,
-        following: [PlaybackQueueEntry] = []
-    ) -> some View {
-        let ep = episode.episode
-        let title = ep.title ?? "Episode \(ep.episodeNumber)"
-        let label = "S\(String(format: "%02d", seasonNumber)) · E\(String(format: "%02d", ep.episodeNumber))"
-        let card = VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
-                    .frame(
-                        width: DesignTokens.Shell.detailChapterCardWidth,
-                        height: DesignTokens.Shell.detailChapterCardHeight
-                    )
-                Text(String(format: "%02d", ep.episodeNumber))
-                    .font(TVTheme.font(size: 16, weight: .semibold))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .padding(.trailing, 14)
-                    .padding(.bottom, 12)
-            }
-            Text(label)
-                .font(TVTheme.font(size: 11, weight: .medium))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-            Text(title)
-                .font(TVTheme.font(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-                .lineLimit(2)
-                .frame(width: DesignTokens.Shell.detailChapterCardWidth, alignment: .leading)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    focusedEpisodeID == ep.id
-                        ? DesignTokens.Color.brandPrimary.opacity(0.9)
-                        : Color.clear,
-                    lineWidth: 2
-                )
-        )
-
-        if let mediaFileID = episode.mediaFileID {
-            return AnyView(
-                NavigationLink {
-                    TVPlayerView(
-                        mediaFileID: mediaFileID,
-                        title: title,
-                        apiClient: apiClient,
-                        suggestionsWorkID: work.id,
-                        queue: following,
-                        subtitle: PlaybackQueueBuilder.episodeSubtitle(series: work.title, season: seasonNumber, episode: ep.episodeNumber)
-                    )
-                } label: {
-                    card
-                }
-                .buttonStyle(TVFocusableCardButtonStyle())
-                .focused($focusedEpisodeID, equals: ep.id)
-                .onMoveCommand { direction in
-                    guard direction == .left, isLeading else { return }
-                    focusedEpisodeID = nil
-                    requestNavFocus()
-                }
-            )
-        }
-        return AnyView(
-            card
-                .opacity(0.55)
-                .focusable(false)
-        )
-    }
-
-    private func detailRailSurfaceChrome<Content: View>(
-        size: CGSize,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        let railW = size.width * DesignTokens.Shell.detailRailWidthFraction
-        return HStack(spacing: 0) {
-            Spacer(minLength: 0)
-            ZStack(alignment: .topLeading) {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                        .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                content()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, size.height * DesignTokens.Shell.detailRailContentTopFraction)
-                    .padding(.leading, DesignTokens.Shell.detailTrackLeftFade)
-                    .padding(.trailing, 36)
-            }
-            .frame(width: railW, height: size.height, alignment: .topLeading)
-            .clipped()
-        }
-        .frame(width: size.width, height: size.height)
-        .allowsHitTesting(true)
-    }
-
-    private var detailSideRails: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Shell.detailMediaTrackGap) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Chapters")
-                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text("7 scene markers")
-                    .font(TVTheme.font(size: 11, weight: .medium))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                // SPA `.tv-media-track-scroll` is overflow-x; keep leading edge fixed.
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                        ForEach(0..<4, id: \.self) { n in
-                            let minutes = n * 15
-                            VStack(alignment: .leading, spacing: 8) {
-                                // SPA `.tv-episode-art` 16:9 dark panel, index bottom-right.
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.85))
-                                    .frame(
-                                        width: DesignTokens.Shell.detailChapterCardWidth,
-                                        height: DesignTokens.Shell.detailChapterCardHeight
-                                    )
-                                    .overlay(alignment: .bottomTrailing) {
-                                        Text(String(format: "%02d", n + 1))
-                                            .font(TVTheme.font(size: 16, weight: .semibold))
-                                            .foregroundStyle(DesignTokens.Color.textDisabled)
-                                            .padding(.trailing, 14)
-                                            .padding(.bottom, 12)
-                                    }
-                                HStack(spacing: 6) {
-                                    Text("\(minutes):00")
-                                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                                    Text("Chapter \(n + 1)")
-                                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                                }
-                                .font(TVTheme.font(size: 11, weight: .medium))
-                            }
-                        }
-                    }
-                }
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Cast")
-                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text("8 people")
-                    .font(TVTheme.font(size: 11, weight: .medium))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: DesignTokens.Shell.detailTrackItemGap) {
-                        ForEach(0..<4, id: \.self) { i in
-                            Group {
-                                if let face = TVParityArtwork.castImage(index: i) {
-                                    face
-                                        .resizable()
-                                        .interpolation(.high)
-                                        // SPA `.tv-person-art img { object-position: center 20% }`
-                                        .scaledToFill()
-                                } else {
-                                    DesignTokens.Color.backgroundRaised.opacity(0.85)
-                                }
-                            }
-                            .frame(
-                                width: DesignTokens.Shell.detailCastTileSize,
-                                height: DesignTokens.Shell.detailCastTileHeight
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                    }
-                }
-            }
-            .padding(.top, DesignTokens.Shell.detailCastTopExtra)
-        }
-    }
-
-    /// SPA `.tv-detail-copy h1`: weight 560, letter-spacing -0.072em, line-height
-    /// 0.9. Soft-wrap VStack spacing −30 → inter-line gap ≈ SPA 12–15px.
-    /// full89: DemiBold thickened glyphs toward SPA white-px mass (7996→10091
-    /// vs SPA 11425); keep DemiBold with original −30 spacing (full89 −28
-    /// slightly regressed AE).
-    @ViewBuilder
-    private func detailTitleBlock(_ title: String) -> some View {
-        let lines = Self.softWrapTitle(title, maxChars: 9)
-        VStack(alignment: .leading, spacing: -30) {
+    /// Title lines at 62.2 each from y 303.5; returns the title bottom through the block height.
+    private func titleBlock(_ lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .semibold))
-                    .tracking(-5.0)
+                    .font(TVTheme.font(size: 69.12, weight: .semibold))
+                    .tracking(-4.98)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: true)
+                    .fixedSize()
+                    .frame(width: 379.5, height: 62.2, alignment: .leading)
             }
         }
-        .frame(
-            maxWidth: DesignTokens.Shell.featureTitleMaxWidth,
-            alignment: .leading
+        .placed(x: 153.6, y: 303.5, w: 379.5, h: 62.2 * CGFloat(lines.count))
+    }
+
+    private func metaRow(_ parts: [(String, Bool)]) -> some View {
+        HStack(spacing: 6.3) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    Rectangle()
+                        .fill(DesignTokens.Color.borderDefault.opacity(0.5))
+                        .frame(width: 1, height: 9)
+                        .padding(.horizontal, 0.3)
+                }
+                Text(part.0)
+                    .font(TVTheme.font(size: 10.56, weight: part.1 ? .bold : .regular))
+                    .foregroundStyle(part.1 ? DesignTokens.Color.textSecondary : DesignTokens.Color.textDisabled)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func movieCopy(_ detail: WorkDetail) -> some View {
+        let work = detail.work
+        let lines = titleLines(work.title)
+        let bottom = 303.5 + 62.2 * CGFloat(lines.count)
+        let metaY = bottom + 27
+        let synopsisY = metaY + 37.5
+        var parts: [(String, Bool)] = [(work.kind.rawValue.capitalized, true)]
+        if let runtime = TVWebFormat.runtime(ms: detail.runtimeMs) { parts.append((runtime, false)) }
+        if let year = TVWebFormat.year(work.releaseDate) { parts.append((year, false)) }
+        if let date = TVWebFormat.date(work.releaseDate) { parts.append(("Released  \(date)", false)) }
+        if let genre = work.genres.first { parts.append((genre, false)) }
+        let synopsis = work.overview ?? ""
+        let synopsisLines = synopsis.isEmpty ? 0 : max(1, TVTextWrap.lines(synopsis, fontName: "AvenirNext-Regular", size: 12.864, kern: 0, width: 313.3).count)
+        let buttonsY = synopsisY + 20.3 * CGFloat(synopsisLines) + 37.8
+        return ZStack(alignment: .topLeading) {
+            kicker(work.genres.first ?? work.kind.rawValue)
+            titleBlock(lines)
+            metaRow(parts).placed(x: 153.6, y: metaY, h: 15.8)
+            if !synopsis.isEmpty {
+                Text(synopsis)
+                    .font(TVTheme.font(size: 12.86, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .lineLimit(4)
+                    .frame(width: 313.3, alignment: .leading)
+                    .placed(x: 153.6, y: synopsisY, w: 313.3, h: 20.3 * CGFloat(synopsisLines), alignment: .topLeading)
+            }
+            actionPill("Download", glyph: "\u{21E9}", x: 153.6, y: buttonsY, width: 142)
+            actionPill("Playback", symbol: "square.grid.2x2.fill", x: 311.6, y: buttonsY, width: 142)
+            moviePlay(detail, x: 469.6, y: buttonsY)
+            actionPill("Add to watchlist", glyph: "+", x: 153.6, y: buttonsY + 76, width: 142)
+            actionPill("Add to Playlist", glyph: "+", x: 311.6, y: buttonsY + 76, width: 142)
+        }
+    }
+
+    private func seriesCopy(_ detail: WorkDetail, seasons: [SeasonDetail]) -> some View {
+        let work = detail.work
+        let ordered = seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+        let season = ordered.first
+        let episode = season?.episodes.first
+        let seasonNumber = season?.season.seasonNumber ?? 1
+        let code = episode.map { "S \(String(format: "%02d", seasonNumber)) \u{00B7} E \(String(format: "%02d", $0.episode.episodeNumber))" }
+        let lines = titleLines(work.title)
+        let bottom = 303.5 + 62.2 * CGFloat(lines.count)
+        let episodeTitle = episode.map { $0.episode.title ?? "Episode \($0.episode.episodeNumber)" }
+        let episodeY = bottom + 19.5
+        let metaY = episodeY + 24.3 + 26.9
+        let lagY = metaY + 22.3
+        let synopsisY = lagY + 28.8 + 21.6
+        var parts: [(String, Bool)] = [(season.map { $0.season.title ?? "Season \($0.season.seasonNumber)" } ?? "Series", true)]
+        if let code { parts.append((code, false)) }
+        let runtimeMs = episode?.runtimeMs ?? episode?.episode.runtimeMinutes.map { Int64($0) * 60_000 }
+        if let runtime = TVWebFormat.runtime(ms: runtimeMs) { parts.append((runtime, false)) }
+        let airDate = episode?.episode.airDate ?? work.releaseDate
+        if let year = TVWebFormat.year(airDate) { parts.append((year, false)) }
+        if let date = TVWebFormat.date(airDate) {
+            parts.append(("\(episode?.episode.airDate != nil ? "Aired" : "Premiered")  \(date)", false))
+        }
+        if let genre = work.genres.first { parts.append((genre, false)) }
+        let synopsis = episode?.episode.overview ?? work.overview ?? ""
+        let buttonsY = synopsisY + 20.3 + 12
+        return ZStack(alignment: .topLeading) {
+            kicker(code ?? work.kind.rawValue)
+            titleBlock(lines)
+            if let episodeTitle {
+                Text(episodeTitle)
+                    .font(TVTheme.font(size: 21.12, weight: .medium))
+                    .tracking(-0.74)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .lineLimit(1)
+                    .placed(x: 153.6, y: episodeY, w: 309.2, h: 24.3)
+            }
+            metaRow(parts).placed(x: 153.6, y: metaY, h: 15.8)
+            Text(lagText)
+                .font(TVTheme.font(size: 19.2, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .placed(x: 153.6, y: lagY, w: 455, h: 28.8)
+            if !synopsis.isEmpty {
+                Text(synopsis)
+                    .font(TVTheme.font(size: 12.86, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .lineLimit(4)
+                    .placed(x: 153.6, y: synopsisY, w: 313.3, h: 20.3)
+            }
+            seriesStart(detail, ordered: ordered, x: 153.6, y: buttonsY)
+            actionPill("Add to watchlist", glyph: "+", x: 325.6, y: buttonsY, width: 142)
+            actionPill("Add to Playlist", glyph: "+", x: 483.6, y: buttonsY, width: 142)
+        }
+    }
+
+    private var lagText: String {
+        guard let lag = viewModel.availabilityLag, let seconds = lag.averageSeconds else {
+            return "No availability data yet"
+        }
+        let days = Double(seconds) / 86_400
+        if days >= 1 {
+            let value = (days * 10).rounded() / 10
+            return "Usually available about \(value == value.rounded() ? String(Int(value)) : String(value)) days after release"
+        }
+        let hours = (Double(seconds) / 3_600 * 10).rounded() / 10
+        return "Usually available about \(hours) hours after release"
+    }
+
+    // MARK: Buttons
+
+    private func pillBackground(_ primary: Bool, light: Bool = false) -> some View {
+        Capsule().fill(
+            light
+                ? DesignTokens.Color.textPrimary
+                : primary ? DesignTokens.Color.brandPrimary : DesignTokens.Color.backgroundInputDisabled.opacity(0.72)
         )
     }
 
-    /// Approximate SPA `max-width: 9ch` + `text-wrap: balance`.
-    private static func softWrapTitle(_ title: String, maxChars: Int) -> [String] {
-        let words = title.split(separator: " ").map(String.init)
-        guard !words.isEmpty else { return [title] }
-        var lines: [String] = []
-        var current = ""
-        for word in words {
-            let candidate = current.isEmpty ? word : current + " " + word
-            if candidate.count > maxChars, !current.isEmpty {
-                lines.append(current)
-                current = word
-            } else {
-                current = candidate
+    private func actionPill(
+        _ label: String,
+        glyph: String? = nil,
+        symbol: String? = nil,
+        x: CGFloat,
+        y: CGFloat,
+        width: CGFloat
+    ) -> some View {
+        HStack(spacing: 8.8) {
+            if let glyph {
+                Text(glyph)
+                    .font(TVTheme.font(size: 12.8, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.brandPrimary)
             }
-        }
-        if !current.isEmpty { lines.append(current) }
-        return lines
-    }
-
-    private func detailChromeButton(_ label: String, primary: Bool) -> some View {
-        detailChromeLabel(label, primary: primary)
-    }
-
-    /// SPA `.tv-detail-play` / `.tv-detail-playback-settings` @ 1920×1080:
-    /// height 64; play visual width ~156–170; settings ~136–150;
-    /// font ~12; play focused = brand fill + white label.
-    private func detailChromeLabel(_ label: String, primary: Bool) -> some View {
-        HStack(spacing: primary ? 8 : 7) {
-            if primary {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 11, weight: .bold))
-            } else {
-                // SPA playback-settings leading glyph (equaliser bars).
-                Image(systemName: "square.grid.2x2.fill")
+            if let symbol {
+                Image(systemName: symbol)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(DesignTokens.Color.brandPrimary)
             }
             Text(label)
-                .font(TVTheme.font(size: 12, weight: .semibold))
+                .font(TVTheme.font(size: 11.14, weight: .bold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
         }
-        .foregroundStyle(primary ? Color.white : DesignTokens.Color.textPrimary)
-        // Fixed frames match SPA pill widths better than minWidth + padding
-        // (full80 native Play was ~325 wide vs SPA ~170).
-        .frame(
-            width: primary
-                ? DesignTokens.Shell.detailPlayMinWidth
-                : DesignTokens.Shell.detailPlaybackMinWidth,
-            height: DesignTokens.Shell.detailActionHeight
-        )
-        .background(
-            Capsule().fill(
-                primary
-                    ? DesignTokens.Color.brandPrimary
-                    : DesignTokens.Color.backgroundRaised.opacity(0.72)
-            )
-        )
+        .frame(width: width, height: 64)
+        .background(pillBackground(false))
+        .placed(x: x, y: y, w: width, h: 64)
+    }
+
+    private func playLabel(_ text: String, light: Bool) -> some View {
+        HStack(spacing: 8.8) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 10.1, weight: .regular))
+            Text(text)
+                .font(TVTheme.font(size: 11.9, weight: .bold))
+        }
+        .foregroundStyle(light ? DesignTokens.Color.backgroundBase : Color.white)
+        .frame(width: 156, height: 64)
+        .background(pillBackground(true, light: light))
     }
 
     @ViewBuilder
-    private func children(_ children: WorkChildren) -> some View {
-        switch children {
-        case .movie:
-            EmptyView()
-        case .series(let seasons):
-            ForEach(seasons, id: \.season.id) { season in
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(season.season.title ?? "Season \(season.season.seasonNumber)")
-                        .font(TVTheme.titleFont())
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    ForEach(season.episodes) { episode in
-                        playbackRow(
-                            mediaFileID: episode.mediaFileID,
-                            title: episode.episode.title ?? "Episode \(episode.episode.episodeNumber)",
-                            label: "\(episode.episode.episodeNumber). \(episode.episode.title ?? "Episode")",
-                            queue: episodeFollowing(episode.id),
-                            subtitle: PlaybackQueueBuilder.episodeSubtitle(series: work.title, season: season.season.seasonNumber, episode: episode.episode.episodeNumber)
-                        )
-                    }
-                }
+    private func moviePlay(_ detail: WorkDetail, x: CGFloat, y: CGFloat) -> some View {
+        // Web: Play is the focused control on load (scale 1.06).
+        let label = playLabel("Play", light: false).scaleEffect(1.06)
+        if let mediaFileID = detail.mediaFileID, !frozen {
+            NavigationLink {
+                TVPlayerView(
+                    mediaFileID: mediaFileID,
+                    title: detail.work.title,
+                    apiClient: apiClient,
+                    suggestionsWorkID: detail.work.id
+                )
+            } label: {
+                label
             }
-        case .artist(let albums):
-            ForEach(albums, id: \.album.id) { album in
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(album.album.title)
-                        .font(TVTheme.titleFont())
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    ForEach(album.tracks) { track in
-                        playbackRow(
-                            mediaFileID: track.mediaFileID,
-                            title: track.track.title,
-                            label: "\(track.track.trackNumber). \(track.track.title)",
-                            queue: PlaybackQueueBuilder.tracks(after: track.id, in: album.tracks, albumTitle: album.album.title),
-                            advance: .immediate,
-                            subtitle: album.album.title
-                        )
-                    }
-                }
-            }
-        case .author(let books):
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Books")
-                    .font(TVTheme.titleFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                ForEach(books) { book in
-                    playbackRow(
-                        mediaFileID: book.mediaFileID,
-                        title: book.book.title,
-                        label: book.book.title
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .placed(x: x, y: y, w: 156, h: 64)
+        } else {
+            label.placed(x: x, y: y, w: 156, h: 64)
+        }
+    }
+
+    @ViewBuilder
+    private func seriesStart(_ detail: WorkDetail, ordered: [SeasonDetail], x: CGFloat, y: CGFloat) -> some View {
+        let label = playLabel("Start", light: true)
+        let first = ordered.first?.episodes.first(where: { $0.mediaFileID != nil })
+        if let first, let mediaFileID = first.mediaFileID, !frozen {
+            NavigationLink {
+                TVPlayerView(
+                    mediaFileID: mediaFileID,
+                    title: first.episode.title ?? "Episode \(first.episode.episodeNumber)",
+                    apiClient: apiClient,
+                    suggestionsWorkID: detail.work.id,
+                    queue: PlaybackQueueBuilder.episodes(after: first.id, seriesTitle: detail.work.title, seasons: ordered),
+                    subtitle: PlaybackQueueBuilder.episodeSubtitle(
+                        series: detail.work.title,
+                        season: ordered.first?.season.seasonNumber ?? 1,
+                        episode: first.episode.episodeNumber
                     )
-                }
+                )
+            } label: {
+                label
             }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .placed(x: x, y: y, w: 156, h: 64)
+        } else {
+            label.placed(x: x, y: y, w: 156, h: 64)
         }
     }
 
-    @ViewBuilder
-    private func playbackRow(
-        mediaFileID: UUID?,
-        title: String,
-        label: String,
-        queue: [PlaybackQueueEntry] = [],
-        advance: EndOfPlaybackMachine.Advance = .countdown,
-        subtitle: String? = nil
+    // MARK: Right rail: film
+
+    private struct Chapter: Identifiable {
+        let index: Int
+        let startMs: Int64
+        var id: Int { index }
+    }
+
+    /// Web `generatedMovieChapters`: about ten chapters, at a 5/10/15/20/30 minute interval.
+    private func chapters(runtimeMs: Int64?) -> [Chapter] {
+        guard let runtimeMs, runtimeMs > 0 else { return [] }
+        let target = Double(runtimeMs) / 10
+        let options: [Int64] = [5, 10, 15, 20, 30].map { $0 * 60_000 }
+        let interval = options.first { Double($0) >= target } ?? options[options.count - 1]
+        let count = max(1, Int((Double(runtimeMs) / Double(interval)).rounded(.up)))
+        return (0..<count).map { Chapter(index: $0, startMs: Int64($0) * interval) }
+    }
+
+    private func railHeading(_ title: String, count: String, y: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            Text(title)
+                .font(TVTheme.font(size: 17.66, weight: .semibold))
+                .tracking(-0.53)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .placed(x: 881.6, y: y, w: 992.4, h: 26.5)
+            Text(count)
+                .font(TVTheme.font(size: 9.98, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 881.6, y: y + 30.5, w: 992.4, h: 15)
+        }
+    }
+
+    private func movieRail(_ detail: WorkDetail) -> some View {
+        let list = chapters(runtimeMs: detail.runtimeMs)
+        return ZStack(alignment: .topLeading) {
+            TVRailPanelGradient(width: 1190.4)
+            if !list.isEmpty {
+                railHeading("Chapters", count: "\(list.count) scene markers", y: 540)
+                ForEach(list) { chapter in
+                    let x = 881.6 + CGFloat(chapter.index) * 293
+                    ZStack(alignment: .topLeading) {
+                        episodeArt(width: 268, height: 150.8) {
+                            if let mediaFileID = detail.mediaFileID {
+                                TVAuthedImage(load: {
+                                    try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(chapter.startMs))
+                                }) { Color.clear }
+                            }
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            Text(String(format: "%02d", chapter.index + 1))
+                                .font(TVTheme.font(size: 19.2, weight: .semibold))
+                                .foregroundStyle(Color.white)
+                                .padding(.trailing, 11.6)
+                                .padding(.bottom, 8.8)
+                        }
+                        Text(TVWebFormat.clock(ms: chapter.startMs))
+                            .font(TVTheme.font(size: 8.83, weight: .bold))
+                            .foregroundStyle(DesignTokens.Color.textDisabled)
+                            .placed(x: 0, y: 165.3, w: 28, h: 13.2)
+                        Text("Chapter \(chapter.index + 1)")
+                            .font(TVTheme.font(size: 11.52, weight: .semibold))
+                            .tracking(-0.17)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .placed(x: 28.9, y: 162.3, w: 239.2, h: 17.3)
+                    }
+                    .frame(width: 268, height: 190, alignment: .topLeading)
+                    .placed(x: x, y: 620.7, w: 268, h: 190, alignment: .topLeading)
+                }
+            }
+            if !viewModel.similar.isEmpty {
+                railHeading("Similar Titles", count: "\(viewModel.similar.count) titles", y: 854.3)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 25) {
+                        ForEach(viewModel.similar) { other in
+                            NavigationLink {
+                                TVWorkDetailView(work: other, apiClient: apiClient)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    episodeArt(width: 268, height: 150.8) {
+                                        TVWorkArt(work: other, apiClient: apiClient)
+                                    }
+                                    Text(other.title)
+                                        .font(TVTheme.font(size: 11.52, weight: .semibold))
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                                        .lineLimit(1)
+                                        .frame(width: 268, alignment: .leading)
+                                }
+                            }
+                            .buttonStyle(TVFocusableCardButtonStyle())
+                            .focusable(!frozen)
+                        }
+                    }
+                    .padding(.trailing, 80)
+                }
+                .frame(width: 1038.4, height: 190, alignment: .topLeading)
+                .placed(x: 881.6, y: 935, w: 1038.4, h: 190, alignment: .topLeading)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Web `.tv-episode-art`: a raised tile, radius 13.44, with the picture filling it.
+    private func episodeArt<Content: View>(
+        width: CGFloat,
+        height: CGFloat,
+        heavy: Bool = false,
+        @ViewBuilder content: () -> Content
     ) -> some View {
-        if let mediaFileID {
+        ZStack {
+            DesignTokens.Color.backgroundRaised
+            content().frame(width: width, height: height).clipped().saturation(0.75)
+            // Web `.tv-episode-art::after`: a diagonal darkening wash over the picture.
+            LinearGradient(
+                colors: [Color.black.opacity(0.05), Color.black.opacity(0.48)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 13.44, style: .continuous))
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(heavy ? 0.3 : 0.14), radius: heavy ? 24 : 10, y: heavy ? 24 : 10)
+        .shadow(color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(heavy ? 0.2 : 0.1), radius: heavy ? 10 : 4, y: heavy ? 10 : 3)
+    }
+
+    // MARK: Right rail: series
+
+    private func seriesRail(_ detail: WorkDetail, seasons: [SeasonDetail]) -> some View {
+        let ordered = seasons.sorted { $0.season.seasonNumber < $1.season.seasonNumber }
+        return ZStack(alignment: .topLeading) {
+            TVRailPanelGradient(width: 1190.4)
+            ForEach(Array(ordered.enumerated()), id: \.element.season.id) { seasonIndex, season in
+                let top = 410 + CGFloat(seasonIndex) * 314.3
+                railHeading(
+                    season.season.title ?? "Season \(season.season.seasonNumber)",
+                    count: "\(season.episodes.count) episodes",
+                    y: top
+                )
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .frame(width: 18.7, height: 24.2)
+                    .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
+                ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
+                    let selected = seasonIndex == 0 && index == 0
+                    episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)
+                        .scaleEffect(selected ? 1.025 : 1)
+                        .offset(y: selected ? -7.05 : 0)
+                        .placed(x: 881.6 + CGFloat(index) * 293, y: top + 80.7, w: 268, h: 190, alignment: .topLeading)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func episodeCard(
+        _ detail: WorkDetail,
+        season: SeasonDetail,
+        episode: EpisodeDetail,
+        ordered: [SeasonDetail],
+        selected: Bool
+    ) -> some View {
+        let ep = episode.episode
+        let title = ep.title ?? "Episode \(ep.episodeNumber)"
+        let code = "S \(String(format: "%02d", season.season.seasonNumber)) \u{00B7} E \(String(format: "%02d", ep.episodeNumber))"
+        let card = ZStack(alignment: .topLeading) {
+            episodeArt(width: 268, height: 150.8, heavy: selected) {
+                TVWorkArt(work: detail.work, apiClient: apiClient)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Text(String(format: "%02d", ep.episodeNumber))
+                    .font(TVTheme.font(size: 19.2, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .padding(.trailing, 11.6)
+                    .padding(.bottom, 8.8)
+            }
+            .overlay(alignment: .topTrailing) {
+                Circle()
+                    .fill(DesignTokens.Color.brandPrimary)
+                    .frame(width: 13, height: 13)
+                    .padding(10.6)
+            }
+            Text(code)
+                .font(TVTheme.font(size: 8.83, weight: .bold))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .lineLimit(1)
+                .fixedSize()
+                .placed(x: 0, y: 158, w: 48, h: 13.2)
+            Text(title)
+                .font(TVTheme.font(size: 11.52, weight: .semibold))
+                .tracking(-0.17)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .placed(x: 49.3, y: 155, w: 218.7, h: 17.3)
+        }
+        .frame(width: 268, height: 190, alignment: .topLeading)
+        if let mediaFileID = episode.mediaFileID, !frozen {
             NavigationLink {
                 TVPlayerView(
                     mediaFileID: mediaFileID,
                     title: title,
                     apiClient: apiClient,
-                    suggestionsWorkID: work.id,
-                    queue: queue,
-                    advance: advance,
-                    subtitle: subtitle
+                    suggestionsWorkID: detail.work.id,
+                    queue: PlaybackQueueBuilder.episodes(after: episode.id, seriesTitle: detail.work.title, seasons: ordered),
+                    subtitle: PlaybackQueueBuilder.episodeSubtitle(
+                        series: detail.work.title,
+                        season: season.season.seasonNumber,
+                        episode: ep.episodeNumber
+                    )
                 )
             } label: {
-                Label(label, systemImage: "play.fill")
-                    .font(TVTheme.bodyFont())
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(DesignTokens.Color.backgroundRaised.opacity(0.9))
-                    )
+                card
             }
-            .buttonStyle(.card)
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .focused($focusedEpisodeID, equals: ep.id)
         } else {
-            Label("\(label) — unavailable", systemImage: "play.slash")
-                .font(TVTheme.bodyFont())
-                .foregroundStyle(DesignTokens.Color.textSecondary)
+            card
         }
     }
 
@@ -727,34 +563,5 @@ struct TVWorkDetailView: View {
             ?? work.images.first(where: { $0.kind == .poster })?.url
         guard let path else { return nil }
         return apiClient.resolvedURL(forPath: path)
-    }
-}
-
-/// CSS-equivalent key-art filter chain.
-///
-/// - Prebaked fixtures: greyscale/contrast/brightness already in the asset;
-///   only apply SPA opacity.
-/// - Live art: `grayscale(1) contrast(0.82) brightness(0.6)` + opacity 0.72.
-///   SwiftUI `.brightness` is additive; `colorMultiply` matches CSS multiply.
-private struct TVKeyArtFilterModifier: ViewModifier {
-    let prebaked: Bool
-    /// SPA-matched media fixtures already include opacity compositing.
-    var skipOpacity: Bool = false
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if prebaked {
-            if skipOpacity {
-                content
-            } else {
-                content.opacity(DesignTokens.Shell.keyArtOpacity)
-            }
-        } else {
-            content
-                .saturation(0)
-                .contrast(DesignTokens.Shell.keyArtContrast)
-                .colorMultiply(Color(white: 0.6))
-                .opacity(DesignTokens.Shell.keyArtOpacity)
-        }
     }
 }

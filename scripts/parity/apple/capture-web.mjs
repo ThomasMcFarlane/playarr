@@ -13,6 +13,7 @@ const cfg = JSON.parse(fs.readFileSync(screensFile, "utf8"));
 const { FIXTURE_PASSWORD: password } = await import(path.join(here, "../../fixtures/catalog.mjs"));
 fs.mkdirSync(outDir, { recursive: true });
 
+const THEME = process.env.PARITY_THEME === "light" ? "light" : "dark";
 const deviceId = "11111111-1111-4111-8111-111111111111";
 async function login(username) {
   const res = await fetch(`${base}/api/v1/auth/login`, {
@@ -37,15 +38,15 @@ async function workId(kind, title) {
   return hit.id;
 }
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.PARITY_CHROME_CHANNEL ? { channel: process.env.PARITY_CHROME_CHANNEL } : {});
 // One context per user. A layout may ask for a device-like context (dpr, touch, mobile viewport).
 async function contextFor(user) {
   const t = user === cfg.user ? tok : await login(user);
   const context = await browser.newContext({
     viewport: cfg.viewport, deviceScaleFactor: cfg.dpr ?? 1, isMobile: !!cfg.mobile, hasTouch: !!cfg.mobile,
-    reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB",
+    reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB", colorScheme: THEME,
   });
-  await context.addInitScript(({ base, tok, deviceId, user }) => {
+  await context.addInitScript(({ base, tok, deviceId, user, theme }) => {
     try {
       localStorage.setItem("playarr:apiBaseUrl", base);
       const session = {
@@ -56,12 +57,69 @@ async function contextFor(user) {
         profileKey: "fx", apiBaseUrl: base, userId: tok.user_id, name: user, deviceId, session,
       }]));
       localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "fx", apiBaseUrl: base, userId: tok.user_id }));
-      localStorage.setItem("playarr-theme", "dark");
+      localStorage.setItem("playarr-theme", theme);
     } catch { /* storage unavailable */ }
-  }, { base, tok: t, deviceId, user });
+  }, { base, tok: t, deviceId, user, theme: THEME });
   await context.clock.setFixedTime(new Date(cfg.frozenTime));
   return context;
 }
+
+// Media file id of a work's first playable file (film: its own file; series: first episode).
+async function mediaFileId(title) {
+  const res = await fetch(`${base}/api/v1/catalog?limit=100`, { headers: auth });
+  const hit = ((await res.json()).items ?? []).find((w) => w.title === title);
+  if (!hit) throw new Error(`work not found: ${title}`);
+  const d = await (await fetch(`${base}/api/v1/catalog/${hit.id}`, { headers: auth })).json();
+  const id = d.media_file_id ?? d.seasons?.[0]?.episodes?.[0]?.media_file_id ?? d.children?.series?.[0]?.episodes?.[0]?.media_file_id;
+  if (!id) throw new Error(`no media file for ${title}`);
+  return id;
+}
+
+async function runStep(page, step) {
+  switch (step.type) {
+    case "pauseAt":
+      // Headless has no user gesture: nudge playback until frames are buffered, then pause on a fixed frame.
+      await page.waitForFunction(() => {
+        const v = document.querySelector("video");
+        if (v?.paused) v.play().catch(() => {});
+        return (v?.readyState ?? 0) >= 2;
+      }, null, { timeout: 100000, polling: 500 });
+      await page.evaluate(async (t) => {
+        const v = document.querySelector("video");
+        v.pause();
+        if (Math.abs(v.currentTime - t) > 0.01) {
+          await new Promise((res) => { v.addEventListener("seeked", res, { once: true }); v.currentTime = t; setTimeout(res, 8000); });
+        }
+        v.pause();
+      }, step.seconds ?? 2);
+      await page.waitForTimeout(400);
+      break;
+    case "revealControls": {
+      const vp = page.viewportSize();
+      await page.mouse.move(vp.width / 2, vp.height / 2);
+      await page.waitForSelector(".player-controls", { state: "visible", timeout: 10000 }).catch(() => {});
+      break;
+    }
+    case "openQualityMenu":
+      for (let i = 0; i < 4; i += 1) {
+        await page.mouse.move(40 + i * 7, 300 + i * 7);
+        await page.locator(".player-quality:not(.player-track-selector) > button").first().click({ timeout: 6000, force: true }).catch(() => {});
+        if (await page.locator(".player-quality-menu").count()) break;
+      }
+      await page.waitForSelector(".player-quality-menu", { timeout: 10000 });
+      break;
+    case "wait":
+      await page.waitForTimeout(step.ms ?? 500);
+      break;
+    case "hideVideo":
+      // The video picture is a codec and scaler difference, not UI: compare the chrome on black.
+      await page.addStyleTag({ content: "video{visibility:hidden!important}" });
+      break;
+    default:
+      throw new Error(`unknown step ${step.type}`);
+  }
+}
+
 const contexts = new Map();
 const results = [];
 for (const s of cfg.screens) {
@@ -69,7 +127,11 @@ for (const s of cfg.screens) {
   if (!contexts.has(user)) contexts.set(user, await contextFor(user));
   if (s.web.path === "/__none") continue;
   const page = await contexts.get(user).newPage();
+  // Captures must not change fixture state: swallow playback progress and session event writes.
+  await page.route(/\/api\/v1\/playback\/(progress|[^/]+\/progress|sessions\/[^/]+\/events)/, (route) =>
+    route.request().method() === "GET" ? route.continue() : route.fulfill({ status: 204, body: "" }));
   let route = s.web.path;
+  if (s.web.file) route = `/player/${await mediaFileId(s.web.file.title)}`;
   if (s.web.work) {
     const id = await workId(s.web.work.kind, s.web.work.title);
     route = `/${s.web.work.kind === "series" ? "series" : "movies"}/${id}`;
@@ -77,6 +139,17 @@ for (const s of cfg.screens) {
   await page.goto(base + route, { waitUntil: "load" });
   await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
   await page.waitForTimeout(5000);
+  // Artwork loads lazily: wait for every image on the page.
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15000 }).catch(() => {});
+  // Detail pages centre the active track with a scripted scroll: wait until it stops moving.
+  for (let i = 0, last = null, stable = 0; i < 40 && stable < 3; i += 1) {
+    const top = await page.evaluate(() => [...document.querySelectorAll(".tv-rail-surface")].map((e) => e.scrollTop).join(","));
+    stable = top === last ? stable + 1 : 0;
+    last = top;
+    await page.waitForTimeout(500);
+  }
+  for (const step of s.web.steps ?? []) await runStep(page, step);
+  if (s.web.steps?.length) await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
   // Layout dump (rect, font, colour per visible element) so the native layout can be fixed from numbers.
   const dom = await page.evaluate(() => {
@@ -104,5 +177,10 @@ for (const s of cfg.screens) {
   console.log(`web ${s.id} -> ${page.url()}`);
   await page.close();
 }
-fs.writeFileSync(path.join(outDir, "web-routes.json"), JSON.stringify(results, null, 2));
+const presetOf = (id) => {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return ["astronaut", "cat", "dinosaur", "robot", "pirate", "alien"][h % 6];
+};
+fs.writeFileSync(path.join(outDir, "web-routes.json"), JSON.stringify({ userId: tok.user_id, avatarPreset: presetOf(tok.user_id), screens: results }, null, 2));
 await browser.close();

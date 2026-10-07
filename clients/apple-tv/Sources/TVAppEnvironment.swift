@@ -92,6 +92,15 @@ final class TVAppEnvironment {
     static let bootstrapPlaceholderURL = HostedDeviceLinkConfiguration.playarrAppOrigin
 
     private(set) var apiClient: PlayarrAPIClient
+    /// Library kinds the profile can browse; `nil` until loaded. A failed read (for example a
+    /// household block) leaves the set empty, which hides the Series, Movies and Music tabs as on the web.
+    private(set) var catalogKinds: Set<WorkKind>?
+    /// Set while the household blocks the profile (outside its schedule, or the budget is spent).
+    private(set) var householdBlocked = false
+    /// The signed-in user's id (access token subject); picks the profile avatar like the web does.
+    private(set) var currentUserID = ""
+    /// The server-backed avatar preset id of the signed-in user, when one is set.
+    private(set) var currentAvatarPreset: String?
     private(set) var pairingState: TVPairingState = .signedOut
     private(set) var serverURL: URL
     /// True when the operator (or a prior successful link) configured a
@@ -160,6 +169,7 @@ final class TVAppEnvironment {
             return args[idx + 1]
         }()
         if let launchToken {
+            currentUserID = Self.subject(ofJWT: launchToken) ?? ""
             pairingState = .signedIn
             apiClient = APIClient(
                 configuration: configuration,
@@ -187,6 +197,28 @@ final class TVAppEnvironment {
         if launchToken == nil, hasConfiguredServer {
             Task { await self.restoreSessionIfPossible() }
         }
+    }
+
+    /// Reads the browsable kinds and the household state for the shell (nav tabs, blocked screen).
+    static func subject(ofJWT token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload += "=" }
+        guard let data = Data(base64Encoded: payload),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["sub"] as? String
+    }
+
+    func refreshShellState() async {
+        if currentUserID.isEmpty, let session = await tokenStore.currentSession() {
+            currentUserID = Self.subject(ofJWT: session.accessToken.exposeSecret()) ?? ""
+        }
+        currentAvatarPreset = (try? await apiClient.fetchProfileAvatarPreset()) ?? nil
+        let kinds = (try? await apiClient.listCatalogKinds()) ?? []
+        catalogKinds = Set(kinds)
+        let status = (try? await apiClient.fetchHouseholdStatus()) ?? nil
+        householdBlocked = status?.isBlocked ?? false
     }
 
     /// If UserDefaults still holds a non-expired device session, open the

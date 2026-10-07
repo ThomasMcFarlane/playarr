@@ -50,6 +50,23 @@ extension TVParityLaunch {
 
     static var isLive: Bool { route != nil }
 
+    /// `-PlayarrTheme light|dark`: forces the appearance for parity captures.
+    static var theme: ColorScheme? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "-PlayarrTheme"), args.indices.contains(idx + 1) else { return nil }
+        switch args[idx + 1] {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
+
+    /// The instant the web reference freezes its clock at (2026-07-29 05:59 UTC).
+    static var frozenNow: Date { Date(timeIntervalSince1970: 1_785_304_740) }
+
+    /// Static chrome (floating nav, no focus effects, frozen clock): fixture screens and live routes.
+    static var frozen: Bool { requestedScreen != nil || isLive }
+
     static var liveTab: TVNavTab? {
         guard let route else { return nil }
         switch route.split(separator: ":", maxSplits: 1).first.map(String.init) ?? route {
@@ -60,7 +77,8 @@ extension TVParityLaunch {
         case "playlists": return .playlists
         case "settings": return .settings
         case "search": return .search
-        case "detail": return .movies
+        case "calendar": return .calendar
+        case "detail": return liveDetail?.kind == .series ? .series : .movies
         default: return nil
         }
     }
@@ -72,6 +90,18 @@ extension TVParityLaunch {
         guard parts.count == 3 else { return nil }
         let kind: WorkKind = parts[1] == "series" ? .series : .movie
         return (kind, parts[2])
+    }
+
+    /// `(title, menuOpen)` for `player:<title>` and `player:<title>:quality`.
+    static var livePlayer: (title: String, menuOpen: Bool)? {
+        guard let route, route.hasPrefix("player:") else { return nil }
+        var rest = String(route.dropFirst("player:".count))
+        var menu = false
+        if rest.hasSuffix(":quality") {
+            menu = true
+            rest = String(rest.dropLast(":quality".count))
+        }
+        return (rest, menu)
     }
 
     static var liveQuery: String? {
@@ -100,6 +130,37 @@ struct TVParityLiveDetailView: View {
                 kind: want.kind, genre: nil, tag: nil, sort: "title", limit: 100, offset: 0
             ) {
                 work = page.items.first { $0.title == want.title }
+            }
+        }
+    }
+}
+
+/// Resolves `player:<title>` to the film's media file and shows the player chrome at the frozen
+/// position (2.0 s of 6 s) over a black stage, as the web reference does with the video hidden.
+struct TVParityLivePlayerView: View {
+    @Environment(TVAppEnvironment.self) private var environment
+    @State private var mediaFileID: UUID?
+
+    var body: some View {
+        Group {
+            if let mediaFileID, let target = TVParityLaunch.livePlayer {
+                TVPlayerView(
+                    mediaFileID: mediaFileID,
+                    title: target.title,
+                    apiClient: environment.apiClient,
+                    parity: (position: 2, duration: 6, menuOpen: target.menuOpen)
+                )
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+        }
+        .task {
+            guard let target = TVParityLaunch.livePlayer else { return }
+            if let page = try? await environment.apiClient.browseCatalog(
+                kind: .movie, genre: nil, tag: nil, sort: "title", limit: 100, offset: 0
+            ), let work = page.items.first(where: { $0.title == target.title }),
+               let detail = try? await environment.apiClient.fetchWork(id: work.id) {
+                mediaFileID = detail.mediaFileID
             }
         }
     }
@@ -321,3 +382,23 @@ struct TVParityPlayerFixtureView: View {
 }
 
 
+
+/// Stage for web destinations the Apple TV client does not implement yet (Downloads, Watchlist,
+/// Requests, Calendar). Honest empty state rather than a missing nav entry.
+struct TVNotYetOnTVView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            TVStageBackground()
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(TVTheme.font(size: 34, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                Text("This screen is not available on Apple TV yet.")
+                    .font(TVTheme.font(size: 16, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+            }
+        }
+    }
+}

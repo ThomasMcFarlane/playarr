@@ -117,9 +117,14 @@ jobs:
           fi
 
       - name: Capture the web reference
+        env:
+          # The runner's Google Chrome plays the H.264 fixture clips the player screens need.
+          PARITY_CHROME_CHANNEL: chrome
         run: |
-          node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
-            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/reference"
+          for theme in ${PARITY_THEMES:-dark light}; do
+            PARITY_THEME="$theme" node scripts/parity/apple/capture-web.mjs "${{ steps.layout.outputs.screens }}" \
+              "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$RUNNER_TEMP/parity/$theme/reference"
+          done
 
       - name: Create the simulator (Apple TV at 1080p)
         id: simulator
@@ -166,18 +171,23 @@ jobs:
                   device_name: "parity-tvos", client_platform: "ios", client_version: "parity" }) });
               console.log((await r.json()).access_token);
             });' "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}")
-          scripts/parity/apple/capture-tvos.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
-            "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$token" "$RUNNER_TEMP/parity/native"
+          for theme in ${PARITY_THEMES:-dark light}; do
+            PARITY_THEME="$theme" scripts/parity/apple/capture-tvos.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
+              "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$token" "$RUNNER_TEMP/parity/$theme/native"
+          done
           xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
           file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
 
       - name: Diff the captures
         if: always()
         run: |
-          [[ -d "$RUNNER_TEMP/parity/native" ]] || exit 0
-          node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
-            "$RUNNER_TEMP/parity/reference" "$RUNNER_TEMP/parity/native" "$RUNNER_TEMP/parity/diff" \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+          for theme in ${PARITY_THEMES:-dark light}; do
+            [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
+            echo "### tvOS parity, $theme theme" | tee -a "$GITHUB_STEP_SUMMARY"
+            node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
+              "$RUNNER_TEMP/parity/$theme/reference" "$RUNNER_TEMP/parity/$theme/native" "$RUNNER_TEMP/parity/$theme/diff" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          done
 
       - name: Stop the fixture environment and delete the simulator
         if: always()

@@ -53,7 +53,7 @@ struct TVHomeView: View {
             )
             .foregroundStyle(DesignTokens.Color.textPrimary)
         case .loaded:
-            if TVParityLaunch.requestedScreen != nil {
+            if TVParityLaunch.frozen {
                 parityHomeLoaded(viewModel)
             } else {
                 productionHomeLoaded(viewModel)
@@ -173,24 +173,12 @@ struct TVHomeView: View {
 
     private func parityHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
         GeometryReader { geo in
-            let hero = heroWork(from: viewModel.works)
+            let hero = TVParityLaunch.isLive
+                ? Self.liveRailDefinitions(viewModel).first?.works.first
+                : heroWork(from: viewModel.works)
             ZStack(alignment: .topLeading) {
                 heroBackdrop(hero: hero, size: geo.size)
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
-                }
+                TVRailPanelGradient(width: geo.size.width * (1 - DesignTokens.Shell.railLeftInset))
                 if let hero {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(kindKicker(hero))
@@ -198,13 +186,8 @@ struct TVHomeView: View {
                             .tracking(1.2)
                             .foregroundStyle(DesignTokens.Color.brandPrimary)
                             .textCase(.uppercase)
-                        Text(hero.title)
-                            .font(TVTheme.font(size: DesignTokens.Shell.featureTitleSize, weight: .medium))
-                            .tracking(-4.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .lineLimit(3)
-                            .frame(maxWidth: DesignTokens.Shell.featureTitleMaxWidth, alignment: .leading)
-                            .padding(.top, 10)
+                        TVHeroTitle(title: hero.title)
+                            .padding(.top, 28)
                         if let overview = hero.overview, !overview.isEmpty {
                             Text(overview)
                                 .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
@@ -228,13 +211,15 @@ struct TVHomeView: View {
     private func homeRails(viewModel: TVHomeViewModel, size: CGSize) -> some View {
         let (startWatching, newMovies) = Self.homeRailMembership(
             works: viewModel.works,
-            interactive: TVParityLaunch.requestedScreen == nil
+            interactive: !TVParityLaunch.frozen
         )
         // Interactive: real HStack layout so the focus engine can move left/right.
         // Absolute `.offset` stacking breaks directional focus (all cards share
         // one layout rect). Parity freezes keep pixel-locked absolute geometry.
         return Group {
-            if TVParityLaunch.requestedScreen == nil {
+            if TVParityLaunch.isLive {
+                homeRailsLive(viewModel: viewModel, size: size)
+            } else if !TVParityLaunch.frozen {
                 homeRailsInteractive(startWatching: startWatching, newMovies: newMovies, size: size)
             } else {
                 homeRailsAbsolute(startWatching: startWatching, newMovies: newMovies, size: size)
@@ -455,6 +440,61 @@ struct TVHomeView: View {
         .allowsHitTesting(false)
     }
 
+    /// Mirrors web `Home.tsx`: the primary rail is the most recently added unique works (8),
+    /// followed by the server's own rails.
+    private static func liveRailDefinitions(_ viewModel: TVHomeViewModel) -> [(title: String, works: [Work])] {
+        let all = viewModel.rails.flatMap(\.items).enumerated()
+            .sorted { lhs, rhs in
+                lhs.element.addedAt != rhs.element.addedAt
+                    ? lhs.element.addedAt > rhs.element.addedAt
+                    : lhs.offset < rhs.offset
+            }
+            .map(\.element)
+        var seen = Set<UUID>()
+        var primary: [Work] = []
+        for work in all where seen.insert(work.id).inserted {
+            primary.append(work)
+            if primary.count >= 8 { break }
+        }
+        let definitions: [(title: String, works: [Work])] =
+            [("Start watching", primary)] + viewModel.rails.map { ($0.title, $0.items) }
+        return definitions.filter { !$0.works.isEmpty }
+    }
+
+    /// Frozen live layout: web `.tv-home-rails` geometry measured on the 1920x1080 reference.
+    private func homeRailsLive(viewModel: TVHomeViewModel, size: CGSize) -> some View {
+        let definitions = Self.liveRailDefinitions(viewModel)
+        let x0: CGFloat = 881.6
+        let y0: CGFloat = 487.8
+        let railPitch: CGFloat = 317.9
+        let cardPitch: CGFloat = 243.9
+        let headingOffset = DesignTokens.Shell.homeRailHeadingOffsetY
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(definitions.enumerated()), id: \.offset) { railIndex, definition in
+                let top = y0 + CGFloat(railIndex) * railPitch
+                Text(definition.title)
+                    .font(TVTheme.font(size: DesignTokens.Shell.railHeadingSize, weight: .semibold))
+                    .tracking(-0.5)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .offset(x: x0, y: top - headingOffset)
+                ForEach(Array(definition.works.enumerated()), id: \.element.id) { index, work in
+                    let selected = railIndex == 0 && index == 0
+                    TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false, focusedLook: selected)
+                        .frame(
+                            width: DesignTokens.Shell.homeCardWidth,
+                            height: DesignTokens.Shell.homeCardHeight + DesignTokens.Shell.homeCardTitleBlock,
+                            alignment: .topLeading
+                        )
+                        // Web: the first card of the first rail is focused (scale 1.025, lifted).
+                        .scaleEffect(selected ? 1.025 : 1)
+                        .offset(x: x0 + CGFloat(index) * cardPitch, y: top - (selected ? 5.5 : 0))
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
     private func heroWork(from works: [Work]) -> Work? {
         if let focus = focusedCard, let match = works.first(where: { $0.id == focus.workID }) {
             return match
@@ -473,6 +513,26 @@ struct TVHomeView: View {
 
     @ViewBuilder
     private func heroBackdrop(hero: Work?, size: CGSize) -> some View {
+        if TVParityLaunch.isLive {
+            liveHeroBackdrop(hero)
+        } else {
+            legacyHeroBackdrop(hero: hero, size: size)
+        }
+    }
+
+    private func liveHeroBackdrop(_ hero: Work?) -> some View {
+        ZStack(alignment: .topLeading) {
+            DesignTokens.Color.backgroundElevated
+            if let hero {
+                TVKeyArt(url: imageURL(for: hero, prefer: .backdrop))
+            }
+            TVStageWash()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func legacyHeroBackdrop(hero: Work?, size: CGSize) -> some View {
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
             // Fixture hero is already SPA-filtered; display with opacity + mask only.
@@ -511,10 +571,7 @@ struct TVHomeView: View {
                             .scaledToFill()
                             .frame(width: keyW, height: size.height * DesignTokens.Shell.keyArtHeightFraction)
                             .clipped()
-                            .saturation(0)
-                            .contrast(DesignTokens.Shell.keyArtContrast)
-                            .colorMultiply(Color(white: DesignTokens.Shell.keyArtBrightness))
-                            .opacity(DesignTokens.Shell.keyArtOpacity)
+                            .modifier(TVKeyArtFilter())
                             .mask(
                                 LinearGradient(
                                     stops: [
@@ -592,26 +649,34 @@ struct TVHomeCard: View {
     let work: Work
     let apiClient: PlayarrAPIClient
     var isSelected: Bool = false
+    /// The web's focused card: a heavy drop shadow under the picture (rest cards have a light one).
+    var focusedLook = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Web `.tv-home-card`: 218.9 x 123.1 art (radius 12.48), title 11.3/630 at +10, meta 8.6/400.
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 cardArtwork
                     .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(focusedLook ? 0.3 : 0.14),
+                        radius: focusedLook ? 24 : 10,
+                        y: focusedLook ? 24 : 10
+                    )
                 // Fixture art may already include the pink unwatched disc.
                 if TVParityArtwork.cardImage(forTitle: work.title) == nil {
                     Circle()
                         .fill(DesignTokens.Color.brandPrimary)
-                        .frame(width: 12, height: 12)
-                        .padding(10)
+                        .frame(width: 13, height: 13)
+                        .padding(10.8)
                 }
             }
             // Parity: no focus ring (SPA selected card uses soft lift only).
             .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                RoundedRectangle(cornerRadius: 12.5, style: .continuous)
                     .stroke(
-                        (isSelected && TVParityLaunch.requestedScreen == nil)
+                        (isSelected && !TVParityLaunch.frozen)
                             ? DesignTokens.Color.brandPrimary
                             : Color.clear,
                         lineWidth: 3
@@ -620,18 +685,19 @@ struct TVHomeCard: View {
 
             // `.tv-home-card > strong` / `small`
             Text(work.title)
-                .font(TVTheme.font(size: 12, weight: .semibold))
+                .font(TVTheme.font(size: 11.33, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(1)
-                .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
-                .padding(.top, 8)
+                .frame(width: DesignTokens.Shell.homeCardWidth, height: 17, alignment: .leading)
+                .padding(.top, 10)
             Text(
                 [work.kind.rawValue.capitalized, work.releaseDate.map { String($0.prefix(4)) }]
                     .compactMap { $0 }.joined(separator: " · ")
             )
-                .font(TVTheme.font(size: 10, weight: .bold))
+                .font(TVTheme.font(size: 8.64, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .padding(.top, 2)
+                .frame(width: DesignTokens.Shell.homeCardWidth, height: 13, alignment: .leading)
+                .padding(.top, 2.5)
         }
         .frame(width: DesignTokens.Shell.homeCardWidth, alignment: .leading)
     }
@@ -669,8 +735,50 @@ struct TVHomeCard: View {
     }
 
     private var thumbURL: URL? {
-        let path = work.images.first(where: { $0.kind == .thumb })?.url
+        // Web cards ask for ["backdrop", "poster"].
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .thumb })?.url
             ?? work.images.first(where: { $0.kind == .poster })?.url
+        guard let path else { return nil }
+        return apiClient.resolvedURL(forPath: path)
+    }
+}
+
+/// Landscape artwork for a work (backdrop, then poster) with the web's text tile as the fallback.
+struct TVWorkArt: View {
+    let work: Work
+    let apiClient: PlayarrAPIClient
+
+    var body: some View {
+        if let url {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    tile
+                }
+            }
+        } else {
+            tile
+        }
+    }
+
+    private var tile: some View {
+        DesignTokens.Color.backgroundRaised
+            .overlay {
+                Text(work.title)
+                    .font(TVTheme.captionFont())
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .padding(8)
+                    .multilineTextAlignment(.center)
+            }
+    }
+
+    private var url: URL? {
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .poster })?.url
+            ?? work.images.first?.url
         guard let path else { return nil }
         return apiClient.resolvedURL(forPath: path)
     }
@@ -680,129 +788,25 @@ struct TVSearchView: View {
     @Environment(TVAppEnvironment.self) private var environment
     @State private var viewModel: TVSearchViewModel?
     @FocusState private var searchFieldFocused: Bool
-    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+    @FocusState private var focusedWorkID: UUID?
+    private var frozen: Bool { TVParityLaunch.frozen }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             // `.tv-search` uses surface (#1b181b), not pure stage base.
             DesignTokens.Color.backgroundElevated.ignoresSafeArea()
-
-            // Positions are authored against the full 1920×1080 stage (web CSS
-            // uses viewport units). Ignore safe-area so GeometryReader origin
-            // matches the shell header / nav overlays outside NavigationStack.
-            GeometryReader { geo in
-                let left = DesignTokens.Shell.searchContentLeft
-                let copyWidth = min(DesignTokens.Shell.searchCopyWidth, geo.size.width * 0.31)
-                let railWidth = geo.size.width * DesignTokens.Shell.searchRailWidthFraction
-
-                ZStack(alignment: .topLeading) {
-                    // Right rail surface (frosted gradient, 62% width).
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                                .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: railWidth)
-                    }
-
-                    // Header: back + title (`.tv-library-heading`).
-                    HStack(spacing: 20) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .frame(
-                                width: DesignTokens.Shell.searchBackSize,
-                                height: DesignTokens.Shell.searchBackSize
-                            )
-                            .background(
-                                Circle()
-                                    .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
-                                    .overlay(
-                                        Circle().stroke(
-                                            DesignTokens.Color.borderDefault.opacity(0.45),
-                                            lineWidth: 1
-                                        )
-                                    )
-                            )
-                        // Web h1: weight ~580, size ~34 — AvenirNext-Medium is closer than DemiBold.
-                        Text("Search")
-                            .font(TVTheme.font(size: DesignTokens.Shell.searchTitleSize, weight: .medium))
-                            .tracking(-1.5)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                    }
-                    .padding(.leading, left)
-                    .padding(.top, DesignTokens.Shell.searchHeadingTop)
-
-                    // Search copy column. Web: `.tv-search-copy` top=130; form has
-                    // margin-top 43 → field top ≈ 173 @ 1080p.
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let viewModel {
-                            @Bindable var model = viewModel
-                            searchForm(query: $model.query, width: copyWidth) {
-                                Task { await model.search() }
-                            }
-                            .padding(.top, DesignTokens.Shell.searchFormTopGap)
-
-                            searchFiltersChip
-                                .padding(.top, DesignTokens.Shell.searchFilterTopGap)
-
-                            Text("Find any available movie, series, artist or playlist.")
-                                .font(TVTheme.font(size: 14, weight: .regular))
-                                .foregroundStyle(DesignTokens.Color.textDisabled)
-                                .frame(maxWidth: 340, alignment: .leading)
-                                .lineSpacing(4)
-                                .padding(.top, DesignTokens.Shell.searchPromptTopGap)
-
-                            if model.state != .idle {
-                                searchResults(model)
-                                    .padding(.top, 24)
-                            }
-                        }
-                    }
-                    .frame(width: copyWidth, alignment: .leading)
-                    .padding(.leading, left)
-                    .padding(.top, DesignTokens.Shell.searchCopyTop)
-
-                    // Idle empty state in the right rail.
-                    // SPA `.tv-empty-state.graphic-search`: 1:1 circle, border only.
-                    if let viewModel, viewModel.state == .idle {
-                        let art = DesignTokens.Shell.searchEmptyArtSize
-                        let cx = DesignTokens.Shell.searchEmptyCenterX
-                        let cy = DesignTokens.Shell.searchEmptyCenterY
-                        HStack(spacing: DesignTokens.Shell.searchEmptyGap) {
-                            ZStack {
-                                Circle()
-                                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.28))
-                                Circle()
-                                    .stroke(
-                                        DesignTokens.Color.borderDefault.opacity(0.55),
-                                        lineWidth: 1
-                                    )
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 36, weight: .regular))
-                                    .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.78))
-                            }
-                            .frame(width: art, height: art)
-                            Text("Start typing to search.")
-                                .font(TVTheme.font(size: 17, weight: .semibold))
-                                .tracking(-0.3)
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                        }
-                        .padding(.top, cy - art / 2)
-                        .padding(.leading, cx - art / 2)
-                    }
-                }
+            if let viewModel, let work = selectedWork(viewModel) {
+                TVKeyArt(url: searchArtURL(work))
             }
-            .ignoresSafeArea()
+            TVStageWash()
+            // `.tv-search-rail-surface`: x 729.6, width 1190.4.
+            TVRailPanelGradient(width: 1190.4)
+            if let viewModel {
+                searchContent(viewModel)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea()
         .task(id: environment.serverURL) {
             let model = TVSearchViewModel(apiClient: environment.apiClient)
             viewModel = model
@@ -813,114 +817,258 @@ struct TVSearchView: View {
         }
     }
 
-    private func searchForm(
-        query: Binding<String>,
-        width: CGFloat,
-        onSubmit: @escaping () -> Void
-    ) -> some View {
-        // Parity captures replace TextField with a static replica so the tvOS
-        // system focus fill (large white capsule) does not dominate AE.
-        // Production keeps a real TextField.
-        Group {
-            if parityMode {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                        .frame(width: 24, height: 24)
-                    Text("Search your libraries and playlists")
-                        .font(TVTheme.font(size: 17, weight: .medium))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                    Spacer(minLength: 0)
-                }
-            } else {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(DesignTokens.Color.textDisabled)
-                        .frame(width: 24, height: 24)
-                    TextField("Search your libraries and playlists", text: query)
-                        .font(TVTheme.font(size: 17, weight: .medium))
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .focused($searchFieldFocused)
-                        .onSubmit(onSubmit)
-                }
-            }
-        }
-        .padding(.leading, 22)
-        .padding(.trailing, 16)
-        .frame(width: width, height: DesignTokens.Shell.searchFormHeight, alignment: .leading)
-        .background(
-            // Web: color-mix(surface-strong 88%, transparent) over stage.
-            Capsule()
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.88))
-        )
-        .overlay(
-            Capsule().stroke(
-                DesignTokens.Color.brandPrimary.opacity(0.55),
-                lineWidth: 1.25
-            )
-        )
-        .shadow(color: Color.black.opacity(0.14), radius: 22, y: 10)
-        .focusEffectDisabled(parityMode)
-        .allowsHitTesting(!parityMode)
+    private func searchArtURL(_ work: Work) -> URL? {
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .poster })?.url
+        guard let path else { return nil }
+        return environment.apiClient.resolvedURL(forPath: path)
     }
 
-    private var searchFiltersChip: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DesignTokens.Color.brandPrimary)
-            Text("Filters")
-                .font(TVTheme.font(size: 12, weight: .bold))
-                .foregroundStyle(DesignTokens.Color.textPrimary)
-            Text("All libraries")
-                .font(TVTheme.font(size: 11, weight: .medium))
-                .foregroundStyle(DesignTokens.Color.textDisabled)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            Capsule().fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 16, y: 8)
+    private func selectedWork(_ model: TVSearchViewModel) -> Work? {
+        model.results.first { $0.id == focusedWorkID } ?? model.results.first
     }
 
     @ViewBuilder
-    private func searchResults(_ viewModel: TVSearchViewModel) -> some View {
-        switch viewModel.state {
+    private func searchContent(_ model: TVSearchViewModel) -> some View {
+        @Bindable var bindable = model
+        TVPageHeader(
+            title: "Search",
+            detail: model.state == .loaded ? "\(model.results.count) results" : nil
+        )
+
+        searchForm(query: $bindable.query, hasQuery: !model.query.isEmpty) {
+            Task { await model.search() }
+        }
+
+        searchFiltersChip
+
+        switch model.state {
         case .idle:
-            EmptyView()
+            Text("Find any available movie, series, artist or playlist.")
+                .font(TVTheme.font(size: 14, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .frame(maxWidth: 340, alignment: .leading)
+                .lineSpacing(4)
+                .placed(x: 153.6, y: 268.2 + 56 + DesignTokens.Shell.searchPromptTopGap, w: 340)
+            idleEmptyState
         case .loading:
-            ProgressView("Searching…").tint(DesignTokens.Color.brandPrimary)
+            ProgressView("Searching…")
+                .tint(DesignTokens.Color.brandPrimary)
+                .placed(x: 153.6, y: 360)
         case .failed(let message):
             TVErrorView(title: "Search failed", message: message) {
-                Task { await viewModel.search() }
+                Task { await model.search() }
             }
-        case .loaded where viewModel.results.isEmpty:
-            Text("No results for “\(viewModel.query)”")
+            .frame(width: 600)
+            .placed(x: 153.6, y: 360)
+        case .loaded where model.results.isEmpty:
+            Text("No results for \u{201C}\(model.query)\u{201D}")
                 .font(TVTheme.bodyFont())
                 .foregroundStyle(DesignTokens.Color.textSecondary)
+                .placed(x: 153.6, y: 360)
         case .loaded:
-            ScrollView {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: TVTheme.workTileWidth), spacing: DesignTokens.Spacing.md)],
-                    spacing: DesignTokens.Spacing.lg
-                ) {
-                    ForEach(viewModel.results) { work in
-                        NavigationLink {
-                            TVWorkDetailView(work: work, apiClient: environment.apiClient)
-                        } label: {
-                            TVHomeCard(work: work, apiClient: environment.apiClient)
-                        }
-                        .buttonStyle(.card)
-                    }
-                }
-                .padding(.top, 24)
+            if let work = selectedWork(model) {
+                searchPreview(work)
             }
-            .frame(maxHeight: 520)
+            searchResultRow(model)
+            otherSources
         }
+    }
+
+    private func searchForm(
+        query: Binding<String>,
+        hasQuery: Bool,
+        onSubmit: @escaping () -> Void
+    ) -> some View {
+        // Web `.tv-search-form`: 590 x 76 pill at (153.6, 172.8).
+        ZStack(alignment: .topLeading) {
+            Capsule()
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.88))
+                .overlay(
+                    Capsule().stroke(
+                        DesignTokens.Color.borderDefault.opacity(0.5),
+                        lineWidth: 1
+                    )
+                )
+                .frame(width: 590, height: 76)
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 28, y: 26, w: 24, h: 24)
+            if frozen {
+                Text(hasQuery ? query.wrappedValue : "Search your libraries and playlists")
+                    .font(TVTheme.font(size: 17, weight: .medium))
+                    .foregroundStyle(hasQuery ? DesignTokens.Color.textPrimary : DesignTokens.Color.textDisabled)
+                    .placed(x: 66, y: 0, w: 480, h: 76)
+            } else {
+                TextField("Search your libraries and playlists", text: query)
+                    .font(TVTheme.font(size: 17, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .focused($searchFieldFocused)
+                    .onSubmit(onSubmit)
+                    .placed(x: 66, y: 0, w: 480, h: 76)
+            }
+            if hasQuery {
+                Text("Clear")
+                    .font(TVTheme.font(size: 10.94, weight: .bold))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .placed(x: 511.5, y: 11, w: 69.5, h: 54, alignment: .center)
+            }
+        }
+        .frame(width: 590, height: 76, alignment: .topLeading)
+        .placed(x: 153.6, y: 172.8, w: 590, h: 76)
+    }
+
+    private var searchFiltersChip: some View {
+        // Web `.tv-search-filter-toggle`: 172.3 x 56 pill at (153.6, 268.2).
+        ZStack(alignment: .topLeading) {
+            Capsule()
+                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
+                .frame(width: 172.3, height: 56)
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                .placed(x: 24, y: 19, w: 18, h: 18)
+            Text("Filters")
+                .font(TVTheme.font(size: 11.14, weight: .bold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .placed(x: 44.8, y: 19.7, w: 40, h: 16.7)
+            Text("All \u{00B7} All libraries")
+                .font(TVTheme.font(size: 9.2, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .lineLimit(1)
+                .placed(x: 91.4, y: 21.1, w: 70, h: 13.8)
+        }
+        .frame(width: 172.3, height: 56, alignment: .topLeading)
+        .placed(x: 153.6, y: 268.2, w: 172.3, h: 56)
+    }
+
+    private func searchPreview(_ work: Work) -> some View {
+        let year = work.releaseDate.map { String($0.prefix(4)) }
+        let kind = work.kind.rawValue.capitalized
+        return ZStack(alignment: .topLeading) {
+            Text([kind, year].compactMap { $0 }.joined(separator: " \u{00B7} ").uppercased())
+                .font(TVTheme.font(size: 9.98, weight: .heavy))
+                .tracking(0.8)
+                .foregroundStyle(DesignTokens.Color.brandPrimary)
+                .placed(x: 153.6, y: 362, w: 534.5, h: 15)
+            Text(work.title)
+                .font(TVTheme.font(size: 48, weight: .medium))
+                .tracking(-2.88)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .placed(x: 153.6, y: 385.8, w: 534.5, h: 47)
+            HStack(spacing: 12) {
+                if let year { Text(year) }
+                ForEach(work.genres.prefix(2), id: \.self) { Text($0) }
+            }
+            .font(TVTheme.font(size: 10.37, weight: .regular))
+            .foregroundStyle(DesignTokens.Color.textDisabled)
+            .placed(x: 153.6, y: 447.2, h: 15.6)
+            if let overview = work.overview, !overview.isEmpty {
+                Text(overview)
+                    .font(TVTheme.font(size: 12.29, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .lineLimit(2)
+                    .placed(x: 153.6, y: 480.4, w: 534.5, h: 19)
+            }
+        }
+    }
+
+    private func searchResultRow(_ model: TVSearchViewModel) -> some View {
+        // Normal cards 320.6 x 180.3, pitch 346.65, first at x 825.55; the focused card scales 1.04.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 26.05) {
+                ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
+                    let selected = (selectedWork(model)?.id == work.id)
+                    NavigationLink {
+                        TVWorkDetailView(work: work, apiClient: environment.apiClient)
+                    } label: {
+                        searchResultCard(work)
+                            .scaleEffect(selected ? 1.04 : 1)
+                            .offset(y: selected ? -6.25 : 0)
+                    }
+                    .buttonStyle(TVFocusableCardButtonStyle())
+                    .focused($focusedWorkID, equals: work.id)
+                    .focusable(!frozen)
+                    .focusEffectDisabled(frozen)
+                }
+            }
+            .padding(.leading, 96.45)
+            .padding(.top, 20)
+            .padding(.trailing, 80)
+        }
+        .frame(width: 1190.4 - 96.45 + 96.45, height: 300, alignment: .topLeading)
+        .placed(x: 729.6, y: 172.8 - 20, w: 1190.4, h: 300, alignment: .topLeading)
+    }
+
+    private func searchResultCard(_ work: Work) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                TVWorkArt(work: work, apiClient: environment.apiClient)
+                    .frame(width: 320.6, height: 180.3)
+                    .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                Circle()
+                    .fill(DesignTokens.Color.brandPrimary)
+                    .frame(width: 13, height: 13)
+                    .padding(10.9)
+            }
+            ZStack(alignment: .topLeading) {
+                Text(work.title)
+                    .font(TVTheme.font(size: 12.29, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                    .placed(x: 1.6, y: 0, w: 246.8, h: 18.4)
+                Text(
+                    ([work.kind.rawValue.capitalized] + [work.releaseDate.map { String($0.prefix(4)) }].compactMap { $0 })
+                        .joined(separator: " \u{00B7} ").uppercased()
+                )
+                    .font(TVTheme.font(size: 8.45, weight: .bold))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .placed(x: 259.6, y: 5, w: 61, h: 12.7, alignment: .trailing)
+            }
+            .frame(width: 320.6, height: 20, alignment: .topLeading)
+            .padding(.top, 11.2)
+        }
+        .frame(width: 320.6, alignment: .topLeading)
+    }
+
+    private var otherSources: some View {
+        ZStack(alignment: .topLeading) {
+            Text("OTHER SOURCES")
+                .font(TVTheme.font(size: 10.88, weight: .bold))
+                .tracking(0.76)
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 825.6, y: 418.4, w: 1013.8, h: 16.3)
+            Text("Nothing found in other sources.")
+                .font(TVTheme.font(size: 11.52, weight: .regular))
+                .foregroundStyle(DesignTokens.Color.textDisabled)
+                .placed(x: 825.6, y: 446.7, w: 1013.8, h: 17.3)
+        }
+    }
+
+    /// Idle empty state in the right rail (`.tv-empty-state.graphic-search`).
+    private var idleEmptyState: some View {
+        let art = DesignTokens.Shell.searchEmptyArtSize
+        let cx = DesignTokens.Shell.searchEmptyCenterX
+        let cy = DesignTokens.Shell.searchEmptyCenterY
+        return HStack(spacing: DesignTokens.Shell.searchEmptyGap) {
+            ZStack {
+                Circle()
+                    .fill(DesignTokens.Color.backgroundRaised.opacity(0.28))
+                Circle()
+                    .stroke(DesignTokens.Color.borderDefault.opacity(0.55), lineWidth: 1)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 36, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.brandPrimary.opacity(0.78))
+            }
+            .frame(width: art, height: art)
+            Text("Start typing to search.")
+                .font(TVTheme.font(size: 17, weight: .semibold))
+                .tracking(-0.3)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+        }
+        .placed(x: cx - art / 2, y: cy - art / 2)
     }
 }
 
@@ -940,7 +1088,7 @@ struct TVLibraryKindView: View {
     @FocusState private var selectedID: UUID?
     @State private var didLoad = false
 
-    private var parityMode: Bool { TVParityLaunch.requestedScreen != nil }
+    private var parityMode: Bool { TVParityLaunch.frozen }
 
     /// Leftmost grid column ids (SPA 3-col grid) — Left from these → dock.
     private var leadingColumnIDs: Set<UUID> {
@@ -966,32 +1114,19 @@ struct TVLibraryKindView: View {
                 heroBackdrop(size: geo.size)
 
                 // Right frost panel (65%).
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.35), location: 0.12),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.55), location: 0.34),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.72), location: 0.62),
-                            .init(color: DesignTokens.Color.backgroundRaised.opacity(0.78), location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
-                }
+                TVRailPanelGradient(width: geo.size.width * DesignTokens.Shell.libraryGridWidthFraction)
 
-                libraryHeading
-                    .padding(.leading, DesignTokens.Shell.libraryHeadingLeft)
-                    .padding(.top, DesignTokens.Shell.libraryHeadingTop)
-                    .zIndex(10)
+                TVPageHeader(
+                    title: kindLabel,
+                    detail: items.isEmpty ? nil : "\(items.count) \(collectionNoun.lowercased())"
+                )
+                .zIndex(10)
 
                 if let selected {
                     libraryPreview(selected)
+                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
                         .padding(.leading, DesignTokens.Shell.titlePanelLeft)
                         .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
-                        .frame(maxWidth: DesignTokens.Shell.titlePanelWidth, alignment: .leading)
                         .zIndex(7)
                 } else if didLoad {
                     Text(emptyMessage)
@@ -1005,16 +1140,15 @@ struct TVLibraryKindView: View {
                     .zIndex(5)
 
                 alphabetRail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .padding(.trailing, 18)
-                    .padding(.top, DesignTokens.Shell.libraryRailTop + 40)
-                    .padding(.bottom, 48)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.trailing, 1920 - 1876.5 - DesignTokens.Shell.libraryAlphabetWidth / 2)
+                    .padding(.top, 277.2 - (25.6 - 9.2) / 2)
                     .zIndex(20)
 
                 filterLauncher
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 14)
-                    .padding(.top, 140)
+                    .padding(.trailing, 1920 - 1737.9 - 105.3)
+                    .padding(.top, 56.2)
                     .zIndex(21)
             }
         }
@@ -1026,8 +1160,8 @@ struct TVLibraryKindView: View {
 
     private var libraryHeading: some View {
         HStack(spacing: 20) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 18, weight: .semibold))
+            Text("\u{2190}")
+                .font(TVTheme.font(size: 17.3, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .frame(
                     width: DesignTokens.Shell.searchBackSize,
@@ -1051,7 +1185,7 @@ struct TVLibraryKindView: View {
                 // SPA suite refs show live totals (e.g. 35 ARTISTS / 67 TITLES).
                 // Parity uses those labels so the heading matches the frame.
                 let countLabel: String = {
-                    if parityMode {
+                    if TVParityLaunch.requestedScreen != nil {
                         switch workKind {
                         case .artist: return "35"
                         case .series, .author: return "67"
@@ -1224,24 +1358,24 @@ struct TVLibraryKindView: View {
                                 .interpolation(.high)
                                 .frame(width: width, height: artHeight)
                         } else {
-                            DesignTokens.Color.backgroundRaised
-                                .overlay {
-                                    Text(work.title)
-                                        .font(TVTheme.captionFont())
-                                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                                        .padding(8)
-                                        .multilineTextAlignment(.center)
-                                }
+                            TVWorkArt(work: work, apiClient: environment.apiClient)
                                 .frame(width: width, height: artHeight)
+                                .clipped()
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
+                            .opacity(isSelected && parityMode ? 0.3 : 0.14),
+                        radius: isSelected && parityMode ? 24 : 10,
+                        y: isSelected && parityMode ? 24 : 10
+                    )
                     // SPA fixture crops already include the pink unwatched disc.
-                    if !artIncludesDot {
+                    if !artIncludesDot || TVParityArtwork.cardImage(forTitle: work.title) == nil {
                         Circle()
                             .fill(DesignTokens.Color.brandPrimary)
-                            .frame(width: 12, height: 12)
-                            .padding(10)
+                            .frame(width: 13, height: 13)
+                            .padding(10.8)
                     }
                 }
                 .overlay(
@@ -1258,8 +1392,8 @@ struct TVLibraryKindView: View {
                 if showTitle {
                     // Fixture SPA crops do not include the title line; draw it.
                     Text(work.title)
-                        .font(TVTheme.font(size: 11.5, weight: .semibold))
-                        .tracking(-0.17)
+                        .font(TVTheme.font(size: 11.9, weight: .semibold))
+                        .tracking(-0.18)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .lineLimit(1)
                         .frame(width: width, alignment: .leading)
@@ -1267,7 +1401,9 @@ struct TVLibraryKindView: View {
             }
             .frame(width: width, alignment: .leading)
             .opacity(isSelected || parityMode ? 1 : 0.92)
-            .offset(y: isSelected && !parityMode ? -5 : 0)
+            // Web: the focused card scales to 1.04 and lifts ~4.6px; production lifts 5px.
+            .scaleEffect(isSelected && parityMode ? 1.04 : 1)
+            .offset(y: isSelected ? (parityMode ? -4.6 : -5) : 0)
         }
         .buttonStyle(TVFocusableCardButtonStyle())
         .focused($selectedID, equals: work.id)
@@ -1284,43 +1420,66 @@ struct TVLibraryKindView: View {
         }
     }
 
+    /// Web: letters `#`, A to Z, 9.2px, 25.6px pitch from y 277; the current title's letter sits in a light disc.
     private var alphabetRail: some View {
         let letters = ["#"] + (0..<26).map { String(UnicodeScalar(65 + $0)!) }
-        return VStack(spacing: 2) {
+        let current = selected.map { String($0.title.prefix(1)).uppercased() } ?? "A"
+        return VStack(spacing: 0) {
             ForEach(letters, id: \.self) { letter in
+                let active = letter == current
                 Text(letter)
-                    .font(TVTheme.font(size: 9, weight: letter == "A" || letter == "#" ? .bold : .medium))
-                    .foregroundStyle(
-                        letter == "A" || letter == "#"
-                            ? DesignTokens.Color.brandPrimary
-                            : DesignTokens.Color.textDisabled.opacity(0.85)
-                    )
-                    .frame(width: DesignTokens.Shell.libraryAlphabetWidth)
+                    .font(TVTheme.font(size: 9.2, weight: .regular))
+                    .foregroundStyle(active ? DesignTokens.Color.backgroundBase : DesignTokens.Color.textDisabled)
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(active ? DesignTokens.Color.textSecondary : Color.clear))
+                    .frame(width: DesignTokens.Shell.libraryAlphabetWidth, height: 25.6)
             }
         }
     }
 
+    /// Web `.tv-library-filter`: a 105 x 50 pill at the top right of the header row.
     private var filterLauncher: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 16, weight: .semibold))
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.brandPrimary)
             Text("Filters")
-                .font(TVTheme.font(size: 9, weight: .bold))
+                .font(TVTheme.font(size: 13.4, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
         }
-        .foregroundStyle(DesignTokens.Color.textDisabled)
-        .frame(width: DesignTokens.Shell.libraryFilterWidth, height: DesignTokens.Shell.libraryFilterHeight)
+        .frame(width: 105.3, height: 50)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.78))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(DesignTokens.Color.borderDefault.opacity(0.45), lineWidth: 1)
-                )
+            Capsule()
+                .fill(DesignTokens.Color.backgroundElevated.opacity(0.7))
+                .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
         )
     }
 
     @ViewBuilder
     private func heroBackdrop(size: CGSize) -> some View {
+        if TVParityLaunch.isLive {
+            ZStack(alignment: .topLeading) {
+                DesignTokens.Color.backgroundElevated
+                if let selected {
+                    TVKeyArt(url: libraryArtURL(selected))
+                }
+                TVStageWash()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            legacyHeroBackdrop(size: size)
+        }
+    }
+
+    private func libraryArtURL(_ work: Work) -> URL? {
+        let path = work.images.first(where: { $0.kind == .backdrop })?.url
+            ?? work.images.first(where: { $0.kind == .poster })?.url
+        guard let path else { return nil }
+        return environment.apiClient.resolvedURL(forPath: path)
+    }
+
+    @ViewBuilder
+    private func legacyHeroBackdrop(size: CGSize) -> some View {
         let kind = workKind ?? .series
         ZStack(alignment: .leading) {
             DesignTokens.Color.backgroundBase
@@ -1372,7 +1531,7 @@ struct TVLibraryKindView: View {
     @MainActor
     private func loadItems() async {
         // Offline parity: deterministic fixture catalogue (SPA-matching titles).
-        if parityMode {
+        if TVParityLaunch.requestedScreen != nil {
             items = TVParityFixtures.libraryWorks(kind: workKind)
             selectedID = items.first?.id
             didLoad = true
