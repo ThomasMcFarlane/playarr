@@ -1570,6 +1570,7 @@ internal enum class PlayarrString(
         "{{apiBaseUrl}}は、プロフィールとプレイヤー設定のプライマリサーバーのままです。",
     ),
     SettingsServerChangeAppHost("Change app host", "เปลี่ยนโฮสต์ของแอป", "アプリのホストを変更"),
+    SettingsServerTvDetailsSummary("TV app connection details", "รายละเอียดการเชื่อมต่อของแอปทีวี", "テレビアプリの接続の詳細"),
     SettingsServerChangeAppHostHint(
         "Reconnect this Android app to a different server-hosted Playarr interface.",
         "เชื่อมต่อแอป Android นี้กับอินเทอร์เฟซ Playarr บนเซิร์ฟเวอร์อื่น",

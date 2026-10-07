@@ -77,6 +77,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -537,6 +538,7 @@ internal fun PlayarrPlayerChrome(
                 onPrevious = { showControls(); onPrevious() },
                 onNext = { showControls(); onNext() },
                 onMenu = { openMenu = it; showControls() },
+                qualityMenuOpen = openMenu == PlayarrPlayerMenu.Quality,
                 playlistOpen = playlistOpen,
                 onTogglePlaylist = { playlistOpen = !playlistOpen; showControls() },
                 trailing = {
@@ -744,7 +746,7 @@ private fun PlayarrPlayerTopButton(
         contentColor = Color.White,
         shape = CircleShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-        modifier = modifier.then(if (isTelevision) Modifier.playerFocusRing(source, CircleShape) else Modifier).then(
+        modifier = modifier.then(if (isTelevision) Modifier.shadow(14.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f)).playerFocusRing(source, CircleShape) else Modifier).then(
             if (isTelevision) {
                 if (iconOnly) Modifier.size(48.dp) else Modifier.height(48.dp)
             } else {
@@ -753,13 +755,13 @@ private fun PlayarrPlayerTopButton(
         ),
     ) {
         Row(
-            modifier = if (isTelevision && iconOnly) Modifier.fillMaxSize() else Modifier.padding(horizontal = if (isTelevision) 16.dp else 11.dp),
+            modifier = if (isTelevision && iconOnly) Modifier.fillMaxSize() else Modifier.padding(horizontal = if (isTelevision) 22.dp else 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (isTelevision && iconOnly) Arrangement.Center else Arrangement.spacedBy(if (isTelevision) 8.8.dp else 8.dp),
         ) {
-            Icon(icon, contentDescription = accessibilityLabel, modifier = Modifier.size(if (isTelevision) 20.dp else 22.dp))
+            Icon(icon, contentDescription = accessibilityLabel, modifier = Modifier.size(if (isTelevision && iconOnly) 11.dp else if (isTelevision) 20.dp else 22.dp))
             if (isTelevision && !iconOnly) {
-                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif)
             }
         }
     }
@@ -799,6 +801,7 @@ private fun PlayerRoundButton(
 
 @Composable
 private fun PlayarrPlayerControlBar(
+    qualityMenuOpen: Boolean = false,
     playbackState: PlaybackState,
     timeline: PlayarrPlayerTimeline,
     controls: PlayarrPlaybackControls,
@@ -839,6 +842,7 @@ private fun PlayarrPlayerControlBar(
     val focusManager = LocalFocusManager.current
     if (isTelevision) {
         PlayarrTelevisionControlBar(
+            qualityMenuOpen = qualityMenuOpen,
             playbackState = playbackState,
             controls = controls,
             displayedPositionMs = displayedPositionMs,
@@ -1051,6 +1055,7 @@ private fun PlayarrPlayerControlBar(
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayarrTelevisionControlBar(
+    qualityMenuOpen: Boolean = false,
     playbackState: PlaybackState,
     controls: PlayarrPlaybackControls,
     displayedPositionMs: Long,
@@ -1261,7 +1266,8 @@ internal fun PlayarrTelevisionControlBar(
                     onClick = { onMenu(PlayarrPlayerMenu.Quality) },
                     enabled = !controls.switching,
                     interactionSource = source,
-                    color = Color.Transparent,
+                    // Web `.player-quality-button.is-active`: a 14% white pill while its menu is open.
+                    color = if (qualityMenuOpen) Color.White.copy(alpha = 0.14f) else Color.Transparent,
                     contentColor = Color.White,
                     shape = CircleShape,
                     modifier = Modifier
@@ -1495,9 +1501,11 @@ private fun PlayarrQualityPopover(
                 onClick = { onSelect(original.id) },
             )
         }
-        Spacer(Modifier.height(8.dp))
+        // Web grid columns land on whole pixels as 157, 156 and 157 wide (starting 118 px in, 6 px gaps).
+        val columnWidths = listOf(157f, 156f, 157f)
+        Spacer(Modifier.height(7.dp))
         Row(Modifier.height(27.5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.width(118.7.dp))
+            Spacer(Modifier.width(118.dp))
             listOf(PlayarrString.SettingsQualityLow, PlayarrString.SettingsQualityMedium, PlayarrString.SettingsQualityHigh).forEachIndexed { i, key ->
                 Text(
                     playarrString(key).uppercase(LocalPlayarrLanguage.current.locale),
@@ -1506,7 +1514,7 @@ private fun PlayarrQualityPopover(
                     fontWeight = FontWeight(760),
                     letterSpacing = 0.819.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.width(156.6.dp).padding(start = 0.dp),
+                    modifier = Modifier.width(columnWidths[i].dp).padding(start = 0.dp),
                 )
                 if (i < 2) Spacer(Modifier.width(6.dp))
             }
@@ -1514,7 +1522,7 @@ private fun PlayarrQualityPopover(
         playarrQualityTiers.forEach { tier ->
             Spacer(Modifier.height(6.dp))
             Row(Modifier.height(60.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.width(118.7.dp).padding(start = 4.dp).offset(y = (-2).dp), verticalArrangement = Arrangement.Center) {
+                Column(Modifier.width(118.dp).padding(start = 4.dp).offset(y = (-1).dp), verticalArrangement = Arrangement.Center) {
                     Text(tier.label, color = Color.White, fontSize = 12.16.sp, fontWeight = FontWeight(760), lineHeight = 18.2.sp)
                     Text(tier.resolution, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.9.sp)
                 }
@@ -1524,11 +1532,11 @@ private fun PlayarrQualityPopover(
                             label = playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps),
                             detail = playarrString(qualityLevelString(option.level)),
                             selected = option.id == controls.activeQualityId,
-                            modifier = Modifier.width(156.6.dp).height(60.dp),
+                            modifier = Modifier.width(columnWidths[i].dp).height(60.dp),
                             onClick = { onSelect(option.id) },
                         )
                     } else {
-                        Box(Modifier.width(156.6.dp).height(60.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.width(columnWidths[i].dp).height(60.dp), contentAlignment = Alignment.Center) {
                             Text("\u2014", color = Color.White.copy(alpha = 0.3f), fontSize = 12.sp)
                         }
                     }

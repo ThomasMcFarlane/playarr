@@ -276,12 +276,16 @@ internal fun PlayarrPageHeaderRow(
                     variant = PlayarrButtonVariant.Ghost,
                     // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
                     modifier = Modifier
-                        // Settings opens with the back button focused: web draws it 1.2x with a heavy ink ring.
-                        .then(if (backActive) Modifier.graphicsLayer { scaleX = 1.2f; scaleY = 1.2f } else Modifier)
-                        .background(webHeaderIconFill(), CircleShape)
-                        .border(if (backActive) 3.dp else 1.dp, if (backActive) WebInk else webHeaderIconRing(), CircleShape),
+                        // Settings opens with the back button focused: web fills it with the ink colour, scales it 1.056
+                        // and draws the 3 px ink focus outline 2 px outside it (`.ui-btn:focus-visible`).
+                        .then(if (backActive) Modifier.drawBehind {
+                            drawCircle(WebInk, radius = 29.9.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+                        } else Modifier)
+                        .then(if (backActive) Modifier.graphicsLayer { scaleX = 1.056f; scaleY = 1.056f } else Modifier)
+                        .background(if (backActive) WebInk else webHeaderIconFill(), CircleShape)
+                        .then(if (backActive) Modifier else Modifier.border(1.dp, webHeaderIconRing(), CircleShape)),
                 ) {
-                    Text("\u2190", color = if (backActive) WebInk else WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
+                    Text("\u2190", color = if (backActive) WebBackground else WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
                 }
             } else {
                 PlayarrPhoneHeaderPill(onClick = onBack, contentDescription = backLabel, active = backActive, focusScale = if (backActive) 1.055f else 1f, shape = WebEllipseShape) {
@@ -299,7 +303,7 @@ internal fun PlayarrPageHeaderRow(
                 fontWeight = FontWeight(580),
                 letterSpacing = if (isTelevision) (-1.5).sp else if (largeTitle) (-0.972).sp else (-0.792).sp,
                 lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else if (largeTitle) 32.4.sp else 26.4.sp,
-                style = if (isTelevision) androidx.compose.ui.text.TextStyle.Default else WebTextStyle,
+                style = if (isTelevision) androidx.compose.material3.LocalTextStyle.current else WebTextStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },

@@ -104,6 +104,8 @@ for id in "${screens[@]}"; do
       # Scrolled states, mandatory in every parity run: the rail (or grid) is dragged so cards continue past its edges, then the
       # edge fade is checked (check-edge-fade.mjs fails a hard-cut edge). The fixture has few titles; a container that cannot
       # scroll is reported, not silently passed.
+      # Start from a clean Home: the screen before may still be the player (its last BACK can land on the finished overlay).
+      launch; sleep 12
       case $id in
         home-scrolled) rail home; sleep 3; shoot home-before-scroll 1
           adb shell input swipe 1750 568 650 568 500; sleep 1.5
