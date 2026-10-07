@@ -7521,6 +7521,14 @@ private fun ExperiencePlayerScreen(
         ),
     )
     LaunchedEffect(state, activeMediaFileId) {
+        val pauseAt = parityPauseAtMs ?: return@LaunchedEffect
+        if (state !is ExperienceLoad.Ready) return@LaunchedEffect
+        // Parity captures: wait for the first frames, then pause and seek, so the presented frame is the one at [pauseAt].
+        while (viewModel.timelineSnapshot().positionMs <= 0L) kotlinx.coroutines.delay(100)
+        viewModel.player.pause()
+        viewModel.seekToSourcePosition(pauseAt)
+    }
+    LaunchedEffect(state, activeMediaFileId) {
         if (state !is ExperienceLoad.Ready) return@LaunchedEffect
         while (true) {
             timeline = viewModel.timelineSnapshot()

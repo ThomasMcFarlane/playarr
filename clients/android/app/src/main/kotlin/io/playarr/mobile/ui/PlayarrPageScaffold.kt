@@ -666,6 +666,9 @@ internal fun webPhoneInsets(): WindowInsets =
  */
 internal var parityNoInsets: Boolean = false
 
+/** Parity captures only (same gate as [parityNoInsets]): the player pauses at this position once it is playing. */
+internal var parityPauseAtMs: Long? = null
+
 /** The web page body does not follow the top inset: it starts where a 24 dp status bar leaves it. */
 @androidx.compose.runtime.Composable
 internal fun webPhoneBodyInsets(): WindowInsets =

@@ -86,7 +86,7 @@ import kotlinx.coroutines.delay
 
 private const val PLAYER_CONTROLS_TIMEOUT_MS = 3_500L
 
-private enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
+internal enum class PlayarrPlayerMenu { Quality, Audio, Subtitles }
 private enum class PlayarrPlayerFocusTarget { Back, Seek }
 private enum class PlayarrCastDialogKind { Picker, Connected }
 
@@ -233,6 +233,47 @@ internal fun PlayarrPlayerChrome(
                 },
         )
 
+        if (!isTelevision) {
+            PhonePlayerOverlay(
+                visible = visible,
+                playbackState = playbackState,
+                timeline = timeline,
+                controls = controls,
+                canPrevious = canPrevious,
+                canNext = canNext,
+                scrubPositionMs = scrubPositionMs ?: pendingSeekMs,
+                onScrub = { scrubPositionMs = it; showControls() },
+                onScrubFinished = {
+                    scrubPositionMs?.let(onSeek)
+                    scrubPositionMs = null
+                    showControls()
+                },
+                onTogglePlayback = { showControls(); onTogglePlayback() },
+                onPrevious = { showControls(); onPrevious() },
+                onNext = { showControls(); onNext() },
+                openMenu = openMenu,
+                onMenu = { openMenu = it; showControls() },
+                onQuality = { onQuality(it); openMenu = null; showControls() },
+                onAudio = { onAudio(it); openMenu = null; showControls() },
+                onSubtitle = { onSubtitle(it); openMenu = null; showControls() },
+                onTogglePlaylist = { playlistOpen = !playlistOpen; showControls() },
+                onMinimise = onMinimise,
+                onBack = onBack,
+                onHealth = if (health != null) ({ showControls(); healthOpen = true }) else null,
+                onPlayOnDevice = onPlayOnDevice,
+                onCast = if (cast.visible) ({
+                    showControls()
+                    if (cast.connectionState is PlayarrCastConnectionState.Connected) {
+                        castDialog = PlayarrCastDialogKind.Connected
+                    } else {
+                        cast.onStartDiscovery()
+                        castDialog = PlayarrCastDialogKind.Picker
+                    }
+                }) else null,
+                castConnected = cast.connectionState is PlayarrCastConnectionState.Connected,
+                onActivity = { showControls() },
+            )
+        } else {
         AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopStart)) {
             Row(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
@@ -336,6 +377,8 @@ internal fun PlayarrPlayerChrome(
             )
         }
 
+        }
+
         AnimatedVisibility(visible = playlistOpen, modifier = Modifier.align(Alignment.CenterEnd)) {
             PlayarrPlayerPlaylistPanel(
                 queue = queue,
@@ -359,7 +402,7 @@ internal fun PlayarrPlayerChrome(
         }
     }
 
-    openMenu?.let { menu ->
+    openMenu?.takeIf { isTelevision }?.let { menu ->
         PlayarrPlayerOptionsDialog(
             menu = menu,
             controls = controls,

@@ -857,6 +857,11 @@ internal enum class PlayarrString(
     PlayerChannelsStereo("Stereo", "สเตอริโอ", "ステレオ"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
+    PlayerSourceQuality("Source quality", "คุณภาพต้นฉบับ", "ソース画質"),
+    PlayerMute("Mute", "ปิดเสียง", "ミュート"),
+    PlayerUnmute("Unmute", "เปิดเสียง", "ミュート解除"),
+    PlayerEnterFullscreen("Enter full screen", "เต็มหน้าจอ", "全画面表示"),
+    PlayerExitFullscreen("Exit full screen", "ออกจากเต็มหน้าจอ", "全画面表示を終了"),
     PlayerPlaylistLabelSingular(
         "Playlist: {{count}} item",
         "เพลย์ลิสต์: {{count}} รายการ",
