@@ -107,10 +107,10 @@ struct TVPlayerChrome: View {
 
     // MARK: Transport
 
-    private func icon(_ symbol: String, x: CGFloat, y: CGFloat = 980) -> some View {
+    private func icon(_ symbol: String, x: CGFloat, y: CGFloat = 980, opacity: Double = 0.92) -> some View {
         Image(systemName: symbol)
             .font(.system(size: 17, weight: .regular))
-            .foregroundStyle(Color.white.opacity(0.92))
+            .foregroundStyle(Color.white.opacity(opacity))
             .frame(width: 20, height: 20)
             .placed(x: x, y: y, w: 20, h: 20, alignment: .center)
     }
@@ -122,7 +122,7 @@ struct TVPlayerChrome: View {
 
     private var transport: some View {
         ZStack(alignment: .topLeading) {
-            icon("backward.end", x: 90)
+            icon("backward.end", x: 90, opacity: 0.3)
             Button(action: onTogglePlay) {
                 Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 20, weight: .regular))
@@ -133,7 +133,7 @@ struct TVPlayerChrome: View {
             .buttonStyle(TVFocusableCardButtonStyle())
             .focusable(!frozen)
             .placed(x: 147.6, y: 958, w: 64, h: 64)
-            icon("forward.end", x: 247.2)
+            icon("forward.end", x: 247.2, opacity: 0.3)
             Text(Self.clock(state.position))
                 .font(TVTheme.font(size: 10.88, weight: .regular))
                 .foregroundStyle(Color.white)
@@ -166,7 +166,6 @@ struct TVPlayerChrome: View {
                         .tracking(0.31)
                         .foregroundStyle(Color.white)
                         .frame(width: 28, height: 20)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.9), lineWidth: 1.2))
                     Text(state.qualityLabel)
                         .font(TVTheme.font(size: 10.56, weight: .bold))
                         .tracking(0.11)

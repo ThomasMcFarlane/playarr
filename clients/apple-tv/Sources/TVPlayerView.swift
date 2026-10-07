@@ -45,7 +45,8 @@ struct TVPlayerView: View {
             ZStack(alignment: .topLeading) {
                 Color.black
                 TVAuthedImage(load: {
-                    try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(parity.position * 1000))
+                    let data = try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(parity.position * 1000))
+                    return TVVideoFrameColour.matchingBrowser(data)
                 }) { Color.black }
                     .frame(width: 1920, height: 1080)
                     .clipped()

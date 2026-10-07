@@ -86,6 +86,13 @@ jobs:
           brew install ffmpeg-full
           echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
 
+      # The reference machine draws the artwork titles with Noto Sans (its fontconfig "Sans").
+      - name: Fetch the artwork font
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/NotoSans-Regular.ttf" \
+            https://github.com/notofonts/notofonts.github.io/raw/main/fonts/NotoSans/full/ttf/NotoSans-Regular.ttf
+          echo "PLAYARR_FIXTURE_FONTFILE=$RUNNER_TEMP/NotoSans-Regular.ttf" >> "$GITHUB_ENV"
+
       - name: Build the fixture server
         working-directory: backend
         run: cargo build --bin playarr-server

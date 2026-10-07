@@ -99,7 +99,7 @@ struct TVCalendarView: View {
                 let isToday = group.day == model.today
                 ZStack(alignment: .topLeading) {
                     Rectangle()
-                        .fill(outside ? Color(red: 49 / 255, green: 42 / 255, blue: 48 / 255).opacity(0.4) : Color.clear)
+                        .fill(outside ? DesignTokens.Color.backgroundRaised.opacity(0.4) : Color.clear)
                         .overlay(Rectangle().stroke(DesignTokens.Color.borderDefault.opacity(0.25), lineWidth: 1))
                         .frame(width: 241.4, height: 138.9)
                     if isToday {
