@@ -10,6 +10,7 @@
  * one test's stored preference from leaking into the next.
  */
 import React from 'react';
+import {ThemeProvider} from '../../theme/ThemeProvider';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {Pressable, Text} from 'react-native';
 import {hydrateLocalStorage, resetLocalStorageShimForTests} from '../../platform/storage/localStorageShim';
@@ -69,7 +70,7 @@ describe('AppearanceScreen', () => {
   it('defaults to System selected when nothing is stored yet', () => {
     let renderer!: ReactTestRenderer;
     act(() => {
-      renderer = create(<AppearanceScreen navigation={fakeNavigation()} />);
+      renderer = create(<ThemeProvider><AppearanceScreen navigation={fakeNavigation()} /></ThemeProvider>);
     });
 
     const systemButton = renderer.root.findByProps({accessibilityLabel: 'System'});
@@ -82,7 +83,7 @@ describe('AppearanceScreen', () => {
   it('persists a selection to localStorage under THEME_PREFERENCE_STORAGE_KEY', () => {
     let renderer!: ReactTestRenderer;
     act(() => {
-      renderer = create(<AppearanceScreen navigation={fakeNavigation()} />);
+      renderer = create(<ThemeProvider><AppearanceScreen navigation={fakeNavigation()} /></ThemeProvider>);
     });
 
     act(() => {
@@ -97,7 +98,7 @@ describe('AppearanceScreen', () => {
 
     let renderer!: ReactTestRenderer;
     act(() => {
-      renderer = create(<AppearanceScreen navigation={fakeNavigation()} />);
+      renderer = create(<ThemeProvider><AppearanceScreen navigation={fakeNavigation()} /></ThemeProvider>);
     });
 
     act(() => {
@@ -112,7 +113,7 @@ describe('AppearanceScreen', () => {
 
     let renderer!: ReactTestRenderer;
     act(() => {
-      renderer = create(<AppearanceScreen navigation={fakeNavigation()} />);
+      renderer = create(<ThemeProvider><AppearanceScreen navigation={fakeNavigation()} /></ThemeProvider>);
     });
 
     // The selected button gets the "selected" background colour, distinct
@@ -140,7 +141,7 @@ describe('AppearanceScreen', () => {
   it('gives the first theme option hasTVPreferredFocus', () => {
     let renderer!: ReactTestRenderer;
     act(() => {
-      renderer = create(<AppearanceScreen navigation={fakeNavigation()} />);
+      renderer = create(<ThemeProvider><AppearanceScreen navigation={fakeNavigation()} /></ThemeProvider>);
     });
 
     const systemButton = renderer.root.findByProps({accessibilityLabel: 'System'});

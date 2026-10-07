@@ -42,7 +42,7 @@ import {
 export {focusMotion, radius, spacing, typeScale};
 export type {TypeScaleStep};
 
-export const colour = {
+const darkColour = {
   /** --bg -- the outermost canvas. */
   bg: '#151315',
   /** --surface -- cards, rails, the stage's rail panel. */
@@ -87,7 +87,65 @@ export const colour = {
   stageKicker: '#cf3157',
 } as const;
 
-export type Colour = typeof colour;
+
+export type DarkColour = typeof darkColour;
+
+export type Colour = {[K in keyof typeof darkColour]: string};
+
+/** The light palette: `:root` in global.css (the dark one above is `:root[data-theme="dark"]`). */
+const lightColour: Colour = {
+  bg: '#f5f3f2',
+  surface: '#fbfaf9',
+  surfaceStrong: '#ffffff',
+  surfaceSoft: '#dfdcdd',
+  ink: '#382621',
+  inkSoft: '#675961',
+  inkMuted: '#a5969e',
+  line: 'rgba(56, 38, 33, 0.14)',
+  lineStrong: 'rgba(56, 38, 33, 0.28)',
+  accent: '#675961',
+  accentSoft: '#c5b8bd',
+  onAccent: '#ffffff',
+  danger: '#a8464c',
+  dangerSoft: '#f2dfe1',
+  success: '#347559',
+  focusOutline: '#675961',
+  focusRing: sharedColor.brand.primary,
+  navAccent: sharedColor.brand.accent,
+  stageKicker: '#cf3157',
+};
+
+export type ColourScheme = 'light' | 'dark';
+
+export const palettes: Record<ColourScheme, Colour> = {light: lightColour, dark: darkColour};
+
+let activeScheme: ColourScheme = 'dark';
+
+/** The theme the whole app currently draws in; set by `theme/ThemeProvider.tsx` (dark until a preference says otherwise). */
+export function getActiveScheme(): ColourScheme {
+  return activeScheme;
+}
+
+export function setActiveScheme(scheme: ColourScheme): void {
+  activeScheme = scheme;
+}
+
+/**
+ * The live palette. Reading a key returns the active theme's value, so existing code that imports `colour` follows
+ * the theme without change; `ThemeProvider` remounts the tree when the theme changes, so every style is rebuilt.
+ * (A `StyleSheet.create` evaluated at module load would keep the dark value: build styles inside the component
+ * or with `useTheme()` for anything that must follow the theme.)
+ */
+export const colour: Colour = new Proxy<Colour>(darkColour, {
+  get: (_target, key: string) => palettes[activeScheme][key as keyof Colour],
+  ownKeys: () => Reflect.ownKeys(darkColour),
+  getOwnPropertyDescriptor: (_target, key) => ({
+    enumerable: true,
+    configurable: true,
+    value: palettes[activeScheme][key as keyof Colour],
+  }),
+});
+
 
 /**
  * Evaluated once, by hand, from the exact CSS this app has no `clamp()`/

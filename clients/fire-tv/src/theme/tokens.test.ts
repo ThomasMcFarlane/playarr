@@ -20,7 +20,7 @@
  */
 import {readFileSync} from 'node:fs';
 import * as path from 'node:path';
-import {colour} from './tokens';
+import {colour, palettes, setActiveScheme} from './tokens';
 
 const GLOBAL_CSS_PATH = path.resolve(__dirname, '../../../tv-web/web/src/styles/global.css');
 
@@ -99,5 +99,40 @@ describe('theme/tokens colour', () => {
     // the per-key test name from it.each above is what makes a failure here
     // identify which colour it was, not a custom assertion message.
     expect(value).not.toMatch(/^#(\.\.\.|000000|fff(?:fff)?)$/i);
+  });
+});
+
+describe('theme/tokens light palette', () => {
+  const css = readFileSync(GLOBAL_CSS_PATH, 'utf8');
+  const rootBlock = css.match(/(?:^|\n):root\s*\{(?<declarations>[^}]*)\}/)?.groups?.declarations;
+  const cssName: Record<string, string> = {
+    bg: 'bg',
+    surface: 'surface',
+    surfaceStrong: 'surface-strong',
+    surfaceSoft: 'surface-soft',
+    ink: 'ink',
+    inkSoft: 'ink-soft',
+    inkMuted: 'ink-muted',
+    line: 'line',
+    lineStrong: 'line-strong',
+    accent: 'accent',
+    accentSoft: 'accent-soft',
+    onAccent: 'on-accent',
+    danger: 'danger',
+    dangerSoft: 'danger-soft',
+    success: 'success',
+    focusOutline: 'focus-outline',
+  };
+
+  it.each(Object.entries(cssName))("palettes.light.%s matches the light theme's --%s", (key, property) => {
+    if (!rootBlock) throw new Error('Could not find the :root block in global.css.');
+    expect(palettes.light[key as keyof typeof palettes.light]).toBe(customProperty(rootBlock, property));
+  });
+
+  it('the live colour proxy follows the active scheme', () => {
+    setActiveScheme('light');
+    expect(colour.bg).toBe(palettes.light.bg);
+    setActiveScheme('dark');
+    expect(colour.bg).toBe(palettes.dark.bg);
   });
 });

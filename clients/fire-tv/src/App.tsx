@@ -72,6 +72,7 @@ import {RootNavigator} from './navigation/RootNavigator';
 import {PlayerHandleContext} from './navigation/PlayerHandleContext';
 import {PlayerScreen, type PlayerScreenHandle} from './screens/PlayerScreen';
 import {colour} from './theme/tokens';
+import {ThemeBoundary, ThemeProvider} from './theme/ThemeProvider';
 import {layout} from './theme/styles';
 
 /**
@@ -145,13 +146,16 @@ export default function App(): JSX.Element {
   }
 
   return (
+    <ThemeProvider>
     <GestureHandlerRootView style={styles.fill}>
       <SafeAreaProvider initialSafeAreaInsets={ZERO_SAFE_AREA_INSETS}>
         <LanguageProvider>
           <ApiClientProvider>
             <PlayerHandleContext.Provider value={playerRef}>
               <NavigationContainer>
-                <RootNavigator />
+                <ThemeBoundary>
+                  <RootNavigator />
+                </ThemeBoundary>
               </NavigationContainer>
               <PlayerScreen ref={playerRef} />
             </PlayerHandleContext.Provider>
@@ -159,6 +163,7 @@ export default function App(): JSX.Element {
         </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </ThemeProvider>
   );
 }
 

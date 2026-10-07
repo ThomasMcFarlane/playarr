@@ -95,6 +95,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Fire TV client: light and dark themes with the web palettes (the Appearance screen now switches them live without resetting navigation; "System" is dark on a TV), and static Nunito Sans and JetBrains Mono instances, because Vega ignores font weight for variable fonts.
 - Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).
 - Roku: light theme. Both web palettes are tokens, and a System, Light or Dark preference (sign-in/profile dropdown and Settings) recolours every screen.
 - Fire TV: a native React Native client for Amazon Vega OS at `clients/fire-tv/`, reusing the `clients/tv-web/packages` logic as TypeScript source (hosted device linking, profiles, home, library, detail, search, playlists, settings and HLS playback). Not yet wired into CI or the client catalogue.

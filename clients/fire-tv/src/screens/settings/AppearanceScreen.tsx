@@ -59,42 +59,21 @@ export interface AppearanceScreenProps {
   navigation: AppearanceScreenNavigation;
 }
 
-export type ThemePreference = 'system' | 'light' | 'dark';
+import {
+  THEME_PREFERENCE_STORAGE_KEY,
+  parseThemePreference,
+  useTheme,
+  type ThemePreference,
+} from '../../theme/ThemeProvider';
 
-export const THEME_PREFERENCE_STORAGE_KEY = 'playarr.tv.themePreference.v1';
+export {THEME_PREFERENCE_STORAGE_KEY, parseThemePreference};
+export type {ThemePreference};
 
 const THEME_OPTIONS: readonly {value: ThemePreference; label: string}[] = [
   {value: 'system', label: 'System'},
   {value: 'light', label: 'Light'},
   {value: 'dark', label: 'Dark'},
 ];
-
-/** Guards a raw stored string down to a real `ThemePreference`, defaulting to `system` for anything absent, corrupt, or from a future version of this screen that stores a value this one doesn't recognise. */
-export function parseThemePreference(raw: string | null): ThemePreference {
-  return raw === 'light' || raw === 'dark' ? raw : 'system';
-}
-
-/**
- * `localStorage` is not a given global -- `platform/storage/
- * localStorageShim.ts`'s own doc comment is explicit that it only exists on
- * `globalThis` once `hydrateLocalStorage()` has resolved (awaited before
- * `App.tsx`'s first render in production; not run at all in a plain `npx
- * jest` invocation, per `api/client.test.ts`'s own comment on the same
- * point). Every other module in this codebase that touches `localStorage`
- * directly (`@playarr-tv/device-auth`'s `tokenStore.ts`,
- * `@playarr-tv/domain`'s `knownServers.ts`) guards it with exactly this
- * `typeof` check rather than assuming it exists; an earlier draft of this
- * screen skipped that guard and threw `ReferenceError: localStorage is not
- * defined` the instant it rendered under Jest, which is what this file's
- * own test caught.
- */
-function hasLocalStorage(): boolean {
-  return typeof localStorage !== 'undefined';
-}
-
-function readStoredThemePreference(): ThemePreference {
-  return parseThemePreference(hasLocalStorage() ? localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY) : null);
-}
 
 interface ThemeOptionButtonProps {
   label: string;
@@ -145,17 +124,10 @@ function BackButton({onPress}: {onPress: () => void}): React.ReactElement {
 }
 
 export function AppearanceScreen({navigation}: AppearanceScreenProps): React.ReactElement {
-  const [preference, setPreference] = React.useState<ThemePreference>(readStoredThemePreference);
+  const {preference, setPreference} = useTheme();
 
   function selectPreference(next: ThemePreference): void {
-    if (next === preference) return;
-    setPreference(next);
-    if (!hasLocalStorage()) return;
-    if (next === 'system') {
-      localStorage.removeItem(THEME_PREFERENCE_STORAGE_KEY);
-    } else {
-      localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, next);
-    }
+    if (next !== preference) setPreference(next);
   }
 
   return (
@@ -181,10 +153,7 @@ export function AppearanceScreen({navigation}: AppearanceScreenProps): React.Rea
             />
           ))}
         </View>
-        <Text style={[text.caption, styles.hint]}>
-          Playarr for Fire TV currently ships one dark theme. Your choice is saved now, and will take
-          effect the moment a light theme is available.
-        </Text>
+        <Text style={[text.caption, styles.hint]}>System follows the platform appearance and is dark when it reports none.</Text>
       </View>
     </View>
   );
