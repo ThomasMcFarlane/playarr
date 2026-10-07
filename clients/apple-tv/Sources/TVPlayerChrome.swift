@@ -99,7 +99,7 @@ struct TVPlayerChrome: View {
         let progress = 1780 * fraction
         return ZStack(alignment: .topLeading) {
             Capsule().fill(Color.white.opacity(0.2)).placed(x: 70, y: 936, w: 1780, h: 6)
-            Capsule().fill(Color.white.opacity(0.34)).placed(x: 70, y: 936, w: 1780, h: 6)
+            Capsule().fill(Color.white.opacity(0.34)).placed(x: 70, y: 936, w: 491.8, h: 6)
             Capsule().fill(DesignTokens.Color.brandPrimary).placed(x: 70, y: 936, w: max(progress, 0), h: 6)
             Circle().fill(DesignTokens.Color.brandPrimary).placed(x: 70 + progress - 7.5, y: 931.5, w: 15, h: 15)
         }
@@ -151,8 +151,9 @@ struct TVPlayerChrome: View {
 
     private var rightGroup: some View {
         ZStack(alignment: .topLeading) {
-            icon("captions.bubble", x: 1323.5)
-            icon("list.bullet", x: 1401.1)
+            icon("speaker.wave.2.fill", x: 1323.5)
+            icon("captions.bubble", x: 1401.1)
+            icon("list.bullet", x: 1478.7)
             Button(action: onToggleQualityMenu) {
                 HStack(spacing: 11.8) {
                     Text("HD")
