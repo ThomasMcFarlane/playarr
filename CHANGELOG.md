@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV: a focused media card (Home, Movies, Series, search results, episode tiles, similar titles) now shows a soft shadow and lifts, animated, with no ring and no fill; buttons, pills and Back keep the ring. The lift is drawn inside the card, so it never changes the bounds D-pad focus search measures.
+- Android TV: UP and DOWN between Home rails land on the card visually above or below (closest on-screen centre), never on the same index of a rail scrolled elsewhere.
+- Android TV: coming back from a detail page or the player puts focus on the card you opened, not on the first navigation item.
 - Calendar on TV: in the week view LEFT/RIGHT now moves between days and UP/DOWN between entries (web and Android TV), the focused entry always scrolls into view, every scrollable calendar area shows the edge fade where content continues, and in the agenda the details panel follows focus.
 - Calendar entries' coloured left border now shows availability (a playable file in the library, or not) instead of the media kind, on web and Android.
 - Web: Filters, Create and Calendar link sit in one shell-owned column at the right edge again, stacked vertically exactly where the 30 September Filters tile was (a row left of the avatar on phones), instead of in each page's header row.
@@ -2401,6 +2404,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Android TV instrumented navigation tests cover the draw-only card lift (focus-target bounds unchanged), geometric vertical moves from a scrolled rail, and media cards drawing no ring or fill in both themes.
 - Parity tooling: the Android TV capture script takes scrolled states (Home rail, library grids) and fails a hard-cut scroll edge with `check-edge-fade.mjs`; `capture-web-scrolled.mjs` captures the same Home position on web for comparison.
 - Android TV D-pad navigation is covered by JVM tests of the web rules (`PlayarrTvNavigationTest`) and instrumented key-event tests across Home rails, the library grid and the series page, plus pixel checks that the focus ring draws no fill in both themes (`PlayarrTvNavigationUiTest`).
 - Tests pin the Calendar's header buttons and every page's Filters button to one component per client: a web style rule check, an Android metrics and call-site test, and source guards for iOS and tvOS.

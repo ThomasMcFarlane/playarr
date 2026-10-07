@@ -134,7 +134,19 @@ internal fun webCardShadows(selected: Boolean, home: Boolean, search: Boolean): 
 
 /** Remote-mode focused card art (`body[data-input-mode="remote"] .tv-home-card[data-remote-active] ...`): a deeper pair of shadows. */
 internal val webRemoteFocusShadows: List<WebShadow> get() =
-    listOf(WebShadow(18.dp, 36.dp, WarmShadow.copy(alpha = 0.28f)), WebShadow(8.dp, 16.dp, WarmShadow.copy(alpha = 0.16f)))
+    listOf(WebShadow(26.dp, 52.dp, WarmShadow.copy(alpha = 0.32f)), WebShadow(11.dp, 22.dp, WarmShadow.copy(alpha = 0.22f)))
+
+/** Focused art shadow of cards other than Home and Search: `0 24px 48px .30, 0 10px 20px .20`. */
+internal val webCardFocusShadows: List<WebShadow> get() =
+    listOf(WebShadow(24.dp, 48.dp, WarmShadow.copy(alpha = 0.30f)), WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.20f)))
+
+/** Focused search result art: `0 22px 52px rgba(31,14,20,.28)`. */
+internal val webSearchFocusShadows: List<WebShadow> get() =
+    listOf(WebShadow(22.dp, 52.dp, Color(0xFF1F0E14).copy(alpha = 0.28f)))
+
+/** Resting card art shadow: `0 10px 20px .14, 0 3px 8px .10`. */
+internal val webCardRestShadows: List<WebShadow> get() =
+    listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
 
 /**
  * A box with CSS-style blurred drop shadows behind it, clipped content in front. The blur is a RenderEffect (API 31+);

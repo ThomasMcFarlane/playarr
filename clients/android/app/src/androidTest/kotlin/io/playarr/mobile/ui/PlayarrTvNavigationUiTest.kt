@@ -29,6 +29,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -85,7 +86,7 @@ class PlayarrTvNavigationUiTest {
         }
         compose.setContent {
             val scope = rememberCoroutineScope()
-            val rails = remember { TvRails(scope, TvRails.Vertical.SameIndex) }
+            val rails = remember { TvRails(scope, TvRails.Vertical.ClosestX) }
             val column = rememberLazyListState()
             val nav = remember { FocusRequester() }
             rails.sizes = sizes
@@ -130,12 +131,38 @@ class PlayarrTvNavigationUiTest {
     }
 
     @Test
+    fun aFocusedCardLiftsAtDrawTimeOnlyAndKeepsItsLayoutBounds() {
+        setHome(listOf(5, 3))
+        // r0-c0 is focused (and lifting); its focus-target bounds must match those of an unfocused neighbour in the same row,
+        // otherwise Compose's focus search sees a lifted card "below" its sibling and DOWN bounces sideways (#214).
+        compose.waitForIdle()
+        val focusedTop = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.top
+        val neighbours = compose.onAllNodes(androidx.compose.ui.test.hasClickAction() and !isFocused()).fetchSemanticsNodes()
+            .filter { kotlin.math.abs(it.boundsInRoot.left - compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.left) > 1f }
+            .map { it.boundsInRoot }
+        val sameRow = neighbours.first { kotlin.math.abs(it.bottom - compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.bottom) < 40f }
+        assertEquals(focusedTop, sameRow.top, 0.5f)
+        // And the regression itself still holds with lifting cards.
+        assertEquals(listOf("r1-c0", "r1-c0"), press(Key.DirectionDown.keyCode, Key.DirectionDown.keyCode))
+    }
+
+    @Test
     fun downKeepsTheCardColumnAndClampsToAShorterRail() {
         setHome(listOf(5, 3, 5))
         press(Key.DirectionRight.keyCode, Key.DirectionRight.keyCode, Key.DirectionRight.keyCode, Key.DirectionRight.keyCode)
         assertEquals("r0-c4", focused)
-        assertEquals(listOf("r1-c2", "r2-c2"), press(Key.DirectionDown.keyCode, Key.DirectionDown.keyCode))
-        assertEquals(listOf("r1-c2", "r0-c2"), press(Key.DirectionUp.keyCode, Key.DirectionUp.keyCode))
+        // Geometric: DOWN to a shorter rail lands on the card nearest in x (never beyond its last card), UP returns by position.
+        val fromX = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.x
+        val down = press(Key.DirectionDown.keyCode).single()
+        assertTrue(down, down.startsWith("r1-c"))
+        val downX = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.x
+        val pitch = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.width + with(compose.density) { 25.dp.toPx() }
+        // The rail has only three cards: the landing card is the closest of those three to the origin x.
+        val others = compose.onAllNodes(androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes()
+            .map { it.boundsInRoot }.filter { kotlin.math.abs(it.center.y - compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.y) < 4f }
+        assertTrue("closest to $fromX", others.all { kotlin.math.abs(downX - fromX) <= kotlin.math.abs(it.center.x - fromX) + 1f })
+        assertEquals("r2", press(Key.DirectionDown.keyCode).single().substring(0, 2))
+        assertTrue(pitch > 0f)
     }
 
     @Test
@@ -151,7 +178,17 @@ class PlayarrTvNavigationUiTest {
         setHome(listOf(30, 30))
         val path = press(*LongArray(25) { Key.DirectionRight.keyCode })
         assertEquals("r0-c25", path.last())
-        assertEquals("r1-c25", press(Key.DirectionDown.keyCode).single())
+        // Owner rule: vertical moves are geometric. The second rail never scrolls to a matching index; DOWN lands on the
+        // card visually beneath, the one whose on-screen centre is closest to where focus was.
+        val fromX = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.x
+        val landed = press(Key.DirectionDown.keyCode).single()
+        assertTrue("landed on $landed, not the same index", landed.startsWith("r1-") && landed != "r1-c25")
+        val node = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot
+        val pitch = node.width + with(compose.density) { 25.dp.toPx() }
+        assertTrue("x centre ${node.center.x} within half a card of $fromX", kotlin.math.abs(node.center.x - fromX) <= pitch / 2f + 1f)
+        // And back up lands on the card above that, still by position.
+        press(Key.DirectionUp.keyCode)
+        assertTrue(kotlin.math.abs(compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.x - node.center.x) <= pitch / 2f + 1f)
     }
 
     /** Movies and Series: three columns, seven titles. */
@@ -241,21 +278,19 @@ class PlayarrTvNavigationUiTest {
     }
 
     @Test
-    fun theFocusRingIsDrawnWithoutAnyFillInTheDarkTheme() = assertRingWithoutFill(dark = true)
+    fun aFocusedMediaCardDrawsNoRingAndNoFillInTheDarkTheme() = assertMediaCardWithoutRingOrFill(dark = true)
 
     @Test
-    fun theFocusRingIsDrawnWithoutAnyFillInTheLightTheme() = assertRingWithoutFill(dark = false)
+    fun aFocusedMediaCardDrawsNoRingAndNoFillInTheLightTheme() = assertMediaCardWithoutRingOrFill(dark = false)
 
-    private fun assertRingWithoutFill(dark: Boolean) {
+    private fun assertMediaCardWithoutRingOrFill(dark: Boolean) {
         run {
             setPlayarrWebPalette(dark)
             val ring = WebCardFocusRing.toArgb()
             val requester = FocusRequester()
             compose.setContent {
                 // Television installs no Material indication (MainActivity), so a focused clickable draws no fill.
-                androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.foundation.LocalIndication provides io.playarr.shared.designsystem.component.PlayarrNoIndication,
-                ) {
+                io.playarr.shared.designsystem.component.PlayarrTelevisionIndication {
                     Box(Modifier.testTag("card").background(WebBackground).padding(16.dp)) {
                         ExperienceLandscapeCard(
                             work = work("ring"), serverUrl = "http://localhost", accessToken = null, width = 219.dp,
@@ -275,7 +310,7 @@ class PlayarrTvNavigationUiTest {
             val edge = with(density) { 16.dp.roundToPx() }
             val ringX = edge - with(density) { 1.5.dp.roundToPx() }
             val midY = edge + with(density) { 60.dp.roundToPx() }
-            assertTrue("ring colour on focus (dark=$dark)", channelsNear(after.getPixel(ringX, midY), ring))
+            assertFalse("no ring on a focused media card (dark=$dark)", channelsNear(after.getPixel(ringX, midY), ring))
             assertFalse("no ring before focus (dark=$dark)", channelsNear(before.getPixel(ringX, midY), ring))
             // No fill: the art's interior is pixel-identical before and after focus.
             for ((x, y) in listOf(edge + 40 to edge + 20, edge + 100 to edge + 70)) {
@@ -287,4 +322,66 @@ class PlayarrTvNavigationUiTest {
 
     private fun channelsNear(argb: Int, ring: Int, tolerance: Int = 16): Boolean =
         listOf(16, 8, 0).all { shift -> kotlin.math.abs(((argb shr shift) and 0xFF) - ((ring shr shift) and 0xFF)) <= tolerance }
+
+    private fun setMovie(playFocus: FocusRequester) {
+        val chapters = (0 until 4).map { io.playarr.shared.data.model.MediaChapter(index = it, startMs = it * 60_000L, title = "Chapter c$it") }
+        val similar = listOf(work("s0"), work("s1"))
+        compose.setContent {
+            MovieDetailBrowser(
+                mediaFileId = "media", chapters = chapters, credits = WorkCreditsResponse(), similarWorks = similar,
+                serverUrl = "http://localhost", accessToken = null, isTelevision = true, launchSettings = null,
+                onPlay = { _, _, _ -> }, onOpenWork = {}, playFocus = playFocus, modifier = Modifier.fillMaxSize(),
+            )
+            Box(Modifier.size(1.dp).focusRequester(playFocus).onFocusChanged { if (it.isFocused) focused = "play" }.focusable())
+        }
+        compose.waitForIdle()
+        compose.onNode(androidx.compose.ui.test.hasText("Chapter c0", substring = true))
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+    }
+
+    private fun focusedText(): String {
+        val config = compose.onNode(isFocused()).fetchSemanticsNode().config
+        return if (config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)) {
+            config[androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString { it.text }
+        } else {
+            ""
+        }
+    }
+
+    @Test
+    fun movieTracksMoveToTheClosestTileAndLeftOrUpFromTheFirstTrackGoToPlay() {
+        setMovie(FocusRequester())
+        assertTrue(focusedText().contains("Chapter c0"))
+        // RIGHT steps through the chapters and stops at the last one.
+        press(Key.DirectionRight.keyCode, Key.DirectionRight.keyCode, Key.DirectionRight.keyCode, Key.DirectionRight.keyCode)
+        assertTrue(focusedText().contains("Chapter c3"))
+        // DOWN lands on the closest similar title (two tiles, so the second), never sideways inside the chapters.
+        press(Key.DirectionDown.keyCode)
+        assertTrue("similar title focused: ${focusedText()}", focusedText().contains("s1"))
+        press(Key.DirectionUp.keyCode)
+        assertTrue(focusedText().contains("Chapter c"))
+        assertEquals(listOf("play"), press(Key.DirectionUp.keyCode))
+    }
+
+    @Test
+    fun aFocusedMaterialSurfaceDrawsNoStateLayerOnTelevision() {
+        val requester = FocusRequester()
+        compose.setContent {
+            io.playarr.shared.designsystem.component.PlayarrTelevisionIndication {
+                Box(Modifier.testTag("surface").background(Color(0xFF202020)).padding(16.dp)) {
+                    androidx.compose.material3.Surface(
+                        onClick = {}, color = Color(0xFFE0E0E0),
+                        modifier = Modifier.size(120.dp, 50.dp).focusRequester(requester),
+                    ) {}
+                }
+            }
+        }
+        compose.waitForIdle()
+        val before = compose.onNodeWithTag("surface").captureToImage().asAndroidBitmap().getPixel(76, 41)
+        compose.waitUntil(10_000) { runCatching { compose.runOnIdle { requester.requestFocus() } }.getOrDefault(false) }
+        compose.waitForIdle()
+        val after = compose.onNodeWithTag("surface").captureToImage().asAndroidBitmap().getPixel(76, 41)
+        assertEquals("a focused Surface keeps its colour", before, after)
+    }
 }

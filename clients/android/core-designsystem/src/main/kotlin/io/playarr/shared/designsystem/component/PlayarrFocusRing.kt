@@ -67,3 +67,21 @@ object PlayarrNoIndication : IndicationNodeFactory {
 
     override fun equals(other: Any?): Boolean = other === this
 }
+
+/**
+ * Installs the television indication: no Material ripple or state layer (a focused Material `Surface` would otherwise
+ * paint a translucent fill) and no foundation indication on plain clickables. Wrap the app content in this on television.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@androidx.compose.runtime.Composable
+fun PlayarrTelevisionIndication(enabled: Boolean = true, content: @androidx.compose.runtime.Composable () -> Unit) {
+    if (!enabled) {
+        content()
+        return
+    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.foundation.LocalIndication provides PlayarrNoIndication,
+        androidx.compose.material3.LocalRippleConfiguration provides null,
+        content = content,
+    )
+}

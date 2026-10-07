@@ -22,6 +22,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.withFrameNanos
 
@@ -167,6 +168,42 @@ internal fun tvRailMove(
  * the television shell; null elsewhere, in which case LEFT falls back to Compose's own search.
  */
 internal val LocalTvNavEntry = compositionLocalOf<FocusRequester?> { null }
+
+/** Whether anything in the app currently holds D-pad focus (the shell tracks it on its root). */
+internal val LocalTvHasFocus = compositionLocalOf<() -> Boolean> { { false } }
+
+/** Whether the navigation rail holds focus (the shell tracks it): on a page's first frame that is only the automatic restore. */
+internal val LocalTvNavHasFocus = compositionLocalOf<() -> Boolean> { { false } }
+
+/**
+ * A page's default focus (web `data-tv-focus-default`): runs [block] once the window has input focus and nothing in the
+ * app holds focus, so a cold start, a warm start from the launcher and a return from playback all land on the page's
+ * content instead of on the first navigation item.
+ */
+@Composable
+internal fun TvDefaultFocusEffect(key: Any?, block: suspend () -> Unit) {
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    val hasFocus = LocalTvHasFocus.current
+    val navHasFocus = LocalTvNavHasFocus.current
+    // Returning from a detail page or the player, Android hands focus to the first navigation item a moment after this
+    // page appears. That is not a user choice, so on the page's first run, focus that settles on the rail counts as
+    // "nothing focused" and the page takes it back.
+    val firstRun = androidx.compose.runtime.remember { booleanArrayOf(true) }
+    androidx.compose.runtime.LaunchedEffect(key, windowFocused) {
+        if (!windowFocused) return@LaunchedEffect
+        val first = firstRun[0]
+        firstRun[0] = false
+        if (!hasFocus()) {
+            block()
+        } else if (first) {
+            // Watch the rail for a short settle window; if it takes focus without the user having pressed anything, move it back.
+            val railTookFocus = kotlinx.coroutines.withTimeoutOrNull(2_000) {
+                androidx.compose.runtime.snapshotFlow { navHasFocus() }.first { it }
+            }
+            if (railTookFocus != null) block()
+        }
+    }
+}
 
 /** Shared slot registry: one focusable per (group, index), found again by key for explicit focus moves. */
 internal abstract class TvSlotRegistry(protected val scope: CoroutineScope) {

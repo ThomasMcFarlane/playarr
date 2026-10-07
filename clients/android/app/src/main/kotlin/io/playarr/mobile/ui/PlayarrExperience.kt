@@ -1635,12 +1635,18 @@ internal fun PlayarrExperience(
         val glassBackdrop = rememberGlassBackdrop()
         // The navigation rail's current item: where LEFT from the first card of a rail or grid lands (web `aria-current`).
         val navEntryFocus = remember { FocusRequester() }
+        val appFocusState = remember { mutableStateOf(false) }
+        val appHasFocusProvider = remember { { appFocusState.value } }
+        val navFocusState = remember { mutableStateOf(false) }
+        val navHasFocusProvider = remember { { navFocusState.value } }
         CompositionLocalProvider(
+            LocalTvHasFocus provides appHasFocusProvider,
+            LocalTvNavHasFocus provides navHasFocusProvider,
             LocalGlassBackdrop provides glassBackdrop,
             LocalDetailSection provides { detailSectionRoute = it },
             LocalTvNavEntry provides navEntryFocus,
         ) {
-        Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
+        Box(modifier = Modifier.fillMaxSize().background(WebBackground).onFocusChanged { appFocusState.value = it.hasFocus }) {
             ExperienceNavHost(
                 navController,
                 serverUrl,
@@ -1681,7 +1687,8 @@ internal fun PlayarrExperience(
                         currentRoute = activeNavRoute,
                         isTelevision = isTelevision,
                         onNavigate = { navController.openExperienceTopLevel(it) },
-                        modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
+                        modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter)
+                            .onFocusChanged { navFocusState.value = it.hasFocus },
                         currentEntryFocus = navEntryFocus,
                     )
                 }
@@ -2595,7 +2602,7 @@ private fun ExperienceHomeScreen(
                     val railsState = androidx.compose.foundation.lazy.rememberLazyListState()
                     var focusedRailKey by remember { mutableStateOf<String?>(null) }
                     // Web Home rules: see PlayarrTvNavigation.kt. Rails are indexed so UP/DOWN keep the card column.
-                    val tvRails = remember { TvRails(homeScope, TvRails.Vertical.SameIndex) }
+                    val tvRails = remember { TvRails(homeScope, TvRails.Vertical.ClosestX) }
                     tvRails.sizes = current.value.map { it.works.size }
                     tvRails.columnState = railsState
                     val navEntry = LocalTvNavEntry.current
@@ -2610,7 +2617,7 @@ private fun ExperienceHomeScreen(
                     }
                     if (isTelevision) {
                         // Web's default focus: the last focused card, else the first card of the first rail.
-                        LaunchedEffect(Unit) {
+                        TvDefaultFocusEffect(Unit) {
                             // After playback or a detail page: the card just opened or watched, wherever its rail is now
                             // (On deck reorders), else the first card of the first rail.
                             val rails = current.value
@@ -3162,11 +3169,11 @@ internal fun ExperienceLandscapeCard(
     // Web remote mode (`body[data-input-mode="remote"]`, which is always the case on a TV): no lift, no scale and no
     // selected state; the focused card's art gets a 3 px ring and a deeper shadow, and nothing else changes.
     val liftActive = focused
-    val artScale = 1f
+    val artScale by animateFloatAsState(if (focused && webTvStyle) 1.025f else 1f, tween(240), label = "homeArtScale")
     val cardRadius = if (webTvStyle) 12.48.dp else 10.dp
     val stackNear = WebInk.copy(alpha = 0.26f)
     val stackFar = WebInk.copy(alpha = 0.14f)
-    Column(
+    Box(
         modifier = modifier
             .width(width)
             .then(
@@ -3182,6 +3189,8 @@ internal fun ExperienceLandscapeCard(
                 onLongClick = onContext,
             ),
     ) {
+    // The lift is applied here, inside the focus target, so focus search keeps the unlifted bounds.
+    Column(Modifier.fillMaxWidth().then(if (webTvStyle) Modifier.mediaCardLift(focused, TvCardMotions.Home) else Modifier)) {
         WebShadowedBox(
             shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) (if (focused) webRemoteFocusShadows else webCardShadows(false, !webTvLibrary, false)) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
@@ -3206,8 +3215,7 @@ internal fun ExperienceLandscapeCard(
                         Modifier
                     },
                 )
-                .scale(artScale)
-                .webFocusRing(focused && webTvStyle, radius = cardRadius, color = WebCardFocusRing),
+                .scale(artScale),
             innerModifier = Modifier.background(if (webSearch) WebSurfaceStrong else WebSurfaceSoft)
                 .then(if (!webPhone && !webTvStyle && (focused || selected)) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
         ) {
@@ -3294,6 +3302,7 @@ internal fun ExperienceLandscapeCard(
         Text(displayTitle, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
         Text(resolvedSubtitle, color = WebInkMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
     }
 }
 
@@ -3481,24 +3490,28 @@ private fun LibraryCoverCard(
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val libraryScale = rememberPlayarrFocusScale(
-        focused = focused,
-        focusedScale = FocusMotion.tileFocusScale,
-        label = "libraryCardFocus",
-    )
-    Column(
-        modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
+    Box(
+        modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width))
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
+    // Focused media card: soft shadow plus a draw-only lift on the content inside the focus target, no ring.
+    Column(Modifier.fillMaxWidth().mediaCardLift(focused, TvCardMotions.Library)) {
         Box {
-            AuthenticatedArtwork(
-                work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
-                Modifier.fillMaxWidth().aspectRatio(2f / 3f).webFocusRing(focused, radius = 12.dp, color = WebCardFocusRing).clip(RoundedCornerShape(12.dp)),
-            )
+            WebShadowedBox(
+                shadows = if (focused) webCardFocusShadows else webCardRestShadows,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+            ) {
+                AuthenticatedArtwork(
+                    work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
+                    Modifier.fillMaxSize(),
+                )
+            }
             if (showUnwatched) PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
         }
         Text(work.title, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+    }
     }
 }
 
@@ -3800,7 +3813,7 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                     )
                     if (isTelevision) {
                         // Web default focus: the selected card, else the first.
-                        LaunchedEffect(kind) {
+                        TvDefaultFocusEffect(kind) {
                             tvGrid.focus(0, filteredWorks.indexOfFirst { it.id == selectedId }.coerceAtLeast(0))
                         }
                     }
@@ -4474,15 +4487,26 @@ private fun TelevisionSearchBody(
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
                         ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
                     } else {
+                        // Web `data-tv-grid` with `data-tv-grid-edge-left=".tv-search input"`: index navigation over three columns, LEFT in
+                        // the first column goes to the search field.
+                        val searchScope = rememberCoroutineScope()
+                        val resultsGrid = remember { TvGrid(searchScope) }
+                        val resultsState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                        resultsGrid.gridState = resultsState
+                        resultsGrid.count = current.value.works.size + current.value.playlists.size
+                        resultsGrid.fixedColumns = 3
+                        resultsGrid.onLeftEdge = { runCatching { searchFieldFocus.requestFocus() }.getOrDefault(false) }
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
+                            state = resultsState,
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(26.dp),
                             verticalArrangement = Arrangement.spacedBy(27.dp),
                             contentPadding = PaddingValues(bottom = 104.dp),
                         ) {
-                            items(current.value.works, key = { "work:${it.id}" }) { work ->
+                            itemsIndexed(current.value.works, key = { _, it -> "work:${it.id}" }) { workIndex, work ->
                                 WebSearchResultCard(
+                                    modifier = Modifier.tvGridItem(resultsGrid, workIndex),
                                     work = work,
                                     serverUrl = serverUrl,
                                     accessToken = accessToken,
@@ -4493,8 +4517,9 @@ private fun TelevisionSearchBody(
                                     onContext = { onContext(work) },
                                 )
                             }
-                            items(current.value.playlists, key = { "playlist:${it.id}" }) { playlist ->
+                            itemsIndexed(current.value.playlists, key = { _, it -> "playlist:${it.id}" }) { playlistIndex, playlist ->
                                 PlaylistCard(
+                                    modifier = Modifier.tvGridItem(resultsGrid, current.value.works.size + playlistIndex),
                                     playlist = playlist,
                                     onClick = { navController.navigate("playlists/${playlist.id}") },
                                     selected = selectedResultKey == "playlist:${playlist.id}",
@@ -4525,24 +4550,22 @@ private fun WebSearchResultCard(
     onSelected: () -> Unit,
     onClick: () -> Unit,
     onContext: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val lift = focused || selected
-    val artScale = rememberPlayarrFocusScale(focused = lift, focusedScale = 1.025f, label = "searchCardArt")
-    Column(
-        Modifier
+    // Focused media card: soft shadow and a draw-only lift on the content inside the focus target, no ring.
+    Box(
+        modifier
             .fillMaxWidth()
-            .graphicsLayer { if (lift) translationY = -6.dp.toPx() }
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
             .combinedClickable(onClick = { onSelected(); onClick() }, onLongClick = onContext),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .scale(artScale)
-                .clip(RoundedCornerShape(12.48.dp))
-                .background(WebSurfaceStrong),
+    Column(Modifier.fillMaxWidth().mediaCardLift(focused, TvCardMotions.Search)) {
+        WebShadowedBox(
+            shadows = if (focused) webSearchFocusShadows else webCardRestShadows,
+            shape = RoundedCornerShape(12.48.dp),
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            innerModifier = Modifier.background(WebSurfaceStrong),
         ) {
             AuthenticatedArtwork(
                 work = work,
@@ -4560,6 +4583,7 @@ private fun WebSearchResultCard(
             Text(work.title, color = WebInk, fontSize = 12.288.sp, fontWeight = FontWeight(650), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(work.playarrKindYearLabel(), color = WebInkMuted, fontSize = 8.448.sp, fontWeight = FontWeight(720), maxLines = 1)
         }
+    }
     }
 }
 
@@ -5493,6 +5517,7 @@ private fun ExperienceVideoDetailContent(
                     launchSettings = movieLaunchSettings,
                     onPlay = onPlay,
                     onOpenWork = onOpenWork,
+                    playFocus = playFocus,
                     modifier = Modifier
                         .width(1038.4.dp)
                         .fillMaxHeight()
@@ -6408,7 +6433,7 @@ internal fun SeriesEpisodeBrowser(
     }
     if (isTelevision && focusEpisodeId != null) {
         // Open with focus on the selected (next-up) tile, its season track scrolled into view.
-        LaunchedEffect(Unit) {
+        TvDefaultFocusEffect(Unit) {
             val season = seasons.indexOfFirst { s -> s.episodes.any { it.episode.id == focusEpisodeId } }
             if (season >= 0) tvRails.focus(season, seasons[season].episodes.indexOfFirst { it.episode.id == focusEpisodeId })
         }
@@ -6583,13 +6608,13 @@ private fun WebEpisodeDetailCard(
     val available = episode.mediaFileId != null
     val lift = focused || selected
     val artScale = rememberPlayarrFocusScale(focused = lift, focusedScale = 1.025f, label = "episodeArtFocus")
-    Column(
+    Box(
         modifier
             .width(268.dp)
-            .graphicsLayer { if (lift) translationY = -7.dp.toPx() }
             .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
             .clickable(enabled = available, onClick = onPlay),
     ) {
+    Column(Modifier.fillMaxWidth().mediaCardLift(lift)) {
         // `.tv-episode-art` box-shadow: a resting pair, and the larger pair while the episode is selected.
         WebShadowedBox(
             shadows = if (lift) {
@@ -6598,8 +6623,7 @@ private fun WebEpisodeDetailCard(
                 listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
             },
             shape = RoundedCornerShape(13.44.dp),
-            modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale)
-                .webFocusRing(focused, radius = 13.44.dp, color = WebCardFocusRing),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale),
             innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
             WebEpisodeArt {
@@ -6644,6 +6668,7 @@ private fun WebEpisodeDetailCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
     }
 }
 
@@ -6712,7 +6737,7 @@ private fun PhoneEpisodeCard(
 }
 
 @Composable
-private fun MovieDetailBrowser(
+internal fun MovieDetailBrowser(
     mediaFileId: String,
     chapters: List<MediaChapter>,
     credits: WorkCreditsResponse,
@@ -6724,8 +6749,18 @@ private fun MovieDetailBrowser(
     onPlay: (String, Long?, PlayarrPlaybackLaunchSettings?) -> Unit,
     onOpenWork: (String) -> Unit,
     modifier: Modifier = Modifier,
+    playFocus: FocusRequester? = null,
 ) {
     if (chapters.isEmpty() && credits.cast.isEmpty() && similarWorks.isEmpty()) return
+    // Web tracks: chapters then similar titles (the cast row has nothing to focus); UP/DOWN land on the closest tile by x,
+    // RIGHT stops at the end, LEFT from the first tile and UP from the first track reach the Play pill.
+    val scope = rememberCoroutineScope()
+    val tvRails = remember { TvRails(scope, TvRails.Vertical.ClosestX) }
+    val chaptersRail = if (chapters.isNotEmpty()) 0 else -1
+    val similarRail = if (similarWorks.isNotEmpty()) (if (chapters.isNotEmpty()) 1 else 0) else -1
+    tvRails.sizes = listOfNotNull(chapters.size.takeIf { chapters.isNotEmpty() }, similarWorks.size.takeIf { similarWorks.isNotEmpty() })
+    tvRails.onLeftEdge = { playFocus?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false }
+    tvRails.onUpEdge = { _ -> playFocus?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false }
     if (isTelevision) {
         // Web `.tv-media-track` stack: no panel, sections start at y = 540 and repeat every 314.3 dp.
         Column(
@@ -6736,10 +6771,12 @@ private fun MovieDetailBrowser(
                 WebMediaTrack(
                     title = playarrString(PlayarrString.DetailChapters),
                     count = playarrString(PlayarrString.DetailSceneMarkersCount, "count" to chapters.size),
+                    state = tvRails.rowState(chaptersRail),
                 ) {
-                    items(chapters, key = MediaChapter::index) { chapter ->
+                    itemsIndexed(chapters, key = { _, it -> it.index }) { chapterIndex, chapter ->
                         val label = chapter.title ?: playarrString(PlayarrString.DetailChapterNumber, "number" to chapter.index + 1)
                         WebEpisodeCard(
+                            modifier = Modifier.tvRailItem(tvRails, chaptersRail, chapterIndex),
                             onClick = { onPlay(mediaFileId, chapter.startMs, launchSettings) },
                             lead = formatPlayarrPlayerTime(chapter.startMs),
                             title = label,
@@ -6766,9 +6803,11 @@ private fun MovieDetailBrowser(
                         if (similarWorks.size == 1) PlayarrString.DetailTitlesCountOne else PlayarrString.DetailTitlesCountOther,
                         "count" to similarWorks.size,
                     ),
+                    state = tvRails.rowState(similarRail),
                 ) {
-                    items(similarWorks, key = Work::id) { work ->
+                    itemsIndexed(similarWorks, key = { _, it -> it.id }) { similarIndex, work ->
                         WebEpisodeCard(
+                            modifier = Modifier.tvRailItem(tvRails, similarRail, similarIndex),
                             onClick = { onOpenWork(work.id) },
                             lead = null,
                             title = work.title,
@@ -6860,15 +6899,21 @@ private fun MovieDetailBrowser(
  * the heading top; the whole section is 260.3 dp tall.
  */
 @Composable
-private fun WebMediaTrack(title: String, count: String, cards: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+private fun WebMediaTrack(
+    title: String,
+    count: String,
+    state: androidx.compose.foundation.lazy.LazyListState? = null,
+    cards: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
+) {
     Column {
         Column(Modifier.padding(start = 0.dp).height(45.5.dp)) {
             Text(title, color = WebInk, fontSize = 17.664.sp, fontWeight = FontWeight(610), letterSpacing = (-0.53).sp, lineHeight = 26.5.sp)
             Text(count, color = WebInkMuted, fontSize = 9.984.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 4.dp))
         }
         LazyRow(
+            state = state ?: androidx.compose.foundation.lazy.rememberLazyListState(),
             modifier = Modifier.padding(top = 17.2.dp),
-            contentPadding = PaddingValues(top = 18.dp, end = 24.dp),
+            contentPadding = PaddingValues(start = 4.dp, top = 18.dp, end = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(25.dp),
             content = cards,
         )
@@ -6882,19 +6927,21 @@ private fun WebEpisodeCard(
     lead: String?,
     title: String,
     badge: String?,
+    modifier: Modifier = Modifier,
     art: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    Column(
-        Modifier
+    Box(
+        modifier
             .width(268.dp)
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick),
     ) {
+    Column(Modifier.fillMaxWidth().mediaCardLift(focused)) {
         WebShadowedBox(
-            shadows = listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f))),
+            shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(13.44.dp),
-            modifier = Modifier.fillMaxWidth().height(150.8.dp).webFocusRing(focused, radius = 13.44.dp, color = WebCardFocusRing),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp),
             innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
             WebEpisodeArt { art() }
@@ -6917,6 +6964,7 @@ private fun WebEpisodeCard(
             }
             Text(title, color = WebInk, fontSize = 11.52.sp, fontWeight = FontWeight(610), letterSpacing = (-0.17).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
     }
 }
 
@@ -6986,34 +7034,39 @@ private fun SimilarWorksRail(
         ) {
             itemsIndexed(works, key = { _, work -> work.id }) { index, work ->
                 var tileFocused by remember { mutableStateOf(false) }
-                Column(Modifier.width(150.dp)) {
-                    Surface(
-                        onClick = { onOpenWork(work.id) },
-                        color = WebSurfaceSoft,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = (if (rails != null) Modifier.tvRailItem(rails, railIndex, index) else Modifier)
-                            .fillMaxWidth().aspectRatio(16f / 9f)
-                            .webFocusRing(tileFocused, radius = 10.dp, color = WebCardFocusRing)
-                            .onFocusChanged { tileFocused = it.isFocused },
-                    ) {
-                        AuthenticatedArtwork(
-                            work = work,
-                            kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
-                            serverUrl = serverUrl,
-                            accessToken = accessToken,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
+                // The focus target is the outer box; the lift and shadow are drawn on the content inside it.
+                Box(
+                    (if (rails != null) Modifier.tvRailItem(rails, railIndex, index) else Modifier)
+                        .width(150.dp)
+                        .onFocusChanged { tileFocused = it.isFocused }
+                        .clickable { onOpenWork(work.id) },
+                ) {
+                    Column(Modifier.fillMaxWidth().mediaCardLift(tileFocused)) {
+                        WebShadowedBox(
+                            shadows = if (tileFocused) webCardFocusShadows else webCardRestShadows,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                            innerModifier = Modifier.background(WebSurfaceSoft),
+                        ) {
+                            AuthenticatedArtwork(
+                                work = work,
+                                kinds = listOf(ImageKind.Backdrop, ImageKind.Poster),
+                                serverUrl = serverUrl,
+                                accessToken = accessToken,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        Text(
+                            work.title,
+                            color = WebInk,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 7.dp),
                         )
                     }
-                    Text(
-                        work.title,
-                        color = WebInk,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 7.dp),
-                    )
                 }
             }
         }

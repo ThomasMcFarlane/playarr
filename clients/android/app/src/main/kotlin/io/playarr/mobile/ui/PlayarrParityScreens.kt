@@ -655,13 +655,14 @@ internal fun PlaylistCard(
     accessToken: String? = null,
     selected: Boolean = false,
     onSelected: () -> Unit = {},
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val openLabel = playarrString(PlayarrString.PlaylistsOpenLabel, "name" to playlist.name)
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.45f)
             .scale(if (focused) FocusMotion.tileFocusScale else FocusMotion.restScale)

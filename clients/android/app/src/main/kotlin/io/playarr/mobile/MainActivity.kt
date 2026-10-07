@@ -196,11 +196,8 @@ class MainActivity : ComponentActivity() {
                     io.playarr.shared.designsystem.component.LocalPlayarrDarkTheme provides display.darkTheme,
                     io.playarr.shared.designsystem.component.LocalPlayarrFadeBackground provides io.playarr.mobile.ui.WebBackground,
                     io.playarr.shared.designsystem.component.LocalPlayarrFocusRing provides io.playarr.mobile.ui.WebFocusRing,
-                    androidx.compose.foundation.LocalIndication provides (
-                        if (isTelevision) io.playarr.shared.designsystem.component.PlayarrNoIndication
-                        else androidx.compose.foundation.LocalIndication.current
-                    ),
                 ) {
+                  io.playarr.shared.designsystem.component.PlayarrTelevisionIndication(enabled = isTelevision) {
                     androidx.compose.material3.ProvideTextStyle(
                         androidx.compose.ui.text.TextStyle(
                             fontFamily = io.playarr.mobile.ui.webFontFamily,
@@ -210,6 +207,7 @@ class MainActivity : ComponentActivity() {
                         PlayarrApp(isTelevision = isTelevision)
                     }
                     if (!isTelevision) AppUpdateEffect()
+                  }
                 }
             }
         }
