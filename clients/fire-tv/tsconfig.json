@@ -88,5 +88,6 @@
       "react": ["./node_modules/@types/react"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "jest.setup.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "jest.setup.ts"],
+  "exclude": ["src/vendor"]
 }

@@ -235,3 +235,16 @@ exactly what is verified vs assumed.
 For the platform-identity decision, the device-linking flow, the playback
 strategy and its fallback plans, and the SDK-on-other-Linux situation in more depth,
 see [`docs/architecture/clients/fire-tv.md`](../../docs/architecture/clients/fire-tv.md).
+
+## Playback prerequisites
+
+HLS (the fallback when a file cannot be direct-played) goes through Shaka Player for Vega, which Amazon distributes as a
+patch set rather than an npm package, under its own licence. Run `scripts/setup-shaka.sh` once before building: it
+downloads the pinned archive (SHA-256 checked), clones upstream Shaka at the matching tag, applies the patches, builds it
+and installs it, with Amazon's polyfills, into `src/vendor/shaka` (git-ignored). It needs git, python3, Java 21 and node.
+Without it the app still builds and direct-play titles work; HLS shows "Shaka Player for Vega is unavailable".
+
+The device advertises the containers and codecs it decodes (`src/lib/playbackCapabilities.ts`), so the server direct-plays
+whatever it can. On a Fire TV Stick 4K Select, Dolby (E-AC3, AC3) and DTS audio is sent as passthrough, and opening that
+audio stream failed on the test device (`audiostream_openPlaybackV2: shared memory allocation failed`), so titles whose
+only audio is Dolby or DTS do not play yet; AAC and MP3 titles do.

@@ -103,6 +103,17 @@ export interface ShakaNamespace {
  * playback error rather than crashing.
  */
 export function resolveShakaNamespace(): ShakaNamespace | undefined {
+  const existing = (globalThis as {shaka?: ShakaNamespace}).shaka;
+  if (existing) return existing;
+  // `scripts/setup-shaka.sh` generates src/vendor/shaka (git-ignored): Amazon's polyfills plus the patched Shaka build,
+  // which installs itself as globalThis.shaka. Metro treats a require inside try/catch as optional, so a checkout that
+  // never ran the script still bundles and simply reports Shaka as unavailable.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('../../vendor/shaka');
+  } catch (error) {
+    console.warn('[shakaAdapter] Shaka Player for Vega is not installed (run scripts/setup-shaka.sh)', error);
+  }
   return (globalThis as {shaka?: ShakaNamespace}).shaka;
 }
 

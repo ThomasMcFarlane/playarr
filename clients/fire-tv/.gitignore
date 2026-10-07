@@ -19,3 +19,7 @@ build/
 # Watchman, if run from inside this directory rather than the SDK container.
 .watchmanconfig.local
 buildinfo.json
+
+# Shaka Player for Vega: fetched and built by scripts/setup-shaka.sh (Amazon-licensed, never committed).
+src/vendor/
+.cache/

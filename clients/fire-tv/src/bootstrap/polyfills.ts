@@ -118,3 +118,14 @@ if (typeof patchable.DOMException === 'undefined') {
   }
   patchable.DOMException = PolyfilledDomException;
 }
+
+// navigator: React Native's `navigator` has only `product`. Shaka Player's platform detection reads `platform`,
+// `vendor`, `language` and `userAgent` and calls `.includes()` on them, so an undefined field is a fatal TypeError.
+{
+  const target = patchable as {navigator?: Record<string, unknown>};
+  const nav = (target.navigator ??= {});
+  nav.platform ??= 'Linux';
+  nav.vendor ??= '';
+  nav.language ??= 'en';
+  nav.userAgent ??= 'AFTCA001';
+}

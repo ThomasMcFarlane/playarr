@@ -53,6 +53,7 @@
     "base-64": "1.0.0",
     "fastestsmallesttextencoderdecoder": "1.0.22",
     "xmldom": "~0.6.0",
+    "@xmldom/xmldom": "0.8.15",
     "react-native-uuid": "^2.0.4",
     "@babel/runtime": "^7.24.0"
   },
