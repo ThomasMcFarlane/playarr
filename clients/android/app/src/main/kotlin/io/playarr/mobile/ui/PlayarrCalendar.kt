@@ -521,7 +521,7 @@ private fun PhoneCalendarPill(label: String, glyph: String? = null, enabled: Boo
     ) {
         Row(Modifier.padding(horizontal = 21.7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (glyph != null) Text(glyph, color = WebInkSoft, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle)
-            Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(if (glyph != null) 800 else 720), style = WebTextStyle, maxLines = 1)
+            Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(if (glyph != null) 900 else 720), style = WebTextStyle, maxLines = 1)
         }
     }
 }

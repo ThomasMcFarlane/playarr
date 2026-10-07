@@ -1,46 +1,43 @@
 # Android phone parity (web mobile layout)
 
-Reference: the web client at a 390x844 CSS viewport, DPR 3 (1170x2532 device pixels), signed in as `fx-viewer` on the
-fixture environment, captured with the shared tooling (`scripts/parity/capture-web.mjs`, no safe area, the web's own fonts,
-both themes). Candidate: the Android phone client (`sideload` debug build) on a headless emulator configured as 1170x2532
-at 480 dpi, so 390x844 dp equals the web CSS viewport. Screen ids and tolerance come from `scripts/parity/screens.json`; the
-diff is `scripts/parity/diff.mjs --theme both` (pixelmatch, threshold 0.1, `includeAA: false`).
+Reference: the committed web references `docs/parity/web/mobile/{light,dark}` (390x844 CSS viewport, DPR 3, 1170x2532 device
+pixels, signed in as `fx-viewer`, the web's own fonts). Candidate: the Android phone client (`sideload` debug build) on a
+headless emulator configured as 1170x2532 at 480 dpi, so 390x844 dp equals the web CSS viewport, against a FRESH fixture
+database (`scripts/fixtures/up.sh --fresh` in an empty `PLAYARR_FIXTURE_DIR`, seeded on the day of the frozen clock: re-seeding an
+old database keeps the wrong rail order). Screen ids and tolerance come from `scripts/parity/screens.json`; the diff is
+`scripts/parity/diff.mjs --theme both` (pixelmatch, threshold 0.1, `includeAA: false`).
 
 ## Result
 
-Mismatch against the web reference of the same theme, system bars masked (see below). The references were captured on the
-same fixture database as the Android captures (the home rails, the watch history and the calendar dates depend on the
-database, so a different fixture run changes them: measured against the committed `docs/parity/web/mobile` references, the Start
-watching rail on Home lists series first and the Test Movie C artwork is lighter, which is fixture data, not the client). Light and
-dark are both measured.
+Mismatch against the web reference of the same theme, system bars masked (see below). Light and dark are both measured.
 
 | Screen | Light | Dark | Status |
 | --- | ---: | ---: | --- |
 | home | 0.95% | 0.85% | pass |
-| movies | 0.53% | 0.53% | pass |
+| movies | 0.52% | 0.52% | pass |
 | series | 0.41% | 0.43% | pass |
-| film-detail | 1.00% | 0.99% | pass |
-| series-detail | 1.14% | 0.72% | above 1% |
-| search | 0.61% | 0.76% | pass |
-| calendar | 2.59% | 2.43% | above 1% |
-| settings | 1.35% | 1.36% | above 1% |
-| player-controls | 5.18% | 5.18% | above 1% |
-| player-quality-menu | 4.24% | 4.24% | above 1% |
+| film-detail | 1.00% | 0.98% | pass |
+| series-detail | 1.13% | 0.71% | above 1% |
+| search | 0.64% | 0.74% | pass |
+| calendar | 2.58% | 2.43% | above 1% |
+| settings | 1.02% | 1.04% | above 1% |
+| player-controls | 0.55% | 0.55% | pass |
+| player-quality-menu | 1.60% | 1.60% | above 1% |
 | profile-switcher | 0.97% | 0.97% | pass |
 | household-blocked | 1.02% | 0.99% | above 1% |
 
 The screens at or below 1% have no difference worth a justification. The rest:
 
-- **player-controls, player-quality-menu**: the two screens differ mostly inside the video frame. Chromium and Android's
-  MediaCodec convert the untagged test clip's YUV to RGB with different matrices (for example the cyan bar is
-  `0, 206, 229` on the web and `3, 229, 229` on Android), so a quarter of the screen differs by more than the pixelmatch
-  threshold (4.6% of the image on the controls screen, measured by masking the video band; everything outside it is 0.6%).
-  The quality menu also draws over a blurred frame on the web (`backdrop-filter`), which the phone panel does not reproduce.
-  Both are platform differences in the video decoder and compositor, not layout.
-- **calendar** (2.6% light, 2.4% dark), **settings** (1.4%), **series-detail** light (1.1%), **household-blocked** light
-  (1.0%): every text row sits within 1 to 3 px of the web (measured per row), and the remaining mismatch is glyph
-  anti-aliasing and sub-pixel advance differences between Chromium's and Android's rasterisers on the same font file, plus
-  1 px edges of pills and borders. No layout difference remains on these screens.
+- **player-controls, player-quality-menu**: the decoded video frame is an agreed platform exception, so the 16:9 video
+  rectangle is copied from the reference into the candidate (`scripts/parity/android-mobile/mask.py`) and the numbers above
+  are chrome only. Chromium and Android's MediaCodec convert the untagged test clip's YUV to RGB with different matrices (for
+  example the cyan bar is `0, 206, 229` on the web and `3, 229, 229` on Android), which is why the frame itself cannot match.
+  The quality menu blurs what is behind it on Android 12 and later (a window the size of the panel with the system background
+  blur on, 24 dp) and is drawn in place without blur below API 31, where the 90% tint hides most of the difference.
+- Screens still above 1% (series-detail, calendar, settings, household-blocked): every text row sits within 1 to 3 px of the web (measured per row)
+  and no layout difference remains; what is left is glyph anti-aliasing and sub-pixel advance differences between Chromium's
+  and Android's rasterisers on the same font file, and 1 px edges of pills and borders. They are not claimed as justified
+  beyond that; calendar is the largest (its agenda card and pill text carry most of it).
 
 ## What the phone client does to match
 
@@ -53,14 +50,15 @@ The screens at or below 1% have no difference worth a justification. The rest:
 - **System bars.** The web references are captured with no safe area, so there is nothing to emulate: the phone layout follows
   the web's own `max(14px, inset)` top rule and the diff masks the two OS-drawn bands (below). A debuggable build started
   with the launch extra `parity_no_insets` lays out with no system-bar insets; real devices always keep their insets.
-- **Player.** A debuggable build started with `parity_pause_at_ms` pauses the player at that position (2000 for the
+- **Player and masks.** The video rectangle of the two player screens is masked on both sides (see below). A debuggable build started with `parity_pause_at_ms` pauses the player at that position (2000 for the
   references) once it is playing, as the web capture does.
 
 ## System bar mask
 
 The status bar (top 72 px) and the gesture navigation bar (bottom 72 px) are drawn by Android, and the web has none.
 `scripts/parity/android-mobile/mask.py` copies those two bands from the reference into the candidate, so they never count as
-mismatch. Everything else is compared as captured.
+mismatch. On the two player screens the 16:9 video rectangle (0, 937 to 1170, 1595) is copied too, because the decoded frame
+is a platform difference. Everything else is compared as captured.
 
 ## Reproduce
 
