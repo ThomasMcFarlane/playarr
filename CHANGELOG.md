@@ -222,6 +222,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the hosted-link broker origin (`PLAYARR_HOSTED_LINK_ORIGIN`) and a frozen app clock for parity captures (`PLAYARR_PARITY_CLOCK`) are build-time settings, so on-device captures need no source patch; the production defaults are unchanged.
 - Xbox, Harmony, Roku and Fire TV: pressing Play opens the player directly (black stage, title, at most a small spinner) instead of a "Preparing playback"/"Loading" page; errors still show as before. BACK closes an open panel or the controls overlay first, and only the next BACK leaves playback.
 - tvOS release calendar renders the server's computed actions (Play or Resume, Open, Request, Watchlist) with their disabled reasons and active states instead of guessing from whether a file exists.
 - Roku: text is drawn in the web typeface (static Nunito Sans instances, JetBrains Mono for figures) instead of the system font.

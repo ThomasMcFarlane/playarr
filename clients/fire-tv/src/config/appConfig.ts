@@ -40,6 +40,15 @@
  * `requestHostedDeviceLink`'s accepted union) is the one place that would
  * need to change back.
  */
+/**
+ * The production hosted-link origin. A build may point at another broker (a bench or capture rig) by setting
+ * `PLAYARR_HOSTED_LINK_ORIGIN` when bundling: `babel.config.js` inlines that variable into this expression, so
+ * the device needs no source patch and an unset variable keeps this default. A plain `http://` origin is
+ * accepted (the clients must reach servers the user enters over http).
+ */
+export const DEFAULT_HOSTED_LINK_ORIGIN = 'https://playarr.app';
+const HOSTED_LINK_ORIGIN: string = process.env.PLAYARR_HOSTED_LINK_ORIGIN || DEFAULT_HOSTED_LINK_ORIGIN;
+
 export const APP_CONFIG = {
   /** Human-readable product name, for anywhere it's shown rather than sent on the wire. */
   clientName: 'Playarr for Fire TV',
@@ -58,7 +67,7 @@ export const APP_CONFIG = {
   /** See this file's top comment -- a real, first-class `ClientPlatform` variant, not a compatibility stand-in. */
   clientPlatform: 'tv-fire',
   /** Where the hosted (no-server-known-yet) device-linking flow lives -- see design doc §5.1. */
-  hostedLinkOrigin: 'https://playarr.app',
+  hostedLinkOrigin: HOSTED_LINK_ORIGIN,
 } as const;
 
 export type AppConfig = typeof APP_CONFIG;

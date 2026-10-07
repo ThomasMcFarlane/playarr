@@ -198,7 +198,10 @@ exactly what is verified vs assumed.
   and `src/components/` where each is used, matching the dependency table in
   the architecture doc.
 - `src/config/appConfig.ts`: the single file naming this app's
-  `ClientPlatform` identity (`'tv-fire'`) and hosted-link origin.
+  `ClientPlatform` identity (`'tv-fire'`) and hosted-link origin. The origin is
+  a build-time setting: bundle with `PLAYARR_HOSTED_LINK_ORIGIN=<origin>` to
+  point a bench build at another broker (plain `http://` is accepted); unset
+  keeps the production default.
 - `src/theme/`: design tokens (imported from `@playarr-tv/design-tokens`
   where possible, harvested from `clients/tv-web/web/src/styles/global.css`
   where the shared package has no colour palette) and the 1920×1080-baseline

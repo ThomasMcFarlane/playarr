@@ -21,6 +21,8 @@ const sharedRoot = path.resolve(projectRoot, '../tv-web/packages');
 const i18nRoot = path.resolve(projectRoot, '../tv-web/web/src/lib/i18n');
 
 module.exports = mergeConfig(getDefaultConfig(projectRoot), {
+  // The build-time settings are inlined at bundle time (babel.config.js); a different value must not reuse cached output.
+  cacheVersion: `build-settings:${process.env.PLAYARR_HOSTED_LINK_ORIGIN || 'default'}:${process.env.PLAYARR_PARITY_CLOCK || 'live'}`,
   watchFolders: [sharedRoot, i18nRoot],
   resolver: {
     // The shared packages' package.json files must be invisible to Metro.
