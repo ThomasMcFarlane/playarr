@@ -5719,7 +5719,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' through unhandled.
         if m.pcMenuOpen = true then return playerMenuKey(key)
         if key = "back"
-            ' BACK closes the menu (above), then the controls overlay; the next BACK exits.
+            ' BACK closes the controls overlay first; the next BACK exits (an open quality menu closes before this).
             if m.playerControls.visible
                 m.playerAutoHideTimer.control = "stop"
                 hidePlayerControls()
