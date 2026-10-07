@@ -1,4 +1,5 @@
 import type {
+  SeasonDetail,
   ResumeOption,
   ResumeOptionKind,
   ResumePlan,
@@ -115,4 +116,38 @@ export function resumePlayerState(
     mediaFileId: option.media_file_id,
     playlistItems,
   };
+}
+
+/** The episode the series page opens on, as a season number and an episode id. */
+export interface NextUpSelection {
+  seasonNumber: number;
+  episodeId: string;
+}
+
+/**
+ * The "next item to play" on a series page: the episode the server's resume plan
+ * (the same plan that drives the Play/Resume button) points at. Falls back to the
+ * first playable episode when nothing was watched, the plan is missing or
+ * unreadable, or its target is not in the catalogue. A fully watched series follows
+ * the plan too (the Play button offers "Watch again" with its own target).
+ */
+export function nextUpSelection(
+  seasons: readonly SeasonDetail[],
+  plan: ResumePlan | null | undefined,
+  seriesWorkId: string
+): NextUpSelection | null {
+  const playable = seasons.flatMap((season) =>
+    season.episodes
+      .filter((episode) => episode.media_file_id != null)
+      .map((episode) => ({ season, episode }))
+  );
+  const target = plan?.series_work_id === seriesWorkId ? plan.target : null;
+  const match = target
+    ? playable.find(({ episode }) => episode.episode.id === target.episode_id) ??
+      playable.find(({ episode }) => episode.media_file_id === target.media_file_id)
+    : undefined;
+  const chosen = match ?? playable[0];
+  return chosen
+    ? { seasonNumber: chosen.season.season.season_number, episodeId: chosen.episode.episode.id }
+    : null;
 }

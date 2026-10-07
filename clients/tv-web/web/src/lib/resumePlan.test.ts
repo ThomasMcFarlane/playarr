@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ResumeOption, ResumePlan, WorkDetail } from "@playarr-tv/api-client";
+import type { ResumeOption, ResumePlan, SeasonDetail, WorkDetail } from "@playarr-tv/api-client";
 import {
   formatLastWatched,
   isStackedPlan,
+  nextUpSelection,
   resumeButtonLabelKey,
   resumeButtonTitleKey,
   resumeOptionCaptionKey,
@@ -133,5 +134,77 @@ describe("resumePlayerState", () => {
   it("falls back to the episode number when the title is unknown", () => {
     const state = resumePlayerState(option({ title: null }), "Show", [], {}, t);
     expect(state.title).toContain("episodeNumber");
+  });
+});
+
+describe("nextUpSelection (the tile a series page opens on)", () => {
+  function season(number: number, episodes: Array<[string, string | null]>): SeasonDetail {
+    return {
+      season: { season_number: number },
+      episodes: episodes.map(([id, media], index) => ({
+        episode: { id, episode_number: index + 1 },
+        media_file_id: media,
+      })),
+    } as unknown as SeasonDetail;
+  }
+  const seasons = [
+    season(1, [["e11", "m11"], ["e12", "m12"], ["e13", "m13"]]),
+    season(2, [["e21", "m21"], ["e22", "m22"]]),
+  ];
+
+  it("points at the episode the Play button resumes, in a later season", () => {
+    const resume = plan({
+      target: option({ episode_id: "e21", media_file_id: "m21", season_number: 2, episode_number: 1 }),
+    });
+    expect(nextUpSelection(seasons, resume, "s")).toEqual({ seasonNumber: 2, episodeId: "e21" });
+  });
+
+  it("opens on the first playable episode when nothing was watched", () => {
+    const start = plan({
+      action: "start",
+      target: option({ episode_id: "e11", media_file_id: "m11", season_number: 1, episode_number: 1 }),
+    });
+    expect(nextUpSelection(seasons, start, "s")).toEqual({ seasonNumber: 1, episodeId: "e11" });
+  });
+
+  it("skips episodes without a media file when choosing the first one", () => {
+    const sparse = [season(1, [["e11", null], ["e12", "m12"]]), season(2, [["e21", "m21"]])];
+    expect(nextUpSelection(sparse, null, "s")).toEqual({ seasonNumber: 1, episodeId: "e12" });
+  });
+
+  it("follows the plan for a fully watched series (Watch again target)", () => {
+    const again = plan({
+      action: "restart",
+      target: option({ episode_id: "e11", media_file_id: "m11", season_number: 1, episode_number: 1 }),
+    });
+    expect(nextUpSelection(seasons, again, "s")).toEqual({ seasonNumber: 1, episodeId: "e11" });
+    const lastAgain = plan({
+      action: "restart",
+      target: option({ episode_id: "e22", media_file_id: "m22", season_number: 2, episode_number: 2 }),
+    });
+    expect(nextUpSelection(seasons, lastAgain, "s")).toEqual({ seasonNumber: 2, episodeId: "e22" });
+  });
+
+  it("matches by media file when the episode id is unknown", () => {
+    const byFile = plan({
+      target: option({ episode_id: "other", media_file_id: "m12", season_number: 1, episode_number: 2 }),
+    });
+    expect(nextUpSelection(seasons, byFile, "s")).toEqual({ seasonNumber: 1, episodeId: "e12" });
+  });
+
+  it("falls back to the first episode without a plan, for another series, or for an unknown target", () => {
+    const first = { seasonNumber: 1, episodeId: "e11" };
+    expect(nextUpSelection(seasons, null, "s")).toEqual(first);
+    expect(nextUpSelection(seasons, undefined, "s")).toEqual(first);
+    expect(nextUpSelection(seasons, plan({ series_work_id: "other" }), "s")).toEqual(first);
+    expect(
+      nextUpSelection(seasons, plan({ target: option({ episode_id: "gone", media_file_id: "gone" }) }), "s")
+    ).toEqual(first);
+    expect(nextUpSelection(seasons, plan({ target: null }), "s")).toEqual(first);
+  });
+
+  it("is null for a series with nothing playable", () => {
+    expect(nextUpSelection([], plan(), "s")).toBeNull();
+    expect(nextUpSelection([season(1, [["e11", null]])], plan(), "s")).toBeNull();
   });
 });

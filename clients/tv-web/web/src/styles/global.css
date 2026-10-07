@@ -31,6 +31,9 @@
   --screen-x: clamp(28px, 4.5vw, 92px);
   --screen-y: clamp(24px, calc(3.5 * var(--viewport-unit)), 54px);
   --focus-outline: #675961;
+  /* The ring painted around the focused card art / control, shared by Home, Library and the detail pages. */
+  --focus-ring-color: color-mix(in srgb, var(--accent, #c4a484) 90%, white);
+  --focus-ring-width: 3px;
   /*
    * Android TV's native WebView host overrides these from its measured
    * bounds because some WebView builds resolve viewport units to zero.
@@ -6471,7 +6474,7 @@ body[data-input-mode="remote"] :is(.tv-title-card, .tv-home-card, .tv-search-res
   :is(.tv-title-card-art, .tv-home-card-art, .tv-search-result-art) {
   transform: none !important;
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent, #c4a484) 90%, white),
+    0 0 0 var(--focus-ring-width) var(--focus-ring-color),
     0 18px 36px rgba(56, 38, 33, 0.28),
     0 8px 16px rgba(56, 38, 33, 0.16) !important;
 }
@@ -12680,4 +12683,34 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 .player-page.is-minimised:has(.player-shell-pip) {
   opacity: 0;
   pointer-events: none;
+}
+
+/*
+ * Title detail focus ring. The detail rules above reset `outline: 0` and rely on a lift or an
+ * inversion, which left the focused control without the ring Home and Library show. Cards paint
+ * the ring around their artwork (outlines follow the art's rounded corners and the card's
+ * overflow is not clipped); every other control paints it on itself. Same tokens as the
+ * remote-active card ring: --focus-ring-color and --focus-ring-width.
+ */
+.tv-episode-card:focus-visible .tv-episode-art {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+.tv-detail :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: 4px;
+}
+
+/* Touch layouts: autofocus (programmatic focus reports :focus-visible) must not look focused. */
+@media (max-width: 760px) and (hover: none) {
+  body:not([data-input-mode="remote"]) .tv-episode-card:focus-visible .tv-episode-art {
+    outline: 0;
+  }
+
+  body:not([data-input-mode="remote"])
+    .tv-detail
+    :is(a, button, input, select, textarea, [tabindex]):focus-visible:not(.tv-episode-card) {
+    outline: 0;
+  }
 }

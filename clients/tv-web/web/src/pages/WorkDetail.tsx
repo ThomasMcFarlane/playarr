@@ -48,6 +48,7 @@ import { ResumeChooserModal } from "../components/ResumeChooserModal";
 import {
   resumeButtonLabelKey,
   resumeButtonTitleKey,
+  nextUpSelection,
   resumePlayerState,
 } from "../lib/resumePlan";
 import { WatchStateOverlay } from "../components/WatchStateOverlay";
@@ -780,6 +781,7 @@ function SeasonEpisodeTrack({
   onNavigate,
   workSources,
   onChooseServer,
+  defaultFocusReady,
 }: {
   season: SeasonDetail;
   seriesTitle: string;
@@ -797,6 +799,8 @@ function SeasonEpisodeTrack({
   onNavigate: ReturnType<typeof useNavigationLayer>["captureLink"];
   workSources: JoinedWorkSource[];
   onChooseServer: (state: PlayerLocationState) => void;
+  /** False until the series' next-up episode is known, so default focus never lands on a placeholder. */
+  defaultFocusReady: boolean;
 }) {
   const { t } = useLanguage();
   const episodes = playableEpisodes(season);
@@ -926,7 +930,7 @@ function SeasonEpisodeTrack({
                   }
                 }}
                 aria-current={isSelected ? "true" : undefined}
-                data-tv-focus-default={isSelected ? true : undefined}
+                data-tv-focus-default={isSelected && defaultFocusReady ? true : undefined}
                 data-episode-id={episode.episode.id}
                 data-media-file-id={mediaFileId}
                 data-navigation-focus-key={`detail:${workId}:episode:${episode.episode.id}`}
@@ -1022,7 +1026,13 @@ export function WorkDetailPage() {
   const [movieDownloadOpen, setMovieDownloadOpen] = useState(false);
   const [movieDownloadBusy, setMovieDownloadBusy] = useState(false);
   const [resumePlan, setResumePlan] = useState<ResumePlan | null>(null);
+  // Series id whose resume plan request has settled (answered or failed): the next-up
+  // episode is only known from then on, so initial focus waits for it.
+  const [resumePlanSettledFor, setResumePlanSettledFor] = useState<string | null>(null);
   const [resumeChooserOpen, setResumeChooserOpen] = useState(false);
+  // The episode the viewer moved to on this page; later plan refreshes must not undo it.
+  const userSelectionRef = useRef<{ workId: string; episodeId: string } | null>(null);
+  const initialFocusDoneRef = useRef<string | null>(null);
   const resumeButtonRef = useRef<HTMLButtonElement>(null);
   const seriesBrowserRef = useRef<HTMLDivElement>(null);
   const moviePlaybackSettingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -1074,11 +1084,15 @@ export function WorkDetailPage() {
     client
       .getResumePlan(resumeSeriesId)
       .then((plan) => {
-        if (!cancelled) setResumePlan(plan);
+        if (cancelled) return;
+        setResumePlan(plan);
+        setResumePlanSettledFor(resumeSeriesId);
       })
       .catch(() => {
         // An older server has no resume plan: the page simply has no Start/Resume button.
-        if (!cancelled) setResumePlan(null);
+        if (cancelled) return;
+        setResumePlan(null);
+        setResumePlanSettledFor(resumeSeriesId);
       });
     return () => {
       cancelled = true;
@@ -1173,6 +1187,20 @@ export function WorkDetailPage() {
       : null;
   }, [seasons, selectedEpisodeId, selectedSeasonNumber, state]);
 
+  const nextUpReady = detailWorkId !== null && resumePlanSettledFor === detailWorkId;
+  const nextUp = useMemo(
+    () => (nextUpReady && detailWorkId ? nextUpSelection(seasons, resumePlan, detailWorkId) : null),
+    [detailWorkId, nextUpReady, resumePlan, seasons]
+  );
+  const nextUpEpisodeId = nextUp?.episodeId ?? null;
+  // Default focus (TV autofocus) may only mark the selected tile once the selection has caught up
+  // with the next-up episode; otherwise it could land on the placeholder first tile for a frame.
+  const defaultFocusReady =
+    nextUpReady &&
+    (requestedEpisodeId !== null ||
+      requestedMediaFileId !== null ||
+      selectedEpisodeId === nextUpEpisodeId);
+
   useEffect(() => {
     const requestedEpisode = seasons
       .flatMap((season) =>
@@ -1189,19 +1217,38 @@ export function WorkDetailPage() {
       return;
     }
 
+    const userSelection = userSelectionRef.current;
+    if (userSelection && userSelection.workId === detailWorkId) {
+      const kept = seasons
+        .flatMap((season) => playableEpisodes(season).map((episode) => ({ season, episode })))
+        .find(({ episode }) => episode.episode.id === userSelection.episodeId);
+      if (kept) {
+        setSelectedSeasonNumber(kept.season.season.season_number);
+        setSelectedEpisodeId(kept.episode.episode.id);
+        return;
+      }
+    }
+
+    // No explicit request: open on the next item to play (the episode the Play button
+    // resumes), which is the first playable episode when nothing was watched yet.
     const firstSeason = seasons[0];
-    setSelectedSeasonNumber(firstSeason?.season.season_number ?? null);
-    setSelectedEpisodeId(firstSeason ? playableEpisodes(firstSeason)[0]?.episode.id ?? null : null);
+    setSelectedSeasonNumber(nextUp?.seasonNumber ?? firstSeason?.season.season_number ?? null);
+    setSelectedEpisodeId(
+      nextUp?.episodeId ??
+        (firstSeason ? playableEpisodes(firstSeason)[0]?.episode.id ?? null : null)
+    );
   }, [
     requestedEpisodeId,
     requestedMediaFileId,
     seasons,
-    state.status === "ready" ? state.data.work.id : null,
+    nextUp,
+    detailWorkId,
   ]);
 
   useEffect(() => {
     if (navigationLayer.hasSnapshot) return;
     if (seasons.length === 0) return;
+    const workKey = detailWorkId;
     const frame = window.requestAnimationFrame(() => {
       const requestedCard =
         (requestedMediaFileId
@@ -1214,30 +1261,54 @@ export function WorkDetailPage() {
               `[data-episode-id="${CSS.escape(requestedEpisodeId)}"]`
             )
           : null);
-      const requestedTrack = requestedCard?.closest<HTMLElement>(".tv-media-track");
+      const nextUpCard =
+        !requestedCard && nextUpEpisodeId && initialFocusDoneRef.current !== workKey
+          ? seriesBrowserRef.current?.querySelector<HTMLElement>(
+              `[data-episode-id="${CSS.escape(nextUpEpisodeId)}"]`
+            )
+          : null;
+      const initialCard = requestedCard ?? nextUpCard ?? null;
+      const requestedTrack = initialCard?.closest<HTMLElement>(".tv-media-track");
       const targetTrack =
         requestedTrack ??
         seriesBrowserRef.current?.querySelector<HTMLElement>(".tv-media-track");
+      if (nextUpCard) {
+        // Do not steal focus the viewer already moved elsewhere on the page.
+        const active = document.activeElement;
+        const free =
+          active === document.body ||
+          active === null ||
+          active === nextUpCard ||
+          (active instanceof HTMLElement && active.closest(".app-nav") !== null);
+        if (!free) return;
+      }
       if (targetTrack) centreDetailTrack(targetTrack, "auto");
-      const rail = requestedCard?.closest<HTMLElement>(".tv-episode-rail");
-      if (requestedCard && rail) {
+      const rail = initialCard?.closest<HTMLElement>(".tv-episode-rail");
+      if (initialCard && rail) {
         rail.scrollTo({
           left:
-            requestedCard.offsetLeft +
-            requestedCard.offsetWidth / 2 -
+            initialCard.offsetLeft +
+            initialCard.offsetWidth / 2 -
             rail.clientWidth / 2,
           behavior: "auto",
         });
-        requestedCard.focus({ preventScroll: true });
+        initialCard.focus({ preventScroll: true });
+        // Stacked (phone) layouts scroll the page, not the track surface: bring the tile into view.
+        const cardRect = initialCard.getBoundingClientRect();
+        if (cardRect.top < 0 || cardRect.bottom > window.innerHeight) {
+          initialCard.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+        }
+        if (nextUpCard) initialFocusDoneRef.current = workKey;
       }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [
     requestedMediaFileId,
     requestedEpisodeId,
+    nextUpEpisodeId,
     seasons.length,
     navigationLayer.hasSnapshot,
-    state.status === "ready" ? state.data.work.id : null,
+    detailWorkId,
   ]);
 
   useEffect(() => {
@@ -1976,7 +2047,9 @@ export function WorkDetailPage() {
               onNavigate={navigationLayer.captureLink}
               workSources={workSources}
               onChooseServer={setPendingServerPlayback}
+              defaultFocusReady={defaultFocusReady}
               onSelect={(seasonNumber, episodeId) => {
+                userSelectionRef.current = { workId: work.id, episodeId };
                 setSelectedSeasonNumber(seasonNumber);
                 setSelectedEpisodeId(episodeId);
               }}

@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web TV: the series detail page now shows the shared focus ring on every focused control and tile (play/resume, watchlist, playlist, season download, episodes, cast and similar titles), and opens focused on the next item to play (the episode the Play button resumes, in its season, scrolled into view) instead of the first episode. Returning to the page restores the last focus.
 - Fire TV client: poster and backdrop artwork now loads on a real device (the artwork URL had a double slash after the server address, which the server answered with 404, so every image stayed a grey box).
 - Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.
 - Android TV: the QR sign-in screen no longer stops on "The Playarr Server session expired before it could be saved". When the code or the server's device code expires, it silently fetches a new code and QR and keeps polling, as the web client does. Network and server blips are retried with backoff (2 s doubling to 30 s) without an error, and the QR path never asks for a server URL. Only an explicit denial on the other device shows an error.
@@ -2352,6 +2353,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Web TV: unit tests for the next-up selection and source tests for the detail-page focus ring; the series-detail TV parity references were recaptured for the focus ring on the first tile.
 - Unit tests for the self-renewing QR sign-in state machine (`QrPairingFlowTest`): hosted code expiry, server device-code expiry, denial, request and poll blips, backoff cap; plus a Fire TV `LinkScreen` expiry-renewal test.
 - Roku: add `scripts/parity/roku/capture.mjs` (device screenshots through the dev installer, in the layout `diff.mjs` reads) and the first dark-theme parity table in `docs/parity/roku/`.
 - `PlayDistributionPolicyTest` now asserts the Play flavour allows cleartext, and `scripts/ci/check-cleartext-policy.sh` (run in CI) checks the Android, iOS, tvOS, Xbox and Tizen configuration.
