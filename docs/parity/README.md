@@ -77,14 +77,18 @@ Known source of difference, which is data and not layout: the calendar shows dat
 and the seeding day (the unaired episode is seeded three days ahead), so seed the fixture on the capture day or
 pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
 
-Reproducibility: two consecutive captures of the same fixture database are identical to within 0.05% of pixels per
-screen (the repeat of the dark mobile set with the bundled fonts differed by 0.00% on every screen), so the 1% budget
-leaves room for real layout differences only. Rail order and artwork depend on the fixture database, which is why
-`seed.mjs` registers and syncs the sources one after another, each awaited (a race between the background syncs used
-to change the order of the home rails) and artwork is generated from fixed palettes. The references were captured for
-both themes on one fresh database from current main with the bundled fonts, the fixture seeded on the day of the
-frozen clock (2026-10-07; the calendar's unaired episode is seeded three days ahead) and
-`PLAYARR_FIXTURE_CLIP_SECONDS=60`. Capture the web again after changing the fixtures or the web client.
+Reproducibility: two fresh fixture databases in different directories (separate media, art and ports) produced
+captures that differ by at most 0.01% of pixels on every one of the 48 screens, so the 1% budget leaves room for real
+layout differences only. What makes that true: artwork is generated with a pinned `gradients` seed (the filter's random
+start made every PNG differ byte for byte), `seed.mjs` registers and syncs radarr, then sonarr, then dubarr one after
+another so the home rails have the same order (the rails sort by `added_at` descending, ties by title), avatars are
+pinned, captures swallow playback progress writes, and the capture waits for images and for the app's own scroll
+position to settle. `up.sh` regenerates media and artwork when `media.mjs`, `art.mjs`, `catalog.mjs` or the clip
+length changed (a stamp file), so a stale media directory cannot leak into a fixture; seed a database with
+`--fresh`, because `added_at` is fixed when a title is first synced. The references were captured for both themes on
+one fresh database from current main with the bundled fonts, the fixture seeded on the day of the frozen clock
+(2026-10-07; the calendar's unaired episode is seeded three days ahead) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
+Capture the web again after changing the fixtures or the web client.
 
 ## Design font (every native client must embed it)
 

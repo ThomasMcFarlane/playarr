@@ -861,6 +861,10 @@ internal enum class PlayarrString(
     PlayerChannelsStereo("Stereo", "สเตอริโอ", "ステレオ"),
     PlayerQualityMenuLabel("Playback quality", "คุณภาพการเล่น", "再生画質"),
     PlayerQualityHeading("Quality", "คุณภาพ", "画質"),
+    PlayerMute("Mute", "ปิดเสียง", "ミュート"),
+    PlayerUnmute("Unmute", "เปิดเสียง", "ミュート解除"),
+    PlayerEnterFullscreen("Enter full screen", "เต็มหน้าจอ", "全画面表示"),
+    PlayerExitFullscreen("Exit full screen", "ออกจากเต็มหน้าจอ", "全画面表示を終了"),
     PlayerQualitySource("Source quality", "คุณภาพต้นฉบับ", "元の画質"),
     PlayerPlaylistLabelSingular(
         "Playlist: {{count}} item",
@@ -1678,6 +1682,7 @@ internal enum class PlayarrString(
     ProfilesSignOut("Sign out", "ออกจากระบบ", "サインアウト"),
     ProfilesSignIn("Sign in", "เข้าสู่ระบบ", "サインイン"),
     ProfilesAddAnother("Add another profile", "เพิ่มโปรไฟล์อื่น", "プロフィールを追加"),
+    ProfilesClients("Clients", "ไคลเอนต์", "クライアント"),
     ProfilesSwitchProfile("Switch profile", "สลับโปรไฟล์", "プロフィールを切り替え"),
     ProfilesEnterPin("Enter four-digit PIN", "ป้อน PIN 4 หลัก", "4桁のPINを入力"),
     ProfilesPinNotAccepted(

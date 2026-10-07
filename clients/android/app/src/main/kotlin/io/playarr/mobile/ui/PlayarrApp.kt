@@ -323,6 +323,11 @@ internal class LoginViewModel @Inject constructor(
                     ),
                 )
                 tokenStore.signIn(response.toTokenResponse(), response.userId, trimmedUsername, normalisedUrl, deviceId)
+                syncProfileDisplayName(
+                    savedName = trimmedUsername,
+                    listProfiles = { api.listAvailableProfiles() },
+                    saveIdentity = { id, name -> tokenStore.saveIdentity(id, name, normalisedUrl) },
+                )
                 _state.value = LoginState.Idle
             } catch (error: Exception) {
                 _state.value = LoginState.Failed(loginFailure(error))

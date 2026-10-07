@@ -13,6 +13,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
+- Web: after a session restore the profile name is resolved from the server's display name instead of staying the typed username or the Viewer placeholder.
+- The merge train now restores a PR branch to its pre-fold head whenever it blocks the PR or main moves after the fold, so folded TASKS/CHANGELOG commits no longer stay on branches and conflict on the next merge of main.
+- TV Home: the Customise Home button is no longer painted over (and blocked) by the full-height rails layer.
 - Phone profile page: the theme and language selectors sit in the logo row instead of covering the "Who's watching?" heading.
 - TV QR sign-in with an `http://` Playarr Server: the server's default verification page is now its own `/tv/link` (reachable over the same scheme), the hosted `playarr.app/link` page hands off to `http://<server>/tv/link?user_code=...` with a one-step explanation, the hosted link endpoints allow cross-origin calls so that page can report the approval back, and the server-hosted client no longer rewrites a public `http://` address to the relay name.
 - VIDAA (and any HTTPS-hosted launcher): an `http://` Playarr Server now works. The server serves the web client itself at `/tv/` (same scheme as the server, so no mixed content), the image and release tarball ship it as `web/tv/`, and the hosted sign-in links to `http://<server>/tv/` with a one-step explanation when it detects an `http://` server instead of failing silently.
@@ -78,6 +82,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iOS: embeds the web's design fonts (Nunito Sans and JetBrains Mono, SIL Open Font License 1.1, variable builds) and draws the web-style screens with them at the exact CSS weights.
 - tvOS: Downloads, Watchlist and Requests pages on the web TV layout, with real watchlist and request data (PlayarrKit `listWatchlistItems`, `listMyRequests`).
 - iOS: a Request latency page in Settings, matching the web page (per-route HTTP latency for admins, with the "Admins only" state for other users), backed by a new `HttpLatencyClient` in PlayarrKit with unit tests.
 - Apple parity workflow: captures both themes, a web layout dump per screen, a player screen pair (controls, quality menu) with the video hidden, and the household blocked screen (fx-child-locked).
@@ -201,6 +206,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fixtures: artwork is generated with a pinned gradient seed and media or artwork is regenerated when its generator changes, so two fresh fixture databases produce identical parity captures; the web reference captures were refreshed (bundled fonts, display name, settled scroll).
+- Android: the profile chip and profile pages show the server's display name, resolved after sign-in and when a saved session is restored, instead of the username typed at sign-in.
+- Android phone: the client uses the web font and the web top-inset rules, the calendar offers Play and Resume, and the profile page follows the web phone layout with the theme selector and a Clients link.
 - Android TV: series detail uses the web episode rail and ink Start pill with the availability note between the meta chips and the synopsis, and the player quality menu is the web popover with the Original choice over the Low, Medium and High matrix instead of a side panel.
 - Web: Nunito Sans and JetBrains Mono are now bundled as self-hosted variable webfonts (SIL OFL) and lead the font stacks, so the UI no longer depends on a platform-specific font; the parity references were re-captured with them.
 - Pixel parity tooling now covers the light and dark themes: `capture-web.mjs --theme`, theme-aware `diff.mjs` and `screens.json`, web references under `docs/parity/web/<layout>/<theme>/`, and a deterministic source sync order in the fixture seed.
@@ -2311,6 +2319,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
 - Regenerated the `@2x` architecture diagram PNGs from the SQLite-only SVGs, and corrected docs left over from the Postgres era: the backup description on the site (opt-in, age-encrypted, local unless an S3 destination is configured, offline CLI restore), the Kubernetes tier (StatefulSet, volume claim template, no Secret hook), the JWT secret fallback, the multi-node locking claims and the stale persistence gaps in the architecture overview.
 - `sqlx-postgres` stays in `Cargo.lock` because the lockfile records sqlx's optional dependencies whatever the features; it is not in the build graph.

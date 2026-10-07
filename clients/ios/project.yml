@@ -27,6 +27,10 @@ targets:
         buildPhase: resources
       - path: Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
+      - path: Resources/Fonts/NunitoSans-Variable.ttf
+        buildPhase: resources
+      - path: Resources/Fonts/JetBrainsMono-Variable.ttf
+        buildPhase: resources
     dependencies:
       - package: PlayarrKit
         product: PlayarrKit

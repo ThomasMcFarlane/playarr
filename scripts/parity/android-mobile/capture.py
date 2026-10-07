@@ -2,8 +2,9 @@
 """Drive the Android phone client through the parity screens and screencap each one.
 
 Prerequisites (see docs/parity/android-mobile/README.md): an emulator at 1170x2532, 480 dpi
-(390x844 dp), the sideload debug APK installed and signed in as fx-viewer, `adb` on PATH
-(ANDROID_SERIAL selects the device). Usage: capture.py <out-dir> <screen-id>...
+(390x844 dp), the sideload debug APK installed, signed in as fx-viewer and launched by capture.sh (which sets the theme
+and the debug launch extras), `adb` on PATH (ANDROID_SERIAL selects the device).
+Usage: capture.py <out-dir> <screen-id>...
 Screen ids follow scripts/parity/screens.json. Taps use uiautomator content descriptions
 where the bottom navigation exposes them, and fixed 1170x2532 pixel positions otherwise.
 """
@@ -17,6 +18,15 @@ def dump():
     return sh("cat", "/sdcard/u.xml")
 
 def find(text=None, desc=None, contains=None):
+    for _ in range(4):
+        xml = dump()
+        if "isn&apos;t responding" not in xml and "isn't responding" not in xml:
+            break
+        # A loaded host makes the emulator's system apps ANR; keep waiting rather than letting the dialog cover the screen.
+        for m in re.finditer(r'text="Wait"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml):
+            a, b, e, f = map(int, m.groups())
+            sh("input", "tap", str((a + e) // 2), str((b + f) // 2))
+        time.sleep(3)
     for m in re.finditer(r'<node [^>]*?text="([^"]*)"[^>]*?content-desc="([^"]*)"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', dump()):
         t, c, a, b, e, f = m.groups()
         if (text and t == text) or (desc and c == desc) or (contains and (contains in t or contains in c)):
@@ -50,11 +60,11 @@ def main(out, screens):
             tap(desc="Movies")
         elif s == "calendar":
             # Calendar is the ninth navigation item: scroll the bar until it is on screen.
-            sh("input", "swipe", "1000", "2350", "100", "2350", "250"); time.sleep(1)
+            sh("input", "swipe", "1000", "2420", "100", "2420", "250"); time.sleep(1)
             tap(desc="Calendar"); time.sleep(1.5)
-            sh("input", "swipe", "100", "2350", "1000", "2350", "250")  # scroll the bar back, as the web reference shows it
+            sh("input", "swipe", "100", "2420", "1000", "2420", "250")  # scroll the bar back, as the web reference shows it
         elif s == "search":
-            tap(desc="Search"); time.sleep(1); tap_xy(585, 425); sh("input", "text", "Sample"); sh("input", "keyevent", "4")
+            tap(desc="Search"); time.sleep(1); tap_xy(585, 395); sh("input", "text", "Sample"); sh("input", "keyevent", "4")
         elif s == "film-detail":
             tap(desc="Movies"); time.sleep(1.5); tap(text="Test Movie A")
         elif s == "series-detail":
@@ -65,10 +75,12 @@ def main(out, screens):
             tap(contains="Profiles for")
         elif s == "settings":
             tap(contains="Profiles for"); time.sleep(2); tap_xy(159, 1299)  # gear on the profile picker
-        elif s == "player-controls":
+        elif s in ("player-controls", "player-quality-menu"):
+            # Debug launch extra parity_pause_at_ms=2000 pauses the player at 2.0 s once it is playing.
             tap(desc="Movies"); time.sleep(1.5); tap(text="Test Movie A"); time.sleep(2.5)
-            tap_xy(370, 1415)  # primary Play / Resume button
-            time.sleep(4); tap_xy(585, 1200)  # reveal controls
+            tap(text="Play"); time.sleep(12)
+            if s == "player-quality-menu":
+                tap_xy(1047, 2295); time.sleep(1.5)  # the quality button, 42 px box at (328, 744)
         else:
             print("unsupported screen", s); continue
         shot(out, s)
