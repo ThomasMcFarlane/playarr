@@ -521,7 +521,7 @@ private fun PhoneCalendarPill(label: String, glyph: String? = null, enabled: Boo
     ) {
         Row(Modifier.padding(horizontal = 21.7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (glyph != null) Text(glyph, color = WebInkSoft, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle)
-            Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720), style = WebTextStyle, maxLines = 1)
+            Text(label, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(if (glyph != null) 800 else 720), style = WebTextStyle, maxLines = 1)
         }
     }
 }
@@ -549,7 +549,7 @@ private fun PhoneCalendarEntry(item: CalendarItem, selected: Boolean, zone: Zone
         border = if (selected) BorderStroke(2.dp, WebInk) else BorderStroke(1.dp, WebPillBorder),
     ) {
         Row(Modifier.padding(horizontal = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            CalendarPoster(entry.posterUrl, Modifier.size(width = 40.dp, height = 60.dp))
+            CalendarPoster(entry.posterUrl, Modifier.size(width = 40.dp, height = 60.dp).clip(RoundedCornerShape(4.dp)))
             Column(Modifier.weight(1f).padding(start = 14.4.dp)) {
                 Text(item.title, color = WebInk, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight(640), style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(calendarItemSubtitle(item), color = WebInkSoft, fontSize = 16.sp, lineHeight = 24.sp, style = WebTextStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)

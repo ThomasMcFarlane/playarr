@@ -3847,7 +3847,7 @@ private fun PhoneSettingsIndex(onOpen: (SettingsSection) -> Unit) {
                             fontWeight = FontWeight(480), letterSpacing = (-0.56).sp, style = WebTextStyle, maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(3.4.dp))
+                        Spacer(Modifier.height(2.1.dp))
                         Text(
                             playarrString(description), color = WebInkMuted, fontSize = 10.88.sp, lineHeight = 15.776.sp,
                             style = WebTextStyle, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
