@@ -140,6 +140,7 @@ struct PlayerView: View {
         }
         // Countdown pauses (does not reset) while the app is backgrounded.
         .onChange(of: scenePhase) { _, phase in
+            if phase != .active { viewModel?.didEnterBackground() }
             guard let controller = viewModel?.endOfPlayback else { return }
             if phase == .active { controller.resumeTimer() } else { controller.stopTimer() }
         }
