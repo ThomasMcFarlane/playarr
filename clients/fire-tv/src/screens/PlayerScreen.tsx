@@ -58,13 +58,19 @@
  */
 import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState} from 'react';
 import {ActivityIndicator, Pressable, StyleSheet, Text, View} from 'react-native';
+import type {PlaybackQualityOption} from '@playarr-tv/api-client';
 import type {PlaybackEventKind} from '@playarr-tv/api-client';
 import {usePlaybackInfo} from '@playarr-tv/api-client/react';
 import {TokenStore} from '@playarr-tv/device-auth';
 import type {PlaybackEngineState} from '@playarr-tv/player-core';
 import {useApiClient} from '../api/ApiClientProvider';
 import {ensureFireTvAccessToken} from '../auth/session';
-import {useAppForeground, useBackHandler, useRemoteKey} from '../platform';
+import {useAppForeground, useRemoteKey} from '../platform';
+import {TvFocusScope, focusNode} from '../platform/focus';
+import {useBackLayer} from '../navigation/backPolicy';
+import {PlayerChrome, type ChromeControl} from '../player/PlayerChrome';
+import {QualityMenu, originalLabel} from '../player/QualityMenu';
+import {Sheet, SheetOption} from '../tv/Sheet';
 import {getSharedVegaPlaybackEngine} from '../platform/media/VegaPlaybackEngine';
 import {VegaVideoSurface} from '../platform/media/VegaVideoSurface';
 import {VEGA_PLAYBACK_CAPABILITIES} from '../lib/playbackCapabilities';
@@ -94,6 +100,8 @@ export interface PlayerScreenProps {
   userId?: string;
   /** Called when the user backs out of a visible player. NOT called for a programmatic `hide()`/`stop()` -- see this file's own top comment for the Back-vs-Stop distinction. */
   onClose?: () => void;
+  /** Called whenever the player's surface appears or goes away (the shell hides the page under it while it is up). */
+  onVisibleChange?: (visible: boolean) => void;
 }
 
 function formatClock(totalSeconds: number): string {
@@ -113,7 +121,7 @@ interface ActiveSession {
 }
 
 export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(function PlayerScreen(
-  {userId, onClose},
+  {userId, onClose, onVisibleChange},
   ref
 ): JSX.Element | null {
   const client = useApiClient();
@@ -131,12 +139,23 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   const [launchOptions, setLaunchOptions] = useState<PlayerLaunchOptions>({});
   const [visible, setVisible] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [focusedControl, setFocusedControl] = useState<ChromeControl | null>('play');
+  const [menu, setMenu] = useState<'quality' | 'subtitles' | null>(null);
+  const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [quality, setQuality] = useState<{id: string; profile?: string}>({id: 'original'});
   const [engineState, setEngineState] = useState<PlaybackEngineState>(() => engine.getState());
 
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
+  useEffect(() => {
+    onVisibleChange?.(visible);
+  }, [visible, onVisibleChange]);
 
-  const negotiation = usePlaybackInfo(client, mediaFileId ?? undefined, VEGA_PLAYBACK_CAPABILITIES);
+  const negotiation = usePlaybackInfo(
+    client,
+    mediaFileId ?? undefined,
+    quality.profile ? {...VEGA_PLAYBACK_CAPABILITIES, profile: quality.profile, forceTranscode: true} : VEGA_PLAYBACK_CAPABILITIES,
+  );
 
   const loadedSessionIdRef = useRef<string | null>(null);
   const sessionRef = useRef<ActiveSession | null>(null);
@@ -345,6 +364,7 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
     );
     clearActivePlayerSession();
     setVisible(false);
+    setMenu(null);
     // Clearing `mediaFileId` (rather than leaving it set) is what makes a
     // later `show()` call for the SAME title negotiate a genuinely fresh
     // session instead of silently reusing the one `closeSession` just
@@ -359,6 +379,10 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
   const show = useCallback((id: string, options?: PlayerLaunchOptions) => {
     setControlsVisible(true);
+    setFocusedControl('play');
+    setMenu(null);
+    setSeekTarget(null);
+    setQuality({id: 'original'});
     setMediaFileId(id);
     setLaunchOptions(options ?? {});
     setVisible(true);
@@ -373,37 +397,142 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
   useImperativeHandle(ref, () => ({show, hide, stop, isVisible}), [show, hide, stop, isVisible]);
 
-  useBackHandler(() => {
-    if (!visible) return false;
-    // BACK closes the controls overlay first; the next BACK exits.
-    if (resolveBack(controlsVisible) === 'hide-controls') {
+  // ---- Controls: visibility, key handling, layered Back (docs: PLAYER-SPEC) ----------------------------------------
+  const controlsRef = useRef(controlsVisible);
+  controlsRef.current = controlsVisible;
+  const swallowPress = useRef(false);
+  const lastInputAt = useRef(Date.now());
+  const qualityPillRef = useRef<View>(null);
+  const playRef = useRef<View>(null);
+  const rootRef = useRef<View>(null);
+  const subtitlesRef = useRef<View>(null);
+
+  const reveal = useCallback(() => {
+    lastInputAt.current = Date.now();
+    setControlsVisible(true);
+  }, []);
+
+  // Back unwinds one layer per press: an open menu closes first (its own layer), then the controls hide, then playback exits.
+  useBackLayer(visible, () => {
+    if (controlsRef.current) {
       setControlsVisible(false);
-      return true;
+      return;
     }
-    // BACK exits playback: stop audio and video and flush progress first.
     void stop().then(() => onClose?.());
-    return true;
   });
+
+  // Auto-hide after about five seconds without input while playing; never while paused or with a menu open.
+  useEffect(() => {
+    if (!visible || !controlsVisible || menu !== null || engineState.state !== 'playing' || seekTarget !== null) return undefined;
+    const timer = setInterval(() => {
+      if (Date.now() - lastInputAt.current >= 5000) setControlsVisible(false);
+    }, 500);
+    return () => clearInterval(timer);
+  }, [visible, controlsVisible, menu, engineState.state, seekTarget]);
+
+  // The page under the player stays mounted and focusable: put focus on Play once the controls are up (the focus guide traps the D-pad).
+  useEffect(() => {
+    if (!visible) return undefined;
+    const timer = setTimeout(() => focusNode(playRef), 150);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [visible]);
+
+  const togglePlay = useCallback(() => {
+    void (engineState.state === 'playing' ? engine.pause() : engine.play());
+  }, [engine, engineState.state]);
+
+  // Seeking: each press moves a pending target; the seek itself commits once the viewer settles (rapid presses, one request).
+  const seekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seekStreak = useRef({count: 0, at: 0});
+  const stepSeek = useCallback(
+    (direction: 1 | -1, fromKey: boolean) => {
+      const now = Date.now();
+      const streak = seekStreak.current;
+      streak.count = now - streak.at < 350 ? streak.count + 1 : 0;
+      streak.at = now;
+      const step = fromKey ? 10 * Math.min(6, 1 + Math.floor(streak.count / 4)) : 10;
+      setSeekTarget((current) => {
+        const base = current ?? latestPlaybackRef.current.positionMs / 1000;
+        const duration = latestPlaybackRef.current.durationMs / 1000;
+        const next = Math.max(0, Math.min(duration > 0 ? duration : Number.MAX_SAFE_INTEGER, base + direction * step));
+        if (seekTimer.current) clearTimeout(seekTimer.current);
+        seekTimer.current = setTimeout(() => {
+          seekTimer.current = null;
+          void engine.seek(next);
+          setSeekTarget(null);
+        }, 450);
+        return next;
+      });
+    },
+    [engine],
+  );
+  useEffect(
+    () => () => {
+      if (seekTimer.current) clearTimeout(seekTimer.current);
+    },
+    [],
+  );
 
   useRemoteKey((key) => {
     if (!visible) return;
-    setControlsVisible(true);
+    // The dedicated Play/Pause key always toggles playback and shows the controls.
     if (key === 'playPause') {
-      void (engineState.state === 'playing' ? engine.pause() : engine.play());
-    } else if (key === 'skipForward') {
-      void engine.seek(engineState.currentTimeSeconds + 10);
-    } else if (key === 'skipBackward') {
-      void engine.seek(Math.max(0, engineState.currentTimeSeconds - 10));
+      reveal();
+      togglePlay();
+      return;
     }
+    if (key === 'skipForward' || key === 'skipBackward') {
+      reveal();
+      stepSeek(key === 'skipForward' ? 1 : -1, true);
+      return;
+    }
+    if (key === 'back' || key === 'menu') return;
+    // The first input with the controls hidden only reveals them: it must not pause, seek or activate anything.
+    if (!controlsRef.current) {
+      swallowPress.current = true;
+      setTimeout(() => {
+        swallowPress.current = false;
+      }, 400);
+      reveal();
+      return;
+    }
+    reveal();
+    if (focusedControl === 'scrubber' && menu === null && (key === 'left' || key === 'right')) stepSeek(key === 'right' ? 1 : -1, true);
   });
 
-  const cycleSubtitles = useCallback(() => {
-    const tracks = engineState.subtitleTracks;
-    if (tracks.length === 0) return;
-    const currentIndex = tracks.findIndex((track) => track.id === engineState.selectedSubtitleTrackId);
-    const nextTrack = currentIndex + 1 < tracks.length ? tracks[currentIndex + 1] : undefined;
-    void engine.selectSubtitleTrack(nextTrack?.id ?? null);
-  }, [engine, engineState.subtitleTracks, engineState.selectedSubtitleTrackId]);
+  const guarded = useCallback((action: () => void) => () => {
+    if (swallowPress.current) {
+      swallowPress.current = false;
+      return;
+    }
+    action();
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    const opener = menu;
+    setMenu(null);
+    // Focus returns to the control that opened the menu.
+    setTimeout(() => focusNode(opener === 'quality' ? qualityPillRef : subtitlesRef), 50);
+  }, [menu]);
+
+  const selectQuality = useCallback(
+    (option: PlaybackQualityOption) => {
+      setMenu(null);
+      if (option.id === quality.id) return;
+      // A new quality is a new negotiation: the player reloads at the position it was at.
+      setLaunchOptions((current) => ({...current, startPositionSeconds: latestPlaybackRef.current.positionMs / 1000}));
+      setQuality({id: option.id, profile: option.profile ?? undefined});
+      setTimeout(() => focusNode(qualityPillRef), 50);
+    },
+    [quality.id],
+  );
+
+  const qualityOptions = negotiation.status === 'ready' ? negotiation.data.quality_options : [];
+  const selectedQualityId = negotiation.status === 'ready' ? negotiation.data.selected_quality_id : quality.id;
+  const qualityLabel =
+    selectedQualityId === 'original' ? originalLabel(qualityOptions.find((option) => option.id === 'original')) : qualityOptions.find((option) => option.id === selectedQualityId)?.label ?? 'Original';
 
   if (!visible) return null;
 
@@ -413,8 +542,8 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   const hasFatalError = engineState.state === 'error' && Boolean(engineState.error?.fatal);
 
   return (
-    <View style={styles.root}>
-      {videoPlayer ? <VegaVideoSurface videoPlayer={videoPlayer} style={styles.surface} /> : null}
+    <View ref={rootRef} style={styles.root}>
+      {videoPlayer ? <VegaVideoSurface videoPlayer={videoPlayer} style={styles.surface} mediaControlFocus={false} /> : null}
 
       {showSpinner({
         negotiation: negotiation.status,
@@ -428,52 +557,78 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
       {negotiationFailed || hasFatalError ? (
         <View style={styles.centeredOverlay}>
-          <Text style={styles.errorTitle}>Playback unavailable</Text>
+          <Text style={styles.errorTitle}>This title cannot be played as it is</Text>
           <Text style={styles.errorMessage}>
-            {negotiationFailed && negotiation.status === 'error' ? negotiation.message : engineState.error?.message}
+            {negotiationFailed
+              ? 'The server could not prepare it for this device.'
+              : 'This device cannot decode it (often its audio format). Choose a quality below to have the server convert it.'}
           </Text>
-          <Pressable accessibilityRole="button" style={styles.backButton} onPress={stop}>
-            <Text style={styles.backButtonLabel}>Back</Text>
-          </Pressable>
+          <View style={{flexDirection: 'row'}}>
+            {qualityOptions.length > 1 ? (
+              <Pressable accessibilityRole="button" style={[styles.backButton, {marginRight: sw(16)}]} onPress={() => setMenu('quality')} hasTVPreferredFocus>
+                <Text style={styles.backButtonLabel}>Choose quality</Text>
+              </Pressable>
+            ) : null}
+            <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => void stop().then(() => onClose?.())} hasTVPreferredFocus={qualityOptions.length <= 1}>
+              <Text style={styles.backButtonLabel}>Close</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
-      <View
-        style={[styles.transportBar, controlsVisible ? null : styles.transportBarHidden]}
-        pointerEvents={controlsVisible ? 'auto' : 'box-none'}
-      >
-        <Text style={styles.title} numberOfLines={1}>
-          {launchOptions.title ?? 'Now playing'}
-        </Text>
-        <View style={styles.transportRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={engineState.state === 'playing' ? 'Pause' : 'Play'}
-            style={styles.transportButton}
-            onFocus={() => setControlsVisible(true)}
-            onPress={() => void (engineState.state === 'playing' ? engine.pause() : engine.play())}
-          >
-            <Text style={styles.transportButtonLabel}>{engineState.state === 'playing' ? 'Pause' : 'Play'}</Text>
-          </Pressable>
-          {engineState.subtitleTracks.length > 0 ? (
-            <Pressable accessibilityRole="button" style={styles.transportButton}
-            onFocus={() => setControlsVisible(true)} onPress={cycleSubtitles}>
-              <Text style={styles.transportButtonLabel}>
-                {engineState.selectedSubtitleTrackId
-                  ? engineState.subtitleTracks.find((track) => track.id === engineState.selectedSubtitleTrackId)?.label ?? 'Subtitles'
-                  : 'Subtitles off'}
-              </Text>
-            </Pressable>
-          ) : null}
-          <Pressable accessibilityRole="button" style={styles.transportButton}
-            onFocus={() => setControlsVisible(true)} onPress={stop}>
-            <Text style={styles.transportButtonLabel}>Stop</Text>
-          </Pressable>
-          <Text style={styles.clock}>
-            {formatClock(engineState.currentTimeSeconds)} / {formatClock(engineState.durationSeconds)}
-          </Text>
-        </View>
-      </View>
+      <TvFocusScope autoFocus trap={['up', 'down', 'left', 'right']} style={StyleSheet.absoluteFill}>
+        <PlayerChrome
+          visible={controlsVisible}
+          playing={engineState.state === 'playing'}
+          positionSeconds={engineState.currentTimeSeconds}
+          durationSeconds={engineState.durationSeconds}
+          bufferedSeconds={engineState.bufferedSeconds}
+          seekTargetSeconds={seekTarget}
+          qualityLabel={qualityLabel}
+          hasSubtitles={engineState.subtitleTracks.length > 0}
+          subtitlesOn={engineState.selectedSubtitleTrackId !== null}
+          focused={focusedControl}
+          onFocusControl={(control) => {
+            setFocusedControl(control);
+            reveal();
+          }}
+          onTogglePlay={guarded(togglePlay)}
+          onClose={guarded(() => void stop().then(() => onClose?.()))}
+          onOpenQuality={guarded(() => setMenu('quality'))}
+          onOpenSubtitles={guarded(() => setMenu('subtitles'))}
+          qualityRef={qualityPillRef}
+          playRef={playRef}
+          subtitlesRef={subtitlesRef}
+        />
+      </TvFocusScope>
+
+      {menu === 'quality' ? <QualityMenu options={qualityOptions} selectedId={selectedQualityId} onSelect={selectQuality} onClose={closeMenu} /> : null}
+      {menu === 'subtitles' ? (
+        <Sheet title="Subtitles" onClose={closeMenu}>
+          <SheetOption
+            label="Off"
+            selected={engineState.selectedSubtitleTrackId === null}
+            hasTVPreferredFocus={engineState.selectedSubtitleTrackId === null}
+            onPress={() => {
+              void engine.selectSubtitleTrack(null);
+              closeMenu();
+            }}
+          />
+          {engineState.subtitleTracks.map((track) => (
+            <SheetOption
+              key={track.id}
+              label={track.label}
+              detail={track.language}
+              selected={engineState.selectedSubtitleTrackId === track.id}
+              hasTVPreferredFocus={engineState.selectedSubtitleTrackId === track.id}
+              onPress={() => {
+                void engine.selectSubtitleTrack(track.id);
+                closeMenu();
+              }}
+            />
+          ))}
+        </Sheet>
+      ) : null}
     </View>
   );
 });

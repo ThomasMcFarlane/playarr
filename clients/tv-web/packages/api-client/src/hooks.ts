@@ -164,6 +164,8 @@ export interface PlaybackCapabilities {
   audioCodecs?: string;
   maxBitrateBps?: number;
   profile?: string;
+  /** Force the requested rendition instead of direct-playing the source (a quality chosen in the player). */
+  forceTranscode?: boolean;
 }
 
 /** Negotiate playback for a MediaFile. Idle until `mediaFileId` is defined. */

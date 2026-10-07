@@ -13,6 +13,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Android TV: playlist, album and similar-title tiles focus with the media-card shadow and a draw-only lift (no ring, no scale), and the profile picker's lift no longer shifts layout bounds.
+- Android TV: a rail brings a focused card into view by scrolling only as far as it takes to unclip it, so UP and DOWN between rails never drag the target rail to a matching offset.
+- Android TV: Settings opens with focus on the first section and the music artist page opens on the selected album.
 - The server image build no longer fails with `Cannot find module '@playarr-tv/player-core'`: the Dockerfile builds every workspace package under `packages/` before the web app, and a new CI job builds the image's web stage on pull requests that touch the Dockerfile or `clients/tv-web/`.
 - VIDAA, webOS and Tizen: the TV layout is scaled to a 1080-high stage whatever viewport the TV browser reports (for example 1280x720), so the sign-in link code and the navigation rail are no longer cut off. Adds the `smoke:tv-viewport` Playwright check.
 - Web TV layout: on a series page, UP and DOWN from the far right of a season rail now land on the nearest episode card instead of the season download button.
@@ -267,6 +270,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fire TV client: the player has the web's controls (close button, scrubber, play and pause, subtitles and the quality menu with the resolution matrix), and Back unwinds one layer per press (menu, then controls, then exit). The first key press with the controls hidden only shows them, the OK key on the scrubber toggles play and pause, and seeking settles before it is sent. A title the device cannot decode now offers a quality choice instead of a bare error.
 - tvOS parity run now captures a scrolled Home (rail moved right by four cards) in both themes and fails on a hard-cut rail edge, comparing it with the web at the same scroll offset.
 - tvOS Home no longer draws a Customise Home button (owner ruling: it lives in Settings).
 - Roku: Home shows every server rail under On deck like the web, On deck lists episodes with their frame and title, artists and a progress bar, and cards show the unwatched dot only for unwatched titles.

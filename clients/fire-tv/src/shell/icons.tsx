@@ -22,7 +22,12 @@ export type IconName =
   | 'signOut'
   | 'theme'
   | 'chevronDown'
-  | 'play';
+  | 'play'
+  | 'pause'
+  | 'close'
+  | 'subtitles'
+  | 'hd'
+  | 'check';
 
 export interface IconProps {
   name: IconName;
@@ -168,6 +173,36 @@ export function Icon({name, size, color, strokeWidth = 1.8}: IconProps): React.R
     case 'play':
       body = <Path {...solid} d="M6.5 3.5v17l14-8.5z" />;
       break;
+    case 'pause':
+      body = (
+        <>
+          <Rect {...solid} x={6} y={4.5} width={4} height={15} rx={1} />
+          <Rect {...solid} x={14} y={4.5} width={4} height={15} rx={1} />
+        </>
+      );
+      break;
+    case 'close':
+      body = <Path {...line} d="M6 6l12 12M18 6L6 18" />;
+      break;
+    case 'subtitles':
+      body = (
+        <>
+          <Rect {...line} x={3} y={5} width={18} height={14} rx={2.5} />
+          <Path {...line} d="M7 11h3M13 11h4M7 15h5M15 15h2" />
+        </>
+      );
+      break;
+    case 'hd':
+      body = (
+        <>
+          <Rect {...line} x={3} y={5} width={18} height={14} rx={2.5} />
+          <Path {...line} d="M7.5 9.5v5M7.5 12h3M10.5 9.5v5M13.5 9.5v5h1.5a2.5 2.5 0 0 0 0-5z" />
+        </>
+      );
+      break;
+    case 'check':
+      body = <Path {...line} d="m5 12.5 4.5 4.5L19 7.5" />;
+      break;
     case 'back':
       body = <Path {...line} d="M19 12H5M11 6l-6 6 6 6" />;
       break;
@@ -182,7 +217,7 @@ export function Icon({name, size, color, strokeWidth = 1.8}: IconProps): React.R
       break;
   }
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg key={name} width={size} height={size} viewBox="0 0 24 24">
       {body}
     </Svg>
   );

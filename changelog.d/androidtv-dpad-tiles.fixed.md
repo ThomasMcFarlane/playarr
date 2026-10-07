@@ -1,3 +1,0 @@
-- Android TV: playlist, album and similar-title tiles focus with the media-card shadow and a draw-only lift (no ring, no scale), and the profile picker's lift no longer shifts layout bounds.
-- Android TV: a rail brings a focused card into view by scrolling only as far as it takes to unclip it, so UP and DOWN between rails never drag the target rail to a matching offset.
-- Android TV: Settings opens with focus on the first section and the music artist page opens on the selected album.

@@ -120,6 +120,9 @@ export default function App(): JSX.Element {
   // no dependency on storage being ready -- only the component it is
   // attached to does.
   const playerRef = useRef<PlayerScreenHandle>(null);
+  // The page under the player stays mounted but leaves the layout while the player is up: otherwise the D-pad moves focus
+  // out of the player's controls into the page behind them.
+  const [playerUp, setPlayerUp] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,12 +155,14 @@ export default function App(): JSX.Element {
         <LanguageProvider>
           <ApiClientProvider>
             <PlayerHandleContext.Provider value={playerRef}>
-              <NavigationContainer>
-                <ThemeBoundary>
-                  <RootNavigator />
-                </ThemeBoundary>
-              </NavigationContainer>
-              <PlayerScreen ref={playerRef} />
+              <View style={playerUp ? styles.hidden : styles.fill}>
+                <NavigationContainer>
+                  <ThemeBoundary>
+                    <RootNavigator />
+                  </ThemeBoundary>
+                </NavigationContainer>
+              </View>
+              <PlayerScreen ref={playerRef} onVisibleChange={setPlayerUp} />
             </PlayerHandleContext.Provider>
           </ApiClientProvider>
         </LanguageProvider>
@@ -170,6 +175,9 @@ export default function App(): JSX.Element {
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
+  },
+  hidden: {
+    display: 'none',
   },
   centered: {
     alignItems: 'center',

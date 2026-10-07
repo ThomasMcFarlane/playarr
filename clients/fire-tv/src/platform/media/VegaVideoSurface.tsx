@@ -51,6 +51,12 @@ export interface VegaVideoSurfaceProps {
   showControls?: boolean;
   /** Renders captions/subtitles baked into `KeplerVideoView`'s own overlay. Defaults to `true` -- there is no separate custom subtitle renderer in this app, unlike the controls bar above. */
   showCaptions?: boolean;
+  /**
+   * Routes the remote's transport keys (and, as a side effect, its directional keys) to the platform media controls. The
+   * player draws its own controls and moves focus itself, so it turns this off: with it on, LEFT and RIGHT seek natively
+   * and the D-pad never reaches the app's focus engine. Defaults to `true`.
+   */
+  mediaControlFocus?: boolean;
 }
 
 /**
@@ -63,7 +69,7 @@ export interface VegaVideoSurfaceProps {
  * isolation principle (design doc §1.3's closing paragraph).
  */
 export function VegaVideoSurface(props: VegaVideoSurfaceProps): React.ReactElement {
-  const {videoPlayer, style, showControls = false, showCaptions = true} = props;
+  const {videoPlayer, style, showControls = false, showCaptions = true, mediaControlFocus = true} = props;
   const componentInstance = useComponentInstance();
 
   // The one cast this file exists to contain -- see this file's own top
@@ -78,6 +84,7 @@ export function VegaVideoSurface(props: VegaVideoSurfaceProps): React.ReactEleme
   // driven by a user action, so this repo's own React rule reserves
   // `useEffect` for exactly this.
   useEffect(() => {
+    if (!mediaControlFocus) return undefined;
     let cancelled = false;
     realVideoPlayer.setMediaControlFocus(componentInstance).catch((error: unknown) => {
       if (!cancelled) {
@@ -87,7 +94,7 @@ export function VegaVideoSurface(props: VegaVideoSurfaceProps): React.ReactEleme
     return () => {
       cancelled = true;
     };
-  }, [realVideoPlayer, componentInstance]);
+  }, [realVideoPlayer, componentInstance, mediaControlFocus]);
 
   return (
     <KeplerVideoView
