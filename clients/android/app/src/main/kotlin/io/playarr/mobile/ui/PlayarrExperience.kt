@@ -1625,10 +1625,12 @@ internal fun PlayarrExperience(
         val appFocusState = remember { mutableStateOf(false) }
         val appHasFocusProvider = remember { { appFocusState.value } }
         val navFocusState = remember { mutableStateOf(false) }
+        val actionColumn = remember { ShellActionColumnState() }
         val navHasFocusProvider = remember { { navFocusState.value } }
         CompositionLocalProvider(
             LocalTvHasFocus provides appHasFocusProvider,
             LocalTvNavHasFocus provides navHasFocusProvider,
+            LocalShellActionColumn provides (if (isTelevision) actionColumn else null),
             LocalGlassBackdrop provides glassBackdrop,
             LocalDetailSection provides { detailSectionRoute = it },
             LocalTvNavEntry provides navEntryFocus,
@@ -1668,6 +1670,7 @@ internal fun PlayarrExperience(
 
             // Web keeps the rail, logo, clock and profile chip around the blocked state.
             if (!isPlayer && !isProfiles) {
+                if (isTelevision) ShellActionColumn(actionColumn, Modifier.align(Alignment.TopEnd))
                 val visibleDestinations = visibleExperienceDestinations(availableKinds, canDownload, hasFolders)
                 if (visibleDestinations.isNotEmpty()) {
                     ExperienceNavigation(
@@ -2553,7 +2556,6 @@ private fun ExperienceHomeScreen(
     val homeView = LocalPlayarrDisplayPreferences.current.homeView
     val railLanguageCode = LocalPlayarrLanguage.current.resolved.code
     LaunchedEffect(railLanguageCode) { viewModel.setRailLanguage(railLanguageCode) }
-    var customising by remember { mutableStateOf(false) }
     // Survives leaving Home for a detail page: the card (and its rail) that last had focus gets it back on return.
     var savedSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var savedRailKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -2618,14 +2620,7 @@ private fun ExperienceHomeScreen(
                     tvRails.columnState = railsState
                     val navEntry = LocalTvNavEntry.current
                     tvRails.onLeftEdge = { navEntry?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false }
-                    val customiseFocus = remember { FocusRequester() }
-                    var customiseBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-                    tvRails.onUpEdge = { from ->
-                        // Web's geometric UP from the first rail only reaches the top pill when it is above the card.
-                        val bounds = customiseBounds
-                        val overlap = if (bounds == null) 0f else minOf(from.right, bounds.right) - maxOf(from.left, bounds.left)
-                        overlap > 0f && runCatching { customiseFocus.requestFocus() }.getOrDefault(false)
-                    }
+                    tvRails.onUpEdge = { _ -> true }
                     if (isTelevision) {
                         // Web's default focus: the last focused card, else the first card of the first rail.
                         TvDefaultFocusEffect(Unit) {
@@ -2693,40 +2688,9 @@ private fun ExperienceHomeScreen(
                             )
                         }
                     }
-                    if (!isTelevision) {
-                        // Web phone: "Customise Home" is a 38 px pill in the header row, left of the profile control.
-                        Surface(
-                            onClick = { viewModel.loadRailPreferences(); customising = true },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 6.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(), end = 68.dp).height(38.dp),
-                            shape = CircleShape,
-                            color = WebSurface,
-                            contentColor = WebInkSoft,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
-                        ) {
-                            Box(Modifier.padding(horizontal = 12.85.dp), contentAlignment = Alignment.Center) {
-                                Text(playarrString(PlayarrString.HomeCustomise), fontSize = 11.52.sp, fontWeight = FontWeight(720), maxLines = 1)
-                            }
-                        }
-                    }
-                    if (isTelevision) {
-                        // Web: a small outlined pill at the top right of the home canvas (x 1752, y 32, 38 high).
-                        PlayarrButton(
-                            variant = PlayarrButtonVariant.Secondary,
-                            size = PlayarrButtonSize.Small,
-                            onClick = { viewModel.loadRailPreferences(); customising = true },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 48.dp).height(38.dp)
-                                .focusRequester(customiseFocus)
-                                .onGloballyPositioned { customiseBounds = it.boundsInRoot() },
-                        ) {
-                            Text(playarrString(PlayarrString.HomeCustomise), fontSize = 11.52.sp, fontWeight = FontWeight(720))
-                        }
-                    }
                     }
                 },
             )
-            if (customising) {
-                CustomiseHomeDialog(viewModel = viewModel, onDismiss = { customising = false })
-            }
             contextWork?.let { work ->
                 MediaContextDialog(
                     work = work,
@@ -2740,62 +2704,46 @@ private fun ExperienceHomeScreen(
     }
 }
 
-/** Per-user Home customisation: show or hide each rail, move it up or down, or reset to the admin's order. */
+/** Per-user Home customisation (Settings, section 11): show or hide each rail, move it up or down, or reset to the admin's order. */
 @Composable
-private fun CustomiseHomeDialog(viewModel: PlayarrExperienceViewModel, onDismiss: () -> Unit) {
+internal fun CustomiseHomeSettings(viewModel: PlayarrExperienceViewModel) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.loadRailPreferences() }
     val saved by viewModel.railPreferences.collectAsState()
     val rails = saved
-    PlayarrPanel(
-        onDismissRequest = onDismiss,
-        title = { Text(playarrString(PlayarrString.HomeCustomiseTitle)) },
-        text = {
-            if (rails == null) {
-                CircularProgressIndicator()
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item {
-                        Text(playarrString(PlayarrString.HomeCustomiseDescription), color = WebInkMuted, fontSize = 12.sp)
-                    }
-                    items(rails.size, key = { rails[it].id }) { index ->
-                        val rail = rails[index]
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                rail.title,
-                                color = if (rail.hidden) WebInkMuted else WebInk,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            PlayarrButton(
-                                variant = PlayarrButtonVariant.Ghost,
-                                enabled = index > 0,
-                                onClick = { viewModel.saveRailPreferences(moveRail(rails, index, -1)) },
-                            ) { Text(playarrString(PlayarrString.HomeCustomiseUp)) }
-                            PlayarrButton(
-                                variant = PlayarrButtonVariant.Ghost,
-                                enabled = index < rails.lastIndex,
-                                onClick = { viewModel.saveRailPreferences(moveRail(rails, index, 1)) },
-                            ) { Text(playarrString(PlayarrString.HomeCustomiseDown)) }
-                            PlayarrButton(
-                                variant = PlayarrButtonVariant.Secondary,
-                                onClick = {
-                                    viewModel.saveRailPreferences(
-                                        rails.toMutableList().also { it[index] = rail.copy(hidden = !rail.hidden) },
-                                    )
-                                },
-                            ) {
-                                Text(playarrString(if (rail.hidden) PlayarrString.HomeCustomiseShow else PlayarrString.HomeCustomiseHide))
-                            }
-                        }
-                    }
-                }
+    if (rails == null) {
+        CircularProgressIndicator()
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        rails.forEachIndexed { index, rail ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    rail.title,
+                    color = if (rail.hidden) WebInkMuted else WebInk,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                PlayarrButton(
+                    variant = PlayarrButtonVariant.Secondary,
+                    onClick = {
+                        viewModel.saveRailPreferences(rails.toMutableList().also { it[index] = rail.copy(hidden = !rail.hidden) })
+                    },
+                ) { Text(playarrString(if (rail.hidden) PlayarrString.HomeCustomiseShow else PlayarrString.HomeCustomiseHide)) }
+                PlayarrButton(
+                    variant = PlayarrButtonVariant.Ghost,
+                    enabled = index > 0,
+                    onClick = { viewModel.saveRailPreferences(moveRail(rails, index, -1)) },
+                ) { Text(playarrString(PlayarrString.HomeCustomiseUp)) }
+                PlayarrButton(
+                    variant = PlayarrButtonVariant.Ghost,
+                    enabled = index < rails.lastIndex,
+                    onClick = { viewModel.saveRailPreferences(moveRail(rails, index, 1)) },
+                ) { Text(playarrString(PlayarrString.HomeCustomiseDown)) }
             }
-        },
-        dismissButton = {
-            PlayarrButton(onClick = viewModel::resetRailPreferences, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.HomeCustomiseReset)) }
-        },
-        confirmButton = { PlayarrButton(onClick = onDismiss, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(PlayarrString.CommonClose)) } },
-    )
+        }
+        PlayarrButton(onClick = viewModel::resetRailPreferences, variant = PlayarrButtonVariant.Ghost) { Text(playarrString(PlayarrString.HomeCustomiseReset)) }
+    }
 }
 
 @Composable
