@@ -186,7 +186,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val display = rememberPlayarrDisplayPreferences(this)
             setPlayarrWebPalette(display.darkTheme)
-            io.playarr.mobile.ui.setPlayarrWebFont(!isTelevision)
+            io.playarr.mobile.ui.setPlayarrWebFont(true)
             PlayarrTheme(darkTheme = display.darkTheme) {
                 CompositionLocalProvider(LocalPlayarrDisplayPreferences provides display.value) {
                     androidx.compose.material3.ProvideTextStyle(

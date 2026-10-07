@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android TV uses the bundled Nunito Sans and JetBrains Mono, as the web and the phone do.
 - Fixtures: artwork is generated with a pinned gradient seed and media or artwork is regenerated when its generator changes, so two fresh fixture databases produce identical parity captures; the web reference captures were refreshed (bundled fonts, display name, settled scroll).
 - Android: the profile chip and profile pages show the server's display name, resolved after sign-in and when a saved session is restored, instead of the username typed at sign-in.
 - Android phone: the client uses the web font and the web top-inset rules, the calendar offers Play and Resume, and the profile page follows the web phone layout with the theme selector and a Clients link.
