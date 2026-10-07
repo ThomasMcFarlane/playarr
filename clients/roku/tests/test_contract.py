@@ -492,7 +492,7 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
 
     def test_play_opens_the_player_stage_before_negotiation_returns(self) -> None:
         body = MAIN.split("sub requestPlayback(", 1)[1].split("end sub", 1)[0]
-        self.assertLess(body.index("enterPlayerStage()"), body.index('sendApi("playback"'))
+        self.assertLess(body.index("enterPlayerStage()"), body.index("startResumeFetch("))
         stage = MAIN.split("sub enterPlayerStage()", 1)[1].split("end sub", 1)[0]
         self.assertIn('showOnly("playback")', stage)
         self.assertIn('m.playerSpinner.control = "start"', stage)

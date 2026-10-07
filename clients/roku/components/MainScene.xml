@@ -753,6 +753,7 @@
   <script type="text/brightscript" uri="pkg:/source/PairingPrefs.brs" />
   <script type="text/brightscript" uri="pkg:/components/Pages.brs" />
   <script type="text/brightscript" uri="pkg:/components/Settings.brs" />
+  <script type="text/brightscript" uri="pkg:/components/PlaybackProgress.brs" />
   <script type="text/brightscript" uri="pkg:/components/PlayerChrome.brs" />
   <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
 </component>

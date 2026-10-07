@@ -328,6 +328,8 @@ sub init()
     m.profiles = []
     m.playbackSessionId = ""
     m.playbackEnded = true
+    m.sourceOffsetSeconds = 0
+    m.playbackDurationMs = 0
     m.lastVideoState = ""
     m.session = LoadSession()
     m.serverAddresses = m.session.serverUrls
@@ -5103,7 +5105,9 @@ sub requestPlayback(mediaFileId as String)
     ' Play opens the player directly: black stage, title, small spinner. No
     ' interstitial or fullscreen status page while the session negotiates.
     enterPlayerStage()
-    sendApi("playback", "GET", path, invalid, true)
+    ' The playback request waits for the server's resume point so an
+    ' on-demand transcode can start at it (see onResumeResult).
+    startResumeFetch(mediaFileId, path)
 end sub
 
 sub enterPlayerStage()
@@ -5144,6 +5148,7 @@ sub startPlayback(data as Object)
     content.httpCertificatesFile = "common:/certs/ca-bundle.crt"
     m.playbackSessionId = data.session_id
     m.playbackEnded = false
+    m.playbackStarted = false
     m.lastVideoState = ""
     m.bufferedSeconds = 0
     m.playerBufferedFill.width = 0
@@ -5170,7 +5175,9 @@ sub startPlayback(data as Object)
     if m.pendingChapterSeekMs <> invalid
         m.video.seek = m.pendingChapterSeekMs / 1000
         m.pendingChapterSeekMs = invalid
+        m.resumeSeconds = invalid
     end if
+    ProgressApplyResume(data)
     m.heartbeatTimer.control = "start"
     m.top.screenState = "playback"
 
@@ -5190,12 +5197,18 @@ sub onVideoStateChanged()
     state = m.video.state
     if m.playbackEnded then return
     positionMs = Int(m.video.position * 1000)
+    if state = "playing" then m.playbackStarted = true
     if state = "paused" and m.lastVideoState <> "paused"
+        persistPlaybackProgress(false)
         sendPlaybackEvent({ kind: "pause", position_ms: positionMs })
     else if state = "playing" and m.lastVideoState = "paused"
         sendPlaybackEvent({ kind: "resume", position_ms: positionMs })
     else if state = "finished"
         showEndOfPlayback()
+    else if state = "error" and ProgressRetryStart()
+        ' A transcode started at the resume point is not ready for the first
+        ' few seconds; the playlist answers 404 until then. Retry quietly.
+        m.playerSpinner.control = "start"
     else if state = "error"
         sendPlaybackEvent({ kind: "error", message: "Roku video playback failed" })
         finishPlayback("error")
@@ -5393,6 +5406,7 @@ end sub
 sub sendHeartbeat()
     if m.top.screenState <> "playback" or m.playbackEnded then return
     sendPlaybackEvent({ kind: "heartbeat", position_ms: Int(m.video.position * 1000) })
+    persistPlaybackProgress(false)
 end sub
 
 sub sendPlaybackEvent(body as Object)
@@ -5408,6 +5422,7 @@ sub finishPlayback(reason as String)
     if m.playbackEnded then return
     m.playbackEnded = true
     m.heartbeatTimer.control = "stop"
+    persistPlaybackProgress(false)
     sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: reason })
     m.video.control = "stop"
     m.video.visible = false
@@ -5479,6 +5494,7 @@ sub showEndOfPlayback()
     m.playbackEnded = true
     m.heartbeatTimer.control = "stop"
     ' Progress/watched is reported before any card appears (spec section 2).
+    persistPlaybackProgress(true)
     sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: "completed" })
     m.video.control = "stop"
     m.video.visible = false

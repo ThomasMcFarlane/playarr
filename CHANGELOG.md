@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: playback now resumes from the server's resume point and reports watch progress (periodically, on pause, on exit and at the end) through its own request tasks, so leaving the player no longer loses the position. Nothing is written when playback never started.
 - Fire TV client: playback works again on a real device. The app now loads Shaka Player for Vega (installed by `scripts/setup-shaka.sh`) with the navigator fields it needs, and advertises the containers and codecs the stick decodes so the server direct-plays instead of answering 503 for an on-demand transcode it has no capacity for.
 - Fire TV client: the access token is renewed before it expires and after a 401, instead of the raw stored token being used until the device was signed out about fifteen minutes after pairing (every request then failed with 401). When renewal is refused everywhere the app returns to the profile picker.
 - Android TV: pressing DOWN on Home moves down through the rails instead of bouncing sideways between the first two cards. Home rails, the Movies and Series grids and the series page follow the web TV's D-pad rules (same card column between rails, hard stop at the end of a rail, LEFT from the first card goes to the navigation rail, RIGHT in the last grid column goes to the alphabet strip).
