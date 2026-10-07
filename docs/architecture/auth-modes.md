@@ -83,10 +83,9 @@ authenticating reverse proxy in front of the server. See
 full writeup this section summarizes.
 
 The user every trusted-network login resolves to is whichever id
-`PLAYARR_DEFAULT_ADMIN_USER_ID` names (or a boot-lifetime-random id if
-unset — every session issued before a restart is then orphaned, which
-today is a non-issue only because sessions don't survive a restart
-either; see below).
+`PLAYARR_DEFAULT_ADMIN_USER_ID` names, or, if it is unset or not a UUID, the
+bootstrap admin (or the existing admin or first user already in the
+database), so the id always resolves to a persisted account.
 
 ### `AuthMode::ManagedProfiles`
 
@@ -96,7 +95,7 @@ profile's PIN *is* its `password_hash`, verified through the exact same
 Argon2id check as a full-account password (`Argon2PasswordVerifier`), just
 a deliberately short secret by convention. Provisioning a profile with a
 known PIN is a user-provisioning concern outside `playarr-auth`'s current
-scope — see the persistence gap below.
+scope; accounts are created through the admin user endpoints.
 
 **Security note:** `GET /api/v1/users/profiles`
 (`playarr-api::users::list_available_profiles_handler`) and
@@ -120,16 +119,13 @@ in the same pass that added this note.
 Ordinary username + password, Argon2id-hashed
 (`playarr_auth::login::hash_password` / `Argon2PasswordVerifier`) —
 correct and fully unit-tested at the `evaluate_login` level, not a stub.
-**Known gap, documented directly in `backend/src/main.rs`'s
-`auth_mode_from_env`:** flipping `PLAYARR_AUTH_MODE=full-account` today
-leaves a fresh deployment with **no way to log in at all**. There is no
-user-provisioning tool and no persisted `UserRepo`; the only seeded `User`
-(the trusted-network default admin) gets a random, never-recorded password
-hash — specifically so it *can't* be logged into by password. Real `User`
-persistence and a provisioning path (an admin CLI command, a first-run
-setup flow, etc.) are required before this mode is usable in practice, and
-the server logs a loud `tracing::warn!` to this effect at boot if it's
-selected.
+A fresh deployment is not locked out: on first boot, when the database has
+no users, the server provisions one admin account
+(`bootstrap_admin_if_needed` in `backend/src/main.rs`). The username comes
+from `PLAYARR_BOOTSTRAP_ADMIN_USERNAME` (default `admin`) and the password
+from `PLAYARR_BOOTSTRAP_ADMIN_PASSWORD`; when that is unset a random
+password is generated and logged once at `WARN`, and only its Argon2id hash
+is stored. Further accounts are managed through the admin user endpoints.
 
 ## What's actually wired up today
 
@@ -138,12 +134,12 @@ sits behind each trust boundary, and what happens after a successful
 login, has some real gaps worth being explicit about rather than implying
 a fully-built system:
 
-- **No persisted `User`/`Policy` store.** `playarr_auth::InMemoryUserDirectory`
-  (real, not a mock — see its own doc comment) is the only `UserDirectory`
-  implementation anywhere in the workspace; there is no `UserRepo` in
-  `playarr-db`, no `users` table in either migration set, and no
-  `PolicyRepo`/`policies` table at all. Accounts do not survive a process
-  restart and are not shared across nodes in a multi-node deployment.
+- **Users and policies are persisted.** `playarr-api`'s
+  `RepoBackedUserDirectory` wraps `playarr_db::UserRepo`, and the `users` and
+  `policies` tables live in the node's SQLite database, so accounts survive a
+  restart. Each node has its own database; peer sync replicates account
+  data between nodes of a group. `InMemoryUserDirectory` remains in
+  `playarr-auth` as a test stand-in only.
 - **Household and child controls are now evaluated on the live request paths**
   (rating/tags, schedule, budget, guardian approvals, PIN lockout): see
   [`household-controls.md`](household-controls.md). The remainder of this
@@ -156,30 +152,20 @@ a fully-built system:
   constructs an `AccessContext` and calls it. The only authorization check
   actually enforced today is the binary admin/non-admin check described
   next.
-- **"Admin" is a flat id set, not `Policy.is_admin`.** The source-instance
-  management endpoints (`POST`/`GET`/`DELETE`/`.../{id}/sync` under
-  `/api/v1/admin/source-instances`, `backend/crates/playarr-api/src/admin.rs`)
-  are the concrete example of what requires more than "logged in" today:
-  they're gated by an `AdminUser` Axum extractor
-  (`playarr-api::auth_extractor`), which checks
-  `playarr_auth::admin::InMemoryAdminRegistry::is_admin(user_id)` — a
-  real, thread-safe, in-process set of admin user ids, seeded at boot with
-  the trusted-network default admin's id — rather than loading and
-  evaluating an actual `Policy`. There is nowhere to load one *from* yet.
-  See that registry's own module doc comment for the intended follow-up
-  once `PolicyRepo` exists.
-- **Refresh tokens and RFC 8628 device-authorization state are in-memory,
-  not database rows.** `RefreshTokenService` stores each device's current
-  token family in `InMemoryRefreshTokenStore` (a `DashMap`), and
-  `DashMapDeviceFlowHandler` stores pending device/user code pairs in
-  `InMemoryDeviceAuthorizationStore`. Both are real, working
-  implementations, not test doubles — login, refresh, and device pairing
-  all genuinely function — but neither survives a restart or is visible to
-  a second node in a multi-node deployment.
-None of this is silently papered over in code — every in-memory store above
-documents its own "real, not a mock, but pending real persistence" status
-directly in its module doc comment, with a `TODO(persistence)` pointing at
-what should replace it.
+- **"Admin" is `Policy.is_admin`.** The `AdminUser` Axum extractor
+  (`playarr-api::auth_extractor`) resolves the caller's `sub` through
+  `AppState::user_repo` and `AppState::policy_repo` to a persisted `User`
+  whose `Policy` has `is_admin` set, and fails closed with a 403 otherwise.
+  The source-instance endpoints under `/api/v1/admin/source-instances` are
+  one example of what it guards. `InMemoryAdminRegistry` is no longer read
+  by that check.
+- **Refresh tokens are durable; device-authorisation state is not.**
+  `RefreshTokenService` is wired in `backend/src/main.rs` to a
+  database-backed store (see `playarr_db::repo::refresh_token`), so a
+  device's token family survives a restart. RFC 8628 pending device/user
+  code pairs are held in `InMemoryDeviceAuthorizationStore` and are lost on
+  restart, and are not visible to another node. An incomplete pairing has to
+  be started again.
 
 ## The `Policy` struct
 
@@ -352,8 +338,8 @@ never a JWT. Only its SHA-256 hash is stored server-side
 (`playarr_auth::secret::hash_token` — a fast, unsalted hash, deliberately:
 the input is already high-entropy random data, not a human-chosen secret,
 so there's nothing for an attacker holding the hash to dictionary-guess).
-**As of this pass that storage is `InMemoryRefreshTokenStore`, not a
-`refresh_tokens` database table** — see the gap noted above. Default
+**Production storage is the SQLite-backed refresh-token repository**
+(`InMemoryRefreshTokenStore` is only a test stand-in). Default
 lifetime 30 days, fixed at issuance (not extended by rotation): the device
 must complete a full login again after 30 days regardless of activity.
 

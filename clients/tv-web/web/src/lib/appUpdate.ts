@@ -74,7 +74,9 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
       isVendorPackage ||
       typeof navigator === "undefined" ||
       !("serviceWorker" in navigator) ||
-      !import.meta.env.PROD
+      !import.meta.env.PROD ||
+      // The server-hosted build (`--mode server`, under /tv/) has no service worker.
+      import.meta.env.MODE === "server"
     ) return;
     let cancelled = false;
     navigator.serviceWorker
@@ -94,7 +96,7 @@ export function useAppUpdate(client: ApiClient, clientPlatform = "web"): AppUpda
   const checkForUpdate = useCallback(async () => {
     if (!isVendorPackage) {
       const manifest = await fetchBuildManifest({
-        manifestUrl: "/build-manifest.json",
+        manifestUrl: `${import.meta.env.BASE_URL}build-manifest.json`,
       });
       if (manifest && isNewerBundleAvailable(__APP_VERSION__, manifest)) {
         setUpdateAvailable(true);

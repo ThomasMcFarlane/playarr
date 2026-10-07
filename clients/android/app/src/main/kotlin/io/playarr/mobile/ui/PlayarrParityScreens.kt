@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -3033,7 +3034,23 @@ private enum class SettingsSection(val label: PlayarrString) {
     Remote(PlayarrString.SettingsRemote),
     YourData(PlayarrString.SettingsYourData),
     Legal(PlayarrString.SettingsLegal),
+    /** Web lists it for everyone; the phone has no latency view, so it points to Playarr Web. */
+    RequestLatency(PlayarrString.SettingsRequestLatency),
 }
+
+/** The web mobile settings index, in order (number, section, one-line description). */
+private val phoneSettingsIndex = listOf(
+    SettingsSection.Appearance to PlayarrString.SettingsAppearanceDescription,
+    SettingsSection.Avatar to PlayarrString.SettingsIndexAvatarDescription,
+    SettingsSection.Language to PlayarrString.SettingsIndexLanguageDescription,
+    SettingsSection.Player to PlayarrString.SettingsIndexPlayerDescription,
+    SettingsSection.Server to PlayarrString.SettingsIndexServerDescription,
+    SettingsSection.Lock to PlayarrString.SettingsIndexProfileLockDescription,
+    SettingsSection.Invite to PlayarrString.SettingsIndexInviteDescription,
+    SettingsSection.RequestLatency to PlayarrString.SettingsIndexRequestLatencyDescription,
+    SettingsSection.Remote to PlayarrString.SettingsIndexRemoteDescription,
+    SettingsSection.YourData to PlayarrString.SettingsYourDataDescription,
+)
 
 @Composable
 internal fun ExperienceParitySettingsScreen(
@@ -3051,7 +3068,11 @@ internal fun ExperienceParitySettingsScreen(
     val hasKnownServerGroup by viewModel.hasKnownServerGroup.collectAsState()
     val serverOperation by viewModel.serverOperation.collectAsState()
     val connectionTest by viewModel.connectionTest.collectAsState()
-    var section by remember { mutableStateOf(SettingsSection.Appearance) }
+    val wideScreen = isTelevision || androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 760
+    // Phones open on the web's numbered index; wide screens keep the side list with Appearance selected.
+    var picked by remember { mutableStateOf<SettingsSection?>(null) }
+    val section = picked ?: SettingsSection.Appearance
+    val showIndex = !wideScreen && picked == null
     LaunchedEffect(section) {
         if (section != SettingsSection.Invite) return@LaunchedEffect
         while (true) {
@@ -3061,21 +3082,28 @@ internal fun ExperienceParitySettingsScreen(
     }
     PlayarrPageScaffold(
         title = playarrString(PlayarrString.SettingsTitle),
-        subtitle = playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
-        onBack = onBack,
+        subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
+        onBack = { if (!wideScreen && picked != null) picked = null else onBack() },
         isTelevision = isTelevision,
+        padBody = !showIndex,
+        largeTitle = showIndex,
+        backActive = showIndex,
     ) {
+    if (showIndex) {
+        PhoneSettingsIndex(onOpen = { picked = it })
+        return@PlayarrPageScaffold
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = isTelevision || maxWidth >= 760.dp
         Row(Modifier.fillMaxSize()) {
             if (wide) {
                 Column(Modifier.width(260.dp).fillMaxHeight()) {
-                    SettingsSection.entries.forEachIndexed { index, candidate ->
+                    SettingsSection.entries.filter { it != SettingsSection.RequestLatency }.forEachIndexed { index, candidate ->
                         Text(
                             "0${index + 1}  ${playarrString(candidate.label)}",
                             color = if (candidate == section) WebInk else WebInkMuted,
                             fontWeight = if (candidate == section) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.fillMaxWidth().clickable { section = candidate }.padding(vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { picked = candidate }.padding(vertical = 12.dp),
                         )
                     }
                 }
@@ -3088,8 +3116,8 @@ internal fun ExperienceParitySettingsScreen(
                 if (!wide) {
                     item {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(SettingsSection.entries) { candidate ->
-                                PlayarrButton(onClick = { section = candidate }, enabled = candidate != section, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(candidate.label)) }
+                            items(phoneSettingsIndex.map { it.first }) { candidate ->
+                                PlayarrButton(onClick = { picked = candidate }, enabled = candidate != section, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(candidate.label)) }
                             }
                         }
                     }
@@ -3441,6 +3469,7 @@ private fun SettingsSectionContent(
                 }
                 PlayarrApprovalNotifications()
             }
+            SettingsSection.RequestLatency -> Text(playarrString(PlayarrString.SettingsRequestLatencyOnWeb), color = WebInkMuted)
             SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
             SettingsSection.Legal -> {
@@ -3823,4 +3852,49 @@ private fun Throwable.playarrServerConnectionMessage(): PlayarrMessage = when (t
     }
     else -> message?.let(PlayarrMessage::Dynamic)
         ?: PlayarrMessage.Localized(PlayarrString.ErrorCouldNotConnectServer)
+}
+
+/** Web mobile `.settings-options-list`: numbered rows 88 px tall, the first one drawn selected. */
+@Composable
+private fun PhoneSettingsIndex(onOpen: (SettingsSection) -> Unit) {
+    Box(Modifier.fillMaxSize().background(WebSurface)) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 116.dp),
+        ) {
+            itemsIndexed(phoneSettingsIndex, key = { _, row -> row.first.name }) { index, (candidate, description) ->
+                val active = index == 0
+                Row(
+                    Modifier.fillMaxWidth().height(88.dp)
+                        .then(if (active) Modifier.background(WebSurfaceSoft) else Modifier)
+                        .clickable { onOpen(candidate) }
+                        .padding(horizontal = 12.dp, vertical = 16.dp),
+                ) {
+                    Text(
+                        (index + 1).toString().padStart(2, '0'), color = WebInkMuted, fontSize = 8.96.sp, lineHeight = 13.44.sp,
+                        fontWeight = FontWeight(760), style = WebTextStyle, modifier = Modifier.width(44.dp),
+                    )
+                    Column(Modifier.weight(1f).fillMaxHeight().padding(bottom = 1.4.dp), verticalArrangement = Arrangement.Center) {
+                        Text(
+                            playarrString(candidate.label), color = WebInk, fontSize = 16.sp, lineHeight = 18.4.sp,
+                            fontWeight = FontWeight(480), letterSpacing = (-0.56).sp, style = WebTextStyle, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(3.4.dp))
+                        Text(
+                            playarrString(description), color = WebInkMuted, fontSize = 10.88.sp, lineHeight = 15.776.sp,
+                            style = WebTextStyle, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Box(Modifier.width(20.8.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Text(
+                            "→", color = if (active) WebInk else WebInkMuted, fontSize = 20.8.sp, lineHeight = 31.2.sp, style = WebTextStyle,
+                            modifier = Modifier.offset(x = if (active) 5.dp else 0.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

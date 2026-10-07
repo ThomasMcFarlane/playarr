@@ -165,7 +165,7 @@ export const en = {
   "components.player.cast.unavailableBrowser":
     "This browser doesn’t support casting. Try Chrome or Microsoft Edge on desktop or Android instead.",
   "components.player.cast.unavailableInsecureServer":
-    "This server isn’t using a secure (HTTPS) address. Chromecast can only play from secure servers.",
+    "Your Chromecast could not reach this server over http://. One step: give the server an https:// address (set PLAYARR_RELAY_REGISTER=true and PLAYARR_ACME_CHALLENGE=relay-dns-01, or use a TLS reverse proxy), sign in again with that address, then cast again. Playing on this device keeps working.",
   "components.player.surface.audioSurfaceAriaLabel": "Audio playback surface",
   "components.player.surface.closeButtonAriaLabel": "Close player",
   "components.player.surface.closePlaylistAriaLabel": "Close playlist",
@@ -258,6 +258,8 @@ export const en = {
   "pages.deviceLink.linkedHeading": "TV linked",
   "pages.deviceLink.linking": "Linking…",
   "pages.deviceLink.title": "Link a TV",
+  "pages.deviceLink.openOnServer": "Your Playarr Server uses http://, which this secure page cannot reach. One step: approve the code on your server's own page instead.",
+  "pages.deviceLink.openOnServerLink": "Open on your server",
   "pages.downloads.activeHeading": "Active",
   "pages.downloads.backToHome": "Back to Home",
   "pages.downloads.bytesOfTotal": "{{downloaded}} of {{total}}",
@@ -386,7 +388,8 @@ export const en = {
     "Your browser connects directly to this server. Playarr does not proxy your login.",
   "pages.login.errorGeneric": "Sign-in failed. Check your username and password and try again.",
   "pages.login.errorInsecureContentBlocked":
-    "The browser blocked this direct HTTP connection. Open the site settings for playarr.app, set Insecure content to Allow, reload Playarr, then try again.",
+    "The browser blocked this http:// connection from the secure playarr.app page. One step: open Playarr from your own server using the link below (http://your-server/tv/), then sign in there.",
+  "pages.login.openFromServer": "Open Playarr from your server instead (no browser setting needed)",
   "pages.login.errorLanUnreachable":
     "Could not reach this LAN server. Check the URL and allow Local Network Access when your browser asks.",
   "pages.login.errorMissingCredentials": "This server requires a username and password to sign in.",

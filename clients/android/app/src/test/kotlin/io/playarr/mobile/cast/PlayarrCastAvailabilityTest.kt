@@ -12,7 +12,6 @@ class PlayarrCastAvailabilityTest {
                 isTelevision = false,
                 playServicesAvailable = true,
                 receiverAppIdConfigured = true,
-                serverIsHttps = true,
             ),
         )
     }
@@ -24,7 +23,6 @@ class PlayarrCastAvailabilityTest {
                 isTelevision = true,
                 playServicesAvailable = true,
                 receiverAppIdConfigured = true,
-                serverIsHttps = true,
             ),
         )
     }
@@ -36,7 +34,6 @@ class PlayarrCastAvailabilityTest {
                 isTelevision = false,
                 playServicesAvailable = false,
                 receiverAppIdConfigured = true,
-                serverIsHttps = true,
             ),
         )
     }
@@ -48,19 +45,6 @@ class PlayarrCastAvailabilityTest {
                 isTelevision = false,
                 playServicesAvailable = true,
                 receiverAppIdConfigured = false,
-                serverIsHttps = true,
-            ),
-        )
-    }
-
-    @Test
-    fun `withholds cast for a plain HTTP server`() {
-        assertFalse(
-            shouldOfferPlayarrCast(
-                isTelevision = false,
-                playServicesAvailable = true,
-                receiverAppIdConfigured = true,
-                serverIsHttps = false,
             ),
         )
     }
@@ -72,7 +56,6 @@ class PlayarrCastAvailabilityTest {
                 isTelevision = true,
                 playServicesAvailable = false,
                 receiverAppIdConfigured = false,
-                serverIsHttps = false,
             ),
         )
     }

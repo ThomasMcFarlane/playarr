@@ -67,6 +67,9 @@ internal object WebGlass {
     /** `.app-nav-group`: blur(24px) saturate(1.2), surface-strong @ .56, 22px radius, hairline border, shadow 0 14 42. */
     val NavGroup = GlassSpec(saturation = 1.2f, tintAlpha = 0.56f, borderAlphaDark = 0.053f, borderAlphaLight = 0.068f, shadow = 14.dp)
 
+    /** Phone `.app-nav`: no blur, surface-strong @ .88, no border, shadow 0 14 40. */
+    val PhoneNav = GlassSpec(saturation = 1.0f, tintAlpha = 0.88f, borderAlphaDark = 0f, borderAlphaLight = 0f, shadow = 14.dp)
+
     /** `.app-user-identity`: blur(22px) saturate(1.2), surface-strong @ .66, shadow 0 18 48. */
     val Identity = GlassSpec(saturation = 1.2f, tintAlpha = 0.66f, borderAlphaDark = 0.077f, borderAlphaLight = 0.099f, shadow = 18.dp)
 

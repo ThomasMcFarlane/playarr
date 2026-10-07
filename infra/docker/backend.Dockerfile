@@ -156,6 +156,10 @@ COPY clients/tv-web/ ./clients/tv-web/
 WORKDIR /build/clients/tv-web
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @playarr-tv/admin... run build
+# The web client built for hosting by the server itself under /tv/ (`vite --mode server`,
+# base "/tv/"): lets a TV whose browser can only reach an http:// server (VIDAA) load the
+# app over the same scheme, with no mixed content. Shipped inside the web dir as web/tv/.
+RUN pnpm --filter @playarr-tv/web... run build:server
 
 # ------------------------------------------------------------------------
 # Export-only stages. `docker buildx build --target binary --platform
@@ -169,10 +173,12 @@ COPY --from=builder /build/out/playarr-server /playarr-server
 
 FROM scratch AS web
 COPY --from=web-builder /build/clients/tv-web/admin/dist/ /web/
+COPY --from=web-builder /build/clients/tv-web/web/dist-server/ /web/tv/
 
 FROM scratch AS built-artifacts
 COPY --from=builder /build/out/playarr-server /playarr-server
 COPY --from=web-builder /build/clients/tv-web/admin/dist/ /web/
+COPY --from=web-builder /build/clients/tv-web/web/dist-server/ /web/tv/
 
 FROM scratch AS prebuilt-artifacts
 ARG TARGETARCH

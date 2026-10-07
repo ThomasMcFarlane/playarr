@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Google Play builds require TLS for every configured Playarr Server. -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+<!--
+  Playarr Server is self-hosted: the user enters their own server address and,
+  if they choose http://, the app must connect. Every distribution channel
+  therefore allows cleartext HTTP; HTTPS remains supported and preferred.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
 </network-security-config>

@@ -83,6 +83,7 @@ class RemoteTargetHost(
     private val stateIntervalMs: Long = 5_000L,
     private val pushRetryMs: Long = 120_000L,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val fingerprint: String? = null,
 ) {
     private var pushFailures = 0
     private var pushDisabledUntil = 0L
@@ -138,7 +139,7 @@ class RemoteTargetHost(
         while (scope.isActive) {
             try {
                 if (!registered) {
-                    api.register(RegisterRemoteTargetRequest(name, platform, capabilities))
+                    api.register(RegisterRemoteTargetRequest(name, platform, capabilities, fingerprint))
                     registered = true
                 }
                 if (clock() >= pushDisabledUntil) {

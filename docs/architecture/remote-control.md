@@ -13,6 +13,12 @@ access-token `device_id`/`sub`); there is no new login path.
   inbox. Capabilities are advertised, never assumed: `navigate`, `text`,
   `playback`, `input` (capture-input selection, task 38, advertised only when
   the device supports it) and `handoff`.
+  Registration may carry an optional `fingerprint` (an install-independent device id). A new
+  install on the same account with the same fingerprint, or without one on either side the same
+  name and platform as an offline target, reclaims the old target and moves its pairings across
+  instead of leaving a stale twin; different fingerprints are never merged. Targets unseen for 30
+  days are pruned (pairings revoked) and the target list hides a target offline for over a day
+  that a fresher same-name, same-platform target replaces.
 - **Controller**: any other device of the same account holding a valid
   access token.
 - **Server**: the only authority. Controllers never talk to targets directly.

@@ -86,8 +86,7 @@ PLAYARR_BOOTSTRAP_ADMIN_USERNAME=admin
 PLAYARR_BOOTSTRAP_ADMIN_PASSWORD=<A-LONG-RANDOM-PASSWORD>
 ```
 
-Also set a stable JWT signing secret at the same time. Without it a fresh random secret is generated
-on every boot, so every signed-in client is logged out whenever the process restarts:
+Also set an explicit JWT signing secret at the same time. Without it the server derives a stable secret from its persisted node identity, so sessions survive restarts, but nodes in a peer group will not honour each other's tokens:
 
 ```bash
 PLAYARR_JWT_SECRET=$(openssl rand -hex 32)   # must be at least 32 bytes
@@ -333,8 +332,8 @@ What a first pass actually does, in order:
 5. Warms the artwork cache and computes similarity embeddings for every touched work.
 
 Expect the first pass on a large library to take minutes rather than seconds, and expect the API to
-stay responsive throughout, reconciliation runs in the worker role, and on a multi-node deployment a
-per-instance lock ensures only one node reconciles a given instance at a time.
+stay responsive throughout, reconciliation runs in the worker role, and an in-process per-instance lock
+ensures only one pass reconciles a given instance at a time. Each node reconciles its own copy of the library.
 
 > **One first-run network dependency.** The "more like this" feature uses a small 384-dimension,
 > CPU-only sentence-embedding model that runs entirely on your server. Its weights are fetched once

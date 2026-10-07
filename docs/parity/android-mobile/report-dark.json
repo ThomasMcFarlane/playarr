@@ -1,0 +1,91 @@
+{
+  "layout": "mobile",
+  "threshold": 0.1,
+  "maxMismatchPercent": 1,
+  "generatedFrom": {
+    "ref": "web mobile reference, dark theme, 390x844 at DPR 3 (Roboto, 24 dp safe areas)",
+    "cand": "Android phone captures, dark theme, system bars masked"
+  },
+  "screens": [
+    {
+      "id": "home",
+      "title": "Home",
+      "status": "fail",
+      "mismatchPercent": 1.342,
+      "mismatchedPixels": 39764,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "movies",
+      "title": "Movies library",
+      "status": "pass",
+      "mismatchPercent": 0.468,
+      "mismatchedPixels": 13870,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "series",
+      "title": "Series library",
+      "status": "pass",
+      "mismatchPercent": 0.392,
+      "mismatchedPixels": 11618,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "film-detail",
+      "title": "Title detail (film)",
+      "status": "fail",
+      "mismatchPercent": 1.156,
+      "mismatchedPixels": 34243,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "series-detail",
+      "title": "Title detail (series with seasons)",
+      "status": "fail",
+      "mismatchPercent": 1.052,
+      "mismatchedPixels": 31175,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "search",
+      "title": "Search with results",
+      "status": "fail",
+      "mismatchPercent": 1.003,
+      "mismatchedPixels": 29700,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "calendar",
+      "title": "Calendar",
+      "status": "fail",
+      "mismatchPercent": 2.83,
+      "mismatchedPixels": 83832,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "status": "fail",
+      "mismatchPercent": 1.266,
+      "mismatchedPixels": 37494,
+      "reference": "1170x2532",
+      "candidate": "1170x2532",
+      "sizeMatch": true
+    }
+  ]
+}

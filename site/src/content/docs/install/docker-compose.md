@@ -62,8 +62,8 @@ The reference file mounts no media and sets only the variables it needs. Create 
 services:
   playarr:
     environment:
-      # 32 bytes or more, or it is ignored with a warning and a per-boot
-      # random secret is used, which signs every client out on restart.
+      # 32 bytes or more. Shorter is ignored with a warning and a secret
+      # derived from the node identity is used instead.
       PLAYARR_JWT_SECRET: ${PLAYARR_JWT_SECRET:?Set PLAYARR_JWT_SECRET in infra/docker/.env}
       PLAYARR_AUTH_MODE: full-account
       # Only if the *arr apps report paths that differ from where this
@@ -221,7 +221,7 @@ Worth adding through the override file:
 
 | Variable | Default | Why |
 | --- | --- | --- |
-| `PLAYARR_JWT_SECRET` | random per boot | Under 32 bytes it is ignored with a warning. Unset means every restart signs every client out and no two containers agree on a token. Set it. |
+| `PLAYARR_JWT_SECRET` | required by the reference file | `docker-compose.prod.yml` refuses to start without it. Under 32 bytes it is ignored with a warning and a secret derived from the node identity is used, which does not agree between containers. |
 | `PLAYARR_AUTH_MODE` | `full-account` | `trusted-network` auto-logs in any request from an allowed CIDR with no credentials. |
 | `PLAYARR_TRUSTED_NETWORK_CIDR` | RFC 1918 plus loopback | **Replaces** the default allowlist rather than extending it. Only relevant in `trusted-network` mode. |
 | `PLAYARR_SUBTITLE_CACHE_DIR` | temp directory | Otherwise extracted subtitles land in the container's tmpfs and are rebuilt after every restart. Must point at a volume mount, the root filesystem is read-only. |
@@ -237,8 +237,7 @@ Playarr's TLS and ACME variables (`PLAYARR_TLS_CERT_PATH`, `PLAYARR_ACME_DOMAIN`
 
 | Volume | Mounted at | Holds |
 | --- | --- | --- |
-| `playarr_prod_data` | `/data` | The SQLite database. This is the volume that matters. |
-| `playarr_prod_artwork_cache` | `/data/playarr-cache/artwork` | Cached artwork. Rebuildable, but slow to rebuild. |
+| `playarr_prod_data` | `/data` | The SQLite database and the artwork cache (`/data/playarr-cache/artwork`). The database is what matters; the cache is rebuildable but slow to rebuild. |
 | `caddy_data`, `caddy_config` | Caddy's own paths | Issued certificates and Caddy state. Losing `caddy_data` means re-issuing certificates. |
 | `playarr_prod_subtitle_cache` | `/data/playarr-cache/subtitles` | Extracted subtitles, yours, from the override in step 3, not the base file. |
 
@@ -246,7 +245,7 @@ Playarr's TLS and ACME variables (`PLAYARR_TLS_CERT_PATH`, `PLAYARR_ACME_DOMAIN`
 
 The `playarr` container runs with `read_only: true`, `no-new-privileges:true` and a tmpfs at `/tmp`, and `restart: unless-stopped`. On-demand transcode output goes to `/tmp`, which means it is a RAM disk sized by Docker's default, no environment variable relocates it.
 
-> **Back up with the built-in backup service**, not by copying the live database file: see [Upgrade and backup](/docs/upgrade-and-backup). It takes a consistent SQLite snapshot of the `playarr_prod_data` volume's database.
+> **Do not copy the live database file.** Playarr can write its own age-encrypted backups, but only once you set `PLAYARR_BACKUP_DIR` and `PLAYARR_BACKUP_RECIPIENTS` in your override file; the reference stack does not. Keep the backup directory on a different volume from `playarr_prod_data`, or copy the archives off the host, because a backup on the same disk does not survive losing it. See [Upgrade and backup](/docs/upgrade-and-backup).
 
 ## Hardware acceleration
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,11 +60,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -106,6 +111,10 @@ internal fun PlayarrPageScaffold(
      * draws its own insets and padding, while the shared header (back, title, breadcrumb, actions) floats above.
      */
     padBody: Boolean = true,
+    /** Web phone: the 21.6 px header title used by Search and the detail pages (library headers use 17.6 px). */
+    largeTitle: Boolean = false,
+    /** Web phone: draw the back button in its focused (inverted, 1.055x) state, as the settings index does. */
+    backActive: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val headerInsets = if (padBody || isTelevision) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
@@ -135,10 +144,12 @@ internal fun PlayarrPageScaffold(
             subtitle = subtitle,
             onBack = onBack,
             isTelevision = isTelevision,
+            largeTitle = largeTitle,
+            backActive = backActive,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .then(headerInsets)
-                .padding(start = if (isTelevision) 154.dp else 8.dp, top = if (isTelevision) 56.dp else 16.dp),
+                .padding(start = if (isTelevision) 154.dp else 16.dp, top = if (isTelevision) 56.dp else 2.dp),
         )
         if (filters != null || panelActions != null || trailingNav != null) {
             PlayarrHeaderActions(
@@ -175,8 +186,8 @@ internal fun PlayarrHeaderActions(
 ) {
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
-        modifier.padding(end = if (isTelevision) playarrPageEnd(true) else 72.dp, top = if (isTelevision) 56.dp else 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier.padding(end = if (isTelevision) playarrPageEnd(true) else 72.dp, top = if (isTelevision) 56.dp else 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (trailingNav != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = trailingNav)
@@ -230,60 +241,74 @@ internal fun PlayarrPageHeaderRow(
     isTelevision: Boolean,
     modifier: Modifier = Modifier,
     /** Absolute x (from the screen's left edge) where this row starts; used to measure against the clock. */
-    startInset: Dp = if (isTelevision) 154.dp else 8.dp,
+    startInset: Dp = if (isTelevision) 154.dp else 16.dp,
+    largeTitle: Boolean = false,
+    backActive: Boolean = false,
 ) {
+    val backLabel = playarrString(PlayarrString.CommonBack)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val reservedStartPx = if (isTelevision) with(density) { (PlayarrClockReservedStart - startInset).roundToPx() } else null
     androidx.compose.ui.layout.SubcomposeLayout(modifier) { constraints ->
         val loose = androidx.compose.ui.unit.Constraints()
-        val backSize = (if (isTelevision) 50.dp else 44.dp).roundToPx()
-        val gap = (if (isTelevision) 23.dp else 12.dp).roundToPx()
+        val backSize = (if (isTelevision) 50.dp else 42.dp).roundToPx()
+        val backHeight = (if (isTelevision) 50.dp else 38.dp).roundToPx()
+        val gap = (if (isTelevision) 23.dp else 10.dp).roundToPx()
         val back = subcompose("back") {
-            PlayarrIconButton(
-                onClick = onBack,
-                contentDescription = playarrString(PlayarrString.CommonBack),
-                size = if (isTelevision) PlayarrButtonSize.Large else PlayarrButtonSize.Medium,
-                variant = if (isTelevision) PlayarrButtonVariant.Ghost else PlayarrButtonVariant.Secondary,
-                modifier = if (isTelevision) {
+            if (isTelevision) {
+                PlayarrIconButton(
+                    onClick = onBack,
+                    contentDescription = backLabel,
+                    size = PlayarrButtonSize.Large,
+                    variant = PlayarrButtonVariant.Ghost,
                     // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
-                    Modifier
+                    modifier = Modifier
                         .background(WebHeaderIconFill, CircleShape)
-                        .border(1.dp, WebHeaderIconRing, CircleShape)
-                } else {
-                    Modifier
-                },
-            ) {
-                if (isTelevision) {
+                        .border(1.dp, WebHeaderIconRing, CircleShape),
+                ) {
                     Text("\u2190", color = WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
-                } else {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null, tint = WebInk, modifier = Modifier.size(20.dp))
+                }
+            } else {
+                PlayarrPhoneHeaderPill(onClick = onBack, contentDescription = backLabel, active = backActive, focusScale = if (backActive) 1.055f else 1f, shape = WebEllipseShape) {
+                    // Web draws the arrow as the text glyph "←" at 12.8 px, weight 720.
+                    Text("←", color = if (backActive) WebBackground else WebInkSoft, fontSize = 12.8.sp, fontWeight = FontWeight(720))
                 }
             }
-        }.first().measure(androidx.compose.ui.unit.Constraints.fixed(backSize, backSize))
+        }.first().measure(androidx.compose.ui.unit.Constraints.fixed(backSize, backHeight))
         val titleMax = ((reservedStartPx ?: constraints.maxWidth) - back.width - gap).coerceAtLeast(0)
         val titleP = subcompose("title") {
             Text(
                 title,
                 color = WebInk,
-                fontSize = if (isTelevision) 34.sp else 24.sp,
+                fontSize = if (isTelevision) 34.sp else if (largeTitle) 21.6.sp else 17.6.sp,
                 fontWeight = FontWeight(580),
-                letterSpacing = (-1.5).sp,
+                letterSpacing = if (isTelevision) (-1.5).sp else if (largeTitle) (-0.972).sp else (-0.792).sp,
+                lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else if (largeTitle) 32.4.sp else 26.4.sp,
+                style = if (isTelevision) androidx.compose.ui.text.TextStyle.Default else WebTextStyle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.semantics { heading() },
             )
         }.first().measure(loose.copy(maxWidth = titleMax.coerceAtMost(constraints.maxWidth)))
-        val separator = (if (isTelevision) 47.04.dp else 24.dp).roundToPx()
+        val separator = (if (isTelevision) 47.04.dp else 10.dp).roundToPx()
         val titleEnd = back.width + gap + titleP.width
         val probe = subtitle?.let {
-            subcompose("probe") { PlayarrBreadcrumbText(it) }.first().measure(loose)
+            subcompose("probe") { PlayarrBreadcrumbText(it, phone = !isTelevision) }.first().measure(loose)
         }
         val placement = decideSubtitlePlacement(subtitle != null, titleEnd, probe?.width ?: 0, separator, reservedStartPx)
         val inline = if (placement == PlayarrSubtitlePlacement.Inline) {
             subcompose("inline") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.padding(horizontal = if (isTelevision) 23.04.dp else 10.dp).width(1.dp).height(if (isTelevision) 50.dp else 16.dp).background(if (isTelevision) Color(0x3BDFDCDD) else WebInkMuted.copy(alpha = 0.45f)))
-                    PlayarrBreadcrumbText(subtitle!!)
+                if (isTelevision) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(horizontal = 23.04.dp).width(1.dp).height(50.dp).background(Color(0x3BDFDCDD)))
+                        PlayarrBreadcrumbText(subtitle!!)
+                    }
+                } else {
+                    // Web `.page-header-detail`: 1 px divider the full 38 px header height, 14 px padding, 10 px after the title.
+                    Row(Modifier.height(38.dp).padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.width(1.dp).fillMaxHeight().background(WebDivider))
+                        Spacer(Modifier.width(14.dp))
+                        PlayarrBreadcrumbText(subtitle!!, phone = true)
+                    }
                 }
             }.first().measure(loose)
         } else {
@@ -293,7 +318,7 @@ internal fun PlayarrPageHeaderRow(
             subcompose("wrapped") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(WebInkMuted.copy(alpha = 0.45f)))
-                    PlayarrBreadcrumbText(subtitle!!)
+                    PlayarrBreadcrumbText(subtitle!!, phone = !isTelevision)
                 }
             }.first().measure(loose.copy(maxWidth = (constraints.maxWidth - back.width - gap).coerceAtLeast(0).coerceAtMost((titleP.width + 160.dp.roundToPx()).coerceAtLeast(titleP.width))))
         } else {
@@ -312,13 +337,13 @@ internal fun PlayarrPageHeaderRow(
 }
 
 @Composable
-private fun PlayarrBreadcrumbText(text: String) {
+private fun PlayarrBreadcrumbText(text: String, phone: Boolean = false) {
     Text(
         text,
         color = WebInkMuted,
-        fontSize = 11.136.sp,
+        fontSize = if (phone) 8.sp else 11.136.sp,
         fontWeight = FontWeight(680),
-        letterSpacing = 0.501.sp,
+        letterSpacing = if (phone) 0.36.sp else 0.501.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -335,6 +360,13 @@ internal fun PlayarrHeaderButton(
     active: Boolean = false,
     badge: Int = 0,
 ) {
+    if (!isTelevision) {
+        // Web phone: the label is hidden; a 44 x 38 pill with the 12.4 px sliders glyph.
+        PlayarrPhoneHeaderPill(onClick = onClick, contentDescription = label, modifier = modifier, width = 44.dp, active = active) {
+            Icon(PlayarrWebIcons.Filters, contentDescription = null, modifier = Modifier.size(12.4.dp))
+        }
+        return
+    }
     PlayarrButton(
         onClick = onClick,
         modifier = modifier,
@@ -565,4 +597,55 @@ internal fun PlayarrSkeleton(modifier: Modifier = Modifier, shape: androidx.comp
         label = "skeletonAlpha",
     )
     Box(modifier.alpha(alpha).background(WebSurfaceSoft, shape))
+}
+
+/** Web phone header pill (`.ui-btn--md`): 38 px tall, 1 px translucent border, fully rounded, 70% surface. */
+@Composable
+internal fun PlayarrPhoneHeaderPill(
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    width: Dp = 42.dp,
+    active: Boolean = false,
+    focusScale: Float = 1f,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
+    ) {
+        Surface(
+            onClick = onClick,
+            modifier = modifier.size(width, 38.dp).graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+                .then(
+                    if (focusScale > 1f) {
+                        // Web focus outline: 3 px solid, offset 2 px, following the element's elliptical shape.
+                        Modifier.drawBehind {
+                            val grow = 3.5.dp.toPx()
+                            drawOval(
+                                color = WebInk,
+                                topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
+                                size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
+                .semantics { this.contentDescription = contentDescription },
+            shape = shape,
+            color = if (active) WebInk else WebSurfaceStrong.copy(alpha = 0.7f),
+            contentColor = if (active) WebBackground else WebInkSoft,
+            border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
+        ) {
+            Box(contentAlignment = Alignment.Center) { content() }
+        }
+    }
+}
+
+/** CSS `border-radius: 50%` on a non-square box is an ellipse, not a pill. */
+internal val WebEllipseShape = object : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: LayoutDirection, density: androidx.compose.ui.unit.Density) =
+        androidx.compose.ui.graphics.Outline.Generic(androidx.compose.ui.graphics.Path().apply { addOval(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height)) })
 }

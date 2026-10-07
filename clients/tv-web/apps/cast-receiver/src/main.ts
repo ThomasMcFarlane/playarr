@@ -31,6 +31,11 @@ import {
   PlaybackNegotiator,
   type NegotiationOverrides,
 } from "./negotiation";
+import {
+  INSECURE_SERVER_REMEDY,
+  insecureServerFailureMessage,
+  isMixedContentServer,
+} from "./insecure";
 import { ProgressReporter } from "./progress";
 import {
   clearActiveSubtitleTrack,
@@ -149,14 +154,6 @@ function ensureServerBinding(baseUrl: string): void {
   apiClient = client;
   credentialStore = store;
   negotiator = new PlaybackNegotiator(client);
-}
-
-function isInsecureServer(baseUrl: string): boolean {
-  try {
-    return new URL(baseUrl).protocol === "http:" && location.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +389,11 @@ playerManager.addEventListener(cast.framework.events.EventType.BUFFERING, (event
   progress.onStateChange(resumedState);
 });
 playerManager.addEventListener(cast.framework.events.EventType.ERROR, () => {
+  // A media (segment or file) request to an http:// server can still be
+  // refused by the device after negotiation succeeded; say so, with the remedy.
+  if (currentServerBaseUrl && isMixedContentServer(currentServerBaseUrl, location.protocol)) {
+    messageBus.sendError(undefined, "insecure_server", INSECURE_SERVER_REMEDY, { retryable: false });
+  }
   progress.onStateChange("error");
   negotiator?.clearSession();
 });
@@ -648,12 +650,9 @@ playerManager.setMessageInterceptor(
       );
     }
 
-    if (isInsecureServer(request.server.baseUrl)) {
-      return failLoad(
-        "insecure_server",
-        "Refusing to load an insecure (http://) server from this secure (https://) receiver page."
-      );
-    }
+    // An http:// server is never refused up front (owner rule: Playarr never
+    // blocks a user's http server). It is tried; only a failed attempt is
+    // explained, with the remedy, below.
 
     ensureServerBinding(request.server.baseUrl);
     credentialStore?.setCredentials(request.credentials);
@@ -672,6 +671,8 @@ playerManager.setMessageInterceptor(
       messageBus.broadcastState(buildStateMessage());
       return loadRequestData;
     } catch (err) {
+      const insecure = insecureServerFailureMessage(err, request.server.baseUrl, location.protocol);
+      if (insecure) return failLoad("insecure_server", insecure);
       return failLoad("negotiation_failed", describeApiError(err));
     }
   }

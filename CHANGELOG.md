@@ -13,6 +13,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Phone profile page: the theme and language selectors sit in the logo row instead of covering the "Who's watching?" heading.
+- TV QR sign-in with an `http://` Playarr Server: the server's default verification page is now its own `/tv/link` (reachable over the same scheme), the hosted `playarr.app/link` page hands off to `http://<server>/tv/link?user_code=...` with a one-step explanation, the hosted link endpoints allow cross-origin calls so that page can report the approval back, and the server-hosted client no longer rewrites a public `http://` address to the relay name.
+- VIDAA (and any HTTPS-hosted launcher): an `http://` Playarr Server now works. The server serves the web client itself at `/tv/` (same scheme as the server, so no mixed content), the image and release tarball ship it as `web/tv/`, and the hosted sign-in links to `http://<server>/tv/` with a one-step explanation when it detects an `http://` server instead of failing silently.
+- Chromecast: an `http://` Playarr Server is no longer refused up front by the receiver or hidden on Android. The receiver tries it; if the Cast device blocks the mixed-content request, the sender now shows a clear message with the one-step remedy (an `https://` address via `PLAYARR_RELAY_REGISTER` or a reverse proxy) instead of failing silently. The Android cast dialog now shows receiver errors.
+- Remote control: reinstalling the app no longer leaves a stale "Offline" device and duplicate pairings. Registering a target now accepts an optional `fingerprint`; a new install on the same account with the same fingerprint (or, when either side has none, the same name and platform as an offline target) takes over the old target, its pairings and nothing else. Targets unseen for 30 days are pruned with their pairings revoked, and the target list hides a target that has been offline for over a day when a fresher one has the same name and platform. The Android app sends a hash of its per-device Android id as the fingerprint.
 - Android TV search: pressing Up from Filters now lands on the search field instead of the Back button, matching the web TV search page. Tests pin the focus order on both clients and the first-Enter/OK activation of web TV cards.
 - Phone remote: a press that cannot be delivered now says why, beside the pad instead of below the pairing lists: "No connection" when this phone has no network, "The device did not respond" when the command is not acknowledged within about 4 s (for example the TV app is in the background or its connection dropped), instead of silently doing nothing or blaming the device.
 - Android TV: the pairing approval prompt now keeps retrying to take D-pad focus until it has it, so a slow first composition no longer leaves the remote's keys falling through to the screen behind.
@@ -73,6 +78,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Web title detail: an Add to Playlist pill beside Add to watchlist, and a Download button in each season heading of a series (shown when downloads are allowed); both open the existing playlist picker and download quality drawer.
 - iOS Settings gains a Phone remote section: control another device from the phone (pairing with code approval, D-pad, playback, text) and rename or revoke paired remotes, backed by a PlayarrKit remote client.
 - iOS: Settings, Your data (export and import of your own watch progress, playlists and preferences, with a preview before anything is saved), matching the web copy and options.
 - Pixel parity tooling under `scripts/parity/`: canonical screen list, web reference capture and a pixelmatch diff with an HTML report, documented in `docs/parity/README.md`.
@@ -191,6 +197,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Every client now allows cleartext `http://` connections to the self-hosted Playarr Server the user enters: the Android Google Play flavour no longer denies cleartext, iOS sets `NSAllowsArbitraryLoads`, and the Xbox package declares `privateNetworkClientServer` for home-network servers. HTTPS remains supported and preferred.
+- Android phone: header, navigation, home rails, library grid, search, settings index, title detail pages and calendar follow the web mobile layout in light and dark themes.
 - Android TV: navigation rail, shell clock, profile chip, page header and the library A-Z rail now follow the web TV layout metrics; Calendar moves to the last rail group (and last in the phone navigation order) as on web, and Requests uses the same bookmark glyph as Watchlist.
 - The audio and subtitle pickers on Web and Android now label tracks identically: the localised language name, a distinguishing title, the codec label and the channel layout, for example "German · AAC · Stereo". Web no longer shows the bare language code; Android no longer shows raw layouts like "2.0".
 - Legacy TV package player (VIDAA fallback PWA): the "< Back" seek button and "Exit" are replaced by a single "Close player" X at the top right that stops playback and returns; the seek buttons are relabelled with their step.
@@ -2274,6 +2282,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- `PlayDistributionPolicyTest` now asserts the Play flavour allows cleartext, and `scripts/ci/check-cleartext-policy.sh` (run in CI) checks the Android, iOS, tvOS, Xbox and Tizen configuration.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - CI: new `ios-tests` workflow compiles the iOS app and runs its unit tests on a hosted macOS simulator for pull requests that touch `clients/ios`.
 - The headless player smoke script now also checks close/minimise placement, the Original label, reveal-only tap and Enter, and runs on the 1920x1080 TV layout; vitest guards the player chrome across the web and legacy TV player.
@@ -2294,6 +2303,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
+- Regenerated the `@2x` architecture diagram PNGs from the SQLite-only SVGs, and corrected docs left over from the Postgres era: the backup description on the site (opt-in, age-encrypted, local unless an S3 destination is configured, offline CLI restore), the Kubernetes tier (StatefulSet, volume claim template, no Secret hook), the JWT secret fallback, the multi-node locking claims and the stale persistence gaps in the architecture overview.
+- `sqlx-postgres` stays in `Cargo.lock` because the lockfile records sqlx's optional dependencies whatever the features; it is not in the build graph.
+- Corrected `docs/architecture/auth-modes.md`, which still described the user, policy and refresh-token stores as in-memory.
+- Pixel parity tooling for the Android phone client: platform profile options for capture-web (safe area, font, colour scheme), an emulator capture script, a system-bar mask and the measured results in both themes.
 - Added the 2026-10-07 emulator validation record for the phone remote and playback handoff (`docs/validation/remote-emulator-run-2026-10-07.md`), including what only a real device can prove.
 - Android TV pixel parity captures, per-screen mismatch table and justified exceptions under `docs/parity/android-tv/`.
 - Retook the site, README and Google Play screenshots against a placeholder demo library (generated posters and backdrops served by the fixture stub), so no real title or artwork is shown. Added a dispatchable Apple TV parity capture workflow that uses the built-in placeholder fixtures.

@@ -166,13 +166,11 @@ playback*, not acquisition. The *arr apps keep their own UIs available for
 power users who want them directly; Playarr Server is additive, not a fork or a
 replacement.
 
-**Known gap:** which *arr instances to reconcile against is not yet
-persisted or admin-configurable anywhere in the workspace — the webhook
-receiver's `instance_id` lookup is backed by `playarr-api::SourceInstanceRegistry`,
-a real, thread-safe, in-process registry that starts empty every boot and
-has no admin API to populate it yet (see that type's own doc comment). A
-fresh deployment currently needs its source instances wired in by whoever
-builds the composition root, not configured through the running server.
+Configured *arr connections (`SourceInstance`) are durable: they are written
+to the node's SQLite database through `playarr_db::SourceInstanceRepo`, managed
+through the admin API (`/api/v1/admin/source-instances`), and loaded into the
+in-process `playarr-api::SourceInstanceRegistry` at every boot. The registry is
+only the fast read path and the owner of the live poller trigger channels.
 
 ## The Tdarr background-vs-on-demand transcode split
 
@@ -196,13 +194,12 @@ let one code path serve both:
   ephemeral and — critically — pinned to the node that started it (see the
   session-affinity discussion in
   [`distributed-design.md`](distributed-design.md)); if that node dies, the
-  session dies with it and the client has to restart playback. **Known
-  gap:** `GET /api/v1/playback/{media_file_id}` implements the
-  direct-play/existing-rendition/on-demand-transcode *decision* and returns
-  a well-known-convention URL for the chosen mode, but actually serving
-  bytes at that URL (range requests for direct-play, HLS playlist/segment
-  serving for the transcode paths) is not implemented yet — see the
-  `TODO(streaming)` on `PlaybackInfoResponse` in `playarr-api`.
+  session dies with it and the client has to restart playback. `GET /api/v1/playback/{media_file_id}` makes the
+  direct-play/existing-rendition/on-demand-transcode decision, and the
+  media routes serve the result: byte-range direct-play at
+  `/api/v1/media/{media_file_id}/stream`, and HLS playlists and segments for
+  durable renditions and live on-demand sessions under
+  `/api/v1/media/renditions/...` and `/api/v1/media/sessions/...`.
 
 Sharing infrastructure between these two would compromise both: background
 jobs would either starve on-demand playback of CPU, or on-demand playback
@@ -317,39 +314,25 @@ guarantees above.
 ## Known gaps as of this pass
 
 The docs under `docs/architecture/` describe both what's built and, where
-relevant, what isn't yet — called out explicitly rather than glossed over.
-The recurring theme across the backend today is: the domain types and the
-trait boundaries they'll eventually persist through already exist, but a
-few of the concrete persistence layers behind those traits don't yet, so
-some real, working functionality is currently backed by an in-process store
-that resets on restart and doesn't survive/coordinate across a multi-node
-deployment. Concretely:
+relevant, what isn't yet, called out explicitly rather than glossed over.
+Persistence is no longer one of those gaps: users, policies, refresh tokens,
+source instances and the catalogue are durable in the node's SQLite database
+(see `playarr-db`'s repositories). The state that is deliberately process-local
+and resets on restart is:
 
-- **No persisted `User`/`Policy` store.** `playarr-auth::InMemoryUserDirectory`
-  and `playarr-auth::InMemoryAdminRegistry` are real, working
-  implementations, not mocks — but there is no `UserRepo`/`PolicyRepo` in
-  `playarr-db`, so accounts and admin status don't survive a restart and
-  aren't shared across nodes in a multi-node deployment. See
-  [`auth-modes.md`](auth-modes.md) for the direct consequence this has for
-  `AuthMode::FullAccount`.
-- **Refresh tokens and RFC 8628 device-authorization state are in-memory.**
-  `RefreshTokenService`/`DashMapDeviceFlowHandler` work correctly within one
-  process's lifetime; a restart or a second node cannot see the other's
-  sessions.
-- **No persisted `SourceInstance` configuration** — see "The arr-wrapping
-  approach" above.
-- **On-demand transcode segment/playlist serving is not implemented** — see
-  "The Tdarr background-vs-on-demand transcode split" above.
-
-None of this is silently papered over in code: every one of the in-memory
-stores above documents its own "not a mock, but pending real persistence"
-status directly in its module doc comment, with a `TODO(persistence)`
-pointing at what should replace it.
+- **RFC 8628 device-authorisation state**
+  (`playarr-auth`'s `InMemoryDeviceAuthorizationStore`): a pending device
+  code does not survive a restart, and is not visible to another node. See
+  [`auth-modes.md`](auth-modes.md).
+- **The cache and on-demand transcode sessions** (`playarr-cache`, in-memory
+  moka): scoped to one node by design, as described in
+  [`distributed-design.md`](distributed-design.md).
 
 ## Where to go next
 
 - New to the storage layer? Start with
-  [ADR 0001: storage engine](adr/0001-storage-engine.md).
+  [ADR 0002: SQLite-only storage](adr/0002-sqlite-only-storage.md)
+  (ADR 0001 is superseded and kept for history).
 - Implementing or reviewing auth? Read [`auth-modes.md`](auth-modes.md).
 - Working on clustering, node affinity, or the coordinator? Read
   [`distributed-design.md`](distributed-design.md).

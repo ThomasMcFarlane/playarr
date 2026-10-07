@@ -14281,6 +14281,14 @@ components:
           items:
             type: string
           description: 'Advertised capabilities: `navigate`, `text`, `playback`, `input`, `handoff`.'
+        fingerprint:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Optional install-independent device fingerprint (for example a hash of the platform's
+            per-device identifier). A reinstalled app that presents the same fingerprint on the same
+            account reclaims its previous target and pairings instead of adding a duplicate.
         name:
           type: string
           description: Human-readable device name shown on controllers.

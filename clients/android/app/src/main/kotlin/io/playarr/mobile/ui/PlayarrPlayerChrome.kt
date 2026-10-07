@@ -102,6 +102,8 @@ private enum class PlayarrCastDialogKind { Picker, Connected }
 internal data class PlayarrPlayerCastState(
     val visible: Boolean = false,
     val connectionState: PlayarrCastConnectionState = PlayarrCastConnectionState.Unavailable,
+    val error: String? = null,
+    val onDismissError: () -> Unit = {},
     val routes: List<PlayarrCastRoute> = emptyList(),
     val onStartDiscovery: () -> Unit = {},
     val onStopDiscovery: () -> Unit = {},
@@ -376,12 +378,17 @@ internal fun PlayarrPlayerChrome(
         )
     }
 
+    LaunchedEffect(cast.error) {
+        if (cast.error != null) castDialog = PlayarrCastDialogKind.Connected
+    }
+
     castDialog?.let { kind ->
         PlayarrCastDialog(
             kind = kind,
             cast = cast,
             onDismiss = {
                 if (kind == PlayarrCastDialogKind.Picker) cast.onStopDiscovery()
+                cast.onDismissError()
                 castDialog = null
                 showControls()
             },
@@ -407,7 +414,7 @@ private fun PlayarrCastDialog(
         text = {
             when (kind) {
                 PlayarrCastDialogKind.Connected -> Text(
-                    playarrString(
+                    cast.error ?: playarrString(
                         PlayarrString.CastButtonConnectedLabel,
                         "device" to (
                             (cast.connectionState as? PlayarrCastConnectionState.Connected)?.deviceName

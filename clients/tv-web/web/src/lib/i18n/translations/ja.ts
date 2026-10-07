@@ -198,7 +198,7 @@ export const ja: Translations = {
   "components.player.cast.unavailableBrowser":
     "このブラウザはキャストに対応していません。デスクトップまたはAndroidのChromeかMicrosoft Edgeをお試しください。",
   "components.player.cast.unavailableInsecureServer":
-    "このサーバーはセキュアな接続(HTTPS)を使用していないため、Chromecastでは再生できません。",
+    "このChromecastはhttp://経由でこのサーバーに接続できませんでした。必要な対応は1つだけです。サーバーにhttps://アドレスを設定し(PLAYARR_RELAY_REGISTER=trueとPLAYARR_ACME_CHALLENGE=relay-dns-01を設定するか、TLSリバースプロキシを使用)、そのアドレスで再度サインインしてからキャストし直してください。このデバイスでの再生は引き続き利用できます。",
   "components.player.cast.error":
     "キャストが予期せず停止しました。もう一度お試しいただくか、このデバイスで視聴を続けてください。",
 
@@ -277,6 +277,8 @@ export const ja: Translations = {
   "lib.toast.dismiss": "{{message}}を閉じる",
 
   "pages.deviceLink.title": "テレビを連携",
+  "pages.deviceLink.openOnServer": "お使いのPlayarrサーバーはhttp://を使用しており、この安全なページからは接続できません。必要な対応は1つだけです。代わりにサーバー自身のページでコードを承認してください。",
+  "pages.deviceLink.openOnServerLink": "サーバーで開く",
   "pages.deviceLink.kicker": "テレビでサインイン",
   "pages.deviceLink.linkedHeading": "テレビが連携されました",
   "pages.deviceLink.linkedBody": "テレビの画面に戻ってください。Playarrが自動的にサインインを完了します。",
@@ -392,7 +394,8 @@ export const ja: Translations = {
   "pages.login.errorGeneric":
     "サインインに失敗しました。ユーザー名とパスワードを確認してもう一度お試しください。",
   "pages.login.errorInsecureContentBlocked":
-    "ブラウザがこの直接HTTP接続をブロックしました。playarr.appのサイト設定を開き、「安全でないコンテンツ」を「許可」に設定してPlayarrを再読み込みしてから、もう一度お試しください。",
+    "安全なplayarr.appページからのこのhttp://接続はブラウザにブロックされました。必要な対応は1つだけです。下のリンクからご自身のサーバー(http://your-server/tv/)でPlayarrを開き、そこでサインインしてください。",
+  "pages.login.openFromServer": "代わりにご自身のサーバーからPlayarrを開く(ブラウザ設定は不要)",
   "pages.login.errorLanUnreachable":
     "このLANサーバーに接続できませんでした。URLを確認し、ブラウザから確認を求められたらローカルネットワークへのアクセスを許可してください。",
   "pages.login.qrDescription":

@@ -16,6 +16,7 @@ compose file here assume.
 | `docker-compose.dev.yml` | Local dev stack: Sonarr/Radarr/Lidarr/Bazarr/Prowlarr/Readarr/Tdarr, plus a real `playarr` service (`PLAYARR_ROLE=all`) built from `backend.Dockerfile`. |
 | `docker-compose.ci.yml` | Same dependency stack, tuned for CI (tmpfs instead of named volumes, fast healthchecks), plus a `playarr` service built from `backend.Dockerfile`. |
 | `docker-compose.mock.yml` | WireMock stand-ins for the six *arr APIs (`mocks/wiremock/<app>/mappings/*.json`), same service names/ports as `docker-compose.dev.yml`, for fast tests of code that consumes those APIs without booting six real .NET apps. |
+| `docker-compose.standalone.yml` | Minimal stack: just the `playarr` service (`PLAYARR_ROLE=all`, SQLite on a named volume) for use against *arr apps and Tdarr you already run elsewhere. |
 | `docker-compose.prod.yml` | Reference production stack: one `playarr` server (`PLAYARR_ROLE=all`, SQLite on a named volume) behind Caddy (`prod/Caddyfile`). |
 | `docker-compose.watchtower.optional.yml` | Opt-in overlay: label-scoped automatic image updates for `playarr-*` services only. Layer with `-f`; does nothing standalone. |
 | `observability/docker-compose.yml` | Optional Prometheus + Grafana overlay. Its own compose project; joins the base stack's `playarr-net` network. |
@@ -43,12 +44,15 @@ are valid) -- the container would have refused to boot as shipped (fixed to
   the binary) are kept in sync with these by hand -- there's no single
   source of truth deriving one from the other, so if either changes,
   update both.
-- **Env var names**: the binary reads `DATABASE_URL` (a `sqlite:` URL),
-  `PLAYARR_ROLE`, `PLAYARR_LOG`, `PLAYARR_HTTP_BIND_ADDR`,
-  `PLAYARR_METRICS_BIND_ADDR`, `PLAYARR_OTLP_ENDPOINT` -- nothing else.
-  `PLAYARR_HTTP_BIND_ADDR`/`PLAYARR_METRICS_BIND_ADDR` are full socket
-  addresses (`"0.0.0.0:8484"`), not bare port numbers. Earlier drafts of
-  these compose files used `APP_ENV`/`LOG_LEVEL`/`LOG_FORMAT`/
+- **Env var names**: the core variables are `DATABASE_URL` (a `sqlite:` URL;
+  anything else, including `postgres://`, fails startup), `PLAYARR_ROLE`,
+  `PLAYARR_LOG`, `PLAYARR_HTTP_BIND_ADDR`, `PLAYARR_METRICS_BIND_ADDR` and
+  `PLAYARR_OTLP_ENDPOINT`. `playarr-config` also reads the TLS/ACME
+  (`PLAYARR_TLS_*`, `PLAYARR_ACME_*`) and relay (`PLAYARR_RELAY_*`) settings,
+  and the server reads `PLAYARR_JWT_SECRET`, `PLAYARR_ARTWORK_CACHE_DIR` and the
+  `PLAYARR_BACKUP_*` family. `PLAYARR_HTTP_BIND_ADDR`/`PLAYARR_METRICS_BIND_ADDR`
+  are full socket addresses (`"0.0.0.0:8484"`), not bare port numbers. Earlier
+  drafts of these compose files used `APP_ENV`/`LOG_LEVEL`/`LOG_FORMAT`/
   `METRICS_ENABLED`/`HTTP_PORT`/`METRICS_PORT` as if the binary read them
   directly -- it never did; those names are now only used where noted above
   as Dockerfile-local shell convenience, not application config.
@@ -68,6 +72,17 @@ are valid) -- the container would have refused to boot as shipped (fixed to
 - **Image repository** `ghcr.io/playarr/playarr` (in `docker-compose.prod.yml`
   and the Watchtower overlay) matches `infra/kubernetes/helm/playarr/values.yaml`'s
   `image.repository` and `Chart.yaml`'s `sources`/`home` URLs.
+
+## Backups
+
+None of these stacks turns backups on. The server's backup feature (age-encrypted
+archives, see [`docs/architecture/server-backups.md`](../../docs/architecture/server-backups.md))
+is off until `PLAYARR_BACKUP_DIR` and at least one `PLAYARR_BACKUP_RECIPIENTS` public
+key are set; point `PLAYARR_BACKUP_DIR` at a path under the data volume (for
+example `/data/backups`) or a separate volume. A backup on the same volume as the
+database guards against corruption and mistakes, not against losing the host; copy
+archives off the node or configure the optional `PLAYARR_BACKUP_S3_*` replica.
+Restore is an offline CLI action (`playarr-server backup restore`).
 
 ## Third-party image choices
 

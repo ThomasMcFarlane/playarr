@@ -198,7 +198,7 @@ export const th: Translations = {
   "components.player.cast.unavailableBrowser":
     "เบราว์เซอร์นี้ไม่รองรับการแคสต์ กรุณาใช้ Chrome หรือ Microsoft Edge บนคอมพิวเตอร์หรือ Android แทน",
   "components.player.cast.unavailableInsecureServer":
-    "เซิร์ฟเวอร์นี้ไม่ได้ใช้การเชื่อมต่อที่ปลอดภัย (HTTPS) จึงไม่สามารถแคสต์ไปยัง Chromecast ได้",
+    "Chromecast เชื่อมต่อกับเซิร์ฟเวอร์นี้ผ่าน http:// ไม่ได้ ขั้นตอนเดียว: ตั้งที่อยู่ https:// ให้เซิร์ฟเวอร์ (ตั้งค่า PLAYARR_RELAY_REGISTER=true และ PLAYARR_ACME_CHALLENGE=relay-dns-01 หรือใช้ TLS reverse proxy) เข้าสู่ระบบใหม่ด้วยที่อยู่นั้น แล้วแคสต์อีกครั้ง การเล่นบนอุปกรณ์นี้ยังใช้งานได้ตามปกติ",
   "components.player.cast.error":
     "การแคสต์หยุดทำงานกะทันหัน กรุณาลองอีกครั้ง หรือดูต่อบนอุปกรณ์นี้",
 
@@ -278,6 +278,8 @@ export const th: Translations = {
   "lib.toast.dismiss": "ปิด {{message}}",
 
   "pages.deviceLink.title": "เชื่อมโยงทีวี",
+  "pages.deviceLink.openOnServer": "เซิร์ฟเวอร์ Playarr ของคุณใช้ http:// ซึ่งหน้าที่ปลอดภัยนี้เข้าถึงไม่ได้ ขั้นตอนเดียว: อนุมัติรหัสที่หน้าของเซิร์ฟเวอร์ของคุณแทน",
+  "pages.deviceLink.openOnServerLink": "เปิดบนเซิร์ฟเวอร์ของคุณ",
   "pages.deviceLink.kicker": "เข้าสู่ระบบทีวี",
   "pages.deviceLink.linkedHeading": "เชื่อมโยงทีวีแล้ว",
   "pages.deviceLink.linkedBody": "กลับไปที่ทีวีของคุณ Playarr จะเข้าสู่ระบบให้เสร็จสมบูรณ์โดยอัตโนมัติ",
@@ -395,7 +397,8 @@ export const th: Translations = {
   "pages.login.errorGeneric":
     "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบชื่อผู้ใช้และรหัสผ่านแล้วลองอีกครั้ง",
   "pages.login.errorInsecureContentBlocked":
-    "เบราว์เซอร์บล็อกการเชื่อมต่อ HTTP โดยตรงนี้ กรุณาเปิดการตั้งค่าไซต์สำหรับ playarr.app ตั้งค่า Insecure content เป็น Allow โหลด Playarr ใหม่ แล้วลองอีกครั้ง",
+    "เบราว์เซอร์บล็อกการเชื่อมต่อ http:// นี้จากหน้า playarr.app ที่ปลอดภัย ขั้นตอนเดียว: เปิด Playarr จากเซิร์ฟเวอร์ของคุณเองผ่านลิงก์ด้านล่าง (http://your-server/tv/) แล้วเข้าสู่ระบบที่นั่น",
+  "pages.login.openFromServer": "เปิด Playarr จากเซิร์ฟเวอร์ของคุณแทน (ไม่ต้องตั้งค่าเบราว์เซอร์)",
   "pages.login.errorLanUnreachable":
     "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ LAN นี้ได้ กรุณาตรวจสอบ URL และอนุญาต Local Network Access เมื่อเบราว์เซอร์ของคุณถาม",
   "pages.login.qrDescription":

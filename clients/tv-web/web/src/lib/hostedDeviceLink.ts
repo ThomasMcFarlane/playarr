@@ -7,6 +7,15 @@ import {
 } from "@playarr-tv/device-auth";
 
 const HOSTED_LINK_ORIGIN = "https://playarr.app";
+/**
+ * Where the phone-side link calls (`/api/link/session`, `/api/link/authorize`) go. On playarr.app they are
+ * same-origin (""); the web client served by a plain-http Playarr Server at /tv/ (`--mode server`) is a
+ * different origin, so it calls the hosted service absolutely (CORS is open on those endpoints).
+ */
+export function hostedLinkApiBase(mode: string = import.meta.env.MODE): string {
+  return mode === "server" ? HOSTED_LINK_ORIGIN : "";
+}
+
 export const HOSTED_LINK_CLAIM_REDEMPTION_GRACE_MS = 30 * 1000;
 
 interface HostedLinkSession {
@@ -165,7 +174,7 @@ export async function pollHostedDeviceLink(
 }
 
 export async function inspectHostedLink(userCode: string): Promise<HostedLinkSession | null> {
-  const response = await fetch(`/api/link/session?user_code=${encodeURIComponent(userCode)}`, {
+  const response = await fetch(`${hostedLinkApiBase()}/api/link/session?user_code=${encodeURIComponent(userCode)}`, {
     headers: { Accept: "application/json" },
   });
   if (response.status === 404) return null;
@@ -188,7 +197,7 @@ export async function authoriseHostedLink(options: {
     server_device_code: serverCode.deviceCode,
     server_urls: bundledServers?.length ? bundledServers : [options.serverUrl],
   };
-  const response = await fetch("/api/link/authorize", {
+  const response = await fetch(`${hostedLinkApiBase()}/api/link/authorize`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(claim),

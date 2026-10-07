@@ -47,12 +47,11 @@ And the same two probe paths:
 | `/healthz` | `livenessProbe` |
 | `/readyz` | `readinessProbe` |
 
-These four values (ports + paths) are assumptions made while scaffolding
-this chart, not something read from the actual `playarr` binary's source.
-If the real binary uses different ports or probe paths, update
-`values.yaml`'s `probes.*` / `config.*` (Helm) or the hardcoded values in
-`base/*.yaml` (kustomize) - both paths were built to make that a small,
-localized edit.
+These four values (ports + paths) match the real binary: `8484` and `9090`
+are the defaults of `PLAYARR_HTTP_BIND_ADDR` and `PLAYARR_METRICS_BIND_ADDR`,
+and `/healthz` and `/readyz` are served by the API router. If you change the
+bind addresses, update `values.yaml`'s `probes.*` / `config.*` (Helm) or the
+hardcoded values in `base/*.yaml` (kustomize) together.
 
 ## Helm chart (`helm/playarr/`)
 
@@ -86,9 +85,15 @@ the deployed version means bumping both `Chart.yaml appVersion` and
 `DATABASE_URL` is not a value: the chart sets `sqlite://<persistence.mountPath>/playarr.db`
 and mounts a PersistentVolumeClaim (`persistence.size`,
 `persistence.storageClassName`) there. A `postgres://` URL is rejected by the
-server at startup. Back up the volume with the server's own backup feature
-(see `docs/architecture/server-backups.md`) rather than copying a live
-database file.
+server at startup. Do not copy the live database file out from under a running
+server. The chart does not enable the server's backup feature (age-encrypted
+archives, see `docs/architecture/server-backups.md`): it stays off until you
+set `PLAYARR_BACKUP_DIR` and `PLAYARR_BACKUP_RECIPIENTS` through `config`.
+Point `PLAYARR_BACKUP_DIR` at a path on the PVC (for example `/data/backups`) or
+another volume; a backup on the same PVC does not survive losing the volume, so
+download archives from the Admin page or configure the optional
+`PLAYARR_BACKUP_S3_*` replica. Restore is an offline CLI action, run with the
+server stopped.
 
 ### ServiceMonitor
 
