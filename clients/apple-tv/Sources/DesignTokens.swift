@@ -35,6 +35,9 @@ enum DesignTokens {
         static let inkSoft = adaptive(light: 0x675961, dark: 0xc5b8bd)
         static let inkMuted = adaptive(light: 0xa5969e, dark: 0x887a82)
         static let accentSoft = adaptive(light: 0xc5b8bd, dark: 0x675961)
+        /// `--accent` and `--on-accent` (primary buttons).
+        static let accent = adaptive(light: 0x675961, dark: 0xdfdcdd)
+        static let onAccent = adaptive(light: 0xffffff, dark: 0x211d21)
         static let brandPink = SwiftUI.Color(red: 0xcf / 255, green: 0x31 / 255, blue: 0x57 / 255) // #cf3157
         static let danger = adaptive(light: 0xa8464c, dark: 0xee9297)
         static let success = adaptive(light: 0x347559, dark: 0x7fc09d)

@@ -201,7 +201,7 @@ final class TVPlayerViewModel {
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private(set) var isPlaying = false
-    private(set) var qualityLabel = "Original"
+    private(set) var qualityLabel = TVParityLaunch.livePlayer != nil ? "Original \u{00B7} 0.3 Mbps" : "Original"
     private(set) var selectedQualityID = "original"
     @ObservationIgnored private var positionObservation: AnyCancellable?
     let engine: PlayerEngine

@@ -17,17 +17,31 @@ enum TVTheme {
     /// Avenir Next ships on tvOS / macOS; fall back to system if missing.
     private static let family = "Avenir Next"
 
-    static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        let name: String
+    /// CSS `font-weight` for a SwiftUI weight, as the web client uses them for text of that role.
+    static func cssWeight(_ weight: Font.Weight) -> CGFloat {
         switch weight {
-        case .ultraLight, .thin, .light: name = "AvenirNext-UltraLight"
-        case .medium: name = "AvenirNext-Medium"
-        case .semibold: name = "AvenirNext-DemiBold"
-        case .bold, .heavy: name = "AvenirNext-Bold"
-        case .black: name = "AvenirNext-Heavy"
-        default: name = "AvenirNext-Regular"
+        case .ultraLight, .thin, .light: return 300
+        case .medium: return 560
+        case .semibold: return 620
+        case .bold: return 700
+        case .heavy: return 800
+        case .black: return 900
+        default: return 400
         }
-        return .custom(name, size: size)
+    }
+
+    /// The design font (Nunito Sans, variable) at a CSS weight such as 560 or 610.
+    static func font(size: CGFloat, css weight: CGFloat) -> Font {
+        Font(TVFontLoader.uiFont(mono: false, size: size, weight: weight))
+    }
+
+    /// JetBrains Mono (variable) at a CSS weight, for the version label and technical runs.
+    static func mono(size: CGFloat, css weight: CGFloat) -> Font {
+        Font(TVFontLoader.uiFont(mono: true, size: size, weight: weight))
+    }
+
+    static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        font(size: size, css: cssWeight(weight))
     }
 
     static func displayFont() -> Font {
@@ -678,11 +692,11 @@ struct TVShellHeader: View {
                 PlayarrLogoMark(size: DesignTokens.Shell.logoSize)
                     .placed(x: 60.6, y: 60.2)
                 HStack(spacing: 11.2) {
-                    Text(frozenClock ? "05:59" : Self.liveTimeString())
+                    Text(Self.timeString(frozen: frozenClock))
                         .font(TVTheme.font(size: 17.28, weight: .bold))
                         .tracking(-0.52)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text(frozenClock ? "WED 29 JULY" : Self.liveDateString())
+                    Text(Self.dateString(frozen: frozenClock))
                         .font(TVTheme.font(size: 11.14, weight: .semibold))
                         .tracking(0.45)
                         .foregroundStyle(DesignTokens.Color.textDisabled)
@@ -702,11 +716,11 @@ struct TVShellHeader: View {
             HStack(spacing: 11) {
                 // Frozen time matches the Playwright reference frames used by
                 // the honest suite (`run-4` / `run-honest-*` capture 05:59).
-                Text(frozenClock ? "05:59" : Self.liveTimeString())
+                Text(Self.timeString(frozen: frozenClock))
                     .font(TVTheme.font(size: 17, weight: .bold))
                     .tracking(-0.5)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text(frozenClock ? "WED 29 JULY" : Self.liveDateString())
+                Text(Self.dateString(frozen: frozenClock))
                     .font(TVTheme.font(size: 11, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(DesignTokens.Color.textDisabled)
@@ -728,16 +742,21 @@ struct TVShellHeader: View {
         .allowsHitTesting(false)
     }
 
-    private static func liveTimeString() -> String {
+    /// The frozen clock is the instant the web references froze, shown in UTC like the web capture.
+    private static func timeString(frozen: Bool) -> String {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
         f.dateFormat = "HH:mm"
-        return f.string(from: Date())
+        if frozen { f.timeZone = TimeZone(identifier: "UTC") }
+        return f.string(from: frozen ? TVParityLaunch.frozenNow : Date())
     }
 
-    private static func liveDateString() -> String {
+    private static func dateString(frozen: Bool) -> String {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
         f.dateFormat = "EEE d MMMM"
-        return f.string(from: Date()).uppercased()
+        if frozen { f.timeZone = TimeZone(identifier: "UTC") }
+        return f.string(from: frozen ? TVParityLaunch.frozenNow : Date()).uppercased()
     }
 }
 
@@ -775,5 +794,34 @@ struct TVProfileChip: View {
                     .padding(.leading, 44)
             }
         }
+    }
+}
+
+/// Loads the bundled variable design fonts (`UIAppFonts`) and sets the weight axis. Nunito Sans
+/// keeps width 100, optical size 12 and `YTLC` 500 as on the web; its file defaults to weight 200,
+/// so the weight is always set. Falls back to the system font if the files are missing.
+enum TVFontLoader {
+    private static let wght = NSNumber(value: 2003265652) // 'wght'
+    private static let wdth = NSNumber(value: 2003072104) // 'wdth'
+    private static let opsz = NSNumber(value: 1869640570) // 'opsz'
+    private static let ytlc = NSNumber(value: 1498696771) // 'YTLC'
+    private static var cache: [String: UIFont] = [:]
+
+    static func uiFont(mono: Bool, size: CGFloat, weight: CGFloat) -> UIFont {
+        let key = "\(mono)-\(size)-\(weight)"
+        if let cached = cache[key] { return cached }
+        let family = mono ? "JetBrains Mono" : "Nunito Sans"
+        // `NunitoSans-wght-web.ttf` has the web's width, optical size and YTLC baked in: only the weight is free.
+        let axes: [NSNumber: Any] = [wght: weight]
+        let base = UIFontDescriptor(fontAttributes: [.family: family])
+        let descriptor = base.addingAttributes([
+            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
+        ])
+        var font = UIFont(descriptor: descriptor, size: size)
+        if font.familyName != family {
+            font = UIFont.systemFont(ofSize: size, weight: mono ? .regular : UIFont.Weight(rawValue: (weight - 400) / 500))
+        }
+        cache[key] = font
+        return font
     }
 }

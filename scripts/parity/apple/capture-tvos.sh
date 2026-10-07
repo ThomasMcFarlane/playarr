@@ -25,7 +25,8 @@ node -e '
   xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
   xcrun simctl launch "$udid" "$bundle" \
     -PlayarrServerURL "$server" -PlayarrAccessToken "$tok" -PlayarrParityRoute "$route" -PlayarrTheme "${PARITY_THEME:-dark}" >/dev/null
-  sleep "${PARITY_SETTLE_SECONDS:-10}"
+  # The player starts the real stream and pauses it at 2.0 s: give it longer.
+  if [[ "$route" == player:* ]]; then sleep 14; else sleep "${PARITY_SETTLE_SECONDS:-10}"; fi
   xcrun simctl io "$udid" screenshot "$out/$id.png"
   echo "captured $id ($route)"
 done

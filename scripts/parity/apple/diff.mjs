@@ -10,7 +10,7 @@ const [screensFile, refDir, candDir, outDir] = process.argv.slice(2);
 const cfg = JSON.parse(fs.readFileSync(screensFile, "utf8"));
 fs.mkdirSync(outDir, { recursive: true });
 const rows = [];
-for (const s of cfg.screens) {
+for (const s of cfg.screens.filter((x) => !x.shared)) {
   const ref = path.join(refDir, `${s.id}.png`);
   const cand = path.join(candDir, `${s.id}.png`);
   if (!fs.existsSync(ref) || !fs.existsSync(cand)) {

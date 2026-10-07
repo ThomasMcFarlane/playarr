@@ -40,12 +40,20 @@ struct TVPlayerView: View {
 
     var body: some View {
         if let parity {
-            ZStack {
-                Color.black.ignoresSafeArea()
+            // Parity route: the fixture clips are Matroska and the runner cannot transcode, so the video
+            // layer is the server's frame of the clip at the paused position, scaled to the stage.
+            ZStack(alignment: .topLeading) {
+                Color.black
+                TVAuthedImage(load: {
+                    let data = try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(parity.position * 1000))
+                    return TVVideoFrameColour.matchingBrowser(data)
+                }) { Color.black }
+                    .frame(width: 1920, height: 1080)
+                    .clipped()
                 TVPlayerChrome(
                     state: TVPlayerChromeState(
                         position: parity.position,
-                        duration: viewModel.duration > 0 ? viewModel.duration : parity.duration,
+                        duration: parity.duration,
                         isPlaying: false,
                         qualityLabel: viewModel.qualityLabel,
                         selectedQualityID: viewModel.selectedQualityID,
@@ -54,6 +62,7 @@ struct TVPlayerView: View {
                     frozen: true
                 )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .ignoresSafeArea()
             .task { await viewModel.loadInfo(mediaFileID: mediaFileID) }
         } else {

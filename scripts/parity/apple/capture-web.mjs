@@ -43,6 +43,8 @@ const browser = await chromium.launch(process.env.PARITY_CHROME_CHANNEL ? { chan
 async function contextFor(user) {
   const t = user === cfg.user ? tok : await login(user);
   const context = await browser.newContext({
+    // The TV layout is captured as a real TV client (same user agent as the shared references).
+    ...(cfg.userAgent ? { userAgent: cfg.userAgent } : {}),
     viewport: cfg.viewport, deviceScaleFactor: cfg.dpr ?? 1, isMobile: !!cfg.mobile, hasTouch: !!cfg.mobile,
     reducedMotion: "reduce", timezoneId: "UTC", locale: "en-GB", colorScheme: THEME,
   });

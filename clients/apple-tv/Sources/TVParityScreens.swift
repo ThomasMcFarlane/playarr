@@ -61,8 +61,8 @@ extension TVParityLaunch {
         }
     }
 
-    /// The instant the web reference freezes its clock at (2026-07-29 05:59 UTC).
-    static var frozenNow: Date { Date(timeIntervalSince1970: 1_785_304_740) }
+    /// The instant the web references freeze their clock at (2026-10-07 12:00 UTC).
+    static var frozenNow: Date { Date(timeIntervalSince1970: 1_791_374_400) }
 
     /// Static chrome (floating nav, no focus effects, frozen clock): fixture screens and live routes.
     static var frozen: Bool { requestedScreen != nil || isLive }
@@ -151,7 +151,7 @@ struct TVParityLivePlayerView: View {
                     mediaFileID: mediaFileID,
                     title: target.title,
                     apiClient: environment.apiClient,
-                    parity: (position: 2, duration: 6, menuOpen: target.menuOpen)
+                    parity: (position: 2, duration: 60, menuOpen: target.menuOpen)
                 )
             } else {
                 Color.black.ignoresSafeArea()

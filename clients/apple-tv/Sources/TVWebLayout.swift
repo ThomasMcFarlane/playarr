@@ -1,3 +1,5 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 /// Building blocks for screens laid out on the web TV grid (1920x1080 stage, CSS pixels
@@ -139,7 +141,7 @@ struct TVAuthedImage<Placeholder: View>: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().interpolation(.high).scaledToFill()
             } else {
                 placeholder()
             }
@@ -154,8 +156,8 @@ struct TVAuthedImage<Placeholder: View>: View {
 
 /// Greedy word wrap using the real font metrics, so multi-line titles break where the web's do.
 enum TVTextWrap {
-    static func lines(_ text: String, fontName: String, size: CGFloat, kern: CGFloat, width: CGFloat) -> [String] {
-        guard let font = UIFont(name: fontName, size: size) else { return [text] }
+    static func lines(_ text: String, weight: CGFloat, size: CGFloat, kern: CGFloat, width: CGFloat) -> [String] {
+        let font = TVFontLoader.uiFont(mono: false, size: size, weight: weight)
         func measure(_ value: String) -> CGFloat {
             (value as NSString).size(withAttributes: [.font: font, .kern: kern]).width
         }
@@ -218,22 +220,29 @@ struct TVWebProfileChip: View {
     var userID: String = ""
     var presetName: String? = nil
 
+    /// Width of the name at 11.14px / 690 with 0.22px tracking (the capsule grows with it).
+    private var nameWidth: CGFloat {
+        let font = TVFontLoader.uiFont(mono: false, size: 11.14, weight: 690)
+        return ceil((name as NSString).size(withAttributes: [.font: font, .kern: 0.22]).width)
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Capsule()
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.66))
                 .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
-                .placed(x: 58.5, y: 997.3, w: 104.3, h: 48.2)
+                .placed(x: 58.5, y: 997.3, w: 64.9 + nameWidth, h: 48.2)
             TVProfileAvatar(userID: userID, size: 34, presetName: presetName)
                 .placed(x: 65.6, y: 1004.4, w: 34, h: 34)
             Text(name)
-                .font(TVTheme.font(size: 11.14, weight: .bold))
+                .font(TVTheme.font(size: 11.14, css: 690))
                 .tracking(0.22)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .lineLimit(1)
-                .placed(x: 110, y: 1013, w: 48, h: 16.7)
+                .fixedSize()
+                .placed(x: 110, y: 1013, w: nameWidth, h: 16.7)
             Text(version)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(TVTheme.mono(size: 8, css: 700))
                 .tracking(0.32)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .placed(x: 66.3, y: 1050.5, h: 8)
@@ -337,15 +346,14 @@ struct TVStageWash: View {
 /// The big title of Home, Library and detail: wraps at 379.5 like the web and keeps 62.2px lines.
 struct TVHeroTitle: View {
     var title: String
-    var fontName = "AvenirNext-Medium"
-    var weight: Font.Weight = .medium
+    var cssWeight: CGFloat = 560
 
     var body: some View {
-        let lines = TVTextWrap.lines(title, fontName: fontName, size: 69.12, kern: -4.98, width: 379.5)
+        let lines = TVTextWrap.lines(title, weight: cssWeight, size: 69.12, kern: -4.98, width: 379.5)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(TVTheme.font(size: 69.12, weight: weight))
+                    .font(TVTheme.font(size: 69.12, css: cssWeight))
                     .tracking(-4.98)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
@@ -353,5 +361,25 @@ struct TVHeroTitle: View {
                     .frame(width: 379.5, height: 62.2, alignment: .leading)
             }
         }
+    }
+}
+
+/// Chrome shows a decoded video frame through its own colour conversion; the server's JPEG frame is
+/// converted differently (a BT.601 against BT.709 luma split that moves only the green channel).
+/// This applies the fitted correction so the parity route's picture matches what the browser shows.
+enum TVVideoFrameColour {
+    static func matchingBrowser(_ data: Data) -> Data {
+        guard let image = CIImage(data: data) else { return data }
+        let filter = CIFilter.colorMatrix()
+        filter.inputImage = image
+        filter.rVector = CIVector(x: 1, y: 0, z: 0, w: 0)
+        filter.gVector = CIVector(x: 0.094, y: 0.847, z: 0.055, w: 0)
+        filter.bVector = CIVector(x: 0, y: 0, z: 1, w: 0)
+        filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        // No colour management: the matrix is fitted on gamma-encoded values.
+        let context = CIContext(options: [.workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
+        guard let output = filter.outputImage,
+              let cg = context.createCGImage(output, from: output.extent) else { return data }
+        return UIImage(cgImage: cg).pngData() ?? data
     }
 }

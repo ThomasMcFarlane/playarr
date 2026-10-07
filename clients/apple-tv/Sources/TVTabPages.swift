@@ -10,8 +10,8 @@ struct TVEmptyStateBlock: View {
     var top: CGFloat
 
     var body: some View {
-        let font = UIFont(name: "AvenirNext-DemiBold", size: 22.08)
-        let titleWidth = font.map { (title as NSString).size(withAttributes: [.font: $0, .kern: -0.44]).width } ?? 212
+        let font = TVFontLoader.uiFont(mono: false, size: 22.08, weight: 650)
+        let titleWidth = (title as NSString).size(withAttributes: [.font: font, .kern: -0.44]).width
         let textWidth = max(212, ceil(titleWidth) + 0.5)
         let total = 164 + 42 + textWidth
         let left = 1127.2 - total / 2

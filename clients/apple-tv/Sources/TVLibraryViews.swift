@@ -202,6 +202,19 @@ struct TVHomeView: View {
                     .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
                 }
                 homeRails(viewModel: viewModel, size: geo.size)
+                if TVParityLaunch.isLive {
+                    // Web `a.btn-secondary` in the page header: "Customise Home" at (1740.6, 32).
+                    Text("Customise Home")
+                        .font(TVTheme.font(size: 11.52, css: 720))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .frame(width: 131.4, height: 38)
+                        .background(
+                            Capsule()
+                                .fill(DesignTokens.Color.backgroundElevated)
+                                .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
+                        )
+                        .placed(x: 1740.6, y: 32, w: 131.4, h: 38)
+                }
             }
         }
         .ignoresSafeArea()
@@ -669,6 +682,7 @@ struct TVHomeCard: View {
                     Circle()
                         .fill(DesignTokens.Color.brandPrimary)
                         .frame(width: 13, height: 13)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                         .padding(10.8)
                 }
             }
@@ -886,10 +900,11 @@ struct TVSearchView: View {
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.88))
                 .overlay(
                     Capsule().stroke(
-                        DesignTokens.Color.borderDefault.opacity(0.5),
-                        lineWidth: 1
+                        frozen ? DesignTokens.Color.brandPrimary.opacity(0.6) : DesignTokens.Color.borderDefault.opacity(0.5),
+                        lineWidth: frozen ? 1.5 : 1
                     )
                 )
+                .shadow(color: DesignTokens.Color.brandPrimary.opacity(frozen ? 0.18 : 0), radius: 8)
                 .frame(width: 590, height: 76)
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .regular))
@@ -980,7 +995,8 @@ struct TVSearchView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 26.05) {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
-                    let selected = (selectedWork(model)?.id == work.id)
+                    // Web: the first hit is not scaled until the remote moves onto the results.
+                    let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
                     NavigationLink {
                         TVWorkDetailView(work: work, apiClient: environment.apiClient)
                     } label: {
@@ -1011,6 +1027,7 @@ struct TVSearchView: View {
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                     .padding(10.9)
             }
             ZStack(alignment: .topLeading) {
@@ -1375,6 +1392,7 @@ struct TVLibraryKindView: View {
                         Circle()
                             .fill(DesignTokens.Color.brandPrimary)
                             .frame(width: 13, height: 13)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                             .padding(10.8)
                     }
                 }
