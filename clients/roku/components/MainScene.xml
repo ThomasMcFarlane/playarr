@@ -258,14 +258,14 @@
         loadDisplayMode="scaleToZoom" visible="false" />
       <Rectangle translation="[0,0]" width="1920" height="1080" color="0x0B0A0BCC" />
       <!-- Web .tv-library-heading: back is dock Home; h1 + "1,730 TITLES". -->
-      <Label id="browseTitle" translation="[200,90]" width="500" height="60" scale="[1.2,1.2]" color="0xFFFFFFFF" />
-      <Label id="browseCountLabel" translation="[520,110]" width="500" height="36" scale="[0.55,0.55]" color="0x887A82FF" />
-      <Label id="browsePreviewKind" translation="[200,200]" width="420" height="30" scale="[0.48,0.48]" color="0xCF3157FF" />
-      <Label id="browsePreviewTitle" translation="[200,235]" width="420" height="120" wrap="true" numLines="3" scale="[1.05,1.05]" color="0xFFFFFFFF" />
-      <Label id="browsePreviewMeta" translation="[200,380]" width="420" height="30" scale="[0.52,0.52]" color="0xA9B7C9FF" />
-      <Label id="browsePreviewOverview" translation="[200,420]" width="420" height="320" wrap="true" vertAlign="top" scale="[0.52,0.52]" color="0xA9B7C9FF" />
-      <MarkupGrid id="browseGrid" translation="[700,200]" itemComponentName="PosterCard"
-        numColumns="3" numRows="3" itemSize="[330,216]" itemSpacing="[27,27]"
+      <Label id="browseTitle" translation="[226.6,56.2]" width="0" height="50" scale="[1.05,1.05]" color="0xFFFFFFFF" />
+      <Label id="browseCountLabel" translation="[372,73]" width="500" height="20" scale="[0.35,0.35]" color="0x887A82FF" />
+      <Label id="browsePreviewKind" translation="[153.6,259.2]" width="455" height="30" scale="[0.38,0.38]" color="0xCF3157FF" />
+      <Label id="browsePreviewTitle" translation="[153.6,303.5]" width="173" height="62" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xFFFFFFFF" />
+      <Label id="browsePreviewMeta" translation="[153.6,392.7]" width="800" height="30" scale="[0.38,0.38]" color="0xA9B7C9FF" />
+      <Label id="browsePreviewOverview" translation="[153.6,432.5]" width="860" height="300" wrap="true" maxLines="5" lineSpacing="-8" vertAlign="top" scale="[0.40,0.40]" color="0xA9B7C9FF" />
+      <MarkupGrid id="browseGrid" translation="[783.4,162]" itemComponentName="PosterCard"
+        numColumns="3" numRows="3" itemSize="[353.5,240.5]" itemSpacing="[0,0]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
       <Label id="browseHint" translation="[200,1020]" width="1700" height="40" text="" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then
@@ -276,7 +276,7 @@
            enterBrowseAlphabet/jumpToBrowseLetter for the real jump
            behaviour (paginates further if the target letter isn't loaded
            yet, not just a decorative strip). -->
-      <Group id="browseAlphabet" translation="[1880,245]">
+      <Group id="browseAlphabet" translation="[1856.5,271]">
         <!-- Populated at runtime (27 Labels: # then A-Z), see
              MainScene.brs's buildAlphabetStrip, kept out of XML since
              it's the exact same 27-entry content on every grid screen that
@@ -293,7 +293,7 @@
            SceneGraph layout (row-list vs grid vs large single-column
            carousel), not a parameter of this one MarkupGrid, so it is a
            real, documented gap rather than a decorative stand-in. -->
-      <Label id="browseFiltersButton" translation="[1845,180]" width="120" height="40" text="Filters" horizAlign="center" scale="[0.56,0.56]" scaleRotateCenter="[60,10]" color="0xA9B7C9FF" />
+      <Label id="browseFiltersButton" translation="[1784,71]" width="100" height="40" text="Filters" scale="[0.42,0.42]" color="0xA9B7C9FF" />
       <Group id="browseFiltersPanel" visible="false">
         <Rectangle translation="[1550,0]" width="370" height="1080" color="0x151315F5" />
         <Label translation="[1610,90]" width="280" height="30" text="LIBRARY CONTROLS" scale="[0.38,0.38]" color="0x887A82FF" />

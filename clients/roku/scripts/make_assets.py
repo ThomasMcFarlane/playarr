@@ -34,6 +34,8 @@ ICONS = {
     "player-next": '<rect x="17.1" y="5" width="2.4" height="14" rx="1" fill="white" stroke="none"/><path d="M4.5 5.5v13L15.8 12z" fill="white" stroke="none"/>',
     "player-subtitles": '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M6.5 12h4M13.5 12h4M6.5 15.5h7M15.5 15.5h2"/>',
     "player-close": '<path d="M6 6l12 12M18 6 6 18"/>',
+    "tile-filters": '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    "tile-bell": '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
     "arrow-left": '<path d="M19 12H5M11 6l-6 6 6 6"/>',
     "arrow-right": '<path d="M5 12h14M13 6l6 6-6 6"/>',
     "arrow-up": '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -108,6 +110,23 @@ def main() -> None:
         for y in range(4):
             px[x, y] = (255, 255, 255, round(255 * x / 259))
     ramp.save(IMAGES / "page-fade.png")
+    # Scroll edge fades (white alpha ramps, tinted with the page background): opaque at the named edge, clear 96 px in.
+    for name, size, fn in (("edge-fade-l", (96, 4), lambda x, y: x), ("edge-fade-r", (96, 4), lambda x, y: 95 - x)):
+        img = Image.new("RGBA", size, (255, 255, 255, 0))
+        px2 = img.load()
+        for yy in range(size[1]):
+            for xx in range(size[0]):
+                t = 1 - fn(xx, yy) / 95
+                px2[xx, yy] = (255, 255, 255, round(255 * max(t, 0) ** 1.4))
+        img.save(IMAGES / f"{name}.png")
+    for name, fn in (("edge-fade-t", lambda y: y), ("edge-fade-b", lambda y: 95 - y)):
+        img = Image.new("RGBA", (4, 96), (255, 255, 255, 0))
+        px2 = img.load()
+        for yy in range(96):
+            for xx in range(4):
+                t = 1 - fn(yy) / 95
+                px2[xx, yy] = (255, 255, 255, round(255 * max(t, 0) ** 1.4))
+        img.save(IMAGES / f"{name}.png")
     # Player scrim (.player-scrim): black fading in from the top of the bottom 48 % to .92 at the bottom edge.
     scrim = Image.new("RGBA", (4, 256), (255, 255, 255, 0))
     spx = scrim.load()

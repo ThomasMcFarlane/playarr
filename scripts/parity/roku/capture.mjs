@@ -22,7 +22,9 @@ if (!out || !target || !password) {
 }
 const dest = join(out, "tv", theme);
 mkdirSync(dest, { recursive: true });
-const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+// Real libraries load artwork slowly; ROKU_WAIT_SCALE stretches every settle wait (the real account runs use 2).
+const waitScale = Number(process.env.ROKU_WAIT_SCALE ?? "1");
+const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000 * (s > 2 ? waitScale : 1)));
 const ecp = async (path) => { spawnSync("curl", ["-s", "-X", "POST", `http://${target}:8060/${path}`], { stdio: "ignore" }); };
 const press = async (key, wait = 1.3) => { await ecp(`keypress/${key}`); await sleep(wait); };
 const presses = async (keys, wait) => { for (const k of keys) await press(k, wait); };
@@ -66,6 +68,10 @@ const screens = {
   // diff compares only the chrome (screens.json compareRegions, diff.mjs --chrome-only).
   "player-controls": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Down", 2); },
   "player-quality-menu": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Up", 2); },
+  // Scrolled states (owner rule): a Home rail several cards in, a library grid several rows down, a long settings panel.
+  "home-scrolled": async () => { await toHome(); await press("Down", 2); await presses(Array(7).fill("Right"), 0.8); await sleep(2); },
+  "movies-scrolled": async () => { await toHome(); await dock(3, 14); await presses(Array(7).fill("Down"), 0.8); await sleep(3); },
+  "settings-player-scrolled": async () => { await settings(3); await press("Right", 1); await presses(Array(11).fill("Down"), 0.7); await sleep(1); },
   settings: async () => { await settings(0); },
   "settings-avatar": async () => { await settings(1); },
   "settings-language": async () => { await settings(2); },

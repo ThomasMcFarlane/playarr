@@ -585,7 +585,7 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         stage = (ROOT / "components" / "TvStage.xml").read_text(encoding="utf-8")
         self.assertIn('id="keyArtFade"', stage)
         self.assertTrue((ROOT / "images" / "stage-key-art-fade.png").is_file())
-        self.assertIn('translation="[882,430]"', stage)
+        self.assertIn('translation="[881.6,422.9]"', stage)
         # Rails are 319px apart (web) and use the server's home rails.
         self.assertIn("y += 319", MAIN)
         self.assertIn('"homeRails", "GET", "/api/v1/home/rails"', MAIN)
@@ -608,7 +608,7 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertNotIn("m.detailContent.AppendChild(m.detailActions)", MAIN)
         self.assertNotIn('rowLabelOffset="[[0,-30]]"', SCENE)
         self.assertIn("sub layoutDetailRails()", MAIN)
-        self.assertIn("m.detailContent.translation = [882, 430 - scrollY]", MAIN)
+        self.assertIn("m.detailContent.translation = [881.6, 422.9 - scrollY]", MAIN)
         self.assertIn('"/api/v1/artwork/episode/"', MAIN)
         self.assertIn("m.detailStage.stageOverview = overview", MAIN)
 

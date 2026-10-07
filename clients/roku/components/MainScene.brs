@@ -1502,18 +1502,21 @@ sub applyProfilesChromeFocus()
     signOutF = m.profilesSignOutHit <> invalid and m.profilesSignOutHit.IsInFocusChain()
     if m.profilesThemePill <> invalid then m.profilesThemePill.uri = pairingChromeUri("theme", themeF)
     if m.profilesLangPill <> invalid then m.profilesLangPill.uri = pairingChromeUri("lang", langF)
+    ' The gear and Sign out bitmaps have a light-theme twin (greys inverted, brand red kept).
+    suffix = ""
+    if ResolvePairingTheme(m.themePreference) = "light" then suffix = "-light"
     if m.profilesSettingsBtn <> invalid
         if settingsF
-            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear-focus.png"
+            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear-focus" + suffix + ".png"
         else
-            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear.png"
+            m.profilesSettingsBtn.uri = "pkg:/images/profiles-gear" + suffix + ".png"
         end if
     end if
     if m.profilesSignOutBtn <> invalid
         if signOutF
-            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout-focus.png"
+            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout-focus" + suffix + ".png"
         else
-            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout.png"
+            m.profilesSignOutBtn.uri = "pkg:/images/profiles-signout" + suffix + ".png"
         end if
     end if
 end sub
@@ -2178,7 +2181,10 @@ sub rebuildBrowseContent()
         if m.browseTotal <> invalid then total = Int(m.browseTotal)
         noun = "TITLES"
         if m.browseKind = "artist" then noun = "ARTISTS"
-        m.browseCountLabel.text = formatCountWithCommas(total) + " " + noun
+        m.browseCountLabel.text = UCase(formatCountWithCommas(total) + " " + noun)
+        titleRight = 226.6 + m.browseTitle.boundingRect().width
+        m.browseCountLabel.translation = [titleRight + 46, 73]
+        m.browseDivider.translation = [titleRight + 22, 57]
     end if
     ' A pending letter jump (see jumpToBrowseLetter) means the target
     ' wasn't loaded yet when it was requested -- now that another page has
@@ -2284,10 +2290,10 @@ sub buildAlphabetStrip()
         label.text = letter
         label.horizAlign = "center"
         label.color = ThemeColor("inkSoft")
-        label.font = PlayarrMakeFont(600, 13)
+        label.font = PlayarrMakeFont(400, 9)
         m.browseAlphabet.AppendChild(label)
         m.alphabetLabels.Push(label)
-        y += 26
+        y += 25.6
     end for
 end sub
 
@@ -2382,12 +2388,14 @@ sub focusBrowseFiltersButton()
     m.browseAlphabetMode = false
     renderBrowseAlphabetFocus()
     m.browseFiltersButtonFocused = true
-    m.browseFiltersButton.color = ThemeColor("brand")
+    m.browseFiltersButton.color = ThemeColor("ink")
+    m.browseFiltersRing.visible = true
 end sub
 
 sub focusBrowseAlphabetFromButton()
     m.browseFiltersButtonFocused = false
     m.browseFiltersButton.color = ThemeColor("inkSoft")
+    m.browseFiltersRing.visible = false
     m.browseAlphabetMode = true
     m.browseAlphabetIndex = 0
     renderBrowseAlphabetFocus()
@@ -2490,8 +2498,8 @@ sub applyBrowseArtworkSize()
     else
         m.browseGrid.numColumns = 3
         m.browseGrid.numRows = 3
-        m.browseGrid.itemSize = [330, 216]
-        m.browseGrid.itemSpacing = [27, 27]
+        m.browseGrid.itemSize = [353.5, 240.5]
+        m.browseGrid.itemSpacing = [0, 0]
     end if
 end sub
 
@@ -2502,7 +2510,7 @@ end sub
 function browseCardScale() as Float
     if m.browseArtworkSize = "small" then return 240.0 / 220.0
     if m.browseArtworkSize = "large" then return 480.0 / 220.0
-    return 1.5
+    return 327.2 / 220.0
 end function
 
 ' Mirrors web Library.tsx aside.tv-library-preview + TvStageShell key art.
@@ -2535,6 +2543,12 @@ sub updateBrowsePreview(work as Object)
         meta += genreLine
     end if
     m.browsePreviewMeta.text = meta
+    ' Web flows the meta line and synopsis under the title: one line of title puts them at 392.7, two lines at 464.
+    titleLines = Int(m.browsePreviewTitle.boundingRect().height / 61 + 0.5)
+    if titleLines < 1 then titleLines = 1
+    metaY = 303.5 + 61 * titleLines + 27.7
+    m.browsePreviewMeta.translation = [153.6, metaY]
+    m.browsePreviewOverview.translation = [153.6, metaY + 40]
     overview = work.overview
     if overview = invalid or overview = "" then overview = "No synopsis available."
     m.browsePreviewOverview.text = overview
@@ -2618,6 +2632,7 @@ sub onBrowseItemFocused(event as Object)
     if itemIndex >= 0 and itemIndex < m.browseItems.Count()
         updateBrowsePreview(m.browseItems[itemIndex])
     end if
+    browseFadesUpdate(itemIndex)
     moreAvailable = m.browseTotal = invalid or m.browseItems.Count() < m.browseTotal
     if moreAvailable and itemIndex >= m.browseItems.Count() - 10 and not m.requestBusy
         loadBrowseCatalog(true)
@@ -3291,7 +3306,7 @@ function createHomeRail(contentTarget as Object) as Object
     ' scaleRotateCenter compensation is needed (top-left pivot already
     ' matches a left-aligned box's origin).
     title.width = 1400
-    title.font = PlayarrMakeFont(500, 18)
+    title.font = PlayarrMakeFont(600, 18)
     title.color = ThemeColor("ink")
     ThemeSetRole(title, "ink")
     group.AppendChild(title)
@@ -3312,19 +3327,20 @@ function createHomeRail(contentTarget as Object) as Object
     ' Card dimensions rebuilt against the real live .tv-home-card (16:9
     ' landscape thumbnail, 220x124 art + 220x165 total card, 24px gap) --
     ' see PosterCard.xml's header comment for the full measurement notes.
-    row.itemSize = [1038, 185]
+    ' The viewport starts 96 px left of the track so scrolled cards continue into the gutter, where the scroll fade covers them.
+    row.itemSize = [1134, 185]
     row.rowItemSize = [[220, 165]]
     row.rowItemSpacing = [[24, 0]]
     row.rowHeights = [185]
     row.showRowLabel = false
-    row.focusXOffset = [0]
+    row.focusXOffset = [96]
     row.rowFocusAnimationStyle = "fixedFocusWrap"
     ' Fully transparent: tv-web's real focus treatment is PosterCard's own
     ' lift+zoom (see PosterCard.xml/.brs), not RowList's native default
     ' focus-ring bitmap, which would otherwise draw an unwanted white
     ' outline with no basis in tv-web's actual CSS.
     row.focusBitmapBlendColor = &h00000000
-    row.translation = [0, 48]
+    row.translation = [-96, 64.9]
     group.AppendChild(row)
 
     contentTarget.AppendChild(group)
@@ -3351,7 +3367,7 @@ sub enterHome(profileName as String)
     if m.homeStage <> invalid
         m.homeStage.stageTitle = "Home"
         m.homeStage.stageKicker = "PLAYARR"
-        m.homeStage.stageMeta = "Loading your library…"
+        m.homeStage.stageMeta = ""
         m.homeStage.stageOverview = ""
         m.homeStage.callFunc("revealStage")
     end if
@@ -3731,7 +3747,7 @@ sub finishHomeLoad()
     ' scrollHomeToFocusedRail) -- the entrance animation only plays once
     ' ever (m.homeShown below), so a return trip to Home would otherwise
     ' keep whatever scroll position Back left it at.
-    m.homeContent.translation = [882, 430]
+    m.homeContent.translation = [881.6, 422.9]
     showOnly("home")
     m.top.screenState = "home"
     ' Reveal rails/hero first, then load key-art. Key-art used to block the
@@ -3769,7 +3785,8 @@ sub updateHeroFromWork(work as Object)
         if meta <> "" then meta += "  •  "
         meta += joinStrings(work.genres, ", ")
     end if
-    m.homeStage.stageMeta = meta
+    ' Web Home shows no meta row under the hero title (year and genres live on the detail page).
+    m.homeStage.stageMeta = ""
     overview = ""
     if work.overview <> invalid then overview = work.overview
     m.homeStage.stageOverview = overview
@@ -3805,6 +3822,7 @@ sub onHomeItemFocused(event as Object)
     works = worksForRow(event.GetRoSGNode())
     if works = invalid or itemIndex < 0 or itemIndex >= works.Count() then return
     m.homeColIndex = itemIndex
+    homeFadesUpdate(itemIndex, works.Count())
     updateHeroFromWork(works[itemIndex])
     ' Column 0: hand focus to homeLeftProxy so Left can enter the dock
     ' (RowList never bubbles Left/Right to Scene onKeyEvent).
@@ -3879,10 +3897,10 @@ sub scrollHomeToFocusedRail()
     ' fixed [882,430] (TvStage.xml's own documented contentPanel geometry),
     ' NOT [0,0] -- overwriting it outright rather than preserving that base
     ' would yank all of Home's rail content to the screen's top-left corner.
-    keepVisible = 2
+    ' Web Home scrolls so the focused rail sits where the first rail sits (rails are 318.4 px apart).
     scrollOffset = 0
-    if m.homeFocusIndex > keepVisible then scrollOffset = (m.homeFocusIndex - keepVisible) * 319
-    m.homeContent.translation = [882, 430 - scrollOffset]
+    if m.homeFocusIndex > 0 then scrollOffset = m.homeFocusIndex * 318.4
+    m.homeContent.translation = [881.6, 422.9 - scrollOffset]
 end sub
 
 ' ---------------------------------------------------------------------------
@@ -4318,7 +4336,7 @@ sub showDetail(detail as Object)
     ' concurrently the way tv-web's own two independent effects do.
     m.detailChapters.visible = false
     m.detailSimilar.visible = false
-    m.detailContent.translation = [882, 430]
+    m.detailContent.translation = [881.6, 422.9]
     m.detailEpisodeActive = false
     layoutDetailRails()
     if m.currentMediaFileId <> ""
@@ -4429,7 +4447,7 @@ sub setDetailFocusIndex(newIndex as Integer)
     if m.detailSimilar.visible then buildDetailSimilarRail(similarActive)
     scrollY = 0
     if newIndex > 0 and newIndex < slots.Count() then scrollY = slots[newIndex].translation[1]
-    m.detailContent.translation = [882, 430 - scrollY]
+    m.detailContent.translation = [881.6, 422.9 - scrollY]
     ' Rails scrolled above the top edge must not bleed into view.
     for i = 0 to slots.Count() - 1
         if scrollY > 0 and i <> newIndex

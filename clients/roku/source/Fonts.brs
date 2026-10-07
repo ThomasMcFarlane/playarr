@@ -45,7 +45,11 @@ end function
 
 ' Weight for a label id (web weights, see global.css). Unknown ids use 400, and big display text 700.
 function PlayarrWeightFor(id as String, size as Integer) as Integer
-    if id = "stageTitleLabel" then return 600
+    if id = "stageTitleLabel" or id = "browsePreviewTitle" or id = "browseTitle" then return 600
+    if id = "browseCountLabel" then return 700
+    if id = "stageMetaLabel" or id = "stageOverviewLabel" then return 400
+    if id = "browsePreviewMeta" or id = "browsePreviewOverview" then return 400
+    if id = "browseFiltersButton" then return 700
     if id = "title" then return 600
     if Instr(1, id, "Kicker") > 0 then return 800
     if Instr(1, id, "Title") > 0 then return 700

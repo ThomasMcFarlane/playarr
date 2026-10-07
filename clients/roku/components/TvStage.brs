@@ -32,9 +32,9 @@ sub resetForEntrance()
     m.keyArtLayer.opacity = 0
     m.keyArtLayer.translation = [15, 0]
     m.titlePanel.opacity = 0
-    m.titlePanel.translation = [110, 262]
+    m.titlePanel.translation = [119.6, 259.2]
     m.contentPanel.opacity = 0
-    m.contentPanel.translation = [942, 430]
+    m.contentPanel.translation = [941.6, 422.9]
 end sub
 
 ' Force every stage layer fully visible at its settled translation.
@@ -46,9 +46,9 @@ sub revealStage()
     m.keyArtLayer.opacity = 1
     m.keyArtLayer.translation = [0, 0]
     m.titlePanel.opacity = 1
-    m.titlePanel.translation = [144, 262]
+    m.titlePanel.translation = [153.6, 259.2]
     m.contentPanel.opacity = 1
-    m.contentPanel.translation = [882, 430]
+    m.contentPanel.translation = [881.6, 422.9]
 end sub
 
 sub onKeyArtUriChange()
@@ -78,15 +78,34 @@ end sub
 
 sub onStageTitleChange()
     m.stageTitleLabel.text = m.top.stageTitle
+    layoutStageText()
 end sub
 
 sub onStageMetaChange()
     m.stageMetaLabel.text = m.top.stageMeta
+    layoutStageText()
 end sub
 
 sub onStageOverviewChange()
     if m.stageOverviewLabel <> invalid
         m.stageOverviewLabel.text = m.top.stageOverview
+    end if
+    layoutStageText()
+end sub
+
+' The web flows meta and synopsis under the title: one title line puts the meta row 27 px below it, the synopsis 37.5 px
+' under the meta (or 21.6 px under the title when there is no meta row). Title lines are 61 px apart at 69 px.
+sub layoutStageText()
+    lines = Int(m.stageTitleLabel.boundingRect().height / 61 + 0.5)
+    if lines < 1 then lines = 1
+    if lines > 3 then lines = 3
+    titleBottom = 44.3 + 61 * lines
+    if m.top.stageMeta <> invalid and m.top.stageMeta <> ""
+        m.stageMetaLabel.translation = [0, titleBottom + 27]
+        m.stageOverviewLabel.translation = [0, titleBottom + 27 + 37.5]
+    else
+        m.stageMetaLabel.translation = [0, titleBottom + 27]
+        m.stageOverviewLabel.translation = [0, titleBottom + 21.6]
     end if
 end sub
 

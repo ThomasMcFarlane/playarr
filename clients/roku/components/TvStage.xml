@@ -107,7 +107,7 @@
         left  = 7.5vw of 1920 = 144px (within the 44-150px clamp bounds)
         width = 27vw of 1920 = 518.4 -> 518px (under the 520px cap)
     -->
-    <Group id="titlePanel" translation="[144,262]" opacity="0">
+    <Group id="titlePanel" translation="[153.6,259.2]" opacity="0">
       <!-- from: .tv-provider/.tv-detail-kicker font-size clamp(0.58rem,0.64vw,0.78rem)
            evaluated at 1920px: 0.64vw = 12.288px -> 12px. Color: theme accent (#cf3157). -->
       <Label id="stageKickerLabel" translation="[0,0]" width="518" height="20" scale="[0.38,0.38]" color="0xCF3157FF" />
@@ -122,12 +122,12 @@
            same font-size-to-line-height ratio as Theme.brs's type scale
            (~1.42x, e.g. display 50/71) for 3 real lines: 86px * 1.42 = 122px
            visual line height * 3 lines = 366px visual / 2.69 scale = 136px. -->
-      <Label id="stageTitleLabel" translation="[0,34]" width="173" height="136" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xF4F0F1FF" />
+      <Label id="stageTitleLabel" translation="[0,44.3]" width="173" height="136" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xF4F0F1FF" />
       <!-- from: .tv-title-meta font-size clamp(0.68rem,0.78vw,0.96rem) evaluated at
            1920px: 0.78vw = 14.976px -> 15px. Color: theme inkSoft. -->
-      <Label id="stageMetaLabel" translation="[0,270]" width="518" height="40" scale="[0.47,0.47]" color="0xC5B8BDFF" />
+      <Label id="stageMetaLabel" translation="[0,133.5]" width="1400" height="40" scale="[0.33,0.33]" color="0x887A82FF" />
       <!-- Synopsis under meta (tv-web .tv-title-panel body copy). -->
-      <Label id="stageOverviewLabel" translation="[0,320]" width="620" height="160" wrap="true" maxLines="5" scale="[0.42,0.42]" color="0xC5B8BDFF" />
+      <Label id="stageOverviewLabel" translation="[0,171]" width="860" height="170" wrap="true" maxLines="4" lineSpacing="-8" scale="[0.40,0.40]" color="0x887A82FF" />
     </Group>
 
     <!--
@@ -141,7 +141,7 @@
         left   = 1920 - width - right = 1920 - 864 - 73 = 983px
         height = 39% of 1080 = 421.2 -> 421px (min-height, content may exceed it)
     -->
-    <Group id="contentPanel" translation="[882,430]" opacity="0" />
+    <Group id="contentPanel" translation="[881.6,422.9]" opacity="0" />
 
     <!--
       Entrance animation: fades+translates keyArtLayer, titlePanel, and
@@ -170,14 +170,14 @@
       <FloatFieldInterpolator id="titleOpacityInterp" fieldToInterp="titlePanel.opacity"
         key="[0.0, 0.10, 0.789]" keyValue="[0.0, 0.0, 1.0]" />
       <Vector2DFieldInterpolator id="titleTranslateInterp" fieldToInterp="titlePanel.translation"
-        key="[0.0, 0.10, 0.789]" keyValue="[[110.0,262.0],[110.0,262.0],[144.0,262.0]]" />
+        key="[0.0, 0.10, 0.789]" keyValue="[[119.6,259.2],[119.6,259.2],[153.6,259.2]]" />
 
       <!-- content panel: hold hidden until 150/900 = 0.167, then fade+slide in
            over 700ms, finishing at (150+700)/900 = 0.944 -->
       <FloatFieldInterpolator id="contentOpacityInterp" fieldToInterp="contentPanel.opacity"
         key="[0.0, 0.167, 0.944]" keyValue="[0.0, 0.0, 1.0]" />
       <Vector2DFieldInterpolator id="contentTranslateInterp" fieldToInterp="contentPanel.translation"
-        key="[0.0, 0.167, 0.944]" keyValue="[[942.0,430.0],[942.0,430.0],[882.0,430.0]]" />
+        key="[0.0, 0.167, 0.944]" keyValue="[[941.6,422.9],[941.6,422.9],[881.6,422.9]]" />
     </Animation>
   </children>
   <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />

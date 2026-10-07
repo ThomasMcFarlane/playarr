@@ -9,16 +9,17 @@
 sub homePillInit()
     holder = m.top.findNode("homeGroup")
     m.homePill = CreateObject("roSGNode", "Group")
-    pgRound(m.homePill, 1750.1, 32, 121.9, 38, 19, "surface")
-    pgRound(m.homePill, 1750.1, 32, 121.9, 38, 19, "line", -1, true)
-    pgLabel(m.homePill, 1750.1, 32, 121.9, 38, "Customise Home", 12, 700, "inkSoft", { horizAlign: "center", vertAlign: "center" })
+    pgRound(m.homePill, 1781, 30, 62, 72, 14, "surfaceStrong", 199)
+    pgRound(m.homePill, 1781, 30, 62, 72, 14, "line", -1, true)
+    pgIcon(m.homePill, 1801, 45, 22, "tile-filters.png", "inkMuted")
+    pgLabel(m.homePill, 1781, 74, 62, 14, "Customise Home", 7, 800, "inkMuted", { horizAlign: "center" })
     m.homePillRing = CreateObject("roSGNode", "Poster")
-    m.homePillRing.uri = "pkg:/images/round-ring-r25.9.png"
-    m.homePillRing.translation = [1747.1, 29]
-    m.homePillRing.width = 127.9
-    m.homePillRing.height = 44
-    ThemeSetRole(m.homePillRing, "ink")
-    m.homePillRing.blendColor = ThemeColor("ink")
+    m.homePillRing.uri = "pkg:/images/round-ring-r12.9.png"
+    m.homePillRing.translation = [1778, 27]
+    m.homePillRing.width = 68
+    m.homePillRing.height = 78
+    ThemeSetRole(m.homePillRing, "focusRing")
+    m.homePillRing.blendColor = ThemeColor("focusRing")
     m.homePillRing.visible = false
     m.homePill.AppendChild(m.homePillRing)
     holder.AppendChild(m.homePill)
@@ -38,6 +39,8 @@ end sub
 
 sub pagesInit()
     homePillInit()
+    browseChromeInit()
+    edgeFadesInit()
     m.pageGroup = m.top.findNode("pageGroup")
     m.pageHead = m.top.findNode("pageHead")
     m.pageBody = m.top.findNode("pageBody")
@@ -46,7 +49,7 @@ sub pagesInit()
     m.pagePanelFade = m.top.findNode("pagePanelFade")
     ThemeSetRole(m.pagePanel, "panel")
     ThemeSetRole(m.pagePanelFade, "panel")
-    ThemeSetRole(m.pageRing, "ink")
+    ThemeSetRole(m.pageRing, "focusRing")
     m.pageItems = []
     m.pageFocusIdx = 0
     m.pageKind = ""
@@ -181,13 +184,25 @@ function pgButton(parent as Object, x as Float, y as Float, h as Float, text as 
     return w
 end function
 
+' Header action tile (web .tv-filter-launcher, the 30 September reference): 62 x 72, radius 14, a 1px line, an icon over a
+' tiny label. Used for every header action (Calendar link, Filters).
+sub pgTile(parent as Object, x as Float, y as Float, label as String, icon as String, action as String, data = invalid as Dynamic)
+    pgRound(parent, x, y, 62, 72, 14, "surfaceStrong", 199)
+    pgRound(parent, x, y, 62, 72, 14, "line", -1, true)
+    pgIcon(parent, x + 20, y + 15, 22, icon, "inkMuted")
+    pgLabel(parent, x, y + 44, 62, 14, label, 8, 800, "inkMuted", { horizAlign: "center" })
+    pgFocusable(x, y, 62, 72, 14, action, data)
+end sub
+
 ' Shell header shared by every page: round back button, title; panelX is where the right-hand panel starts (0 = none).
 sub pageBegin(title as String, panelX as Float)
     m.pageBody.removeChildrenIndex(m.pageBody.getChildCount(), 0)
     m.pageHead.removeChildrenIndex(m.pageHead.getChildCount(), 0)
     m.pageItems = []
-    m.pageScrollY = 0
-    m.pageBody.translation = [0, 0]
+    if m.pageKeepScroll <> true
+        m.pageScrollY = 0
+        m.pageBody.translation = [0, 0]
+    end if
     m.pagePanel.visible = panelX > 0
     m.pagePanelFade.visible = panelX > 0
     if panelX > 0
@@ -231,6 +246,11 @@ sub pageFocusRender()
     end if
     oy = 0
     if item.scrolls = true then oy = m.pageScrollY
+    bottom = 0.0
+    for each it in m.pageItems
+        if it.scrolls = true and it.y + it.h > bottom then bottom = it.y + it.h
+    end for
+    pageFadesUpdate(bottom)
     radius = 25
     if item.r < 25 then radius = 12
     m.pageRing.uri = "pkg:/images/round-ring-r" + radius.ToStr() + ".9.png"
@@ -247,7 +267,9 @@ sub pageOnFocus(item as Object)
             m.calendarSelected = item.data
             ' Re-render, keeping focus on the same entry.
             focusKey = item.data
+            m.pageKeepScroll = true
             renderCalendar()
+            m.pageKeepScroll = false
             for i = 0 to m.pageItems.Count() - 1
                 if m.pageItems[i].action = "entry" and m.pageItems[i].data = focusKey then m.pageFocusIdx = i
             end for
@@ -630,8 +652,8 @@ sub renderCalendar()
     pgRound(m.pageHead, 1516.6, 56.2, 50, 50, 25, "line", -1, true)
     pgIcon(m.pageHead, 1534, 73, 15, "arrow-right.png", "inkSoft")
     pgFocusable(1516.6, 56.2, 50, 50, 25, "calNext")
-    pgButton(m.pageHead, 1591.5, 56.2, 50, "Calendar link", "secondary", "calLink", invalid, 27)
-    pgButton(m.pageHead, 1739, 56.2, 50, "Filters", "secondary", "calFilters", invalid, 27)
+    pgTile(m.pageHead, 1707, 46, "Calendar link", "tile-bell.png", "calLink")
+    pgTile(m.pageHead, 1781, 46, "Filters", "tile-filters.png", "calFilters")
 
     rangeLabel = pgLabel(m.pageBody, 174.6, 175, 0, 40, calendarRangeLabel(), 24, 600, "ink", { vertAlign: "center" })
     pgIcon(m.pageBody, 174.6 + rangeLabel.boundingRect().width + 12, 188, 14, "chevron-down.png", "ink")
@@ -662,21 +684,21 @@ sub renderCalendar()
 
     ' Left: the selected entry's sheet.
     dt = calendarEntryDate(selected)
-    pgLabel(m.pageBody, 153.6, 240, 600, 18, UCase(calendarKindLabel(selected) + " · " + calendarReleaseLabel(selected)), 12, 800, "inkMuted")
-    pgLabel(m.pageBody, 153.6, 272, 600, 58, selected.title, 38, 600, "ink")
-    pgLabel(m.pageBody, 153.6, 344, 600, 30, calendarEntrySubtitle(selected), 19, 400, "ink")
-    pgLabel(m.pageBody, 153.6, 387, 600, 17, UCase("Release"), 11, 400, "inkMuted")
-    pgLabel(m.pageBody, 153.6, 405, 620, 26, calendarDayHeading(dt, true) + " at " + calendarTime(dt), 19, 400, "ink")
-    pgLabel(m.pageBody, 153.6, 443, 600, 17, UCase("Status"), 11, 400, "inkMuted")
+    pgLabel(m.pageHead, 153.6, 240, 600, 18, UCase(calendarKindLabel(selected) + " · " + calendarReleaseLabel(selected)), 12, 800, "inkMuted")
+    pgLabel(m.pageHead, 153.6, 272, 600, 58, selected.title, 38, 600, "ink")
+    pgLabel(m.pageHead, 153.6, 344, 600, 30, calendarEntrySubtitle(selected), 19, 400, "ink")
+    pgLabel(m.pageHead, 153.6, 387, 600, 17, UCase("Release"), 11, 400, "inkMuted")
+    pgLabel(m.pageHead, 153.6, 405, 620, 26, calendarDayHeading(dt, true) + " at " + calendarTime(dt), 19, 400, "ink")
+    pgLabel(m.pageHead, 153.6, 443, 600, 17, UCase("Status"), 11, 400, "inkMuted")
     statusText = "Not monitored"
     if selected.monitored = true then statusText = "Monitored"
     if selected.has_file = true then statusText = "Available"
-    badgeW = calendarBadge(153.6, 461.3, 26, statusText, 19)
-    pgLabel(m.pageBody, 153.6, 498.7, 600, 17, UCase("Reported by"), 11, 400, "inkMuted")
+    badgeW = calendarBadge(m.pageHead, 153.6, 461.3, 26, statusText, 19)
+    pgLabel(m.pageHead, 153.6, 498.7, 600, 17, UCase("Reported by"), 11, 400, "inkMuted")
     y = 516.0
     if selected.sources <> invalid
         for each src in selected.sources
-            pgLabel(m.pageBody, 153.6, y, 620, 28, src.source_name + "  (" + src.source_kind + ")", 19, 400, "ink")
+            pgLabel(m.pageHead, 153.6, y, 620, 28, src.source_name + "  (" + src.source_kind + ")", 19, 400, "ink")
             y = y + 29
         end for
     end if
@@ -691,15 +713,15 @@ sub renderCalendar()
         end for
     end if
     if playFile <> ""
-        x = x + pgButton(m.pageBody, x, btnY, 58, "Play", "primary", "calPlay", playFile, 24) + 10
+        x = x + pgButton(m.pageHead, x, btnY, 58, "Play", "primary", "calPlay", playFile, 24) + 10
     end if
     if openWork <> ""
         label = "Open title"
         if selected.media_kind = "episode" then label = "Open series"
         if selected.media_kind = "movie" then label = "Open movie"
-        x = x + pgButton(m.pageBody, x, btnY, 58, label, "secondary", "calOpen", openWork, 24) + 10
+        x = x + pgButton(m.pageHead, x, btnY, 58, label, "secondary", "calOpen", openWork, 24) + 10
     end if
-    pgButton(m.pageBody, x, btnY, 58, "+  Add to watchlist", "secondary", "calWatch", selected, 24)
+    pgButton(m.pageHead, x, btnY, 58, "+  Add to watchlist", "secondary", "calWatch", selected, 24)
 
     ' Right: the agenda, grouped by day.
     ay = 240.0
@@ -708,12 +730,10 @@ sub renderCalendar()
         edt = calendarEntryDate(entry)
         day = entry.date
         if day <> lastDay
-            if ay + 27 + 110 > 1040 then exit for
             pgLabel(m.pageBody, 786.4, ay, 900, 28, calendarDayHeading(edt, false), 18, 600, "ink")
             ay = ay + 34
             lastDay = day
         end if
-        if ay + 100 > 1040 then exit for
         pgRound(m.pageBody, 786.4, ay, 1048.8, 99.6, 14, "surfaceStrong")
         if entry.id = m.calendarSelected then pgRound(m.pageBody, 786.4, ay, 1048.8, 99.6, 14, "ink", 56, true)
         art = ""
@@ -732,19 +752,19 @@ sub renderCalendar()
         st = "Not monitored"
         if entry.monitored = true then st = "Monitored"
         if entry.has_file = true then st = "Available"
-        calendarBadge(kindX + 12 + calendarKindLabel(entry).Len() * 6.4, ay + 71, 19.2, st, 13)
-        pgFocusable(786.4, ay, 1048.8, 99.6, 14, "entry", entry.id)
+        calendarBadge(m.pageBody, kindX + 12 + calendarKindLabel(entry).Len() * 6.4, ay + 71, 19.2, st, 13)
+        pgFocusable(786.4, ay, 1048.8, 99.6, 14, "entry", entry.id, true)
         ay = ay + 114
     end for
 end sub
 
 ' Status chip (web .calendar-badge): tinted pill with the status text. Returns its width.
-function calendarBadge(x as Float, y as Float, h as Float, text as String, size as Integer) as Float
-    probe = pgLabel(m.pageBody, x, y, 0, h, text, size, 600, "ink")
+function calendarBadge(parent as Object, x as Float, y as Float, h as Float, text as String, size as Integer) as Float
+    probe = pgLabel(parent, x, y, 0, h, text, size, 600, "ink")
     w = probe.boundingRect().width + 16
-    m.pageBody.removeChild(probe)
-    pgRound(m.pageBody, x, y, w, h, 12, "statusTint")
-    pgLabel(m.pageBody, x, y, w, h, text, size, 600, "ink", { horizAlign: "center", vertAlign: "center" })
+    parent.removeChild(probe)
+    pgRound(parent, x, y, w, h, 12, "statusTint")
+    pgLabel(parent, x, y, w, h, text, size, 600, "ink", { horizAlign: "center", vertAlign: "center" })
     return w
 end function
 
@@ -966,4 +986,72 @@ sub householdAction(item as Object)
         renderHousehold()
         pageFocusRender()
     end if
+end sub
+
+' Library header chrome (web .tv-library-heading): round back button, a divider before the title count, and the Filters pill.
+sub browseChromeInit()
+    holder = m.top.findNode("browseGroup")
+    pgRound(holder, 153.6, 56.3, 50, 50, 25, "surface", 179)
+    pgRound(holder, 153.6, 56.3, 50, 50, 25, "line", -1, true)
+    pgIcon(holder, 170, 73, 17, "arrow-left.png", "inkSoft")
+    m.browseDivider = pgRect(holder, 348, 57, 1, 48, "line")
+    pgRound(holder, 1739, 56.2, 104.2, 50, 25, "surface", 179)
+    pgRound(holder, 1739, 56.2, 104.2, 50, 25, "line", -1, true)
+    pgIcon(holder, 1760, 73, 16, "tile-filters.png", "inkSoft")
+    m.browseFiltersRing = CreateObject("roSGNode", "Poster")
+    m.browseFiltersRing.uri = "pkg:/images/round-ring-r25.9.png"
+    m.browseFiltersRing.translation = [1736, 53]
+    m.browseFiltersRing.width = 110.2
+    m.browseFiltersRing.height = 56
+    ThemeSetRole(m.browseFiltersRing, "focusRing")
+    m.browseFiltersRing.blendColor = ThemeColor("focusRing")
+    m.browseFiltersRing.visible = false
+    holder.AppendChild(m.browseFiltersRing)
+end sub
+
+' ---------------------------------------------------------------------------
+' Scroll edge fades (one component for every scrollable area): a page-background ramp where content continues off-screen.
+' Rails: the left fade sits in the gutter left of the track start (cards scrolled past the start line vanish under it);
+' grids and panels fade at the top and bottom.
+
+function pgFade(parent as Object, side as String, x as Float, y as Float, w as Float, h as Float) as Object
+    fade = CreateObject("roSGNode", "Poster")
+    fade.uri = "pkg:/images/edge-fade-" + side + ".png"
+    fade.translation = [x, y]
+    fade.width = w
+    fade.height = h
+    fade.blendColor = ThemeColor("bg")
+    ThemeSetRole(fade, "bg")
+    fade.visible = false
+    parent.AppendChild(fade)
+    return fade
+end function
+
+sub edgeFadesInit()
+    home = m.top.findNode("homeGroup")
+    m.homeFadeLeft = pgFade(home, "l", 786, 410, 96, 670)
+    m.homeFadeRight = pgFade(home, "r", 1824, 410, 96, 670)
+    browse = m.top.findNode("browseGroup")
+    m.browseFadeTop = pgFade(browse, "t", 740, 128, 1110, 40)
+    m.browseFadeBottom = pgFade(browse, "b", 740, 1000, 1110, 80)
+    m.pageFadeTop = pgFade(m.top.findNode("pageGroup"), "t", 0, 128, 1920, 56)
+    m.pageFadeBottom = pgFade(m.top.findNode("pageGroup"), "b", 0, 1000, 1920, 80)
+end sub
+
+' Home rails: the left fade once the rail is scrolled, the right fade while more cards continue past the edge.
+sub homeFadesUpdate(itemIndex as Integer, total as Integer)
+    m.homeFadeLeft.visible = itemIndex > 0
+    m.homeFadeRight.visible = total - itemIndex > 5
+end sub
+
+sub browseFadesUpdate(itemIndex as Integer)
+    row = Int(itemIndex / 3)
+    totalRows = Int((m.browseItems.Count() + 2) / 3)
+    m.browseFadeTop.visible = row > 0
+    m.browseFadeBottom.visible = (row + 3 < totalRows) or (m.browseTotal <> invalid and m.browseItems.Count() < m.browseTotal)
+end sub
+
+sub pageFadesUpdate(contentBottom as Float)
+    m.pageFadeTop.visible = m.pageScrollY < 0
+    m.pageFadeBottom.visible = contentBottom + m.pageScrollY > 1040
 end sub

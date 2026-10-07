@@ -94,6 +94,10 @@ const screens = [
   { id: "settings-latency", route: "/settings/request-latency" },
   { id: "settings-your-data", route: "/settings/your-data" },
   { id: "profile-switcher", route: "/profiles" },
+  // Scrolled states, reached with the same remote keys as the device capture.
+  { id: "home-scrolled", route: "/", keys: ["ArrowDown", ...Array(7).fill("ArrowRight")] },
+  { id: "movies-scrolled", route: "/movies", keys: Array(7).fill("ArrowDown") },
+  { id: "settings-player-scrolled", route: "/settings/player", keys: ["ArrowRight", ...Array(11).fill("ArrowDown")] },
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined });
@@ -138,7 +142,12 @@ try {
         await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
         await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(1500);
-        await page.screenshot({ path: join(out, "tv", theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
+        for (const key of screen.keys ?? []) {
+          await page.keyboard.press(key);
+          await page.waitForTimeout(450);
+        }
+        if (screen.keys) await page.waitForTimeout(1200);
+        await page.screenshot({ path: join(out, "tv", theme, `${screen.id}.png`), animations: "disabled", caret: "hide", timeout: 120000 });
         await context.close();
         console.log(`ok   tv/${theme}/${screen.id}`);
       } catch (e) {

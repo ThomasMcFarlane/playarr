@@ -251,6 +251,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: rails, library grids and pages fade at the edges where content continues off-screen, the Home rail viewport shifts with focus like the web track, and header action buttons use the web filter tile look.
 - Roku: Home labels its first rail On deck like the web, the hero title uses the web size, and parity captures compare the device with the live web client on the same real account.
 - CI: the Fire TV client's typecheck and jest run on pull requests that touch the app or the shared code it imports (they never ran in CI before), and gate merges through `ci-required`.
 - iOS and tvOS: Play opens the player directly instead of a full-screen "Preparing playback" screen; tvOS player BACK closes panels, then the controls, then exits, the scrubber shows the web focus ring and SELECT on it toggles play/pause, and the controls scrim rises from the bottom.

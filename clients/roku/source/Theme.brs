@@ -42,6 +42,8 @@ function ThemeTokens(mode as String) as Object
             lineStrong: &h38262147
             ' Brand red (.tv-provider kicker, unwatched dot, player accent): the same in both themes.
             brand: &hCF3157FF
+            ' Focus ring: ink in light, literal white in dark (owner ruling).
+            focusRing: &h382621FF
             ' Right-hand content panel of the page shell (--surface blended with --surface-soft).
             panel: &hEFEEEEFF
             ' Status chip tint (.calendar-badge): rgba(91,127,209,.24), the same in both themes.
@@ -77,6 +79,7 @@ function ThemeTokens(mode as String) as Object
         line: &hDFDCDD1C
         lineStrong: &hDFDCDD3B
         brand: &hCF3157FF
+        focusRing: &hFFFFFFFF
         panel: &h282227FF
         statusTint: &h5B7FD13D
         ' Player chrome is the same over video in both themes: white ink on a dark scrim (global.css .player-*).

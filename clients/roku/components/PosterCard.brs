@@ -4,6 +4,9 @@ sub init()
     for each id in ["cornerTL", "cornerTR", "cornerBL", "cornerBR"]
         ThemeSetRole(m.top.findNode(id), "surface")
     end for
+    for each id in ["ringTop", "ringBottom", "ringLeft", "ringRight"]
+        ThemeSetRole(m.top.findNode(id), "focusRing")
+    end for
     ThemeInitComponent()
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
