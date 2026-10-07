@@ -28,16 +28,17 @@ class PlayarrHeaderButtonParityTest {
     fun `the shared header button carries the web metrics`() {
         val body = headerButtonBody()
         listOf(
-            "height(50.dp)",
-            "padding(horizontal = 19.2.dp)",
-            "spacedBy(8.dp)",
-            "size(17.dp)",
-            "fontSize = 13.44.sp",
-            "FontWeight(680)",
-            "WebSurfaceStrong.copy(alpha = 0.7f)",
-            "WebPillBorder",
+            "widthIn(min = 62.dp).height(72.dp)",
+            "Modifier.size(44.dp)",
+            "RoundedCornerShape(14.dp)",
+            "fontSize = 8.256.sp",
+            "FontWeight.Bold",
+            "size(24.dp)",
+            "WebSurfaceStrong.copy(alpha = 0.78f)",
+            "if (active) WebInk",
+            "WebLauncherBorder",
+            "focusScale = if (focused) 1.06f",
         ).forEach { assertTrue("PlayarrHeaderButton must keep $it (web .page-filters-button)", body.contains(it)) }
-        assertTrue("phones use the 44 x 38 pill", body.contains("PlayarrPhoneHeaderPill(") && body.contains("width = 44.dp"))
     }
 
     @Test
@@ -49,7 +50,7 @@ class PlayarrHeaderButtonParityTest {
         val calendar = ui("PlayarrCalendar.kt")
         val header = calendar.substring(calendar.indexOf("val panelActions:"), calendar.indexOf("val navigation:"))
         assertTrue("Calendar link uses PlayarrHeaderButton on TV", header.contains("PlayarrHeaderButton("))
-        assertTrue("Calendar link uses PlayarrPhoneHeaderPill on phones", header.contains("PlayarrPhoneHeaderPill("))
+        assertTrue("phones draw the bell with the same PlayarrHeaderButton", header.contains("isTelevision = false"))
         assertTrue("Calendar Filters goes through the scaffold", calendar.contains("filters = PlayarrFilterAction("))
         listOf("Surface(", "OutlinedButton(", "FilterChip(", "PlayarrButton(").forEach {
             assertTrue("the calendar header must not hand-draw its buttons with $it", !header.contains(it))

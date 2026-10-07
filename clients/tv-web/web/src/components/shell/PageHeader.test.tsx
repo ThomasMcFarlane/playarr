@@ -55,16 +55,17 @@ describe("PageHeader filters slot", () => {
     const css = readFileSync(
       new URL("../../styles/global.css", import.meta.url),
       "utf8",
-    );
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
     const selectors = [
       ...css.matchAll(/([^{}]*page-filters-button[^{}]*)\{/g),
     ].map((m) => m[1]!.trim());
     // Only the shared rule, its svg/state/count variants and the phone icon-only media rule may name it.
     const allowed =
-      /^(\.page-filters-button(:hover|:focus-visible|\.is-active|\s+svg|\s+span)?,?\s*)+$/;
-    const stray = selectors.filter(
-      (sel) => !allowed.test(sel.replace(/\s+/g, " ")),
-    );
+      /^(\.(ui-btn|ui-btn--secondary)\.page-filters-button(:hover:not\(:disabled\)|:focus-visible|\.is-active|\s+svg|\s+span)?|\.page-filters-button\s+span|\.page-filters-count),?\s*$/;
+    const stray = selectors
+      .flatMap((sel) => sel.split(","))
+      .map((sel) => sel.trim().replace(/\s+/g, " "))
+      .filter((sel) => sel && !allowed.test(sel));
     expect(stray).toEqual([]);
     for (const page of ["Calendar.css", "Calendar.tsx"]) {
       const source = readFileSync(

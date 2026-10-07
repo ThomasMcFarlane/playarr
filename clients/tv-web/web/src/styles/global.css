@@ -12257,41 +12257,70 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   margin-left: auto;
 }
 
-.page-filters-button {
-  min-height: clamp(38px, 2.8vw, 50px);
+/*
+ * The header launcher (Filters, Calendar link, ...) keeps the look the library Filters launcher had before the
+ * shared page shell (owner ruling, 2026-10-07: "whatever was on Web a week ago"): a 14px-radius tile with the
+ * glyph above a small bold label, glass fill and a soft shadow. Focus and the open state draw the ring (never
+ * a fill), the same as Back and the other pills.
+ */
+.ui-btn.page-filters-button {
+  min-width: clamp(48px, 3.6vw, 62px);
+  min-height: clamp(52px, 5.2vw, 72px);
+  height: auto;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0 clamp(12px, 1vw, 20px);
-  border: 1px solid color-mix(in srgb, var(--line-strong) 66%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
-  color: var(--ink-soft);
-  font-size: clamp(0.62rem, 0.7vw, 0.9rem);
-  font-weight: 680;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  color: var(--ink-muted);
+  font-size: clamp(0.38rem, 0.43vw, 0.52rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 14px 36px rgba(56, 38, 33, 0.08);
+  backdrop-filter: blur(22px) saturate(120%);
   cursor: pointer;
-  backdrop-filter: blur(18px);
   transition:
     background 180ms ease,
     color 180ms ease,
     transform 180ms ease;
 }
 
-.page-filters-button svg {
-  width: clamp(16px, 1.2vw, 22px);
-  height: clamp(16px, 1.2vw, 22px);
-  fill: none;
+.ui-btn.page-filters-button svg {
+  width: clamp(18px, 1.4vw, 24px);
+  height: clamp(18px, 1.4vw, 24px);
+  overflow: visible;
+  fill: var(--surface-strong);
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.5;
 }
 
-.page-filters-button:hover,
-.page-filters-button:focus-visible,
-.page-filters-button.is-active {
-  outline: 0;
+/*
+ * Focus (and hover) draw the ring and the 1.06 scale, never a fill. The open state (drawer shown) keeps the
+ * ink fill. Dark theme: --ink is white, light theme: near-black ink.
+ */
+.ui-btn--secondary.page-filters-button:hover:not(:disabled),
+.ui-btn--secondary.page-filters-button:focus-visible {
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  border-color: color-mix(in srgb, var(--line) 68%, transparent);
+  color: var(--ink);
+  transform: scale(1.06);
+}
+
+.ui-btn.page-filters-button:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.ui-btn--secondary.page-filters-button.is-active {
   background: var(--ink);
+  border-color: transparent;
   color: var(--bg);
 }
 
@@ -12372,10 +12401,13 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
     display: none;
   }
 
-  .page-filters-button {
+  .ui-btn.page-filters-button {
     width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     justify-content: center;
     padding: 0;
+    border-radius: 14px;
   }
 }
 
@@ -12509,23 +12541,24 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   }
 }
 
+/* The header row grows to fit the 72px action tile and everything centres vertically on it. */
 .tv-library-heading.has-actions {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .tv-library-heading.has-actions > .page-header-title-block > h1 {
-  align-self: flex-start;
+  align-self: center;
   min-height: clamp(38px, 2.8vw, 50px);
   display: flex;
   align-items: center;
 }
 
 .tv-library-heading.has-actions > .tv-page-back {
-  align-self: flex-start;
+  align-self: center;
 }
 
 .tv-library-heading.has-actions > .page-header-title-block > .page-header-detail {
-  align-self: flex-start;
+  align-self: center;
   min-height: clamp(38px, 2.8vw, 50px);
   display: flex;
   align-items: center;

@@ -32,14 +32,16 @@ struct TVCalendarView: View {
 
     @ViewBuilder
     private func content(_ model: CalendarViewModel) -> some View {
+        // The header row centres on the 72 pt action tile (web: the row grows to fit it).
         TVPageHeader(title: "Release Calendar")
+            .offset(y: 11)
 
         // Period controls: previous, Today (focused ring), next, Calendar link, Filters.
-        roundControl("\u{2190}", x: 1367.4, y: 56.2, size: 50) { Task { await model.step(-1) } }
-        todayControl(x: 1423.1, y: 54.8) { Task { await model.goToToday() } }
-        roundControl("\u{2192}", x: 1516.5, y: 56.2, size: 50) { Task { await model.step(1) } }
-        pill("Calendar link", symbol: "bell", x: 1591.5, width: 147.5)
-        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1739, width: 104.2)
+        roundControl("\u{2190}", x: 1494.2, y: 67.2, size: 50) { Task { await model.step(-1) } }
+        todayControl(x: 1549.9, y: 65.8) { Task { await model.goToToday() } }
+        roundControl("\u{2192}", x: 1643.3, y: 67.2, size: 50) { Task { await model.step(1) } }
+        pill("Calendar link", symbol: "bell", x: 1718.3, width: 62.9)
+        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1781.2, width: 62)
 
         // Month button.
         HStack(spacing: 0) {

@@ -23,6 +23,7 @@ describe("header button parity across clients", () => {
       "clients/ios/Sources/PlayarrApp/Views/CalendarView.swift",
     );
     m(calendar, /PlayarrHeaderPill\(label: "Calendar link"/);
+    m(repo("clients/ios/Sources/PlayarrApp/Views/LibraryView.swift"), /PlayarrHeaderPill\(label: "Filters"/);
     nm(
       calendar,
       /in: Circle\(\)/,

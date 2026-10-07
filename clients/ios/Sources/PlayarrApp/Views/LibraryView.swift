@@ -275,15 +275,7 @@ struct LibraryView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(PlayarrStyle.inkSoft)
             } else {
-                Button { showingFilters = true } label: {
-                    Label(phone ? "" : "Filters", systemImage: "slider.horizontal.3")
-                        .font(.custom("Avenir Next", fixedSize: 11).weight(.bold))
-                        .frame(minWidth: 42, minHeight: 42)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(PlayarrStyle.ink)
-                .background(PlayarrStyle.surfaceStrong.opacity(0.8), in: Capsule())
-                .overlay { Capsule().stroke(PlayarrStyle.lineStrong, lineWidth: 1) }
+                PlayarrHeaderPill(label: "Filters", systemImage: "slider.horizontal.3", iconOnly: phone) { showingFilters = true }
             }
         }
         .padding(.leading, phone ? 16 : max(102, proxy.size.width * 0.08))

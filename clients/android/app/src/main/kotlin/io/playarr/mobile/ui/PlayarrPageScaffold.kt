@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -161,7 +162,7 @@ internal fun PlayarrPageScaffold(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .then(headerInsets)
-                .padding(start = if (isTelevision) 154.dp else 16.dp, top = if (isTelevision) 56.dp else 2.dp),
+                .padding(start = if (isTelevision) 154.dp else 16.dp, top = if (isTelevision) (if (filters != null || panelActions != null || trailingNav != null) 67.dp else 56.dp) else 2.dp),
         )
         if (filters != null || panelActions != null || trailingNav != null) {
             PlayarrHeaderActions(
@@ -198,13 +199,13 @@ internal fun PlayarrHeaderActions(
 ) {
     Row(
         // On phones the profile chip is pinned top-right, so the cluster stops short of it.
-        modifier.padding(end = if (isTelevision) playarrPageEnd(true) else 72.dp, top = if (isTelevision) 56.dp else 2.dp),
+        modifier.padding(end = if (isTelevision) 76.8.dp else 72.dp, top = if (isTelevision) 56.dp else 2.dp),
         // Web TV: the period arrows sit 25 px before the panel pills, which touch the Filters pill.
         horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (trailingNav != null) Row(Modifier.padding(end = 25.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = trailingNav)
-        if (panelActions != null) Row(horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 0.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, content = panelActions)
+        if (panelActions != null) Row(horizontalArrangement = Arrangement.spacedBy(0.dp), verticalAlignment = Alignment.CenterVertically, content = panelActions)
         if (filters != null) {
             PlayarrHeaderButton(
                 label = filters.label,
@@ -364,7 +365,12 @@ private fun PlayarrBreadcrumbText(text: String, phone: Boolean = false) {
     )
 }
 
-/** Header action in the shared rounded style (Filters, Calendar subscription, ...). */
+/**
+ * The header launcher (Filters, Calendar link, Create, ...) on every page: the library Filters launcher as the web
+ * drew it before the shared page shell and still draws it in `.page-filters-button`. A 14 dp tile with the glyph
+ * above a small bold label (icon only, 44 dp square, on phones), glass fill, hairline border and a soft shadow.
+ * Focus draws the ring (white in dark, ink in light) at 1.06x and never fills the tile; the open state keeps the ink fill.
+ */
 @Composable
 internal fun PlayarrHeaderButton(
     label: String,
@@ -375,59 +381,67 @@ internal fun PlayarrHeaderButton(
     active: Boolean = false,
     badge: Int = 0,
 ) {
-    if (!isTelevision) {
-        // Web phone: the label is hidden; a 44 x 38 pill with the 12.4 px sliders glyph.
-        PlayarrPhoneHeaderPill(onClick = onClick, contentDescription = label, modifier = modifier, width = 44.dp, active = active) {
-            Icon(PlayarrWebIcons.Filters, contentDescription = null, modifier = Modifier.size(12.4.dp))
-        }
-        return
-    }
-    // Web TV `.page-filters-button` (Filters, Calendar link, Create, ... on every page): a 50 px outlined pill,
-    // 19.2 px side padding, an 8 px gap, a 17 px line icon and a 13.44 px / 680 label, 70% surface fill. Focus
-    // (and an open panel) inverts to ink with a 3 px ink ring at 1.055x, as the web does.
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
-    val lit = active || focused
-    val focusScale = if (focused) 1.055f else 1f
-    androidx.compose.material3.Surface(
-        onClick = onClick,
-        interactionSource = source,
-        modifier = modifier
-            .height(50.dp)
-            .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
-            .then(
-                if (focused) {
-                    Modifier.drawBehind {
-                        val grow = 1.5.dp.toPx()
-                        drawRoundRect(
-                            color = WebInk,
-                            topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
-                            size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2 + grow),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
-                        )
-                    }
-                } else {
-                    Modifier
-                },
-            ),
-        shape = CircleShape,
-        color = if (lit) WebInk else WebSurfaceStrong.copy(alpha = 0.7f),
-        contentColor = if (lit) WebBackground else WebInkSoft,
-        border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder),
+    val focusScale = if (focused) 1.06f else 1f
+    val shape = RoundedCornerShape(14.dp)
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
     ) {
-        Row(Modifier.padding(horizontal = 19.2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp))
-            Text(label, fontSize = 13.44.sp, fontWeight = FontWeight(680), maxLines = 1)
-            if (badge > 0) {
-                Surface(color = WebPink, shape = CircleShape) {
-                    Text(
-                        badge.toString(),
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
-                    )
+        androidx.compose.material3.Surface(
+            onClick = onClick,
+            interactionSource = source,
+            modifier = modifier
+                .then(if (isTelevision) Modifier.widthIn(min = 62.dp).height(72.dp) else Modifier.size(44.dp))
+                .graphicsLayer { scaleX = focusScale; scaleY = focusScale }
+                .shadow(14.dp, shape, clip = false, ambientColor = Color(0x14382621), spotColor = Color(0x14382621))
+                .then(
+                    if (focused) {
+                        // Web focus outline: 3 px solid, offset 2 px, following the tile's rounded shape.
+                        Modifier.drawBehind {
+                            val grow = 3.5.dp.toPx()
+                            drawRoundRect(
+                                color = WebInk,
+                                topLeft = androidx.compose.ui.geometry.Offset(-grow, -grow),
+                                size = androidx.compose.ui.geometry.Size(size.width + 2 * grow, size.height + 2 * grow),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx() + grow),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
+                .semantics { contentDescription = label },
+            shape = shape,
+            // Focus draws the ring only; the open state (panel shown) keeps the ink fill.
+            color = if (active) WebInk else WebSurfaceStrong.copy(alpha = 0.78f),
+            contentColor = if (active) WebBackground else if (focused) WebInk else WebInkMuted,
+            border = androidx.compose.foundation.BorderStroke(1.dp, WebLauncherBorder),
+        ) {
+            if (isTelevision) {
+                Column(
+                    Modifier.padding(horizontal = 4.dp, vertical = 7.2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.6.dp, Alignment.CenterVertically),
+                ) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Text(label, fontSize = 8.256.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.165.sp, maxLines = 1)
+                    if (badge > 0) {
+                        Surface(color = WebPink, shape = CircleShape) {
+                            Text(
+                                badge.toString(),
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp),
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             }
         }

@@ -1137,6 +1137,7 @@ struct TVLibraryKindView: View {
                     title: kindLabel,
                     detail: items.isEmpty ? nil : "\(items.count) \(collectionNoun.lowercased())"
                 )
+                .offset(y: 11) // centred on the 72 pt Filters tile
                 .zIndex(10)
 
                 if let selected {
@@ -1164,7 +1165,7 @@ struct TVLibraryKindView: View {
 
                 filterLauncher
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 1920 - 1737.9 - 105.3)
+                    .padding(.trailing, 1920 - 1781.2 - 62)
                     .padding(.top, 56.2)
                     .zIndex(21)
             }
@@ -1455,9 +1456,9 @@ struct TVLibraryKindView: View {
         }
     }
 
-    /// Web `.tv-library-filter`: a 105 x 50 pill at the top right of the header row.
+    /// Web `.page-filters-button`: the 62 x 72 action tile at the top right of the header row.
     private var filterLauncher: some View {
-        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 105.3)
+        TVHeaderPill(label: "Filters", symbol: "line.3.horizontal.decrease", width: 62)
     }
 
     @ViewBuilder

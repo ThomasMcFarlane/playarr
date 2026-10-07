@@ -1266,6 +1266,8 @@ internal fun televisionDestinationGroups(
 private fun webHairline(darkAlpha: Float, lightAlpha: Float): Color =
     if (webIsDark) Color(0xFFDFDCDD).copy(alpha = darkAlpha) else Color(0xFF382621).copy(alpha = lightAlpha)
 internal val WebPillBorder: Color get() = webHairline(0.1527f, 0.1838f)
+/** Web `.page-filters-button` border: `--line` at 68%. */
+internal val WebLauncherBorder: Color get() = webHairline(0.0747f, 0.0952f)
 internal val WebDivider: Color get() = webHairline(0.23f, 0.28f)
 internal val WebSearchBorder: Color get() = webHairline(0.1758f, 0.2116f)
 
