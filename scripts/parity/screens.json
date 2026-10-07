@@ -4,6 +4,8 @@
     "tv": { "width": 1920, "height": 1080, "dpr": 1, "device": "Android TV, tvOS", "deviceWidthPx": 1920, "deviceHeightPx": 1080 },
     "mobile": { "width": 390, "height": 844, "dpr": 3, "device": "iOS, Android phone", "deviceWidthPx": 1170, "deviceHeightPx": 2532 }
   },
+  "themes": ["light", "dark"],
+  "themeStorage": { "localStorageKey": "playarr-theme", "values": ["light", "dark"], "note": "The web app resolves its theme from this key, else prefers-color-scheme. References set both, so a native client may use either the system appearance or its own setting." },
   "user": "fx-viewer",
   "tolerance": { "pixelmatchThreshold": 0.1, "maxMismatchPercent": 1 },
   "screens": [

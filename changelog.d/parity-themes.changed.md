@@ -1,0 +1,1 @@
+- Pixel parity tooling now covers the light and dark themes: `capture-web.mjs --theme`, theme-aware `diff.mjs` and `screens.json`, web references under `docs/parity/web/<layout>/<theme>/`, and a deterministic source sync order in the fixture seed.

@@ -8,7 +8,10 @@ Web is the source of truth: fix the native client, not the web reference. If the
 | `tv` | 1920x1080 | 1 | 1920x1080 | Android TV, tvOS |
 | `mobile` | 390x844 | 3 | 1170x2532 | iOS, Android phone |
 
-Acceptance per screen: at most 1% of pixels mismatched (pixelmatch threshold 0.1, anti-aliasing ignored), or a
+Every screen is captured and diffed in both themes, `light` and `dark`. A native client must match both,
+whether it follows the system appearance or its own theme setting.
+
+Acceptance per screen and theme: at most 1% of pixels mismatched (pixelmatch threshold 0.1, anti-aliasing ignored), or a
 written, owner-reviewable justification for an unavoidable platform difference (system status bar, OS font
 rasterisation).
 
@@ -20,7 +23,8 @@ rasterisation).
   household screen uses `fx-child-locked`), the steps to reach the state and the layouts.
 - `scripts/parity/capture-web.mjs`: Playwright captures of the web reference.
 - `scripts/parity/diff.mjs`: pixelmatch diff, per-screen mismatch table and an HTML report.
-- `docs/parity/web/<layout>/<id>.png`: committed web reference captures (placeholder artwork only).
+- `docs/parity/web/<layout>/<theme>/<id>.png`: committed web reference captures (placeholder artwork only), plus
+  `manifest.json`. (The earlier unthemed `<layout>/<id>.png` references are now `<layout>/light/<id>.png`.)
 
 ## Setup
 
@@ -44,8 +48,19 @@ npx playwright-core install chromium # once, or set PARITY_CHROMIUM to a Chromiu
 
    ```sh
    node scripts/parity/capture-web.mjs --base http://127.0.0.1:18484 --out docs/parity/web
-   # options: --layouts tv,mobile  --screens home,search  --clock 2026-10-07T12:00:00Z
+   # options: --layouts tv,mobile  --theme light|dark|both (default both)  --screens home,search
+   #          --clock 2026-10-07T12:00:00Z
    ```
+
+Themes: each page is opened with `prefers-color-scheme` emulation set to the theme and with the app's own
+explicit choice stored (`localStorage` key `playarr-theme` set to `light` or `dark`, see
+`clients/tv-web/web/src/lib/theme.tsx`), so the result is the same whether a user follows the system or picked
+the theme. The theme list and storage key are in `screens.json`.
+
+Platform profile options (off by default): `--safe-area top,bottom[,left,right]` emulates system bars as CSS
+safe-area insets and `--font <file>` renders all text with one font file, for comparing against a client whose
+platform differs (see `docs/parity/android-mobile/`). `--color-scheme` is an alias of `--theme`. The committed
+shared references use neither: they use the web's own font stack and no artificial safe area.
 
 Determinism: the page clock is frozen (`--clock`, default `2026-10-07T12:00:00Z`), reduced motion is on,
 animations and transitions are forced off, scrollbars and the caret are hidden, the locale is `en-GB` and the
@@ -62,11 +77,13 @@ Known source of difference, which is data and not layout: the calendar shows dat
 and the seeding day (the unaired episode is seeded three days ahead), so seed the fixture on the capture day or
 pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
 
-Reproducibility: two consecutive full captures on one fresh fixture database differ by at most 0.05% of pixels
-per screen (0.00 to 0.01% on tv, 0.00 to 0.05% on mobile; the largest is the calendar), so the 1% budget leaves
-room for real layout differences only. The committed references were captured from the web client at the
-commit that added them, with the fixture seeded the same day as the frozen clock (2026-10-07) and
-`PLAYARR_FIXTURE_CLIP_SECONDS=60`.
+Reproducibility: two consecutive captures of the same fixture database differ by at most 0.05% of pixels per
+screen (dark mobile re-run: 0.00 to 0.05%, the calendar and film detail being the largest), so the 1% budget
+leaves room for real layout differences only. Rail order and artwork depend on the fixture database, which is
+why `seed.mjs` syncs the sources one after another (it used to race) and artwork is generated from fixed
+palettes; the references were re-captured for both themes on one fresh database from current main, with the
+fixture seeded the same day as the frozen clock (2026-10-07) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`. Capture the
+web again after changing the fixtures or the web client.
 
 ## Canonical web mobile bottom navigation
 
@@ -97,14 +114,17 @@ reference, and the clipped ninth item is expected.
 
 ## Diff a native capture
 
-Name native captures `<dir>/<layout>/<id>.png` at the layout's device pixel size (a different size is compared
-on the larger canvas and the missing area counts as mismatch), then:
+Name native captures `<dir>/<layout>/<theme>/<id>.png` at the layout's device pixel size (a different size is
+compared on the larger canvas and the missing area counts as mismatch; an unthemed `<dir>/<layout>/<id>.png` is
+still read as the light theme), then:
 
 ```sh
-node scripts/parity/diff.mjs --ref docs/parity/web --cand <dir> --layout mobile [--screens home,search] [--out <dir>/diff-mobile]
+node scripts/parity/diff.mjs --ref docs/parity/web --cand <dir> --layout mobile [--theme light|dark|both] [--screens home,search] [--out <dir>/diff-mobile]
 ```
 
-It prints the per-screen table and writes `report.json`, `summary.md` and `report.html` (reference, candidate and
-diff side by side) to `--out`. `--fail` exits non-zero when any screen is over `--max` (default 1).
+`--theme` defaults to `both`: the candidate directory of each theme is diffed against the matching reference. It
+prints one per-screen table per theme and writes `report.json` (a `themes` object), `summary.md` and `report.html`
+(one section per theme, reference, candidate and diff side by side) to `--out`. `--fail` exits non-zero when any
+compared screen is over `--max` (default 1) or has no candidate.
 
 Commit native captures and the `summary.md` under `docs/parity/<client>/`; keep the PNGs small.

@@ -22,6 +22,7 @@ State lives in `.fixtures/` (git-ignored; override with `PLAYARR_FIXTURE_DIR`).
 | Server | `http://127.0.0.1:18484` | `PLAYARR_FIXTURE_PORT`, `PLAYARR_FIXTURE_BIND` |
 | Source stub (Sonarr, Radarr, Dubarr) | `127.0.0.1:18490` | `PLAYARR_FIXTURE_STUB_PORT` |
 | Dub length in seconds (default: the clip length; set before the media is first generated) | clip length | `PLAYARR_FIXTURE_DUB_SECONDS` |
+| Artwork host advertised to clients (emulator: `10.0.2.2`) | `127.0.0.1` | `PLAYARR_FIXTURE_PUBLIC_HOST`, with `PLAYARR_FIXTURE_STUB_BIND=0.0.0.0` so the stub listens there (trusted network only; the server must also be able to reach that host if it downloads the artwork itself) |
 | Child schedule window (UTC minutes of day) | `0-1440` | `FIXTURE_CHILD_WINDOW=360-1260` then re-run `up.sh` |
 
 ## What is seeded

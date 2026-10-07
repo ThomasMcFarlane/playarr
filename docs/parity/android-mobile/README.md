@@ -73,8 +73,10 @@ mismatch. Everything else is compared as captured.
    LAN servers), so it cannot reach `http://10.0.2.2:<port>`. `adb reverse` the stub port so artwork URLs that point at the
    host's loopback resolve. Sign in as `fx-viewer`.
 3. `python3 scripts/parity/android-mobile/capture.py <raw-dir> home movies series ...`
-4. `python3 scripts/parity/android-mobile/mask.py <web-ref>/mobile <raw-dir> <out>` then
-   `node scripts/parity/diff.mjs --ref <web-ref> --cand <out> --layout mobile`.
+4. `python3 scripts/parity/android-mobile/mask.py <web-ref>/mobile/<theme> <raw-dir> <out> <theme>` (theme is `light` or
+   `dark`; capture each theme with the matching device night mode) then
+   `node scripts/parity/diff.mjs --ref <web-ref> --cand <out> --layout mobile --theme <theme>`. The web references are
+   `docs/parity/web/<layout>/<theme>/<id>.png`.
 
 `mobile/light` and `mobile/dark` hold the masked Android captures (palette-quantised to keep them small); `report-light.json`
 and `report-dark.json` the raw numbers.
