@@ -12,7 +12,7 @@ describe("Home layout", () => {
       /\.tv-home-card:hover \.tv-home-card-art,[\s\S]*?\{[^}]*0 26px 52px[^}]*transform:\s*scale\(1\.025\)/s
     );
     expect(css).toMatch(
-      /\.tv-media-track\s*\{[^}]*--tv-track-left-fade:\s*clamp\(88px, 8\.8vw, 152px\)[^}]*padding-left:\s*var\(--tv-track-left-fade\)/s
+      /\.tv-media-track\s*\{[^}]*--tv-track-left-fade:\s*clamp\(88px, calc\(8\.8 \* var\(--vw\)\), 152px\)[^}]*padding-left:\s*var\(--tv-track-left-fade\)/s
     );
     expect(css).toMatch(
       /\.tv-media-track-window\s*\{[^}]*width:\s*calc\(100% \+ var\(--tv-track-left-fade\)\)[^}]*margin-left:\s*calc\(-1 \* var\(--tv-track-left-fade\)\)/s
@@ -37,7 +37,7 @@ describe("Home layout", () => {
       /\.tv-detail-copy\s*\{(?<declarations>[^}]*--mobile-top-inset[^}]*)\}/
     )?.groups?.declarations;
     const mobileDetailTitleRule = css.match(
-      /\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*10vw[^}]*)\}/
+      /\.tv-detail > \.tv-detail-copy h1\s*\{(?<declarations>[^}]*calc\(10 \* var\(--vw\)\)[^}]*)\}/
     )?.groups?.declarations;
     const mobileDetailSynopsisRule = css.match(
       /\.tv-detail-synopsis\s*\{(?<declarations>[^}]*0\.72rem[^}]*)\}/
@@ -48,9 +48,9 @@ describe("Home layout", () => {
     );
 
     expect(sharedCopyRule).toContain("top: 24%");
-    expect(sharedCopyRule).toContain("left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance))");
-    expect(sharedCopyRule).toContain("width: min(24vw, 455px)");
-    expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, 3.6vw, 5rem)");
+    expect(sharedCopyRule).toContain("left: max(clamp(102px, calc(8 * var(--vw)), 160px), var(--tv-nav-clearance))");
+    expect(sharedCopyRule).toContain("width: min(calc(24 * var(--vw)), 455px)");
+    expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, calc(3.6 * var(--vw)), 5rem)");
     expect(sharedTitleRule).toContain("line-height: 0.9");
     expect(sharedSynopsisRule).toContain("max-width: 42ch");
     expect(sharedSynopsisRule).toContain(
@@ -61,7 +61,7 @@ describe("Home layout", () => {
       "top: calc(var(--mobile-top-inset) + 58px)"
     );
     expect(mobileDetailCopyRule).toContain("width: calc(100% - 32px)");
-    expect(mobileDetailTitleRule).toContain("font-size: clamp(2rem, 10vw, 3.5rem)");
+    expect(mobileDetailTitleRule).toContain("font-size: clamp(2rem, calc(10 * var(--vw)), 3.5rem)");
     expect(mobileDetailSynopsisRule).toContain("margin-top: 10px");
     expect(mobileDetailSynopsisRule).toContain("-webkit-line-clamp: 3");
     expect(css).toMatch(

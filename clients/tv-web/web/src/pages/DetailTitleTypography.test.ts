@@ -9,7 +9,7 @@ describe("detail title typography", () => {
     )?.groups?.declarations;
 
     expect(sharedTitleRule).toContain("max-width: 9ch");
-    expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, 3.6vw, 5rem)");
+    expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, calc(3.6 * var(--vw)), 5rem)");
     expect(sharedTitleRule).toContain("font-weight: 560");
     expect(sharedTitleRule).toContain("letter-spacing: -0.072em");
     expect(sharedTitleRule).toContain("line-height: 0.9");

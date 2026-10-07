@@ -9,7 +9,14 @@ import { LanguageProvider } from "./lib/i18n/LanguageProvider";
 import { LiveEventsRoot } from "./lib/liveEvents/LiveEventsRoot";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider } from "./lib/toast";
-import { IS_PACKAGED_TV, PLAYARR_CLIENT_PLATFORM } from "./lib/clientPlatform";
+import {
+  IS_PACKAGED_TV,
+  IS_TIZEN,
+  IS_VIDAA,
+  IS_WEBOS,
+  PLAYARR_CLIENT_PLATFORM,
+} from "./lib/clientPlatform";
+import { installTvStageScale } from "./lib/tvStageScale";
 import {
   bootstrapParityMode,
   installParityApplyHook,
@@ -33,6 +40,11 @@ if (!container) {
 }
 
 document.documentElement.dataset.platform = PLAYARR_CLIENT_PLATFORM;
+
+// Smart-TV browsers report assorted viewports and cannot scroll: fit the 1920x1080 TV stage to them.
+if (IS_VIDAA || IS_WEBOS || IS_TIZEN) {
+  installTvStageScale();
+}
 
 // Product TV cross-engine assets: identical text/media, live layout (no solidify).
 const tvCrossEngine = readTvCrossEngine();

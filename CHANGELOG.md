@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- VIDAA, webOS and Tizen: the TV layout is scaled to a 1080-high stage whatever viewport the TV browser reports (for example 1280x720), so the sign-in link code and the navigation rail are no longer cut off. Adds the `smoke:tv-viewport` Playwright check.
 - Web TV layout: on a series page, UP and DOWN from the far right of a season rail now land on the nearest episode card instead of the season download button.
 - Android: closing the player while it was still buffering no longer resets the saved resume point to the start. Progress is only written once playback has actually started.
 - Android: a start that stalls (or a playback error) now retries automatically with backoff and then shows an in-player error with Try again and the X close, in plain language instead of an exception name.

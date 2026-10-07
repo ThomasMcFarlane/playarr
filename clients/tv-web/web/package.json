@@ -22,7 +22,8 @@
     "smoke:profile-chip": "node scripts/profile-chip-settle.mjs",
     "smoke:calendar-layout": "node scripts/calendar-layout.mjs",
     "smoke:calendar-nav": "node scripts/calendar-nav.mjs",
-    "smoke:tablet-layout": "node scripts/tablet-layout.mjs"
+    "smoke:tablet-layout": "node scripts/tablet-layout.mjs",
+    "smoke:tv-viewport": "node scripts/tv-viewport.mjs"
   },
   "dependencies": {
     "@playarr-tv/api-client": "workspace:*",

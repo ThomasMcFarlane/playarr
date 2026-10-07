@@ -15,9 +15,9 @@ describe("tablet widths: content clears the navigation rail", () => {
   });
 
   it("floors every proportional left offset of titles and the page frame to it", () => {
-    expect(css).not.toMatch(/left:\s*(?:7\.5vw|clamp\(102px, 8vw, 160px\));/);
-    expect(css.match(/max\(7\.5vw, var\(--tv-nav-clearance\)\)/g)?.length).toBe(4);
-    expect(css.match(/max\(clamp\(102px, 8vw, 160px\), var\(--tv-nav-clearance\)\)/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(css).not.toMatch(/left:\s*(?:calc\(7\.5 \* var\(--vw\)\)|clamp\(102px, calc\(8 \* var\(--vw\)\), 160px\));/);
+    expect(css.match(/max\(calc\(7\.5 \* var\(--vw\)\), var\(--tv-nav-clearance\)\)/g)?.length).toBe(4);
+    expect(css.match(/max\(clamp\(102px, calc\(8 \* var\(--vw\)\), 160px\), var\(--tv-nav-clearance\)\)/g)?.length).toBeGreaterThanOrEqual(5);
   });
 
   it("keeps the settings list label-wide and the detail panel out of it", () => {
