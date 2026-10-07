@@ -155,3 +155,11 @@ structure from the web TV layout even though their mismatch looks small:
 
 Series detail was fixed in this change (overview and pill row spacing, and the series-level Download pill, which the web
 does not have, removed): dark 0.92%, light 1.67%.
+
+### Settings follows the web TV layout
+
+Android TV settings is rebuilt as the web layout: the wide numbered section list on the left (480 px, 92 px rows, selected
+row filled, arrow at the right), the header rule with the section eyebrow and caption above it, and the selected
+section's panel at x 774 (headings, square segmented controls, a divider), with the back button focused on entry. The
+other sections reuse their existing content in the same panel. Measured against the shared references with the theme
+preference chosen in the app to match (the references set it explicitly): dark 0.92%, light 0.97%.
