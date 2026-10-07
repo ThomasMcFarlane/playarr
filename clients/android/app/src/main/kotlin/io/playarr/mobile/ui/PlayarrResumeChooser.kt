@@ -105,7 +105,7 @@ private fun ResumeOptionRow(
         color = WebSurface,
         contentColor = WebInk,
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) WebPink else WebInkSoft.copy(alpha = 0.4f)),
+        border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) WebAccent else WebInkSoft.copy(alpha = 0.4f)),
         modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -133,7 +133,7 @@ private fun ResumeOptionRow(
                 val progressLabel = playarrString(PlayarrString.ResumePercentWatched, "percent" to option.progressPercent)
                 LinearProgressIndicator(
                     progress = { (option.progressPercent / 100f).coerceIn(0f, 1f) },
-                    color = WebPink,
+                    color = WebAccent,
                     trackColor = WebInk.copy(alpha = 0.16f),
                     modifier = Modifier.fillMaxWidth().height(4.dp).semantics {
                         contentDescription = progressLabel

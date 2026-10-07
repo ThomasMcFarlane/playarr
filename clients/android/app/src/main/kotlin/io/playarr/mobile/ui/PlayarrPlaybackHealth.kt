@@ -403,7 +403,7 @@ private fun HealthFocusable(modifier: Modifier = Modifier, content: @Composable 
         modifier
             .fillMaxWidth()
             .border(
-                BorderStroke(if (focused) 2.dp else 0.dp, if (focused) WebPink else Color.Transparent),
+                BorderStroke(if (focused) 2.dp else 0.dp, if (focused) WebAccent else Color.Transparent),
                 RoundedCornerShape(10.dp),
             )
             .focusable(interactionSource = source)

@@ -432,7 +432,7 @@ internal fun PlayarrHeaderButton(
                     Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
                     Text(label, fontSize = 8.256.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.165.sp, maxLines = 1)
                     if (badge > 0) {
-                        Surface(color = WebPink, shape = CircleShape) {
+                        Surface(color = WebAccent, shape = CircleShape) {
                             Text(
                                 badge.toString(),
                                 color = Color.White,

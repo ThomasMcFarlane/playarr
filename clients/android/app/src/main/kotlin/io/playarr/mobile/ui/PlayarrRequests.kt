@@ -124,7 +124,7 @@ private fun RequestRow(request: RequestView, dpadFocus: Boolean) {
     // Rows carry no actions, so on television the row itself takes D-pad focus to let the list scroll.
     val focusModifier = if (dpadFocus) {
         Modifier.onFocusChanged { focused = it.isFocused }.focusable()
-            .border(if (focused) 2.dp else 0.dp, if (focused) WebPink else WebSurface, shape)
+            .border(if (focused) 2.dp else 0.dp, if (focused) WebAccent else WebSurface, shape)
     } else Modifier
     Surface(
         color = WebSurfaceStrong.copy(alpha = 0.6f),
@@ -140,7 +140,7 @@ private fun RequestRow(request: RequestView, dpadFocus: Boolean) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .background(WebPink.copy(alpha = 0.22f), RoundedCornerShape(50))
+                    .background(WebAccent.copy(alpha = 0.22f), RoundedCornerShape(50))
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             )
             request.requesterLabel()?.let { (key, params) ->

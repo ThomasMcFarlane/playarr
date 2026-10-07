@@ -1323,7 +1323,7 @@ private fun PlayarrPlayerPlaylistPanel(
                 Column(Modifier.weight(1f)) {
                     Text(
                         playarrString(PlayarrString.PlayerUpNext).uppercase(LocalPlayarrLanguage.current.locale),
-                        color = WebPink,
+                        color = WebAccent,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold,
                     )
@@ -1405,7 +1405,7 @@ private fun PlayarrPlayerPlaylistPanel(
                                         item.music -> playarrString(PlayarrString.PlayerTrackLabel)
                                         else -> playarrString(PlayarrString.PlayerMovieLabel)
                                     },
-                                    color = if (active) WebPink else Color.White.copy(alpha = 0.54f),
+                                    color = if (active) WebAccent else Color.White.copy(alpha = 0.54f),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -1684,6 +1684,6 @@ private fun PlayerDialogOption(
             Text(label)
             detail?.let { Text(it, color = WebInkMuted, fontSize = 11.sp) }
         }
-        if (selected) Text("✓", color = WebPink, fontWeight = FontWeight.Bold)
+        if (selected) Text("✓", color = WebAccent, fontWeight = FontWeight.Bold)
     }
 }

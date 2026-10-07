@@ -982,7 +982,7 @@ private fun CalendarSubscriptionSheet(
                 }
             }
             state.loading || state.busy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CircularProgressIndicator(color = WebPink, modifier = Modifier.size(20.dp))
+                CircularProgressIndicator(color = WebAccent, modifier = Modifier.size(20.dp))
                 Text(playarrString(PlayarrString.CalendarLinkPreparing), color = WebInkMuted, fontSize = 13.sp)
             }
             state.status?.active == true -> Text(playarrString(PlayarrString.CalendarLinkHidden), color = WebInkMuted, fontSize = 13.sp)
@@ -1269,7 +1269,7 @@ internal fun CalendarItemDetails(item: CalendarItem, locale: Locale, zone: ZoneI
                 )
             }
         } else {
-            Text(calendarStateLabel(entry.libraryState()), color = WebPink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text(calendarStateLabel(entry.libraryState()), color = WebAccent, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
         entry.averageLagSeconds?.takeIf { it > 0 }?.let {
             Text(
@@ -1720,10 +1720,10 @@ private fun CalendarDayHeading(day: LocalDate, today: LocalDate, locale: Locale,
             fontWeight = FontWeight.SemiBold,
         )
         if (day == today) {
-            Surface(color = WebPink.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
+            Surface(color = WebAccent.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
                 Text(
                     playarrString(PlayarrString.CalendarToday).uppercase(locale),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.sp,
@@ -1784,9 +1784,9 @@ private fun CalendarDayCell(
     )
     Surface(
         onClick = onClick,
-        color = if (selected) WebPink.copy(alpha = 0.22f) else WebSurfaceSoft.copy(alpha = if (inMonth) 0.62f else 0.3f),
+        color = if (selected) WebAccent.copy(alpha = 0.22f) else WebSurfaceSoft.copy(alpha = if (inMonth) 0.62f else 0.3f),
         shape = shape,
-        border = if (isToday) BorderStroke(1.5.dp, WebPink) else null,
+        border = if (isToday) BorderStroke(1.5.dp, WebAccent) else null,
         interactionSource = source,
         modifier = modifier
             .heightIn(min = if (isTelevision) 84.dp else 56.dp)
@@ -1801,7 +1801,7 @@ private fun CalendarDayCell(
                 fontSize = if (isTelevision) 16.sp else 13.sp,
             )
             if (count > 0) {
-                Surface(color = WebPink.copy(alpha = 0.85f), shape = RoundedCornerShape(10.dp)) {
+                Surface(color = WebAccent.copy(alpha = 0.85f), shape = RoundedCornerShape(10.dp)) {
                     Text(
                         count.toString(),
                         color = Color.White,

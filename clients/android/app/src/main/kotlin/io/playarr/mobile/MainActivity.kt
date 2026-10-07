@@ -39,6 +39,10 @@ import io.playarr.mobile.ui.LocalPlayarrDisplayPreferences
 import io.playarr.mobile.ui.PlayarrApp
 import io.playarr.mobile.ui.rememberPlayarrDisplayPreferences
 import io.playarr.mobile.ui.setPlayarrWebPalette
+import io.playarr.shared.designsystem.page.LocalPlayarrFormFactor
+import io.playarr.shared.designsystem.page.PlayarrFormFactor
+import io.playarr.shared.designsystem.theme.LocalPlayarrWebPalette
+import io.playarr.shared.designsystem.theme.PlayarrWebTheme
 import io.playarr.mobile.update.AppUpdateEffect
 import io.playarr.shared.designsystem.theme.PlayarrTheme
 
@@ -196,6 +200,8 @@ class MainActivity : ComponentActivity() {
                     io.playarr.shared.designsystem.component.LocalPlayarrDarkTheme provides display.darkTheme,
                     io.playarr.shared.designsystem.component.LocalPlayarrFadeBackground provides io.playarr.mobile.ui.WebBackground,
                     io.playarr.shared.designsystem.component.LocalPlayarrFocusRing provides io.playarr.mobile.ui.WebFocusRing,
+                    LocalPlayarrFormFactor provides if (isTelevision) PlayarrFormFactor.Tv else PlayarrFormFactor.Phone,
+                    LocalPlayarrWebPalette provides PlayarrWebTheme.palette,
                 ) {
                   io.playarr.shared.designsystem.component.PlayarrTelevisionIndication(enabled = isTelevision) {
                     androidx.compose.material3.ProvideTextStyle(

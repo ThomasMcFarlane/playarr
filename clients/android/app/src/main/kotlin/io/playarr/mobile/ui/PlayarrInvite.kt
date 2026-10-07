@@ -101,7 +101,7 @@ internal fun PlayarrInviteDialog(
             ) {
                 Text(
                     playarrString(PlayarrString.SettingsInviteModalKicker),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )

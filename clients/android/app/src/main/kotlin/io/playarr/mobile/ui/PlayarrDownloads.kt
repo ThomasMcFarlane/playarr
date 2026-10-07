@@ -270,7 +270,7 @@ internal fun ExperienceDownloadsScreen(
         LinearProgressIndicator(
             progress = { storageUsage.percent / 100f },
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(4.dp),
-            color = WebPink,
+            color = WebAccent,
             trackColor = WebSurfaceSoft,
         )
         if (downloads.isEmpty()) {
@@ -416,7 +416,7 @@ private fun DownloadPreview(
 private fun DownloadFlatPreview(entry: DownloadEntity) {
     Text(
         (downloadTypeLabel(entry.kind) ?: entry.qualityLabel).uppercase(LocalPlayarrLanguage.current.locale),
-        color = WebPink,
+        color = WebAccent,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.2.sp,
@@ -452,7 +452,7 @@ private fun DownloadEnrichedPreview(entry: DownloadEntity, preview: DownloadFocu
     Text(
         (if (episode != null) work.title else work.genres.firstOrNull() ?: kindLabel)
             .uppercase(LocalPlayarrLanguage.current.locale),
-        color = WebPink,
+        color = WebAccent,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.2.sp,
@@ -578,13 +578,13 @@ private fun DownloadListCopy(entry: DownloadEntity, locale: Locale, modifier: Mo
                 LinearProgressIndicator(
                     progress = { (entry.bytesDownloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().padding(top = 5.dp).height(4.dp),
-                    color = WebPink,
+                    color = WebAccent,
                     trackColor = WebSurfaceSoft,
                 )
             } else {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().padding(top = 5.dp).height(4.dp),
-                    color = WebPink,
+                    color = WebAccent,
                     trackColor = WebSurfaceSoft,
                 )
             }
@@ -829,7 +829,7 @@ internal fun DownloadOptionsSheet(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    CircularProgressIndicator(color = WebPink)
+                    CircularProgressIndicator(color = WebAccent)
                     Text(playarrString(PlayarrString.DownloadDrawerLoading), color = WebInkMuted)
                 }
                 is ExperienceLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1025,7 +1025,7 @@ private fun KeepUntilPicker(selection: KeepUntilSelection, onSelectionChange: (K
 private fun KeepUntilUnitButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = if (selected) WebPink else WebSurfaceSoft,
+        color = if (selected) WebAccent else WebSurfaceSoft,
         contentColor = if (selected) Color.White else WebInk,
         shape = RoundedCornerShape(8.dp),
     ) {

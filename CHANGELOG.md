@@ -265,6 +265,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android: the Playarr web palette and the page chrome measurements (gutters, header geometry, safe areas, focus ring) now live in `core-designsystem` as observable, theme-aware tokens, with the form factor provided once from the main activity. `WebPink` is renamed `WebAccent`. No visual change.
+- Android TV: settings panels, the Phone remote and Your data screens, Home rail row pitch, the player control pills and the quality matrix, choice cells, the profile-lock field and the search field follow the web TV geometry more closely (light and dark).
 - tvOS series page opens focused on the episode the server's resume plan points at (S1E1 when nothing is watched), with its season scrolled into view and the media-card focus state on it (soft shadow plus a lift, no ring).
 - Fire TV client: the film and series title pages, search, watchlist, requests and downloads follow the web TV layout; Home and the library grid fade at their scroll edges; media cards lift with the web's pinned shadow instead of a ring; UP and DOWN between Home rails land on the card directly above or below; and Customise Home moves from Home into Settings.
 - Edge fades are now clearly visible in the dark theme on web and Android (a scrim in the page background over the content); the light theme is unchanged.

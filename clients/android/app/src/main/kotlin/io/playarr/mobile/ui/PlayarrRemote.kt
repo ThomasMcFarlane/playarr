@@ -361,7 +361,7 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
                         Text(playarrString(PlayarrString.RemoteMoveTo, "name" to other.name))
                     }
                 }
-            if (moving) Text(playarrString(PlayarrString.RemoteMoving), color = WebPink)
+            if (moving) Text(playarrString(PlayarrString.RemoteMoving), color = WebAccent)
         }
     }
 
@@ -417,7 +417,7 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
                 "name" to (nameOf(it.targetDeviceId) ?: unknown),
                 "code" to it.verificationCode.orEmpty(),
             ),
-            color = WebPink,
+            color = WebAccent,
         )
     }
     if (controlPairing == null) error?.let { Text(playarrString(it), color = MaterialTheme.colorScheme.error) }

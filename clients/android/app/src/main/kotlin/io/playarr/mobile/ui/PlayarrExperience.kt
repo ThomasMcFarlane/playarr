@@ -263,6 +263,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import io.playarr.shared.designsystem.theme.PlayarrWebTheme
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -278,36 +279,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private data class WebPalette(
-    val background: Color,
-    val surface: Color,
-    val surfaceStrong: Color,
-    val surfaceSoft: Color,
-    val ink: Color,
-    val inkSoft: Color,
-    val inkMuted: Color,
-    val accent: Color,
-)
-
 private data class PlayarrSessionClosure(
     val sessionId: String,
     val positionMs: Long,
     val terminal: PlaybackEventRequest,
 )
 
-private val darkWebPalette = WebPalette(
-    Color(0xFF151315), Color(0xFF1B181B), Color(0xFF211D21), Color(0xFF312A30),
-    Color(0xFFF4F0F1), Color(0xFFC5B8BD), Color(0xFF887A82), Color(0xFFDFDCDD),
-)
-private val lightWebPalette = WebPalette(
-    Color(0xFFF5F3F2), Color(0xFFFBFAF9), Color.White, Color(0xFFDFDCDD),
-    Color(0xFF382621), Color(0xFF675961), Color(0xFFA5969E), Color(0xFF675961),
-)
-private var webPalette = darkWebPalette
-
 /** Whether the active Playarr palette is the dark one (drives the key-art filter and glass border tokens). */
-internal var webIsDark: Boolean = true
-    private set
+internal val webIsDark: Boolean get() = PlayarrWebTheme.palette.dark
 
 /**
  * The web client's own fonts (`--font` Nunito Sans, `--mono` JetBrains Mono, SIL OFL, licences in clients/android/licenses),
@@ -344,8 +323,7 @@ internal fun setPlayarrWebFont(enabled: Boolean) {
 }
 
 internal fun setPlayarrWebPalette(darkTheme: Boolean) {
-    webPalette = if (darkTheme) darkWebPalette else lightWebPalette
-    webIsDark = darkTheme
+    PlayarrWebTheme.select(darkTheme)
 }
 
 /** Cubic-bezier matching Playarr Web `focusMotion.transitionEasing`. */
@@ -378,14 +356,18 @@ internal fun rememberPlayarrFocusScale(
     return scale
 }
 
-internal val WebBackground get() = webPalette.background
-internal val WebSurface get() = webPalette.surface
-internal val WebSurfaceStrong get() = webPalette.surfaceStrong
-internal val WebSurfaceSoft get() = webPalette.surfaceSoft
-internal val WebInk get() = webPalette.ink
-internal val WebInkSoft get() = webPalette.inkSoft
-internal val WebInkMuted get() = webPalette.inkMuted
-internal val WebPink get() = webPalette.accent
+internal val WebBackground get() = PlayarrWebTheme.palette.background
+internal val WebSurface get() = PlayarrWebTheme.palette.surface
+internal val WebSurfaceStrong get() = PlayarrWebTheme.palette.surfaceStrong
+internal val WebSurfaceSoft get() = PlayarrWebTheme.palette.surfaceSoft
+internal val WebInk get() = PlayarrWebTheme.palette.ink
+internal val WebInkSoft get() = PlayarrWebTheme.palette.inkSoft
+internal val WebInkMuted get() = PlayarrWebTheme.palette.inkMuted
+internal val WebAccent get() = PlayarrWebTheme.palette.accent
+
+/** Old name of [WebAccent] (the accent is not pink). Kept until in-flight branches have moved; removed in A7. */
+@Deprecated("Use WebAccent", ReplaceWith("WebAccent"))
+internal val WebPink get() = WebAccent
 
 /** Web kicker / eyebrow accent (`#cf3157`), distinct from the neutral palette accent. */
 internal val WebKicker = Color(0xFFCF3157)
@@ -1797,7 +1779,7 @@ private fun PlayarrMiniPlayer(
             } ?: Box(
                 artworkModifier.background(
                     Brush.radialGradient(
-                        listOf(WebPink.copy(alpha = 0.5f), Color(0xFF0D090B)),
+                        listOf(WebAccent.copy(alpha = 0.5f), Color(0xFF0D090B)),
                     ),
                 ),
                 contentAlignment = Alignment.Center,
@@ -1854,7 +1836,7 @@ private fun PlayarrMiniPlayer(
                             .fillMaxWidth(playarrPlaybackProgress(timeline.positionMs, timeline.durationMs))
                             .fillMaxHeight()
                             .clip(CircleShape)
-                            .background(WebPink),
+                            .background(WebAccent),
                     )
                 }
             }
@@ -2473,7 +2455,7 @@ private fun ExperienceOfflineScreen(isTelevision: Boolean) {
                 modifier = Modifier
                     .size(if (wide) 164.dp else 116.dp)
                     .clip(CircleShape)
-                    .background(WebPink.copy(alpha = 0.12f))
+                    .background(WebAccent.copy(alpha = 0.12f))
                     .border(2.dp, WebInk.copy(alpha = 0.82f), CircleShape)
                     .padding(if (wide) 34.dp else 24.dp),
                 contentAlignment = Alignment.Center,
@@ -2498,7 +2480,7 @@ private fun ExperienceOfflineScreen(isTelevision: Boolean) {
                         )
                     }
                     drawCircle(
-                        color = WebPink,
+                        color = WebAccent,
                         radius = size.minDimension * 0.14f,
                         center = Offset(size.width * 0.79f, size.height * 0.24f),
                     )
@@ -3273,7 +3255,7 @@ internal fun ExperienceLandscapeCard(
             }
             progress?.takeIf { it.state != WatchState.Unseen }?.let {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
-                    Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                    Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebAccent))
                 }
             }
             if (showUnwatched && stackCount <= 1 && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
@@ -4247,7 +4229,7 @@ private fun PhoneSearchContent(
             val topInset = webPhoneInsets().asPaddingValues().calculateTopPadding()
             Box(Modifier.padding(top = (24.dp - topInset).coerceAtLeast(0.dp)).weight(1f).fillMaxWidth()) {
                 when (val current = state) {
-                    ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
+                    ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                     is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query_.isBlank()) {
                         ExperienceEmpty(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
@@ -4508,7 +4490,7 @@ private fun TelevisionSearchBody(
         Box(Modifier.align(Alignment.CenterEnd).width(1190.4.dp).fillMaxHeight().background(webRailSurfaceBrush())) {
             Box(Modifier.padding(start = 96.dp, top = 172.8.dp, end = 80.6.dp).fillMaxSize()) {
                 when (val current = state) {
-                    ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
+                    ExperienceLoad.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                     is ExperienceLoad.Failed -> ExperienceFailure(current.message, onSubmit)
                     is ExperienceLoad.Ready -> if (query.isBlank()) {
                         ExperienceEmpty(playarrString(PlayarrString.SearchIdleTitle), playarrString(PlayarrString.SearchEmptyPrompt))
@@ -4634,7 +4616,7 @@ private fun ExperienceSearchPreview(
                 val language = LocalPlayarrLanguage.current
                 Text(
                     work.kind.playarrSingularLabel().uppercase(language.locale),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -4665,7 +4647,7 @@ private fun ExperienceSearchPreview(
                     playarrString(
                         if (playlist.isSystem) PlayarrString.SearchSystemPlaylist else PlayarrString.SearchPlaylist,
                     ).uppercase(language.locale),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -5252,7 +5234,7 @@ private fun ExperienceDetailScreen(
                     Surface(
                         onClick = viewModel::clearMessage,
                         color = WebSurfaceStrong,
-                        contentColor = if (success) WebPink else MaterialTheme.colorScheme.error,
+                        contentColor = if (success) WebAccent else MaterialTheme.colorScheme.error,
                         shape = RoundedCornerShape(12.dp),
                         shadowElevation = 16.dp,
                         modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(top = 18.dp),
@@ -5336,7 +5318,7 @@ private fun PlayarrServerChoiceDialog(
             ) {
                 when (choices) {
                     ExperienceLoad.Loading -> {
-                        CircularProgressIndicator(color = WebPink)
+                        CircularProgressIndicator(color = WebAccent)
                         Text(playarrString(PlayarrString.ServerChoiceLoading), color = WebInkMuted)
                     }
                     is ExperienceLoad.Failed -> {
@@ -5346,7 +5328,7 @@ private fun PlayarrServerChoiceDialog(
                     is ExperienceLoad.Ready -> {
                         Text(
                             playarrString(PlayarrString.ServerChoiceAvailable, "count" to choices.value.size),
-                            color = WebPink,
+                            color = WebAccent,
                             fontSize = 11.sp,
                         )
                         Text(playarrString(PlayarrString.ServerChoiceChoose), color = WebInkMuted)
@@ -6677,7 +6659,7 @@ private fun WebEpisodeDetailCard(
             )
             progress?.takeIf { it.state != WatchState.Unseen }?.let {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
-                    Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                    Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebAccent))
                 }
             }
             if (available && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
@@ -6727,7 +6709,7 @@ private fun PhoneEpisodeCard(
                 )
                 progress?.takeIf { it.state != WatchState.Unseen }?.let {
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.28f))) {
-                        Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebPink))
+                        Box(Modifier.fillMaxWidth(it.fraction).fillMaxHeight().background(WebAccent))
                     }
                 }
                 if (available && shouldShowPlayarrUnwatchedDot(progress, progressLoaded = true)) {
@@ -7363,7 +7345,7 @@ private fun MusicAlbumCard(
                 .aspectRatio(1f)
                 .scale(albumScale)
                 .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
-                .then(if (selected) Modifier.border(2.dp, WebPink, RoundedCornerShape(12.dp)) else Modifier),
+                .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
             shape = RoundedCornerShape(12.dp),
             color = WebSurfaceStrong,
         ) {
@@ -7449,7 +7431,7 @@ private fun MusicTrackRow(
             Icon(
                 Icons.Outlined.PlayArrow,
                 contentDescription = playarrString(PlayarrString.DetailPlayTitle, "title" to track.track.title),
-                tint = WebPink,
+                tint = WebAccent,
             )
         }
     }
@@ -7671,7 +7653,7 @@ private fun PlayRow(
                 contentDescription = playarrString(
                     if (available) PlayarrString.DetailPlay else PlayarrString.DetailUnavailable,
                 ),
-                tint = if (available) WebPink else WebInkMuted,
+                tint = if (available) WebAccent else WebInkMuted,
             )
         }
     }
@@ -9160,7 +9142,7 @@ private fun PlayarrMusicVisualiser(active: Boolean, modifier: Modifier = Modifie
                 Modifier
                     .width(5.dp)
                     .height(if (active) 50.dp * level else 10.dp)
-                    .background(WebPink, RoundedCornerShape(3.dp)),
+                    .background(WebAccent, RoundedCornerShape(3.dp)),
             )
         }
     }
@@ -9372,7 +9354,7 @@ internal fun ExperienceLoading(label: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             PlayarrLogo()
-            CircularProgressIndicator(color = WebPink)
+            CircularProgressIndicator(color = WebAccent)
             Text(label, color = WebInkMuted, fontSize = 12.sp)
         }
     }
@@ -9419,7 +9401,7 @@ private fun ExperienceNotFoundScreen() {
         Modifier
             .fillMaxSize()
             .background(WebSurface)
-            .background(Brush.radialGradient(listOf(WebPink.copy(alpha = 0.12f), Color.Transparent))),
+            .background(Brush.radialGradient(listOf(WebAccent.copy(alpha = 0.12f), Color.Transparent))),
     ) {
         val wide = maxWidth >= 760.dp
         Column(
@@ -9443,7 +9425,7 @@ private fun ExperienceNotFoundScreen() {
             )
             Text(
                 playarrString(PlayarrString.NotFoundKicker).uppercase(LocalPlayarrLanguage.current.locale),
-                color = WebPink,
+                color = WebAccent,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.2.sp,
@@ -9476,7 +9458,7 @@ private fun PlayarrNotFoundArtwork(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = (-12).sp,
         )
-        val accent = WebPink.copy(alpha = 0.82f)
+        val accent = WebAccent.copy(alpha = 0.82f)
         val fill = WebSurfaceStrong.copy(alpha = 0.88f)
         val orbit = WebInkMuted.copy(alpha = 0.45f)
         Canvas(Modifier.fillMaxSize()) {

@@ -375,7 +375,7 @@ internal fun AddToPlaylistDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (val current = state) {
-                    ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
+                    ParityLoad.Loading -> CircularProgressIndicator(color = WebAccent)
                     is ParityLoad.Failed -> Text(playarrText(current.message), color = MaterialTheme.colorScheme.error)
                     is ParityLoad.Ready -> if (current.value.isEmpty()) {
                         Text(
@@ -680,9 +680,9 @@ internal fun PlaylistCard(
             if (focused || selected) WebInkSoft else WebInkMuted.copy(alpha = 0.18f),
         ),
     ) {
-        Box(Modifier.background(Brush.linearGradient(listOf(WebPink.copy(alpha = 0.22f), WebSurfaceStrong)))) {
+        Box(Modifier.background(Brush.linearGradient(listOf(WebAccent.copy(alpha = 0.22f), WebSurfaceStrong)))) {
             if (coverWorks.isEmpty() || serverUrl.isBlank()) {
-                Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, contentDescription = null, tint = WebPink, modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(38.dp))
+                Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, contentDescription = null, tint = WebAccent, modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(38.dp))
             } else {
                 coverWorks.take(3).asReversed().forEachIndexed { index, work ->
                     AuthenticatedArtwork(
@@ -1154,7 +1154,7 @@ private fun PlaylistDetailItem(
                 }
                 if (mediaFileId != null) {
                     PlayarrIconButton(onClick = { onPlay(mediaFileId) }, contentDescription = playarrString(PlayarrString.PlaylistItemPlay)) {
-                        Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = WebPink)
+                        Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = WebAccent)
                     }
                 }
             }
@@ -3183,7 +3183,7 @@ internal fun ExperienceParitySettingsScreen(
                 }
                 item {
                     when (val current = state) {
-                        ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebPink) }
+                        ParityLoad.Loading -> Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WebAccent) }
                         is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
                         is ParityLoad.Ready -> SettingsSectionContent(
                             section = section,
@@ -3204,7 +3204,7 @@ internal fun ExperienceParitySettingsScreen(
                     item {
                         Text(
                             playarrText(notice.message),
-                            color = if (notice.success) WebPink else MaterialTheme.colorScheme.error,
+                            color = if (notice.success) WebAccent else MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clickable { viewModel.clearMessage() },
                         )
@@ -3675,7 +3675,7 @@ private fun SettingsSectionContent(
         localNotice?.let { notice ->
             Text(
                 playarrString(notice),
-                color = WebPink,
+                color = WebAccent,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { localNotice = null },
@@ -3838,7 +3838,7 @@ private fun SettingsServerSection(
                             playarrString(PlayarrString.SettingsServerPrimaryBadge).uppercase(
                                 LocalPlayarrLanguage.current.locale,
                             ),
-                            color = WebPink,
+                            color = WebAccent,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
                         )
@@ -3944,7 +3944,7 @@ private fun SettingsServerSection(
                     "serverVersion" to connectionTest.version.serverVersion,
                     "apiVersion" to connectionTest.version.apiVersion,
                 ),
-                color = WebPink,
+                color = WebAccent,
                 fontSize = 10.sp,
             )
             is SettingsConnectionTest.Failed -> Text(
@@ -4175,7 +4175,7 @@ private fun TvSettingsBody(
             Modifier.offset(x = 774.dp, y = 212.dp).width(995.dp),
         ) {
             when (val current = state) {
-                ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
+                ParityLoad.Loading -> CircularProgressIndicator(color = WebAccent)
                 is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
                 is ParityLoad.Ready -> androidx.compose.runtime.CompositionLocalProvider(LocalSettingsPlainPanel provides true) {
                     SettingsSectionContent(
@@ -4497,7 +4497,7 @@ private fun <T> SettingChoiceOptions(
 internal fun ParityLoading(label: String) {
     Box(Modifier.fillMaxSize().background(WebSurface), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            CircularProgressIndicator(color = WebPink)
+            CircularProgressIndicator(color = WebAccent)
             Text(label, color = WebInkMuted)
         }
     }

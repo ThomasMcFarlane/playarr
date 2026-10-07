@@ -313,7 +313,7 @@ internal fun PlayarrAvatarSettings(
                 onClick = { onSaveAvatar(ProfileAvatarPreference(ProfileAvatarKind.Preset, preset)) },
                 modifier = Modifier
                     .size(76.dp)
-                    .then(if (selected) Modifier.border(3.dp, WebPink, CircleShape) else Modifier)
+                    .then(if (selected) Modifier.border(3.dp, WebAccent, CircleShape) else Modifier)
                     .semantics { contentDescription = presetDescription },
                 shape = CircleShape,
                 color = androidx.compose.ui.graphics.Color.Transparent,
@@ -333,7 +333,7 @@ internal fun PlayarrAvatarSettings(
                     preference = resolved,
                     modifier = Modifier
                         .size(76.dp)
-                        .border(3.dp, WebPink, CircleShape)
+                        .border(3.dp, WebAccent, CircleShape)
                         .semantics { contentDescription = currentCustomDescription },
                     glyphSize = 31.sp,
                 )

@@ -490,7 +490,7 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
             }
         }
         state.notice?.let {
-            Text(playarrString(it), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(playarrString(it), color = WebAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -638,7 +638,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
             )
         }
         state.notice?.let {
-            Text(playarrString(it), color = WebPink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(playarrString(it), color = WebAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

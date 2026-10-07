@@ -137,7 +137,7 @@ import kotlinx.coroutines.launch
 
 private val PlayarrBackground get() = WebBackground
 private val PlayarrPanel get() = WebSurfaceStrong
-private val PlayarrViolet get() = WebPink
+private val PlayarrViolet get() = WebAccent
 
 sealed interface RootState {
     data object Loading : RootState

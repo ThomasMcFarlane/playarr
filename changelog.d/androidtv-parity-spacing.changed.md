@@ -1,1 +1,0 @@
-- Android TV: settings panels, the Phone remote and Your data screens, Home rail row pitch, the player control pills and the quality matrix, choice cells, the profile-lock field and the search field follow the web TV geometry more closely (light and dark).

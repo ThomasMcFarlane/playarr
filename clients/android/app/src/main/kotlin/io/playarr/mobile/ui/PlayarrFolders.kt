@@ -290,7 +290,7 @@ private fun FolderRow(label: String, isTelevision: Boolean, onClick: () -> Unit,
         shape = shape,
         modifier = Modifier
             .fillMaxWidth()
-            .border(BorderStroke(if (focused) 3.dp else 1.dp, if (focused) WebPink else WebInk.copy(alpha = 0.14f)), shape)
+            .border(BorderStroke(if (focused) 3.dp else 1.dp, if (focused) WebAccent else WebInk.copy(alpha = 0.14f)), shape)
             .semantics { contentDescription = label },
     ) {
         Row(Modifier.padding(if (isTelevision) 14.dp else 10.dp), verticalAlignment = Alignment.CenterVertically) { content() }
@@ -340,7 +340,7 @@ private fun FolderCard(
             }
             if (entry.progress > 0f) {
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp).background(WebInk.copy(alpha = 0.3f))) {
-                    Box(Modifier.fillMaxWidth(entry.progress).fillMaxHeight().background(WebPink))
+                    Box(Modifier.fillMaxWidth(entry.progress).fillMaxHeight().background(WebAccent))
                 }
             }
         }
@@ -349,7 +349,7 @@ private fun FolderCard(
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(name, color = WebInk, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (meta.isNotEmpty()) Text(meta, color = WebInkSoft, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (resumable) Text(playarrString(PlayarrString.FoldersResume), color = WebPink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (resumable) Text(playarrString(PlayarrString.FoldersResume), color = WebAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             if (watched) Text(playarrString(PlayarrString.FoldersWatched), color = WebInkMuted, fontSize = 12.sp)
         }
     }

@@ -275,7 +275,7 @@ internal fun PlayarrEndOfPlaybackOverlay(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     playarrString(PlayarrString.EndCardFinished).uppercase(language.locale),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -392,7 +392,7 @@ private fun PlayarrUpNextCard(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     playarrString(PlayarrString.PlayerUpNext).uppercase(language.locale),
-                    color = WebPink,
+                    color = WebAccent,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
@@ -444,7 +444,7 @@ private fun PlayarrUpNextCard(
                         ) {
                             CircularProgressIndicator(
                                 progress = { state.progress },
-                                color = WebPink,
+                                color = WebAccent,
                                 trackColor = Color.White.copy(alpha = 0.16f),
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -490,7 +490,7 @@ private fun PlayarrEndCardButton(
         color = if (emphasised) Color.White else Color.White.copy(alpha = 0.14f),
         contentColor = if (emphasised) Color.Black else Color.White,
         shape = CircleShape,
-        border = if (focused) BorderStroke(3.dp, WebPink) else BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+        border = if (focused) BorderStroke(3.dp, WebAccent) else BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
         modifier = modifier
             .height(if (isTelevision) 48.dp else 44.dp)
             .semantics { contentDescription = accessibilityLabel ?: label },
@@ -525,7 +525,7 @@ private fun PlayarrSuggestionTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .border(if (focused) 3.dp else 0.dp, WebPink, RoundedCornerShape(10.dp))
+                .border(if (focused) 3.dp else 0.dp, WebAccent, RoundedCornerShape(10.dp))
                 .semantics { contentDescription = work.title },
         ) {
             PlayarrSuggestionArtwork(
