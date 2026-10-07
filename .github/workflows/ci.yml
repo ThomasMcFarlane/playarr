@@ -115,6 +115,19 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: scripts/ci/check-no-coauthor.sh
 
+      # Owner rule (docs/design/page-layout.md, section 7.4): the look of the shared page layout changes only on an
+      # explicit owner request that names the reference, recorded as a Layout-Change line in the PR body. Train runs
+      # (workflow_dispatch on the PR branch) read the body through the API.
+      - name: Require an owner request for shared layout look changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/check-layout-owner-request.sh
+
+      - name: Layout owner-request gate tests
+        run: scripts/ci/test-layout-owner-request.sh
+
       # The repository is public: no hostnames, addresses, paths or pins of a
       # real deployment. Site-specific names come from a secret, never the tree.
       - name: Reject environment-specific data
@@ -173,6 +186,9 @@ jobs:
               - 'clients/harmony/**'
             tv-web:
               - 'clients/tv-web/**'
+              # The layout parity job diffs against these pins with the shared capture tools.
+              - 'docs/parity/web/layout/**'
+              - 'scripts/parity/**'
             # The server image builds the Admin and web assets from clients/tv-web inside the Dockerfile.
             server-image:
               - 'infra/docker/backend.Dockerfile'
@@ -464,6 +480,57 @@ jobs:
         run: pnpm --filter @playarr-tv/web run test
 
   # ---------------------------------------------------------------------
+  # Page layout parity (docs/design/page-layout.md, section 7.3): the canonical header and action pill, built from the
+  # shared components, must equal the committed 30 September reference and pins, and every page's pills and header band
+  # must equal the canonical ones at 0 pixels, in both themes. Needs no fixture server and no Rust build: it serves the
+  # built web client with the deterministic mock API of scripts/nav-perf.
+  # ---------------------------------------------------------------------
+  web-layout-parity:
+    name: web layout parity
+    needs: changes
+    if: needs.changes.outputs.tv-web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: clients/tv-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: clients/tv-web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web workspace dependencies
+        working-directory: clients/tv-web
+        run: pnpm --filter './packages/**' run build
+
+      - name: Install the capture tools and Chromium
+        working-directory: scripts/parity
+        run: npm ci --no-audit --no-fund && npx playwright-core install --with-deps chromium
+
+      - name: Layout parity (reference pin, pill identity, header bands)
+        working-directory: clients/tv-web/web
+        run: node scripts/layout-parity.mjs --out "$RUNNER_TEMP/layout-parity"
+
+      - name: Upload the diff images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layout-parity-diffs
+          path: ${{ runner.temp }}/layout-parity
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------
   # OpenAPI contract: regenerate the utoipa-derived spec and diff it
   # against the committed copy. Delegates to scripts/openapi-diff-check.sh
   # (owned by the dev-scripts scaffolding) so the regeneration/diff logic
@@ -568,6 +635,7 @@ jobs:
       - tv-web-check
       - server-image-web
       - firetv-check
+      - web-layout-parity
       - openapi-contract-check
     if: always()
     runs-on: ubuntu-latest
@@ -580,7 +648,7 @@ jobs:
           echo "$NEEDS_JSON" | jq .
 
           fail=0
-          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check openapi-contract-check; do
+          for job in changes backend-check android-check xbox-check harmony-check tv-web-check server-image-web firetv-check web-layout-parity openapi-contract-check; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg j "$job" '.[$j].result // "missing"')
             echo "Job '$job' result: $result"
             case "$result" in

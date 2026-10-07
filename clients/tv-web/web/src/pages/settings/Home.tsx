@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { describeApiError } from "@playarr-tv/api-client";
+import { ErrorState, LoadingState } from "../../components/shell";
 import { Button } from "../../components/ui";
 import { useApiClient } from "../../lib/ApiClientProvider";
 import {
@@ -68,13 +69,9 @@ export function SettingsHomePage() {
     >
       <section className="card settings-card settings-card-wide">
         {state.status === "loading" ? (
-          <p className="tv-discovery-note" role="status">
-            {t("pages.home.customise.loading")}
-          </p>
+          <LoadingState size="inline" label={t("pages.home.customise.loading")} />
         ) : state.status === "error" ? (
-          <p className="tv-watchlist-error" role="alert">
-            {state.message}
-          </p>
+          <ErrorState variant="compact" title={t("pages.home.error.title")} description={state.message} />
         ) : (
           <>
             <p className="tv-discovery-note">{t("pages.home.customise.hint")}</p>
@@ -113,11 +110,7 @@ export function SettingsHomePage() {
             </div>
           </>
         )}
-        {saveError ? (
-          <p className="tv-watchlist-error" role="alert">
-            {saveError}
-          </p>
-        ) : null}
+        {saveError ? <ErrorState variant="compact" title={t("pages.home.error.title")} description={saveError} /> : null}
       </section>
     </SettingsSectionLayout>
   );

@@ -33,6 +33,7 @@ import {
 } from "./pages/Legal";
 import "./styles/fonts.css";
 import "./styles/global.css";
+import "./styles/page-layout.css";
 
 // Debug builds only (`--mode debug-mirror`): the constant is false in every other build, so the
 // bundler drops this branch and the mirror module never reaches a production bundle.

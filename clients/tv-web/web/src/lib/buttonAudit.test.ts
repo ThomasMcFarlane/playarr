@@ -30,7 +30,7 @@ describe("button style audit", () => {
   });
 
   it("shared shell and calendar surfaces render buttons only through the family", () => {
-    for (const file of ["components/shell/PageHeader.tsx", "components/shell/FiltersDrawer.tsx", "pages/Calendar.tsx", "components/CalendarLink.tsx"]) {
+    for (const file of ["components/shell/PageHeader.tsx", "components/shell/ActionPill.tsx", "pages/Calendar.tsx", "components/CalendarLink.tsx"]) {
       const text = readFileSync(join(src, file), "utf8");
       expect(text, `${file} must import from components/ui`).toMatch(/from "\.\.?\/(\.\.\/)?(components\/)?ui"/);
     }

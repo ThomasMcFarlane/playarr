@@ -1,7 +1,8 @@
-import { Button } from "../ui";
+import { ActionPill } from "./ActionPill";
+import type { ActionIcon } from "./icons";
 import type { ReactNode, Ref } from "react";
 
-/** Header action that opens the page's {@link FiltersDrawer}. */
+/** @deprecated Use a `filters` action on the page header. An alias of {@link ActionPill} for one PR. */
 export function FiltersButton({
   label,
   open,
@@ -12,41 +13,30 @@ export function FiltersButton({
   buttonProps,
 }: {
   buttonRef?: Ref<HTMLButtonElement>;
-  /** Page-specific data attributes (focus keys, edge targets). */
   buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
   label: string;
   open: boolean;
   onToggle: () => void;
-  /** Id of the drawer this button controls. */
   controls: string;
-  /** Number of active filters, shown as a badge. */
   activeCount?: number;
 }) {
   return (
-    <Button
-      variant="secondary"
-      className="page-filters-button"
+    <ActionPill
+      kind="filters"
+      marker="data-filters-button"
+      icon="filters"
+      label={label}
       active={open}
+      count={activeCount}
       onClick={onToggle}
-      aria-expanded={open}
-      aria-controls={controls}
-      data-filters-button
-      ref={buttonRef}
-      {...buttonProps}
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 6h16M7 12h10m-7 6h4" />
-        <circle cx="8" cy="6" r="1.5" />
-        <circle cx="15" cy="12" r="1.5" />
-        <circle cx="12" cy="18" r="1.5" />
-      </svg>
-      <span>{label}</span>
-      {activeCount > 0 ? <b className="page-filters-count">{activeCount}</b> : null}
-    </Button>
+      controls={controls}
+      buttonRef={buttonRef}
+      buttonProps={buttonProps}
+    />
   );
 }
 
-/** Secondary header action stacked directly below Filters (for example Calendar subscription); same style and slot family. */
+/** @deprecated Use a `panel` action on the page header. An alias of {@link ActionPill} for one PR. */
 export function PanelButton({
   label,
   icon,
@@ -59,26 +49,23 @@ export function PanelButton({
   buttonRef?: Ref<HTMLButtonElement>;
   buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
   label: string;
-  icon: ReactNode;
+  icon: ActionIcon;
   open: boolean;
   onToggle: () => void;
   controls: string;
 }) {
   return (
-    <Button
-      variant="secondary"
-      className="page-filters-button"
+    <ActionPill
+      kind="panel"
+      marker="data-panel-button"
+      icon={icon}
+      label={label}
       active={open}
       onClick={onToggle}
-      aria-expanded={open}
-      aria-controls={controls}
-      data-panel-button
-      ref={buttonRef}
-      {...buttonProps}
-    >
-      {icon}
-      <span>{label}</span>
-    </Button>
+      controls={controls}
+      buttonRef={buttonRef}
+      buttonProps={buttonProps}
+    />
   );
 }
 

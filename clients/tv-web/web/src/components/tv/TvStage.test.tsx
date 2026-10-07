@@ -23,7 +23,7 @@ describe("TvDetailHeading", () => {
     );
     expect(markup).not.toContain(">|<");
 
-    const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../../styles/page-layout.css", import.meta.url), "utf8");
     const sharedDividerRule = css.match(
       /\.tv-library-heading > \.page-header-title-block > span\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
@@ -31,7 +31,7 @@ describe("TvDetailHeading", () => {
       /\.tv-library-heading > \.page-header-title-block > \.tv-detail-heading-item\s*\{(?<declarations>[^}]*)\}/
     )?.groups?.declarations;
 
-    expect(sharedDividerRule).toContain("padding-left: clamp(14px, calc(1.2 * var(--vw)), 24px)");
+    expect(sharedDividerRule).toContain("padding-left: var(--page-header-gap)");
     expect(sharedDividerRule).toContain("border-left: 1px solid var(--line-strong)");
     expect(detailItemRule).not.toContain("padding-left");
     expect(detailItemRule).not.toContain("border-left");

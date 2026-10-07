@@ -1,0 +1,1 @@
+- CI gate: a PR that changes a shared page layout look file (the page-layout stylesheet, the shared layout components, the layout references and pins, the Android page package and goldens) fails unless its body carries `Layout-Change: owner request <date>, reference <id>`.

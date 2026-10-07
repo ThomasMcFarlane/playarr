@@ -1105,11 +1105,7 @@ export function PlaylistsPage() {
                 {
                   id: "create",
                   label: t("pages.playlists.create"),
-                  icon: (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                  ),
+                  icon: "add",
                   open: drawer === "create",
                   onToggle: () => openDrawer("create"),
                   controls: "playlist-create-drawer",

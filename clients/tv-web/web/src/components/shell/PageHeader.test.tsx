@@ -26,11 +26,11 @@ describe("PageHeader filters slot", () => {
         title="Release Calendar"
         backLabel="Back"
         filters={filters("Filters")}
-        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: null, open: false, onToggle: noop, controls: "sub" }]}
+        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: "bell" as const, open: false, onToggle: noop, controls: "sub" }]}
       />
     );
     expect(filterButton(calendar)).toBe(filterButton(movies));
-    expect(movies).toContain("btn btn-secondary ui-btn ui-btn--secondary ui-btn--md page-filters-button");
+    expect(movies).toContain("btn btn-secondary ui-btn ui-btn--secondary ui-btn--md action-pill");
   });
 
   it("puts panel buttons in the same style directly before Filters (Playlists pattern)", () => {
@@ -39,7 +39,7 @@ describe("PageHeader filters slot", () => {
         title="Release Calendar"
         backLabel="Back"
         filters={filters("Filters")}
-        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: null, open: false, onToggle: noop, controls: "sub" }]}
+        panelButtons={[{ id: "subscription", label: "Calendar subscription", icon: "bell" as const, open: false, onToggle: noop, controls: "sub" }]}
       />
     );
     const panel = markup.indexOf("data-panel-button");
@@ -51,31 +51,17 @@ describe("PageHeader filters slot", () => {
     expect(markup).toContain('class="page-header-stack"');
   });
 
-  it("styles every header button through the one .page-filters-button rule, with no per-page override", () => {
-    const css = readFileSync(
-      new URL("../../styles/global.css", import.meta.url),
-      "utf8",
-    ).replace(/\/\*[\s\S]*?\*\//g, "");
-    const selectors = [
-      ...css.matchAll(/([^{}]*page-filters-button[^{}]*)\{/g),
-    ].map((m) => m[1]!.trim());
-    // Only the shared rule, its svg/state/count variants and the phone icon-only media rule may name it.
-    const allowed =
-      /^(\.(ui-btn|ui-btn--secondary)\.page-filters-button(:hover:not\(:disabled\)|:focus-visible|\.is-active|\s+svg|\s+span)?|\.page-filters-button\s+span|\.page-filters-count),?\s*$/;
-    const stray = selectors
-      .flatMap((sel) => sel.split(","))
-      .map((sel) => sel.trim().replace(/\s+/g, " "))
-      .filter((sel) => sel && !allowed.test(sel));
-    expect(stray).toEqual([]);
+  it("styles every header button through the one .action-pill rule in page-layout.css, with no per-page override", () => {
+    const read = (path: string) =>
+      readFileSync(new URL(path, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const layout = read("../../styles/page-layout.css");
+    expect(layout).toMatch(/\.ui-btn\.action-pill\s*\{/);
+    for (const other of ["../../styles/global.css", "../../pages/Calendar.css", "../../pages/Folders.css"]) {
+      expect(read(other), `${other} must not style the shared header buttons`).not.toMatch(/action-pill|page-filters-button/);
+    }
     for (const page of ["Calendar.css", "Calendar.tsx"]) {
-      const source = readFileSync(
-        new URL(`../../pages/${page}`, import.meta.url),
-        "utf8",
-      );
-      expect(
-        source,
-        `${page} must not restyle the shared header buttons`,
-      ).not.toMatch(/page-filters-button/);
+      const source = readFileSync(new URL(`../../pages/${page}`, import.meta.url), "utf8");
+      expect(source, `${page} must not restyle the shared header buttons`).not.toMatch(/page-filters-button|action-pill/);
     }
   });
 
@@ -88,10 +74,11 @@ describe("PageHeader filters slot", () => {
 
   it("keeps side-panel and action buttons out of pages: only the shell column places them", () => {
     const pagesDir = new URL("../../pages/", import.meta.url);
-    const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const css = readFileSync(new URL("../../styles/page-layout.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const column = /\.shell-action-column \{([^}]*)\}/.exec(css)?.[1] ?? "";
     expect(column).toContain("position: absolute");
     expect(column).toContain("var(--directory-controls-edge)");
+    expect(column).toContain("var(--shell-action-column-top)");
     const walk = (dir: URL): URL[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : /\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) ? [new URL(e.name, dir)] : [],

@@ -1006,11 +1006,7 @@ export function CalendarPage() {
         {
           id: "subscription",
           label: t("pages.calendar.subscription.title"),
-          icon: (
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0" />
-            </svg>
-          ),
+          icon: "bell",
           open: panel === "link",
           onToggle: () => setPanel(panel === "link" ? null : "link"),
           controls: "calendar-subscribe-drawer",

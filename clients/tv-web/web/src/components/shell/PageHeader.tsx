@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { detailFitsInline } from "../../lib/pageHeaderLayout";
 import { Button, ButtonLink } from "../ui";
-import { FiltersButton, PanelButton } from "./FiltersDrawer";
-import { ShellActionColumnSlot } from "./ShellActionColumn";
+import { PageActionStack, PageHeaderActions, type PageAction } from "./PageActions";
+import type { ActionIcon } from "./icons";
 
+/** Legacy Filters slot, kept until the page that passes it migrates to `actions`. */
 export interface FiltersSlot {
   label: string;
   open: boolean;
@@ -16,10 +17,11 @@ export interface FiltersSlot {
   buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
 }
 
+/** Legacy panel opener, kept until the page that passes it migrates to `actions`. */
 export interface PanelSlot {
   id: string;
   label: string;
-  icon: ReactNode;
+  icon: ActionIcon;
   open: boolean;
   onToggle: () => void;
   controls: string;
@@ -27,36 +29,47 @@ export interface PanelSlot {
   buttonProps?: Record<`data-${string}`, string | boolean | undefined>;
 }
 
+type BackProps = { label: string } & ({ to: string } | { onBack: () => void });
+
 export interface PageHeaderProps {
   /** Large page title (`<h1>`). */
   title: ReactNode;
-  /** Accessible label for the back control. */
-  backLabel: string;
-  /** Route the back control links to. Defaults to Home. Ignored when `onBack` is set. */
-  backTo?: string;
-  /** Imperative back handler (settings, nested detail views). */
-  onBack?: () => void;
-  /** Secondary text after the divider (counts, section name, breadcrumb). */
+  /** Secondary text after the divider (counts, section name, breadcrumb). In the `detail` variant it is the item title. */
   detail?: ReactNode;
-  /** Extra class on the detail wrapper (page-specific typography). */
-  detailClassName?: string;
-  /** Extra class names for page-specific tweaks; the base layout never changes. */
-  className?: string;
+  /** Back control: where it goes, and its accessible label. Home is the default destination. */
+  back?: BackProps;
   /**
-   * The page's Filters. Rendered in the shell action column (right edge, vertical, as on 30 September), never in the
-   * header row, so every filterable page looks and sits identically.
+   * The header actions, in any order: `PageActions` draws them navigation first, secondary pills next and Filters last.
+   * A node is still accepted while Downloads migrates (W3).
    */
-  filters?: FiltersSlot;
-  /** Secondary panel openers rendered immediately left of Filters in the same style (Playlists' Create, Calendar subscription). */
-  panelButtons?: readonly PanelSlot[];
-  /** Page navigation (e.g. calendar previous/today/next) placed left of the Filters column. */
-  navigation?: ReactNode;
-  /** Any further right-side actions, left of the Filters column. */
-  actions?: ReactNode;
-  /** Extra attributes for the back control (focus hooks, refs are not supported). */
+  actions?: PageAction[] | ReactNode;
+  /** `detail` is the detail-page variant: the detail text is the item title, bold. */
+  variant?: "page" | "detail";
   /** Ref to the back control (focus management). */
   backRef?: Ref<HTMLAnchorElement>;
+  /** Extra attributes for the back control (focus hooks). */
   backProps?: HTMLAttributes<HTMLElement> & Record<`data-${string}`, string | boolean | undefined>;
+
+  /** @deprecated Use `back`. Kept until the page that passes it migrates. */
+  backLabel?: string;
+  /** @deprecated Use `back`. */
+  backTo?: string;
+  /** @deprecated Use `back`. */
+  onBack?: () => void;
+  /** @deprecated Use an `actions` filters entry. */
+  filters?: FiltersSlot;
+  /** @deprecated Use `actions` panel entries. */
+  panelButtons?: readonly PanelSlot[];
+  /** @deprecated Use an `actions` navigation entry. */
+  navigation?: ReactNode;
+  /** @deprecated A page may not restyle the header; removed as pages migrate (W2, W6). */
+  detailClassName?: string;
+  /** @deprecated A page may not restyle the header; removed as pages migrate (W2, W6). */
+  className?: string;
+}
+
+function isActionList(value: unknown): value is PageAction[] {
+  return Array.isArray(value) && value.every((item) => item && typeof item === "object" && "kind" in item);
 }
 
 /** Width of the content itself, independent of how wide its (possibly wrapped) box currently is. */
@@ -74,19 +87,31 @@ function naturalWidth(element: HTMLElement): number {
  */
 export function PageHeader({
   title,
-  backLabel,
-  backTo = "/",
-  onBack,
   detail,
-  detailClassName,
-  className,
+  back,
   actions,
+  variant = "page",
+  backProps,
+  backRef,
+  backLabel: legacyBackLabel,
+  backTo: legacyBackTo,
+  onBack: legacyOnBack,
   filters,
   panelButtons,
   navigation,
-  backProps,
-  backRef,
+  detailClassName,
+  className,
 }: PageHeaderProps) {
+  const backLabel = back?.label ?? legacyBackLabel ?? "";
+  const backTo = back && "to" in back ? back.to : (legacyBackTo ?? "/");
+  const onBack = back && "onBack" in back ? back.onBack : legacyOnBack;
+  const isDetail = variant === "detail";
+  const pageActions: PageAction[] = [
+    ...(isActionList(actions) ? actions : []),
+    ...(panelButtons ?? []).map((panel): PageAction => ({ kind: "panel", ...panel })),
+    ...(filters ? [{ kind: "filters", ...filters } as PageAction] : []),
+  ];
+  const extraNode = isActionList(actions) ? null : (actions as ReactNode);
   const headerRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const detailRef = useRef<HTMLSpanElement>(null);
@@ -132,11 +157,11 @@ export function PageHeader({
     };
   });
 
-  const hasActions = Boolean(actions || navigation);
-  const hasPanelButtons = Boolean(filters || panelButtons?.length);
+  const hasActions = Boolean(extraNode || navigation || pageActions.some((action) => action.kind === "navigation" || action.kind === "status"));
   const classes = [
     "tv-library-heading",
     "page-header",
+    isDetail ? "tv-detail-heading" : "",
     hasActions ? "has-actions" : "",
     wrapped && detail ? "is-detail-wrapped" : "",
     className ?? "",
@@ -172,28 +197,17 @@ export function PageHeader({
       <div className="page-header-title-block">
         <h1 ref={titleRef}>{title}</h1>
         {detail ? (
-          <span ref={detailRef} className={`page-header-detail${detailClassName ? ` ${detailClassName}` : ""}`}>
-            {detail}
+          <span
+            ref={detailRef}
+            className={`page-header-detail${isDetail ? " tv-detail-heading-item" : ""}${detailClassName ? ` ${detailClassName}` : ""}`}
+          >
+            {isDetail ? <strong>{detail}</strong> : detail}
           </span>
         ) : null}
       </div>
-      {hasActions ? (
-        <div ref={actionsRef} className="page-header-actions">
-          {navigation}
-          {actions}
-        </div>
-      ) : null}
+      <PageHeaderActions actions={pageActions} actionsRef={actionsRef} legacyNavigation={navigation} legacyExtra={extraNode} />
     </header>
-    {hasPanelButtons ? (
-      <ShellActionColumnSlot>
-        <div className="page-header-stack">
-          {panelButtons?.map((panel) => (
-            <PanelButton key={panel.id} {...panel} />
-          ))}
-          {filters ? <FiltersButton {...filters} /> : null}
-        </div>
-      </ShellActionColumnSlot>
-    ) : null}
+    <PageActionStack actions={pageActions} />
     </>
   );
 }

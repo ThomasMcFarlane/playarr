@@ -559,28 +559,6 @@ body[data-input-mode="pointer"] :focus:not(:focus-visible) {
   gap: clamp(16px, calc(2 * var(--vw)), 34px);
 }
 
-.app-clock {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: clamp(12px, calc(1.5 * var(--vw)), 28px);
-  white-space: nowrap;
-}
-
-.app-clock-time {
-  font-size: clamp(0.95rem, calc(1.25 * var(--vw)), 1.35rem);
-  font-weight: 520;
-  letter-spacing: -0.03em;
-}
-
-.app-clock-date {
-  color: var(--ink-muted);
-  font-size: clamp(0.62rem, calc(0.72 * var(--vw)), 0.8rem);
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .theme-toggle {
   width: clamp(40px, calc(3 * var(--vw)), 52px);
   height: clamp(40px, calc(3 * var(--vw)), 52px);
@@ -4622,10 +4600,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     grid-template-columns: auto 1fr auto;
   }
 
-  .app-clock-date {
-    display: none;
-  }
-
   .home-feature,
   .detail-editorial {
     grid-template-columns: minmax(210px, 0.8fr) minmax(280px, 1fr);
@@ -4667,8 +4641,7 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     grid-template-columns: 1fr;
   }
 
-  .app-logo > span:last-child,
-  .app-clock {
+  .app-logo > span:last-child{
     display: none;
   }
 
@@ -4829,34 +4802,10 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   pointer-events: none;
 }
 
-.app-clock,
 .app-utility,
 .app-logo,
-.theme-toggle {
+.theme-toggle{
   pointer-events: auto;
-}
-
-.app-clock {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: 0.7rem;
-  color: var(--ink);
-}
-
-.app-clock-time {
-  font-size: clamp(0.82rem, calc(0.9 * var(--vw)), 1.1rem);
-  font-weight: 760;
-  letter-spacing: -0.03em;
-}
-
-.app-clock-date {
-  max-width: 10rem;
-  color: var(--ink-muted);
-  font-size: clamp(0.52rem, calc(0.58 * var(--vw)), 0.72rem);
-  font-weight: 640;
-  letter-spacing: 0.04em;
-  line-height: 1.1;
 }
 
 .app-utility {
@@ -5683,24 +5632,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   }
 }
 
-/* -------------------------------------------------------------------------
- * Playarr TV library stage — grid rail + focus-driven editorial preview
- * ---------------------------------------------------------------------- */
-
-.app-clock {
-  position: absolute;
-  top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
-  right: calc(65% + clamp(18px, calc(2 * var(--vw)), 38px));
-  bottom: auto;
-  left: auto;
-  height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  transform: none;
-  align-content: center;
-  align-items: center;
-  justify-items: end;
-  text-align: right;
-}
-
 .app-user-identity-cluster {
   position: fixed;
   z-index: 92;
@@ -5877,32 +5808,9 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   text-transform: none;
 }
 
-.tv-library-heading {
-  position: absolute;
-  z-index: 24;
-  top: clamp(34px, calc(5.2 * var(--viewport-unit)), 66px);
-  left: max(clamp(102px, calc(8 * var(--vw)), 160px), var(--tv-nav-clearance));
-  display: flex;
-  align-items: center;
-  gap: clamp(14px, calc(1.2 * var(--vw)), 24px);
-}
-
-.tv-library-heading h1 {
-  font-size: clamp(1.2rem, calc(1.75 * var(--vw)), 2.35rem);
-  font-weight: 580;
-  letter-spacing: -0.045em;
-}
-
 .tv-detail-heading {
   right: clamp(102px, calc(8 * var(--vw)), 160px);
   min-width: 0;
-}
-
-.tv-library-heading > .page-header-title-block > .tv-detail-heading-item {
-  min-width: 0;
-  overflow: hidden;
-  text-transform: none;
-  white-space: nowrap;
 }
 
 .tv-detail-heading-item > strong {
@@ -5912,16 +5820,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
   font: inherit;
   font-weight: inherit;
   text-overflow: ellipsis;
-}
-
-.tv-library-heading > .page-header-title-block > span {
-  padding-left: clamp(14px, calc(1.2 * var(--vw)), 24px);
-  border-left: 1px solid var(--line-strong);
-  color: var(--ink-muted);
-  font-size: clamp(0.5rem, calc(0.58 * var(--vw)), 0.72rem);
-  font-weight: 680;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
 }
 
 .tv-directory {
@@ -6150,33 +6048,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
 
 .tv-view-icon-cover-flow i:last-child {
   transform: rotateY(-42deg);
-}
-
-.tv-page-back {
-  width: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--line-strong) 66%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
-  color: var(--ink-soft);
-  font-size: clamp(0.8rem, calc(0.9 * var(--vw)), 1.1rem);
-  cursor: pointer;
-  backdrop-filter: blur(18px);
-  transition:
-    transform 220ms ease,
-    background 220ms ease,
-    color 220ms ease;
-}
-
-.tv-page-back:hover,
-.tv-page-back:focus-visible {
-  outline: 0;
-  background: var(--ink);
-  color: var(--bg);
-  transform: scale(1.1);
 }
 
 .tv-home-feature,
@@ -9841,9 +9712,6 @@ html.is-native-scroll-root .profile-auth-scroll {
 }
 
 @media (max-width: 1100px), (max-height: 700px) {
-  .tv-library-heading {
-    left: max(calc(7.5 * var(--vw)), var(--tv-nav-clearance));
-  }
 
   .tv-library-grid-panel {
     right: 0;
@@ -9910,8 +9778,7 @@ html.is-native-scroll-root .profile-auth-scroll {
 }
 
 @media (max-width: 760px) {
-  .app-clock,
-  .app-user-name {
+  .app-user-name{
     display: none;
   }
 
@@ -9967,13 +9834,8 @@ html.is-native-scroll-root .profile-auth-scroll {
     display: block;
   }
 
-  .tv-library-heading {
-    left: calc(5 * var(--vw));
-  }
-
-  .tv-library-heading > .page-header-title-block > span,
   .tv-library-preview,
-  .tv-directory .tv-alphabet {
+.tv-directory .tv-alphabet{
     display: none;
   }
 
@@ -10507,23 +10369,8 @@ html.is-native-scroll-root .profile-auth-scroll {
     font-size: 0.62rem;
   }
 
-  .tv-library-heading {
-    top: calc(var(--mobile-top-inset) + 2px);
-    right: 116px;
-    left: var(--mobile-page-gutter);
-    gap: 10px;
-  }
-
-  .tv-library-heading h1 {
-    overflow: hidden;
-    font-size: 1.35rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .tv-library-heading > .page-header-title-block > span,
   .tv-library-preview,
-  .tv-directory .tv-alphabet {
+.tv-directory .tv-alphabet{
     display: none;
   }
 
@@ -10532,8 +10379,7 @@ html.is-native-scroll-root .profile-auth-scroll {
     max-width: calc(calc(100 * var(--vw)) - 250px);
   }
 
-  .tv-page-back,
-  .tv-back {
+  .tv-back{
     width: 42px;
     height: 42px;
     flex: 0 0 42px;
@@ -11410,12 +11256,11 @@ html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .theme-toggle,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .app-nav,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-primary-action,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-filter-launcher,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-page-back,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .tv-back,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-close,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-minimise,
 html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-btn-primary,
-html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-quality-menu {
+html:is([data-platform="android-tv"], [data-platform="tv-vidaa"]) .player-quality-menu{
   backdrop-filter: blur(12px) saturate(112%);
   -webkit-backdrop-filter: blur(12px) saturate(112%);
 }
@@ -12159,7 +12004,6 @@ body[data-input-mode="remote"] :is(
     .app-nav-group,
     .app-nav-link,
     .app-user-identity,
-    .tv-page-back,
     .tv-filter-launcher,
     .tv-search-form
   ) {
@@ -12264,99 +12108,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   font-size: 0.9rem;
 }
 
-/* Shared page header actions + Filters button (components/shell). */
-.tv-library-heading.has-actions {
-  right: clamp(24px, calc(4 * var(--vw)), 96px);
-}
-
-.tv-library-heading > .page-header-title-block > .page-header-detail {
-  min-width: 0;
-}
-
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: clamp(8px, calc(0.8 * var(--vw)), 16px);
-  margin-left: auto;
-}
-
-/*
- * The header launcher (Filters, Calendar link, ...) keeps the look the library Filters launcher had before the
- * shared page shell (owner ruling, 2026-10-07: "whatever was on Web a week ago"): a 14px-radius tile with the
- * glyph above a small bold label, glass fill and a soft shadow. Focus and the open state draw the ring (never
- * a fill), the same as Back and the other pills.
- */
-.ui-btn.page-filters-button {
-  min-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
-  min-height: clamp(52px, calc(5.2 * var(--vw)), 72px);
-  height: auto;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.25rem;
-  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
-  color: var(--ink-muted);
-  font-size: clamp(0.38rem, calc(0.43 * var(--vw)), 0.52rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  box-shadow: 0 14px 36px rgba(56, 38, 33, 0.08);
-  backdrop-filter: blur(22px) saturate(120%);
-  cursor: pointer;
-  transition:
-    background 180ms ease,
-    color 180ms ease,
-    transform 180ms ease;
-}
-
-.ui-btn.page-filters-button svg {
-  width: clamp(18px, calc(1.4 * var(--vw)), 24px);
-  height: clamp(18px, calc(1.4 * var(--vw)), 24px);
-  overflow: visible;
-  fill: var(--surface-strong);
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-
-/*
- * Focus (and hover) draw the ring and the 1.06 scale, never a fill. The open state (drawer shown) keeps the
- * ink fill. Dark theme: --ink is white, light theme: near-black ink.
- */
-.ui-btn--secondary.page-filters-button:hover:not(:disabled),
-.ui-btn--secondary.page-filters-button:focus-visible {
-  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
-  border-color: color-mix(in srgb, var(--line) 68%, transparent);
-  color: var(--ink);
-  transform: scale(1.06);
-}
-
-.ui-btn.page-filters-button:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.ui-btn--secondary.page-filters-button.is-active {
-  background: var(--ink);
-  border-color: transparent;
-  color: var(--bg);
-}
-
-.page-filters-count {
-  min-width: 1.4em;
-  padding: 0 0.4em;
-  border-radius: 999px;
-  background: var(--accent, var(--ink));
-  color: var(--bg);
-  font-size: 0.8em;
-  text-align: center;
-}
-
 .filters-date-range {
   display: grid;
   gap: 0.6rem;
@@ -12398,18 +12149,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
 }
 
 @media (max-width: 760px) {
-  /* The profile avatar floats top-right on phones; keep actions clear of it. */
-  .tv-library-heading.has-actions {
-    right: 72px;
-  }
-
-  .tv-library-heading .page-header-actions.is-stacked {
-    flex-direction: row;
-  }
-
-  .tv-library-heading.has-actions > .page-header-title-block > h1 {
-    font-size: 1.1rem;
-  }
 
   /* Keep the drawer's close control clear of the floating avatar and bottom nav. */
   .tv-filter-drawer > header {
@@ -12419,32 +12158,11 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   .tv-filter-drawer {
     padding-bottom: 110px;
   }
-
-  .page-filters-button span {
-    display: none;
-  }
-
-  .ui-btn.page-filters-button {
-    width: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    justify-content: center;
-    padding: 0;
-    border-radius: 14px;
-  }
 }
 
 /* Shared page frame, master-detail, skeleton and safe areas (components/shell). */
 .app-shell {
-  /* The profile chip lives bottom-left on every screen; pages must not render beneath it. */
-  --page-safe-bottom: clamp(92px, calc(11 * var(--viewport-unit)), 124px);
   --page-safe-left: clamp(220px, calc(12 * var(--vw)), 260px);
-}
-
-.page-header-actions.is-stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
 }
 
 .page-shell {
@@ -12544,11 +12262,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   }
 }
 
-/* Long page titles must not run into the shell clock sitting at the stage divider. */
-.app-shell:has(.page-header) .app-clock {
-  right: calc(65% - clamp(10px, calc(2 * var(--vw)), 40px));
-}
-
 /* The settings detail panel is pinned to the right edge at a percentage width, independent of the list
    column. Keep the two in step: the list column is never narrower than the rail clearance plus a full option
    label (see .settings-workspace-track), so the panel gives up that space instead of overlapping the list. */
@@ -12562,37 +12275,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   .tv-library-grid-panel.settings-detail-panel {
     width: min(66%, calc(100% - var(--tv-nav-clearance) - 320px));
   }
-}
-
-/* Tablet widths: the stage divider sits too close to the rail for the clock to share the header row with a
-   page title (Preferences, Release Calendar). The clock is already hidden on phones; hide it here too. */
-@media (min-width: 761px) and (max-width: 1100px) {
-  .app-shell:has(.page-header) .app-clock {
-    display: none;
-  }
-}
-
-/* The header row grows to fit the 72px action tile and everything centres vertically on it. */
-.tv-library-heading.has-actions {
-  align-items: center;
-}
-
-.tv-library-heading.has-actions > .page-header-title-block > h1 {
-  align-self: center;
-  min-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  display: flex;
-  align-items: center;
-}
-
-.tv-library-heading.has-actions > .tv-page-back {
-  align-self: center;
-}
-
-.tv-library-heading.has-actions > .page-header-title-block > .page-header-detail {
-  align-self: center;
-  min-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  display: flex;
-  align-items: center;
 }
 
 .tv-filter-drawer .calendar-link {
@@ -12661,19 +12343,26 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   border-radius: 50%;
 }
 
+/* The focus indicator is the theme ring, never a fill (docs/design/page-layout.md, section 5). Hover follows focus. */
 .ui-btn:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
+  outline: var(--page-focus-ring);
+  outline-offset: var(--page-focus-ring-offset);
 }
 
-.ui-btn:hover:not(:disabled),
+@media (hover: hover) {
+  .ui-btn--secondary:hover:not(:disabled),
+  .ui-btn--icon:hover:not(:disabled) {
+    outline: var(--page-focus-ring);
+    outline-offset: var(--page-focus-ring-offset);
+  }
+}
+
 .ui-btn.is-active {
   border-color: transparent;
 }
 
-.ui-btn--secondary:hover:not(:disabled),
+/* The open or pressed state keeps its ink fill (owner decision Q12); it is not a focus state. */
 .ui-btn--secondary.is-active,
-.ui-btn--icon:hover:not(:disabled),
 .ui-btn--icon.is-active,
 .ui-btn--ghost.is-active {
   background: var(--ink);
@@ -12688,39 +12377,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.6;
-}
-
-/* Header detail that cannot fit beside the title wraps beneath it with a horizontal rule. */
-.tv-library-heading > .page-header-title-block > .page-header-detail {
-  white-space: nowrap;
-}
-
-.tv-library-heading.is-detail-wrapped {
-  --page-header-divider-pad: 20px;
-  right: clamp(24px, calc(4 * var(--vw)), 96px);
-  align-items: flex-start;
-}
-
-.page-header-title-block {
-  display: contents;
-}
-
-/* Wrapped: title over detail in a column exactly as wide as the wider of the two, so the rule matches it. */
-.tv-library-heading.is-detail-wrapped > .page-header-title-block {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: max-content;
-  max-width: 100%;
-  gap: 0.35rem;
-}
-
-.tv-library-heading.is-detail-wrapped > .page-header-title-block > .page-header-detail {
-  max-width: none;
-  margin: 0;
-  padding: 0.4rem 0 0;
-  border-top: 1px solid var(--line-strong);
-  border-left: 0;
 }
 
 .tv-home-customise-list {
@@ -12807,57 +12463,6 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     min-width: 0;
     max-width: 100%;
     padding: 0 0.6rem;
-  }
-}
-
-/*
- * Shell action column (owner ruling, 8 October 2026): every page's side-panel buttons (Filters, Create, Calendar link,
- * ...) live in one column owned by the app shell, at the right edge where the 30 September `.tv-filter-launcher` sat
- * (commit 54224f36): right var(--directory-controls-edge), width var(--directory-controls-width), the same top offset,
- * stacked vertically with the panel openers above Filters. Pages never position these buttons. On phones, as on
- * 30 September, the column becomes a row left of the profile avatar.
- */
-.app-shell {
-  --directory-controls-edge: clamp(5px, calc(0.65 * var(--vw)), 14px);
-  --directory-controls-width: clamp(48px, calc(3.6 * var(--vw)), 62px);
-  --directory-controls-gap: clamp(18px, calc(1.5 * var(--vw)), 30px);
-}
-
-.shell-action-column {
-  position: absolute;
-  z-index: 32;
-  top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
-  right: var(--directory-controls-edge);
-  width: var(--directory-controls-width);
-}
-
-.shell-action-column:empty {
-  display: none;
-}
-
-.page-header-stack {
-  display: grid;
-  gap: clamp(10px, calc(1.2 * var(--viewport-unit)), 16px);
-}
-
-.shell-action-column .ui-btn {
-  width: var(--directory-controls-width);
-}
-
-@media (max-width: 760px) {
-  .shell-action-column {
-    top: var(--mobile-top-inset, 14px);
-    right: 66px;
-    width: auto;
-  }
-
-  .page-header-stack {
-    display: flex;
-    gap: 8px;
-  }
-
-  .shell-action-column .ui-btn {
-    width: 44px;
   }
 }
 
