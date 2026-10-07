@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests the merge-train re-merge decision, the revert safeguards (#267/#269 regression) and the
+# Tests the merge-train fold restore on block and requeue, the re-merge decision, the revert safeguards (#267/#269 regression) and the
 # check-fragments trailer exemption in throwaway repos.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -104,6 +104,83 @@ else bad "end to end: landed $(git --git-dir="$e2e/origin.git" diff --name-only 
 grep -q 'pr comment\|issues/.*/comments' "$e2e/gh.log" 2>/dev/null && bad "end to end: the train posted a comment" || ok "end to end: the train posted no comment"
 rm -rf "$e2e"
 git checkout -q main
+
+# --- Fold bookkeeping: a blocked or requeued PR is never left with folded content on its branch. ---
+# fold_env <dir>: bare origin + clone with a stub fold script (appends fragments to CHANGELOG.md),
+# main at `base`, branch `feature` = base + one src change + one fragment. Sets F_BASE and F_ORIG.
+fold_env() {
+  local d="$1" w="$1/seed"
+  git init -q -b main "$w"; git init -q --bare "$d/origin.git"
+  (
+    cd "$w"; git config user.name t; git config user.email t@example.invalid
+    mkdir -p changelog.d tasks.d scripts/ci src; printf "r\n" >changelog.d/README.md; printf "r\n" >tasks.d/README.md; printf '# Changelog\n' >CHANGELOG.md; printf 'x\n' >TASKS.md; printf 'a\n' >src/a.txt
+    printf '#!/bin/sh\nexit 0\n' >scripts/ci/check-hosted-runners.sh; chmod +x scripts/ci/check-hosted-runners.sh
+    cat >scripts/fold-fragments.mjs <<'JS'
+import fs from 'node:fs';
+for (const f of fs.readdirSync('changelog.d')) {
+  if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
+  fs.appendFileSync('CHANGELOG.md', fs.readFileSync(`changelog.d/${f}`, 'utf8'));
+  fs.unlinkSync(`changelog.d/${f}`);
+}
+JS
+    git add -A; git commit -qm base; git push -q "$d/origin.git" HEAD:refs/heads/main
+    git checkout -qb feature; printf 'a2\n' >src/a.txt; printf -- '- pr entry\n' >changelog.d/pr.fixed.md; git add -A; git commit -qm "pr"
+    git push -q "$d/origin.git" feature
+  )
+  F_BASE=$(git --git-dir="$d/origin.git" rev-parse main); F_ORIG=$(git --git-dir="$d/origin.git" rev-parse feature)
+  git clone -q "$d/origin.git" "$d/work" 2>/dev/null
+  ( cd "$d/work"; git config user.name t; git config user.email t@example.invalid )
+}
+# run_train <dir> <key-mode> <ci>: process PR 7 once with a stubbed gh and CI state.
+run_train() {
+  local d="$1" mode="$2" ci="$3"
+  (
+    cd "$d/work"
+    gh() { case "$1 $2" in
+      "pr view") printf '{"headRefName":"feature","isCrossRepository":false,"isDraft":false,"title":"T","body":"B","baseRefName":"main","state":"OPEN"}\n' ;;
+      "pr edit") echo "blocked" >>"$d/gh.log" ;;
+      *) echo "$*" >>"$d/gh.log" ;;
+    esac; }
+    ci_state() { if [ "$1" = "$F_ORIG" ]; then echo none; else echo "$ci"; fi; }
+    KEY_MODE=$mode DRY=false SUMMARY=/dev/null process 7 >>"$d/train.log" 2>&1 || true
+  )
+}
+ogit() { git --git-dir="$1/origin.git" "${@:2}"; }
+
+for mode in true false; do
+  label="key mode"; [ "$mode" = false ] && label="token mode"
+  # 1. The train folds and pushes, CI then fails: the branch must go back to the exact original head.
+  fe=$(mktemp -d); fold_env "$fe"
+  run_train "$fe" "$mode" failure
+  [ "$(ogit "$fe" rev-parse feature)" = "$F_ORIG" ] && ok "$label: block after fold restores the original head SHA" || { bad "$label: branch left at $(ogit "$fe" rev-parse feature | cut -c1-8)"; cat "$fe/train.log"; }
+  ogit "$fe" show feature:changelog.d/pr.fixed.md >/dev/null 2>&1 && ok "$label: restored branch still holds its fragment" || bad "$label: fragment lost"
+  [ "$(ogit "$fe" show feature:CHANGELOG.md)" = "# Changelog" ] && ok "$label: restored branch has no folded CHANGELOG content" || bad "$label: CHANGELOG.md still folded"
+  [ -z "$(ogit "$fe" for-each-ref 'refs/train/*')" ] && ok "$label: pre-fold refs removed after the block" || bad "$label: stale pre-fold ref"
+  grep -q blocked "$fe/gh.log" && ok "$label: the PR was labelled blocked" || bad "$label: PR not blocked"
+  rm -rf "$fe"
+done
+
+# 2. Folded and waiting for CI, then main moves with its own CHANGELOG entry: no conflict on requeue.
+fe=$(mktemp -d); fold_env "$fe"
+run_train "$fe" true pending
+folded=$(ogit "$fe" rev-parse feature)
+[ "$folded" != "$F_ORIG" ] && [ "$(ogit "$fe" show feature:CHANGELOG.md | grep -c 'pr entry')" = 1 ] && ok "folded head is on the branch while CI runs" || bad "fold was not pushed"
+(
+  cd "$fe/seed"; git checkout -q main; printf -- '- main entry\n' >>CHANGELOG.md; printf 'b\n' >src/b.txt; git add -A; git commit -qm "main moves"
+  git push -q "$fe/origin.git" main
+)
+moved=$(ogit "$fe" rev-parse main)
+run_train "$fe" true success
+landed=$(ogit "$fe" rev-parse main)
+if [ "$landed" != "$moved" ] && [ "$(ogit "$fe" rev-parse "$landed^")" = "$moved" ]; then
+  ok "main moved after the fold: requeue lands on the new main"
+else bad "requeue did not land"; cat "$fe/train.log"; fi
+ch=$(ogit "$fe" show main:CHANGELOG.md)
+{ grep -q 'main entry' <<<"$ch" && grep -q 'pr entry' <<<"$ch" && ! grep -q '^<<<<<<<' <<<"$ch"; } \
+  && ok "landed CHANGELOG.md holds both entries, no conflict markers" || bad "landed CHANGELOG.md is wrong: $ch"
+[ -z "$(ogit "$fe" for-each-ref 'refs/train/*')" ] && ok "pre-fold refs removed after landing" || bad "stale pre-fold ref after landing"
+grep -q 'restoring the pre-fold head' "$fe/train.log" && ok "the train unfolded before re-folding" || bad "no unfold logged"
+rm -rf "$fe"
 
 # block(): label change and summary only, never a comment.
 bl=$(mktemp -d)

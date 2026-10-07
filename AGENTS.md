@@ -98,6 +98,15 @@ on a personal account do not get.
   file to its state before one of main's last 50 commits, or drops TASKS/CHANGELOG lines those
   commits added; after an API merge the train checks main's new tree is exactly main + the PR and
   stops if not. A deliberate revert of a recent change is therefore landed by hand (merge rule v2).
+- A blocked or requeued PR is never left holding the train's folded TASKS/CHANGELOG content. Before
+  the train rewrites a head (merge main, fold, squash) it records the original head in
+  `refs/train/pf/<pr>/<new head>`. On any block it force-pushes that original head back (with lease), so
+  the branch keeps its fragments, the same SHA and CI result, and your next merge of `main` cannot
+  conflict in TASKS.md or CHANGELOG.md. If `main` moves after the fold (while CI runs, or before
+  landing) the train does the same restore and folds again on the new main instead of landing a stale
+  fold. The refs are deleted on landing. If you ever find a folded commit on a branch (a
+  `chore(train): fold fragments` commit or a squash with a `Merge-Train: yes` trailer) with no `ready`
+  label, reset to the pre-fold head named by `git ls-remote origin 'refs/train/pf/<pr>/*'`.
 - On a conflict, a red `ci-required`, a timeout or any other failure it removes `ready`, adds
   `blocked` and writes the reason to the run's job summary and logs. The train posts no PR comment at
   all (not on success, block or failure). The agent that owns a PR watches for the `blocked` label on it

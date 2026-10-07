@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The merge train now restores a PR branch to its pre-fold head whenever it blocks the PR or main moves after the fold, so folded TASKS/CHANGELOG commits no longer stay on branches and conflict on the next merge of main.
 - TV Home: the Customise Home button is no longer painted over (and blocked) by the full-height rails layer.
 - Phone profile page: the theme and language selectors sit in the logo row instead of covering the "Who's watching?" heading.
 - TV QR sign-in with an `http://` Playarr Server: the server's default verification page is now its own `/tv/link` (reachable over the same scheme), the hosted `playarr.app/link` page hands off to `http://<server>/tv/link?user_code=...` with a one-step explanation, the hosted link endpoints allow cross-origin calls so that page can report the approval back, and the server-hosted client no longer rewrites a public `http://` address to the relay name.

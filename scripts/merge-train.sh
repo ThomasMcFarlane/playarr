@@ -22,6 +22,9 @@
 #      (or no TASKS/CHANGELOG line) that main's recent commits replaced; after an
 #      API merge verify_landed checks that main's new tree is exactly
 #      main + the PR. Either failing stops the train,
+#      A head the train rewrote (merge, fold, squash) is recorded in refs/train/pf/<pr>/<new head>;
+#      any block, or main moving after the fold, force-pushes the original head back (with lease), so
+#      a PR branch never keeps folded TASKS/CHANGELOG content,
 #   4. on any failure removes `ready`, adds `blocked`, writes the reason to the
 #      run's job summary and logs (never a PR comment: the train posts none) and
 #      moves on to the next PR.
@@ -68,8 +71,44 @@ strip_coauthor() { grep -viE '^[[:space:]]*co-authored-by[[:space:]]*:' || true;
 log() { echo "[train] $*"; echo "- $*" >>"$SUMMARY"; }
 run() { if [ "$DRY" = true ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
+# Pre-fold bookkeeping. Whenever the train rewrites a branch head (merge main, fold fragments, squash)
+# it first records the original head in `refs/train/pf/<pr>/<new head>`. A branch that is blocked, or
+# whose folded head is stale because main moved, is force-pushed back to that original head (with
+# lease), so a PR branch is never left holding folded TASKS/CHANGELOG content: the next merge of main
+# cannot conflict there, agents can push fixes, and the landing guard never reads a stale fold as a revert.
+PF_NS="refs/train/pf"
+TRAIN_BR=""
+
+# folded_original <pr> <head>: prints the pre-fold head recorded for <head> (empty when <head> is not a train rewrite).
+folded_original() { git ls-remote origin "$PF_NS/$1/$2" 2>/dev/null | awk 'NR==1{print $1}'; }
+
+# drop_pf_refs <pr>: delete every pre-fold ref of the PR.
+drop_pf_refs() {
+  local refs; refs=$(git ls-remote origin "$PF_NS/$1/*" 2>/dev/null | awk '{print $2}')
+  [ -n "$refs" ] || return 0
+  # shellcheck disable=SC2086
+  git push -q origin --delete $refs >/dev/null 2>&1 || true
+}
+
+# unfold_branch <pr> <branch>: when the remote branch head is a train rewrite, restore the recorded
+# original head. Succeeds (doing nothing) when there is nothing to restore.
+unfold_branch() {
+  local pr="$1" br="$2" cur orig
+  cur=$(git ls-remote origin "refs/heads/$br" 2>/dev/null | awk 'NR==1{print $1}')
+  [ -n "$cur" ] || return 0
+  orig=$(folded_original "$pr" "$cur")
+  [ -n "$orig" ] || return 0
+  git fetch -q origin "$PF_NS/$pr/$cur:refs/train-local/pf" || return 1
+  git push -q origin "$orig:refs/heads/$br" --force-with-lease="refs/heads/$br:$cur" || return 1
+  log "PR #$pr: restored $br to its pre-fold head $orig (was $cur)"
+  drop_pf_refs "$pr"
+}
+
 block() { # <pr> <reason>
   local pr="$1" reason="$2"
+  if [ "$DRY" != true ] && [ -n "$TRAIN_BR" ]; then
+    unfold_branch "$pr" "$TRAIN_BR" || log "PR #$pr: could not restore $TRAIN_BR to its pre-fold head"
+  fi
   # The train never comments on a PR. The reason goes to the job summary and the log; the PR's agent
   # watches for the `blocked` label, reads the run summary, fixes the cause and re-adds `ready`.
   log "PR #$pr blocked: $reason"
@@ -247,6 +286,7 @@ process() { # <pr>
   [ "$cross" = true ] && { block "$pr" "Pull requests from forks cannot be trained."; return; }
   [ "$draft" = true ] && { block "$pr" "The pull request is a draft."; return; }
   [ "$base" = main ] || { block "$pr" "Base branch is \`$base\`, not \`main\`."; return; }
+  TRAIN_BR="$br"
   log "PR #$pr ($br): start"
 
   while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
@@ -255,6 +295,13 @@ process() { # <pr>
     local main head newhead rc
     main=$(git rev-parse origin/main); head=$(git rev-parse "origin/$br")
     git checkout -q -B train-work "origin/$br"
+    if [ "$DRY" != true ] && ! git merge-base --is-ancestor "$main" "$head" && [ -n "$(folded_original "$pr" "$head")" ]; then
+      # The branch still holds the train's folded head from an earlier run and main has moved since:
+      # go back to the original head and fold again on the new main (no CHANGELOG/TASKS conflict).
+      log "PR #$pr: main moved since the fold; restoring the pre-fold head"
+      unfold_branch "$pr" "$br" || { block "$pr" "Could not restore \`$br\` to its pre-fold head."; return; }
+      continue
+    fi
 
     local ncommits need_push=false remerge=false contains_main=true has_fragments=false
     ncommits=$(git rev-list --count "$main..HEAD")
@@ -335,6 +382,15 @@ $(printf '%s' "$hosted_out" | head -c 1500)
       newhead=$(git rev-parse HEAD)
       log "PR #$pr: pushing $newhead (attempt $attempt)"
       if [ "$DRY" != true ]; then
+        if [ -z "$(folded_original "$pr" "$head")" ]; then
+          # Remember the head the PR's agent pushed, so any block restores it.
+          git push -q origin "$head:$PF_NS/$pr/$newhead" 2>/tmp/train-push.log \
+            || { block "$pr" "Could not record the pre-fold head: $(head -c 200 /tmp/train-push.log)"; return; }
+        else
+          # Rewriting a head that is itself a train rewrite: keep pointing at the original.
+          git fetch -q origin "$PF_NS/$pr/$head:refs/train-local/pf" \
+            && git push -q origin "refs/train-local/pf:$PF_NS/$pr/$newhead" 2>/dev/null || true
+        fi
         if ! git push -q origin "HEAD:refs/heads/$br" --force-with-lease="refs/heads/$br:$head" 2>/tmp/train-push.log; then
           if grep -qi 'workflow' /tmp/train-push.log; then
             block "$pr" "GITHUB_TOKEN may not push workflow-file changes that arrive with the latest \`main\`. Merge \`main\` into the branch yourself and push, or install the TRAIN_DEPLOY_KEY secret (see AGENTS.md)."
@@ -373,6 +429,13 @@ $(printf '%s' "$hosted_out" | head -c 1500)
     local nmain; nmain=$(git rev-parse origin/main)
     local ff=true
     if ! git merge-base --is-ancestor "$nmain" "$head"; then
+      if [ -n "$(folded_original "$pr" "$head")" ]; then
+        # The folded head is stale: unfold and fold again on the new main instead of landing it
+        # three-way (the fold would conflict with main's own CHANGELOG/TASKS changes).
+        log "PR #$pr: main moved after the fold; restoring the pre-fold head and repeating"
+        unfold_branch "$pr" "$br" || { block "$pr" "Could not restore \`$br\` to its pre-fold head."; return; }
+        continue
+      fi
       if remerge_needed "$nmain" "$head"; then
         log "PR #$pr: main moved and overlaps or conflicts, repeating"
         continue
@@ -398,6 +461,7 @@ If this is intended (for example a deliberate revert), land it manually under me
         log "PR #$pr: main moved during landing, repeating"; continue
       fi
       git push -q origin --delete "$br" 2>/dev/null || true
+      drop_pf_refs "$pr"
       log "PR #$pr: landed as $head"
     else
       if ! gh pr merge "$pr" --repo "$REPO" --squash --match-head-commit "$head" \
@@ -417,6 +481,7 @@ $TRAIN_TRAILER" --delete-branch >/tmp/train-merge-api.log 2>&1; then
         echo "::error title=Merge train stopped::PR #$pr squash-merged as $merged but its tree is not main plus the PR; inspect git diff $merged^ $merged"
         STOP=true; exit 1
       fi
+      drop_pf_refs "$pr"
       post_merge_dispatch "$merged"
       log "PR #$pr: landed as $merged"
     fi
