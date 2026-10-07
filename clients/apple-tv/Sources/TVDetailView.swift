@@ -518,6 +518,7 @@ struct TVWorkDetailView: View {
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                     .padding(10.6)
             }
             Text(code)

@@ -21,6 +21,7 @@ struct TVCalendarView: View {
             let model = CalendarViewModel(
                 transport: environment.apiClient,
                 zone: TimeZone(identifier: "UTC") ?? .current,
+                firstWeekday: 2,
                 now: { TVParityLaunch.isLive ? TVParityLaunch.frozenNow : Date() }
             )
             viewModel = model
@@ -34,11 +35,11 @@ struct TVCalendarView: View {
         TVPageHeader(title: "Release Calendar")
 
         // Period controls: previous, Today (focused ring), next, Calendar link, Filters.
-        roundControl("\u{2190}", x: 1357.8, y: 56.2, size: 50) { Task { await model.step(-1) } }
-        todayControl(x: 1413.4, y: 54.8) { Task { await model.goToToday() } }
-        roundControl("\u{2192}", x: 1511.3, y: 56.2, size: 50) { Task { await model.step(1) } }
-        pill("Calendar link", symbol: "bell", x: 1586.3, width: 151.6)
-        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1737.9, width: 105.3)
+        roundControl("\u{2190}", x: 1367.4, y: 56.2, size: 50) { Task { await model.step(-1) } }
+        todayControl(x: 1423.1, y: 54.8) { Task { await model.goToToday() } }
+        roundControl("\u{2192}", x: 1516.5, y: 56.2, size: 50) { Task { await model.step(1) } }
+        pill("Calendar link", symbol: "bell", x: 1591.5, width: 147.5)
+        pill("Filters", symbol: "line.3.horizontal.decrease", x: 1739, width: 104.2)
 
         // Month button.
         HStack(spacing: 0) {
@@ -71,7 +72,65 @@ struct TVCalendarView: View {
                     .foregroundStyle(DesignTokens.Color.textDisabled)
                     .placed(x: 153.6, y: 303.2, w: 1100, h: 28.8)
             } else {
-                agenda(model)
+                monthGrid(model)
+            }
+        }
+    }
+
+    /// Web `.calendar-view-month`: weekday labels at y 236, a 7 x N grid of 241.4 x 138.9 cells from y 266.8.
+    private func monthGrid(_ model: CalendarViewModel) -> some View {
+        let groups = model.dayGroups
+        let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        let anchorMonth = String(model.anchor.prefix(7))
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(weekdays.enumerated()), id: \.offset) { index, name in
+                Text(name.uppercased())
+                    .font(TVTheme.font(size: 12, css: 400))
+                    .tracking(0.96)
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .placed(x: 153.6 + CGFloat(index) * 241.4, y: 236, w: 241.4, h: 30.8, alignment: .center)
+            }
+            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                let col = CGFloat(index % 7)
+                let row = CGFloat(index / 7)
+                let x = 153.6 + col * 241.4
+                let y = 266.8 + row * 138.9
+                let outside = !group.day.hasPrefix(anchorMonth)
+                let isToday = group.day == model.today
+                ZStack(alignment: .topLeading) {
+                    Rectangle()
+                        .fill(outside ? Color(red: 49 / 255, green: 42 / 255, blue: 48 / 255).opacity(0.4) : Color.clear)
+                        .overlay(Rectangle().stroke(DesignTokens.Color.borderDefault.opacity(0.25), lineWidth: 1))
+                        .frame(width: 241.4, height: 138.9)
+                    if isToday {
+                        Rectangle()
+                            .stroke(DesignTokens.Color.textPrimary, lineWidth: 2.5)
+                            .frame(width: 241.4, height: 138.9)
+                    }
+                    Text(String(Int(group.day.suffix(2)) ?? 0))
+                        .font(TVTheme.font(size: 12.8, css: 640))
+                        .foregroundStyle(outside ? DesignTokens.Color.textDisabled : DesignTokens.Color.textPrimary)
+                        .placed(x: 5.8, y: 5.8, w: 229.8, h: 19.2)
+                    ForEach(Array(group.items.prefix(3).enumerated()), id: \.offset) { itemIndex, item in
+                        Text(Self.title(of: item))
+                            .font(TVTheme.font(size: 12, css: 400))
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .lineLimit(1)
+                            .padding(.leading, 9)
+                            .frame(width: 229.8, height: 24, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(DesignTokens.Color.backgroundRaised)
+                            )
+                            .overlay(alignment: .leading) {
+                                Rectangle().fill(Color(red: 0.36, green: 0.52, blue: 0.9)).frame(width: 3)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .placed(x: 5.8, y: 32.1 + CGFloat(itemIndex) * 28, w: 229.8, h: 24)
+                    }
+                }
+                .frame(width: 241.4, height: 138.9, alignment: .topLeading)
+                .placed(x: x, y: y, w: 241.4, h: 138.9, alignment: .topLeading)
             }
         }
     }
@@ -125,7 +184,7 @@ struct TVCalendarView: View {
             Text("Today")
                 .font(TVTheme.font(size: 14.72, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-                .frame(width: 92.3, height: 52.8)
+                .frame(width: 87.8, height: 52.8)
                 .background(Capsule().fill(DesignTokens.Color.backgroundElevated))
                 // Web: the Today control holds focus on load (white ring).
                 .overlay(Capsule().stroke(DesignTokens.Color.textPrimary, lineWidth: 2.5))
@@ -133,7 +192,7 @@ struct TVCalendarView: View {
         .buttonStyle(.plain)
         .focusable(!TVParityLaunch.frozen)
         .focusEffectDisabled(TVParityLaunch.frozen)
-        .placed(x: x, y: y, w: 92.3, h: 52.8)
+        .placed(x: x, y: y, w: 87.8, h: 52.8)
     }
 
     private func pill(_ label: String, symbol: String, x: CGFloat, width: CGFloat) -> some View {

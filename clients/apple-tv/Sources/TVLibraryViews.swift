@@ -669,6 +669,7 @@ struct TVHomeCard: View {
                     Circle()
                         .fill(DesignTokens.Color.brandPrimary)
                         .frame(width: 13, height: 13)
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                         .padding(10.8)
                 }
             }
@@ -1011,6 +1012,7 @@ struct TVSearchView: View {
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                     .padding(10.9)
             }
             ZStack(alignment: .topLeading) {
@@ -1375,6 +1377,7 @@ struct TVLibraryKindView: View {
                         Circle()
                             .fill(DesignTokens.Color.brandPrimary)
                             .frame(width: 13, height: 13)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                             .padding(10.8)
                     }
                 }
