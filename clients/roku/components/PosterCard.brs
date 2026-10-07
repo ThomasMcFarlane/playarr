@@ -37,8 +37,8 @@ sub onContentChanged()
     ' the same pattern activeRailFactor below already established.
     cardScale = 1
     if content.cardScale <> invalid then cardScale = content.cardScale
-    m.cardRoot.scale = [cardScale, cardScale]
     m.cardScaleValue = cardScale
+    layoutCard(cardScale)
     showKind = true
     if content.showKind <> invalid then showKind = content.showKind
     m.kind.visible = showKind
@@ -116,7 +116,7 @@ sub onFocusChanged()
     if shadowOpacity < 0 then shadowOpacity = 0
     m.focusShadow.opacity = shadowOpacity
     m.restShadow.opacity = 1 - shadowOpacity
-    liftY = -cardFocusLift() * effective / m.cardScaleValue
+    liftY = -cardFocusLift() * effective
     artScale = 1 + (effective * cardFocusScale())
     m.liftInterp.key = [0, 1]
     m.liftInterp.keyValue = [m.cardRoot.translation, [0, liftY]]
@@ -159,4 +159,37 @@ sub onPosterRetry()
     sep = "?"
     if Instr(1, m.posterUri, "?") > 0 then sep = "&"
     m.poster.uri = m.posterUri + sep + "retry=" + m.posterRetries.ToStr()
+end sub
+
+' Card geometry for the art size: the art, corner masks, watch overlays and text are laid out at their own web sizes (a 1.5 grid
+' card has a 330 px art but still 12 px text and a 13 px dot), so nothing is scaled as a whole.
+sub layoutCard(cardScale as Float)
+    artW = 220 * cardScale
+    artH = 124 * cardScale
+    if m.laidOutScale = cardScale then return
+    m.laidOutScale = cardScale
+    m.top.findNode("posterBg").width = artW
+    m.top.findNode("posterBg").height = artH
+    m.poster.width = artW
+    m.poster.height = artH
+    m.artGroup.scaleRotateCenter = [artW / 2, artH / 2]
+    m.top.findNode("cornerTL").translation = [0, 0]
+    m.top.findNode("cornerTR").translation = [artW - 12, 0]
+    m.top.findNode("cornerBL").translation = [0, artH - 12]
+    m.top.findNode("cornerBR").translation = [artW - 12, artH - 12]
+    m.unwatchedBadge.translation = [artW - 23.5, 10.5]
+    m.progressTrack.translation = [0, artH - 3]
+    m.progressTrack.width = artW
+    m.restShadow.translation = [-90, -90]
+    m.restShadow.width = artW + 180
+    m.restShadow.height = artH + 180
+    m.focusShadow.translation = [-90, -90]
+    m.focusShadow.width = artW + 180
+    m.focusShadow.height = artH + 180
+    titleGap = 9.9
+    if cardScale > 1 then titleGap = 11.5
+    m.title.translation = [0, artH + titleGap]
+    m.title.width = artW
+    m.kind.translation = [0, artH + titleGap + 19.5]
+    m.kind.width = artW
 end sub

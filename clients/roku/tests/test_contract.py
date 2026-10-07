@@ -597,7 +597,8 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         # Hero and rail headings keep the web letter-spacing through TrackedText; stage gradients are stretched ramps.
         stage_xml = (ROOT / "components" / "TvStage.xml").read_text(encoding="utf-8")
         self.assertIn("TrackedText", stage_xml)
-        self.assertIn("ramp-l.png", stage_xml)
+        self.assertIn("StageScrims", stage_xml)
+        self.assertIn("ramp-l.png", (ROOT / "components" / "StageScrims.xml").read_text(encoding="utf-8"))
         self.assertTrue((ROOT / "components" / "TrackedText.brs").is_file())
         # Clock and date sit together near x=480 like .app-clock.
         self.assertIn('id="clockTime" translation="[481,', SCENE)

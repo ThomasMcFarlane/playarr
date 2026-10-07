@@ -154,11 +154,11 @@ end function
 ' App-shell action column: every button that opens a side panel or creates something is a tile in ONE column at the right of the
 ' shell, stacked vertically (web .tv-filter-launcher stack); pages register their actions and never place them per page.
 function shellActionX() as Float
-    return 1781
+    return 1845.5
 end function
 
 function shellActionY(slot as Integer) as Float
-    return 46 + 84 * slot
+    return 151.2 + 84.9 * slot
 end function
 
 ' Header action tile (web .tv-filter-launcher, the 30 September reference): 62 x 72, radius 14, a 1px line, an icon over a

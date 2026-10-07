@@ -60,15 +60,12 @@ async function login() {
   return { ...r, displayName };
 }
 
-// The first film and first series in the A-Z library order the Roku shows.
+// The first film and first series in the library order: the web Library sorts pages with a numeric, case-insensitive collator on
+// sort_title (falling back to title), and the Roku sorts the same way.
+const COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const first = async (kind, token) => {
-  const items = (await api(`/api/v1/catalog?kind=${kind}&available_only=true&limit=200`, token)).items ?? [];
-  // The Roku library sorts A-Z ignoring leading punctuation, numbers first.
-  const key = (t) => {
-    const clean = t.replace(/^[^A-Za-z0-9]+/, "");
-    return (/^[0-9]/.test(clean) ? "0" : "1") + clean.toLowerCase();
-  };
-  return items.sort((a, b) => key(a.title).localeCompare(key(b.title), "en", { numeric: true }))[0];
+  const items = (await api(`/api/v1/catalog?kind=${kind}&available_only=true&sort=title&limit=200`, token)).items ?? [];
+  return items.sort((a, b) => COLLATOR.compare(a.sort_title || a.title, b.sort_title || b.title))[0];
 };
 const seed = await login();
 const film = await first("movie", seed.access_token);
@@ -101,6 +98,8 @@ const screens = [
   { id: "settings-player-scrolled", route: "/settings/player", keys: ["ArrowRight", ...Array(11).fill("ArrowDown")] },
 ];
 
+let cachedSession = null;
+let cachedAt = 0;
 const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined });
 let failures = 0;
 try {
@@ -108,7 +107,13 @@ try {
     mkdirSync(join(out, "tv", theme), { recursive: true });
     for (const screen of screens.filter((s) => !only.length || only.includes(s.id))) {
       try {
-        const s = await login();
+        // One login per run (refreshed every 8 minutes): each login is a new device session on the account, and the real devices
+        // sharing the account are signed out when too many pile up.
+        if (!cachedSession || Date.now() - cachedAt > 8 * 60 * 1000) {
+          cachedSession = await login();
+          cachedAt = Date.now();
+        }
+        const s = cachedSession;
         const context = await browser.newContext({ userAgent: UA, viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1, reducedMotion: "reduce", colorScheme: theme, locale: "en-GB" });
         await context.addInitScript(({ base, s, dev, theme }) => {
           try {
@@ -143,7 +148,7 @@ try {
         await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
         await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
         // The relay is slow: On deck resolves after several round trips, so Home needs a long settle (and every screen a little).
-        await page.waitForTimeout(screen.id.startsWith("home") ? 12000 : 1500);
+        await page.waitForTimeout(screen.id.startsWith("home") ? 12000 : /^(movies|series|film|search|watchlist|requests)/.test(screen.id) ? 9000 : 1500);
         for (const key of screen.keys ?? []) {
           await page.keyboard.press(key);
           await page.waitForTimeout(450);

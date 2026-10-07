@@ -76,6 +76,12 @@ sub onSpecChange()
             end if
         end for
     end for
+    widest = 0.0
+    for each line in lines
+        w = lineWidth(line, tracking)
+        if w > widest then widest = w
+    end for
+    m.top.textWidth = widest
     m.top.lineCount = lines.Count()
 end sub
 

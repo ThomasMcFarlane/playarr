@@ -2,7 +2,7 @@
 // Pixel diff of candidate captures against the web reference, per theme, with an HTML report.
 //
 //   node diff.mjs --ref <dir> --cand <dir> --layout tv|mobile [--theme light|dark|both] [--out <dir>]
-//                 [--screens id,id] [--threshold 0.1] [--max 1] [--fail]
+//                 [--screens id,id (ids missing from screens.json, such as home-scrolled, are compared too)] [--threshold 0.1] [--max 1] [--fail]
 //                 [--mask-rect x,y,w,h[,screen-id]]... [--keep-rect x,y,w,h[,screen-id]]... [--chrome-only]
 //                 [--no-manifest-masks]
 //
@@ -99,7 +99,12 @@ function blank(png, rects) {
     }
   }
 }
-const screens = spec.screens.filter((s) => !only.length || only.includes(s.id));
+// Ids named in --screens that screens.json does not list (the scrolled states a device capture adds, for example
+// home-scrolled) are compared as they are: the reference and candidate directories just have to hold the same file name.
+const screens = [
+  ...spec.screens.filter((s) => !only.length || only.includes(s.id)),
+  ...only.filter((id) => !spec.screens.some((s) => s.id === id)).map((id) => ({ id, title: id })),
+];
 
 const read = (p) => PNG.sync.read(readFileSync(p));
 function onCanvas(png, w, h) {

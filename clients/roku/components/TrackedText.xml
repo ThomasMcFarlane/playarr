@@ -11,6 +11,7 @@
   <interface>
     <field id="spec" type="assocarray" onChange="onSpecChange" />
     <field id="lineCount" type="integer" value="0" />
+    <field id="textWidth" type="float" value="0" />
   </interface>
   <children>
     <Label id="measure" visible="false" translation="[0,0]" width="0" />

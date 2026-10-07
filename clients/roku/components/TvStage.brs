@@ -9,11 +9,6 @@
 sub init()
     PlayarrFontifyTree(m.top)
     ThemeSetRole(m.top.findNode("keyArtFade"), "bg")
-    for each id in ["rampKeyLeft", "rampKeyBottom", "rampKeyTop", "rampWashLeft", "rampWashRight"]
-        ramp = m.top.findNode(id)
-        ThemeSetRole(ramp, "surface")
-        ramp.blendColor = ThemeColor("surface")
-    end for
     ThemeInitComponent()
     m.keyArtLayer = m.top.findNode("keyArtLayer")
     m.keyArt = m.top.findNode("keyArt")
@@ -78,8 +73,8 @@ sub onKeyArtUriChange()
         m.keyArtAgent.SetHeaders(m.top.keyArtHeaders)
     end if
     m.keyArt.SetHttpAgent(m.keyArtAgent)
-    m.keyArt.loadWidth = Int(m.keyArt.width)
-    m.keyArt.loadHeight = Int(m.keyArt.height)
+    m.keyArt.loadWidth = 1038
+    m.keyArt.loadHeight = 1191
     m.keyArtBase = uri
     m.keyArtRetries = 0
     m.keyArtRetryTimer.control = "stop"

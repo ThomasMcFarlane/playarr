@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  StageScrims: the web stage gradients as stretched alpha ramps tinted with the page surface colour.
+    .tv-key-art::after = 90deg surface -> transparent over 22 % (422 px); 0deg surface -> transparent over the bottom 22 %
+    (238 px) and surface at the top from 82 % (the top 194 px); .tv-stage-wash = 90deg surface 94 % over 31 % (595 px) and
+    270deg surface 50 % over 34 % (653 px).
+-->
+<component name="StageScrims" extends="Group">
+  <children>
+    <Poster id="rampKeyLeft" translation="[0,0]" width="422" height="1080" uri="pkg:/images/ramp-l.png" loadDisplayMode="scaleToFill" />
+    <Poster id="rampKeyBottom" translation="[0,842]" width="1920" height="238" uri="pkg:/images/ramp-b.png" loadDisplayMode="scaleToFill" />
+    <Poster id="rampKeyTop" translation="[0,0]" width="1920" height="194" uri="pkg:/images/ramp-t.png" loadDisplayMode="scaleToFill" />
+    <Poster id="rampWashLeft" translation="[0,0]" width="595" height="1080" uri="pkg:/images/ramp-l.png" opacity="0.94" loadDisplayMode="scaleToFill" />
+    <Poster id="rampWashRight" translation="[1267,0]" width="653" height="1080" uri="pkg:/images/ramp-r.png" opacity="0.5" loadDisplayMode="scaleToFill" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+  <script type="text/brightscript" uri="pkg:/components/StageScrims.brs" />
+</component>

@@ -254,18 +254,20 @@
     -->
     <Group id="browseGroup" visible="false">
       <!-- Full-bleed key art (web TvStageShell) behind chrome; washed for text. -->
-      <Poster id="browseKeyArt" translation="[0,0]" width="1100" height="1080"
+      <Poster id="browseKeyArt" translation="[-20,-22.9]" width="1038" height="1191"
         loadDisplayMode="scaleToZoom" visible="false" />
-      <Rectangle translation="[0,0]" width="1920" height="1080" color="0x0B0A0BCC" />
+      <Poster id="browseKeyArtFade" translation="[727,-22.9]" width="291" height="1191" uri="pkg:/images/stage-key-art-fade.png" loadDisplayMode="scaleToFill" />
+      <StageScrims id="browseScrims" />
       <!-- Web .tv-library-heading: back is dock Home; h1 + "1,730 TITLES". -->
-      <Label id="browseTitle" translation="[226.6,56.2]" width="0" height="50" scale="[1.05,1.05]" color="0xFFFFFFFF" />
+      <TrackedText id="browseTitle" translation="[226.6,56.2]" />
       <Label id="browseCountLabel" translation="[372,73]" width="500" height="20" scale="[0.35,0.35]" color="0x887A82FF" />
-      <Label id="browsePreviewKind" translation="[153.6,259.2]" width="455" height="30" scale="[0.38,0.38]" color="0xCF3157FF" />
-      <Label id="browsePreviewTitle" translation="[153.6,303.5]" width="173" height="62" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xFFFFFFFF" />
-      <Label id="browsePreviewMeta" translation="[153.6,392.7]" width="800" height="30" scale="[0.38,0.38]" color="0xA9B7C9FF" />
-      <Label id="browsePreviewOverview" translation="[153.6,432.5]" width="860" height="300" wrap="true" maxLines="5" lineSpacing="-8" vertAlign="top" scale="[0.40,0.40]" color="0xA9B7C9FF" />
+      <TrackedText id="browsePreviewKind" translation="[153.6,259.2]" />
+      <TrackedText id="browsePreviewTitle" translation="[153.6,288.5]" />
+      <TrackedText id="browsePreviewMeta" translation="[153.6,454.9]" />
+      <TrackedText id="browsePreviewMeta2" translation="[194.4,454.9]" />
+      <TrackedText id="browsePreviewOverview" translation="[153.6,494.7]" />
       <MarkupGrid id="browseGrid" translation="[783.4,162]" itemComponentName="PosterCard"
-        numColumns="3" numRows="3" itemSize="[353.5,240.5]" itemSpacing="[0,0]"
+        numColumns="3" numRows="4" itemSize="[353.5,240.5]" itemSpacing="[0,0]"
         focusBitmapBlendColor="0x00000000" vertFocusAnimationStyle="fixedFocus" />
       <Label id="browseHint" translation="[200,1020]" width="1700" height="40" text="" scale="[0.62,0.62]" color="0xA9B7C9FF" />
       <!-- Alphabet jump strip (from: .tv-alphabet, confirmed live: "#" then

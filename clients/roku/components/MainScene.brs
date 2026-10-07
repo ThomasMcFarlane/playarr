@@ -97,9 +97,12 @@ sub init()
     m.browseTitle = m.top.findNode("browseTitle")
     m.browseCountLabel = m.top.findNode("browseCountLabel")
     m.browseKeyArt = m.top.findNode("browseKeyArt")
+    m.browseKeyArtFade = m.top.findNode("browseKeyArtFade")
+    ThemeSetRole(m.browseKeyArtFade, "bg")
     m.browsePreviewKind = m.top.findNode("browsePreviewKind")
     m.browsePreviewTitle = m.top.findNode("browsePreviewTitle")
     m.browsePreviewMeta = m.top.findNode("browsePreviewMeta")
+    m.browsePreviewMeta2 = m.top.findNode("browsePreviewMeta2")
     m.browsePreviewOverview = m.top.findNode("browsePreviewOverview")
     m.browseAlphabet = m.top.findNode("browseAlphabet")
     buildAlphabetStrip()
@@ -777,6 +780,18 @@ sub handleApiFailure(action as String, result as Object)
     end if
 
     if action = "refresh"
+        ' Only a refusal ends the session. A timeout or a relay hiccup keeps the stored tokens and asks again (up to 3 times), so a
+        ' slow network never signs the device out.
+        if result.status <> 400 and result.status <> 401 and result.status <> 403 and result.status <> 404
+            if m.refreshRetries = invalid then m.refreshRetries = 0
+            if m.refreshRetries < 3
+                m.refreshRetries = m.refreshRetries + 1
+                refreshSession()
+                return
+            end if
+        end if
+        m.refreshRetries = 0
+        print "Playarr: refresh refused status=";result.status;" error=";result.error
         ClearSession(true)
         m.accessToken = ""
         m.refreshToken = ""
@@ -2108,7 +2123,7 @@ sub openBrowse(kind as String, label as String)
     m.browseFiltersButton.color = ThemeColor("inkSoft")
     renderBrowseAlphabetFocus()
     ' Stay inside the browse shell while fetching (no fullscreen Loading UI).
-    m.browseTitle.text = label
+    setBrowseTitle(label)
     if m.browseCountLabel <> invalid then m.browseCountLabel.text = "…"
     m.browseItems = []
     buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
@@ -2154,6 +2169,11 @@ sub acceptBrowseCatalog(data as Object, append as Boolean)
     if not append then updateBrowsePreview(m.browseItems[0])
 end sub
 
+' Library heading (web .page-header h1: 33.6 px, weight 580, -0.045em tracking).
+sub setBrowseTitle(text as String)
+    m.browseTitle.spec = { text: text, size: 34, weight: 600, tracking: -1.512, role: "ink" }
+end sub
+
 sub rebuildBrowseContent()
     ' Web Library.tsx orderWorks: title sort uses numeric localeCompare on
     ' sort_title/title. Server sort is stringy ("10" before "2"); re-order
@@ -2163,14 +2183,14 @@ sub rebuildBrowseContent()
     end if
     buildGridContent(m.browseGrid, m.browseItems, browseCardScale())
     ' Web heading: h1 = "Movies", span = "1,730 TITLES" (not "50 of 1730").
-    m.browseTitle.text = m.browseLabel
+    setBrowseTitle(m.browseLabel)
     if m.browseCountLabel <> invalid
         total = m.browseItems.Count()
         if m.browseTotal <> invalid then total = Int(m.browseTotal)
         noun = "TITLES"
         if m.browseKind = "artist" then noun = "ARTISTS"
         m.browseCountLabel.text = UCase(formatCountWithCommas(total) + " " + noun)
-        titleRight = 226.6 + m.browseTitle.boundingRect().width
+        titleRight = 226.6 + m.browseTitle.textWidth
         m.browseCountLabel.translation = [titleRight + 46, 73]
         m.browseDivider.translation = [titleRight + 22, 57]
     end if
@@ -2464,17 +2484,17 @@ end sub
 sub applyBrowseArtworkSize()
     if m.browseArtworkSize = "small"
         m.browseGrid.numColumns = 4
-        m.browseGrid.numRows = 3
+        m.browseGrid.numRows = 4
         m.browseGrid.itemSize = [240, 157]
         m.browseGrid.itemSpacing = [24, 24]
     else if m.browseArtworkSize = "large"
         m.browseGrid.numColumns = 2
-        m.browseGrid.numRows = 2
+        m.browseGrid.numRows = 3
         m.browseGrid.itemSize = [480, 314]
         m.browseGrid.itemSpacing = [30, 30]
     else
         m.browseGrid.numColumns = 3
-        m.browseGrid.numRows = 3
+        m.browseGrid.numRows = 4
         m.browseGrid.itemSize = [353.5, 240.5]
         m.browseGrid.itemSpacing = [0, 0]
     end if
@@ -2502,33 +2522,32 @@ sub updateBrowsePreview(work as Object)
     if work.genres <> invalid and work.genres.Count() > 0
         kicker = UCase(work.genres[0])
     end if
-    m.browsePreviewKind.text = kicker
-    m.browsePreviewTitle.text = work.title
-    meta = ""
+    m.browsePreviewKind.spec = { text: kicker, size: 12, weight: 800, tracking: 0.983, role: "brand", upper: true }
+    m.browsePreviewTitle.spec = { text: work.title, size: 69, weight: 560, tracking: -4.977, role: "ink", width: 373.2, lineHeight: 62.208, maxLines: 3, balance: true }
+    year = ""
     ' Web uses added_at year, not release_date.
     if work.added_at <> invalid and work.added_at.Len() >= 4
-        meta = work.added_at.Left(4)
+        year = work.added_at.Left(4)
     else if work.release_date <> invalid and work.release_date.Len() >= 4
-        meta = work.release_date.Left(4)
+        year = work.release_date.Left(4)
     end if
+    genreLine = ""
     if work.genres <> invalid and work.genres.Count() > 0
         genreLine = joinStrings(work.genres, " · ")
-        if work.genres.Count() > 2
-            genreLine = work.genres[0] + " · " + work.genres[1]
-        end if
-        if meta <> "" then meta += "  "
-        meta += genreLine
+        if work.genres.Count() > 2 then genreLine = work.genres[0] + " · " + work.genres[1]
     end if
-    m.browsePreviewMeta.text = meta
-    ' Web flows the meta line and synopsis under the title: one line of title puts them at 392.7, two lines at 464.
-    titleLines = Int(m.browsePreviewTitle.boundingRect().height / 61 + 0.5)
+    ' Web flows the meta line (year in ink-soft, genres in ink-muted) and the synopsis under the title.
+    titleLines = m.browsePreviewTitle.lineCount
     if titleLines < 1 then titleLines = 1
-    metaY = 303.5 + 61 * titleLines + 27.7
+    metaY = 303.5 + 62.208 * titleLines + 27
     m.browsePreviewMeta.translation = [153.6, metaY]
-    m.browsePreviewOverview.translation = [153.6, metaY + 40]
+    m.browsePreviewMeta.spec = { text: year, size: 12, weight: 400, tracking: 0, role: "inkSoft", width: 60, lineHeight: 18.144, maxLines: 1 }
+    m.browsePreviewMeta2.translation = [194.4, metaY]
+    m.browsePreviewMeta2.spec = { text: genreLine, size: 12, weight: 400, tracking: 0, role: "inkMuted", width: 300, lineHeight: 18.144, maxLines: 1 }
     overview = work.overview
     if overview = invalid or overview = "" then overview = "No synopsis available."
-    m.browsePreviewOverview.text = overview
+    m.browsePreviewOverview.translation = [153.6, metaY + 39.8]
+    m.browsePreviewOverview.spec = { text: overview, size: 14, weight: 400, tracking: 0, role: "inkMuted", width: 336, lineHeight: 20.33, maxLines: 5 }
     ' Defer key-art download so acceptBrowseCatalog paints the grid first.
     ' Home hero uses sync GetToFile successfully; here it must not block paint.
     if m.browseKeyArt <> invalid
@@ -2561,8 +2580,11 @@ sub onBrowseKeyArtTimer()
     g = GetGlobalAA()
     if g.playarrArtHeaders <> invalid then agent.SetHeaders(g.playarrArtHeaders)
     m.browseKeyArt.SetHttpAgent(agent)
+    m.browseKeyArt.loadWidth = 1038
+    m.browseKeyArt.loadHeight = 1191
     m.browseKeyArt.uri = uri
     m.browseKeyArt.visible = true
+    m.browseKeyArtFade.visible = true
 end sub
 
 ' Flat-content counterpart to buildRailContent() below: MarkupGrid takes one

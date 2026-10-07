@@ -79,27 +79,21 @@
       <!-- Key-art Poster loads GET /api/v1/artwork/...&style=stage (server
            greyscale + opacity + right fade). No client-side filter wash on
            the bitmap itself - - that used to fight a full-colour source. -->
-      <Poster id="keyArt" translation="[0,-33]" width="998" height="1145" loadDisplayMode="scaleToZoom" />
+      <Poster id="keyArt" translation="[-20,-22.9]" width="1038" height="1191" loadDisplayMode="scaleToZoom" />
       <!-- Web masks the cropped image with linear-gradient(90deg, #000 72%,
            transparent 100%). The server bakes that fade into the source
            bitmap, but scaleToZoom crops the sides off, so the fade never
            reaches the stage and the art ended in a hard edge at x=998.
            Re-apply it here: a surface-coloured ramp over the last 28%
            (x=718..998, from: 72% of 998). -->
-      <Poster id="keyArtFade" translation="[718,-33]" width="280" height="1145" uri="pkg:/images/stage-key-art-fade.png" loadDisplayMode="scaleToFill" />
+      <Poster id="keyArtFade" translation="[727,-22.9]" width="291" height="1191" uri="pkg:/images/stage-key-art-fade.png" loadDisplayMode="scaleToFill" />
       <!-- Soft stage wash only (left + vertical vignette). Pixel math for
            greyscale/contrast/brightness/opacity is baked server-side. -->
       <!-- Web gradients as stretched alpha ramps tinted with the page surface colour (ThemeSetRole in TvStage.brs):
            .tv-key-art::after = 90deg surface -> transparent over 22 % (422 px); 0deg surface -> transparent over the bottom 22 %
            (238 px) and surface at the top from 82 % (the top 194 px); .tv-stage-wash = 90deg surface 94 % over 31 % (595 px) and
            270deg surface 50 % over 34 % (653 px). -->
-      <Group id="scrimLayer">
-        <Poster id="rampKeyLeft" translation="[0,0]" width="422" height="1080" uri="pkg:/images/ramp-l.png" loadDisplayMode="scaleToFill" />
-        <Poster id="rampKeyBottom" translation="[0,842]" width="1920" height="238" uri="pkg:/images/ramp-b.png" loadDisplayMode="scaleToFill" />
-        <Poster id="rampKeyTop" translation="[0,0]" width="1920" height="194" uri="pkg:/images/ramp-t.png" loadDisplayMode="scaleToFill" />
-        <Poster id="rampWashLeft" translation="[0,0]" width="595" height="1080" uri="pkg:/images/ramp-l.png" opacity="0.94" loadDisplayMode="scaleToFill" />
-        <Poster id="rampWashRight" translation="[1267,0]" width="653" height="1080" uri="pkg:/images/ramp-r.png" opacity="0.5" loadDisplayMode="scaleToFill" />
-      </Group>
+      <StageScrims id="scrimLayer" />
     </Group>
 
     <!--
