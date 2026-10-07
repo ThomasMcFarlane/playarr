@@ -900,10 +900,11 @@ struct TVSearchView: View {
                 .fill(DesignTokens.Color.backgroundInputDisabled.opacity(0.88))
                 .overlay(
                     Capsule().stroke(
-                        DesignTokens.Color.borderDefault.opacity(0.5),
-                        lineWidth: 1
+                        frozen ? DesignTokens.Color.brandPrimary.opacity(0.6) : DesignTokens.Color.borderDefault.opacity(0.5),
+                        lineWidth: frozen ? 1.5 : 1
                     )
                 )
+                .shadow(color: DesignTokens.Color.brandPrimary.opacity(frozen ? 0.18 : 0), radius: 8)
                 .frame(width: 590, height: 76)
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .regular))
@@ -994,7 +995,8 @@ struct TVSearchView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 26.05) {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, work in
-                    let selected = (selectedWork(model)?.id == work.id)
+                    // Web: the first hit is not scaled until the remote moves onto the results.
+                    let selected = focusedWorkID != nil && (selectedWork(model)?.id == work.id)
                     NavigationLink {
                         TVWorkDetailView(work: work, apiClient: environment.apiClient)
                     } label: {
