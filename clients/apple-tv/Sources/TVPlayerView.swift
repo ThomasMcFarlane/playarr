@@ -39,7 +39,34 @@ struct TVPlayerView: View {
     }
 
     var body: some View {
-        playerBody
+        if let parity {
+            // Parity route: the fixture clips are Matroska and the runner cannot transcode, so the video
+            // layer is the server's frame of the clip at the paused position, scaled to the stage.
+            ZStack(alignment: .topLeading) {
+                Color.black
+                TVAuthedImage(load: {
+                    try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(parity.position * 1000))
+                }) { Color.black }
+                    .frame(width: 1920, height: 1080)
+                    .clipped()
+                TVPlayerChrome(
+                    state: TVPlayerChromeState(
+                        position: parity.position,
+                        duration: parity.duration,
+                        isPlaying: false,
+                        qualityLabel: viewModel.qualityLabel,
+                        selectedQualityID: viewModel.selectedQualityID,
+                        menuOpen: parity.menuOpen
+                    ),
+                    frozen: true
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .ignoresSafeArea()
+            .task { await viewModel.loadInfo(mediaFileID: mediaFileID) }
+        } else {
+            playerBody
+        }
     }
 
     private var playerBody: some View {
@@ -100,12 +127,6 @@ struct TVPlayerView: View {
             // Returning from a suggestion must not restart a finished item.
             if viewModel.state == .idle, viewModel.endOfPlayback.phase == .playing {
                 await viewModel.play(mediaFileID: mediaFileID, title: title)
-                if let parity {
-                    // Parity route: pause on a fixed frame with the chrome (and menu) showing.
-                    menuOpen = parity.menuOpen
-                    await viewModel.engine.seek(to: parity.position)
-                    viewModel.engine.pause()
-                }
             }
         }
         .task(id: viewModel.endOfPlayback.phase == .playing) { @MainActor in

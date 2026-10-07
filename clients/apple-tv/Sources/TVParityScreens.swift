@@ -151,7 +151,7 @@ struct TVParityLivePlayerView: View {
                     mediaFileID: mediaFileID,
                     title: target.title,
                     apiClient: environment.apiClient,
-                    parity: (position: 2, duration: 6, menuOpen: target.menuOpen)
+                    parity: (position: 2, duration: 60, menuOpen: target.menuOpen)
                 )
             } else {
                 Color.black.ignoresSafeArea()
