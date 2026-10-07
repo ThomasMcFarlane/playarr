@@ -47,7 +47,7 @@ jobs:
       group: deploy-web-prod
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     outputs:
       deployed: ${{ steps.deploy.outputs.deployed || 'false' }}
       sha: ${{ steps.guard_early.outputs.sha }}
