@@ -4,8 +4,9 @@ import UIKit
 /// The web's design fonts, Nunito Sans and JetBrains Mono (SIL Open Font License 1.1, variable builds in
 /// `Resources/Fonts`, registered through `UIAppFonts`), built at an exact CSS weight like the web does.
 enum DesignFont {
-    /// Axes the web leaves at: width 100, optical size 12, `YTLC` 500.
-    static let nunitoAxes: [String: Double] = ["wdth": 100, "opsz": 12, "YTLC": 500]
+    /// `NunitoSans-wght-web.ttf` is the web's exact Nunito Sans instance with the width, optical-size
+    /// and `YTLC` axes already baked in, so only the weight is set (its default is 200).
+    static let nunitoAxes: [String: Double] = [:]
 
     private static func tag(_ name: String) -> NSNumber {
         var value: UInt32 = 0
@@ -22,7 +23,7 @@ enum DesignFont {
             UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): variation,
         ])
         let font = UIFont(descriptor: descriptor, size: size)
-        return font.familyName == family ? font : nil
+        return font.familyName.hasPrefix(family) ? font : nil
     }
 }
 
