@@ -67,7 +67,7 @@ namespace Playarr.Xbox.ViewModels
 
         private readonly XboxAppEnvironment _environment;
         private readonly Guid _mediaFileId;
-        private readonly long? _resumePositionMs;
+        private long? _resumePositionMs;
 
         private readonly Guid? _workId;
         private Timer? _countdownTimer;
@@ -76,6 +76,7 @@ namespace Playarr.Xbox.ViewModels
         private Timer? _progressTimer;
         private MediaPlaybackItem? _playbackItem;
         private bool _disposed;
+        private volatile bool _playbackStarted;
 
         private PlayerLoadState _loadState = PlayerLoadState.Loading;
         private string? _errorMessage;
@@ -100,6 +101,7 @@ namespace Playarr.Xbox.ViewModels
 
             Player = new MediaPlayer { AutoPlay = true };
             Player.MediaEnded += Player_MediaEnded;
+            Player.PlaybackSession.PlaybackStateChanged += PlaybackSession_PlaybackStateChanged;
             ConfigureSystemMediaTransportControls();
 
             // Fire-and-forget -- see the type-level remarks. The page
@@ -172,6 +174,14 @@ namespace Playarr.Xbox.ViewModels
         /// until then); <c>null</c> means "off".
         /// </summary>
         public string? SelectedSubtitleTrackId => _selectedSubtitleTrackId;
+
+        private void PlaybackSession_PlaybackStateChanged(MediaPlaybackSession sender, object args)
+        {
+            if (sender.PlaybackState == MediaPlaybackState.Playing)
+            {
+                _playbackStarted = true;
+            }
+        }
 
         private void Player_MediaEnded(MediaPlayer sender, object args)
         {
@@ -451,12 +461,47 @@ namespace Playarr.Xbox.ViewModels
             _ = ReportProgressAsync();
         }
 
+        /// <summary>
+        /// Pauses and saves the current position. Awaited by the suspend
+        /// handler so the write completes inside the suspend deferral; also
+        /// used when the window is hidden.
+        /// </summary>
+        public Task PauseAndFlushProgressAsync()
+        {
+            try
+            {
+                Player.Pause();
+            }
+            catch (Exception)
+            {
+                // Best-effort -- see PauseForNavigatingAway.
+            }
+
+            return ReportProgressAsync();
+        }
+
         private async Task LoadAsync()
         {
             try
             {
                 var model = XboxModelDetector.DetectModel();
                 var profile = XboxPlaybackProfile.ForModel(model);
+
+                // Resume from the server's saved point unless the caller passed one.
+                if (_resumePositionMs is null)
+                {
+                    try
+                    {
+                        var saved = await _environment.ApiClient
+                            .GetWatchProgressAsync(_mediaFileId)
+                            .ConfigureAwait(false);
+                        _resumePositionMs = PlaybackResume.FromProgress(saved);
+                    }
+                    catch (Exception)
+                    {
+                        // Resume is best-effort: playback starts from the top.
+                    }
+                }
 
                 var info = await _environment.ApiClient
                     .GetPlaybackInfoAsync(_mediaFileId, profile)
@@ -659,6 +704,10 @@ namespace Playarr.Xbox.ViewModels
             }
 
             var positionMs = (long)position.TotalMilliseconds + info.SourceOffsetMs;
+            if (!PlaybackResume.ShouldReport(_playbackStarted, positionMs))
+            {
+                return;
+            }
 
             try
             {
@@ -735,6 +784,14 @@ namespace Playarr.Xbox.ViewModels
             _disposed = true;
             StopCountdown();
             Player.MediaEnded -= Player_MediaEnded;
+            try
+            {
+                Player.PlaybackSession.PlaybackStateChanged -= PlaybackSession_PlaybackStateChanged;
+            }
+            catch (Exception)
+            {
+            }
+
             _progressTimer?.Dispose();
             _progressTimer = null;
 

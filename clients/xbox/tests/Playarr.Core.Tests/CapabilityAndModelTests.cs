@@ -109,7 +109,7 @@ namespace Playarr.Core.Tests
             var progress = JsonCoding.Deserialize<WatchProgress>(
                 "{\"media_file_id\":\"00000000-0000-0000-0000-000000000000\"," +
                 "\"work_id\":\"00000000-0000-0000-0000-000000000000\"," +
-                "\"position_ms\":1,\"duration_ms\":2,\"state\":\"in_progress\"}");
+                "\"position_ms\":1,\"duration_ms\":2,\"state\":\"part_watched\"}");
 
             Assert.Equal(WatchState.InProgress, progress!.State);
         }

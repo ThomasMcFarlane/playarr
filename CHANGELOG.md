@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Xbox player now resumes from the server's saved position, saves progress on suspend and when minimised, and never writes position 0 before playback has started. Watch-state values now match the server.
 - The shared TV player (VIDAA, webOS, Tizen shell) now resumes from the server's saved position, reports watch progress while playing, saves on exit, background and end, and stops playback on exit.
 - Every page's Filters button and the Calendar's Filters and Calendar link buttons are one tile again, the look the library Filters launcher had on web on 30 September (owner ruling): a 14 px-radius tile with the glyph above a small bold label (icon only, 44 px, on phones), in the header action slot. Web's header pill from the shared page shell (4 October) is gone, and the header row centres on the taller tile. Focus draws the ring (white in dark, ink in light) with the 1.06 scale and never a fill; the open state keeps the ink fill. Android TV and phone, tvOS and iOS draw the same tile.
 - Android TV: the earlier calendar restyle (#154) had rebuilt the shared header button for every page and dropped its focus state; it is the tile above now.

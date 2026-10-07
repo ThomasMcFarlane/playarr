@@ -42,6 +42,23 @@ namespace Playarr.Core.Playback
 
             return durationMs > 0 && position >= durationMs - WatchedTailMs ? (long?)null : position;
         }
+
+        /// <summary>
+        /// The resume point from the server's saved progress: only a part-watched
+        /// item with a positive position resumes (the web client's rule).
+        /// </summary>
+        public static long? FromProgress(WatchProgress? progress) =>
+            progress is { State: WatchState.InProgress } && progress.PositionMs > 0
+                ? (long?)progress.PositionMs
+                : null;
+
+        /// <summary>
+        /// Progress is only written once playback has really started and the
+        /// position is positive, so a stalled or cancelled start can never
+        /// overwrite the saved resume point with 0.
+        /// </summary>
+        public static bool ShouldReport(bool playbackStarted, long positionMs) =>
+            playbackStarted && positionMs > 0;
     }
 
     /// <summary>Builds the up-next queue from a work's children.</summary>

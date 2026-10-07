@@ -119,16 +119,26 @@ namespace Playarr.Xbox
             // implement itself.
         }
 
-        private void OnSuspending(object sender, SuspendingEventArgs e)
+        private async void OnSuspending(object sender, SuspendingEventArgs e)
         {
             var deferral = e.SuspendingOperation.GetDeferral();
-
-            // No unsaved state to flush yet -- XboxAppEnvironment persists
-            // eagerly (LocalSettings/PasswordVault writes happen at the
-            // point of the change, not batched here). Revisit once playback
-            // position needs an explicit flush-on-suspend, in the Playback
-            // phase.
-            deferral.Complete();
+            try
+            {
+                // XboxAppEnvironment persists eagerly; the only unsaved state
+                // is the playback position, flushed here inside the deferral.
+                if (Window.Current.Content is Frame { Content: Views.PlayerPage player })
+                {
+                    await player.FlushProgressAsync();
+                }
+            }
+            catch (Exception)
+            {
+                // Best-effort: never block suspension.
+            }
+            finally
+            {
+                deferral.Complete();
+            }
         }
 
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e) =>

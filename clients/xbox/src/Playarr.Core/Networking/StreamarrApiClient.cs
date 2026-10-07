@@ -53,6 +53,8 @@ namespace Playarr.Core.Networking
 
         Task<IList<WatchProgress>> ListWatchProgressAsync(CancellationToken cancellationToken = default);
 
+        Task<WatchProgress> GetWatchProgressAsync(Guid mediaFileId, CancellationToken cancellationToken = default);
+
         Task<WatchProgress> UpdateWatchProgressAsync(
             Guid mediaFileId,
             UpdateWatchProgressRequest body,
@@ -201,6 +203,10 @@ namespace Playarr.Core.Networking
         public Task<IList<WatchProgress>> ListWatchProgressAsync(CancellationToken cancellationToken = default) =>
             GetAsync<IList<WatchProgress>>(
                 "/api/v1/playback/progress", null, authenticated: true, cancellationToken);
+
+        public Task<WatchProgress> GetWatchProgressAsync(Guid mediaFileId, CancellationToken cancellationToken = default) =>
+            GetAsync<WatchProgress>(
+                $"/api/v1/playback/{mediaFileId:D}/progress", null, authenticated: true, cancellationToken);
 
         public Task<WatchProgress> UpdateWatchProgressAsync(
             Guid mediaFileId,
