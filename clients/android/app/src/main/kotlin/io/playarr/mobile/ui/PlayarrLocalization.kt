@@ -766,6 +766,10 @@ internal enum class PlayarrString(
     DetailEpisodeNumber("Episode {{number}}", "ตอนที่ {{number}}", "エピソード{{number}}"),
     DetailEpisodeCount("{{count}} episodes", "{{count}} ตอน", "{{count}}話"),
     DetailAired("Aired {{date}}", "ออกอากาศ {{date}}", "放送日 {{date}}"),
+    DetailTitlesCountOne("{{count}} title", "{{count}} เรื่อง", "{{count}}件のタイトル"),
+    DetailTitlesCountOther("{{count}} titles", "{{count}} เรื่อง", "{{count}}件のタイトル"),
+    DetailPremiered("Premiered {{date}}", "ฉายรอบปฐมทัศน์เมื่อ {{date}}", "初公開日 {{date}}"),
+    DetailAdded("Added {{date}}", "เพิ่มเมื่อ {{date}}", "追加日 {{date}}"),
     DetailRuntimeMinutes("{{minutes}} min", "{{minutes}} นาที", "{{minutes}}分"),
     DetailRuntimeHours("{{hours}}h", "{{hours}} ชม.", "{{hours}}時間"),
     DetailRuntimeHoursMinutes(

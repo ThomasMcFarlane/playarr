@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,9 +82,18 @@ import androidx.compose.ui.window.DialogProperties
  * pinned bottom-left. PlayarrPageScaffoldRegistryTest keeps new screens from bypassing it.
  */
 
-/** Web header icon button fill and ring (`a.ui-btn--icon`, dark theme). */
-private val WebHeaderIconFill = Color(0xB3211D21)
-private val WebHeaderIconRing = Color(0x27DFDCDD)
+/** Web header icon button fill and ring (`a.ui-btn--icon`): surface-strong at .7 and a hairline ring, per theme. */
+@Composable
+private fun webHeaderIconFill(): Color = WebSurfaceStrong.copy(alpha = 0.7f)
+
+@Composable
+private fun webHeaderIconRing(): Color =
+    if (WebSurface.luminance() < 0.5f) Color(0x27DFDCDD) else WebInk.copy(alpha = 0.1838f)
+
+/** Web `.page-header-detail` divider, per theme. */
+@Composable
+internal fun webHeaderDivider(): Color =
+    if (WebSurface.luminance() < 0.5f) Color(0x3BDFDCDD) else WebInk.copy(alpha = 0.28f)
 
 /** Space the body reserves at the bottom so nothing renders under the bottom-left profile chip. */
 internal fun playarrPageSafeBottom(isTelevision: Boolean): Dp = if (isTelevision) 96.dp else 72.dp
@@ -262,8 +272,8 @@ internal fun PlayarrPageHeaderRow(
                     variant = PlayarrButtonVariant.Ghost,
                     // Web `a.ui-btn--icon`: rgba(33,29,33,.7) fill with a 1px rgba(223,220,221,.15) ring and a text arrow.
                     modifier = Modifier
-                        .background(WebHeaderIconFill, CircleShape)
-                        .border(1.dp, WebHeaderIconRing, CircleShape),
+                        .background(webHeaderIconFill(), CircleShape)
+                        .border(1.dp, webHeaderIconRing(), CircleShape),
                 ) {
                     Text("\u2190", color = WebInkSoft, fontSize = 17.28.sp, fontWeight = FontWeight(720))
                 }
@@ -299,7 +309,7 @@ internal fun PlayarrPageHeaderRow(
             subcompose("inline") {
                 if (isTelevision) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.padding(horizontal = 23.04.dp).width(1.dp).height(50.dp).background(Color(0x3BDFDCDD)))
+                        Box(Modifier.padding(horizontal = 23.04.dp).width(1.dp).height(50.dp).background(WebDivider))
                         PlayarrBreadcrumbText(subtitle!!)
                     }
                 } else {

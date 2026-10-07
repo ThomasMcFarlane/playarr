@@ -233,7 +233,7 @@ internal fun PlayarrPlayerChrome(
                 },
         )
 
-        AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopStart)) {
+        AnimatedVisibility(visible = visible && !isTelevision, modifier = Modifier.align(Alignment.TopStart)) {
             Row(
                 modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -287,12 +287,12 @@ internal fun PlayarrPlayerChrome(
 
         AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
             Row(
-                modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = (if (isTelevision) Modifier.padding(top = 37.8.dp, end = 58.dp) else Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)),
+                horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 12.dp else 8.dp),
             ) {
                 if (onMinimise != null) {
                     PlayarrPlayerTopButton(
-                        icon = Icons.Outlined.PictureInPictureAlt,
+                        icon = if (isTelevision) WebIcons.Minimise else Icons.Outlined.PictureInPictureAlt,
                         label = playarrString(PlayarrString.PlayerMinimiseLabel),
                         accessibilityLabel = playarrString(PlayarrString.PlayerMinimise),
                         isTelevision = isTelevision,
@@ -300,11 +300,12 @@ internal fun PlayarrPlayerChrome(
                     )
                 }
                 PlayarrPlayerTopButton(
-                    icon = Icons.Outlined.Close,
+                    icon = if (isTelevision) WebIcons.Close else Icons.Outlined.Close,
                     label = playarrString(PlayarrString.PlayerCloseLabel),
                     accessibilityLabel = playarrString(PlayarrString.PlayerClosePlayer),
                     isTelevision = isTelevision,
                     onClick = { onBack() },
+                    iconOnly = isTelevision,
                     modifier = Modifier.focusRequester(backFocusRequester),
                 )
             }
@@ -333,6 +334,40 @@ internal fun PlayarrPlayerChrome(
                 onMenu = { openMenu = it; showControls() },
                 playlistOpen = playlistOpen,
                 onTogglePlaylist = { playlistOpen = !playlistOpen; showControls() },
+                trailing = {
+                    // Web order after Quality: cast, playback health, play on another device.
+                    if (cast.visible) {
+                        val connected = cast.connectionState is PlayarrCastConnectionState.Connected
+                        val connecting = cast.connectionState is PlayarrCastConnectionState.Connecting
+                        PlayerRoundButton(
+                            icon = if (connected || connecting) Icons.Outlined.CastConnected else Icons.Outlined.Cast,
+                            contentDescription = playarrString(PlayarrString.CastButtonLabel),
+                            onClick = {
+                                showControls()
+                                if (connected) {
+                                    castDialog = PlayarrCastDialogKind.Connected
+                                } else {
+                                    cast.onStartDiscovery()
+                                    castDialog = PlayarrCastDialogKind.Picker
+                                }
+                            },
+                        )
+                    }
+                    if (health != null) {
+                        PlayerRoundButton(
+                            icon = WebIcons.Health,
+                            contentDescription = playarrString(PlayarrString.HealthOpen),
+                            onClick = { showControls(); healthOpen = true },
+                        )
+                    }
+                    if (onPlayOnDevice != null) {
+                        PlayerRoundButton(
+                            icon = WebIcons.PlayOnDevice,
+                            contentDescription = playarrString(PlayarrString.RemotePlayOnTitle),
+                            onClick = { showControls(); onPlayOnDevice() },
+                        )
+                    }
+                },
             )
         }
 
@@ -457,24 +492,62 @@ private fun PlayarrPlayerTopButton(
     isTelevision: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    iconOnly: Boolean = false,
 ) {
+    // Web `.player-minimise` / `.player-close`: 48 high, rgba(12,10,11,.58) fill, 1px rgba(255,255,255,.28) ring.
     Surface(
         onClick = onClick,
-        color = Color.Black.copy(alpha = 0.62f),
+        color = if (isTelevision) Color(0x940C0A0B) else Color.Black.copy(alpha = 0.62f),
         contentColor = Color.White,
         shape = CircleShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
-        modifier = modifier.then(if (isTelevision) Modifier.height(48.dp) else Modifier.size(44.dp)),
+        modifier = modifier.then(
+            if (isTelevision) {
+                if (iconOnly) Modifier.size(48.dp) else Modifier.height(48.dp)
+            } else {
+                Modifier.size(44.dp)
+            },
+        ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = if (isTelevision) 16.dp else 11.dp),
+            modifier = if (isTelevision && iconOnly) Modifier.fillMaxSize() else Modifier.padding(horizontal = if (isTelevision) 16.dp else 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = if (isTelevision && iconOnly) Arrangement.Center else Arrangement.spacedBy(if (isTelevision) 8.8.dp else 8.dp),
         ) {
-            Icon(icon, contentDescription = accessibilityLabel, modifier = Modifier.size(22.dp))
-            if (isTelevision) {
-                Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Icon(icon, contentDescription = accessibilityLabel, modifier = Modifier.size(if (isTelevision) 20.dp else 22.dp))
+            if (isTelevision && !iconOnly) {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+/** Web `.player-btn`: a 64 dp round control with an optional filled disc (the play button). */
+@Composable
+private fun PlayerRoundButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    disc: Boolean = false,
+    tint: Color = Color.White,
+) {
+    val source = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = source,
+        color = if (disc) Color.White.copy(alpha = 0.14f) else Color.Transparent,
+        contentColor = tint,
+        shape = CircleShape,
+        modifier = modifier
+            .size(64.dp)
+            .playerFocusRing(source, CircleShape)
+            .semantics { this.contentDescription = contentDescription },
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -498,6 +571,7 @@ private fun PlayarrPlayerControlBar(
     onMenu: (PlayarrPlayerMenu) -> Unit,
     playlistOpen: Boolean,
     onTogglePlaylist: () -> Unit,
+    trailing: @Composable () -> Unit = {},
 ) {
     val durationMs = timeline.durationMs.coerceAtLeast(0L)
     val displayedPositionMs = (scrubPositionMs ?: timeline.positionMs).coerceIn(0L, durationMs.coerceAtLeast(0L))
@@ -512,6 +586,30 @@ private fun PlayarrPlayerControlBar(
         "duration" to formatPlayarrPlayerTime(durationMs),
     )
     val focusManager = LocalFocusManager.current
+    if (isTelevision) {
+        PlayarrTelevisionControlBar(
+            playbackState = playbackState,
+            controls = controls,
+            displayedPositionMs = displayedPositionMs,
+            durationMs = durationMs,
+            bufferedProgress = bufferedProgress,
+            seekDescription = seekDescription,
+            seekFocusRequester = seekFocusRequester,
+            canPrevious = canPrevious,
+            canNext = canNext,
+            queue = queue,
+            playlistOpen = playlistOpen,
+            onScrub = onScrub,
+            onScrubFinished = onScrubFinished,
+            onTogglePlayback = onTogglePlayback,
+            onPrevious = onPrevious,
+            onNext = onNext,
+            onMenu = onMenu,
+            onTogglePlaylist = onTogglePlaylist,
+            trailing = trailing,
+        )
+        return
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -684,6 +782,177 @@ private fun PlayarrPlayerControlBar(
                     onMenu(PlayarrPlayerMenu.Quality)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Television control bar, laid out like web `.player-controls` at 1920 x 1080: 70 dp side gutters, a 6 dp seek
+ * track (15 dp thumb) 16 dp above a row of 64 dp round controls, 13.6 dp apart, bottom edge 58 dp from the screen
+ * edge. Volume, mute and fullscreen are absent exactly as on the web Android TV client (`systemVolumeOnly`).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PlayarrTelevisionControlBar(
+    playbackState: PlaybackState,
+    controls: PlayarrPlaybackControls,
+    displayedPositionMs: Long,
+    durationMs: Long,
+    bufferedProgress: Float,
+    seekDescription: String,
+    seekFocusRequester: FocusRequester,
+    canPrevious: Boolean,
+    canNext: Boolean,
+    queue: PlayarrPlaybackQueue,
+    playlistOpen: Boolean,
+    onScrub: (Long) -> Unit,
+    onScrubFinished: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onMenu: (PlayarrPlayerMenu) -> Unit,
+    onTogglePlaylist: () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    val progress = if (durationMs > 0L) (displayedPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val dimmed = Color.White.copy(alpha = 0.35f)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
+            .padding(start = 70.dp, end = 70.dp, bottom = 58.dp, top = 40.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(15.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.fillMaxWidth().height(6.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(3.dp)))
+            Box(Modifier.fillMaxWidth(bufferedProgress.coerceIn(0f, 1f)).height(6.dp).background(Color.White.copy(alpha = 0.34f), RoundedCornerShape(3.dp)))
+            Box(Modifier.fillMaxWidth(progress).height(6.dp).background(WebPink, RoundedCornerShape(3.dp)))
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(15.dp)) {
+                Box(Modifier.padding(start = (maxWidth - 15.dp) * progress).size(15.dp).background(WebPink, CircleShape))
+            }
+            // The Slider stays for input and semantics (D-pad seek, scrub) but draws nothing of its own.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp,
+            ) {
+                Slider(
+                    value = displayedPositionMs.toFloat(),
+                    onValueChange = { onScrub(it.toLong()) },
+                    onValueChangeFinished = onScrubFinished,
+                    valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
+                    enabled = durationMs > 0L && !controls.switching,
+                    thumb = {},
+                    track = {},
+                    modifier = Modifier
+                        .focusRequester(seekFocusRequester)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (event.key) {
+                                Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                                Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                                else -> false
+                            }
+                        }
+                        .fillMaxWidth()
+                        .height(15.dp)
+                        .semantics { contentDescription = seekDescription },
+                )
+            }
+        }
+        Spacer(Modifier.height(11.5.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(13.6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlayerRoundButton(
+                icon = WebIcons.Previous,
+                contentDescription = playarrString(PlayarrString.PlayerPreviousEpisode),
+                onClick = onPrevious,
+                enabled = canPrevious && !controls.switching,
+                tint = if (canPrevious && !controls.switching) Color.White else dimmed,
+            )
+            PlayerRoundButton(
+                icon = if (playbackState.playWhenReady) WebIcons.Pause else WebIcons.Play,
+                contentDescription = playarrString(
+                    if (playbackState.playWhenReady) PlayarrString.PlayerPause else PlayarrString.PlayerPlay,
+                ),
+                onClick = onTogglePlayback,
+                enabled = !controls.switching,
+                disc = true,
+            )
+            PlayerRoundButton(
+                icon = WebIcons.Next,
+                contentDescription = playarrString(PlayarrString.PlayerNextEpisode),
+                onClick = onNext,
+                enabled = canNext && !controls.switching,
+                tint = if (canNext && !controls.switching) Color.White else dimmed,
+            )
+            Text(
+                "${formatPlayarrPlayerTime(displayedPositionMs)} / ${formatPlayarrPlayerTime(durationMs)}",
+                color = Color.White,
+                fontSize = 10.88.sp,
+            )
+            Spacer(Modifier.weight(1f))
+            if (controls.audioTracks.isNotEmpty()) {
+                PlayerRoundButton(
+                    icon = WebIcons.AudioTrack,
+                    contentDescription = playarrString(PlayarrString.PlayerAudioTrackMenuLabel),
+                    onClick = { onMenu(PlayarrPlayerMenu.Audio) },
+                    enabled = !controls.switching,
+                )
+            }
+            PlayerRoundButton(
+                icon = WebIcons.Subtitles,
+                contentDescription = playarrString(PlayarrString.PlayerSubtitleTrackMenuLabel),
+                onClick = { onMenu(PlayarrPlayerMenu.Subtitles) },
+                enabled = !controls.switching,
+            )
+            PlayerRoundButton(
+                icon = WebIcons.PlaylistQueue,
+                contentDescription = if (playlistOpen) {
+                    playarrString(PlayarrString.PlayerClosePlaylist)
+                } else {
+                    playarrString(
+                        if (queue.items.size == 1) PlayarrString.PlayerPlaylistLabelSingular else PlayarrString.PlayerPlaylistLabelPlural,
+                        "count" to queue.items.size,
+                    )
+                },
+                onClick = onTogglePlaylist,
+                enabled = !controls.switching,
+            )
+            if (controls.qualityOptions.isNotEmpty()) {
+                val active = controls.qualityOptions.firstOrNull { it.id == controls.activeQualityId }
+                val source = remember { MutableInteractionSource() }
+                val qualityDescription = playarrString(PlayarrString.PlayerQualityMenuLabel)
+                Surface(
+                    onClick = { onMenu(PlayarrPlayerMenu.Quality) },
+                    enabled = !controls.switching,
+                    interactionSource = source,
+                    color = Color.Transparent,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .height(56.dp)
+                        .playerFocusRing(source, CircleShape)
+                        .semantics { contentDescription = qualityDescription },
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 14.4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.8.dp),
+                    ) {
+                        Text("HD", fontSize = 7.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            active?.let { playarrQualityLabel(it.label, it.videoBitrateBps, it.id == "original") }
+                                ?: playarrString(PlayarrString.PlayerQualityHeading),
+                            fontSize = 10.56.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.1056.sp,
+                        )
+                    }
+                }
+            }
+            trailing()
         }
     }
 }
