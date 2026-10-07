@@ -200,6 +200,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: Nunito Sans and JetBrains Mono are now bundled as self-hosted variable webfonts (SIL OFL) and lead the font stacks, so the UI no longer depends on a platform-specific font; the parity references were re-captured with them.
 - Pixel parity tooling now covers the light and dark themes: `capture-web.mjs --theme`, theme-aware `diff.mjs` and `screens.json`, web references under `docs/parity/web/<layout>/<theme>/`, and a deterministic source sync order in the fixture seed.
 - tvOS: Home, Library, title detail, Search, Settings, Release Calendar, profile switcher, the household blocked screen and the player now follow the web TV layout (1920x1080) in light and dark, with the web's nav tabs, preset profile avatars, key art treatment and a web-style player with quality matrix.
 - Every client now allows cleartext `http://` connections to the self-hosted Playarr Server the user enters: the Android Google Play flavour no longer denies cleartext, iOS sets `NSAllowsArbitraryLoads`, and the Xbox package declares `privateNetworkClientServer` for home-network servers. HTTPS remains supported and preferred.

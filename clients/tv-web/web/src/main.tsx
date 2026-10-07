@@ -24,6 +24,7 @@ import {
   PrivacyPolicyPage,
   TermsPage,
 } from "./pages/Legal";
+import "./styles/fonts.css";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
