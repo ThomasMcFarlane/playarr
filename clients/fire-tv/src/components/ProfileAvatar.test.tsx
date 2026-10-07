@@ -30,7 +30,7 @@ jest.mock('@amazon-devices/react-native-svg', () => ({
 }));
 jest.mock('@amazon-devices/react-linear-gradient', () => ({
   __esModule: true,
-  LinearGradient: 'LinearGradient',
+  default: 'LinearGradient',
 }));
 
 import React from 'react';

@@ -55,7 +55,7 @@ jest.mock('@amazon-devices/react-native-device-info', () => ({
 // Same mock shape `components/ProfileAvatar.test.tsx` already established.
 jest.mock('@amazon-devices/react-linear-gradient', () => ({
   __esModule: true,
-  LinearGradient: 'LinearGradient',
+  default: 'LinearGradient',
 }));
 
 // `VegaVideoSurface.tsx` (imported statically by `PlayerScreen.tsx`, which

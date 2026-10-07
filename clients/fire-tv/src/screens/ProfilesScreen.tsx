@@ -62,6 +62,7 @@ import {colour} from '../theme/tokens';
 import {layout, text as textStyle} from '../theme/styles';
 import {sw} from '../theme/scale';
 import {ROUTES, type RouteName} from '../navigation/routes';
+import {APP_SHELL_ROUTE} from '../navigation/AppShellNavigator';
 import {ProfileAvatar} from '../components/ProfileAvatar';
 import {TvEmptyState} from '../components/TvEmptyState';
 
@@ -69,7 +70,10 @@ type LoadState = {status: 'loading'} | {status: 'ready'} | {status: 'error'; mes
 
 /** Everything this screen needs from a navigation prop -- an explicit generic override on `useNavigation`, deliberately NOT the package's own default `NavigationProp<ReactNavigation.RootParamList>`: that default resolves against a GLOBAL `RootParamList` interface no navigator in this build-order pass has augmented yet (it is declared as the empty `interface RootParamList {}` in `@amazon-devices/react-navigation__core`'s own types), which would make `navigate()` reject every real route name at compile time until `RootNavigator.tsx` (a later step) exists and augments it. This minimal shape is a structural subset of the real thing `RootNavigator`'s eventual `NavigationProp` will satisfy regardless. */
 interface ProfilesNavigation {
-  navigate: (route: RouteName) => void;
+  navigate: {
+    (route: RouteName): void;
+    (route: typeof APP_SHELL_ROUTE, params: {screen: RouteName}): void;
+  };
 }
 
 function safeFourDigitPin(value: string): string {
@@ -279,7 +283,9 @@ export function ProfilesScreen(): React.ReactElement {
   const proceedWithProfile = useCallback(
     (profile: AvailableProfile) => {
       if (profile.is_current) {
-        navigation.navigate(ROUTES.home);
+        // The root stack only knows `Link`, `Profiles` and the shell route;
+        // `Home` lives inside the shell, so a bare `navigate('Home')` is a no-op.
+        navigation.navigate(APP_SHELL_ROUTE, {screen: ROUTES.home});
         return;
       }
       // See this file's top doc comment: no profile-session store exists

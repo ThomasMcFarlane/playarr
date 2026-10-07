@@ -138,7 +138,9 @@ export async function hydrateLocalStorage(asyncStorage: AsyncStorageLike): Promi
 
   const allKeys = await asyncStorage.getAllKeys();
   const persistedKeys = allKeys.filter(isPersistedKey);
-  const pairs = await asyncStorage.multiGet(persistedKeys);
+  // Vega's AsyncStorage rejects multiGet([]) ("At least one key is needed"),
+  // which is exactly what a first launch asks for.
+  const pairs = persistedKeys.length > 0 ? await asyncStorage.multiGet(persistedKeys) : [];
 
   const nextStore = new Map<string, string>();
   for (const [key, value] of pairs) {

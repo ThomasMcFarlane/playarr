@@ -34,7 +34,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import {FlashList, type ListRenderItem} from '@amazon-devices/shopify__flash-list';
-import {LinearGradient} from '@amazon-devices/react-linear-gradient';
+import LinearGradient from '@amazon-devices/react-linear-gradient';
 import {colour, spacing} from '../theme/tokens';
 import {text as textStyle} from '../theme/styles';
 import {sw} from '../theme/scale';

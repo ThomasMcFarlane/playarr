@@ -14,6 +14,10 @@
 # the day the two drift apart, not to resolve which one wins.
 schema-version = 1
 
+[os.version]
+min = "1.2"
+target = "1.2"
+
 [package]
 id = "com.streamarr.firetv"
 title = "Playarr"
@@ -36,6 +40,9 @@ launch-type = "singleton"
 # privilege backs.
 [[needs.privilege]]
 id = "com.amazon.network.privilege.net-info"
+
+[[needs.module]]
+id = "/com.amazon.vega.os@IVega_1_2"
 
 [wants]
 # --- Remote control + on-screen keyboard -------------------------------
@@ -89,6 +96,12 @@ id = "com.amazon.gipc.uuid.*"
 
 [[offers.interaction]]
 id = "com.streamarr.firetv.main"
+
+# The Vega manifest validator requires every [[message]] URI to be included
+# by an offered module (offers.module.includes-messages).
+[[offers.module]]
+id = "/com.streamarr.firetv.module@IMain"
+includes-messages = ["pkg://com.streamarr.firetv.main"]
 
 # Required, not a v2 deep-linking feature -- confirmed against Amazon's own
 # published vega-video-sample/manifest.toml, which marks the equivalent

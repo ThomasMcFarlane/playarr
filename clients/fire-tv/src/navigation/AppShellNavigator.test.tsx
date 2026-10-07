@@ -56,7 +56,7 @@ jest.mock('@amazon-devices/react-native-device-info', () => ({
 
 jest.mock('@amazon-devices/react-linear-gradient', () => ({
   __esModule: true,
-  LinearGradient: 'LinearGradient',
+  default: 'LinearGradient',
 }));
 
 jest.mock('@amazon-devices/react-native-gesture-handler', () => {
