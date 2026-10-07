@@ -210,3 +210,12 @@ distance, and the edge fade runs along the left and the bottom), the heading and
 selected avatar lifted and scaled with its 4 px rose ring outside the avatar, a lighter shadow on the glass pills, and the
 Clients pill at the bottom right. Clients opens a dialog with a QR code and the address of the server's clients page, since
 Android TV has no browser to hand it to. Dark 1.04%, light 1.35%.
+
+### Settings sections against the shared references
+
+Measured against the nine `settings-*` section references in `docs/parity/web/tv` (dark; light within 0.2 of it except server at 3.7%
+and player at 2.3%): avatar 1.25%, invite 0.92%, language 0.72%, request latency 0.75%, profile lock 1.5%, phone remote 1.9% (my
+fixture lists six stale offline devices that the reference does not), player 2.1%, your data 2.65%, server 2.9%.
+This pass added the page's horizontal tone change behind the section list (the page is darker at the left and fades to the
+panel tone between x 680 and 1150), kept the web font inside the panel (the nested Material theme was resetting it to the
+platform font), and tuned the invite, lock, remote and player rhythm to the references.

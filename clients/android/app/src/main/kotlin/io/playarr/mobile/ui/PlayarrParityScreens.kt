@@ -3325,13 +3325,13 @@ private fun SettingsSectionContent(
                     TvChoiceCell(
                         selected = display.playerDefaults.qualityId == "original",
                         onClick = { display.setPlayerQuality("original"); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
-                        modifier = Modifier.fillMaxWidth().height(58.dp),
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
                         trailing = if (display.playerDefaults.qualityId == "original") "\u2713" else null,
                     ) {
                         Text(playarrString(PlayarrString.SettingsQualityOriginal), color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Text(playarrString(PlayarrString.SettingsQualityOriginalDetail), color = WebInkMuted, fontSize = 9.sp)
                     }
-                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().offset(y = (-8).dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Spacer(Modifier.width(210.dp))
                         listOf(PlayarrString.SettingsQualityLow, PlayarrString.SettingsQualityMedium, PlayarrString.SettingsQualityHigh).forEach { level ->
                             Text(playarrString(level).uppercase(LocalPlayarrLanguage.current.locale), color = WebInkMuted, fontSize = 10.sp, letterSpacing = 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -3349,8 +3349,8 @@ private fun SettingsSectionContent(
                                     onClick = { display.setPlayerQuality(option.id); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
                                     modifier = Modifier.weight(1f).height(58.dp),
                                 ) {
-                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
-                                    Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 10.sp)
+                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 13.5.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold)
+                                    Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 10.sp, lineHeight = 13.sp)
                                 }
                             }
                         }
@@ -3427,6 +3427,7 @@ private fun SettingsSectionContent(
                     playarrString(PlayarrString.SettingsPlayerAudioTitle),
                     playarrString(PlayarrString.SettingsPlayerAudioDescription),
                     divider = true,
+                    dividerGap = 15,
                 )
                 val selectedAudio = snapshot.player.preferredAudioLanguage.takeIf { saved ->
                     playarrLanguageOptions.any { option -> option.code == saved }
@@ -3463,8 +3464,8 @@ private fun SettingsSectionContent(
             SettingsSection.Lock -> {
                 var pin by remember { mutableStateOf("") }
                 if (LocalSettingsPlainPanel.current) {
-                    TvFieldLabel(playarrString(if (snapshot.pin.pinLocked) PlayarrString.SettingsProfileLockReplacePin else PlayarrString.SettingsProfileLockNewPin))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.offset(y = (-2).dp)) { TvFieldLabel(playarrString(if (snapshot.pin.pinLocked) PlayarrString.SettingsProfileLockReplacePin else PlayarrString.SettingsProfileLockNewPin)) }
+                    Row(Modifier.offset(y = (-10).dp), verticalAlignment = Alignment.CenterVertically) {
                         TvField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, "\u2022 \u2022 \u2022 \u2022", Modifier.width(330.dp), enabled = !pinBusy, password = true)
                         TvPrimaryPill(
                             playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockSaving; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockReplace; else -> PlayarrString.SettingsProfileLockSetPin }),
@@ -3477,7 +3478,7 @@ private fun SettingsSectionContent(
                     }
                     Text(
                         playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockUpdating; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockOn; else -> PlayarrString.SettingsProfileLockOff }),
-                        color = WebInkSoft, fontSize = 13.sp, modifier = Modifier.padding(top = 26.dp),
+                        color = WebInkMuted, fontSize = 19.5.sp, modifier = Modifier.padding(top = 8.dp),
                     )
                     return@SettingsCard
                 }
@@ -3541,25 +3542,26 @@ private fun SettingsSectionContent(
                     if (request?.status == InviteRequestStatus.Pending) requestMessage = ""
                 }
                 if (LocalSettingsPlainPanel.current) {
-                    Text(playarrString(request?.status.playarrInviteStatusKey()), color = WebInkMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
-                    when (request?.status) {
-                        InviteRequestStatus.Approved -> TvPrimaryPill(
-                            playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteGenerateQr),
-                            onClick = { viewModel.generateInvite(serverUrl) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth(), height = 58,
-                        )
-                        InviteRequestStatus.Pending -> TvPrimaryPill(playarrString(PlayarrString.SettingsInviteRequestPending), onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(), height = 58)
-                        else -> {
-                            TvFieldLabel(playarrString(PlayarrString.SettingsInviteMessageLabel))
-                            TvField(requestMessage, { if (it.length <= 500) requestMessage = it }, playarrString(PlayarrString.SettingsInviteMessagePlaceholder), Modifier.fillMaxWidth(), enabled = !inviteBusy, singleLine = false)
-                            Spacer(Modifier.height(24.dp))
-                            TvPrimaryPill(
-                                playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteRequestQr),
-                                onClick = { viewModel.requestInvite(requestMessage) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth(), height = 58,
+                    // Web TV `.settings-invite`: absolute rhythm read off the reference (status, label, field, pill, notifications).
+                    Box(Modifier.fillMaxWidth().height(330.dp)) {
+                        Text(playarrString(request?.status.playarrInviteStatusKey()), color = WebInkMuted, fontSize = 19.3.sp, modifier = Modifier.offset(y = (-1).dp))
+                        when (request?.status) {
+                            InviteRequestStatus.Approved -> TvPrimaryPill(
+                                playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteGenerateQr),
+                                onClick = { viewModel.generateInvite(serverUrl) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth().offset(y = 179.dp), height = 58,
                             )
+                            InviteRequestStatus.Pending -> TvPrimaryPill(playarrString(PlayarrString.SettingsInviteRequestPending), onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth().offset(y = 179.dp), height = 58)
+                            else -> {
+                                Box(Modifier.offset(y = 57.dp)) { TvFieldLabel(playarrString(PlayarrString.SettingsInviteMessageLabel)) }
+                                TvField(requestMessage, { if (it.length <= 500) requestMessage = it }, playarrString(PlayarrString.SettingsInviteMessagePlaceholder), Modifier.fillMaxWidth().offset(y = 74.dp), enabled = !inviteBusy, singleLine = false)
+                                TvPrimaryPill(
+                                    playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteRequestQr),
+                                    onClick = { viewModel.requestInvite(requestMessage) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth().offset(y = 179.dp), height = 58,
+                                )
+                            }
                         }
+                        Box(Modifier.offset(y = 267.dp)) { PlayarrApprovalNotifications() }
                     }
-                    Spacer(Modifier.height(18.dp))
-                    PlayarrApprovalNotifications()
                     return@SettingsCard
                 }
                 Text(
@@ -3700,9 +3702,9 @@ private fun SettingsServerSection(
         Spacer(Modifier.height(4.dp))
         TvFieldLabel(playarrString(PlayarrString.SettingsServerAddAnother))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TvField(serverUrl, { serverUrl = it; connectionAdded = false }, playarrString(PlayarrString.SettingsServerAddress), Modifier.width(400.dp), enabled = !serverBusy)
-            TvField(username, { username = it }, playarrString(PlayarrString.SettingsServerUsername), Modifier.width(200.dp), enabled = !serverBusy)
-            TvField(password, { password = it }, playarrString(PlayarrString.SettingsServerPassword), Modifier.width(200.dp), enabled = !serverBusy, secret = true)
+            TvField(serverUrl, { serverUrl = it; connectionAdded = false }, playarrString(PlayarrString.SettingsServerAddress), Modifier.width(400.dp), enabled = !serverBusy, textSize = 16f)
+            TvField(username, { username = it }, playarrString(PlayarrString.SettingsServerUsername), Modifier.width(200.dp), enabled = !serverBusy, textSize = 16f)
+            TvField(password, { password = it }, playarrString(PlayarrString.SettingsServerPassword), Modifier.width(200.dp), enabled = !serverBusy, secret = true, textSize = 16f)
             TvPrimaryPill(
                 playarrString(if (connecting) PlayarrString.SettingsServerConnecting else PlayarrString.SettingsServerConnect),
                 onClick = { viewModel.connectServer(serverUrl, username, password, isTelevision) { serverUrl = ""; password = ""; connectionAdded = true } },
@@ -3932,12 +3934,13 @@ private fun SettingsServerSection(
 }
 
 @Composable
-private fun PlayerDefaultHeading(title: String, description: String, divider: Boolean = false) {
+private fun PlayerDefaultHeading(title: String, description: String, divider: Boolean = false, dividerGap: Int = 0) {
     if (LocalSettingsPlainPanel.current) {
         Column {
             if (divider) {
+                Spacer(Modifier.height(dividerGap.dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(40.dp))
             }
             Text(title, color = WebInk, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight(430), letterSpacing = (-0.5).sp)
             Text(description, color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 9.dp))
@@ -4012,7 +4015,17 @@ private fun TvSettingsBody(
     val locale = LocalPlayarrLanguage.current.locale
     val entries = phoneSettingsIndex
     val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
-    Box(Modifier.fillMaxSize()) {
+    // The page is darker (lighter in the light theme) behind the section list and fades to the panel tone from x 680 to 1150.
+    val start = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
+    val mid = if (webIsDark) Color(0xFF252125) else Color(0xFFF3F1F2)
+    val end = if (webIsDark) Color(0xFF272227) else Color(0xFFF0EEEF)
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.horizontalGradient(
+                0.354f to start, 0.43f to mid, 0.47f to Color.Unspecified.let { mid }, 0.6f to end, 1f to end,
+            ),
+        ),
+    ) {
         Box(Modifier.offset(x = 227.dp, y = 112.dp).width(365.dp).height(1.dp).background(TvSettingsPalette.headerLine))
         Text(
             playarrString(section.label).uppercase(locale),
@@ -4057,7 +4070,10 @@ private fun TvSettingsBody(
             }
         }
         // Web TV settings draw their primary buttons as a light pill (dark ink in the light theme), not the brand pink.
+        // MaterialTheme re-provides the body text style (the platform font); keep the web font the page already set.
+        val outerTextStyle = androidx.compose.material3.LocalTextStyle.current
         MaterialTheme(
+            typography = MaterialTheme.typography,
             colorScheme = MaterialTheme.colorScheme.copy(
                 primary = if (webIsDark) Color(0xFFDFDCDD) else Color(0xFF675961),
                 onPrimary = if (webIsDark) Color(0xFF151315) else Color.White,
@@ -4065,6 +4081,7 @@ private fun TvSettingsBody(
                 outline = WebInkMuted,
             ),
         ) {
+        androidx.compose.material3.ProvideTextStyle(outerTextStyle) {
         Column(
             Modifier.offset(x = 774.dp, y = 212.dp).width(995.dp),
         ) {
@@ -4089,6 +4106,7 @@ private fun TvSettingsBody(
             }
         }
         }
+        }
     }
 }
 
@@ -4104,20 +4122,21 @@ private fun TvField(
     password: Boolean = false,
     enabled: Boolean = true,
     secret: Boolean = false,
+    textSize: Float = 11f,
 ) {
     androidx.compose.foundation.text.BasicTextField(
         value = value,
         onValueChange = onValueChange,
         enabled = enabled,
         singleLine = singleLine,
-        textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 14.sp),
+        textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = textSize.sp),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
         visualTransformation = if (password || secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.NumberPassword) else if (secret) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
         modifier = modifier.height(height.dp).background(TvSettingsPalette.segment).border(1.dp, TvSettingsPalette.segmentBorder).playarrSingleLineArrowNavigation(),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
-                if (value.isEmpty()) Text(placeholder, color = WebInkMuted, fontSize = 14.sp)
+                if (value.isEmpty()) Text(placeholder, color = WebInkMuted, fontSize = textSize.sp)
                 inner()
             }
         },
@@ -4293,7 +4312,7 @@ private fun <T> SettingChoiceOptions(
         if (cells) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 choices.forEach { (value, choiceLabel) ->
-                    TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(240.dp).height(62.dp)) {
+                    TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(240.dp).height(68.dp)) {
                         Text(choiceLabel, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                 }

@@ -352,18 +352,18 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
     }
 
     val tv = LocalSettingsPlainPanel.current
-    val headingSize = if (tv) 16.sp else androidx.compose.ui.unit.TextUnit.Unspecified
+    val headingSize = if (tv) 22.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified
     if (tv) {
         // Web TV `.settings-remote`: bold 16 px headings, a native checkbox row, and wide gaps between the three groups.
-        Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontSize = headingSize, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 28.dp)) {
+        Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontSize = headingSize, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             androidx.compose.material3.Checkbox(
                 checked = hostEnabled, onCheckedChange = viewModel.controller::setHostEnabled,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
             )
-            Text(playarrString(PlayarrString.RemoteHostToggle), color = WebInk, fontSize = 14.sp)
+            Text(playarrString(PlayarrString.RemoteHostToggle), color = WebInk, fontSize = 19.5.sp)
         }
-        Text(playarrString(PlayarrString.RemoteHostHint), color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 35.dp, bottom = 100.dp))
+        Text(playarrString(PlayarrString.RemoteHostHint), color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp, bottom = 80.dp))
     } else {
         Text(playarrString(PlayarrString.RemoteHostTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -375,7 +375,7 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
 
     Text(playarrString(PlayarrString.RemoteTargetsTitle), color = WebInk, fontSize = headingSize, fontWeight = if (tv) FontWeight.Bold else FontWeight.SemiBold)
     val others = targets.filterNot { it.isSelf }
-    if (others.isEmpty()) Text(playarrString(PlayarrString.RemoteTargetsEmpty), color = WebInkMuted, fontSize = if (tv) 13.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 20.dp) else Modifier)
+    if (others.isEmpty()) Text(playarrString(PlayarrString.RemoteTargetsEmpty), color = WebInkMuted, fontSize = if (tv) 19.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 32.dp) else Modifier)
     val controllerName = viewModel.controller.deviceName()
     others.forEach { target ->
         val existing = viewModel.activePairingFor(target.deviceId)
@@ -408,7 +408,7 @@ internal fun ColumnScope.RemoteSettingsPanel(viewModel: RemoteViewModel = hiltVi
 
     Text(playarrString(PlayarrString.RemotePairingsTitle), color = WebInk, fontSize = headingSize, fontWeight = if (tv) FontWeight.Bold else FontWeight.SemiBold, modifier = if (tv) Modifier.padding(top = 80.dp) else Modifier)
     val live = pairings.filter { it.status == "active" || it.status == "pending" }
-    if (live.isEmpty()) Text(playarrString(PlayarrString.RemotePairingsEmpty), color = WebInkMuted, fontSize = if (tv) 13.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 20.dp) else Modifier)
+    if (live.isEmpty()) Text(playarrString(PlayarrString.RemotePairingsEmpty), color = WebInkMuted, fontSize = if (tv) 19.5.sp else androidx.compose.ui.unit.TextUnit.Unspecified, modifier = if (tv) Modifier.padding(top = 32.dp) else Modifier)
     var renaming by remember { mutableStateOf<Pair<String, String>?>(null) }
     live.forEach { pairing ->
         val editing = renaming?.takeIf { it.first == pairing.id }
