@@ -154,8 +154,8 @@ struct TVAuthedImage<Placeholder: View>: View {
 
 /// Greedy word wrap using the real font metrics, so multi-line titles break where the web's do.
 enum TVTextWrap {
-    static func lines(_ text: String, fontName: String, size: CGFloat, kern: CGFloat, width: CGFloat) -> [String] {
-        guard let font = UIFont(name: fontName, size: size) else { return [text] }
+    static func lines(_ text: String, weight: CGFloat, size: CGFloat, kern: CGFloat, width: CGFloat) -> [String] {
+        let font = TVFontLoader.uiFont(mono: false, size: size, weight: weight)
         func measure(_ value: String) -> CGFloat {
             (value as NSString).size(withAttributes: [.font: font, .kern: kern]).width
         }
@@ -233,7 +233,7 @@ struct TVWebProfileChip: View {
                 .lineLimit(1)
                 .placed(x: 110, y: 1013, w: 48, h: 16.7)
             Text(version)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .font(TVTheme.mono(size: 8, css: 700))
                 .tracking(0.32)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .placed(x: 66.3, y: 1050.5, h: 8)
@@ -337,15 +337,14 @@ struct TVStageWash: View {
 /// The big title of Home, Library and detail: wraps at 379.5 like the web and keeps 62.2px lines.
 struct TVHeroTitle: View {
     var title: String
-    var fontName = "AvenirNext-Medium"
-    var weight: Font.Weight = .medium
+    var cssWeight: CGFloat = 560
 
     var body: some View {
-        let lines = TVTextWrap.lines(title, fontName: fontName, size: 69.12, kern: -4.98, width: 379.5)
+        let lines = TVTextWrap.lines(title, weight: cssWeight, size: 69.12, kern: -4.98, width: 379.5)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(line)
-                    .font(TVTheme.font(size: 69.12, weight: weight))
+                    .font(TVTheme.font(size: 69.12, css: cssWeight))
                     .tracking(-4.98)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)

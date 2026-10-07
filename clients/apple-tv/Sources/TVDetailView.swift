@@ -91,7 +91,7 @@ struct TVWorkDetailView: View {
     // MARK: Copy column
 
     private func titleLines(_ title: String) -> [String] {
-        TVTextWrap.lines(title, fontName: "AvenirNext-DemiBold", size: 69.12, kern: -4.98, width: 379.5)
+        TVTextWrap.lines(title, weight: 560, size: 69.12, kern: -4.98, width: 379.5)
     }
 
     private func kicker(_ text: String) -> some View {
@@ -147,7 +147,7 @@ struct TVWorkDetailView: View {
         if let date = TVWebFormat.date(work.releaseDate) { parts.append(("Released  \(date)", false)) }
         if let genre = work.genres.first { parts.append((genre, false)) }
         let synopsis = work.overview ?? ""
-        let synopsisLines = synopsis.isEmpty ? 0 : max(1, TVTextWrap.lines(synopsis, fontName: "AvenirNext-Regular", size: 12.864, kern: 0, width: 313.3).count)
+        let synopsisLines = synopsis.isEmpty ? 0 : max(1, TVTextWrap.lines(synopsis, weight: 400, size: 12.864, kern: 0, width: 313.3).count)
         let buttonsY = synopsisY + 20.3 * CGFloat(synopsisLines) + 37.8
         return ZStack(alignment: .topLeading) {
             kicker(work.genres.first ?? work.kind.rawValue)
