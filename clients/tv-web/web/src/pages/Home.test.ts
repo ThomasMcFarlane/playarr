@@ -22,6 +22,12 @@ describe("Home layout", () => {
     );
   });
 
+  it("keeps the Customise Home button above the full-height rails layer", () => {
+    const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const z = (selector: string) => Number(new RegExp(`^${selector.replace(".", "\\.")} \\{[^}]*?z-index: (\\d+)`, "m").exec(css)?.[1]);
+    expect(z(".tv-home-customise")).toBeGreaterThan(z(".tv-home-rails"));
+  });
+
   it("shares media-copy layout and typography across home, directories, and details", () => {
     const css = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     const sharedCopyRule = css.match(

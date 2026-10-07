@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- TV Home: the Customise Home button is no longer painted over (and blocked) by the full-height rails layer.
 - Phone profile page: the theme and language selectors sit in the logo row instead of covering the "Who's watching?" heading.
 - TV QR sign-in with an `http://` Playarr Server: the server's default verification page is now its own `/tv/link` (reachable over the same scheme), the hosted `playarr.app/link` page hands off to `http://<server>/tv/link?user_code=...` with a one-step explanation, the hosted link endpoints allow cross-origin calls so that page can report the approval back, and the server-hosted client no longer rewrites a public `http://` address to the relay name.
 - VIDAA (and any HTTPS-hosted launcher): an `http://` Playarr Server now works. The server serves the web client itself at `/tv/` (same scheme as the server, so no mixed content), the image and release tarball ship it as `web/tv/`, and the hosted sign-in links to `http://<server>/tv/` with a one-step explanation when it detects an `http://` server instead of failing silently.

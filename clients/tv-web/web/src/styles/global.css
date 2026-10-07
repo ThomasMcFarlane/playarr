@@ -12613,7 +12613,7 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   position: absolute;
   top: clamp(16px, 2vw, 32px);
   right: clamp(16px, 3vw, 48px);
-  z-index: 3;
+  z-index: 11; /* above .tv-home-rails (10), which otherwise covers the button */
 }
 
 .tv-home-customise-list {
