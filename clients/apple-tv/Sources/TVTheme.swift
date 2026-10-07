@@ -801,26 +801,25 @@ struct TVProfileChip: View {
 /// keeps width 100, optical size 12 and `YTLC` 500 as on the web; its file defaults to weight 200,
 /// so the weight is always set. Falls back to the system font if the files are missing.
 enum TVFontLoader {
-    private static let wght = NSNumber(value: 2003265652) // 'wght'
-    private static let wdth = NSNumber(value: 2003072104) // 'wdth'
-    private static let opsz = NSNumber(value: 1869640570) // 'opsz'
-    private static let ytlc = NSNumber(value: 1498696771) // 'YTLC'
     private static var cache: [String: UIFont] = [:]
 
+    /// Builds the face with the shared `DesignFont` helper (the file `clients/ios/Sources/PlayarrApp/DesignFont.swift`
+    /// is compiled into this target as well). `NunitoSans-wght-web.ttf` has the web's width, optical size and
+    /// YTLC baked in, so only the weight is set. The system font is used only if a face is not registered.
     static func uiFont(mono: Bool, size: CGFloat, weight: CGFloat) -> UIFont {
         let key = "\(mono)-\(size)-\(weight)"
         if let cached = cache[key] { return cached }
-        let family = mono ? "JetBrains Mono" : "Nunito Sans"
-        // `NunitoSans-wght-web.ttf` has the web's width, optical size and YTLC baked in: only the weight is free.
-        let axes: [NSNumber: Any] = [wght: weight]
-        let base = UIFontDescriptor(fontAttributes: [.family: family])
-        let descriptor = base.addingAttributes([
-            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
-        ])
-        var font = UIFont(descriptor: descriptor, size: size)
-        if font.familyName != family {
-            font = UIFont.systemFont(ofSize: size, weight: mono ? .regular : UIFont.Weight(rawValue: (weight - 400) / 500))
-        }
+        let css = Int(weight.rounded())
+        let face = mono
+            ? DesignFont.uiFont(family: "JetBrains Mono", size: size, weight: css, fixedAxes: [:])
+            : DesignFont.uiFont(
+                family: "Nunito Sans",
+                postScriptName: DesignFont.nunitoPostScriptName,
+                size: size,
+                weight: css,
+                fixedAxes: DesignFont.nunitoAxes
+            )
+        let font = face ?? UIFont.systemFont(ofSize: size, weight: mono ? .regular : UIFont.Weight(rawValue: (weight - 400) / 500))
         cache[key] = font
         return font
     }

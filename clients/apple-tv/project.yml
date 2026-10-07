@@ -13,6 +13,7 @@ targets:
     platform: tvOS
     sources:
       - path: Sources
+      - path: ../ios/Sources/PlayarrApp/DesignFont.swift
       - path: Supporting/Assets.xcassets
       - path: ../../docs/parity/fonts/NunitoSans-wght-web.ttf
       - path: ../ios/Resources/Fonts/JetBrainsMono-Variable.ttf
