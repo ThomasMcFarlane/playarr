@@ -141,6 +141,13 @@ for (const s of cfg.screens) {
   await page.waitForTimeout(5000);
   // Artwork loads lazily: wait for every image on the page.
   await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 15000 }).catch(() => {});
+  // Detail pages centre the active track with a scripted scroll: wait until it stops moving.
+  for (let i = 0, last = null, stable = 0; i < 40 && stable < 3; i += 1) {
+    const top = await page.evaluate(() => [...document.querySelectorAll(".tv-rail-surface")].map((e) => e.scrollTop).join(","));
+    stable = top === last ? stable + 1 : 0;
+    last = top;
+    await page.waitForTimeout(500);
+  }
   for (const step of s.web.steps ?? []) await runStep(page, step);
   if (s.web.steps?.length) await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(outDir, `${s.id}.png`) });
