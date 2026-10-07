@@ -433,6 +433,11 @@ jobs:
           args=(); for f in $FILTERS; do args+=(--filter "$f"); done
           pnpm -r "${args[@]}" --if-present run test
 
+      # The exact command the post-merge deploy (web-ci.yml) runs, unconditionally, so a web test
+      # failure there (for example an unbuilt workspace package) is caught before merge.
+      - name: Test web client (deploy parity)
+        run: pnpm --filter @playarr-tv/web run test
+
   # ---------------------------------------------------------------------
   # OpenAPI contract: regenerate the utoipa-derived spec and diff it
   # against the committed copy. Delegates to scripts/openapi-diff-check.sh
