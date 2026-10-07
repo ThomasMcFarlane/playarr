@@ -1,6 +1,6 @@
 # Page layout: one anatomy, enforced
 
-Status: spec, 7 October 2026 (row 800). Web is the source of truth. Applies to every client.
+Status: spec, 7 October 2026 (row 800); owner decisions recorded 7 and 8 October (section 10). Web is the source of truth. Applies to every client.
 
 Owner order: every Playarr page uses one page layout, so page chrome can no longer drift between pages or between clients.
 Trigger: a change restyled the library Filters button to match the Calendar, the reverse of what was asked.
@@ -11,9 +11,11 @@ Trigger: a change restyled the library Filters button to match the Calendar, the
 > A PR that changes them must carry the trailer line `Layout-Change: owner request <date>, reference <screen id or component>` in its body.
 > CI enforces this ([section 7.4](#74-owner-request-gate)).
 
-The **reference** for the action pill is the library Filters button: `.page-filters-button` on web, as it renders on Movies at 1920x1080.
-- Do not restyle it to match anything else. Everything else is restyled to match it.
-- The Android restore of that button (the filter-fix PR, see [section 9](#9-sequencing)) lands before any implementation PR here.
+The **reference** for the action pill (owner decision Q1) is "whatever was on Web a week ago": the web library Filters button as of 30 September 2026, taken from git history. It is used on every client.
+- The pinned commit is `54224f36`, the last `main` commit before the end of 30 September (UTC).
+- At that commit the button is `button.tv-filter-launcher` in `clients/tv-web/web/src/pages/Library.tsx`, styled by the `.tv-filter-launcher` rules in `src/styles/global.css`. Section 2.1 quotes them.
+- It is **not** today's `.page-filters-button` header pill. PR 164 introduced that pill on 4 October, replacing the launcher.
+- Do not restyle the reference to match anything else. Everything else is restyled to match it.
 
 ## 1. Audit summary (7 October 2026)
 
@@ -119,29 +121,59 @@ Gaps:
    - Player.
    - Profile picker, Household gate and pre-auth pages.
    - NotFound.
-2. **Header row geometry is fixed by tokens.** A page cannot move, resize or recolour the header or its controls. No `className` or `Modifier` reaches them.
+2. **Header row geometry is fixed by tokens.** The row grows to the height of the action pill tile (Q9), and Back, the title, the clock and every action centre vertically on the tile. A page cannot move, resize or recolour the header or its controls. No `className` or `Modifier` reaches them.
 3. **Action order, left to right:**
    1. `navigation` group (for example the calendar's ‹ Today ›).
    2. Secondary pills in the order given (Create, Calendar link, Customise Home).
    3. **Filters, always last (rightmost).**
-4. **One `ActionPill` look for every header pill**, matching the reference. The only variants are the ones web has:
-   - `pill`: icon plus label. Icon-only on mobile.
-   - `icon`: round, used by back and the period arrows.
+4. **One `ActionPill` look for every header action**: Filters, Calendar link, Create and Customise Home (owner decision Q3). It is the reference look in section 2.1. The only variants are:
+   - `tile`: the reference, with the icon above a small label. On mobile it is a 44px icon-only square with the same radius.
+   - `icon`: round, used by Back and the period arrows. It stays round (Q10), keeps today's geometry and takes only the shared focus ring (Q2, Q11).
    - `count` badge on Filters.
 5. **Clock.** The global shell clock sits on the header row, left of the rail divider. It is shown on TV and desktop and hidden at ≤1100px with a header, and at ≤760px. Pages never render or position it. `PageHeader` treats it as an obstacle when wrapping the detail text.
 6. **Body.** Exactly one `ScrollArea` per scrollable region. It is a real native scroll container with the edge fades built in. Variants:
    - `panel` (default): the rail panel, `.tv-rail-panel.tv-library-grid-panel` and `--library-rail-*`.
-   - `bleed`: hero, detail, Home and Calendar (see Q5).
+   - `bleed`: hero, detail, Home, Calendar and Folders (Q5).
 7. **States** render inside the body, never instead of the page: `LoadingState`, `EmptyState` and `ErrorState`.
 8. **Safe areas:**
    - The body never draws under the profile chip (`--page-safe-bottom`) or the nav rail (`--page-start`).
    - Phone bodies respect system insets through `PageLayout` only.
 
+### 2.1 The reference action pill (web, commit `54224f36`)
+
+These are the 30 September `.tv-filter-launcher` rules, quoted from `global.css` at that commit. `ActionPill` reproduces this **look** under its own class (`action-pill`). The `tv-filter-launcher` class itself stays banned: its floating position is retired, and the pill lives in the header slot (rule 2.3).
+
+```css
+/* box */
+width: var(--directory-controls-width);          /* clamp(48px, 3.6vw, 62px) */
+min-height: clamp(52px, 5.2vw, 72px);
+display: flex; flex-direction: column; align-items: center; justify-content: center;
+gap: 0.35rem; padding: 0.45rem 0.25rem;
+border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+border-radius: 14px;
+background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+color: var(--ink-muted);
+box-shadow: 0 14px 36px rgba(56, 38, 33, 0.08);
+backdrop-filter: blur(22px) saturate(120%);
+transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+/* icon */  width/height: clamp(18px, 1.4vw, 24px); fill: var(--surface-strong); stroke: currentColor;
+            stroke-width: 1.5; stroke-linecap/linejoin: round;  (same sliders path as today)
+/* label */ font-size: clamp(0.38rem, 0.43vw, 0.52rem); font-weight: 700; letter-spacing: 0.02em;
+/* mobile (≤760px) */ width: 44px; min-height: 44px; padding: 0; border-radius: 14px; label hidden;
+/* open (is-active) */ background: var(--ink); color: var(--bg);
+```
+
+Deliberate departures from the 30 September rules, all owner decisions:
+- **Focus (Q2).** The reference filled with `--ink` and scaled 1.06 on `:focus-visible` and hover. Focus is now the theme focus ring (white in dark, ink in light; section 5, Q11) with **no fill**. The 1.06 scale is kept, drawn as a transform. Hover on pointer devices follows focus.
+- **Open state.** The ink fill for `is-active` (drawer open) is kept. It is not a focus state. Owner decision Q12 (8 October): the drawer-open state keeps its ink fill, and the focus ring draws on top when focused.
+- **Position (Q3).** Every pill sits in the header action slot, not floating at the right edge below the header.
+
+The reference capture is produced in W1 from a build of `54224f36`. It is the TV Movies page, cropped to the launcher, in light and dark, and the mobile layout as well. It is committed as `docs/parity/web/layout/reference/{tv,mobile}/{light,dark}/filters-0930.png` and is the pin for section 7.3.
 ## 3. Tokens
 
 Web tokens are defined once, in `clients/tv-web/web/src/styles/page-layout.css` on `.app-shell`, with mobile overrides under `@media (max-width: 760px)`.
 - They replace the literals listed in section 1.
-- They take their values from today's majority CSS, so adopting them changes no pixels on majority pages.
+- They take their values from today's majority CSS, so adopting them changes no pixels on majority pages. The exceptions are the action-pill tokens (the 30 September reference) and the focus ring (Q2).
 
 Android tokens are `object PlayarrPageTokens` in `core-designsystem/.../designsystem/page/PageTokens.kt`. They are selected by `LocalPlayarrFormFactor` (TV or Phone). The values below are what the scaffold uses today; 1 CSS px is 1 dp on the TV reference.
 
@@ -150,16 +182,20 @@ Android tokens are `object PlayarrPageTokens` in `core-designsystem/.../designsy
 | `--page-header-top` | `clamp(34px, calc(5.2 * var(--viewport-unit)), 66px)` | `calc(var(--mobile-top-inset) + 2px)` | `headerTop` 56 dp | 2 dp + insets |
 | `--page-start` | `max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance))` | `var(--mobile-page-gutter)` (16px) | `start` 154 dp | 16 dp |
 | `--page-end` | `clamp(24px, 4vw, 96px)` | 72px (clear of the avatar) | `end` 72 dp | 72 dp header / 16 dp body |
-| `--page-control-height` | `clamp(38px, 2.8vw, 50px)` | 38px | `control` 50 dp | 38 dp |
-| `--page-pill-icon-only-width` | n/a | 44px | n/a | 44 dp |
+| `--page-control-height` (Back, icon buttons, clock; centred on the pill tile, Q9) | `clamp(38px, 2.8vw, 50px)` | 38px | `control` 50 dp | 38 dp |
+| `--action-pill-width` | `clamp(48px, 3.6vw, 62px)` | 44px | 62 dp | 44 dp |
+| `--action-pill-height` | `clamp(52px, 5.2vw, 72px)` | 44px | 72 dp | 44 dp |
+| `--action-pill-radius` | 14px | 14px | 14 dp | 14 dp |
 | `--page-header-gap` | `clamp(14px, 1.2vw, 24px)` | 10px | 23 dp (web at 1920) | 10 dp |
 | `--page-actions-gap` | `clamp(8px, .8vw, 16px)` | 8px | as web at 1920 (16 dp), pending the restore PR | 8 dp |
 | `--page-header-divider-pad` | 20px | 20px | 20 dp | 20 dp |
 | `--page-body-top` (bleed body; the panel body uses `--library-rail-top`) | `clamp(104px, 15vh, 168px)` | `calc(var(--mobile-top-inset) + 72px)` | today 122 dp; A0 re-measures from the web dom dump | 72 dp |
 | `--page-safe-bottom` | `clamp(92px, 11vh, 124px)` | `var(--mobile-nav-height)` | `safeBottom` 96 dp | 72 dp |
-| `--page-pill-radius` | 999px | 999px | `CircleShape` | `CircleShape` |
-| `--page-focus-ring` | `3px solid var(--ink)`, offset 2px | 2px, offset 3px | 3 dp `ink` border, outset 2 dp | 2 dp, outset 3 dp |
-| `--page-edge-fade` | the panel glow size (current `.tv-library-grid-panel::before/::after`) | same | `edgeFade` from the web dom dump | same |
+| `--page-icon-radius` (Back, arrows) | 50% | 50% | `CircleShape` | `CircleShape` |
+| `--page-focus-ring` | `3px solid var(--focus-ring-color)`, offset 2px | 2px, offset 3px | 3 dp, outset 2 dp | 2 dp, outset 3 dp |
+| `--focus-ring-color` | dark: `#ffffff`; light: the theme `--ink` token, a near-black ink (Q11) | same | dark `Color.White`; light the theme ink colour | same |
+| `--page-header-height` | `max(var(--action-pill-height), var(--page-control-height))`: the row grows to fit the tile (Q9) | same | tile height, 72 dp | 44 dp |
+| `--page-edge-fade` | the rail-panel glow (current `.tv-library-grid-panel::before/::after`), the single fade (Q6) | same | `edgeFade` from the web dom dump | same |
 
 **Colours.** Colours come only from the theme tokens: `--ink`, `--ink-soft`, `--surface-strong`, `--line-strong` and `--danger` on web, and their Android equivalents. They are never hard-coded. The Android palette moves into `core-designsystem/theme/PlayarrWebPalette.kt`:
 - It is backed by an `@Immutable` data class provided through `LocalPlayarrWebPalette`, so that a theme change recomposes.
@@ -213,25 +249,26 @@ export function PageActions(props: { actions: PageAction[] }): JSX.Element;
 // ActionPill.tsx: replaces FiltersButton and PanelButton (kept as deprecated aliases for one PR).
 export type ActionIcon = "filters" | "bell" | "add" | "customise" | "prev" | "next" | "back";
 export interface ActionPillProps {
-  shape?: "pill" | "icon";              // pill = icon+label (icon-only ≤760px); icon = round
+  shape?: "tile" | "icon";              // tile = the reference, icon over label (icon-only ≤760px); icon = round
   icon: ActionIcon;                     // from one icon map, no inline SVG in pages
   label: string;                        // always the accessible name, visible on pill shape
   active?: boolean;                     // open/pressed
   count?: number;                       // Filters badge only
   // as button: onClick + aria-expanded/aria-controls; as link: to
 }
-// Renders <Button variant="secondary" className="action-pill …"> or <ButtonLink>; the CSS is
-// today's .page-filters-button verbatim (renamed; the old class stays as an alias until the guard PR).
+// Renders <Button variant="secondary" className="action-pill …"> or <ButtonLink>; the CSS is the
+// 30 September .tv-filter-launcher look (section 2.1) with the Q2 focus ring, under the action-pill class.
+// .page-filters-button is retired in W1 (every page changes look at once; see section 8).
 
 // ScrollArea.tsx: one scroll container with built-in edge fades.
 export function ScrollArea(props: {
   axis: "vertical" | "horizontal";
   scrollKey: string;                    // data-navigation-scroll-key
-  variant?: "panel" | "track";          // panel = rail-panel glow; track = media-track mask+glow
   className?: string;                   // layout only (grid template); guard forbids colour/fade rules on it
   children: ReactNode;
 }): JSX.Element;
 // Sets data-tv-scroll-container, data-tv-scroll-axis, overflow, and can-scroll-{start,end} from useScrollEdges.
+// One fade on every axis (Q6): the rail-panel glow. The media-track mask and glow and .tv-scroll-edge-window are retired.
 
 // States.tsx
 export function LoadingState(props: { label: string; size?: "page" | "inline" }): JSX.Element; // role=status
@@ -277,7 +314,7 @@ sealed interface PlayarrPageAction {
 
 @Composable fun PlayarrActionPill(        // internal to the page package; screens never call it
     icon: PlayarrActionIcon, label: String, onClick: () -> Unit,
-    shape: PlayarrPillShape = PlayarrPillShape.Pill, active: Boolean = false, count: Int = 0,
+    shape: PlayarrPillShape = PlayarrPillShape.Tile, active: Boolean = false, count: Int = 0,
     focusRequester: FocusRequester? = null,
 )
 
@@ -299,11 +336,12 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
 
 ## 5. Focus (TV, every client)
 
-1. **The focus indicator is a ring, never a fill.** It is `--page-focus-ring`:
-   - 3px of `--ink`, which is white in dark and the dark ink in light, offset 2px.
+1. **The focus indicator is a ring, never a fill** (owner decisions Q2, Q11). It is `--page-focus-ring`:
+   - 3px of `--focus-ring-color`, offset 2px. The colour is white (`#ffffff`) in dark theme and the theme's `--ink` token (near-black) in light theme.
+   - Width, offset and the 1.06 scale are the same in both themes. There is no fill.
    - Phone, mobile and pointer use 2px with a 3px offset.
-
-   The same token is used for back, pills, the nav group and content cards. The one open conflict, Q2, is that web's reference pill also fills with ink on focus and when open.
+   - It is used everywhere: Back, action pills, the navigation group and content cards. **No ink fill on focus.** The fills web has today go, which affects Back, `.page-filters-button`, `.tv-page-back` and `.ui-btn` hover/focus.
+   - Light theme: a white ring would vanish on `--bg` `#f5f3f2` and `--surface-strong` `#ffffff`, so light uses the ink ring (Q11). Every place that used a literal white ring reads `--focus-ring-color` instead.
 2. **D-pad order:**
    - nav rail → Back → (Right) navigation items → secondary pills → Filters.
    - **Down** from any header control enters the content. It goes to the restored focus key if there is one, otherwise to the first item.
@@ -312,7 +350,7 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
    - **Right** from Filters does nothing.
    - The title, detail and clock are never focusable.
 3. **Initial focus** on opening a page goes to content, never to the header. The exception is when the content is in a `LoadingState`, `EmptyState` or `ErrorState`: then it goes to the state's action (Retry) if there is one, otherwise to Back. The series page rule (next episode) is unchanged.
-4. **Focus never moves the header.** Header controls do not scale in a way that shifts siblings. Focus scale, where the reference has it, is drawn with `transform`/`graphicsLayer` only.
+4. **Focus never moves the header.** Header controls do not scale in a way that shifts siblings. The focus scale (1.06 on the action pill, 1.1 on Back) is drawn with `transform`/`graphicsLayer` only.
 5. **Back** (the remote key) closes an open drawer or panel first, then navigates. This is the existing rule.
 
 ## 6. Both themes
@@ -374,9 +412,12 @@ These run in CI through `:app:testSideloadDebugUnitTest`.
 
   Acceptance is **0 mismatched pixels**. Layouts are TV 1920x1080, desktop 1280x720 and mobile 390x844 at DPR 3, in light and dark.
 - **Pill identity.** For every `ActionPill` on every page, crop the pill and diff it against the harness pill with the same icon, label, state and count, at 0 pixels. This catches a restyle even if the page's header band moved as a whole.
-- **Reference pin.** `docs/parity/web/layout/{tv,mobile}/{light,dark}/action-pill-filters.png` and `header-canonical.png` are committed. The job diffs the harness against them at 0 pixels, so the shared component itself cannot change without updating the reference, which falls under 7.4.
+- **Reference pin.** `docs/parity/web/layout/reference/{tv,mobile}/{light,dark}/filters-0930.png` holds the unfocused, closed 30 September launcher (section 2.1). The harness Filters pill in the same state must match it at 0 pixels.
+  - Focus and open states are pinned by `docs/parity/web/layout/{tv,mobile}/{light,dark}/action-pill-{focus,open}.png`, captured from the harness once the Q2/Q11 ring is in.
+  - `header-canonical.png` pins the header band.
+  - The shared component therefore cannot change without updating a reference, which falls under 7.4.
 
-**Android, CI.** Use Roborazzi (Robolectric screenshot tests; JVM-only, so it runs in the existing unit-test task). Q7 covers the alternative.
+**Android, CI.** Use Roborazzi (Robolectric screenshot tests; JVM-only, so it runs in the existing unit-test task). This is coordinator default Q7.
 - Goldens are recorded for `PlayarrPageHeader` and `PlayarrActionPill` in every variant, in TV and phone, light and dark.
 - Golden directory: `clients/android/core-designsystem/src/test/snapshots/`.
 - `verifyRoborazziDebug` is added to the affected-module tasks in `scripts/ci/android-scope.sh`.
@@ -410,13 +451,13 @@ A PR with an unlisted pixel change fails review. Expected intentional changes ar
 | # | PR | Scope | Visual change |
 |---|---|---|---|
 | W0 | ci: run web vitest guards on PRs | ci.yml step, `lint` script, Household registry reason fixed | none |
-| W1 | Shared primitives | `page-layout.css` (tokens; moves the header, pill, clock and panel rules out of `global.css` unchanged); `PageLayout`, `PageActions`, `ActionPill`, `ScrollArea`, the states and the icon map; `FiltersButton`/`PanelButton` become aliases of `ActionPill`; `/__layout/header` harness; `layout-parity.mjs` and the CI job (pill reference pin only); ratchet guards with every page `unmigrated` | none (all references at their current %) |
-| W2 | Library, Playlists, Search | `PageLayout` (panel); Search results onto `ScrollArea`; drop `tv-playlists-heading`/`tv-search-heading` overrides; Library drawer onto `FilterSection` | ⚑ mobile Playlists actions right edge 176px → 72px; ⚑ Search results fade switches to the panel fade (Q6) |
+| W1 | Shared primitives and the reference pill | `page-layout.css` (tokens; moves the header, clock and panel rules out of `global.css` unchanged); `PageLayout`, `PageActions`, `ActionPill` (section 2.1 look), `ScrollArea`, the states and the icon map; `FiltersButton`/`PanelButton` become aliases of `ActionPill`; the theme focus ring (Q2, Q11) on Back, pills and `.ui-btn`; `/__layout/header` harness; reference capture from `54224f36`; `layout-parity.mjs` and the CI job (pill pins); ratchet guards with every page `unmigrated`; web parity references re-captured | ⚑ every Filters, Calendar link and Create pill becomes the 30 September tile (Q1); ⚑ focus is a ring (white in dark, ink in light) with no fill (Q2, Q11); ⚑ the header row grows to the tile height and its items centre on it (Q9). Commit trailer: `Layout-Change: owner request 2026-10-07, reference filters-0930`. |
+| W2 | Library, Playlists, Search | `PageLayout` (panel); Search results onto `ScrollArea`; drop `tv-playlists-heading`/`tv-search-heading` overrides; Library drawer onto `FilterSection` | ⚑ mobile Playlists actions right edge 176px → 72px; ⚑ Search results fade switches to the rail-panel fade (Q6) |
 | W3 | Downloads, Watchlist, Requests, Customise Home page | `PageLayout` (panel); `ScrollArea` fixes the missing overflow; `LoadingState`/`ErrorState`; Downloads offline badge becomes `status` action | ⚑ fades appear; ⚑ loading text becomes `LoadingState` |
-| W4 | Calendar, Folders | `PageShell` → `PageLayout`; navigation rendered once (layout decides header or phone sub-row); Calendar.css focus override removed; `ScrollArea` with `data-tv-scroll-container` | ⚑ fades; body per Q5 |
+| W4 | Calendar, Folders | `PageShell` → `PageLayout(body="bleed")` (Q5); navigation rendered once (layout decides header or phone sub-row); Calendar.css focus override removed; `ScrollArea` with `data-tv-scroll-container` | ⚑ fades |
 | W5 | Settings | `PageLayout`; panel fades wired; `SettingsSectionLayout` props removed or used; section states | ⚑ fades |
-| W6 | Work detail, music detail | `variant: "detail"`; single `<h1>` (body title becomes `h2`, same style); `LoadingState` inside the frame | ⚑ header visible while loading (Q4) |
-| W7 | Home | `header: { kind: "none", actions: [link customise] }` | ⚑ Customise Home moves to the header row as an `ActionPill` (Q3) |
+| W6 | Work detail, music detail; Library loading | `variant: "detail"`; single `<h1>` (body title becomes `h2`, same style); `LoadingState`/`ErrorState` inside the frame, here and on Library | ⚑ header and Back visible while loading and on error (Q4); ⚑ media-track fades become the rail-panel fade (Q6) |
+| W7 | Home; Household | Home `header: { kind: "none", actions: [link customise] }`; Household gets the standard Back (Q8), still registry-exempt for the rest | ⚑ Customise Home moves to the header row as a standard `ActionPill` (Q3); ⚑ Household Back |
 | W8 | Guards final | Remove aliases, `PageShell`, `TvStageShell`, `TvDetailHeading` and dead CSS (`.tv-home-rail-window`, `.page-header-actions.is-stacked`, `--page-safe-left`, duplicate `--library-rail-*`); ratchet list empty; header-band CI over all pages; owner-request gate | none |
 
 ### Android (`clients/android`)
@@ -427,12 +468,12 @@ Coordinate with the D-pad/focus, calendar, parity-residue and player workers. Ke
 |---|---|---|---|
 | A0 | Palette and tokens into core-designsystem | `PlayarrWebPalette` (CompositionLocal, `WebAccent` rename), `PlayarrPageTokens`, `LocalPlayarrFormFactor` provided in `MainActivity` | none |
 | A1 | Page components | `page/` package (section 4.2); `PlayarrPageScaffold` reimplemented on top (same signature) so no screen changes; Roborazzi goldens; order and icon tests | none, except ⚑ phone Create pill shows the add glyph (bug) |
-| A2 | Pills | Library, Playlists and Folders Filters, Calendar Bell, Search TV and phone pills onto `PlayarrPageAction`; Search's absolute-offset pill into the header slot (keep `PlayarrSearchFocusOrderTest` contract) | ⚑ focus ring on header pills (rule 5.1); ⚑ Search pills match the reference |
-| A3 | States | `Experience*`/`Parity*`/`Folders*`/Calendar inline → `PlayarrLoadingState`/`EmptyState`/`ErrorState` inside the frame | ⚑ header visible while loading (Q4) |
+| A2 | Pills | Library, Playlists and Folders Filters, Calendar Bell, Search TV and phone pills onto `PlayarrPageAction`; Search's absolute-offset pill into the header slot (keep `PlayarrSearchFocusOrderTest` contract); theme focus ring (white dark, ink light) on Back and every pill, no focus fill | ⚑ every header pill becomes the 30 September tile (Q1); ⚑ theme focus ring (Q2, Q11); ⚑ header row grows to the tile height (Q9) |
+| A3 | States | `Experience*`/`Parity*`/`Folders*`/Calendar inline → `PlayarrLoadingState`/`EmptyState`/`ErrorState` inside the frame | ⚑ header and Back visible while loading and on error (Q4) |
 | A4 | Hero pages | Library, Search, Detail, Music detail onto `PlayarrPageLayout(body = Bleed)`; all `154.dp` and bottom-padding literals → tokens | ⚑ music detail TV inset 118 → 154 dp |
 | A5 | List pages | Watchlist, Requests, Guardian approvals, Downloads, Playlists (+ detail), Folders, Settings onto `PlayarrPageLayout` and `PlayarrScroll*` | ⚑ fades |
 | A6 | Calendar | Header actions and `trailingNav` → `Navigation` action; scroll areas (with the calendar worker) | ⚑ fades |
-| A7 | Home and cleanup | Customise Home as `Link` action (one implementation, Q3); delete `PlayarrPageScaffold`, `PlayarrPageHeader` (dead), header pill code; ratchet empty; owner-request gate covers `page/` | ⚑ Customise Home position |
+| A7 | Home and cleanup | Customise Home as `Link` action (one implementation, Q3); Household standard Back (Q8); delete `PlayarrPageScaffold`, `PlayarrPageHeader` (dead), header pill code; ratchet empty; owner-request gate covers `page/` | ⚑ Customise Home position and look; ⚑ Household Back |
 
 ### Other clients
 
@@ -452,23 +493,35 @@ Native clients implement one `PageLayout`/`PageHeader`/`ActionPill`/`ScrollArea`
 
 ## 9. Sequencing
 
-1. **The filter-fix PR lands first.** It is another worker's: it restores the library Filters style and makes the Calendar's Filters and Calendar-link buttons match it. W1 and A1 start from main after it lands. W1's pill reference pin is captured from that main, so the reference is whatever the owner accepted there.
-2. W0 can land immediately. It changes no pixels and turns on the guards that already exist.
+1. **The filter-fix PR lands first.** It is another worker's: it restores the library Filters style and makes the Calendar's Filters and Calendar-link buttons match it. Its target must be the Q1 reference (section 2.1), not today's `.page-filters-button` pill or Android's pre-#154 button. If it restores anything else, W1 and A2 restyle it again. W1 and A1 start from main after it lands.
+2. W0 landed in #196.
 3. Web PRs go before the matching Android PRs. Android diffs against the web references, which must not move underneath it.
 4. Each migration PR rebases often. The page files are shared with the parity, calendar and focus workers, and the merge train only merges `main` in when the PR's files are touched.
 
-## 10. Open questions for the owner
+## 10. Owner decisions
 
-| # | Question | Proposal |
-|---|---|---|
-| Q1 | **Which Android Filters look is "the original"?** Before #154 it was `PlayarrButton` Secondary (TV 44 dp, 18 dp icon, 14 sp semibold, 3 dp primary ring, 1.04 scale). #154 made it a 50 dp outlined glass pill measured from web's `.page-filters-button`, which is closer to the web reference, and dropped the focus ring. | The web Library Filters (`.page-filters-button`) is the reference on every client. Android keeps the 50 dp web geometry and gets the ring back. Confirm the filter-fix PR does this, not the pre-#154 Material button. |
-| Q2 | **Focus: ring or fill?** The reference web pill and back button fill with `--ink` on focus (back also scales 1.1). The owner's TV rule says a white ring, never a fill. | Ring on focus (`--page-focus-ring`); ink fill only for `active` (drawer open). This changes the web reference's focus state, so it needs an explicit owner yes. Until then, keep web as is. |
-| Q3 | **Move Customise Home** onto the header row as an `ActionPill` (icon plus label, 50px, glass), from its own spot 16–32px from the top. | Yes: it is the only header pill outside the slot. |
-| Q4 | **Header while loading:** Library, the detail pages and Android Home, Library, Detail and Playlist detail currently replace the whole page while loading or erroring, with no back control. | Always render the header; states go in the body. |
-| Q5 | **Calendar and Folders body:** move them into the rail panel like Library, or keep the full-bleed body? | Keep `bleed` (Calendar was redesigned for it); fades still apply. |
-| Q6 | **One vertical fade:** the panel radial glow (Library, Playlists) or the `.tv-scroll-edge-window` fade (Search, music tracks)? | Panel glow for vertical and the media-track mask and glow for horizontal rails: one per axis. |
-| Q7 | **Android CI screenshots:** add Roborazzi (a new test dependency, JVM-only), or run an emulator in CI (slow on hosted runners)? | Roborazzi for components; emulator header-band diffs stay per-PR evidence. |
-| Q8 | **Exemptions stay exempt:** Profiles, Household gate, Clients, Legal, pre-auth, NotFound and Player. | Yes, but Household gets the standard Back (it now has a text link at the bottom). |
+Answered on 7 October 2026 (Q1 to Q8). **Owner** rows are owner decisions. **Default** rows are coordinator defaults, which the owner may override; an override is an owner request under 7.4.
+
+| # | Question | Decision | Effect on this spec |
+|---|---|---|---|
+| Q1 | Which Filters look is the reference? | **Owner:** "whatever was on Web a week ago": web's library Filters button as of about 30 September 2026, from git history, used on every client. | Section 2.1: the `.tv-filter-launcher` tile at `54224f36`. It is neither today's `.page-filters-button` nor Android's pre-#154 button. W1 and A2 change every header pill to it. |
+| Q2 | Focus: ring or fill? | **Owner:** the ring everywhere, including pills and Back. No ink fill on focus. | Section 5.1 and tokens (`--focus-ring-color`: white in dark, `--ink` in light, per Q11). The fills on Back, pills and `.ui-btn` go in W1. |
+| Q3 | Customise Home in the header row? | **Owner:** yes, as a standard pill. | W7 and A7. |
+| Q4 | Header while loading or failed? | **Owner:** the header and Back always show. | Rule 2.7; W6 and A3. |
+| Q5 | Calendar and Folders body? | **Default:** keep the full-bleed body. | W4 uses `body="bleed"`; edge fades still apply. |
+| Q6 | One edge fade? | **Default:** the web rail fade becomes the single shared edge fade. | Read as the rail-panel glow (`.tv-rail-panel.tv-library-grid-panel::before/::after`) on every axis. `ScrollArea` loses its `track` variant, and the media-track mask and glow and `.tv-scroll-edge-window` are retired (W2, W6). If "rail fade" meant the Home rails' media-track fade, only the fade CSS in W1 changes. |
+| Q7 | Android CI screenshots? | **Default:** Roborazzi. | Section 7.3. |
+| Q8 | Exemptions? | **Default:** keep them; Household gets a standard Back. | W7 and A7. |
+
+Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
+
+| # | Question | Decision | Effect on this spec |
+|---|---|---|---|
+| Q1 | Reference look (confirmed) | **Owner, confirmed:** the 30 September `.tv-filter-launcher` tile (commit `54224f36`) is the reference look for every header action pill on every client. | Section 2.1 stands. |
+| Q9 | Header row height | **Owner:** the header row grows to fit the tile, and all items centre vertically on the tile. | Rule 2.2 and the `--page-header-height` token. Back, title, clock and actions centre on the tile height. Each page's ⚑ list states the shift. |
+| Q10 | Back and period arrows | **Owner:** they stay round. Only the focus ring is added. | Rule 2.4 `icon` variant. They do not take the tile look. |
+| Q11 | Focus ring in the light theme | **Owner:** the ring is white (`#ffffff`) in dark theme and a near-black ink ring in light theme (the theme's ink token). Width, offset and the 1.06 scale are unchanged, with no fill. | Section 5.1 and the `--focus-ring-color` token. Wherever the spec said "literal white" or "white everywhere", it now reads as this theme-aware ring. |
+| Q12 | Drawer-open state | **Owner:** the drawer-open state keeps its ink fill. | Section 2.1. The ring draws on top when focused. |
 
 ## Appendix A: audit inventory
 

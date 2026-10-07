@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Windows.UI.Core;
@@ -301,8 +302,18 @@ namespace Playarr.Xbox.Views
             }
         }
 
-        private void Window_VisibilityChanged(object sender, VisibilityChangedEventArgs e) =>
+        private void Window_VisibilityChanged(object sender, VisibilityChangedEventArgs e)
+        {
             _viewModel?.SetCountdownPaused(!e.Visible);
+            if (!e.Visible && _viewModel is not null)
+            {
+                // Minimised or backgrounded: pause and save the position now.
+                _ = _viewModel.PauseAndFlushProgressAsync();
+            }
+        }
+
+        /// <summary>Pauses and awaits a progress save; called from the app's suspend handler.</summary>
+        public Task FlushProgressAsync() => _viewModel?.PauseAndFlushProgressAsync() ?? Task.CompletedTask;
 
         private void RenderSuggestions()
         {

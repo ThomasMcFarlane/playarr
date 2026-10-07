@@ -72,7 +72,9 @@ jobs:
         run: pnpm --filter './packages/**' run build
 
       - name: Test Samsung AVPlay adapter
-        run: pnpm --filter @playarr-tv/player-avplay run test
+        run: |
+          pnpm --filter @playarr-tv/player-avplay run test
+          pnpm --filter @playarr-tv/ui-tv run test
 
       - name: Test package gates
         run: |

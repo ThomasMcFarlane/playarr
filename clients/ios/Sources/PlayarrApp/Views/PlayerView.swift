@@ -58,14 +58,11 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            switch viewModel?.loadState {
-            case nil, .idle, .loadingPlaybackInfo:
-                VStack(spacing: 14) {
-                    ProgressView().tint(.white).controlSize(.large)
-                    Text("Preparing playback…")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
+            // Play opens the player directly: a black stage with at most the small
+            // buffering spinner while the session and stream are negotiated.
+            switch PlayerStagePhase.resolve(viewModel?.loadState) {
+            case .stage:
+                ProgressView().tint(.white).controlSize(.large)
             case .failed(let message):
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
@@ -90,12 +87,12 @@ struct PlayerView: View {
                     } else {
                         VideoPlayer(player: viewModel.avPlayer)
                         .ignoresSafeArea()
-                        .onTapGesture { withAnimation { controlsVisible.toggle() } }
+                        .onTapGesture { withAnimation(PlayerStagePhase.controlsAnimation) { controlsVisible.toggle() } }
                     }
 
                     if controlsVisible {
                         controls(viewModel)
-                            .transition(.opacity)
+                            .transition(PlayerStagePhase.controlsTransition)
                     }
                 }
             }
@@ -143,6 +140,7 @@ struct PlayerView: View {
         }
         // Countdown pauses (does not reset) while the app is backgrounded.
         .onChange(of: scenePhase) { _, phase in
+            if phase != .active { viewModel?.didEnterBackground() }
             guard let controller = viewModel?.endOfPlayback else { return }
             if phase == .active { controller.resumeTimer() } else { controller.stopTimer() }
         }
@@ -343,4 +341,24 @@ struct PlayerView: View {
         let totalSeconds = Int(seconds)
         return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
+}
+
+/// What the player stage shows for a load state. There is no interstitial: every
+/// state before playback is the black stage (with the buffering spinner).
+enum PlayerStagePhase: Equatable {
+    case stage
+    case failed(String)
+    case playing
+
+    static func resolve(_ loadState: PlayerViewModel.LoadState?) -> PlayerStagePhase {
+        switch loadState {
+        case nil, .idle?, .loadingPlaybackInfo?: return .stage
+        case .failed(let message)?: return .failed(message)
+        case .playing?: return .playing
+        }
+    }
+
+    /// The controls card rises from the bottom edge and recedes downward (web: 240 ms ease).
+    static let controlsTransition: AnyTransition = .move(edge: .bottom).combined(with: .opacity)
+    static let controlsAnimation: Animation = .timingCurve(0.25, 0.1, 0.25, 1, duration: 0.24)
 }

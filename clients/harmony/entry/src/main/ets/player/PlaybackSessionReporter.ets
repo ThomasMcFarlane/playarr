@@ -78,7 +78,7 @@
 
 import { sendPlaybackSessionEvent, putWatchProgress } from '../data/PlaybackRepository';
 
-import { reportedPositionMs } from '../core/PlaybackMath.ts';
+import { reportedPositionMs, shouldCheckpointProgress } from '../core/PlaybackMath.ts';
 import {
   PlaybackEventKind,
   PlaybackEventStart,
@@ -150,6 +150,7 @@ export class PlaybackSessionReporter {
   private coalescedNext: PlaybackEventKind | null = null;
   private sendChain: Promise<void> = Promise.resolve();
   private tornDown: boolean = false;
+  private playbackStarted: boolean = false;
 
   constructor(sessionId: string, sourceOffsetMs: number, mediaFileId: string, durationMs: number) {
     this.sessionId = sessionId;
@@ -170,6 +171,7 @@ export class PlaybackSessionReporter {
    * first succeeds. There is no separate start-session call -- the
    * session already exists from the negotiation GET. */
   public reportStart(): void {
+    this.playbackStarted = true;
     const event: PlaybackEventStart = { kind: 'start' };
     this.enqueue(event);
   }
@@ -206,6 +208,7 @@ export class PlaybackSessionReporter {
   /** `{"kind":"resume","position_ms":...}` (brief 4.12): call on the
    * paused-to-playing transition. */
   public reportResume(positionMs: number): void {
+    this.playbackStarted = true;
     const event: PlaybackEventResume = {
       kind: 'resume',
       position_ms: reportedPositionMs(positionMs, this.sourceOffsetMs),
@@ -302,11 +305,19 @@ export class PlaybackSessionReporter {
     if (outcome.kind === 'stop') {
       const stopEvent: PlaybackEventStop = { kind: 'stop', reason: outcome.reason, position_ms: reported };
       await this.sendOne(stopEvent);
-      this.putProgress(reported);
+      // Awaited so the resume point is saved before the page goes away.
+      await this.putProgress(reported);
     } else {
       const errorEvent: PlaybackEventError = { kind: 'error', message: outcome.message };
       await this.sendOne(errorEvent);
+      await this.putProgress(reported);
     }
+  }
+
+  /** Awaitable progress save for background/minimise. A no-op until
+   * playback has started and while the position is 0. */
+  public flushProgress(positionMs: number): Promise<void> {
+    return this.putProgress(reportedPositionMs(positionMs, this.sourceOffsetMs));
   }
 
   /** Starts sending `event` immediately if idle, or overwrites
@@ -368,11 +379,11 @@ export class PlaybackSessionReporter {
    * an unresolved (`duration_ms === 0`, not yet reconciled via
    * `core/PlaybackMath.ts#resolveDurationMs`) or live (`-1`) duration has
    * no meaningful `completed` threshold to compute. */
-  private putProgress(reportedPositionValue: number): void {
-    if (this.currentDurationMs <= 0) {
-      return;
+  private putProgress(reportedPositionValue: number): Promise<void> {
+    if (this.currentDurationMs <= 0 || !shouldCheckpointProgress(this.playbackStarted, reportedPositionValue)) {
+      return Promise.resolve();
     }
-    this.sendProgressCheckpoint(reportedPositionValue);
+    return this.sendProgressCheckpoint(reportedPositionValue);
   }
 
   /** The actual checkpoint call, isolated from `putProgress()` so the

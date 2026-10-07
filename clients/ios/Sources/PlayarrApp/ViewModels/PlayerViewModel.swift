@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import Observation
 import PlayarrKit
+import UIKit
 
 struct NativePlayerDefaults: Equatable {
     static let qualityKey = "com.playarr.ios.player.quality"
@@ -305,8 +306,9 @@ public final class PlayerViewModel {
     /// `CastSessionCoordinator.endSession(reason:)` (from the "Now
     /// casting" card or `RootView`'s persistent affordance), never this
     /// method; see `viewDidDisappear()`.
-    public func stop() {
-        guard !isCasting else { return }
+    @discardableResult
+    public func stop() -> Task<Void, Never> {
+        guard !isCasting else { return Task {} }
         let sessionID = activeSessionID
         let mediaFileID = activeMediaFileID
         let position = positionMS
@@ -318,16 +320,51 @@ public final class PlayerViewModel {
         playbackMode = nil
         activeSessionID = nil
         activeMediaFileID = nil
-        if let sessionID {
-            Task { try? await apiClient.recordPlaybackEvent(sessionID: sessionID, event: PlaybackEventRequest(kind: "stop", positionMS: position, reason: "user_stopped")) }
-        }
-        if let mediaFileID, duration > 0 {
-            Task {
-                try? await apiClient.updateWatchProgress(
+        let completed = duration > 0 && position >= duration - 30_000
+        return runGuaranteed { [apiClient] in
+            // Progress first, awaited, so the detail page never reads a
+            // stale resume point. Never written when playback never started.
+            if let mediaFileID, duration > 0, Self.shouldWriteProgress(positionMS: position, completed: completed) {
+                _ = try? await apiClient.updateWatchProgress(
                     mediaFileID: mediaFileID,
-                    body: UpdateWatchProgressRequest(positionMS: position, durationMS: duration, completed: position >= duration - 30_000)
+                    body: UpdateWatchProgressRequest(positionMS: position, durationMS: duration, completed: completed)
                 )
             }
+            if let sessionID {
+                try? await apiClient.recordPlaybackEvent(sessionID: sessionID, event: PlaybackEventRequest(kind: "stop", positionMS: position, reason: "user_stopped"))
+            }
+        }
+    }
+
+    /// Stops and returns only once the progress write has been delivered.
+    public func stopAndFlush() async { await stop().value }
+
+    /// App left the foreground: pause and flush the position under a
+    /// background task so the write survives suspension.
+    public func didEnterBackground() {
+        guard !isCasting else { return }
+        if engineState == .playing { engine.pause() }
+        persistProgress()
+    }
+
+    /// A zero position without completion means playback never started (or a
+    /// stalled resume); writing it would wipe the server's resume point.
+    nonisolated static func shouldWriteProgress(positionMS: Int64, completed: Bool) -> Bool {
+        completed || positionMS > 0
+    }
+
+    /// Runs `work` under a UIKit background task so it finishes even if the
+    /// app is suspended or the view is torn down meanwhile.
+    private func runGuaranteed(_ work: @MainActor @escaping () async -> Void) -> Task<Void, Never> {
+        let app = UIApplication.shared
+        var taskID = UIBackgroundTaskIdentifier.invalid
+        taskID = app.beginBackgroundTask(withName: "playarr.progress-flush") {
+            app.endBackgroundTask(taskID)
+            taskID = .invalid
+        }
+        return Task { @MainActor in
+            await work()
+            if taskID != .invalid { app.endBackgroundTask(taskID) }
         }
     }
 
@@ -438,7 +475,8 @@ public final class PlayerViewModel {
                 event: PlaybackEventRequest(kind: "heartbeat", positionMS: positionMS)
             )
         }
-        if let mediaFileID = activeMediaFileID, durationMS > 0 {
+        if let mediaFileID = activeMediaFileID, durationMS > 0,
+           Self.shouldWriteProgress(positionMS: positionMS, completed: positionMS >= durationMS - 30_000) {
             _ = try? await apiClient.updateWatchProgress(
                 mediaFileID: mediaFileID,
                 body: UpdateWatchProgressRequest(
@@ -451,7 +489,7 @@ public final class PlayerViewModel {
     }
 
     private func persistProgress() {
-        Task { await heartbeat() }
+        _ = runGuaranteed { [weak self] in await self?.heartbeat() }
     }
 
     private func sendEvent(_ event: PlaybackEventRequest) {

@@ -38,8 +38,8 @@ namespace Playarr.Core.Models
     {
         Unknown = 0,
 
-        [EnumMember(Value = "unwatched")] Unwatched,
-        [EnumMember(Value = "in_progress")] InProgress,
+        [EnumMember(Value = "unseen")] Unwatched,
+        [EnumMember(Value = "part_watched")] InProgress,
         [EnumMember(Value = "watched")] Watched,
     }
 

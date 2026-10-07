@@ -37,13 +37,8 @@
  *  - `stop()` pauses playback, closes the current analytics session,
  *    flushes final watch progress, and hides the surface -- the real "stop
  *    and go back" action. This screen's own Back-button handling calls
- *    `hide()`, not `stop()` (matching tv-web's own Back-vs-Stop distinction
- *    in `pages/Player.tsx`: Back minimises, a dedicated Stop control -- the
- *    transport bar's Stop button below -- actually stops); a shell that
- *    knows it is playing VIDEO (as opposed to `MusicDetailScreen`'s
- *    inline-music case) rather than this component should decide whether
- *    its own Back handling should call `stop()` instead, since this
- *    component has no way to know which kind of content it is showing.
+ *    `stop()` (after the controls overlay has been dismissed): exiting
+ *    playback must stop audio and video and flush progress, awaited.
  *  - `isVisible()` lets the shell avoid remounting or re-showing a player
  *    that is already visible for the same title.
  * =============================================================================
@@ -75,6 +70,7 @@ import {VegaVideoSurface} from '../platform/media/VegaVideoSurface';
 import {VEGA_PLAYBACK_CAPABILITIES} from '../lib/playbackCapabilities';
 import {clearActivePlayerSession, readActivePlayerSession, writeActivePlayerSession} from '../lib/playerSession';
 import {colour} from '../theme/tokens';
+import {resumeSecondsFromServer, settleWithin, shouldWriteProgress} from '../lib/progressRules';
 import {resolveBack, showSpinner} from './playerStage';
 import {sh, sw} from '../theme/scale';
 
@@ -88,7 +84,8 @@ export interface PlayerLaunchOptions {
 export interface PlayerScreenHandle {
   show(mediaFileId: string, options?: PlayerLaunchOptions): void;
   hide(): void;
-  stop(): void;
+  /** Resolves once the final progress write and session close have settled (bounded). */
+  stop(): Promise<void>;
   isVisible(): boolean;
 }
 
@@ -168,29 +165,41 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
   useEffect(() => engine.onStateChange(setEngineState), [engine]);
 
+  // True once this load really reached "playing"; a stalled or failed start
+  // must never write position 0 or overwrite the server's resume point.
+  const playbackStartedRef = useRef(false);
+  useEffect(() => {
+    if (engineState.state === 'playing') playbackStartedRef.current = true;
+  }, [engineState.state]);
+
   const flushProgress = useCallback(
-    (completed: boolean) => {
-      if (!mediaFileId) return;
+    (completed: boolean): Promise<void> => {
+      if (!mediaFileId) return Promise.resolve();
       const {positionMs, durationMs} = latestPlaybackRef.current;
-      if (positionMs <= 0 && !completed) return;
-      void client.updateWatchProgress(mediaFileId, {positionMs, durationMs, completed}).catch(() => {
-        // Progress must never interrupt playback -- the next heartbeat or
-        // state transition retries with the latest position.
-      });
+      if (!shouldWriteProgress({positionMs, completed, playbackStarted: playbackStartedRef.current})) {
+        return Promise.resolve();
+      }
+      return client
+        .updateWatchProgress(mediaFileId, {positionMs, durationMs, completed})
+        .then(() => undefined)
+        .catch(() => {
+          // Progress must never interrupt playback -- the next heartbeat or
+          // state transition retries with the latest position.
+        });
     },
     [client, mediaFileId]
   );
 
   const closeSession = useCallback(
-    (event: PlaybackEventKind, completed: boolean) => {
+    (event: PlaybackEventKind, completed: boolean): Promise<void> => {
       const session = sessionRef.current;
-      if (!session || session.closed) return;
+      if (!session || session.closed) return Promise.resolve();
       session.closed = true;
-      flushProgress(completed);
-      void client.recordPlaybackEvent(session.sessionId, event).catch(() => {
-        // Teardown stays best-effort: closing the player must not be
-        // blocked by a network call that may never resolve.
+      const saved = flushProgress(completed);
+      const closed = client.recordPlaybackEvent(session.sessionId, event).catch(() => {
+        // Teardown stays best-effort: a dead network must not wedge the exit.
       });
+      return Promise.all([saved, closed]).then(() => undefined);
     },
     [client, flushProgress]
   );
@@ -220,20 +229,33 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
     // a different title while one was already playing) before starting the
     // new one -- VegaPlaybackEngine.load() itself handles tearing down the
     // previous native player; this is the analytics-session half of that.
+    // `flushProgress` is bound to the NEW media id here, so never write the old position to it.
+    playbackStartedRef.current = false;
     closeSession({kind: 'stop', position_ms: latestPlaybackRef.current.positionMs, reason: 'user_stopped'}, false);
 
     engine.setPlaybackSessionId(info.session_id);
     sessionRef.current = {sessionId: info.session_id, mediaFileId, startedEvent: false, closed: false};
 
+    playbackStartedRef.current = false;
     const persisted = readActivePlayerSession(userId);
-    const startPositionSeconds =
-      launchOptions.startPositionSeconds ??
-      (persisted?.mediaFileId === mediaFileId ? persisted.startPositionSeconds : undefined);
+    const localSeconds = persisted?.mediaFileId === mediaFileId ? persisted.startPositionSeconds : undefined;
 
-    writeActivePlayerSession(userId, {mediaFileId, startPositionSeconds, title: launchOptions.title});
+    // Resume point: an explicit launch position, else the server's row (the
+    // same call the web client makes), else the local session if the server
+    // could not be reached.
+    const resolveStart: Promise<number | undefined> =
+      launchOptions.startPositionSeconds !== undefined
+        ? Promise.resolve(launchOptions.startPositionSeconds)
+        : client.getWatchProgress(mediaFileId).then(
+            (progress) => resumeSecondsFromServer(progress),
+            () => localSeconds
+          );
 
-    void engine
-      .load({url: client.resolveUrl(info.url), mimeType: info.mime_type, startPositionSeconds})
+    void resolveStart
+      .then((startPositionSeconds) => {
+        writeActivePlayerSession(userId, {mediaFileId, startPositionSeconds, title: launchOptions.title});
+        return engine.load({url: client.resolveUrl(info.url), mimeType: info.mime_type, startPositionSeconds});
+      })
       .then(async () => {
         if (info.subtitle_tracks.length === 0) return;
         await engine.addExternalSubtitleTracks(
@@ -308,13 +330,19 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   useEffect(() => {
     if (wasForegroundRef.current && !foreground && engineState.state === 'playing') {
       void engine.pause();
+      void flushProgress(false);
     }
     wasForegroundRef.current = foreground;
-  }, [foreground, engine, engineState.state]);
+  }, [foreground, engine, engineState.state, flushProgress]);
 
-  const stop = useCallback(() => {
-    void engine.pause();
-    closeSession({kind: 'stop', position_ms: latestPlaybackRef.current.positionMs, reason: 'user_stopped'}, false);
+  const stop = useCallback((): Promise<void> => {
+    // Pause first so audio and video stop at once, then close the session and
+    // flush progress; the returned promise is the awaited, bounded save.
+    const paused = engine.pause().catch(() => undefined);
+    const closed = closeSession(
+      {kind: 'stop', position_ms: latestPlaybackRef.current.positionMs, reason: 'user_stopped'},
+      false
+    );
     clearActivePlayerSession();
     setVisible(false);
     // Clearing `mediaFileId` (rather than leaving it set) is what makes a
@@ -326,6 +354,7 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
     // `session_id` the loading effect above will treat as fresh.
     setMediaFileId(null);
     loadedSessionIdRef.current = null;
+    return settleWithin(Promise.all([paused, closed]), 4000);
   }, [engine, closeSession]);
 
   const show = useCallback((id: string, options?: PlayerLaunchOptions) => {
@@ -351,8 +380,8 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
       setControlsVisible(false);
       return true;
     }
-    hide();
-    onClose?.();
+    // BACK exits playback: stop audio and video and flush progress first.
+    void stop().then(() => onClose?.());
     return true;
   });
 

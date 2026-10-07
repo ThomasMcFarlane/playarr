@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ApiClient } from "@playarr-tv/api-client";
 import { usePlaybackInfo, type PlaybackCapabilities } from "@playarr-tv/api-client/react";
 import type { PlaybackEngine } from "@playarr-tv/player-core";
 import { AsyncStateMessage } from "../lib/AsyncStateMessage";
 import { mimeTypeForPlaybackMode } from "../lib/playback";
+import { fetchResumeSeconds, ProgressReporter } from "../lib/progress";
 import { PlayerScreen } from "./PlayerScreen";
 
 export interface PlayerScreenContainerProps {
@@ -34,18 +35,57 @@ export function PlayerScreenContainer({
   const state = usePlaybackInfo(client, mediaFileId, capabilities);
   const loadedForUrl = useRef<string | null>(null);
 
+  const reporterRef = useRef<ProgressReporter | null>(null);
+
   useEffect(() => {
     if (state.status !== "ready") return;
     if (loadedForUrl.current === state.data.url) return;
     loadedForUrl.current = state.data.url;
+    const url = state.data.url;
+    const mode = state.data.mode;
 
-    void engine
-      .load({
-        url: client.resolveUrl(state.data.url),
-        mimeType: mimeTypeForPlaybackMode(state.data.mode),
-      })
-      .then(() => engine.play());
-  }, [state, engine, client]);
+    void fetchResumeSeconds(client, mediaFileId).then(async (startPositionSeconds) => {
+      if (loadedForUrl.current !== url) return;
+      const reporter = new ProgressReporter(client, mediaFileId, engine);
+      reporter.start();
+      reporterRef.current = reporter;
+      await engine.load({
+        url: client.resolveUrl(url),
+        mimeType: mimeTypeForPlaybackMode(mode),
+        startPositionSeconds,
+      });
+      await engine.play();
+    });
+  }, [state, engine, client, mediaFileId]);
+
+  // Flush on exit, on the page going to the background and when unmounting
+  // for any other reason, then stop playback so audio never outlives the screen.
+  const finish = useCallback(async () => {
+    const reporter = reporterRef.current;
+    reporterRef.current = null;
+    if (reporter) {
+      await reporter.flush();
+      reporter.dispose();
+    }
+    await engine.pause().catch(() => undefined);
+  }, [engine]);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") void reporterRef.current?.flush();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", onHidden);
+      void finish();
+    };
+  }, [finish]);
+
+  const handleExit = useCallback(() => {
+    void finish().finally(() => onExit?.());
+  }, [finish, onExit]);
 
   // Loading and idle fall through to the player itself: Play opens the player
   // straight away, with no interstitial while the session is negotiated.
@@ -56,5 +96,5 @@ export function PlayerScreenContainer({
     return <AsyncStateMessage kind="empty" message="No playable source was returned for this title." />;
   }
 
-  return <PlayerScreen engine={engine} title={title} onExit={onExit} />;
+  return <PlayerScreen engine={engine} title={title} onExit={onExit ? handleExit : undefined} />;
 }

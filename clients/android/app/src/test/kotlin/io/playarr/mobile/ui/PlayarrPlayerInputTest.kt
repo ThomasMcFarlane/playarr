@@ -68,4 +68,57 @@ class PlayarrPlayerInputTest {
         assertEquals("Original", playarrQualityLabel("Original", 0L, true))
         assertEquals("FHD Medium", playarrQualityLabel("FHD Medium", 8_000_000L, false))
     }
+
+    @Test
+    fun `back closes the open panel first, then the controls, then exits`() {
+        // Episodes / playlist panel
+        assertEquals(PlayarrPlayerBackAction.ClosePlaylist, playarrPlayerBackAction(playlistOpen = true, menuOpen = false, controlsVisible = true))
+        // Quality / audio / subtitles menu
+        assertEquals(PlayarrPlayerBackAction.CloseMenu, playarrPlayerBackAction(playlistOpen = false, menuOpen = true, controlsVisible = true))
+        // Controls overlay
+        assertEquals(PlayarrPlayerBackAction.HideControls, playarrPlayerBackAction(playlistOpen = false, menuOpen = false, controlsVisible = true))
+        // Controls hidden: one BACK exits.
+        assertEquals(PlayarrPlayerBackAction.Exit, playarrPlayerBackAction(playlistOpen = false, menuOpen = false, controlsVisible = false))
+    }
+
+    @Test
+    fun `back sequence takes one level per press`() {
+        var playlist = true
+        var menu = true
+        var controls = true
+        val presses = mutableListOf<PlayarrPlayerBackAction>()
+        while (true) {
+            val action = playarrPlayerBackAction(playlist, menu, controls)
+            presses += action
+            when (action) {
+                PlayarrPlayerBackAction.ClosePlaylist -> playlist = false
+                PlayarrPlayerBackAction.CloseMenu -> menu = false
+                PlayarrPlayerBackAction.HideControls -> controls = false
+                PlayarrPlayerBackAction.Exit -> break
+            }
+        }
+        assertEquals(
+            listOf(
+                PlayarrPlayerBackAction.ClosePlaylist,
+                PlayarrPlayerBackAction.CloseMenu,
+                PlayarrPlayerBackAction.HideControls,
+                PlayarrPlayerBackAction.Exit,
+            ),
+            presses,
+        )
+    }
+
+    @Test
+    fun `select on the scrubber is play-pause only and arrows are not select`() {
+        assertEquals(true, playarrScrubberSelectKey(KeyEvent.KEYCODE_DPAD_CENTER))
+        assertEquals(true, playarrScrubberSelectKey(KeyEvent.KEYCODE_ENTER))
+        assertEquals(true, playarrScrubberSelectKey(KeyEvent.KEYCODE_NUMPAD_ENTER))
+        assertEquals(false, playarrScrubberSelectKey(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(false, playarrScrubberSelectKey(KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
+
+    @Test
+    fun `controls animation matches web 240ms`() {
+        assertEquals(240, PLAYER_CONTROLS_ANIMATION_MS)
+    }
 }

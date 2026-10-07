@@ -91,7 +91,9 @@ sub init()
     m.navEnabled = [true, true, true, true, false, true, true, true, true, true]
     m.qualityPref = LoadQualityPreference()
     m.subtitlePref = LoadSubtitlePreference()
+    m.householdTicks = 0
     pagesInit()
+    playerChromeInit()
     m.browseTitle = m.top.findNode("browseTitle")
     m.browseCountLabel = m.top.findNode("browseCountLabel")
     m.browseKeyArt = m.top.findNode("browseKeyArt")
@@ -382,6 +384,13 @@ sub updateClock()
     monthIndex = dt.GetMonth()
     if monthIndex >= 1 and monthIndex <= 12 then month = monthNames[monthIndex - 1]
     m.clockDate.text = weekday + " " + dt.GetDayOfMonth().ToStr() + " " + month
+    ' Household state is re-checked every 30 s while a profile is signed in (web HouseholdGate).
+    m.householdTicks = m.householdTicks + 1
+    if m.householdTicks >= 30
+        m.householdTicks = 0
+        s = m.top.screenState
+        if s = "home" or s = "page" or s = "browse" or s = "search" or s = "detail" or s = "playlists" then householdPoll()
+    end if
     ' Pairing "Code refreshes in M:SS" shares this 1s clock tick (web uses setInterval 1000).
     if m.top.screenState = "pairing" then updatePairingCountdown()
 end sub
@@ -687,6 +696,12 @@ sub onApiResult(event as Object)
         acceptPageData(action, result.data)
     else if action = "railPrefsReset"
         sendApi("railPrefs", "GET", "/api/v1/home/rails/preferences?lang=en", invalid, true)
+    else if action = "resumePlan"
+        acceptResumePlan(result.data)
+    else if action = "householdStatus"
+        acceptHouseholdStatus(result.data)
+    else if action = "householdAsk"
+        ' The request note is already shown.
     else if action = "watchlistRemove"
         sendApi("watchlist", "GET", "/api/v1/watchlist", invalid, true)
     else if action = "calendarFeed"
@@ -746,6 +761,11 @@ sub onApiResult(event as Object)
 end sub
 
 sub handleApiFailure(action as String, result as Object)
+    if action = "householdStatus" or action = "householdAsk" then return
+    if action = "resumePlan"
+        acceptResumePlan(invalid)
+        return
+    end if
     if action = "watchlist" or action = "requests" or action = "calendar" or action = "railPrefs"
         acceptPageFailure(action, result)
         return
@@ -2541,16 +2561,15 @@ sub onBrowseKeyArtTimer()
         m.browseKeyArt.visible = false
         return
     end if
-    xfer = CreateObject("roUrlTransfer")
-    xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
-    xfer.InitClientCertificates()
-    xfer.SetUrl(uri)
-    xfer.SetHeaders(ClientHeaders(m.accessToken))
-    tmpPath = "tmp:/playarr-browse-keyart.jpg"
-    if xfer.GetToFile(tmpPath)
-        m.browseKeyArt.uri = tmpPath
-        m.browseKeyArt.visible = true
-    end if
+    ' URL transfers cannot be created on the render thread, so the poster loads the art itself with the auth headers.
+    agent = CreateObject("roHttpAgent")
+    agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    agent.InitClientCertificates()
+    g = GetGlobalAA()
+    if g.playarrArtHeaders <> invalid then agent.SetHeaders(g.playarrArtHeaders)
+    m.browseKeyArt.SetHttpAgent(agent)
+    m.browseKeyArt.uri = uri
+    m.browseKeyArt.visible = true
 end sub
 
 ' Flat-content counterpart to buildRailContent() below: MarkupGrid takes one
@@ -3336,6 +3355,7 @@ sub enterHome(profileName as String)
     end if
     ' Filter Sites / other library kinds against GET /api/v1/catalog/kinds,
     ' then load home rails (chained one request at a time).
+    householdPoll()
     sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds", invalid, true)
 end sub
 
@@ -3631,6 +3651,8 @@ end function
 ' Rail membership matches tv-web Home.tsx takeUnused (on-deck/start first,
 ' then new/more movies and series without repeating ids).
 sub finishHomeLoad()
+    ' Re-check the household state once Home has painted, so a blocked profile lands on the blocked screen.
+    householdPoll()
     primaryWorks = []
     primaryLabel = "Start watching"
     if m.homeContinueEntries.Count() > 0
@@ -4269,6 +4291,9 @@ sub showDetail(detail as Object)
     ' leak into a series/artist detail view (this drives whether the
     ' Chapters rail load fires further down).
     m.currentMediaFileId = ""
+    ' A previous title's episode position must never leak into this one.
+    m.detailEpisodePos = [0, 0]
+    m.detailUserMoved = false
     if isSeriesShaped
         m.detailGroupKind = "series"
         m.detailSeasons = seasonsFromDetail(detail)
@@ -4317,6 +4342,48 @@ sub showDetail(detail as Object)
     ' moves into the season/chapter/similar rails, Left comes back.
     m.detailFocusIndex = -1
     m.detailActions.SetFocus(true)
+    ' A series opens on the next item to play (web series page): the resume plan's episode with its season selected and
+    ' scrolled into view, or S1E1 when nothing was watched. The plan arrives asynchronously (see acceptResumePlan).
+    if isSeriesShaped and work <> invalid and work.id <> invalid
+        m.detailNextUpWorkId = work.id
+        sendApi("resumePlan", "GET", "/api/v1/catalog/" + UrlEncode(work.id) + "/resume-plan", invalid, true)
+    end if
+end sub
+
+' [row, col] of the episode the series page should open on, or invalid when nothing is playable.
+function detailNextUpPosition(plan as Dynamic) as Dynamic
+    target = invalid
+    if plan <> invalid and plan.target <> invalid and plan.series_work_id = m.detailNextUpWorkId then target = plan.target
+    firstPlayable = invalid
+    for row = 0 to m.detailSeasons.Count() - 1
+        leaves = groupLeaves(m.detailSeasons[row], m.detailGroupKind)
+        for col = 0 to leaves.Count() - 1
+            leaf = leaves[col]
+            if leaf.media_file_id <> invalid and firstPlayable = invalid then firstPlayable = [row, col]
+            if target <> invalid and leaf.episode <> invalid and leaf.episode.id = target.episode_id then return [row, col]
+        end for
+    end for
+    ' Unknown episode id: match by media file, as the web does.
+    if target <> invalid
+        for row = 0 to m.detailSeasons.Count() - 1
+            leaves = groupLeaves(m.detailSeasons[row], m.detailGroupKind)
+            for col = 0 to leaves.Count() - 1
+                if leaves[col].media_file_id = target.media_file_id then return [row, col]
+            end for
+        end for
+    end if
+    return firstPlayable
+end function
+
+sub acceptResumePlan(plan as Dynamic)
+    if m.top.screenState <> "detail" or m.detailGroupKind <> "series" then return
+    if m.detailUserMoved = true then return
+    target = detailNextUpPosition(plan)
+    if target = invalid then return
+    m.detailEpisodePos = target
+    if m.detailEpisodes.visible
+        setDetailFocusIndex(0)
+    end if
 end sub
 
 ' Chapters/Similar Titles load in asynchronously after showDetail already
@@ -4377,6 +4444,7 @@ sub setDetailFocusIndex(newIndex as Integer)
 end sub
 
 function moveDetailFocus(delta as Integer) as Boolean
+    m.detailUserMoved = true
     if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
     if m.detailFocusIndex < 0 then return true
     slots = detailRightSlots()
@@ -4388,6 +4456,7 @@ end function
 
 ' Left/Right between the Play button column and the rails.
 function moveDetailFocusHorizontal(delta as Integer) as Boolean
+    m.detailUserMoved = true
     if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
     slots = detailRightSlots()
     if slots.Count() = 0 then return false
@@ -5226,6 +5295,7 @@ sub updatePlayerProgress()
     m.playerProgressFill.width = m.playerProgressTrack.width * fraction
     m.playerBufferedFill.width = m.playerProgressTrack.width * bufferedFraction
     m.playerTimeLabel.text = formatPlaybackTime(position) + " / " + formatPlaybackTime(duration)
+    playerChromeUpdate(position, duration, fraction)
 end sub
 
 ' Formats a duration in seconds as "M:SS" or, once an hour is reached,
@@ -5699,14 +5769,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' the bar" behaviour. Up/Down are intentionally non-destructive
         ' no-ops (still re-arm the auto-hide timer) rather than falling
         ' through unhandled.
+        if m.pcMenuOpen = true then return playerMenuKey(key)
         if key = "back"
-            ' BACK closes the controls overlay first; the next BACK exits.
+            ' BACK closes the controls overlay first; the next BACK exits (an open quality menu closes before this).
             if m.playerControls.visible
                 m.playerAutoHideTimer.control = "stop"
                 hidePlayerControls()
                 return true
             end if
             finishPlayback("user_stopped")
+            return true
+        else if key = "up"
+            playerMenuOpen()
             return true
         else if key = "OK" or key = "play"
             togglePlayPause()

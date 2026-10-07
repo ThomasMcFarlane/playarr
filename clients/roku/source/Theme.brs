@@ -46,6 +46,18 @@ function ThemeTokens(mode as String) as Object
             panel: &hEFEEEEFF
             ' Status chip tint (.calendar-badge): rgba(91,127,209,.24), the same in both themes.
             statusTint: &h5B7FD13D
+            ' Player chrome is the same over video in both themes: white ink on a dark scrim (global.css .player-*).
+            playerInk: &hFFFFFFFF
+            playerMuted: &hFFFFFF8A
+            playerPanel: &h120E11E6
+            playerTint: &hFFFFFF0E
+            playerButton: &hFFFFFF24
+            playerSelected: &hCF315738
+            playerPill: &h0C0A0B94
+            playerTrack: &hFFFFFF33
+            playerBuffered: &hFFFFFF57
+            playerSeparator: &h776B71FF
+            playerScrim: &h000000EB
         }
     end if
     return {
@@ -67,6 +79,18 @@ function ThemeTokens(mode as String) as Object
         brand: &hCF3157FF
         panel: &h282227FF
         statusTint: &h5B7FD13D
+        ' Player chrome is the same over video in both themes: white ink on a dark scrim (global.css .player-*).
+        playerInk: &hFFFFFFFF
+        playerMuted: &hFFFFFF8A
+        playerPanel: &h120E11E6
+        playerTint: &hFFFFFF0E
+        playerButton: &hFFFFFF24
+        playerSelected: &hCF315738
+        playerPill: &h0C0A0B94
+        playerTrack: &hFFFFFF33
+        playerBuffered: &hFFFFFF57
+        playerSeparator: &h776B71FF
+        playerScrim: &h000000EB
     }
 end function
 

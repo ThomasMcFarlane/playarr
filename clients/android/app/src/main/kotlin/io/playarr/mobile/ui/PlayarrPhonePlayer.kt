@@ -49,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -182,7 +181,7 @@ internal fun BoxScope.PhonePlayerOverlay(
     val displayedMs = (scrubPositionMs ?: timeline.positionMs).coerceIn(0L, durationMs)
     val activeQuality = controls.qualityOptions.firstOrNull { it.id == controls.activeQualityId } ?: controls.qualityOptions.firstOrNull()
 
-    AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.TopEnd)) {
+    AnimatedVisibility(visible = visible, enter = PlayerChromeFadeEnter, exit = PlayerChromeFadeExit, modifier = Modifier.align(Alignment.TopEnd)) {
         Row(Modifier.padding(end = 16.dp, top = topInset), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (onMinimise != null) {
                 PhonePlayerCorner(PlayarrWebIcons.PlayerMinimise, playarrString(PlayarrString.PlayerMinimise)) { onActivity(); onMinimise() }
@@ -191,11 +190,9 @@ internal fun BoxScope.PhonePlayerOverlay(
         }
     }
 
-    AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.BottomCenter)) {
-        Box(Modifier.fillMaxWidth().fillMaxHeight(0.48f).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f)))))
-    }
+    PlayarrPlayerScrim(visible = visible)
 
-    AnimatedVisibility(visible = visible, modifier = Modifier.align(Alignment.BottomCenter)) {
+    AnimatedVisibility(visible = visible, enter = PlayerChromeFadeEnter, exit = PlayerChromeFadeExit, modifier = Modifier.align(Alignment.BottomCenter)) {
         Column(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = bottomInset),
             verticalArrangement = Arrangement.spacedBy(10.dp),

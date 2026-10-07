@@ -915,13 +915,6 @@ internal enum class PlayarrString(
     PlayerTrackLabel("Track", "แทร็ก", "トラック"),
     PlayerMovieLabel("Movie", "ภาพยนตร์", "映画"),
     PlayerMaximiseTitle("Maximise {{title}}", "ขยาย {{title}} เต็มจอ", "{{title}}を最大化"),
-    PlayerOneMoment("One moment", "รอสักครู่", "少々お待ちください"),
-    PlayerPreparingPlayback("Preparing playback", "กำลังเตรียมการเล่น", "再生を準備しています"),
-    PlayerPreparingMessage(
-        "Large files can take a few seconds while a stream is prepared.",
-        "ไฟล์ขนาดใหญ่อาจใช้เวลาสักครู่ในการเตรียมสตรีม",
-        "ファイルサイズが大きい場合、ストリームの準備に数秒かかることがあります。",
-    ),
     PlayerPlaybackUnavailable("Playback unavailable", "ไม่สามารถเล่นได้", "再生できません"),
     PlayerCouldNotStart(
         "Couldn’t start this title",

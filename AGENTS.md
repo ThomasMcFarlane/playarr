@@ -37,6 +37,11 @@ studio franchise anywhere in it**: not in code, tests, fixtures, comments, docs,
 Likewise never commit real posters, backdrops, stills, album art, cast photos, video clips or screenshots that show
 real titles or artwork; generate placeholders instead (solid colours, gradients, procedural art). Openly licensed
 demo media that the product genuinely needs is the only exception and must be justified where it is used.
+That exception covers the public screenshots (README, `site/`, Play listing): they show the openly licensed
+open-movie demo library with attribution, never the parity fixture. Produce them only with `scripts/showcase`
+(see `clients/android/fastlane/README.md`); `scripts/ci/check-public-screenshots.sh` enforces it. Keep the film
+names out of code, tests, fragments, commits and PR text, except for the attribution in the README
+"Third-party media" section and the showcase catalogue under `scripts/showcase`.
 Do not keep a list of forbidden titles in the repository: such a list would itself leak them.
 
 ## Delivery

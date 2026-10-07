@@ -161,6 +161,47 @@ final class PlayerViewModelLifecycleTests: XCTestCase {
         XCTAssertEqual(events.map(\.kind), ["start"])
         XCTAssertEqual(events.first?.sessionID, sessionID)
     }
+
+    private func makePlayer() -> (PlayerViewModel, PlayerEngineSpy, PlaybackEventRecorder, UUID) {
+        let mediaFileID = UUID()
+        let recorder = PlaybackEventRecorder()
+        let apiClient = PlayerLifecycleAPIClient(mediaFileID: mediaFileID, sessionID: UUID(), recorder: recorder)
+        let engine = PlayerEngineSpy(duration: 120)
+        let viewModel = PlayerViewModel(engine: engine, apiClient: apiClient, downloadRepository: DownloadRepository(apiClient: apiClient))
+        return (viewModel, engine, recorder, mediaFileID)
+    }
+
+    func testStopAndFlushDeliversProgressBeforeReturning() async {
+        let (viewModel, engine, recorder, mediaFileID) = makePlayer()
+        await viewModel.play(mediaFileID: mediaFileID, title: "Test Film")
+        engine.timeSubject.send(55)
+        try? await Task.sleep(for: .milliseconds(100))
+
+        await viewModel.stopAndFlush()
+
+        let writes = await recorder.progressWrites
+        XCTAssertEqual(writes.last?.positionMS, 55_000)
+        XCTAssertEqual(writes.last?.durationMS, 120_000)
+        XCTAssertEqual(engine.state, .idle)
+        let kinds = await recorder.events.map(\.kind)
+        XCTAssertEqual(kinds.last, "stop")
+    }
+
+    func testStopNeverWritesZeroPositionWhenPlaybackNeverStarted() async {
+        let (viewModel, _, recorder, mediaFileID) = makePlayer()
+        await viewModel.play(mediaFileID: mediaFileID, title: "Test Film")
+
+        await viewModel.stopAndFlush()
+
+        let writes = await recorder.progressWrites
+        XCTAssertTrue(writes.isEmpty)
+    }
+
+    func testProgressWritePolicy() {
+        XCTAssertFalse(PlayerViewModel.shouldWriteProgress(positionMS: 0, completed: false))
+        XCTAssertTrue(PlayerViewModel.shouldWriteProgress(positionMS: 1, completed: false))
+        XCTAssertTrue(PlayerViewModel.shouldWriteProgress(positionMS: 0, completed: true))
+    }
 }
 
 private struct WorkDetailAPIClient: PlayarrAPIClient {
@@ -210,6 +251,9 @@ private actor PlaybackEventRecorder {
     }
 
     private(set) var events: [Event] = []
+    private(set) var progressWrites: [UpdateWatchProgressRequest] = []
+
+    func appendProgress(_ body: UpdateWatchProgressRequest) { progressWrites.append(body) }
 
     func append(sessionID: UUID, kind: String) {
         events.append(Event(sessionID: sessionID, kind: kind))
@@ -259,6 +303,10 @@ private struct PlayerLifecycleAPIClient: PlayarrAPIClient {
             state: .partWatched
         )
     }
+    func updateWatchProgress(mediaFileID: UUID, body: UpdateWatchProgressRequest) async throws -> WatchProgress {
+        await recorder.appendProgress(body)
+        return WatchProgress(mediaFileID: mediaFileID, workID: UUID(), positionMS: body.positionMS, durationMS: body.durationMS, state: .partWatched)
+    }
     func recordPlaybackEvent(sessionID: UUID, event: PlaybackEventRequest) async throws {
         await recorder.append(sessionID: sessionID, kind: event.kind)
     }
@@ -278,7 +326,8 @@ private final class PlayerEngineSpy: PlayerEngine {
 
     let avPlayer: AVPlayer? = AVPlayer()
     var statePublisher: AnyPublisher<PlayerPlaybackState, Never> { Empty().eraseToAnyPublisher() }
-    var currentTimePublisher: AnyPublisher<Double, Never> { Empty().eraseToAnyPublisher() }
+    let timeSubject = CurrentValueSubject<Double, Never>(0)
+    var currentTimePublisher: AnyPublisher<Double, Never> { timeSubject.eraseToAnyPublisher() }
 
     init(duration: Double) { self.duration = duration }
     func load(_ item: PlayableItem) async throws { loadedItem = item; state = .readyToPlay }

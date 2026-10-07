@@ -41,6 +41,10 @@ struct TVPlayerChrome: View {
     var onClose: () -> Void = {}
     var onTogglePlay: () -> Void = {}
     var onToggleQualityMenu: () -> Void = {}
+    /// Hidden controls leave only the black stage; the scrim recedes downward (web: 240 ms ease).
+    var controlsVisible = true
+    /// Focus owned by the player view so it survives the per-tick rebuild after a seek.
+    var focus: FocusState<TVPlayerControl?>.Binding?
     /// Static drawing for the parity route (no focus effects).
     var frozen = false
     /// What the quality panel blurs. The parity route passes its own copy of the video frame so the blur
@@ -50,6 +54,7 @@ struct TVPlayerChrome: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // The scrim rises from the bottom edge and recedes downward; it never grows from the middle.
             LinearGradient(
                 colors: [Color.black.opacity(0), Color.black.opacity(0.82)],
                 startPoint: .top,
@@ -57,13 +62,20 @@ struct TVPlayerChrome: View {
             )
             .frame(width: 1920, height: 518.4)
             .placed(x: 0, y: 561.6, w: 1920, h: 518.4)
+            .offset(y: controlsVisible ? 0 : 518.4)
+            .opacity(controlsVisible ? 1 : 0)
 
-            topButtons
-            scrubber
-            transport
-            rightGroup
-            if state.menuOpen { qualityMenu }
+            Group {
+                topButtons
+                scrubber
+                transport
+                rightGroup
+                if state.menuOpen { qualityMenu }
+            }
+            .opacity(controlsVisible ? 1 : 0)
+            .allowsHitTesting(controlsVisible)
         }
+        .animation(.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.24), value: controlsVisible)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -91,7 +103,8 @@ struct TVPlayerChrome: View {
                     .background(Circle().fill(Color(red: 12 / 255, green: 10 / 255, blue: 11 / 255).opacity(0.58)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(!frozen)
+            .focusable(interactive)
+            .modifier(TVFocusTag(binding: focus, control: .close))
             .placed(x: 1814, y: 37.8, w: 48, h: 48)
         }
     }
@@ -101,13 +114,16 @@ struct TVPlayerChrome: View {
     private var scrubber: some View {
         let fraction = state.duration > 0 ? min(max(state.position / state.duration, 0), 1) : 0
         let progress = 1780 * fraction
-        return ZStack(alignment: .topLeading) {
-            Capsule().fill(Color.white.opacity(0.2)).placed(x: 70, y: 936, w: 1780, h: 6)
-            Capsule().fill(Color.white.opacity(0.34)).placed(x: 70, y: 936, w: 491.8, h: 6)
-            Capsule().fill(DesignTokens.Color.brandPrimary).placed(x: 70, y: 936, w: max(progress, 0), h: 6)
-            Circle().fill(DesignTokens.Color.brandPrimary).placed(x: 70 + progress - 7.5, y: 931.5, w: 15, h: 15)
+        return Button(action: onTogglePlay) {
+            TVScrubberBody(progress: progress)
         }
+        .buttonStyle(TVFocusableCardButtonStyle())
+        .focusable(interactive)
+        .modifier(TVFocusTag(binding: focus, control: .scrubber))
+        .placed(x: 70, y: 921, w: 1780, h: 36)
     }
+
+    private var interactive: Bool { !frozen && controlsVisible }
 
     // MARK: Transport
 
@@ -135,7 +151,8 @@ struct TVPlayerChrome: View {
                     .background(Circle().fill(Color.white.opacity(0.14)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(!frozen)
+            .focusable(interactive)
+            .modifier(TVFocusTag(binding: focus, control: .play))
             .placed(x: 147.6, y: 958, w: 64, h: 64)
             icon("forward.end", x: 247.2, opacity: 0.3)
             Text(Self.clock(state.position))
@@ -176,7 +193,8 @@ struct TVPlayerChrome: View {
                 .background(Capsule().fill(Color.white.opacity(state.menuOpen ? 0.15 : 0)))
             }
             .buttonStyle(TVFocusableCardButtonStyle())
-            .focusable(!frozen)
+            .focusable(interactive)
+            .modifier(TVFocusTag(binding: focus, control: .quality))
             .placed(x: 1527.8, y: 959.8, w: 173.4, h: 60.5)
             icon("info.circle", x: 1730.4)
             icon("airplayvideo", x: 1808)
@@ -283,6 +301,141 @@ struct TVPlayerChrome: View {
                     .placed(x: spec.1, y: top, w: 156.6, h: 60)
                 }
             }
+        }
+    }
+}
+
+/// Applies the shared focus binding when the chrome has one (the parity route draws without).
+private struct TVFocusTag: ViewModifier {
+    let binding: FocusState<TVPlayerControl?>.Binding?
+    let control: TVPlayerControl
+
+    func body(content: Content) -> some View {
+        if let binding {
+            content.focused(binding, equals: control)
+        } else {
+            content
+        }
+    }
+}
+
+/// The scrubber track in local coordinates. When focused it shows the web focus treatment: a 3 px
+/// white ring around the track and the thumb enlarged to 24 px, white with an accent ring.
+private struct TVScrubberBody: View {
+    @Environment(\.isFocused) private var isFocused
+    let progress: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Capsule().fill(Color.white.opacity(0.2)).frame(width: 1780, height: 6).offset(y: 15)
+            Capsule().fill(Color.white.opacity(0.34)).frame(width: 491.8, height: 6).offset(y: 15)
+            Capsule().fill(DesignTokens.Color.brandPrimary).frame(width: max(progress, 0), height: 6).offset(y: 15)
+            if isFocused {
+                Capsule().stroke(Color.white, lineWidth: 3).frame(width: 1786, height: 12).offset(x: -3, y: 12)
+                Circle().fill(Color.white)
+                    .overlay(Circle().stroke(DesignTokens.Color.brandPrimary, lineWidth: 3))
+                    .frame(width: 24, height: 24)
+                    .offset(x: progress - 12, y: 6)
+            } else {
+                Circle().fill(DesignTokens.Color.brandPrimary)
+                    .frame(width: 15, height: 15)
+                    .offset(x: progress - 7.5, y: 10.5)
+            }
+        }
+        .frame(width: 1780, height: 36, alignment: .topLeading)
+        .animation(.easeOut(duration: DesignTokens.FocusMotion.transitionSeconds), value: isFocused)
+    }
+}
+
+// MARK: - Remote interaction
+
+/// The focusable controls of the tvOS player chrome.
+enum TVPlayerControl: Hashable {
+    case scrubber
+    case play
+    case quality
+    case close
+}
+
+enum TVPlayerSelectAction: Equatable {
+    case togglePlayPause
+    case openQualityMenu
+    case close
+}
+
+/// Remote behaviour of the player chrome as a pure state machine, so the BACK sequence, SELECT on the
+/// scrubber and focus retention across seeks are testable without a UI.
+///
+/// BACK (Menu) closes an open panel first, returning focus to the control that opened it; the next BACK
+/// hides the controls; only a BACK with the controls hidden exits playback.
+struct TVPlayerInteraction: Equatable {
+    enum BackResult: Equatable {
+        case closedMenu
+        case hidControls
+        case exit
+    }
+
+    var focus: TVPlayerControl? = .play
+    var controlsVisible = true
+    var menuOpen = false
+
+    mutating func back() -> BackResult {
+        if menuOpen {
+            menuOpen = false
+            focus = .quality
+            return .closedMenu
+        }
+        if controlsVisible {
+            controlsVisible = false
+            return .hidControls
+        }
+        return .exit
+    }
+
+    /// Any remote activity reveals hidden controls; focus returns to where the user left it.
+    mutating func reveal() {
+        controlsVisible = true
+        if focus == nil { focus = .play }
+    }
+
+    mutating func openQualityMenu() {
+        menuOpen = true
+        focus = .quality
+    }
+
+    /// SELECT on the scrubber only toggles play/pause: no scrub commit, no focus change.
+    mutating func select() -> TVPlayerSelectAction? {
+        guard controlsVisible else {
+            reveal()
+            return nil
+        }
+        switch focus {
+        case .scrubber, .play: return .togglePlayPause
+        case .quality:
+            openQualityMenu()
+            return .openQualityMenu
+        case .close: return .close
+        case nil: return nil
+        }
+    }
+
+    /// A seek (left/right) never moves focus; the scrubber keeps it after the seek commits.
+    mutating func seeked() {
+        controlsVisible = true
+    }
+}
+
+/// What the tvOS player stage shows per playback state. Pressing Play mounts the chrome at once; there is
+/// no interstitial. Only a failure replaces the stage, and the spinner is the only loading affordance.
+enum TVPlayerStage: Equatable {
+    case chrome(videoAttached: Bool, spinner: Bool)
+    case failed(String)
+
+    static func resolve(_ state: TVPlayerViewModel.State) -> TVPlayerStage {
+        switch state {
+        case .idle, .negotiating: return .chrome(videoAttached: false, spinner: true)
+        case .ready: return .chrome(videoAttached: true, spinner: false)
+        case .failed(let message): return .failed(message)
         }
     }
 }

@@ -58,6 +58,7 @@
  */
 import React from 'react';
 import {createStackNavigator} from '@amazon-devices/react-navigation__stack';
+import {TokenStore} from '@playarr-tv/device-auth';
 import {AppShellNavigator, APP_SHELL_ROUTE} from './AppShellNavigator';
 import {LinkScreen} from '../screens/LinkScreen';
 import {ProfilesScreen} from '../screens/ProfilesScreen';
@@ -65,9 +66,19 @@ import {ROUTES} from './routes';
 
 const Stack = createStackNavigator();
 
+/**
+ * A device that already holds a session opens on the profile picker (which verifies the session and falls back to
+ * re-pairing through `authFailed`); only a device with no stored session pairs. Starting on Link regardless made every
+ * launch show a fresh QR code even though the device was signed in.
+ */
+export function initialRouteName(): typeof ROUTES.link | typeof ROUTES.profiles {
+  return new TokenStore().get() ? ROUTES.profiles : ROUTES.link;
+}
+
 export function RootNavigator(): React.ReactElement {
+  const [initialRoute] = React.useState(initialRouteName);
   return (
-    <Stack.Navigator initialRouteName={ROUTES.link} screenOptions={{headerShown: false}}>
+    <Stack.Navigator initialRouteName={initialRoute} screenOptions={{headerShown: false}}>
       <Stack.Screen name={ROUTES.link} component={LinkScreen} />
       <Stack.Screen name={ROUTES.profiles} component={ProfilesScreen} />
       <Stack.Screen name={APP_SHELL_ROUTE} component={AppShellNavigator} />

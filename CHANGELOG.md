@@ -13,6 +13,19 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iOS: leaving the player now delivers the resume point before returning (background task, awaited), flushes it when the app leaves the foreground, and never overwrites it with position 0 when playback did not start.
+- Fire TV: BACK now stops playback (audio and video), closes the session and saves progress, awaited with a short bound; it previously only hid the player and left it playing.
+- Fire TV: playback resumes from the server's resume point (falling back to the local session only when the server cannot be reached), and progress is never written for a start that never played, so a stalled start can no longer overwrite a resume point.
+- Fire TV: progress is also flushed when the app goes to the background.
+- Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.
+- Fire TV client: the signed-in session, device id and server address now survive an app restart (the storage allowlist still used the old `streamarr:` prefix, so nothing the shared packages wrote under `playarr:` was saved), and a device that holds a session opens on the profile picker instead of pairing again on every launch.
+- Harmony player now resumes from the server's saved position, saves progress (awaited) on exit, error and when backgrounded, and never writes position 0 before playback has started.
+- Xbox player now resumes from the server's saved position, saves progress on suspend and when minimised, and never writes position 0 before playback has started. Watch-state values now match the server.
+- The shared TV player (VIDAA, webOS, Tizen shell) now resumes from the server's saved position, reports watch progress while playing, saves on exit, background and end, and stops playback on exit.
+- Every page's Filters button and the Calendar's Filters and Calendar link buttons are one tile again, the look the library Filters launcher had on web on 30 September (owner ruling): a 14 px-radius tile with the glyph above a small bold label (icon only, 44 px, on phones), in the header action slot. Web's header pill from the shared page shell (4 October) is gone, and the header row centres on the taller tile. Focus draws the ring (white in dark, ink in light) with the 1.06 scale and never a fill; the open state keeps the ink fill. Android TV and phone, tvOS and iOS draw the same tile.
+- Android TV: the earlier calendar restyle (#154) had rebuilt the shared header button for every page and dropped its focus state; it is the tile above now.
+- The post-merge web deploy no longer fails at "Test web client": the web vitest config resolves `@playarr-tv/spatial-nav` from source, so tests run in a clean checkout without a build. Pull-request CI now runs the same web test command as the deploy, and the deploy job timeout is 30 minutes.
+- The web client now deploys after every merge to main, including merges landed by the merge train without a push event (CI started with `workflow_dispatch`); previously every post-merge deploy was skipped. The docs deploy gains the same dispatch trigger.
 - Web TV: the series detail page now shows the shared focus ring on every focused control and tile (play/resume, watchlist, playlist, season download, episodes, cast and similar titles), and opens focused on the next item to play (the episode the Play button resumes, in its season, scrolled into view) instead of the first episode. Returning to the page restores the last focus.
 - Fire TV client: poster and backdrop artwork now loads on a real device (the artwork URL had a double slash after the server address, which the server answered with 404, so every image stayed a grey box).
 - Roku: signing out from the profile picker returns to the hosted QR code instead of the typed-address screen.
@@ -96,6 +109,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Fire TV client: light and dark themes with the web palettes (the Appearance screen now switches them live without resetting navigation; "System" is dark on a TV), and static Nunito Sans and JetBrains Mono instances, because Vega ignores font weight for variable fonts.
 - Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).
 - Roku: light theme. Both web palettes are tokens, and a System, Light or Dark preference (sign-in/profile dropdown and Settings) recolours every screen.
@@ -225,6 +239,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- iOS and tvOS: Play opens the player directly instead of a full-screen "Preparing playback" screen; tvOS player BACK closes panels, then the controls, then exits, the scrubber shows the web focus ring and SELECT on it toggles play/pause, and the controls scrim rises from the bottom.
+- Android: Play opens the player directly (black stage, close control, buffering spinner) instead of a full-screen "Preparing playback" page; the unused strings and translations are removed.
+- Android player: BACK closes the open panel first (returning focus to its opener), then the controls overlay, and only then exits.
+- Android TV player: the focused scrubber shows the web white ring with an enlarged thumb, SELECT toggles play/pause only, and focus no longer leaves the scrubber after a seek.
+- Android player: the controls scrim rises from the bottom edge and recedes downward (240 ms ease, as on web).
+- The single release workflow now also deploys playarr.app from the release commit after the GitHub Release is created. A failed web deploy fails the release, and the run summary reports the deployed version and commit.
 - Web and the legacy TV container: pressing Play opens the player at once (black stage, normal chrome, buffering spinner) instead of a full-screen "Preparing playback" page; errors still show inside the player.
 - Web player: BACK or Escape hides open controls first and a second press exits; menus and panels still close first. SELECT on the focused scrubber toggles play/pause without seeking, the scrubber shows the white focus ring with an enlarged thumb, and it keeps focus while a seek buffers. The controls scrim now rises from the bottom edge and recedes downward.
 - Fire TV client: the hosted-link broker origin (`PLAYARR_HOSTED_LINK_ORIGIN`) and a frozen app clock for parity captures (`PLAYARR_PARITY_CLOCK`) are build-time settings, so on-device captures need no source patch; the production defaults are unchanged.
@@ -2356,6 +2376,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Tests pin the Calendar's header buttons and every page's Filters button to one component per client: a web style rule check, an Android metrics and call-site test, and source guards for iOS and tvOS.
 - CI: the web layout guards (page header registry, button audit, drawer audit) now run on every pull request that touches `clients/tv-web`, through a new `lint` script in the web package, and `tv-web-check` also runs the affected packages' vitest suites. Both feed `ci-required`. The Household registry reason now matches the page.
 - Added `clients/tv-web/web/scripts/player-entry-e2e.mjs` (Playwright against the fixture server, TV and phone layouts) and unit tests for direct player mounting and the BACK sequence.
 - Web TV: unit tests for the next-up selection and source tests for the detail-page focus ring; the series-detail TV parity references were recaptured for the focus ring on the first tile.
@@ -2382,6 +2403,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Page layout spec: owner decisions recorded. The reference action pill is web's library Filters button as of 30 September 2026 (pinned to a commit), the header row grows to the tile height with items centred, Back and the period arrows stay round, focus is a ring with no fill (white in dark theme, ink in light theme), the drawer-open state keeps its ink fill, Customise Home moves into the header row, and the header and Back always show while loading or on error.
+- README, project site and Play listing screenshots show the open-movie demo library on the current UI again (retaken, with the README attribution tables and CC BY credits restored). They are produced by the new `scripts/showcase` setup, which is separate from the parity fixture, and a CI check rejects public screenshots that were not made with it.
 - Page layout spec (docs/design/page-layout.md): an audit of page chrome on web and Android, one canonical page anatomy with its component API and tokens, TV focus rules, enforcement through source guards, header-band parity and an owner-request gate, and the per-client migration plan.
 - Android phone parity README: calendar and quality-menu residue recorded with measurements, final summary.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.

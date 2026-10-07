@@ -71,6 +71,24 @@ describe('localStorageShim', () => {
     expect(globalThis.localStorage.getItem('never-set')).toBeNull();
   });
 
+  it('persists the shared packages\' current `playarr:` keys (session, device id, server address)', async () => {
+    const {fake, backing} = createFakeAsyncStorage({});
+    await hydrateLocalStorage(fake);
+
+    globalThis.localStorage.setItem('playarr:session', '{"accessToken":"a"}');
+    globalThis.localStorage.setItem('playarr:deviceId', 'device-1');
+    globalThis.localStorage.setItem('playarr:apiBaseUrl', 'https://server.example');
+    await flushMicrotasks();
+
+    expect(backing.get('playarr:session')).toBe('{"accessToken":"a"}');
+    expect(backing.get('playarr:deviceId')).toBe('device-1');
+    expect(backing.get('playarr:apiBaseUrl')).toBe('https://server.example');
+
+    resetLocalStorageShimForTests();
+    await hydrateLocalStorage(fake);
+    expect(globalThis.localStorage.getItem('playarr:session')).toBe('{"accessToken":"a"}');
+  });
+
   it('never hydrates a key outside the streamarr:/playarr. allowlist', async () => {
     const {fake} = createFakeAsyncStorage({
       'some-other-library-key': 'should not appear',

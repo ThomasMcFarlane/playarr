@@ -111,7 +111,7 @@ import { media } from '@kit.MediaKit';
 import { image } from '@kit.ImageKit';
 import { audio } from '@kit.AudioKit';
 
-import { negotiatePlayback } from '../data/PlaybackRepository';
+import { negotiatePlayback, getWatchProgress } from '../data/PlaybackRepository';
 import type { PlaybackNegotiationOptions } from '../data/PlaybackRepository';
 import { getWorkDetail, getSimilarWorks } from '../data/CatalogRepository';
 import { fetchWorkArtworkByPriority, COVER_ARTWORK_PRIORITY } from '../data/ArtworkRepository';
@@ -129,7 +129,7 @@ import { resolvePlayerAction, SEEK_STEP_MS } from '../player/PlayerInput';
 import type { PlayerAction } from '../player/PlayerInput';
 
 import { chromeMounted, resolveBack } from '../core/PlayerStage.ts';
-import { resolveDurationMs, reportedPositionMs, clampSeekTargetMs } from '../core/PlaybackMath.ts';
+import { resolveDurationMs, reportedPositionMs, clampSeekTargetMs, resumeStartMs } from '../core/PlaybackMath.ts';
 import type { PlaybackInfoResponse, SubtitleTrack } from '../core/Types/Playback.ts';
 import type { Work } from '../core/Types/Work.ts';
 import {
@@ -338,6 +338,11 @@ struct Player {
   onPageHide(): void {
     this.endMachine.paused = true;
     void this.exitImmersiveMode();
+    if (!this.hasExited && this.reporter !== null) {
+      // Backgrounded or covered: pause and save the position now.
+      void this.controller.pause();
+      void this.reporter.flushProgress(this.controller.getCurrentPositionMs());
+    }
   }
 
   // -- Immersive mode (brief 6.4) --------------------------------------------
@@ -434,8 +439,16 @@ struct Player {
 
   private async loadInitial(): Promise<void> {
     const options: PlaybackNegotiationOptions = {};
-    if (this.startPositionMs > 0) {
-      options.startPositionMs = this.startPositionMs;
+    let resumeMs: number = this.startPositionMs;
+    if (resumeMs <= 0) {
+      // No caller-supplied resume point: use the server's saved progress.
+      const saved = await getWatchProgress(this.activeMediaFileId);
+      if (saved.kind === 'ok') {
+        resumeMs = resumeStartMs(saved.value.state, saved.value.position_ms);
+      }
+    }
+    if (resumeMs > 0) {
+      options.startPositionMs = resumeMs;
     }
     await this.negotiateAndAttach(options);
   }
