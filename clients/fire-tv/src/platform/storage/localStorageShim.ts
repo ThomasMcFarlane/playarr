@@ -57,16 +57,18 @@ export interface AsyncStorageLike {
  * Only keys under one of these prefixes are ever written back to
  * AsyncStorage; every other `localStorage` key some incidental library call
  * might set lives in the in-memory Map for the app's lifetime and nowhere
- * else. Both prefixes are the ones tv-web's own code already uses --
- * `streamarr:` for the shared @playarr-tv/* packages (`streamarr:session`,
- * `streamarr:knownServerGroup`, `streamarr:deviceId`, `streamarr:apiBaseUrl`)
+ * else. These prefixes are the ones the shared code already uses --
+ * `playarr:` for the shared @playarr-tv/* packages (`playarr:session`,
+ * `playarr:knownServerGroup`, `playarr:deviceId`, `playarr:apiBaseUrl`; the
+ * packages used `streamarr:` before the rename, which stays allowed so an
+ * old install keeps its data)
  * and `playarr.` for fire-tv's own future profile-session bookkeeping
  * (`playarr.profileSessions.v4`, `playarr.currentUserName`, matching design
  * doc §5.4's table) -- kept as an explicit allowlist rather than persisting
  * everything, so this shim can never accidentally start writing some
  * unrelated library's scratch state into a Fire TV Stick's limited flash.
  */
-const PERSISTED_PREFIXES = ['streamarr:', 'playarr.'] as const;
+const PERSISTED_PREFIXES = ['streamarr:', 'playarr:', 'playarr.'] as const;
 
 function isPersistedKey(key: string): boolean {
   return PERSISTED_PREFIXES.some((prefix) => key.startsWith(prefix));

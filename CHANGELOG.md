@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fire TV client: the signed-in session, device id and server address now survive an app restart (the storage allowlist still used the old `streamarr:` prefix, so nothing the shared packages wrote under `playarr:` was saved), and a device that holds a session opens on the profile picker instead of pairing again on every launch.
 - Harmony player now resumes from the server's saved position, saves progress (awaited) on exit, error and when backgrounded, and never writes position 0 before playback has started.
 - Xbox player now resumes from the server's saved position, saves progress on suspend and when minimised, and never writes position 0 before playback has started. Watch-state values now match the server.
 - The shared TV player (VIDAA, webOS, Tizen shell) now resumes from the server's saved position, reports watch progress while playing, saves on exit, background and end, and stops playback on exit.
