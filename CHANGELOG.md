@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Web: Filters, Create and Calendar link sit in one shell-owned column at the right edge again, stacked vertically exactly where the 30 September Filters tile was (a row left of the avatar on phones), instead of in each page's header row.
 - Web TV layout: UP and DOWN between Home rails now land on the card visually above or below instead of the same index, and the target rail no longer scrolls to match.
 - Android: Home rails fade at their edges like the web client. Cards scrolled past the start line fade away over the gutter on the left (the card at rest stays fully visible) and a soft shadow shows on the right while more cards follow, in both themes, on television and phone.
 - Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.

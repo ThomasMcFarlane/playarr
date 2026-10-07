@@ -12796,3 +12796,54 @@ body[data-input-mode="remote"] .quality-matrix.is-player .quality-matrix-choice:
     padding: 0 0.6rem;
   }
 }
+
+/*
+ * Shell action column (owner ruling, 8 October 2026): every page's side-panel buttons (Filters, Create, Calendar link,
+ * ...) live in one column owned by the app shell, at the right edge where the 30 September `.tv-filter-launcher` sat
+ * (commit 54224f36): right var(--directory-controls-edge), width var(--directory-controls-width), the same top offset,
+ * stacked vertically with the panel openers above Filters. Pages never position these buttons. On phones, as on
+ * 30 September, the column becomes a row left of the profile avatar.
+ */
+.app-shell {
+  --directory-controls-edge: clamp(5px, 0.65vw, 14px);
+  --directory-controls-width: clamp(48px, 3.6vw, 62px);
+  --directory-controls-gap: clamp(18px, 1.5vw, 30px);
+}
+
+.shell-action-column {
+  position: absolute;
+  z-index: 32;
+  top: clamp(116px, calc(14 * var(--viewport-unit)), 164px);
+  right: var(--directory-controls-edge);
+  width: var(--directory-controls-width);
+}
+
+.shell-action-column:empty {
+  display: none;
+}
+
+.page-header-stack {
+  display: grid;
+  gap: clamp(10px, calc(1.2 * var(--viewport-unit)), 16px);
+}
+
+.shell-action-column .ui-btn {
+  width: var(--directory-controls-width);
+}
+
+@media (max-width: 760px) {
+  .shell-action-column {
+    top: var(--mobile-top-inset, 14px);
+    right: 66px;
+    width: auto;
+  }
+
+  .page-header-stack {
+    display: flex;
+    gap: 8px;
+  }
+
+  .shell-action-column .ui-btn {
+    width: 44px;
+  }
+}

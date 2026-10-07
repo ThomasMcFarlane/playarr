@@ -103,8 +103,9 @@ Gaps:
 
 ```
 ┌ rail ┐┌──────────────────────────── PageLayout ─────────────────────────────┐
-│      ││ PageHeader  [←] Title │ DETAIL              clock   PageActions ──► │  header row
-│      ││                                     [nav group] [pill] … [Filters]  │
+│      ││ PageHeader  [←] Title │ DETAIL              clock    [nav group]    │  header row
+│      ││                                                       [ Create ] ◄──┼─ shell action column
+│      ││                                                       [ Filters ]   │  (right edge, vertical)
 │      ││ ┌──────────────────────── body (ScrollArea) ──────────────────────┐ │
 │      ││ │ ▒ top fade (only when content continues above)                  │ │
 │      ││ │   content: grid / list / rails / panels                         │ │
@@ -122,10 +123,12 @@ Gaps:
    - Profile picker, Household gate and pre-auth pages.
    - NotFound.
 2. **Header row geometry is fixed by tokens.** The row grows to the height of the action pill tile (Q9), and Back, the title, the clock and every action centre vertically on the tile. A page cannot move, resize or recolour the header or its controls. No `className` or `Modifier` reaches them.
-3. **Action order, left to right:**
-   1. `navigation` group (for example the calendar's ‹ Today ›).
-   2. Secondary pills in the order given (Create, Calendar link, Customise Home).
-   3. **Filters, always last (rightmost).**
+3. **Header row and shell action column (owner ruling, 8 October 2026, Q1b; overrides the earlier header-slot rule).**
+   1. The header row holds Back, the title and detail, the clock and the page's `navigation` group (for example the calendar's ‹ Today ›). It holds no side-panel or action pills.
+   2. Every side-panel and action button (Filters, Create, Calendar link and any other button that opens a side panel) lives in the **shell action column**, one column owned by the app shell: `position: absolute` once, in the shell, at `right: var(--directory-controls-edge)`, `width: var(--directory-controls-width)`, `top: clamp(116px, calc(14 * var(--viewport-unit)), 164px)`, exactly where the 30 September launcher sat (`54224f36`).
+   3. The buttons stack **vertically**, in the order the page gives them, **Filters last (lowest)**: Create above Filters on Playlists, Calendar link above Filters on the Calendar. Gap `clamp(10px, calc(1.2 * var(--viewport-unit)), 16px)`.
+   4. On phones (as on 30 September) the column becomes a row of 44px icon squares, top `--mobile-top-inset`, right `66px`, left of the profile avatar, in the same order.
+   5. Pages register their buttons through `PageHeader` (`filters`, `panelButtons`), which portals them into the column (`ShellActionColumnSlot`). A page never renders or positions these buttons itself; `PageHeader.test.tsx` fails when a page names `FiltersButton`, `PanelButton`, `page-filters-button` or `tv-filter-launcher`.
 4. **One `ActionPill` look for every header action**: Filters, Calendar link, Create and Customise Home (owner decision Q3). It is the reference look in section 2.1. The only variants are:
    - `tile`: the reference, with the icon above a small label. On mobile it is a 44px icon-only square with the same radius.
    - `icon`: round, used by Back and the period arrows. It stays round (Q10), keeps today's geometry and takes only the shared focus ring (Q2, Q11).
@@ -141,7 +144,7 @@ Gaps:
 
 ### 2.1 The reference action pill (web, commit `54224f36`)
 
-These are the 30 September `.tv-filter-launcher` rules, quoted from `global.css` at that commit. `ActionPill` reproduces this **look** under its own class (`action-pill`). The `tv-filter-launcher` class itself stays banned: its floating position is retired, and the pill lives in the header slot (rule 2.3).
+These are the 30 September `.tv-filter-launcher` rules, quoted from `global.css` at that commit. `ActionPill` reproduces this **look** under its own class (`action-pill`). The `tv-filter-launcher` class itself stays banned: its look is the reference, and so is its position: the shell action column (rule 2.3, Q1b).
 
 ```css
 /* box */
@@ -166,7 +169,7 @@ transition: background 180ms ease, color 180ms ease, transform 180ms ease;
 Deliberate departures from the 30 September rules, all owner decisions:
 - **Focus (Q2).** The reference filled with `--ink` and scaled 1.06 on `:focus-visible` and hover. Focus is now the theme focus ring (white in dark, ink in light; section 5, Q11) with **no fill**. The 1.06 scale is kept, drawn as a transform. Hover on pointer devices follows focus.
 - **Open state.** The ink fill for `is-active` (drawer open) is kept. It is not a focus state. Owner decision Q12 (8 October): the drawer-open state keeps its ink fill, and the focus ring draws on top when focused.
-- **Position (Q3).** Every pill sits in the header action slot, not floating at the right edge below the header.
+- **Position (Q1b, 8 October).** Position is part of Q1. Every pill sits in the shell action column at the 30 September launcher position (right edge, below the header row), stacked vertically. Not in the header row, and not positioned per page.
 
 The reference capture is produced in W1 from a build of `54224f36`. It is the TV Movies page, cropped to the launcher, in light and dark, and the mobile layout as well. It is committed as `docs/parity/web/layout/reference/{tv,mobile}/{light,dark}/filters-0930.png` and is the pin for section 7.3.
 ## 3. Tokens
@@ -525,6 +528,8 @@ Answered on 8 October 2026 (owner rulings on Q1 and Q9 to Q12):
 | # | Question | Decision | Effect on this spec |
 |---|---|---|---|
 | Q1 | Reference look (confirmed) | **Owner, confirmed:** the 30 September `.tv-filter-launcher` tile (commit `54224f36`) is the reference look for every header action pill on every client. | Section 2.1 stands. |
+| Q1b | Position of the side-panel buttons | **Owner (8 October):** position is part of Q1 ("whatever was on web a week ago"). The app shell owns one fixed right-hand column where the 30 September launcher sat, and every page's side-panel and action buttons stack vertically in it. This overrides the coordinator default that put the pills in the header row. | Rule 2.3, section 2.1 and the `ShellActionColumn` component. Header row = Back, title, detail, clock, navigation. 30 September history: only Library (Filters) and Playlists (Create above Filters) had such buttons; the phone layout was a row left of the avatar. |
+| Q3b | Customise Home | **Owner (8 October), overrides Q3:** Customise Home is not a pill in the header or the column. It is removed from Home and moves into Settings. | Recorded here; delivered in its own PR. |
 | Q9 | Header row height | **Owner:** the header row grows to fit the tile, and all items centre vertically on the tile. | Rule 2.2 and the `--page-header-height` token. Back, title, clock and actions centre on the tile height. Each page's ⚑ list states the shift. |
 | Q10 | Back and period arrows | **Owner:** they stay round. Only the focus ring is added. | Rule 2.4 `icon` variant. They do not take the tile look. |
 | Q11 | Focus ring in the light theme | **Owner:** the ring is white (`#ffffff`) in dark theme and a near-black ink ring in light theme (the theme's ink token). Width, offset and the 1.06 scale are unchanged, with no fill. | Section 5.1 and the `--focus-ring-color` token. Wherever the spec said "literal white" or "white everywhere", it now reads as this theme-aware ring. |

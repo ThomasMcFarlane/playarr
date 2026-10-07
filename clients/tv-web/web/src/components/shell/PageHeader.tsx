@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { detailFitsInline } from "../../lib/pageHeaderLayout";
 import { Button, ButtonLink } from "../ui";
 import { FiltersButton, PanelButton } from "./FiltersDrawer";
+import { ShellActionColumnSlot } from "./ShellActionColumn";
 
 export interface FiltersSlot {
   label: string;
@@ -42,8 +43,8 @@ export interface PageHeaderProps {
   /** Extra class names for page-specific tweaks; the base layout never changes. */
   className?: string;
   /**
-   * The page's Filters. Rendered by the header itself in the one shared slot
-   * (top-right), so every filterable page looks and sits identically.
+   * The page's Filters. Rendered in the shell action column (right edge, vertical, as on 30 September), never in the
+   * header row, so every filterable page looks and sits identically.
    */
   filters?: FiltersSlot;
   /** Secondary panel openers rendered immediately left of Filters in the same style (Playlists' Create, Calendar subscription). */
@@ -131,7 +132,8 @@ export function PageHeader({
     };
   });
 
-  const hasActions = Boolean(actions || filters || navigation || panelButtons?.length);
+  const hasActions = Boolean(actions || navigation);
+  const hasPanelButtons = Boolean(filters || panelButtons?.length);
   const classes = [
     "tv-library-heading",
     "page-header",
@@ -142,6 +144,7 @@ export function PageHeader({
     .filter(Boolean)
     .join(" ");
   return (
+    <>
     <header ref={headerRef} className={classes}>
       {onBack ? (
         <Button
@@ -178,16 +181,19 @@ export function PageHeader({
         <div ref={actionsRef} className="page-header-actions">
           {navigation}
           {actions}
-          {filters || panelButtons?.length ? (
-            <div className="page-header-stack">
-              {panelButtons?.map((panel) => (
-                <PanelButton key={panel.id} {...panel} />
-              ))}
-              {filters ? <FiltersButton {...filters} /> : null}
-            </div>
-          ) : null}
         </div>
       ) : null}
     </header>
+    {hasPanelButtons ? (
+      <ShellActionColumnSlot>
+        <div className="page-header-stack">
+          {panelButtons?.map((panel) => (
+            <PanelButton key={panel.id} {...panel} />
+          ))}
+          {filters ? <FiltersButton {...filters} /> : null}
+        </div>
+      </ShellActionColumnSlot>
+    ) : null}
+    </>
   );
 }

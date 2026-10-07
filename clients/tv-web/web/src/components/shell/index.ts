@@ -6,3 +6,4 @@ export { SkeletonBlock, SkeletonLines } from "./Skeleton";
 export { ViewToggle, type ViewOption } from "./ViewToggle";
 export { DateRangeField, FilterSection, FiltersButton, FiltersDrawer, MultiSelect, PanelButton } from "./FiltersDrawer";
 export { PeriodPicker } from "./PeriodPicker";
+export { ShellActionColumnProvider, ShellActionColumnSlot } from "./ShellActionColumn";

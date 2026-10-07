@@ -103,6 +103,7 @@ import {
   PLAYARR_CLIENT_PLATFORM,
   shouldStartTvLink,
 } from "./lib/clientPlatform";
+import { ShellActionColumnProvider } from "./components/shell/ShellActionColumn";
 import { PRODUCT_NAV_GROUPS } from "./lib/productSurfaces";
 import { useLanguage } from "./lib/i18n/LanguageProvider";
 import type { TranslationKey } from "./lib/i18n/translations";
@@ -425,6 +426,7 @@ function AppShell() {
     <div
       className={`app-shell${isPlayerRoute ? " is-player-route" : ""}`}
     >
+      <ShellActionColumnProvider>
       <UpdateToast state={appUpdate} />
 
       {!isPlayerRoute && (
@@ -599,6 +601,7 @@ function AppShell() {
           </span>
         </div>
       )}
+      </ShellActionColumnProvider>
     </div>
     </RemoteProvider>
   );

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -76,6 +76,29 @@ describe("PageHeader filters slot", () => {
         source,
         `${page} must not restyle the shared header buttons`,
       ).not.toMatch(/page-filters-button/);
+    }
+  });
+
+  it("renders the side-panel buttons outside the header row (the shell action column owns them)", () => {
+    const markup = render(<PageHeader title="Movies" backLabel="Back" filters={filters("Filters")} />);
+    const header = /<header[\s\S]*?<\/header>/.exec(markup)?.[0] ?? "";
+    expect(header).not.toContain("data-filters-button");
+    expect(markup).toContain("data-filters-button");
+  });
+
+  it("keeps side-panel and action buttons out of pages: only the shell column places them", () => {
+    const pagesDir = new URL("../../pages/", import.meta.url);
+    const css = readFileSync(new URL("../../styles/global.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const column = /\.shell-action-column \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(column).toContain("position: absolute");
+    expect(column).toContain("var(--directory-controls-edge)");
+    const walk = (dir: URL): URL[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(new URL(`${e.name}/`, dir)) : /\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) ? [new URL(e.name, dir)] : [],
+      );
+    for (const file of walk(pagesDir)) {
+      const source = readFileSync(file, "utf8");
+      expect(source, `${file.pathname} renders a side-panel button itself`).not.toMatch(/<(FiltersButton|PanelButton)\b|page-filters-button|tv-filter-launcher/);
     }
   });
 });
