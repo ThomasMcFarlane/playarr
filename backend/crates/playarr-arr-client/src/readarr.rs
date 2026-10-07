@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use playarr_model::Sensitive;
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,10 @@ pub struct ReadarrAuthor {
     /// Goodreads author id.
     #[serde(rename = "foreignAuthorId")]
     pub foreign_author_id: String,
+    /// When the *arr app itself added this entry. Lenient: absent, null or
+    /// unparseable becomes `None`. Seeds `Work::added_at`.
+    #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]
+    pub added: Option<DateTime<Utc>>,
     pub monitored: bool,
     pub path: String,
 }

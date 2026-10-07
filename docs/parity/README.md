@@ -94,13 +94,13 @@ The calendar does not depend on the day you seed or capture: the page clock is f
 Reproducibility: two fresh fixture databases in different directories (separate media, art and ports) produced
 captures that differ by at most 0.01% of pixels on every one of the 48 screens, so the 1% budget leaves room for real
 layout differences only. What makes that true: artwork is generated with a pinned `gradients` seed and its title text is drawn from the bundled `scripts/fixtures/fonts/NunitoSans-Bold-art.ttf` (a static Bold instance of the design font; never a host font) (the filter's random
-start made every PNG differ byte for byte), `pin-added-at.mjs` (run by `up.sh` after seeding) writes an explicit, distinct `added_at` per title from
-`catalog.mjs` into the database (the server stamps the sync time and ignores the *arr `added` field, so the rails,
-which sort by `added_at` descending, used to depend on sync timing), avatars are
+start made every PNG differ byte for byte), the stub serves an explicit, distinct `added` per title from
+`catalog.mjs` (`ADDED_AT`) and the server seeds `added_at` from it (it used to stamp the sync time, so the rails,
+which sort by `added_at` descending, depended on sync timing), avatars are
 pinned, captures swallow playback progress writes, and the capture waits for images and for the app's own scroll
 position to settle. `up.sh` regenerates media and artwork when `media.mjs`, `art.mjs`, `catalog.mjs` or the clip
 length changed (a stamp file), so a stale media directory cannot leak into a fixture; seed a database with
-`--fresh` for a clean database (or re-run `up.sh`, which re-pins `added_at`). The references were captured for both themes on
+`--fresh` for a clean database. The references were captured for both themes on
 one fresh database from current main with the bundled fonts, the frozen clock `FIXTURE_CLOCK` (2026-10-07) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
 Capture the web again after changing the fixtures or the web client.
 

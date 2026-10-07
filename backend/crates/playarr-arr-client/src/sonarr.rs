@@ -37,6 +37,10 @@ pub struct SonarrSeries {
     /// `playarr_arr_sync::arr_client::map_sonarr`.
     #[serde(default, rename = "firstAired")]
     pub first_aired: Option<DateTime<Utc>>,
+    /// When the *arr app itself added this entry. Lenient: absent, null or
+    /// unparseable becomes `None`. Seeds `Work::added_at`.
+    #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]
+    pub added: Option<DateTime<Utc>>,
     /// Content rating (TV Parental Guidelines, e.g. `TV-MA`). Absent/null/
     /// blank for unrated series. Mapped to a `rating:` tag for household
     /// controls.

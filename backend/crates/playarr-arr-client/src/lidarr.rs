@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use playarr_model::Sensitive;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -30,6 +31,10 @@ pub struct LidarrArtist {
     pub genres: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub images: Vec<LidarrImage>,
+    /// When the *arr app itself added this entry. Lenient: absent, null or
+    /// unparseable becomes `None`. Seeds `Work::added_at`.
+    #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]
+    pub added: Option<DateTime<Utc>>,
     #[serde(default)]
     pub statistics: Option<LidarrArtistStatistics>,
 }

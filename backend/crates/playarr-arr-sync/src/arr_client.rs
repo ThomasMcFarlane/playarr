@@ -153,6 +153,12 @@ pub struct RemoteWork {
     /// Readarr -- see `map_lidarr`/`map_readarr`) or a Movie/Series entry
     /// the source app itself hasn't backfilled one for yet.
     pub release_date: Option<DateTime<Utc>>,
+    /// When the source *arr app itself added this entry (Radarr movie
+    /// `added`, Sonarr/Whisparr series `added`, Lidarr artist `added`),
+    /// already vetted by [`usable_added`]. Seeds `Work::added_at` so "Recently
+    /// added" reflects the real library history rather than first-sync time.
+    /// `None` when absent or implausible; callers fall back to now.
+    pub added: Option<DateTime<Utc>>,
     /// The arr app's content rating, normalised by [`normalise_certification`].
     /// `None` = unrated. Stored on the `Work` as an arr-owned
     /// `rating:<value>` tag (see `playarr_auth::household`).
@@ -161,6 +167,16 @@ pub struct RemoteWork {
     /// `score:`, see `playarr_model::home_rail`), replaced wholesale on every
     /// sync pass. Empty for sources that report none.
     pub arr_tags: Vec<String>,
+}
+
+/// An *arr `added` timestamp, or `None` when it is unusable: *arr apps send
+/// the .NET default (`0001-01-01`) for "unset", and a clock-skewed or
+/// corrupt value in the future must not pin a title to the top of the rails.
+/// Anything before 2000 or more than a day ahead counts as absent.
+pub fn usable_added(raw: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+    use chrono::{Duration, TimeZone};
+    let floor = Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).single()?;
+    raw.filter(|at| *at >= floor && *at <= Utc::now() + Duration::days(1))
 }
 
 /// Trims/uppercases a certification and drops the "not rated" spellings so
@@ -228,6 +244,7 @@ fn map_sonarr(series: &SonarrSeries) -> RemoteWork {
         genres: series.genres.clone(),
         images: sonarr_images(&series.images),
         release_date: series.first_aired,
+        added: usable_added(series.added),
         certification: normalise_certification(series.certification.as_deref()),
         arr_tags: sonarr_arr_tags(series),
     }
@@ -252,6 +269,7 @@ fn map_radarr(movie: &RadarrMovie) -> RemoteWork {
         genres: movie.genres.clone(),
         images: radarr_images(&movie.images),
         release_date: radarr_release_date(movie),
+        added: usable_added(movie.added),
         certification: normalise_certification(movie.certification.as_deref()),
         arr_tags: radarr_arr_tags(movie),
     }
@@ -307,6 +325,7 @@ fn map_lidarr(artist: &LidarrArtist, source_instance_id: Uuid) -> RemoteWork {
         // An artist (unlike a single album) has no one release date of its
         // own -- see `Work::release_date`'s doc comment.
         release_date: None,
+        added: usable_added(artist.added),
     }
 }
 
@@ -352,6 +371,7 @@ fn map_readarr(author: &ReadarrAuthor) -> RemoteWork {
         images: Vec::new(),
         // An author, like an artist, has no one release date of its own.
         release_date: None,
+        added: usable_added(author.added),
     }
 }
 
@@ -374,6 +394,7 @@ fn map_whisparr(series: &WhisparrSeries) -> RemoteWork {
         genres: series.genres.clone(),
         images: whisparr_images(&series.images),
         release_date: series.first_aired,
+        added: usable_added(series.added),
     }
 }
 
@@ -602,6 +623,7 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             first_aired: None,
+            added: None,
             certification: None,
             ratings: None,
             statistics: None,
@@ -621,6 +643,7 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             first_aired: None,
+            added: None,
         }
     }
 
@@ -651,6 +674,7 @@ mod tests {
             certification: None,
             collection: None,
             ratings: None,
+            added: None,
         }
     }
 
@@ -665,6 +689,7 @@ mod tests {
             overview: None,
             genres: Vec::new(),
             images: Vec::new(),
+            added: None,
             statistics: Some(LidarrArtistStatistics {
                 album_count: 9,
                 track_file_count,
@@ -825,6 +850,32 @@ mod tests {
         assert_eq!(remote.images.len(), 1);
         assert_eq!(remote.images[0].kind, playarr_model::ImageKind::Poster);
         assert_eq!(remote.images[0].url, "https://cdn.theporndb.net/poster.jpg");
+    }
+
+    #[test]
+    fn added_maps_for_every_source_and_rejects_unusable_values() {
+        let at = "2023-05-04T12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let mut series = sonarr_series(1, "Example Show", 1, true);
+        series.added = Some(at);
+        assert_eq!(map_sonarr(&series).added, Some(at));
+        let mut whisparr = whisparr_series(1, "Example Studio", 1, true);
+        whisparr.added = Some(at);
+        assert_eq!(map_whisparr(&whisparr).added, Some(at));
+        let mut movie = radarr_movie(1, "Test Movie A", 1, true, true);
+        movie.added = Some(at);
+        assert_eq!(map_radarr(&movie).added, Some(at));
+        let mut artist = lidarr_artist(1);
+        artist.added = Some(at);
+        assert_eq!(map_lidarr(&artist, Uuid::new_v4()).added, Some(at));
+
+        assert_eq!(map_sonarr(&sonarr_series(1, "X", 1, true)).added, None);
+        let unset = "0001-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert_eq!(usable_added(Some(unset)), None);
+        assert_eq!(
+            usable_added(Some(Utc::now() + chrono::Duration::days(30))),
+            None
+        );
+        assert_eq!(usable_added(None), None);
     }
 
     #[test]
