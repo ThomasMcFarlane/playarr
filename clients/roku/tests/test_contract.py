@@ -402,6 +402,34 @@ class PageShellTests(unittest.TestCase):
             self.assertIn(f'title: "{title}"', settings)
 
 
+class PlayerChromeTests(unittest.TestCase):
+    def test_player_has_quality_menu_and_layered_back(self) -> None:
+        chrome = (ROOT / "components" / "PlayerChrome.brs").read_text(encoding="utf-8")
+        for fragment in ("QUALITY", "Source quality", "sub playerMenuOpen", "sub playerApplyQuality"):
+            self.assertIn(fragment, chrome)
+        self.assertIn("hidePlayerControls()", MAIN)
+        self.assertIn("playerMenuOpen()", MAIN)
+
+    def test_household_gate_uses_the_status_endpoint(self) -> None:
+        pages = (ROOT / "components" / "Pages.brs").read_text(encoding="utf-8")
+        self.assertIn('"/api/v1/household/status"', pages)
+        self.assertIn('"/api/v1/household/approvals"', pages)
+        self.assertIn("Ask a guardian for more time", pages)
+
+
+class SeriesFocusTests(unittest.TestCase):
+    def test_series_opens_on_the_resume_plan_episode(self) -> None:
+        self.assertIn("/resume-plan", MAIN)
+        self.assertIn("function detailNextUpPosition", MAIN)
+        self.assertIn("m.detailEpisodePos = [0, 0]", MAIN)  # never leaks between titles
+        self.assertIn("acceptResumePlan(invalid)", MAIN)  # a failed plan still lands on the first playable episode
+
+    def test_library_key_art_is_not_fetched_with_url_transfer_on_the_render_thread(self) -> None:
+        start = MAIN.index("sub onBrowseKeyArtTimer()")
+        body = MAIN[start : MAIN.index("end sub", start)]
+        self.assertNotIn("roUrlTransfer", body)
+
+
 if __name__ == "__main__":
     unittest.main()
 

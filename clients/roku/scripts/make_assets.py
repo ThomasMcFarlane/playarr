@@ -28,6 +28,12 @@ ICONS = {
     "nav-playlists": '<path d="M5 6h10M5 10h10M5 14h6"/><path d="M17 13.5v6"/><path d="m17 13.5 4-1.5v5.5"/><circle cx="15.5" cy="19.5" r="1.5"/><circle cx="19.5" cy="17.5" r="1.5"/>',
     "nav-watchlist": '<path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.5L5 21V4.5a1 1 0 0 1 1-1Z"/><path d="M12 7.5v5M9.5 10h5"/>',
     "nav-calendar": '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    "player-play": '<path d="M7 4.5v15l13-7.5z" fill="white" stroke="none"/>',
+    "player-pause": '<rect x="6" y="4.5" width="4.5" height="15" rx="1" fill="white" stroke="none"/><rect x="13.5" y="4.5" width="4.5" height="15" rx="1" fill="white" stroke="none"/>',
+    "player-prev": '<rect x="4.5" y="5" width="2.4" height="14" rx="1" fill="white" stroke="none"/><path d="M19.5 5.5v13L8.2 12z" fill="white" stroke="none"/>',
+    "player-next": '<rect x="17.1" y="5" width="2.4" height="14" rx="1" fill="white" stroke="none"/><path d="M4.5 5.5v13L15.8 12z" fill="white" stroke="none"/>',
+    "player-subtitles": '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M6.5 12h4M13.5 12h4M6.5 15.5h7M15.5 15.5h2"/>',
+    "player-close": '<path d="M6 6l12 12M18 6 6 18"/>',
     "arrow-left": '<path d="M19 12H5M11 6l-6 6 6 6"/>',
     "arrow-right": '<path d="M5 12h14M13 6l6 6-6 6"/>',
     "arrow-up": '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -102,6 +108,13 @@ def main() -> None:
         for y in range(4):
             px[x, y] = (255, 255, 255, round(255 * x / 259))
     ramp.save(IMAGES / "page-fade.png")
+    # Player scrim (.player-scrim): black fading in from the top of the bottom 48 % to .92 at the bottom edge.
+    scrim = Image.new("RGBA", (4, 256), (255, 255, 255, 0))
+    spx = scrim.load()
+    for y in range(256):
+        for x in range(4):
+            spx[x, y] = (255, 255, 255, round(255 * y / 255))
+    scrim.save(IMAGES / "player-scrim.png")
     # Identity pill (.app-user-identity): 143.5 x 48.2, fully rounded, --surface at .66.
     rounded(144, 48, 24, 168).save(IMAGES / "nav-user-pill.png")
     # Active dock chip: 67.2 square, radius 16, ink at .09 (tinted by blendColor).

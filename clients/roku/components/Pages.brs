@@ -74,7 +74,11 @@ function pgLabel(parent as Object, x as Float, y as Float, w as Float, h as Floa
     if opts <> invalid
         if opts.horizAlign <> invalid then label.horizAlign = opts.horizAlign
         if opts.vertAlign <> invalid then label.vertAlign = opts.vertAlign
-        if opts.wrap = true then label.wrap = true
+        if opts.wrap = true
+            label.wrap = true
+            ' Roku adds the font's full line gap between wrapped lines; pull it back to the web's ~1.45 line height.
+            label.lineSpacing = -Int(size * 0.6)
+        end if
         if opts.maxLines <> invalid then label.maxLines = opts.maxLines
         if opts.lineSpacing <> invalid then label.lineSpacing = opts.lineSpacing
         if opts.mono = true then label.font = PlayarrMakeFont(weight, size, true)
@@ -317,7 +321,11 @@ function pageOnKey(key as String) as Boolean
         return false
     end if
     if key = "back"
-        pageLeaveToHome()
+        if m.pageKind = "household"
+            loadProfiles()
+        else
+            pageLeaveToHome()
+        end if
         return true
     end if
     if key = "OK"
@@ -350,6 +358,8 @@ sub pageActivate(item as Object)
         settingsAction(item)
     else if m.pageKind = "customise"
         customiseAction(item)
+    else if m.pageKind = "household"
+        householdAction(item)
     end if
 end sub
 
@@ -375,6 +385,9 @@ sub openPage(kind as String)
         m.calendarSelected = ""
         renderCalendar()
         loadCalendar()
+    else if kind = "household"
+        m.householdNote = ""
+        renderHousehold()
     else if kind = "customise"
         renderCustomise()
         sendApi("railPrefs", "GET", "/api/v1/home/rails/preferences?lang=en", invalid, true)
@@ -877,4 +890,80 @@ sub pageLeaveToHome()
     showOnly("home")
     m.top.screenState = "home"
     focusCurrentHomeRail()
+end sub
+
+' ---------------------------------------------------------------------------
+' Household gate (web HouseholdBlockedScreen): while the profile is outside its schedule or out of budget the app shows
+' "Not available right now" with "Ask a guardian for more time" and "Switch profile". The server decides; this only
+' polls GET /api/v1/household/status (every 30 s and on entering Home) so the screen appears before a request fails.
+
+sub householdPoll()
+    if m.refreshToken = invalid or m.refreshToken = "" then return
+    sendApi("householdStatus", "GET", "/api/v1/household/status", invalid, true)
+end sub
+
+sub acceptHouseholdStatus(data as Dynamic)
+    m.householdBlock = invalid
+    if data <> invalid
+        if data.state = "outside_schedule"
+            m.householdBlock = { kind: "schedule", until: data.next_start_at }
+        else if data.state = "budget_exhausted"
+            m.householdBlock = { kind: "budget", until: data.resets_at }
+        end if
+    end if
+    if m.householdBlock <> invalid
+        if m.top.screenState <> "page" or m.pageKind <> "household"
+            openPage("household")
+        end if
+    else if m.top.screenState = "page" and m.pageKind = "household"
+        enterHome(m.currentProfileName)
+    end if
+end sub
+
+function householdUntilText(iso as Dynamic) as String
+    if iso = invalid or iso = "" then return ""
+    dt = CreateObject("roDateTime")
+    dt.FromISO8601String(iso)
+    dt.ToLocalTime()
+    return calendarDayHeading(dt, true) + ", " + calendarTime(dt)
+end function
+
+sub renderHousehold()
+    pageBegin("", 0)
+    m.pageHead.removeChildrenIndex(m.pageHead.getChildCount(), 0)
+    m.pageItems = []
+    block = m.householdBlock
+    title = "Not available right now"
+    description = "This profile can’t watch at this time."
+    if block <> invalid
+        until = householdUntilText(block.until)
+        if block.kind = "schedule"
+            if until <> "" then description = "This profile can watch again at " + until + "."
+        else
+            title = "That’s all for today"
+            description = "Today’s watch time is used up."
+            if until <> "" then description = "Today’s watch time is used up. It resets at " + until + "."
+        end if
+    end if
+    pgRound(m.pageBody, 742.8, 129.6, 164, 164, 82, "surface", 138)
+    pgRound(m.pageBody, 742.8, 129.6, 164, 164, 82, "line", -1, true)
+    pgIcon(m.pageBody, 804, 191, 40, "icon-empty.png", "brand")
+    pgLabel(m.pageBody, 948.8, 181, 460, 36, title, 22, 700, "ink")
+    pgLabel(m.pageBody, 948.8, 223.7, 240, 34, description, 11, 400, "inkMuted", { wrap: true, maxLines: 2 })
+    askW = pgButton(m.pageBody, 723.6, 313.6, 50, "Ask a guardian for more time", "secondary", "hhAsk", invalid, 26)
+    pgButton(m.pageBody, 723.6 + askW + 12, 313.6, 50, "Switch profile", "secondary", "hhSwitch", invalid, 26)
+    if m.householdNote <> invalid and m.householdNote <> "" then pgLabel(m.pageBody, 723.6, 384, 900, 24, m.householdNote, 13, 400, "inkMuted")
+end sub
+
+sub householdAction(item as Object)
+    if item.action = "hhSwitch"
+        loadProfiles()
+    else if item.action = "hhAsk"
+        subject = "schedule"
+        if m.householdBlock <> invalid and m.householdBlock.kind = "budget" then subject = "budget"
+        sendApi("householdAsk", "POST", "/api/v1/household/approvals", { kind: "time", subject: subject }, true)
+        m.householdNote = "Request sent. A guardian can approve it on their profile."
+        renderHousehold()
+        pageFocusRender()
+    end if
 end sub

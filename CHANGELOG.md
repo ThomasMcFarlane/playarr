@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Roku: a series opens with focus on the episode to play next (its season selected and scrolled into view, S1E1 when nothing was watched), and library key art no longer crashes the channel.
 - Fire TV client: the signed-in session, device id and server address now survive an app restart (the storage allowlist still used the old `streamarr:` prefix, so nothing the shared packages wrote under `playarr:` was saved), and a device that holds a session opens on the profile picker instead of pairing again on every launch.
 - Harmony player now resumes from the server's saved position, saves progress (awaited) on exit, error and when backgrounded, and never writes position 0 before playback has started.
 - Xbox player now resumes from the server's saved position, saves progress on suspend and when minimised, and never writes position 0 before playback has started. Watch-state values now match the server.
@@ -104,6 +105,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.
 - Fire TV client: light and dark themes with the web palettes (the Appearance screen now switches them live without resetting navigation; "System" is dark on a TV), and static Nunito Sans and JetBrains Mono instances, because Vega ignores font weight for variable fonts.
 - Roku: dock entries and screens for Watchlist, Requests and the Release Calendar, a Customise Home pill, and Preferences with the web's ten sections (theme, avatar, language, player quality and audio, server, PIN lock and more).
 - Roku: light theme. Both web palettes are tokens, and a System, Light or Dark preference (sign-in/profile dropdown and Settings) recolours every screen.
