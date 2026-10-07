@@ -100,3 +100,12 @@ is in the dark column. Differences that remain against the shared references:
 - The references have no "Customise Home" pill on the home screen.
 - Player screens: the video frame is masked, the remaining mismatch is video pixels behind the control bar and
   the top buttons. Justified exception, agreed with the coordinator.
+
+### With the bundled fonts (Nunito Sans, JetBrains Mono)
+
+Android TV now embeds the same variable font files as the web, against the refreshed shared references and a fresh
+fixture database. Dark: home 1.78%, movies 4.45%, series 1.18%, film-detail 3.07%, series-detail 3.95%, search 0.93%,
+calendar 0.69%, settings 1.39%, profile-switcher 1.45%, household-blocked 0.43%; player screens stay video-bound
+(about 14 to 24% with the frame masked). The light theme is not re-measured here: the poster images in the emulator
+load only partly before a capture, which dominates its numbers, so it needs a capture run with decoded art.
+The Typeface bullet above is resolved by this change.

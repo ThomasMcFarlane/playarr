@@ -329,7 +329,61 @@ internal fun BoxScope.PhonePlayerOverlay(
     }
 }
 
-/** `.player-quality-menu` on a phone: fixed 12 px from both sides, 96 px above the bottom, scrolling past 58% of the height. */
+/** The menu's heading and rows; shared by the blurred window and the in-composition fallback. */
+@Composable
+private fun PhoneMenuPanelContent(
+    menu: PlayarrPlayerMenu,
+    controls: PlayarrPlaybackControls,
+    onQuality: (String) -> Unit,
+    onAudio: (String) -> Unit,
+    onSubtitle: (String?) -> Unit,
+) {
+    val locale = LocalPlayarrLanguage.current.locale
+    Column(
+        Modifier.heightIn(max = 489.5.dp).verticalScroll(rememberScrollState()).padding(8.8.dp),
+    ) {
+        Text(
+            when (menu) {
+                PlayarrPlayerMenu.Quality -> playarrString(PlayarrString.PlayerQualityHeading)
+                PlayarrPlayerMenu.Audio -> playarrString(PlayarrString.PlayerAudioHeading)
+                PlayarrPlayerMenu.Subtitles -> playarrString(PlayarrString.PlayerSubtitlesHeading)
+            }.uppercase(locale),
+            color = Color.White.copy(alpha = 0.56f), fontSize = 8.64.sp, lineHeight = 12.96.sp, fontWeight = FontWeight(760),
+            letterSpacing = 1.296.sp, style = WebTextStyle,
+            modifier = Modifier.padding(start = 11.2.dp, end = 11.2.dp, top = 8.8.dp, bottom = 7.2.dp),
+        )
+        when (menu) {
+            PlayarrPlayerMenu.Quality -> PhoneQualityMatrix(controls, onQuality)
+            PlayarrPlayerMenu.Audio -> controls.audioTracks.forEach { track ->
+                val selected = track.id == (controls.selectedAudioTrackId ?: controls.audioTracks.firstOrNull()?.id)
+                PhoneMenuOption(
+                    playarrAudioTrackLabel(track, locale, playarrString(PlayarrString.PlayerChannelsMono), playarrString(PlayarrString.PlayerChannelsStereo)),
+                    null, selected,
+                ) { onAudio(track.id) }
+            }
+            PlayarrPlayerMenu.Subtitles -> {
+                PhoneMenuOption(
+                    playarrString(PlayarrString.PlayerOff),
+                    playarrString(if (controls.subtitleTracks.isEmpty()) PlayarrString.PlayerNoSubtitleTracksAvailable else PlayarrString.PlayerNoSubtitles),
+                    controls.selectedSubtitleTrackId == null,
+                ) { onSubtitle(null) }
+                controls.subtitleTracks.forEach { track ->
+                    PhoneMenuOption(
+                        playarrSubtitleTrackLabel(track, locale, playarrString(PlayarrString.PlayerSubtitleForced)),
+                        null, track.id == controls.selectedSubtitleTrackId,
+                    ) { onSubtitle(track.id) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * `.player-quality-menu` on a phone: fixed 12 px from both sides, 96 px above the bottom, scrolling past 58% of the height.
+ * The web blurs what is behind it (`backdrop-filter: blur(24px)`). From API 31 the panel is a window sized to the panel
+ * whose background blur is switched on, so only the video behind the panel is blurred; below API 31 it is drawn in place
+ * with the same 90% tint and no blur.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BoxScope.PhonePlayerMenuPanel(
@@ -341,11 +395,18 @@ private fun BoxScope.PhonePlayerMenuPanel(
     onAudio: (String) -> Unit,
     onSubtitle: (String?) -> Unit,
 ) {
-    val locale = LocalPlayarrLanguage.current.locale
+    val shape = RoundedCornerShape(18.dp)
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+        BlurredMenuWindow(bottomMargin = 96.dp - 14.dp + bottomInset, onDismiss = onDismiss) {
+            Box(Modifier.fillMaxWidth().border(1.dp, Color.White.copy(alpha = 0.18f), shape)) {
+                PhoneMenuPanelContent(menu, controls, onQuality, onAudio, onSubtitle)
+            }
+        }
+        return
+    }
     Box(
         Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
     )
-    val shape = RoundedCornerShape(18.dp)
     WebShadowedBox(
         shadows = listOf(WebShadow(24.dp, 70.dp, Color.Black.copy(alpha = 0.5f))),
         shape = shape,
@@ -354,43 +415,41 @@ private fun BoxScope.PhonePlayerMenuPanel(
         innerWidthFill = true,
         innerModifier = Modifier.background(PlayerPanel).border(1.dp, Color.White.copy(alpha = 0.18f), shape),
     ) {
-        Column(
-            Modifier.heightIn(max = 489.5.dp).verticalScroll(rememberScrollState()).padding(8.8.dp),
-        ) {
-            Text(
-                when (menu) {
-                    PlayarrPlayerMenu.Quality -> playarrString(PlayarrString.PlayerQualityHeading)
-                    PlayarrPlayerMenu.Audio -> playarrString(PlayarrString.PlayerAudioHeading)
-                    PlayarrPlayerMenu.Subtitles -> playarrString(PlayarrString.PlayerSubtitlesHeading)
-                }.uppercase(locale),
-                color = Color.White.copy(alpha = 0.56f), fontSize = 8.64.sp, lineHeight = 12.96.sp, fontWeight = FontWeight(760),
-                letterSpacing = 1.296.sp, style = WebTextStyle,
-                modifier = Modifier.padding(start = 11.2.dp, end = 11.2.dp, top = 8.8.dp, bottom = 7.2.dp),
-            )
-            when (menu) {
-                PlayarrPlayerMenu.Quality -> PhoneQualityMatrix(controls, onQuality)
-                PlayarrPlayerMenu.Audio -> controls.audioTracks.forEach { track ->
-                    val selected = track.id == (controls.selectedAudioTrackId ?: controls.audioTracks.firstOrNull()?.id)
-                    PhoneMenuOption(
-                        playarrAudioTrackLabel(track, locale, playarrString(PlayarrString.PlayerChannelsMono), playarrString(PlayarrString.PlayerChannelsStereo)),
-                        null, selected,
-                    ) { onAudio(track.id) }
+        PhoneMenuPanelContent(menu, controls, onQuality, onAudio, onSubtitle)
+    }
+}
+
+/** A dialog window that is exactly the panel (12 dp side margins, [bottomMargin] up) with the system's background blur on. */
+@androidx.annotation.RequiresApi(31)
+@Composable
+private fun BlurredMenuWindow(bottomMargin: Dp, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val metrics = LocalContext.current.resources.displayMetrics
+        androidx.compose.runtime.SideEffect {
+            window?.let { w ->
+                val shapeBg = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = with(density) { 18.dp.toPx() }
+                    setColor(0xE6120E11.toInt())
                 }
-                PlayarrPlayerMenu.Subtitles -> {
-                    PhoneMenuOption(
-                        playarrString(PlayarrString.PlayerOff),
-                        playarrString(if (controls.subtitleTracks.isEmpty()) PlayarrString.PlayerNoSubtitleTracksAvailable else PlayarrString.PlayerNoSubtitles),
-                        controls.selectedSubtitleTrackId == null,
-                    ) { onSubtitle(null) }
-                    controls.subtitleTracks.forEach { track ->
-                        PhoneMenuOption(
-                            playarrSubtitleTrackLabel(track, locale, playarrString(PlayarrString.PlayerSubtitleForced)),
-                            null, track.id == controls.selectedSubtitleTrackId,
-                        ) { onSubtitle(track.id) }
-                    }
+                w.setBackgroundDrawable(shapeBg)
+                w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                // CSS blur(24px) is a Gaussian of sigma 24 CSS px; the window blur radius is in device pixels.
+                w.setBackgroundBlurRadius(with(density) { 24.dp.roundToPx() })
+                w.setGravity(android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL)
+                w.attributes = w.attributes.apply {
+                    width = metrics.widthPixels - with(density) { 24.dp.roundToPx() }
+                    height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+                    y = with(density) { bottomMargin.roundToPx() }
                 }
             }
         }
+        content()
     }
 }
 
@@ -489,7 +548,7 @@ private fun PhoneMatrixChoice(
             .padding(horizontal = 10.88.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f, fill = check), verticalArrangement = Arrangement.spacedBy(1.92.dp)) {
+        Column(Modifier.weight(1f, fill = check).offset(y = (-1.5).dp), verticalArrangement = Arrangement.spacedBy(1.92.dp)) {
             Text(title, color = Color.White, fontSize = 9.28.sp, lineHeight = 13.92.sp, fontWeight = FontWeight.Bold, style = WebTextStyle, maxLines = 1)
             detail?.let { Text(it, color = PlayerMuted, fontSize = 7.04.sp, lineHeight = 10.56.sp, style = WebTextStyle, maxLines = 1) }
         }

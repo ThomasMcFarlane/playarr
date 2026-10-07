@@ -206,6 +206,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
+- Parity: the native font files are now the exact instance the web renders (Nunito Sans with wdth 100, opsz 12 and YTLC 500 pinned, weight variable) in docs/parity/fonts.
+- Fixtures: the placeholder artwork titles are drawn with a bundled Nunito Sans Bold file instead of the host's default font, so the artwork is the same on every OS; the web parity references were re-captured.
+- Android phone calendar: the selected agenda entry draws the web's border, left bar and inset ring.
+- Android TV uses the bundled Nunito Sans and JetBrains Mono, as the web and the phone do.
 - Fixtures: artwork is generated with a pinned gradient seed and media or artwork is regenerated when its generator changes, so two fresh fixture databases produce identical parity captures; the web reference captures were refreshed (bundled fonts, display name, settled scroll).
 - Android: the profile chip and profile pages show the server's display name, resolved after sign-in and when a saved session is restored, instead of the username typed at sign-in.
 - Android phone: the client uses the web font and the web top-inset rules, the calendar offers Play and Resume, and the profile page follows the web phone layout with the theme selector and a Clients link.
@@ -2319,6 +2324,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone household blocked screen parity (0.83% in the light theme) and its capture step.
 - Regenerated the `@2x` architecture diagram PNGs from the SQLite-only SVGs, and corrected docs left over from the Postgres era: the backup description on the site (opt-in, age-encrypted, local unless an S3 destination is configured, offline CLI restore), the Kubernetes tier (StatefulSet, volume claim template, no Secret hook), the JWT secret fallback, the multi-node locking claims and the stale persistence gaps in the architecture overview.
