@@ -50,6 +50,16 @@ extension TVParityLaunch {
 
     static var isLive: Bool { route != nil }
 
+    /// `home-scrolled:<cards>:<scrollLeft>`: Home with the first rail moved right by `cards` focus steps and its track
+    /// scrolled `scrollLeft` points (the web capture's own offset, so both sit at the same position).
+    static var homeScroll: (cards: Int, offset: CGFloat)? {
+        guard let route, route.hasPrefix("home-scrolled") else { return nil }
+        let parts = route.split(separator: ":").map(String.init)
+        let cards = parts.count > 1 ? Int(parts[1]) ?? 4 : 4
+        let offset = parts.count > 2 ? Double(parts[2]).map { CGFloat($0) } ?? 0 : 0
+        return (cards, offset)
+    }
+
     /// `-PlayarrTheme light|dark`: forces the appearance for parity captures.
     static var theme: ColorScheme? {
         let args = ProcessInfo.processInfo.arguments
@@ -81,7 +91,7 @@ extension TVParityLaunch {
     static var liveTab: TVNavTab? {
         guard let route else { return nil }
         switch route.split(separator: ":", maxSplits: 1).first.map(String.init) ?? route {
-        case "home": return .home
+        case "home", "home-scrolled": return .home
         case "movies": return .movies
         case "series": return .series
         case "music": return .music

@@ -267,6 +267,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- tvOS parity run now captures a scrolled Home (rail moved right by four cards) in both themes and fails on a hard-cut rail edge, comparing it with the web at the same scroll offset.
+- tvOS Home no longer draws a Customise Home button (owner ruling: it lives in Settings).
 - Roku: Home shows every server rail under On deck like the web, On deck lists episodes with their frame and title, artists and a progress bar, and cards show the unwatched dot only for unwatched titles.
 - Roku: the Home hero and rail headings keep the web letter-spacing, the stage uses smooth gradient ramps, artwork is decoded at card size and retried when the relay drops a request, card focus uses the pinned web shadow and lift, the dock matches the web geometry, and the capture scripts record the web DOM.
 - Android: the Playarr web palette and the page chrome measurements (gutters, header geometry, safe areas, focus ring) now live in `core-designsystem` as observable, theme-aware tokens, with the form factor provided once from the main activity. `WebPink` is renamed `WebAccent`. No visual change.

@@ -174,7 +174,7 @@ struct TVHomeView: View {
     private func parityHomeLoaded(_ viewModel: TVHomeViewModel) -> some View {
         GeometryReader { geo in
             let hero = TVParityLaunch.isLive
-                ? Self.liveRailDefinitions(viewModel).first?.works.first
+                ? Self.liveHero(viewModel)
                 : heroWork(from: viewModel.works)
             ZStack(alignment: .topLeading) {
                 heroBackdrop(hero: hero, size: geo.size)
@@ -202,19 +202,6 @@ struct TVHomeView: View {
                     .padding(.top, geo.size.height * DesignTokens.Shell.titlePanelTopFraction)
                 }
                 homeRails(viewModel: viewModel, size: geo.size)
-                if TVParityLaunch.isLive {
-                    // Web `a.btn-secondary` in the page header: "Customise Home" at (1740.6, 32).
-                    Text("Customise Home")
-                        .font(TVTheme.font(size: 11.52, css: 720))
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .frame(width: 131.4, height: 38)
-                        .background(
-                            Capsule()
-                                .fill(DesignTokens.Color.backgroundElevated)
-                                .overlay(Capsule().stroke(DesignTokens.Color.borderDefault.opacity(0.35), lineWidth: 1))
-                        )
-                        .placed(x: 1740.6, y: 32, w: 131.4, h: 38)
-                }
             }
         }
         .ignoresSafeArea()
@@ -490,22 +477,61 @@ struct TVHomeView: View {
                     .tracking(-0.5)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .offset(x: x0, y: top - headingOffset)
-                ForEach(Array(definition.works.enumerated()), id: \.element.id) { index, work in
-                    let selected = railIndex == 0 && index == 0
-                    TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false, focusedLook: selected)
-                        .frame(
-                            width: DesignTokens.Shell.homeCardWidth,
-                            height: DesignTokens.Shell.homeCardHeight + DesignTokens.Shell.homeCardTitleBlock,
-                            alignment: .topLeading
-                        )
-                        // Web: the first card of the first rail is focused (scale 1.025, lifted).
-                        .scaleEffect(selected ? 1.025 : 1)
-                        .offset(x: x0 + CGFloat(index) * cardPitch, y: top - (selected ? 5.5 : 0))
-                }
+                railCards(definition.works, railIndex: railIndex, top: top, x0: x0, cardPitch: cardPitch)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .allowsHitTesting(false)
+    }
+
+    /// One live rail's cards. The first rail is the focused one: in the scrolled capture its track is moved left by the
+    /// web's scroll offset, the focused card is `cards` steps in, and the web's left gutter mask
+    /// (`--tv-track-left-fade`, transparent at the window's edge to opaque 152 px in) hides what scrolled past the start
+    /// line. The right-hand shadow (`.tv-media-track-window::after`) shows while content continues off-screen.
+    @ViewBuilder
+    private func railCards(_ works: [Work], railIndex: Int, top: CGFloat, x0: CGFloat, cardPitch: CGFloat) -> some View {
+        let scroll = railIndex == 0 ? TVParityLaunch.homeScroll : nil
+        let shift = scroll?.offset ?? 0
+        let focusIndex = railIndex == 0 ? (scroll?.cards ?? 0) : -1
+        let cards = ZStack(alignment: .topLeading) {
+            ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
+                let selected = index == focusIndex
+                TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false, focusedLook: selected)
+                    .frame(
+                        width: DesignTokens.Shell.homeCardWidth,
+                        height: DesignTokens.Shell.homeCardHeight + DesignTokens.Shell.homeCardTitleBlock,
+                        alignment: .topLeading
+                    )
+                    // Web: the focused Home card rises 6 px (the art scale is in TVHomeCard).
+                    .offset(x: x0 + CGFloat(index) * cardPitch - shift, y: top - (selected ? 6 : 0))
+            }
+        }
+        if shift > 0 {
+            let window = x0 - DesignTokens.Shell.railTrackLeftFade
+            cards
+                .frame(width: 1920, height: 1080, alignment: .topLeading)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .clear, location: window / 1920),
+                            .init(color: .black, location: x0 / 1920),
+                            .init(color: .black, location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+        } else {
+            cards
+        }
+    }
+
+    /// The hero follows focus: the first card of the first rail, or the focused one in the scrolled capture.
+    private static func liveHero(_ viewModel: TVHomeViewModel) -> Work? {
+        guard let first = liveRailDefinitions(viewModel).first?.works else { return nil }
+        let index = TVParityLaunch.homeScroll?.cards ?? 0
+        return first.indices.contains(index) ? first[index] : first.first
     }
 
     private func heroWork(from works: [Work]) -> Work? {
@@ -672,11 +698,19 @@ struct TVHomeCard: View {
                 cardArtwork
                     .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    // Pinned web values: rest 0 10 20 .14 + 0 3 8 .10; focused Home 0 26 52 .32 + 0 11 22 .22.
                     .shadow(
-                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(focusedLook ? 0.3 : 0.14),
-                        radius: focusedLook ? 24 : 10,
-                        y: focusedLook ? 24 : 10
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(focusedLook ? 0.32 : 0.14),
+                        radius: focusedLook ? 26 : 10,
+                        y: focusedLook ? 26 : 10
                     )
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(focusedLook ? 0.22 : 0.10),
+                        radius: focusedLook ? 11 : 4,
+                        y: focusedLook ? 11 : 3
+                    )
+                    // The art grows to 1.025 when focused.
+                    .scaleEffect(focusedLook ? 1.025 : 1)
                 // Fixture art may already include the pink unwatched disc.
                 if TVParityArtwork.cardImage(forTitle: work.title) == nil {
                     Circle()
@@ -686,16 +720,7 @@ struct TVHomeCard: View {
                         .padding(10.8)
                 }
             }
-            // Parity: no focus ring (SPA selected card uses soft lift only).
-            .overlay(
-                RoundedRectangle(cornerRadius: 12.5, style: .continuous)
-                    .stroke(
-                        (isSelected && !TVParityLaunch.frozen)
-                            ? DesignTokens.Color.brandPrimary
-                            : Color.clear,
-                        lineWidth: 3
-                    )
-            )
+            // Media cards never draw a focus ring: shadow plus lift only (owner ruling).
 
             // `.tv-home-card > strong` / `small`
             Text(work.title)

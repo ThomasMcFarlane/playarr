@@ -136,6 +136,15 @@ jobs:
           node scripts/parity/capture-web.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
             --out "$RUNNER_TEMP/parity/web" --layouts tv --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --dump-dom
 
+      - name: Capture the web scrolled states
+        if: env.PLATFORM == 'tvos'
+        env:
+          PARITY_CHROME_CHANNEL: chrome
+        run: |
+          # Home with the first rail moved right by four cards, at the track offset the web settles on (home-scrolled.json).
+          node scripts/parity/capture-web-scrolled.mjs --base "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" \
+            --out "$RUNNER_TEMP/parity/web-scrolled" --theme both --cards 4
+
       - name: Create the simulator (Apple TV at 1080p)
         id: simulator
         run: |
@@ -186,6 +195,18 @@ jobs:
             PARITY_THEME="$theme" scripts/parity/apple/capture-tvos.sh "$udid" "$bundle" "${{ steps.layout.outputs.screens }}" \
               "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" "$token" "$RUNNER_TEMP/parity/$theme/native"
           done
+          # Scrolled states (mandatory): the same position as the web capture, then the edge-fade check.
+          for theme in ${PARITY_THEMES:-dark light}; do
+            offset=$(node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log(m[0] ? m[0].scrollLeft : 0)' \
+              "$RUNNER_TEMP/parity/web-scrolled/tv/$theme/home-scrolled.json")
+            mkdir -p "$RUNNER_TEMP/parity/scrolled-native/tv/$theme"
+            xcrun simctl terminate "$udid" "$bundle" 2>/dev/null || true
+            xcrun simctl launch "$udid" "$bundle" -PlayarrParityNow "$(node scripts/parity/apple/fixture-clock.mjs)" \
+              -PlayarrServerURL "http://127.0.0.1:${PLAYARR_FIXTURE_PORT}" -PlayarrAccessToken "$token" \
+              -PlayarrParityRoute "home-scrolled:4:$offset" -PlayarrTheme "$theme" >/dev/null
+            sleep "${PARITY_SETTLE_SECONDS:-10}"
+            xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/scrolled-native/tv/$theme/home-scrolled.png"
+          done
           xcrun simctl io "$udid" screenshot "$RUNNER_TEMP/parity/size-probe.png"
           file "$RUNNER_TEMP/parity/size-probe.png" | tee "$RUNNER_TEMP/parity/size-probe.txt"
 
@@ -203,6 +224,14 @@ jobs:
           node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout tv \
             --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" --chrome-only \
             --out "$RUNNER_TEMP/parity/shared-diff" | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Diff the scrolled states
+        if: always() && env.PLATFORM == 'tvos'
+        run: |
+          echo "### tvOS scrolled states (Home rail scrolled by four cards) against the web at the same position" | tee -a "$GITHUB_STEP_SUMMARY"
+          cd scripts/parity && node apple/diff-scrolled.mjs --web "$RUNNER_TEMP/parity/web-scrolled" \
+            --native "$RUNNER_TEMP/parity/scrolled-native" --theme "$(echo "${PARITY_THEMES:-dark light}" | tr ' ' ',')" \
+            --out "$RUNNER_TEMP/parity/scrolled-diff" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Stop the fixture environment and delete the simulator
         if: always()
