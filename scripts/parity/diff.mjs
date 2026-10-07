@@ -3,7 +3,8 @@
 //
 //   node diff.mjs --ref <dir> --cand <dir> --layout tv|mobile [--theme light|dark|both] [--out <dir>]
 //                 [--screens id,id] [--threshold 0.1] [--max 1] [--fail]
-//                 [--mask-rect x,y,w,h[,screen-id]]... [--no-manifest-masks]
+//                 [--mask-rect x,y,w,h[,screen-id]]... [--keep-rect x,y,w,h[,screen-id]]... [--chrome-only]
+//                 [--no-manifest-masks]
 //
 // Both directories hold <layout>/<theme>/<screen-id>.png (what capture-web.mjs writes). The candidate
 // directory may instead hold the legacy <layout>/<screen-id>.png, which is taken as the light theme.
@@ -11,7 +12,10 @@
 // mismatch. Writes <out>/report.json, <out>/summary.md and <out>/report.html (reference, candidate and
 // diff overlays per screen, one section per theme). Ignored regions: --mask-rect (CSS px of the layout, repeatable,
 // optionally limited to one screen id) and the maskRects the reference manifest records for text that legitimately
-// differs per fixture instance (for example the server address); both images are blanked there before comparing. --fail exits 1 if any compared screen is over --max
+// differs per fixture instance (for example the server address); both images are blanked there before comparing.
+// --chrome-only (and --keep-rect) keep only the listed regions: everything outside them is blanked in both images, as
+// for the player screens whose decoded video is a codec difference, not UI. --chrome-only uses `compareRegions`
+// from screens.json for the layout; --keep-rect adds ad hoc regions. --fail exits 1 if any compared screen is over --max
 // or missing a candidate.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -51,7 +55,28 @@ const refManifest = (() => {
     return [];
   }
 })();
+const keepMasks = args.flatMap((a, i) => (a === "--keep-rect" && args[i + 1] ? [args[i + 1]] : [])).map((v) => {
+  const [x, y, w, h, screen] = v.split(",");
+  return { rect: [x, y, w, h].map(Number), screen };
+});
+const chromeOnly = args.includes("--chrome-only");
 const dpr = spec.layouts[layout].dpr;
+function keepFor(screen) {
+  const fromSpec = chromeOnly ? screen.compareRegions?.[layout] ?? [] : [];
+  const fromCli = keepMasks.filter((m) => !m.screen || m.screen === screen.id).map((m) => m.rect);
+  return [...fromSpec, ...fromCli];
+}
+// Blank everything outside the kept rectangles (CSS px).
+function keepOnly(png, rects) {
+  const keep = rects.map(([x, y, w, h]) => [Math.floor(x * dpr), Math.floor(y * dpr), Math.ceil((x + w) * dpr), Math.ceil((y + h) * dpr)]);
+  for (let yy = 0; yy < png.height; yy += 1) {
+    for (let xx = 0; xx < png.width; xx += 1) {
+      if (keep.some(([x0, y0, x1, y1]) => xx >= x0 && xx < x1 && yy >= y0 && yy < y1)) continue;
+      const o = (yy * png.width + xx) * 4;
+      png.data[o] = 255; png.data[o + 1] = 0; png.data[o + 2] = 255; png.data[o + 3] = 255;
+    }
+  }
+}
 function masksFor(theme, id) {
   const fromManifest = refManifest
     .filter((e) => e.layout === layout && e.theme === theme && e.id === id)
@@ -107,6 +132,11 @@ for (const theme of themes) {
     }
     const a = read(rp);
     const b = read(cp);
+    const kept = keepFor(s);
+    if (kept.length) {
+      keepOnly(a, kept);
+      keepOnly(b, kept);
+    }
     const masks = masksFor(theme, s.id);
     if (masks.length) {
       blank(a, masks);
@@ -130,6 +160,7 @@ for (const theme of themes) {
       candidate: `${b.width}x${b.height}`,
       sizeMatch: a.width === b.width && a.height === b.height,
       ...(masks.length ? { maskedRects: masks.length } : {}),
+      ...(kept.length ? { keptRegions: kept.length } : {}),
     });
   }
   report.themes[theme] = rows;

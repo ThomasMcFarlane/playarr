@@ -20,15 +20,20 @@ rasterisation).
 - `scripts/parity/screens.json`: the canonical screen list. Ids: `home`, `movies`, `series`, `film-detail`,
   `series-detail`, `search`, `calendar`, `settings` (the Appearance panel), the settings section panels
   `settings-avatar`, `settings-language`, `settings-player` (quality matrix), `settings-server`, `settings-lock` (PIN),
-  `settings-invite`, `settings-remote` (phone remote), `settings-latency` (request latency), `settings-your-data`, then
+  `settings-invite`, `settings-remote` (phone remote), `settings-latency` (request latency), `settings-your-data`, the tabs
+  `downloads`, `watchlist`, `requests`, then
   `player-controls`, `player-quality-menu`, `profile-switcher`, `household-blocked`. Each has the web route, the
   fixture user (default `fx-viewer`, the household screen uses `fx-child-locked`), the steps to reach the state and
   the layouts.
-- `scripts/parity/capture-web.mjs`: Playwright captures of the web reference.
+- `scripts/parity/capture-web.mjs`: Playwright captures of the web reference. `--dump-dom` also writes the rect, font
+  and colour of every visible element per screen (`<layout>/<theme>/dom/<id>.json`); `PARITY_CHROME_CHANNEL=chrome`
+  launches the installed Chrome; the `hideVideo` step blanks the video picture.
 - `scripts/parity/diff.mjs`: pixelmatch diff, per-screen mismatch table and an HTML report. Ignored regions:
   `--mask-rect x,y,w,h[,screen-id]` (CSS px of the layout, repeatable) and the `maskRects` the reference manifest
   records for text that differs per fixture instance (the `settings-server` address, from `maskSelectors` in
   `screens.json`); both images are blanked there before comparing. `--no-manifest-masks` turns the manifest ones off.
+  `--chrome-only` compares only the `compareRegions` of a screen (the tv player screens: top buttons, transport row and
+  the quality panel), blanking the decoded video in both images; `--keep-rect x,y,w,h[,screen-id]` adds ad hoc regions.
 - `docs/parity/web/<layout>/<theme>/<id>.png`: committed web reference captures (placeholder artwork only), plus
   `manifest.json`. (The earlier unthemed `<layout>/<id>.png` references are now `<layout>/light/<id>.png`.)
 
@@ -174,3 +179,10 @@ prints one per-screen table per theme and writes `report.json` (a `themes` objec
 compared screen is over `--max` (default 1) or has no candidate.
 
 Commit native captures and the `summary.md` under `docs/parity/<client>/`; keep the PNGs small.
+
+## One tool for every client
+
+The Apple workflow (`.github/workflows/parity-apple.yml`) uses these shared tools only: `capture-web.mjs --dump-dom` for
+the layout dump and `diff.mjs --chrome-only` against `docs/parity/web`. `scripts/parity/apple/screens.tv.json` now only
+maps shared screen ids to the tvOS app's native routes (`capture-tvos.sh` reads `id`, `native` and `user`). Screens the
+native client does not have yet (for example the settings section panels on tvOS) show as `missing-candidate` rows.
