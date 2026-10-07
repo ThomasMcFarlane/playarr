@@ -160,10 +160,10 @@ public final class AppEnvironment {
             expiresIn: response.expiresIn,
             peerAddresses: response.peerAddresses
         )
-        let resolvedName = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        currentUserName = resolvedName
+        currentUserName = nil
         currentUserID = response.userID
-        userDefaults.set(resolvedName, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
+        // The profile's display name from the server, never the username that was typed.
+        await refreshCurrentProfileName()
         await refreshCurrentAvatar()
     }
 
@@ -240,7 +240,18 @@ public final class AppEnvironment {
         }
         currentUserName = userDefaults.string(forKey: Self.userNameDefaultsKey(for: serverBaseURL))
         sessionState = isSignedIn ? .signedIn : .signedOut
-        if isSignedIn { await refreshCurrentAvatar() }
+        if isSignedIn {
+            await refreshCurrentProfileName()
+            await refreshCurrentAvatar()
+        }
+    }
+
+    /// Resolves the signed-in profile's display name from the server's profile list and remembers it;
+    /// keeps the remembered name when the list cannot be read.
+    public func refreshCurrentProfileName() async {
+        guard let name = await apiClient.resolveCurrentProfileName(currentUserID: currentUserID) else { return }
+        currentUserName = name
+        userDefaults.set(name, forKey: Self.userNameDefaultsKey(for: serverBaseURL))
     }
 
     public func signOut() async throws {

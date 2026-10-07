@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iOS: the signed-in profile is named by its display name from the server's profile list, resolved after sign-in and on app start, instead of the username typed to sign in (like Web and Android); the rule lives in PlayarrKit (`ProfileDisplayName`) with tests.
 - Web: after a session restore the profile name is resolved from the server's display name instead of staying the typed username or the Viewer placeholder.
 - The merge train now restores a PR branch to its pre-fold head whenever it blocks the PR or main moves after the fold, so folded TASKS/CHANGELOG commits no longer stay on branches and conflict on the next merge of main.
 - TV Home: the Customise Home button is no longer painted over (and blocked) by the full-height rails layer.
