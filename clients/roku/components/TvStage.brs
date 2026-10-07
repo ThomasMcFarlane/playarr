@@ -7,6 +7,7 @@
 ' SceneGraph substitution notes).
 
 sub init()
+    PlayarrFontifyTree(m.top)
     m.keyArtLayer = m.top.findNode("keyArtLayer")
     m.keyArt = m.top.findNode("keyArt")
     m.titlePanel = m.top.findNode("titlePanel")
@@ -29,9 +30,9 @@ sub resetForEntrance()
     m.keyArtLayer.opacity = 0
     m.keyArtLayer.translation = [15, 0]
     m.titlePanel.opacity = 0
-    m.titlePanel.translation = [110, 335]
+    m.titlePanel.translation = [110, 262]
     m.contentPanel.opacity = 0
-    m.contentPanel.translation = [1043, 259]
+    m.contentPanel.translation = [942, 430]
 end sub
 
 ' Force every stage layer fully visible at its settled translation.
@@ -43,9 +44,9 @@ sub revealStage()
     m.keyArtLayer.opacity = 1
     m.keyArtLayer.translation = [0, 0]
     m.titlePanel.opacity = 1
-    m.titlePanel.translation = [144, 335]
+    m.titlePanel.translation = [144, 262]
     m.contentPanel.opacity = 1
-    m.contentPanel.translation = [983, 259]
+    m.contentPanel.translation = [882, 430]
 end sub
 
 sub onKeyArtUriChange()

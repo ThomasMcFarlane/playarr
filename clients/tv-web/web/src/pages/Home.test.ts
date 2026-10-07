@@ -54,7 +54,7 @@ describe("Home layout", () => {
     );
 
     expect(sharedCopyRule).toContain("top: 24%");
-    expect(sharedCopyRule).toContain("left: clamp(102px, 8vw, 160px)");
+    expect(sharedCopyRule).toContain("left: max(clamp(102px, 8vw, 160px), var(--tv-nav-clearance))");
     expect(sharedCopyRule).toContain("width: min(24vw, 455px)");
     expect(sharedTitleRule).toContain("font-size: clamp(2.2rem, 3.6vw, 5rem)");
     expect(sharedTitleRule).toContain("line-height: 0.9");

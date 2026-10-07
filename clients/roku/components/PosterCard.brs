@@ -1,4 +1,5 @@
 sub init()
+    PlayarrFontifyTree(m.top)
     m.poster = m.top.findNode("poster")
     m.title = m.top.findNode("title")
     m.kind = m.top.findNode("kind")
@@ -6,6 +7,7 @@ sub init()
     m.cardRoot = m.top.findNode("cardRoot")
     m.artGroup = m.top.findNode("artGroup")
     m.focusAnim = m.top.findNode("focusAnim")
+    m.focusRing = m.top.findNode("focusRing")
     m.liftInterp = m.top.findNode("liftInterp")
     m.scaleInterp = m.top.findNode("scaleInterp")
 end sub
@@ -77,6 +79,10 @@ end sub
 ' the art zooms in a touch further (scale(1.025)).
 sub onFocusChanged()
     effective = m.top.focusPercent * m.top.activeRailFactor
+    ringOpacity = effective
+    if ringOpacity > 1 then ringOpacity = 1
+    if ringOpacity < 0 then ringOpacity = 0
+    m.focusRing.opacity = ringOpacity
     liftY = -10 * effective
     artScale = 1 + (effective * 0.025)
     m.liftInterp.key = [0, 1]

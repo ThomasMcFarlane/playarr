@@ -142,7 +142,7 @@ describe("SettingsIndexPage", () => {
       /\.tv-library,\s*\.tv-detail\s*\{[^}]*height:\s*var\(--viewport-height\)/s
     );
     expect(css).toMatch(
-      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(0, 35fr\) minmax\(0, 65fr\)/s
+      /\.settings-workspace-track\s*\{[^}]*grid-template-columns:\s*minmax\(calc\(var\(--tv-nav-clearance\) \+ 320px\), 35fr\) minmax\(0, 65fr\)/s
     );
     expect(css).toMatch(/\.settings-workspace\s*\{[^}]*inset:\s*0/s);
     expect(markup).toContain(

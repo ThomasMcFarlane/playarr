@@ -1225,6 +1225,7 @@ private fun PlayarrQualityPopover(
                     fontSize = 10.24.sp,
                     fontWeight = FontWeight(760),
                     letterSpacing = 0.819.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.width(156.6.dp).padding(start = 0.dp),
                 )
                 if (i < 2) Spacer(Modifier.width(6.dp))
@@ -1233,7 +1234,7 @@ private fun PlayarrQualityPopover(
         playarrQualityTiers.forEach { tier ->
             Spacer(Modifier.height(6.dp))
             Row(Modifier.height(60.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.width(118.7.dp).padding(start = 4.dp), verticalArrangement = Arrangement.Center) {
+                Column(Modifier.width(118.7.dp).padding(start = 4.dp).offset(y = (-2).dp), verticalArrangement = Arrangement.Center) {
                     Text(tier.label, color = Color.White, fontSize = 12.16.sp, fontWeight = FontWeight(760), lineHeight = 18.2.sp)
                     Text(tier.resolution, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.9.sp)
                 }
@@ -1277,18 +1278,19 @@ private fun QualityChoice(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
-        color = Color.White.copy(alpha = if (selected) 0.15f else 0.055f),
+        // Web: the selected choice is crimson (a faint crimson fill and a crimson ring), not white.
+        color = if (selected) WebKicker.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.055f),
         contentColor = Color.White,
         border = androidx.compose.foundation.BorderStroke(
             if (focused) 2.dp else 1.dp,
-            if (focused) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = if (selected) 0.24f else 0.1f),
+            if (focused) Color.White.copy(alpha = 0.9f) else if (selected) WebKicker.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.1f),
         ),
         modifier = modifier.onFocusChanged { focused = it.isFocused },
     ) {
         Row(Modifier.padding(horizontal = 9.92.dp, vertical = 8.8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Text(label, fontSize = 12.48.sp, fontWeight = FontWeight.Bold, lineHeight = 18.7.sp, maxLines = 1)
-                Text(detail, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.9.sp, maxLines = 1)
+                Text(label, fontSize = 12.48.sp, fontWeight = FontWeight.Bold, lineHeight = 15.sp, maxLines = 1, modifier = Modifier.offset(y = (-3).dp))
+                Text(detail, color = Color.White.copy(alpha = 0.54f), fontSize = 9.28.sp, lineHeight = 13.sp, maxLines = 1, modifier = Modifier.offset(y = (-1.5).dp))
             }
             if (selected) Text("\u2713", color = WebKicker, fontSize = 11.84.sp)
         }

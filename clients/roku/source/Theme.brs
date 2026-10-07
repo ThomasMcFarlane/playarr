@@ -63,45 +63,14 @@ function Theme() as object
             xxxl: 64
         }
 
-        ' Roku fonts are drawn from a fixed system family (font:MediumSystemFont /
-        ' font:MediumBoldSystemFont) at a given point size -- there is no variable
-        ' font-weight axis. Each design-tokens typeScale step's fontWeight is mapped:
-        ' 400 -> MediumSystemFont, 700 -> MediumBoldSystemFont. The `display` token's
-        ' 300 (light) weight has no Roku equivalent lighter than Medium, so it also
-        ' maps to MediumSystemFont per the task brief.
-        '
-        ' *** PLATFORM BUG - DO NOT ADD <Font role="font" .../> CHILDREN TO LABELS ***
-        ' Confirmed on real hardware (Roku Streaming Stick 4K, OS 14.10.5): any
-        ' `Label` node with a custom `<Font role="font" .../>` child renders its
-        ' text completely invisible -- this happens regardless of whether `uri`
-        ' is set, even a bare `<Font role="font" size="38" />` with no uri
-        ' reproduces it. Isolated via a live device test (screenshot
-        ' color-histogram diff showed zero non-background pixels in the label's
-        ' bounding box) and confirmed visually on the physical TV. A plain
-        ' `Label` with no `Font` child renders fine.
-        '
-        ' VERIFIED WORKAROUND: don't attach a Font child at all. Use the Label's
-        ' default (unstyled) font and apply the `scale` field instead, e.g.
-        ' scale="[1.19,1.19]", to visually resize the text. If the label is
-        ' `horizAlign="center"` or `"right"` and/or `wrap="true"`, see
-        ' components/MainScene.xml / components/TvStage.xml for the accompanying
-        ' `scaleRotateCenter` / width-height compensation needed to keep the
-        ' scaled text visually where the unscaled text would have been.
-        '
-        ' CALIBRATION: the default (unscaled, scale="[1,1]") font's glyph
-        ' cap-height was measured on-device at 32px for an all-caps string.
-        ' Treat 32 as the reference size -- for any size N you would have put in
-        ' a `<Font size="N" />`, use scale="[N/32, N/32]" (both axes equal),
-        ' rounded to 2 decimal places, on a Font-less Label instead.
-        '
-        ' These typeScale sizes below, pre-computed against that 32px baseline
-        ' for convenience when wiring up new Labels via this table:
-        '   micro (11)        -> scale 0.34
-        '   caption (12)      -> scale 0.38
-        '   body/bodyEmphasis (14) -> scale 0.44
-        '   subtitle (18)     -> scale 0.56
-        '   title (24)        -> scale 0.75
-        '   display (50)      -> scale 1.56
+        ' Typeface: the web draws everything in Nunito Sans. Roku cannot load a variable font, so static instances
+        ' (wght 300/400/500/600/700/800, cut from docs/parity/fonts/NunitoSans-wght-web.ttf with fontTools
+        ' varLib.instancer) and JetBrains Mono 400/700 live in pkg:/fonts. source/Fonts.brs attaches them from
+        ' BrightScript through the documented Font node (`uri` + `size`), which renders text correctly on the device
+        ' (OS 15.3.4, Streaming Stick 4K). A `<Font role="font"/>` child declared in the component XML does not (the
+        ' label stays blank), so never declare one. Labels authored with a `scale` (size N = scale N/32) are converted by
+        ' PlayarrFontifyTree at component init; labels created in code call PlayarrMakeFont(weight, size) directly.
+        ' Roku has no letter-spacing, so the web's negative tracking on the hero title cannot be reproduced exactly.
         type: {
             ' from: typeScale.micro { fontSize: 11, lineHeight: 16, fontWeight: 400 }
             ' size 11 -> scale 0.34

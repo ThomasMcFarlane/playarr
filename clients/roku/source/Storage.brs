@@ -14,6 +14,7 @@ function LoadSession() as Object
         refreshToken: section.Read("refresh_token")
         deviceId: section.Read("device_id")
         profileName: section.Read("profile_name")
+        directPairing: section.Read("direct_pairing") = "1"
     }
 end function
 
@@ -73,6 +74,18 @@ sub SaveTokens(accessToken as String, refreshToken as String, deviceId as String
     section.Flush()
 end sub
 
+' Remembers that the viewer typed their own server address (instead of using
+' the hosted broker), so a later re-pair goes to that server directly.
+sub SaveDirectPairing(direct as Boolean)
+    section = SessionRegistry()
+    if direct
+        section.Write("direct_pairing", "1")
+    else
+        section.Delete("direct_pairing")
+    end if
+    section.Flush()
+end sub
+
 sub SaveProfileName(profileName as String)
     section = SessionRegistry()
     section.Write("profile_name", profileName)
@@ -90,6 +103,7 @@ sub ClearSession(keepServer = true as Boolean)
     if not keepServer
         section.Delete("server_url")
         section.Delete("server_urls")
+        section.Delete("direct_pairing")
     else
         if serverUrl <> "" then section.Write("server_url", serverUrl)
         if serverUrls <> "" then section.Write("server_urls", serverUrls)

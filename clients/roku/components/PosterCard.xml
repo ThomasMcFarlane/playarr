@@ -114,17 +114,28 @@
              both light and dark). 11px inset from the art's own top/right
              edges (measured top:10.56/right:10.56 on the real element). -->
         <Poster id="unwatchedBadge" translation="[196,11]" width="13" height="13" uri="pkg:/images/badge-unwatched.png" visible="false" />
+        <!-- Focus ring: a 3px light outline inset in the art edge (RowList clips anything outside the item box) that fades in with
+             the card's effective focus (SceneGraph has no border primitive,
+             so four thin Rectangles), so the focused card is unmistakable on
+             a TV even without the lift. Opacity is driven by onFocusChanged. -->
+        <Group id="focusRing" opacity="0">
+          <Rectangle id="ringTop" translation="[0,0]" width="220" height="3" color="0xF4F0F1FF" />
+          <Rectangle id="ringBottom" translation="[0,121]" width="220" height="3" color="0xF4F0F1FF" />
+          <Rectangle id="ringLeft" translation="[0,0]" width="3" height="124" color="0xF4F0F1FF" />
+          <Rectangle id="ringRight" translation="[217,0]" width="3" height="124" color="0xF4F0F1FF" />
+        </Group>
       </Group>
       <!-- Title + kind sit BELOW the art box entirely, on the page's own
            background, not overlaid on the art, confirmed live there is no
            dark title-bar strip anywhere in the real design. -->
-      <Label id="title" translation="[0,134]" width="220" height="18" numLines="1" scale="[0.35,0.35]" color="0xF4F0F1FF" />
-      <Label id="kind" translation="[0,152]" width="220" height="14" numLines="1" scale="[0.27,0.27]" color="0x887A82FF" />
+      <Label id="title" translation="[0,134]" width="629" height="51" numLines="1" scale="[0.35,0.35]" color="0xF4F0F1FF" />
+      <Label id="kind" translation="[0,152]" width="815" height="52" numLines="1" scale="[0.27,0.27]" color="0x887A82FF" />
     </Group>
     <Animation id="focusAnim" duration="0.16" easeFunction="inOutCubic">
       <Vector2DFieldInterpolator id="liftInterp" fieldToInterp="cardRoot.translation" />
       <Vector2DFieldInterpolator id="scaleInterp" fieldToInterp="artGroup.scale" />
     </Animation>
   </children>
+  <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
   <script type="text/brightscript" uri="pkg:/components/PosterCard.brs" />
 </component>

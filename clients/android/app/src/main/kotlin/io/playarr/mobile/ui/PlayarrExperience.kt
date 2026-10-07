@@ -4322,18 +4322,18 @@ private fun TelevisionSearchBody(
             modifier = Modifier.offset(x = 153.6.dp, y = 268.2.dp).height(56.dp).widthIn(min = 165.7.dp).focusProperties { up = searchFieldFocus },
         ) {
             Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-                Column {
-                    Text(playarrString(PlayarrString.SearchFilters), fontSize = 11.136.sp, fontWeight = FontWeight(760))
-                    Text(
-                        playarrString(mediaFilter.label) + playarrString(
-                            PlayarrString.SearchLibraryFilter,
-                            "library" to (activeLibraryName ?: playarrString(PlayarrString.SearchAllLibraries)),
-                        ),
-                        color = WebInkMuted,
-                        fontSize = 9.216.sp,
-                    )
-                }
+                // Web `.tv-search-filter-button`: the sliders icon, the label and the summary on one line.
+                Icon(PlayarrWebIcons.Filters, contentDescription = null, tint = WebKicker, modifier = Modifier.size(14.dp))
+                Text(playarrString(PlayarrString.SearchFilters), fontSize = 11.136.sp, fontWeight = FontWeight(760), maxLines = 1)
+                Text(
+                    playarrString(mediaFilter.label) + playarrString(
+                        PlayarrString.SearchLibraryFilter,
+                        "library" to (activeLibraryName ?: playarrString(PlayarrString.SearchAllLibraries)),
+                    ),
+                    color = WebInkMuted,
+                    fontSize = 9.216.sp,
+                    maxLines = 1,
+                )
             }
         }
         if (filtersOpen) {
@@ -4384,13 +4384,13 @@ private fun TelevisionSearchBody(
                     fontSize = 48.sp,
                     fontWeight = FontWeight(560),
                     letterSpacing = (-3.456).sp,
-                    lineHeight = 43.2.sp,
+                    lineHeight = 33.2.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.8.dp),
+                    modifier = Modifier.padding(top = 8.8.dp).offset(y = (-5).dp),
                 )
                 if (selectedWork != null) {
-                    Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         selectedWork.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year?.let {
                             Text(it.toString(), color = WebInkMuted, fontSize = 10.368.sp, lineHeight = 15.6.sp)
                         }
@@ -6495,13 +6495,16 @@ private fun WebEpisodeDetailCard(
             .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
             .clickable(enabled = available, onClick = onPlay),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(150.8.dp)
-                .scale(artScale)
-                .clip(RoundedCornerShape(13.44.dp))
-                .background(WebSurfaceSoft),
+        // `.tv-episode-art` box-shadow: a resting pair, and the larger pair while the episode is selected.
+        WebShadowedBox(
+            shadows = if (lift) {
+                listOf(WebShadow(24.dp, 48.dp, WarmShadow.copy(alpha = 0.30f)), WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.20f)))
+            } else {
+                listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
+            },
+            shape = RoundedCornerShape(13.44.dp),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale),
+            innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
             WebEpisodeArt {
                 AuthenticatedArtwork(
@@ -6792,12 +6795,11 @@ private fun WebEpisodeCard(
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(150.8.dp)
-                .clip(RoundedCornerShape(13.44.dp))
-                .background(WebSurfaceSoft)
+        WebShadowedBox(
+            shadows = listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f))),
+            shape = RoundedCornerShape(13.44.dp),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp),
+            innerModifier = Modifier.background(WebSurfaceSoft)
                 .then(if (focused) Modifier.border(2.dp, WebInk.copy(alpha = 0.7f), RoundedCornerShape(13.44.dp)) else Modifier),
         ) {
             WebEpisodeArt { art() }

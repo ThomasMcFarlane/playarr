@@ -482,47 +482,43 @@
            real hardware the two visibly overlapped (confirmed live: "Season 1" label was
            swallowed by the overview's last line). Bumped both siblings' y to 230 for a
            real ~83px gap below the overview text. -->
-      <Label id="detailOverview" translation="[0,0]" width="1067" height="182" wrap="true" maxLines="4" scale="[0.81,0.81]" color="0xDCE5F0FF" />
-      <LabelList id="detailActions" translation="[0,230]" itemSize="[600,68]" numRows="3" focusBitmapBlendColor="0xCF3157FF" />
-      <!-- itemSize is the ROW's own viewport box, not one item's size, see
-           libraryList's identical comment above for the confirmed-live root
-           cause. 860 matches TvStage's contentPanel width this renders into. -->
-      <RowList id="detailEpisodes" translation="[0,230]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[860,185]" rowItemSize="[[220,165]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[185]" showRowLabel="true"
-        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+      <!-- Web puts the synopsis in the left title panel (TvStage's
+           stageOverview) and the Play/Resume button right under it, so the
+           overview Label stays declared (it is still cleared elsewhere) but
+           hidden, and detailActions is NOT reparented into the right-hand
+           content panel (see MainScene.brs init). -->
+      <Label id="detailOverview" translation="[0,0]" width="1067" height="182" wrap="true" maxLines="4" scale="[0.81,0.81]" color="0xDCE5F0FF" visible="false" />
+      <LabelList id="detailActions" translation="[176,760]" itemSize="[300,64]" numRows="1" focusBitmapBlendColor="0xCF3157FF" />
+      <!-- RowList places each row's items vertically centred inside
+           rowHeights[row] and draws the row label at rowLabelOffset from the
+           row top. The previous 185px row with a -30px label offset put the
+           label ABOVE the row, outside the list, so it was clipped and then
+           covered by the cards ("Season N" / "Similar Titles" overlapped).
+           Rows are now tall enough for label + cards (matching web's ~315px
+           season pitch) with the label at a positive offset inside the row.
+           MainScene.brs sets rowHeights/numRows per title and lays the three
+           right-hand rails out vertically (layoutDetailRails). -->
+      <RowList id="detailEpisodes" translation="[0,0]" itemComponentName="PosterCard"
+        numRows="2" itemSize="[1038,630]" rowItemSize="[[275,206]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[315]" showRowLabel="true"
+        rowLabelOffset="[[0,10]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
-      <!-- Chapters + Similar Titles rails (confirmed live against the real
-           detail page): movies show a "Chapters" rail (from GET
-           /api/v1/media/{media_file_id}/chapters, each card's art from GET
-           /api/v1/media/{id}/thumbnail?position_ms={start_ms}, a genuine
-           per-timestamp generated thumbnail, not a static image) below the
-           Play button, and any kind shows a "Similar Titles" rail below
-           that, confirmed live via the network panel that
-           /api/v1/catalog/{id}/similar 404s for this catalog (no cached
-           embeddings) and tv-web's own WorkDetail.tsx falls back to a
-           client-side genre search: up to 3 of the work's own genres, each
-           fetched via GET /api/v1/catalog?genre={genre}&limit=100, merged
-           and deduplicated by id, scored by
-           sharedGenres*100 + sameKind*10 + yearProximity(max 5) and sorted
-           descending, capped at 20, see MainScene.brs's
-           loadSimilarTitles/scoreSimilarWork for the port of that exact
-           algorithm. Both use the larger .tv-title-card sizing (cardScale
-           1.5) like the Library/Search grids, not Home's smaller rail card. -->
-      <RowList id="detailChapters" translation="[0,320]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[860,270]" rowItemSize="[[330,247]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
-        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+      <!-- Chapters + Similar Titles rails (see the earlier note on the real
+           detail page's network calls and the genre-search fallback). Both
+           use the larger .tv-title-card sizing (cardScale 1.5 = 330x247). -->
+      <RowList id="detailChapters" translation="[0,0]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[1038,330]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[330]" showRowLabel="true"
+        rowLabelOffset="[[0,4]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
-      <RowList id="detailSimilar" translation="[0,610]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[860,270]" rowItemSize="[[330,247]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
-        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+      <RowList id="detailSimilar" translation="[0,0]" itemComponentName="PosterCard"
+        numRows="1" itemSize="[1038,330]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[330]" showRowLabel="true"
+        rowLabelOffset="[[0,4]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
-      <Label translation="[100,915]" width="1600" height="50" text="Back library" scale="[0.69,0.69]" color="0xA9B7C9FF" />
     </Group>
 
     <!--
@@ -590,8 +586,8 @@
       <!-- Clock from .app-clock on TV stage: top band, mid-canvas
            (right: calc(65% + ~38px) ≈ x~600 at 1920). Time + date sit on one
            baseline row like web's grid-template-columns: auto auto. -->
-      <Label id="clockTime" translation="[600,42]" width="160" height="36" scale="[0.55,0.55]" color="0xF4F0F1FF" />
-      <Label id="clockDate" translation="[720,50]" width="360" height="28" scale="[0.36,0.36]" color="0x887A82FF" />
+      <Label id="clockTime" translation="[480,72]" width="160" height="36" scale="[0.55,0.55]" color="0xF4F0F1FF" />
+      <Label id="clockDate" translation="[534,76]" width="360" height="28" scale="[0.36,0.36]" color="0x887A82FF" />
 
       <!-- navDock: web-matched TV left rail (.app-nav / .app-nav-group /
            .app-nav-link). Three rounded group panels (pre-rendered PNGs —
@@ -710,14 +706,14 @@
       <Rectangle id="endButton3" translation="[1150,400]" width="300" height="72" color="0x2A262CFF" />
       <Label id="endButtonLabel3" translation="[1150,418]" width="300" height="50" horizAlign="center" scale="[0.69,0.69]" scaleRotateCenter="[150,25]" color="0xFFFFFFFF" />
       <RowList id="endSuggestions" translation="[160,610]" itemComponentName="PosterCard"
-        numRows="1" itemSize="[1600,270]" rowItemSize="[[330,247]]"
-        rowItemSpacing="[[24,0]]" rowHeights="[270]" showRowLabel="true"
-        rowLabelOffset="[[0,-30]]" focusXOffset="[0]"
+        numRows="1" itemSize="[1600,330]" rowItemSize="[[330,247]]"
+        rowItemSpacing="[[24,0]]" rowHeights="[330]" showRowLabel="true"
+        rowLabelOffset="[[0,4]]" focusXOffset="[0]"
         focusBitmapBlendColor="0x00000000" rowFocusAnimationStyle="fixedFocusWrap"
         visible="false" />
     </Group>
 
-    <Timer id="pairingTimer" repeat="true" />
+    <Timer id="pairingPollTimer" repeat="true" />
     <!-- Matches tv-web's useMinuteClock: a 30s refresh is frequent enough
          for a clock that only displays hours/minutes. -->
     <!-- 1s: header clock + pairing "Code refreshes in M:SS" (web DeviceLogin). -->
@@ -730,6 +726,7 @@
     <!-- Deferred browse key-art download so acceptBrowseCatalog can paint first. -->
     <Timer id="browseKeyArtTimer" duration="0.5" repeat="false" />
   </children>
+  <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
   <script type="text/brightscript" uri="pkg:/source/Config.brs" />
   <script type="text/brightscript" uri="pkg:/source/Storage.brs" />
   <script type="text/brightscript" uri="pkg:/source/Api.brs" />
