@@ -53,12 +53,16 @@ private struct TVTabPage<Content: View>: View {
             TVRailPanelGradient(width: 1190.4)
             TVPageHeader(title: title)
             if let detail {
+                Rectangle()
+                    .fill(DesignTokens.Color.borderDefault.opacity(0.5))
+                    .frame(width: 255.3, height: 1)
+                    .placed(x: 226.6, y: 112.1, w: 255.3, h: 1)
                 Text(detail.uppercased())
                     .font(TVTheme.font(size: 11.14, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(DesignTokens.Color.textDisabled)
                     .lineLimit(1)
-                    .placed(x: 226.6, y: 112.1, w: 480, h: 24.1)
+                    .placed(x: 226.6, y: 115, w: 480, h: 24.1)
             }
             content()
         }
@@ -110,7 +114,7 @@ struct TVWatchlistView: View {
             } else if items != nil {
                 TVEmptyStateBlock(
                     title: "Your watchlist is empty",
-                    detail: "Add titles from search or a detail page.",
+                    detail: "Add titles from search or a title page to keep them here on every device.",
                     top: 89.6
                 )
             }
