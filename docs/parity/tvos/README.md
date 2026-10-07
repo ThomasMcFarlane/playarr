@@ -15,7 +15,7 @@ The captures here are the native frames at half size (960x540, 64 colours); the 
 native, reference and diff images and an HTML report. `shared-summary.md` and `{dark,light}/summary.md (the tabs outside the shared list)` are the
 raw tables.
 
-Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37604182853 (against the #147 TV-identity references).
+Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37606853654 (against the #147 TV-identity references).
 
 ## Mismatch per screen (percent, against the shared references)
 
@@ -31,19 +31,22 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37604182853 (
 | settings | 0.77 | 0.76 |
 | profile switcher | 0.70 | 0.80 |
 | household blocked (fx-child-locked) | 0.41 | 0.39 |
-| player, controls visible | 0.91 | 0.91 |
-| player, quality menu open | 1.70 | 1.70 |
+| player, controls visible (video masked) | 0.19 | 0.19 |
+| player, quality menu open (video masked) | 0.92 | 0.92 |
 | Downloads, Watchlist, Requests (local capture) | 0.27 to 0.36 | 0.27 to 0.38 |
 
-23 of 24 shared captures are at or under 1%; the quality menu is the exception (justified below).
+All 24 shared captures are at or under 1%.
 
 ## Justified differences
 
-- Player quality menu (1.70%): the fixture clips are Matroska and the runner cannot transcode, so the native
-  player cannot play them there. The video layer is the server's own frame of the clip at 2.0 s (the endpoint the chapter
-  thumbnails use), colour-corrected for the browser's conversion and scaled to the stage. The remaining difference is the
-  scaler along colour edges and, in the quality menu, the web's backdrop blur behind the panel. Chrome (scrim, buttons,
-  scrubber, quality matrix) matches.
+- Player screens: the fixture clips are Matroska and the runner cannot transcode, so the native player cannot play
+  them there. The video layer is the server's own frame of the clip at 2.0 s (the endpoint the chapter thumbnails use),
+  colour-corrected for the browser's conversion. As on Android, the decoded video is masked on both sides
+  (`scripts/parity/apple/mask-video.mjs` copies every pixel outside the chrome from the reference), so the numbers
+  compare the chrome only: top buttons, the scrubber and transport band and, with the menu open, the quality panel
+  including its backdrop blur (the web's `blur(24px) saturate(120%)` over a 0.9 tint; the native route blurs its copy of
+  the frame the same way and playback uses the system material over the live video). The unmasked captures remain in
+  the workflow artifact.
 - Focus: the references show the first control focused on load (scaled card, heavy shadow, ringed Today, white back
   button). The frozen captures draw the same state; at runtime the tvOS focus engine replaces the web's hover and
   focus-visible styling, with the same scale and shadow values for the focused card.
@@ -59,5 +62,6 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37604182853 (
 
 ## Not covered / follow-ups
 
-- Per-episode download buttons wait for the web.
+- Downloads on the detail pages: web PR #117 added a season Download button and a title Download button (there is no
+  per-episode button). tvOS draws both and makes them focusable; they explain that Apple TV keeps no offline copies.
 - The calendar Play button shows only for entries whose media is on disk, as on the web.

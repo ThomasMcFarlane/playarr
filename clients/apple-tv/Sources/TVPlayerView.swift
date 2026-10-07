@@ -44,12 +44,7 @@ struct TVPlayerView: View {
             // layer is the server's frame of the clip at the paused position, scaled to the stage.
             ZStack(alignment: .topLeading) {
                 Color.black
-                TVAuthedImage(load: {
-                    let data = try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int(parity.position * 1000))
-                    return TVVideoFrameColour.matchingBrowser(data)
-                }) { Color.black }
-                    .frame(width: 1920, height: 1080)
-                    .clipped()
+                parityFrame
                 TVPlayerChrome(
                     state: TVPlayerChromeState(
                         position: parity.position,
@@ -59,7 +54,8 @@ struct TVPlayerView: View {
                         selectedQualityID: viewModel.selectedQualityID,
                         menuOpen: parity.menuOpen
                     ),
-                    frozen: true
+                    frozen: true,
+                    menuBackdrop: AnyView(parityFrame)
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -68,6 +64,16 @@ struct TVPlayerView: View {
         } else {
             playerBody
         }
+    }
+
+    /// The server's frame of the clip at the paused position, colour-matched to the browser's output.
+    private var parityFrame: some View {
+        TVAuthedImage(load: {
+            let data = try await apiClient.fetchMediaThumbnail(mediaFileID: mediaFileID, positionMs: Int((parity?.position ?? 0) * 1000))
+            return TVVideoFrameColour.matchingBrowser(data)
+        }) { Color.black }
+            .frame(width: 1920, height: 1080)
+            .clipped()
     }
 
     private var playerBody: some View {

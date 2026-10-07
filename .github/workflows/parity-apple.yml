@@ -199,6 +199,9 @@ jobs:
             for id in $(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(s.screens.filter(x=>x.shared).map(x=>x.id).join(" "))' "${{ steps.layout.outputs.screens }}"); do
               cp "$RUNNER_TEMP/parity/$theme/native/$id.png" "$RUNNER_TEMP/parity/cand/tv/$theme/$id.png" 2>/dev/null || true
             done
+            # The player screens compare chrome only: the decoded video is masked on both sides (as on Android).
+            node scripts/parity/apple/mask-video.mjs "docs/parity/web/tv/$theme" "$RUNNER_TEMP/parity/$theme/native" \
+              "$RUNNER_TEMP/parity/cand/tv/$theme" player-controls player-quality-menu || true
           done
           echo "### tvOS parity against the shared web references (tv layout)" | tee -a "$GITHUB_STEP_SUMMARY"
           node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout tv --theme both \

@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- tvOS: the player quality panel blurs the video behind it like the web, the player parity numbers mask the decoded video, and the season and title Download controls are focusable and explain that Apple TV keeps no offline copies.
 - tvOS: embeds Nunito Sans and JetBrains Mono (the files shared with iOS), shows the agenda release calendar and the profile display name, and the Apple parity workflow now diffs against the shared web references in both themes.
 - Android TV settings: the section panels (avatar, language, player, server, profile lock, invite, request latency, phone remote, your data) follow the web TV layout.
 - Fixtures: every title gets an explicit, distinct added_at (pinned after the first sync), so the home rail order never depends on sync timing; up.sh now needs the sqlite3 CLI.
