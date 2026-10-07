@@ -22,6 +22,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.Dp
@@ -489,24 +498,25 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
 @Composable
 private fun YourDataTelevision(viewModel: YourDataViewModel) {
     val state by viewModel.state.collectAsState()
-    // Web TV `.settings-your-data`: 26 px headings, 20.5 px muted body at a 30 px line, a 13 px note, 58 px pills.
-    val heading: @Composable (String, Dp) -> Unit = { text, top ->
-        Text(text, color = WebInk, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight(430), letterSpacing = (-0.5).sp, modifier = Modifier.padding(top = top))
+    // Web TV `.settings-your-data`: 22.464 px bold headings, 19.2 px muted body, a 12.48 px note, 58 px pills; blocks 30.24 px apart.
+    val gap = 30.24.dp
+    val heading: @Composable (String) -> Unit = { text ->
+        Text(text, color = WebInk, fontSize = 22.464.sp, lineHeight = 33.7.sp, fontWeight = FontWeight.Bold, style = cssLine())
     }
     val body: @Composable (String) -> Unit = { text ->
-        Text(text, color = WebInkMuted, fontSize = 20.5.sp, lineHeight = 30.sp, modifier = Modifier.padding(top = 27.dp))
+        Text(text, color = WebInkMuted, fontSize = 19.2.sp, lineHeight = 28.8.sp, style = cssLine(), modifier = Modifier.requiredWidth(995.dp).padding(top = gap))
     }
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        heading(playarrString(PlayarrString.YourDataExportTitle), 0.dp)
+    Column(Modifier.layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        layout(placeable.width, placeable.height) { placeable.place(0, -2) }
+    }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        heading(playarrString(PlayarrString.YourDataExportTitle))
         body(playarrString(PlayarrString.YourDataExportDescription))
-        Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 26.dp))
-        PlayarrButton(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning, size = PlayarrButtonSize.Large, modifier = Modifier.padding(top = 30.dp)) {
-            Text(
-                playarrString(
-                    if (state.exportRunning) PlayarrString.YourDataExportPreparing
-                    else PlayarrString.YourDataExportStart,
-                ),
-                fontSize = 17.sp,
+        Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp, style = cssLine(), modifier = Modifier.padding(top = gap - 1.dp))
+        Box(Modifier.padding(top = gap + 1.dp)) {
+            TvPrimaryPill(
+                playarrString(if (state.exportRunning) PlayarrString.YourDataExportPreparing else PlayarrString.YourDataExportStart),
+                onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning, height = 58,
             )
         }
         state.exportJob?.let { job ->
@@ -537,22 +547,14 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
         }
         state.exportError?.let { ErrorLine(playarrText(it)) }
 
-        heading(playarrString(PlayarrString.YourDataImportTitle), 97.dp)
+        Spacer(Modifier.height(96.dp))
+        heading(playarrString(PlayarrString.YourDataImportTitle))
         body(playarrString(PlayarrString.YourDataImportDescription))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 30.dp)) {
-            PlayarrButton(
-                onClick = viewModel::startSession,
-                enabled = !state.sessionBusy && state.session?.status != "uploading",
-                size = PlayarrButtonSize.Large,
-            ) {
-                Text(
-                    playarrString(
-                        if (state.session != null) PlayarrString.YourDataTransferNewCode
-                        else PlayarrString.YourDataTransferStartUpload,
-                    ),
-                    fontSize = 17.sp,
-                )
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = gap)) {
+            TvPrimaryPill(
+                playarrString(if (state.session != null) PlayarrString.YourDataTransferNewCode else PlayarrString.YourDataTransferStartUpload),
+                onClick = viewModel::startSession, enabled = !state.sessionBusy && state.session?.status != "uploading", height = 58,
+            )
             if (state.session != null) {
                 PlayarrButton(onClick = viewModel::cancelSession, variant = PlayarrButtonVariant.Secondary) {
                     Text(playarrString(PlayarrString.YourDataTransferCancel))
@@ -586,13 +588,33 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
             )
         }
         if (state.sessionExpired) ErrorLine(playarrString(PlayarrString.YourDataTransferExpired))
-        ConflictChoices(state.conflicts, viewModel::setConflicts)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = state.includePreferences, onCheckedChange = viewModel::setIncludePreferences)
-            Text(playarrString(PlayarrString.YourDataIncludePreferences), color = WebInkSoft, fontSize = 12.sp)
+        Column(Modifier.padding(top = gap)) {
+            Text(
+                playarrString(PlayarrString.YourDataConflictsLabel).uppercase(LocalPlayarrLanguage.current.locale),
+                color = WebInkMuted, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight(720), letterSpacing = 0.896.sp, style = cssLine(),
+            )
+            Spacer(Modifier.height(0.dp))
+            TvSelectField(
+                choices = listOf(
+                    UserDataProgressConflicts.Newest to playarrString(PlayarrString.YourDataConflictsNewest),
+                    UserDataProgressConflicts.KeepExisting to playarrString(PlayarrString.YourDataConflictsKeep),
+                ),
+                selected = state.conflicts, onSelected = viewModel::setConflicts,
+            )
         }
-        PlayarrButton(onClick = viewModel::preview, enabled = state.canPreviewSession, variant = PlayarrButtonVariant.Secondary) {
-            Text(playarrString(PlayarrString.YourDataPreviewButton))
+        Row(Modifier.padding(top = 39.4.dp).clickable { viewModel.setIncludePreferences(!state.includePreferences) }, verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.padding(start = 2.dp, end = 8.5.dp).size(13.dp)
+                    .border(1.dp, androidx.compose.ui.graphics.Color(0xFF767676), RoundedCornerShape(2.dp))
+                    .then(if (state.includePreferences) Modifier.background(WebInk, RoundedCornerShape(2.dp)) else Modifier),
+            )
+            Text(
+                playarrString(PlayarrString.YourDataIncludePreferences).uppercase(LocalPlayarrLanguage.current.locale),
+                color = WebInkMuted, fontSize = 11.2.sp, lineHeight = 20.8.sp, fontWeight = FontWeight(720), letterSpacing = 0.896.sp, style = cssLine(),
+            )
+        }
+        Box(Modifier.padding(top = 35.5.dp)) {
+            TvSecondaryPill(playarrString(PlayarrString.YourDataPreviewButton), onClick = viewModel::preview, enabled = state.canPreviewSession)
         }
         state.importError?.let { ErrorLine(playarrText(it)) }
         state.preview?.let { preview ->

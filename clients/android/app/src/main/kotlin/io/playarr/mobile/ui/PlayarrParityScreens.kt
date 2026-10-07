@@ -106,6 +106,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -3326,41 +3327,54 @@ private fun SettingsSectionContent(
                     }
                 }
             }
-            SettingsSection.Player -> {
+            SettingsSection.Player -> TvShiftUp(2) {
                 PlayerDefaultHeading(
                     playarrString(PlayarrString.SettingsPlayerQualityTitle),
                     playarrString(PlayarrString.SettingsPlayerQualityDescription),
                 )
                 if (LocalSettingsPlainPanel.current) {
+                    Spacer(Modifier.height(18.4.dp))
+                    val qualityShape = RoundedCornerShape(10.dp)
                     TvChoiceCell(
                         selected = display.playerDefaults.qualityId == "original",
                         onClick = { display.setPlayerQuality("original"); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
                         modifier = Modifier.fillMaxWidth().height(60.dp),
                         trailing = if (display.playerDefaults.qualityId == "original") "\u2713" else null,
+                        shape = qualityShape, bar = 3f, startPad = 10.92f, endPad = 13.95f,
                     ) {
-                        Text(playarrString(PlayarrString.SettingsQualityOriginal), color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(playarrString(PlayarrString.SettingsQualityOriginalDetail), color = WebInkMuted, fontSize = 9.sp)
+                        Text(playarrString(PlayarrString.SettingsQualityOriginal), color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                        Spacer(Modifier.height(1.92.dp))
+                        Text(playarrString(PlayarrString.SettingsQualityOriginalDetail), color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, style = cssLine())
                     }
-                    Row(Modifier.fillMaxWidth().offset(y = (-8).dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Spacer(Modifier.width(210.dp))
+                    Spacer(Modifier.height(7.dp))
+                    // Web grid: a 189.2 px heading column and three 262.6 px columns, 6 px gaps; the heading row is 27.5 px.
+                    Row(Modifier.fillMaxWidth().height(27.5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Spacer(Modifier.width(189.2.dp))
                         listOf(PlayarrString.SettingsQualityLow, PlayarrString.SettingsQualityMedium, PlayarrString.SettingsQualityHigh).forEach { level ->
-                            Text(playarrString(level).uppercase(LocalPlayarrLanguage.current.locale), color = WebInkMuted, fontSize = 10.sp, letterSpacing = 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                            Box(Modifier.width(262.6.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                Text(playarrString(level).uppercase(LocalPlayarrLanguage.current.locale), color = WebInkMuted, fontSize = 10.24.sp, lineHeight = 15.36.sp, fontWeight = FontWeight(760), letterSpacing = 0.8192.sp, style = cssLine())
+                            }
                         }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { playarrQualityTiers.forEach { tier ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Column(Modifier.width(200.dp)) {
-                                Text(tier.label, color = WebInk, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
-                                Text(tier.resolution, color = WebInkMuted, fontSize = 10.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { playarrQualityTiers.forEach { tier ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(Modifier.width(189.2.dp).padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(1.92.dp)) {
+                                Text(tier.label, color = WebInk, fontSize = 12.16.sp, lineHeight = 18.24.sp, fontWeight = FontWeight(760), style = cssLine())
+                                Text(tier.resolution, color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, style = cssLine())
                             }
                             tier.options.forEach { option ->
+                                val optionSelected = display.playerDefaults.qualityId == option.id
                                 TvChoiceCell(
-                                    selected = display.playerDefaults.qualityId == option.id,
+                                    selected = optionSelected,
                                     onClick = { display.setPlayerQuality(option.id); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
-                                    modifier = Modifier.weight(1f).height(58.dp),
+                                    modifier = Modifier.width(262.6.dp).height(60.dp),
+                                    trailing = if (optionSelected) "\u2713" else null,
+                                    shape = qualityShape, bar = 3f, startPad = 10.92f, endPad = 13.95f,
                                 ) {
-                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 13.5.sp, lineHeight = 17.sp, fontWeight = FontWeight.Bold)
-                                    Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 10.sp, lineHeight = 13.sp)
+                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 12.48.sp, lineHeight = 18.72.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                                    Spacer(Modifier.height(1.92.dp))
+                                    Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 9.28.sp, lineHeight = 13.92.sp, style = cssLine())
                                 }
                             }
                         }
@@ -3437,7 +3451,7 @@ private fun SettingsSectionContent(
                     playarrString(PlayarrString.SettingsPlayerAudioTitle),
                     playarrString(PlayarrString.SettingsPlayerAudioDescription),
                     divider = true,
-                    dividerGap = 15,
+                    dividerGap = -1,
                 )
                 val selectedAudio = snapshot.player.preferredAudioLanguage.takeIf { saved ->
                     playarrLanguageOptions.any { option -> option.code == saved }
@@ -3687,74 +3701,98 @@ private fun SettingsServerSection(
     val connecting = serverOperation == SettingsServerOperation.Connecting
 
     if (LocalSettingsPlainPanel.current) {
-        // Web TV: the connected-server cards, then one row of joined inputs with the Connect pill, then the disclosure.
-        servers.forEach { server ->
-            Row(
-                Modifier.fillMaxWidth().background(TvSettingsPalette.segment).border(1.dp, TvSettingsPalette.segmentBorder.copy(alpha = 0.6f)).padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(server.label, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(server.username, color = WebInkMuted, fontSize = 9.sp)
-                    Text(server.serverUrl, color = WebInkMuted, fontSize = 9.sp)
+        // Web TV: the connected-server list, the joined inputs with the Connect pill, Test connection, the hint, the disclosure.
+        // Blocks sit 30.24 px apart (the settings card gap at 1080 px), text in the web's line boxes.
+        val line = TvSettingsPalette.joinedFill
+        Column(Modifier.offset(y = (-2).dp), verticalArrangement = Arrangement.spacedBy(30.24.dp)) {
+            Column(Modifier.width(900.dp).background(line).padding(1.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                servers.forEach { server ->
+                    Row(
+                        Modifier.fillMaxWidth().background(TvSettingsPalette.listBackground).padding(horizontal = 18.4.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.2.dp)) {
+                            Text(server.label, color = WebInk, fontSize = 19.2.sp, lineHeight = 28.8.sp, fontWeight = FontWeight.Bold, style = cssLine())
+                            Text(server.username, color = WebInkMuted, fontSize = 10.56.sp, lineHeight = 15.84.sp, style = cssLine())
+                            Text(server.serverUrl, color = WebInkMuted, fontSize = 10.56.sp, lineHeight = 15.84.sp, style = cssLine())
+                        }
+                        if (server.primary) {
+                            Text(
+                                playarrString(PlayarrString.SettingsServerPrimaryBadge).uppercase(LocalPlayarrLanguage.current.locale),
+                                color = WebInkMuted, fontSize = 10.56.sp, lineHeight = 15.84.sp, fontFamily = webMonoFamily,
+                                style = cssLine(),
+                                modifier = Modifier.border(1.dp, TvSettingsPalette.joinedBorder).padding(horizontal = 10.4.dp, vertical = 6.72.dp),
+                            )
+                        } else {
+                            TvOutlinedPill(playarrString(PlayarrString.SettingsServerDisconnect), { viewModel.disconnectServer(server.serverUrl) })
+                        }
+                    }
                 }
-                if (server.primary) {
-                    Text(
-                        playarrString(PlayarrString.SettingsServerPrimaryBadge).uppercase(LocalPlayarrLanguage.current.locale),
-                        color = WebInkMuted, fontSize = 9.sp, letterSpacing = 1.sp,
-                        modifier = Modifier.border(1.dp, TvSettingsPalette.segmentBorder).padding(horizontal = 10.dp, vertical = 6.dp),
+            }
+            Column {
+                Text(
+                    playarrString(PlayarrString.SettingsServerAddAnother).uppercase(LocalPlayarrLanguage.current.locale),
+                    color = WebInkMuted, fontSize = 11.2.sp, lineHeight = 16.8.sp, fontWeight = FontWeight(720), letterSpacing = 0.896.sp,
+                    style = cssLine(),
+                    modifier = Modifier.padding(bottom = 7.2.dp),
+                )
+                Row(Modifier.width(900.dp).background(TvSettingsPalette.joinedFill), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    TvField(serverUrl, { serverUrl = it; connectionAdded = false }, playarrString(PlayarrString.SettingsServerAddress), Modifier.width(398.1.dp), enabled = !serverBusy, joined = true)
+                    TvField(username, { username = it }, playarrString(PlayarrString.SettingsServerUsername), Modifier.width(199.dp), enabled = !serverBusy, joined = true)
+                    TvField(password, { password = it }, playarrString(PlayarrString.SettingsServerPassword), Modifier.width(199.dp), enabled = !serverBusy, secret = true, joined = true)
+                    TvPrimaryPill(
+                        playarrString(if (connecting) PlayarrString.SettingsServerConnecting else PlayarrString.SettingsServerConnect),
+                        onClick = { viewModel.connectServer(serverUrl, username, password, isTelevision) { serverUrl = ""; password = ""; connectionAdded = true } },
+                        enabled = serverUrl.isNotBlank() && !serverBusy, height = 62,
                     )
-                } else {
-                    TvOutlinedPill(playarrString(PlayarrString.SettingsServerDisconnect), { viewModel.disconnectServer(server.serverUrl) })
+                }
+                Text(
+                    playarrString(if (connectionAdded) PlayarrString.SettingsServerConnectedHint else PlayarrString.SettingsServerCredentialsHint),
+                    color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp,
+                    style = cssLine(),
+                    modifier = Modifier.padding(top = 0.dp),
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvOutlinedPill(
+                    playarrString(if (connectionTest == SettingsConnectionTest.Testing) PlayarrString.SettingsServerTesting else PlayarrString.SettingsServerTestConnection),
+                    viewModel::testPrimaryConnection,
+                )
+                when (connectionTest) {
+                    SettingsConnectionTest.Idle, SettingsConnectionTest.Testing -> Unit
+                    is SettingsConnectionTest.Success -> Text(
+                        playarrString(PlayarrString.SettingsServerConnectedSuccess, "serverVersion" to connectionTest.version.serverVersion, "apiVersion" to connectionTest.version.apiVersion),
+                        color = WebInkSoft, fontSize = 12.48.sp,
+                    )
+                    is SettingsConnectionTest.Failed -> Text(
+                        playarrString(PlayarrString.SettingsServerConnectError, "message" to playarrText(connectionTest.message)),
+                        color = MaterialTheme.colorScheme.error, fontSize = 12.48.sp,
+                    )
                 }
             }
-        }
-        Spacer(Modifier.height(4.dp))
-        TvFieldLabel(playarrString(PlayarrString.SettingsServerAddAnother))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TvField(serverUrl, { serverUrl = it; connectionAdded = false }, playarrString(PlayarrString.SettingsServerAddress), Modifier.width(400.dp), enabled = !serverBusy, textSize = 16f)
-            TvField(username, { username = it }, playarrString(PlayarrString.SettingsServerUsername), Modifier.width(200.dp), enabled = !serverBusy, textSize = 16f)
-            TvField(password, { password = it }, playarrString(PlayarrString.SettingsServerPassword), Modifier.width(200.dp), enabled = !serverBusy, secret = true, textSize = 16f)
-            TvPrimaryPill(
-                playarrString(if (connecting) PlayarrString.SettingsServerConnecting else PlayarrString.SettingsServerConnect),
-                onClick = { viewModel.connectServer(serverUrl, username, password, isTelevision) { serverUrl = ""; password = ""; connectionAdded = true } },
-                enabled = serverUrl.isNotBlank() && !serverBusy, height = 62,
-            )
-        }
-        Text(
-            playarrString(if (connectionAdded) PlayarrString.SettingsServerConnectedHint else PlayarrString.SettingsServerCredentialsHint),
-            color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp),
-        )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvOutlinedPill(
-                playarrString(if (connectionTest == SettingsConnectionTest.Testing) PlayarrString.SettingsServerTesting else PlayarrString.SettingsServerTestConnection),
-                viewModel::testPrimaryConnection,
-            )
-            when (connectionTest) {
-                SettingsConnectionTest.Idle, SettingsConnectionTest.Testing -> Unit
-                is SettingsConnectionTest.Success -> Text(
-                    playarrString(PlayarrString.SettingsServerConnectedSuccess, "serverVersion" to connectionTest.version.serverVersion, "apiVersion" to connectionTest.version.apiVersion),
-                    color = WebInkSoft, fontSize = 10.sp,
+            Column {
+                Text(
+                    playarrString(PlayarrString.SettingsServerPrimaryHint, "apiBaseUrl" to primaryServerUrl),
+                    color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp,
+                    style = cssLine(),
                 )
-                is SettingsConnectionTest.Failed -> Text(
-                    playarrString(PlayarrString.SettingsServerConnectError, "message" to playarrText(connectionTest.message)),
-                    color = MaterialTheme.colorScheme.error, fontSize = 10.sp,
-                )
+                if (hasKnownServerGroup) Text(playarrString(PlayarrString.SettingsServerForgetHint), color = WebInkMuted, fontSize = 12.48.sp, lineHeight = 18.72.sp)
             }
-        }
-        Text(playarrString(PlayarrString.SettingsServerPrimaryHint, "apiBaseUrl" to primaryServerUrl), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 18.dp))
-        if (hasKnownServerGroup) Text(playarrString(PlayarrString.SettingsServerForgetHint), color = WebInkMuted, fontSize = 10.sp)
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(1.dp).background(TvSettingsPalette.divider))
-        var detailsOpen by remember { mutableStateOf(false) }
-        Text(
-            (if (detailsOpen) "\u25BE " else "\u25B8 ") + playarrString(PlayarrString.SettingsServerChangeAppHost),
-            color = WebInkSoft, fontSize = 10.sp,
-            modifier = Modifier.clickable { detailsOpen = !detailsOpen }.padding(vertical = 8.dp),
-        )
-        if (detailsOpen) {
-            TvField(primaryValue, { primaryValue = it }, playarrString(PlayarrString.LoginServerUrl), Modifier.width(520.dp))
-            TvPrimaryPill(playarrString(PlayarrString.SettingsServerChangeAppHost), { viewModel.changeServer(primaryValue) }, enabled = primaryValue.isNotBlank())
-            Text(playarrString(PlayarrString.SettingsServerChangeAppHostHint), color = WebInkMuted, fontSize = 10.sp)
+            var detailsOpen by remember { mutableStateOf(false) }
+            Column(Modifier.width(900.dp)) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
+                Text(
+                    (if (detailsOpen) "\u25BE " else "\u25B8 ") + playarrString(PlayarrString.SettingsServerTvDetailsSummary),
+                    color = WebInkSoft, fontSize = 11.52.sp, lineHeight = 17.28.sp, fontWeight = FontWeight(720),
+                    style = cssLine(),
+                    modifier = Modifier.clickable { detailsOpen = !detailsOpen }.padding(top = 16.dp, bottom = 8.dp),
+                )
+                if (detailsOpen) {
+                    TvField(primaryValue, { primaryValue = it }, playarrString(PlayarrString.LoginServerUrl), Modifier.width(520.dp))
+                    TvPrimaryPill(playarrString(PlayarrString.SettingsServerChangeAppHost), { viewModel.changeServer(primaryValue) }, enabled = primaryValue.isNotBlank())
+                    Text(playarrString(PlayarrString.SettingsServerChangeAppHostHint), color = WebInkMuted, fontSize = 12.48.sp)
+                }
+            }
         }
         return
     }
@@ -3947,13 +3985,14 @@ private fun SettingsServerSection(
 private fun PlayerDefaultHeading(title: String, description: String, divider: Boolean = false, dividerGap: Int = 0) {
     if (LocalSettingsPlainPanel.current) {
         Column {
+            // Web: a group after the first has the panel gap (30.24) above its 1 px top border and the same as padding below.
             if (divider) {
-                Spacer(Modifier.height(dividerGap.dp))
+                Spacer(Modifier.height((30.24f + dividerGap).dp))
                 Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(30.24.dp))
             }
-            Text(title, color = WebInk, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight(430), letterSpacing = (-0.5).sp)
-            Text(description, color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 9.dp))
+            Text(title, color = WebInk, fontSize = 26.4.sp, lineHeight = 39.2.sp, fontWeight = FontWeight(560), letterSpacing = (-0.924).sp, style = cssLine())
+            Text(description, color = WebInkMuted, fontSize = 13.12.sp, lineHeight = 20.34.sp, style = cssLine(), modifier = Modifier.padding(top = 5.6.dp))
         }
         return
     }
@@ -3970,15 +4009,17 @@ private fun PlayerLanguageChoices(
     onSelected: (String) -> Unit,
 ) {
     if (LocalSettingsPlainPanel.current) {
-        androidx.compose.foundation.layout.FlowRow(
-            maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            playarrLanguageOptions.forEach { option ->
-                TvChoiceCell(
-                    selected = option.code == selected, onClick = { onSelected(option.code) },
-                    modifier = Modifier.width(491.dp).height(58.dp), trailing = option.code,
-                ) { Text(option.label, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.height(19.44.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            playarrLanguageOptions.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { option ->
+                        TvChoiceCell(
+                            selected = option.code == selected, onClick = { onSelected(option.code) },
+                            modifier = Modifier.width(491.5.dp).height(62.dp), trailing = option.code, startPad = 17f, endPad = 17f, trailingMono = true, trailingSize = 9.28f,
+                        ) { Text(option.label, color = WebInk, fontSize = 14.72.sp, fontWeight = FontWeight(680), style = cssLine()) }
+                    }
+                }
             }
         }
         return
@@ -3999,14 +4040,42 @@ private fun PlayerLanguageChoices(
 internal val LocalSettingsPlainPanel = androidx.compose.runtime.compositionLocalOf { false }
 
 /** Web TV `.tv-settings`: palette values read off the committed references (dark and light). */
-private object TvSettingsPalette {
+internal object TvSettingsPalette {
     val listBackground get() = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
     val selectedRow get() = if (webIsDark) Color(0xFF312A30) else Color(0xFFDFDCDD)
     val segment get() = if (webIsDark) Color(0xFF151315) else Color(0xFFF5F3F2)
     val segmentBorder get() = if (webIsDark) Color(0xFF474347) else Color(0xFFC3BCBC)
     val divider get() = if (webIsDark) Color(0xFF393538) else Color(0xFFD7D3D3)
     val headerLine get() = if (webIsDark) Color(0xFF484547) else Color(0xFFC5BFBC)
+    /** `--line` over the panel: the fill of inputs inside a joined group and the 1 px gaps between them. */
+    val joinedFill get() = if (webIsDark) Color(0xFF3A3639) else Color(0xFFD7D3D3)
+    val joinedBorder get() = if (webIsDark) Color(0xFF5F5B5E) else Color(0xFFACA4A2)
+    /** A choice cell: `--surface` fill, `--line` border (drawn over the fill), the selected one 12% crimson. */
+    val cellBorder get() = if (webIsDark) Color(0xFF312E30) else Color(0xFFE0DCDB)
+    val cellSelectedFill get() = if (webIsDark) Color(0xFF311B22) else Color(0xFFF6E2E6)
+    /** `--line-strong` over the panel: the border of a standalone input. */
+    val inputBorder get() = if (webIsDark) Color(0xFF4D494C) else Color(0xFFC1BBB9)
 }
+
+/** On television the panel content starts at the web's y 210, two pixels above where the other sections were tuned. */
+@Composable
+private fun TvShiftUp(px: Int, content: @Composable () -> Unit) {
+    if (!LocalSettingsPlainPanel.current) { content(); return }
+    Column(Modifier.layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        layout(placeable.width, placeable.height) { placeable.place(0, -px) }
+    }) { content() }
+}
+
+@Composable
+internal fun cssLine(): androidx.compose.ui.text.TextStyle =
+    androidx.compose.material3.LocalTextStyle.current.merge(androidx.compose.ui.text.TextStyle(lineHeightStyle = CssLine))
+
+/** CSS half-leading: the glyphs centred in a line box of the given height, as the web lays text out. */
+private val CssLine = androidx.compose.ui.text.style.LineHeightStyle(
+    androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+    androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+)
 
 @Composable
 private fun TvSettingsBody(
@@ -4036,16 +4105,16 @@ private fun TvSettingsBody(
             ),
         ),
     ) {
-        Box(Modifier.offset(x = 227.dp, y = 112.dp).width(365.dp).height(1.dp).background(TvSettingsPalette.headerLine))
+        Box(Modifier.offset(x = 227.dp, y = 112.dp).width(440.dp).height(1.dp).background(TvSettingsPalette.headerLine))
         Text(
             playarrString(section.label).uppercase(locale),
-            color = WebInkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 18.sp,
-            modifier = Modifier.offset(x = 227.dp, y = 120.dp),
+            color = WebInkMuted, fontSize = 13.76.sp, fontWeight = FontWeight.Black, letterSpacing = 0.6192.sp, lineHeight = 15.sp, style = cssLine(),
+            modifier = Modifier.offset(x = 226.dp, y = 119.5.dp),
         )
         Text(
             playarrString(description).uppercase(locale),
-            color = WebInkMuted, fontSize = 11.sp, letterSpacing = 0.5.sp, lineHeight = 16.sp, maxLines = 1,
-            modifier = Modifier.offset(x = 227.dp, y = 143.dp).width(420.dp),
+            color = WebInkMuted, fontSize = 12.16.sp, fontWeight = FontWeight(500), letterSpacing = (-0.06).sp, lineHeight = 14.sp, maxLines = 1, softWrap = false, style = cssLine(),
+            modifier = Modifier.offset(x = 227.dp, y = 142.7.dp).widthIn(max = 760.dp),
         )
         LazyColumn(
             Modifier.offset(x = 154.dp, y = 162.dp).width(480.dp).fillMaxHeight(),
@@ -4064,18 +4133,18 @@ private fun TvSettingsBody(
                 ) {
                     Text(
                         settingsSectionNumber(index),
-                        color = WebInkMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, lineHeight = 12.sp,
+                        color = WebInkMuted, fontSize = 9.92.sp, fontWeight = FontWeight(760), lineHeight = 11.sp, style = cssLine(),
                         modifier = Modifier.offset(x = 32.dp, y = 27.dp),
                     )
                     Text(
                         playarrString(candidate.label),
-                        color = WebInk, fontSize = 29.4.sp, fontWeight = FontWeight(430), lineHeight = 40.sp, letterSpacing = (-0.6).sp,
-                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 92.dp),
+                        color = WebInk, fontSize = 29.6.sp, fontWeight = FontWeight(480), lineHeight = 33.sp, letterSpacing = (-0.9).sp, style = cssLine(),
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 92.dp).offset(y = (-1).dp),
                     )
                     Text(
                         "\u2192",
-                        color = if (selected) WebInk else WebInkMuted, fontSize = if (selected) 20.sp else 17.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp),
+                        color = if (selected) WebInk else WebInkMuted, fontSize = 20.8.sp, lineHeight = 23.sp, style = cssLine(),
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = if (selected) 27.dp else 32.dp).offset(y = (-2).dp),
                     )
                 }
             }
@@ -4133,7 +4202,8 @@ private fun TvField(
     password: Boolean = false,
     enabled: Boolean = true,
     secret: Boolean = false,
-    textSize: Float = 11f,
+    textSize: Float = 19.2f,
+    joined: Boolean = false,
 ) {
     androidx.compose.foundation.text.BasicTextField(
         value = value,
@@ -4144,9 +4214,12 @@ private fun TvField(
         cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
         visualTransformation = if (password || secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.NumberPassword) else if (secret) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
-        modifier = modifier.height(height.dp).background(TvSettingsPalette.segment).border(1.dp, TvSettingsPalette.segmentBorder).playarrSingleLineArrowNavigation(),
+        modifier = modifier.height(height.dp)
+            .then(if (joined) Modifier.background(TvSettingsPalette.joinedFill) else Modifier)
+            .border(1.dp, if (joined) TvSettingsPalette.joinedBorder else TvSettingsPalette.inputBorder)
+            .playarrSingleLineArrowNavigation(),
         decorationBox = { inner ->
-            Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
+            Box(Modifier.padding(horizontal = 17.dp, vertical = 12.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
                 if (value.isEmpty()) Text(placeholder, color = WebInkMuted, fontSize = textSize.sp)
                 inner()
             }
@@ -4161,14 +4234,46 @@ private fun TvFieldLabel(text: String) {
 
 /** Web TV primary pill: light in the dark theme, dark ink in the light theme. */
 @Composable
-private fun TvPrimaryPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, height: Int = 50) {
+internal fun TvPrimaryPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, height: Int = 50) {
     val fill = if (webIsDark) Color(0xFFDFDCDD) else Color(0xFF675961)
     val ink = if (webIsDark) Color(0xFF151315) else Color.White
     androidx.compose.material3.Surface(
         onClick = onClick, enabled = enabled, shape = CircleShape,
         color = if (enabled) fill else fill.copy(alpha = 0.4f), contentColor = ink,
         modifier = modifier.height(height.dp),
-    ) { Box(Modifier.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 13.sp, fontWeight = FontWeight(720), maxLines = 1) } }
+    ) { Box(Modifier.padding(horizontal = 21.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 14.72.sp, fontWeight = FontWeight(720), maxLines = 1) } }
+}
+
+/** Web `.btn-secondary` at the 58 px size: a surface pill with a line border and 14.72 px text. */
+@Composable
+internal fun TvSecondaryPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, height: Int = 58) {
+    androidx.compose.material3.Surface(
+        onClick = onClick, enabled = enabled, shape = CircleShape, color = TvSettingsPalette.listBackground,
+        contentColor = if (enabled) WebInkSoft else WebInkMuted.copy(alpha = 0.6f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) WebPillBorder else TvSettingsPalette.cellBorder), modifier = modifier.height(height.dp),
+    ) { Box(Modifier.padding(horizontal = 21.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 14.72.sp, fontWeight = FontWeight(720), maxLines = 1, style = cssLine()) } }
+}
+
+/** Web `select.input`: a 62 px bordered box with 11.2 px bold text and the browser's down chevron at the right. */
+@Composable
+internal fun <T> TvSelectField(choices: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Box(
+            Modifier.fillMaxWidth().height(62.dp).border(1.dp, TvSettingsPalette.inputBorder).clickable { open = true }.padding(horizontal = 17.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(choices.firstOrNull { it.first == selected }?.second.orEmpty(), color = WebInk, fontSize = 11.2.sp, fontWeight = FontWeight.Bold, style = cssLine())
+            androidx.compose.foundation.Canvas(Modifier.align(Alignment.CenterEnd).size(width = 9.dp, height = 6.dp)) {
+                val stroke = androidx.compose.ui.graphics.drawscope.Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(WebInk, androidx.compose.ui.geometry.Offset(0.5.dp.toPx(), 0.8.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width / 2, size.height - 0.8.dp.toPx()), stroke.width, stroke.cap)
+                drawLine(WebInk, androidx.compose.ui.geometry.Offset(size.width / 2, size.height - 0.8.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 0.5.dp.toPx(), 0.8.dp.toPx()), stroke.width, stroke.cap)
+            }
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { (value, label) -> androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onSelected(value) }) }
+        }
+    }
 }
 
 @Composable
@@ -4176,7 +4281,7 @@ private fun TvOutlinedPill(label: String, onClick: () -> Unit, modifier: Modifie
     androidx.compose.material3.Surface(
         onClick = onClick, shape = CircleShape, color = WebSurface, contentColor = WebInkSoft,
         border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder), modifier = modifier.height(height.dp),
-    ) { Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 11.5.sp, fontWeight = FontWeight(720), maxLines = 1) } }
+    ) { Box(Modifier.padding(horizontal = 14.4.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 11.52.sp, fontWeight = FontWeight(720), maxLines = 1) } }
 }
 
 /** Web TV select: a 168 x 48 outlined box showing the current value and a caret; the choices open in a menu. */
@@ -4203,27 +4308,45 @@ private fun <T> TvSelect(choices: List<Pair<T, String>>, selected: T, onSelected
     }
 }
 
-/** Web TV choice cell: a dark rectangle; the selected one gets a crimson border, a 4 px crimson bar and a faint crimson fill. */
+/** Web TV choice cell: a `--surface` rectangle with a `--line` border; the selected one gets a crimson border, an inset crimson bar and a 12% crimson fill. */
 @Composable
 private fun TvChoiceCell(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: String? = null,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+    bar: Float = 4f,
+    startPad: Float = 15.4f,
+    endPad: Float = 15.4f,
+    trailingMono: Boolean = false,
+    trailingSize: Float = 11.84f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     val accent = WebKicker
     androidx.compose.material3.Surface(
         onClick = onClick,
-        color = if (selected) accent.copy(alpha = 0.16f) else TvSettingsPalette.segment,
+        shape = shape,
+        color = if (selected) TvSettingsPalette.cellSelectedFill else TvSettingsPalette.listBackground,
         contentColor = WebInk,
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) accent else TvSettingsPalette.segmentBorder.copy(alpha = 0.5f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) accent.copy(alpha = 0.76f) else TvSettingsPalette.cellBorder),
         modifier = modifier.webFocusRing(focused, radius = 0.dp, offset = (-3).dp).onFocusChanged { focused = it.isFocused },
     ) {
-        Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) } else Modifier)) {
-            Column(Modifier.align(Alignment.CenterStart).padding(start = 14.dp), verticalArrangement = Arrangement.Center, content = content)
-            trailing?.let { Text(it, color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp)) }
+        Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(bar.dp.toPx() - 1.dp.toPx(), size.height)) } else Modifier)) {
+            Column(Modifier.align(Alignment.CenterStart).padding(start = (startPad - 1f).dp), verticalArrangement = Arrangement.Center, content = content)
+            trailing?.let {
+                Text(
+                    if (trailingMono) it.uppercase() else it,
+                    color = if (trailingMono && selected) accent else if (trailingMono) WebInkMuted else if (selected) accent else WebInkMuted,
+                    fontSize = trailingSize.sp,
+                    style = cssLine(),
+                    fontFamily = if (trailingMono) webMonoFamily else null,
+                    fontWeight = if (trailingMono) FontWeight(720) else null,
+                    letterSpacing = if (trailingMono) 0.7424.sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = (endPad - 1f).dp),
+                )
+            }
         }
     }
 }
@@ -4321,10 +4444,11 @@ private fun <T> SettingChoiceOptions(
 ) {
     if (LocalSettingsPlainPanel.current) {
         if (cells) {
+            Spacer(Modifier.height(19.44.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 choices.forEach { (value, choiceLabel) ->
-                    TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(240.dp).height(68.dp)) {
-                        Text(choiceLabel, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(239.7.dp).height(68.dp)) {
+                        Text(choiceLabel, color = WebInk, fontSize = 14.08.sp, fontWeight = FontWeight.Bold, style = cssLine())
                     }
                 }
             }

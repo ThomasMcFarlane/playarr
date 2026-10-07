@@ -1965,17 +1965,19 @@ private fun TelevisionNavigation(
     val contentEntry = LocalTvContentEntry.current
     Column(
         modifier = modifier.padding(start = 42.2.dp),
-        verticalArrangement = Arrangement.spacedBy(13.6.dp),
     ) {
-        groups.forEach { group ->
+        groups.forEachIndexed { groupIndex, group ->
+            // Whole-pixel gaps that reproduce the web's 13.6 px between groups and 9.6 px between links.
+            if (groupIndex > 0) Spacer(Modifier.height(if (groupIndex == 1) 13.dp else 14.dp))
             val groupShape = RoundedCornerShape(22.dp)
             Surface(
                 modifier = Modifier.glass(groupShape, WebGlass.NavGroup),
                 color = Color.Transparent,
                 shape = groupShape,
             ) {
-                Column(Modifier.padding(horizontal = 6.75.dp, vertical = 7.68.dp), verticalArrangement = Arrangement.spacedBy(9.6.dp)) {
-                    group.forEach { destination ->
+                Column(Modifier.padding(start = 6.75.dp, end = 6.75.dp, top = 8.dp, bottom = 7.dp)) {
+                    group.forEachIndexed { destinationIndex, destination ->
+                        if (destinationIndex > 0) Spacer(Modifier.height((if (group.size == 3) listOf(9, 10) else listOf(10, 9, 10))[(destinationIndex - 1) % (if (group.size == 3) 2 else 3)].dp))
                         val selected = currentRoute == destination.route
                         val label = playarrString(destination.label)
                         var focused by remember { mutableStateOf(false) }
@@ -2007,13 +2009,24 @@ private fun TelevisionNavigation(
                                     }
                                 },
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            // Web `.app-nav-link`: the 20 px icon 15.2 px down, the 8.832 px label 4.8 px under it.
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
+                                Spacer(Modifier.height(15.2.dp))
                                 Icon(destination.icon, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Text(
                                     label,
                                     fontSize = 8.832.sp,
+                                    lineHeight = 8.832.sp,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight(680),
                                     letterSpacing = 0.309.sp,
+                                    style = androidx.compose.material3.LocalTextStyle.current.merge(
+                                        androidx.compose.ui.text.TextStyle(
+                                            lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                                                androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                                                androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                                            ),
+                                        ),
+                                    ),
                                     modifier = Modifier.padding(top = 4.8.dp),
                                 )
                             }
@@ -2036,7 +2049,7 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
             now = playarrNow()
         }
     }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.2.dp)) {
+    Row(modifier.offset(1.dp, 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.2.dp)) {
         Text(
             now.format(DateTimeFormatter.ofPattern("HH:mm")),
             color = WebInk,
@@ -2079,7 +2092,7 @@ private fun ProfileControl(
         modifier = modifier
             .windowInsetsPadding(if (isTelevision) WindowInsets(0) else webPhoneInsets())
             .then(
-                if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 15.dp) else Modifier.padding(end = 16.dp),
+                if (isTelevision) Modifier.padding(start = 58.5.dp, bottom = 20.5.dp) else Modifier.padding(end = 16.dp),
             ),
         horizontalAlignment = Alignment.Start,
     ) {
@@ -2118,14 +2131,14 @@ private fun ProfileControl(
             }
         }
         Box(
-            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = if (isTelevision) 5.dp else 3.8.dp, start = if (isTelevision) 7.8.dp else 0.dp),
+            modifier = Modifier.width(if (isTelevision) 36.dp else 42.dp).padding(top = if (isTelevision) 3.dp else 3.8.dp, start = if (isTelevision) 7.8.dp else 0.dp),
             contentAlignment = if (isTelevision) Alignment.CenterStart else Alignment.Center,
         ) {
             Text(
                 profileVersionLabel(BuildConfig.VERSION_NAME),
                 color = WebInkMuted,
                 fontSize = if (isTelevision) 8.sp else 6.08.sp,
-                lineHeight = if (isTelevision) androidx.compose.ui.unit.TextUnit.Unspecified else 6.08.sp,
+                lineHeight = if (isTelevision) 11.sp else 6.08.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = if (isTelevision) 0.32.sp else 0.2432.sp,
                 fontFamily = webMonoFamily,
