@@ -1,0 +1,1 @@
+- Android TV D-pad navigation is covered by JVM tests of the web rules (`PlayarrTvNavigationTest`) and instrumented key-event tests across Home rails, the library grid and the series page, plus pixel checks that the focus ring draws no fill in both themes (`PlayarrTvNavigationUiTest`).

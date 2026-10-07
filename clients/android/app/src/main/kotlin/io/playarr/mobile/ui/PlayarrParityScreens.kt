@@ -665,6 +665,7 @@ internal fun PlaylistCard(
             .fillMaxWidth()
             .aspectRatio(1.45f)
             .scale(if (focused) FocusMotion.tileFocusScale else FocusMotion.restScale)
+            .webFocusRing(focused, radius = 18.dp, offset = 0.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onSelected()
@@ -4055,7 +4056,8 @@ private fun TvSettingsBody(
                     Modifier
                         .fillMaxWidth()
                         .height(92.dp)
-                        .background(if (selected || focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
+                        .background(if (selected && !focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
+                        .webFocusRing(focused, radius = 0.dp, offset = (-3).dp)
                         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onPick(candidate) }
                         .clickable { onPick(candidate) },
                 ) {
@@ -4215,8 +4217,8 @@ private fun TvChoiceCell(
         onClick = onClick,
         color = if (selected) accent.copy(alpha = 0.16f) else TvSettingsPalette.segment,
         contentColor = WebInk,
-        border = androidx.compose.foundation.BorderStroke(if (selected || focused) 1.dp else 1.dp, if (selected) accent else if (focused) WebInk else TvSettingsPalette.segmentBorder.copy(alpha = 0.5f)),
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) accent else TvSettingsPalette.segmentBorder.copy(alpha = 0.5f)),
+        modifier = modifier.webFocusRing(focused, radius = 0.dp, offset = (-3).dp).onFocusChanged { focused = it.isFocused },
     ) {
         Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) } else Modifier)) {
             Column(Modifier.align(Alignment.CenterStart).padding(start = 14.dp), verticalArrangement = Arrangement.Center, content = content)
@@ -4236,7 +4238,7 @@ private fun <T> TvSegmented(choices: List<Pair<T, String>>, selected: T, onSelec
                 Modifier
                     .fillMaxHeight()
                     .background(if (active) WebInk else TvSettingsPalette.segment)
-                    .then(if (focused) Modifier.border(2.dp, WebInk) else Modifier)
+                    .webFocusRing(focused, radius = 0.dp, offset = (-3).dp)
                     .onFocusChanged { focused = it.isFocused }
                     .clickable { onSelected(value) }
                     .padding(horizontal = 18.dp),

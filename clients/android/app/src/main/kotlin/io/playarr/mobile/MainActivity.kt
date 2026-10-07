@@ -191,7 +191,14 @@ class MainActivity : ComponentActivity() {
             setPlayarrWebPalette(display.darkTheme)
             io.playarr.mobile.ui.setPlayarrWebFont(true)
             PlayarrTheme(darkTheme = display.darkTheme) {
-                CompositionLocalProvider(LocalPlayarrDisplayPreferences provides display.value) {
+                CompositionLocalProvider(
+                    LocalPlayarrDisplayPreferences provides display.value,
+                    io.playarr.shared.designsystem.component.LocalPlayarrFocusRing provides io.playarr.mobile.ui.WebFocusRing,
+                    androidx.compose.foundation.LocalIndication provides (
+                        if (isTelevision) io.playarr.shared.designsystem.component.PlayarrNoIndication
+                        else androidx.compose.foundation.LocalIndication.current
+                    ),
+                ) {
                     androidx.compose.material3.ProvideTextStyle(
                         androidx.compose.ui.text.TextStyle(
                             fontFamily = io.playarr.mobile.ui.webFontFamily,

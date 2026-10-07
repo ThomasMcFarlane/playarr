@@ -53,10 +53,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1610,9 +1615,12 @@ internal fun PlayarrExperience(
 
     CompositionLocalProvider(LocalPlayarrServerAccessResolver provides viewModel.serverAccessResolver) {
         val glassBackdrop = rememberGlassBackdrop()
+        // The navigation rail's current item: where LEFT from the first card of a rail or grid lands (web `aria-current`).
+        val navEntryFocus = remember { FocusRequester() }
         CompositionLocalProvider(
             LocalGlassBackdrop provides glassBackdrop,
             LocalDetailSection provides { detailSectionRoute = it },
+            LocalTvNavEntry provides navEntryFocus,
         ) {
         Box(modifier = Modifier.fillMaxSize().background(WebBackground)) {
             ExperienceNavHost(
@@ -1656,6 +1664,7 @@ internal fun PlayarrExperience(
                         isTelevision = isTelevision,
                         onNavigate = { navController.openExperienceTopLevel(it) },
                         modifier = Modifier.align(if (isTelevision) Alignment.CenterStart else Alignment.BottomCenter),
+                        currentEntryFocus = navEntryFocus,
                     )
                 }
                 ProfileControl(
@@ -1850,9 +1859,10 @@ private fun ExperienceNavigation(
     isTelevision: Boolean,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
+    currentEntryFocus: FocusRequester? = null,
 ) {
     if (isTelevision) {
-        TelevisionNavigation(destinations, currentRoute, onNavigate, modifier)
+        TelevisionNavigation(destinations, currentRoute, onNavigate, modifier, currentEntryFocus)
         return
     }
     // Web: `bottom: max(8px, env(safe-area-inset-bottom))`, so the bar sits on the gesture inset or 8 dp up.
@@ -1918,6 +1928,7 @@ private fun TelevisionNavigation(
     currentRoute: String,
     onNavigate: (String) -> Unit,
     modifier: Modifier,
+    currentEntryFocus: FocusRequester?,
 ) {
     val groups = televisionDestinationGroups(destinations)
     Column(
@@ -1944,12 +1955,15 @@ private fun TelevisionNavigation(
                         )
                         Surface(
                             onClick = { onNavigate(destination.route) },
-                            color = if (selected || focused) WebInk.copy(alpha = if (focused) 0.14f else 0.09f) else Color.Transparent,
+                            // Focus is a ring, never a fill: only the current page keeps the soft fill.
+                            color = if (selected) WebInk.copy(alpha = 0.09f) else Color.Transparent,
                             contentColor = if (selected || focused) WebInk else WebInkMuted,
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
                                 .size(64.dp)
                                 .scale(navScale)
+                                .webFocusRing(focused, radius = 16.dp, offset = 2.dp)
+                                .then(if (selected && currentEntryFocus != null) Modifier.focusRequester(currentEntryFocus) else Modifier)
                                 .onFocusChanged { focused = it.isFocused },
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -2033,13 +2047,12 @@ private fun ProfileControl(
             modifier = (if (isTelevision) Modifier.height(48.2.dp) else Modifier.size(42.dp))
                 .scale(focusScale)
                 .glass(CircleShape, WebGlass.Identity)
+                .webFocusRing(focused, offset = 2.dp)
                 .onFocusChanged { focused = it.isFocused }
                 .semantics { contentDescription = profileDescription },
             shape = CircleShape,
             color = Color.Transparent,
             contentColor = if (focused) WebInk else WebInkSoft,
-            // A visible ring is the only focus cue the D-pad has on this control.
-            border = if (focused) androidx.compose.foundation.BorderStroke(2.dp, WebPink) else null,
         ) {
             Row(
                 modifier = Modifier.padding(start = if (isTelevision) 7.1.dp else 0.dp, end = if (isTelevision) 13.dp else 0.dp),
@@ -2505,6 +2518,9 @@ private fun ExperienceHomeScreen(
     val railLanguageCode = LocalPlayarrLanguage.current.resolved.code
     LaunchedEffect(railLanguageCode) { viewModel.setRailLanguage(railLanguageCode) }
     var customising by remember { mutableStateOf(false) }
+    // Survives leaving Home for a detail page: the card (and its rail) that last had focus gets it back on return.
+    var savedSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var savedRailKey by rememberSaveable { mutableStateOf<String?>(null) }
     val state by viewModel.home.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressByWork = remember(progress) { progress.associateBy(WatchProgress::workId) }
@@ -2521,8 +2537,8 @@ private fun ExperienceHomeScreen(
                 return
             }
             val allWorks = current.value.flatMap(HomeRail::works)
-            var selectedId by remember(allWorks) { mutableStateOf(allWorks.first().id) }
-            var activeRailKey by remember(allWorks) { mutableStateOf(current.value.first().key) }
+            val selectedId = savedSelectedId?.takeIf { id -> allWorks.any { it.id == id } } ?: allWorks.first().id
+            val activeRailKey = savedRailKey?.takeIf { key -> current.value.any { it.key == key } } ?: current.value.first().key
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var resumeChooser by remember { mutableStateOf<PlayarrOnDeckEntry?>(null) }
             val homeScope = rememberCoroutineScope()
@@ -2560,6 +2576,34 @@ private fun ExperienceHomeScreen(
                 rails = {
                     val railsState = androidx.compose.foundation.lazy.rememberLazyListState()
                     var focusedRailKey by remember { mutableStateOf<String?>(null) }
+                    // Web Home rules: see PlayarrTvNavigation.kt. Rails are indexed so UP/DOWN keep the card column.
+                    val tvRails = remember { TvRails(homeScope, TvRails.Vertical.SameIndex) }
+                    tvRails.sizes = current.value.map { it.works.size }
+                    tvRails.columnState = railsState
+                    val navEntry = LocalTvNavEntry.current
+                    tvRails.onLeftEdge = { navEntry?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false }
+                    val customiseFocus = remember { FocusRequester() }
+                    var customiseBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+                    tvRails.onUpEdge = { from ->
+                        // Web's geometric UP from the first rail only reaches the top pill when it is above the card.
+                        val bounds = customiseBounds
+                        val overlap = if (bounds == null) 0f else minOf(from.right, bounds.right) - maxOf(from.left, bounds.left)
+                        overlap > 0f && runCatching { customiseFocus.requestFocus() }.getOrDefault(false)
+                    }
+                    if (isTelevision) {
+                        // Web's default focus: the last focused card, else the first card of the first rail.
+                        LaunchedEffect(Unit) {
+                            // After playback or a detail page: the card just opened or watched, wherever its rail is now
+                            // (On deck reorders), else the first card of the first rail.
+                            val rails = current.value
+                            val rail = rails.indexOfFirst { rail -> rail.key == activeRailKey && rail.works.any { it.id == selectedId } }
+                                .takeIf { it >= 0 }
+                                ?: rails.indexOfFirst { rail -> rail.works.any { it.id == selectedId } }.takeIf { it >= 0 }
+                                ?: 0
+                            val card = rails[rail].works.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+                            tvRails.focus(rail, card)
+                        }
+                    }
                     // D-pad Up/Down glides the focused rail to the same anchor (the top
                     // of the content padding) instead of nudging by whatever bring-into-view
                     // needs. animateScrollToItem is cancelled and restarted by the next
@@ -2578,9 +2622,11 @@ private fun ExperienceHomeScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(if (isTelevision) 78.6.dp else 66.93.dp),
                     ) {
-                        items(current.value, key = HomeRail::key) { rail ->
+                        itemsIndexed(current.value, key = { _, rail -> rail.key }) { railIndex, rail ->
                             ExperienceMediaRail(
                                 rail = rail,
+                                rails = if (isTelevision) tvRails else null,
+                                railIndex = railIndex,
                                 serverUrl = serverUrl,
                                 accessToken = accessToken,
                                 isTelevision = isTelevision,
@@ -2588,7 +2634,7 @@ private fun ExperienceHomeScreen(
                                 selectedId = selectedId,
                                 active = rail.key == activeRailKey,
                                 progressByWork = progressByWork,
-                                onSelected = { selectedId = it.id; activeRailKey = rail.key },
+                                onSelected = { savedSelectedId = it.id; savedRailKey = rail.key },
                                 onClick = { work, onDeck ->
                                     if (onDeck?.resumePlan?.isStacked == true) {
                                         // Several ways to continue: ask here instead of opening the series.
@@ -2629,7 +2675,9 @@ private fun ExperienceHomeScreen(
                             variant = PlayarrButtonVariant.Secondary,
                             size = PlayarrButtonSize.Small,
                             onClick = { viewModel.loadRailPreferences(); customising = true },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 48.dp).height(38.dp),
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 48.dp).height(38.dp)
+                                .focusRequester(customiseFocus)
+                                .onGloballyPositioned { customiseBounds = it.boundsInRoot() },
                         ) {
                             Text(playarrString(PlayarrString.HomeCustomise), fontSize = 11.52.sp, fontWeight = FontWeight(720))
                         }
@@ -2951,7 +2999,7 @@ private fun FeatureCopy(work: Work, isTelevision: Boolean = false, style: Featur
 }
 
 @Composable
-private fun ExperienceMediaRail(
+internal fun ExperienceMediaRail(
     rail: HomeRail,
     serverUrl: String,
     accessToken: String?,
@@ -2965,6 +3013,9 @@ private fun ExperienceMediaRail(
     onRailFocused: () -> Unit = {},
     /** The rail that holds the selection; only its card (and heading) draw the selected state. */
     active: Boolean = true,
+    /** Television: the D-pad navigator this rail belongs to, and the rail's position in it. */
+    rails: TvRails? = null,
+    railIndex: Int = 0,
 ) {
     val collection = playarrString(PlayarrString.LibraryCollectionTitles)
     val railTitle = rail.literalTitle ?: rail.title?.let { playarrString(it) }.orEmpty()
@@ -2990,18 +3041,20 @@ private fun ExperienceMediaRail(
             }
             Spacer(Modifier.height(8.dp))
         }
-        val railState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val railState = rails?.rowState(railIndex) ?: androidx.compose.foundation.lazy.rememberLazyListState()
         Box {
         LazyRow(
             state = railState,
-            modifier = (if (isTelevision) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
-            contentPadding = if (isTelevision) PaddingValues(end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
+            // Television: the 3 px focus ring sits outside the first card, so the row starts 4 dp early and pads 4 dp back.
+            modifier = (if (isTelevision) Modifier.fillMaxWidth().offset(x = (-4).dp) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
+            contentPadding = if (isTelevision) PaddingValues(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
         ) {
-            items(rail.works, key = Work::id) { work ->
+            itemsIndexed(rail.works, key = { _, work -> work.id }) { itemIndex, work ->
                 val onDeck = rail.onDeckByWork[work.id]
                 val episode = onDeck?.episode
                 ExperienceLandscapeCard(
+                    modifier = if (rails != null) Modifier.tvRailItem(rails, railIndex, itemIndex) else Modifier,
                     work = work,
                     serverUrl = serverUrl,
                     accessToken = accessToken,
@@ -3097,7 +3150,7 @@ internal fun PhoneRailEdgeFade(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ExperienceLandscapeCard(
+internal fun ExperienceLandscapeCard(
     work: Work,
     serverUrl: String,
     accessToken: String?,
@@ -3135,12 +3188,10 @@ private fun ExperienceLandscapeCard(
     )
     // Web touch layouts no longer raise the autofocused card (#90): a phone card is never lifted or scaled.
     val scale = if (webPhone) 1f else animatedScale
-    val liftActive = if (webTvStyle) focused || selected else focused
-    val artScale = rememberPlayarrFocusScale(
-        focused = liftActive && webTvStyle,
-        focusedScale = if (webTvLibrary) 1.04f else 1.025f,
-        label = "playarrCardArtFocus",
-    )
+    // Web remote mode (`body[data-input-mode="remote"]`, which is always the case on a TV): no lift, no scale and no
+    // selected state; the focused card's art gets a 3 px ring and a deeper shadow, and nothing else changes.
+    val liftActive = focused
+    val artScale = 1f
     val cardRadius = if (webTvStyle) 12.48.dp else 10.dp
     val stackNear = WebInk.copy(alpha = 0.26f)
     val stackFar = WebInk.copy(alpha = 0.14f)
@@ -3154,7 +3205,6 @@ private fun ExperienceLandscapeCard(
                     Modifier.scale(scale)
                 },
             )
-            .graphicsLayer { if (webTvStyle && liftActive) translationY = (if (webTvLibrary) -6.6f else -6f).dp.toPx() }
             .onFocusChanged { if (it.isFocused) { focused = true; onSelected() } else focused = false }
             .combinedClickable(
                 onClick = { onSelected(); onClick() },
@@ -3162,7 +3212,7 @@ private fun ExperienceLandscapeCard(
             ),
     ) {
         WebShadowedBox(
-            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) webCardShadows(liftActive, !webTvLibrary, false) else emptyList(),
+            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) (if (focused) webRemoteFocusShadows else webCardShadows(false, !webTvLibrary, false)) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
             modifier = Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
@@ -3186,7 +3236,7 @@ private fun ExperienceLandscapeCard(
                     },
                 )
                 .scale(artScale)
-                ,
+                .webFocusRing(focused && webTvStyle, radius = cardRadius, color = WebCardFocusRing),
             innerModifier = Modifier.background(if (webSearch) WebSurfaceStrong else WebSurfaceSoft)
                 .then(if (!webPhone && !webTvStyle && (focused || selected)) Modifier.border(1.dp, WebInk.copy(alpha = 0.62f), RoundedCornerShape(10.dp)) else Modifier),
         ) {
@@ -3303,6 +3353,7 @@ internal fun WebDetailPill(
             .height(64.dp)
             .widthIn(min = if (primary) 156.dp else 142.dp)
             .scale(scale)
+            .webFocusRing(focused, offset = 3.dp)
             .onFocusChanged { focused = it.isFocused },
     ) {
         Row(
@@ -3333,7 +3384,7 @@ private fun PlayarrUnwatchedDot(modifier: Modifier = Modifier, size: Dp = 12.dp)
 }
 
 @Composable
-private fun LibraryResults(
+internal fun LibraryResults(
     works: List<Work>,
     viewMode: LibraryViewMode,
     artworkSize: LibraryArtworkSize,
@@ -3346,8 +3397,16 @@ private fun LibraryResults(
     onSelected: (Work) -> Unit,
     onOpen: (Work) -> Unit,
     onContext: (Work) -> Unit,
+    /** Television: the D-pad grid navigator (web title-grid rules) and the state of the grid it drives. */
+    grid: TvGrid? = null,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
 ) {
     val fixedColumns = playarrLibraryGridColumns(viewMode, artworkSize, isTelevision)
+    if (grid != null) {
+        grid.gridState = gridState
+        grid.count = works.size
+        grid.fixedColumns = fixedColumns?.takeIf { viewMode == LibraryViewMode.Screen || viewMode == LibraryViewMode.Cover }
+    }
     val landscapeWidth = when (artworkSize) {
         LibraryArtworkSize.Small -> if (isTelevision) 150.dp else 132.dp
         LibraryArtworkSize.Medium -> if (isTelevision) 190.dp else 164.dp
@@ -3360,12 +3419,13 @@ private fun LibraryResults(
     when (viewMode) {
         LibraryViewMode.Screen -> LazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: if (isTelevision) GridCells.Adaptive(landscapeWidth) else GridCells.Fixed(2),
+            state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = screenPadding,
             horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.92.dp else 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (isTelevision) 27.dp else 24.dp),
         ) {
-            items(works, key = Work::id) { work ->
+            itemsIndexed(works, key = { _, work -> work.id }) { index, work ->
                 ExperienceLandscapeCard(
                     work = work,
                     serverUrl = serverUrl,
@@ -3374,7 +3434,7 @@ private fun LibraryResults(
                     selected = work.id == selectedId,
                     onSelected = { onSelected(work) },
                     onClick = { onOpen(work) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = (if (grid != null) Modifier.tvGridItem(grid, index) else Modifier).fillMaxWidth(),
                     progress = progressByWork[work.id],
                     onContext = { onContext(work) },
                     showUnwatched = progressLoaded,
@@ -3406,13 +3466,14 @@ private fun LibraryResults(
         }
         LibraryViewMode.Cover -> LazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(landscapeWidth * 0.72f),
+            state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = padding,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            items(works, key = Work::id) { work ->
-                LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.72f, work.id == selectedId, onSelected, onOpen, onContext, showUnwatched = progressLoaded && shouldShowPlayarrUnwatchedDot(progressByWork[work.id], true), fillWidth = fixedColumns != null)
+            itemsIndexed(works, key = { _, work -> work.id }) { index, work ->
+                LibraryCoverCard(work, serverUrl, accessToken, landscapeWidth * 0.72f, work.id == selectedId, onSelected, onOpen, onContext, showUnwatched = progressLoaded && shouldShowPlayarrUnwatchedDot(progressByWork[work.id], true), fillWidth = fixedColumns != null, modifier = if (grid != null) Modifier.tvGridItem(grid, index) else Modifier)
             }
         }
         LibraryViewMode.CoverFlow -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -3446,23 +3507,23 @@ private fun LibraryCoverCard(
     onContext: (Work) -> Unit,
     showUnwatched: Boolean = false,
     fillWidth: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     val libraryScale = rememberPlayarrFocusScale(
-        focused = focused || selected,
+        focused = focused,
         focusedScale = FocusMotion.tileFocusScale,
         label = "libraryCardFocus",
     )
     Column(
-        (if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
+        modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier.width(width)).scale(libraryScale)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onSelected(work) }
             .combinedClickable(onClick = { onSelected(work); onOpen(work) }, onLongClick = { onContext(work) }),
     ) {
         Box {
             AuthenticatedArtwork(
                 work, listOf(ImageKind.Poster, ImageKind.Backdrop), serverUrl, accessToken, ContentScale.Crop,
-                Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp))
-                    .then(if (focused || selected) Modifier.border(1.dp, WebInkSoft, RoundedCornerShape(12.dp)) else Modifier),
+                Modifier.fillMaxWidth().aspectRatio(2f / 3f).webFocusRing(focused, radius = 12.dp, color = WebCardFocusRing).clip(RoundedCornerShape(12.dp)),
             )
             if (showUnwatched) PlayarrUnwatchedDot(Modifier.align(Alignment.TopEnd).padding(8.dp))
         }
@@ -3669,9 +3730,18 @@ private fun ExperienceLibraryScreen(
                 )
                 return
             }
-            var selectedId by remember(kind) { mutableStateOf(state.value.first().id) }
+            // Saved, so coming back from a title restores the card that last had focus.
+            var savedSelectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
+            val selectedId = savedSelectedId?.takeIf { id -> state.value.any { it.id == id } } ?: state.value.first().id
             var contextWork by remember { mutableStateOf<Work?>(null) }
             var activeLetter by remember(kind) { mutableStateOf("#") }
+            val libraryScope = rememberCoroutineScope()
+            val tvGrid = remember(kind) { TvGrid(libraryScope) }
+            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+            val letterFocus = remember { FocusRequester() }
+            val libraryNavEntry = LocalTvNavEntry.current
+            tvGrid.onLeftEdge = { libraryNavEntry?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false }
+            tvGrid.onRightEdge = { runCatching { letterFocus.requestFocus() }.getOrDefault(false) }
             var filtersOpen by remember { mutableStateOf(false) }
             val viewMode = library.view
             val artworkSize = library.size
@@ -3751,10 +3821,18 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                         selectedId = selectedId,
                         progressByWork = progressByWork,
                         progressLoaded = progressLoaded,
-                        onSelected = { selectedId = it.id },
+                        onSelected = { savedSelectedId = it.id },
                         onOpen = { navController.navigate("experience-detail/${it.id}") },
                         onContext = { contextWork = it },
+                        grid = if (isTelevision) tvGrid else null,
+                        gridState = gridState,
                     )
+                    if (isTelevision) {
+                        // Web default focus: the selected card, else the first.
+                        LaunchedEffect(kind) {
+                            tvGrid.focus(0, filteredWorks.indexOfFirst { it.id == selectedId }.coerceAtLeast(0))
+                        }
+                    }
                     }
                 }
                 if (isTelevision && sortMode == "title") {
@@ -3768,9 +3846,13 @@ if (filteredWorks.isEmpty() && matchingIds != null) {
                             // Web marks the letter of the selected title while no letter filter is applied.
                             val shownLetter = if (activeLetter == "#") selected.sortTitle.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' }?.toString() ?: "#" else activeLetter
                             val active = shownLetter == letter
+                            var letterFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .size(24.dp)
+                                    .then(if (active) Modifier.focusRequester(letterFocus) else Modifier)
+                                    .webFocusRing(letterFocused, offset = 1.dp)
+                                    .onFocusChanged { letterFocused = it.isFocused }
                                     .clip(CircleShape)
                                     .then(if (active) Modifier.background(WebInk.copy(alpha = 0.78f)) else Modifier)
                                     .clickable { activeLetter = letter },
@@ -5311,17 +5393,24 @@ private fun ExperienceVideoDetailContent(
                 ?.let { season.season.seasonNumber to it }
         }
     }
-    var selectedSeasonNumber by remember(detail.work.id, initialMediaFileId) {
-        mutableStateOf(initialEpisode?.first ?: playableSeasons.firstOrNull()?.season?.seasonNumber)
+    // A series opens on its next item to play (the resume plan's episode that the Play button also uses, else S1E1),
+    // unless the route names an episode. The selection is saved, so coming back from playback restores the last focus.
+    val nextUp = remember(detail.work.id, playableSeasons, resumePlan) {
+        if (series != null) playarrNextUpSelection(playableSeasons, resumePlan, detail.work.id) else null
+    }
+    var selectedSeasonNumber by rememberSaveable(detail.work.id, initialMediaFileId) {
+        mutableStateOf(initialEpisode?.first ?: nextUp?.first ?: playableSeasons.firstOrNull()?.season?.seasonNumber)
     }
     val selectedSeason = playableSeasons.firstOrNull { it.season.seasonNumber == selectedSeasonNumber }
         ?: playableSeasons.firstOrNull()
-    var selectedEpisodeId by remember(detail.work.id, initialMediaFileId) {
+    var selectedEpisodeId by rememberSaveable(detail.work.id, initialMediaFileId) {
         mutableStateOf(
             initialEpisode?.second?.episode?.id
+                ?: nextUp?.second
                 ?: selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }?.episode?.id,
         )
     }
+    val playFocus = remember { FocusRequester() }
     val selectedEpisode = selectedSeason?.episodes
         ?.firstOrNull { it.episode.id == selectedEpisodeId && it.mediaFileId != null }
         ?: selectedSeason?.episodes?.firstOrNull { it.mediaFileId != null }
@@ -5391,7 +5480,9 @@ private fun ExperienceVideoDetailContent(
                     onDownload = onDownload,
                     resumePlan = resumePlan,
                     onResumeChoice = onResumeChoice,
-                    autoFocusPlay = true,
+                    // A series opens on its next-up tile; movies still open on Play.
+                    autoFocusPlay = series == null,
+                    playFocus = playFocus,
                     television = true,
                     modifier = Modifier.padding(top = if (selectedEpisode != null) 10.3.dp else 37.8.dp),
                 )
@@ -5412,6 +5503,8 @@ private fun ExperienceVideoDetailContent(
                     credits = credits,
                     similarWorks = similarWorks,
                     onOpenWork = onOpenWork,
+                    focusEpisodeId = selectedEpisode?.episode?.id,
+                    playFocus = playFocus,
                     modifier = Modifier
                         .fillMaxWidth(0.62f)
                         .fillMaxHeight()
@@ -6034,6 +6127,8 @@ private fun VideoDetailActions(
     resumePlan: io.playarr.shared.data.model.ResumePlan? = null,
     onResumeChoice: (io.playarr.shared.data.model.ResumeOption) -> Unit = {},
     autoFocusPlay: Boolean = false,
+    /** The Play pill's focus requester when the page needs to focus it (LEFT from the first episode tile). */
+    playFocus: FocusRequester? = null,
     /** Television: the web `.tv-detail-actions` pills instead of the shared buttons. */
     television: Boolean = false,
     modifier: Modifier = Modifier,
@@ -6044,7 +6139,8 @@ private fun VideoDetailActions(
     }
     // Television: start D-pad focus on Play (as Playarr Web does) instead of the
     // first focusable item in the navigation rail.
-    val playFocus = remember { FocusRequester() }
+    val ownPlayFocus = remember { FocusRequester() }
+    val playFocus = playFocus ?: ownPlayFocus
     LaunchedEffect(mediaFileId, autoFocusPlay) {
         if (autoFocusPlay) runCatching { playFocus.requestFocus() }
     }
@@ -6302,7 +6398,7 @@ private fun MoviePlaybackChoiceGroup(
 }
 
 @Composable
-private fun SeriesEpisodeBrowser(
+internal fun SeriesEpisodeBrowser(
     seasons: List<SeasonDetail>,
     selectedEpisodeId: String?,
     work: Work,
@@ -6317,11 +6413,34 @@ private fun SeriesEpisodeBrowser(
     credits: WorkCreditsResponse,
     similarWorks: List<Work>,
     onOpenWork: (String) -> Unit,
+    focusEpisodeId: String? = null,
+    playFocus: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     if (seasons.isEmpty()) {
         ExperienceEmpty(playarrString(PlayarrString.DetailNoPlayableMedia))
         return
+    }
+    // Web series rules (PlayarrTvNavigation.kt): every season is a track; UP/DOWN land on the closest tile by x.
+    val scope = rememberCoroutineScope()
+    val tvRails = remember { TvRails(scope, TvRails.Vertical.ClosestX) }
+    val columnState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Seasons are rails 0..n-1; the similar titles are the last rail (the cast row has nothing to focus).
+    val similarRail = seasons.size
+    tvRails.sizes = seasons.map { it.episodes.size } + (if (similarWorks.isNotEmpty()) listOf(similarWorks.size) else emptyList())
+    tvRails.columnState = columnState
+    tvRails.columnIndexOfRail = { rail -> if (rail == similarRail) seasons.size + (if (credits.cast.isNotEmpty()) 1 else 0) else rail }
+    val navEntry = LocalTvNavEntry.current
+    tvRails.onLeftEdge = {
+        // Web: LEFT from the first tile reaches the nearest control on the left, the Play pill.
+        (playFocus ?: navEntry)?.let { runCatching { it.requestFocus() }.getOrDefault(false) } ?: false
+    }
+    if (isTelevision && focusEpisodeId != null) {
+        // Open with focus on the selected (next-up) tile, its season track scrolled into view.
+        LaunchedEffect(Unit) {
+            val season = seasons.indexOfFirst { s -> s.episodes.any { it.episode.id == focusEpisodeId } }
+            if (season >= 0) tvRails.focus(season, seasons[season].episodes.indexOfFirst { it.episode.id == focusEpisodeId })
+        }
     }
     val posterUrl = work.images.firstOrNull { it.kind == ImageKind.Poster }?.url
     // TV: web layout, seasons sit directly on the rail gradient; phones keep the glass panel.
@@ -6377,13 +6496,16 @@ private fun SeriesEpisodeBrowser(
                 subtitle = null,
                 onDownloadAll = onDownload,
             )
+            val seasonIndex = seasons.indexOf(season)
             LazyRow(
+                state = if (isTelevision) tvRails.rowState(seasonIndex) else androidx.compose.foundation.lazy.rememberLazyListState(),
                 modifier = if (isTelevision) Modifier.padding(top = 17.3.dp) else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
-                contentPadding = if (isTelevision) PaddingValues(top = 18.dp, end = 24.dp) else PaddingValues(vertical = 6.dp),
+                contentPadding = if (isTelevision) PaddingValues(start = 4.dp, top = 18.dp, end = 24.dp) else PaddingValues(vertical = 6.dp),
             ) {
-                items(season.episodes, key = { it.episode.id }) { episode ->
+                itemsIndexed(season.episodes, key = { _, it -> it.episode.id }) { episodeIndex, episode ->
                     EpisodeDetailCard(
+                        modifier = if (isTelevision) Modifier.tvRailItem(tvRails, seasonIndex, episodeIndex) else Modifier,
                         episode = episode,
                         seasonNumber = season.season.seasonNumber,
                         work = work,
@@ -6402,13 +6524,13 @@ private fun SeriesEpisodeBrowser(
             }
         }
         if (isTelevision) {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(54.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
+            LazyColumn(Modifier.weight(1f), state = columnState, verticalArrangement = Arrangement.spacedBy(54.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                 items(seasons, key = { it.season.id }) { content(it) }
                 if (credits.cast.isNotEmpty()) {
                     item { DetailCreditsRail(credits.cast) }
                 }
                 if (similarWorks.isNotEmpty()) {
-                    item { SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork) }
+                    item { SimilarWorksRail(similarWorks, serverUrl, accessToken, onOpenWork, tvRails, similarRail) }
                 }
             }
         } else {
@@ -6431,12 +6553,13 @@ private fun EpisodeDetailCard(
     isTelevision: Boolean,
     onSelect: () -> Unit,
     onPlay: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (!isTelevision) {
         PhoneEpisodeCard(episode, seasonNumber, work, progress, serverUrl, accessToken, onSelect, onPlay)
         return
     }
-    WebEpisodeDetailCard(episode, seasonNumber, work, progress, serverUrl, accessToken, selected, onSelect, onPlay)
+    WebEpisodeDetailCard(episode, seasonNumber, work, progress, serverUrl, accessToken, selected, onSelect, onPlay, modifier)
 }
 
 /** Web season heading: 17.664 px / 610 title, count line, and the 46 dp Download button at x 1828. */
@@ -6459,8 +6582,8 @@ private fun WebSeasonHeading(
                 Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(if (focused) WebSurfaceStrong.copy(alpha = 0.72f) else Color.Transparent)
                     .onFocusChanged { focused = it.isFocused }
+                    .webFocusRing(focused, offset = 0.dp)
                     .clickable { onDownloadAll(candidates) }
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
@@ -6483,13 +6606,14 @@ private fun WebEpisodeDetailCard(
     selected: Boolean,
     onSelect: () -> Unit,
     onPlay: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember(episode.episode.id) { mutableStateOf(false) }
     val available = episode.mediaFileId != null
     val lift = focused || selected
     val artScale = rememberPlayarrFocusScale(focused = lift, focusedScale = 1.025f, label = "episodeArtFocus")
     Column(
-        Modifier
+        modifier
             .width(268.dp)
             .graphicsLayer { if (lift) translationY = -7.dp.toPx() }
             .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
@@ -6503,7 +6627,8 @@ private fun WebEpisodeDetailCard(
                 listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f)))
             },
             shape = RoundedCornerShape(13.44.dp),
-            modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp).scale(artScale)
+                .webFocusRing(focused, radius = 13.44.dp, color = WebCardFocusRing),
             innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
             WebEpisodeArt {
@@ -6798,9 +6923,8 @@ private fun WebEpisodeCard(
         WebShadowedBox(
             shadows = listOf(WebShadow(10.dp, 20.dp, WarmShadow.copy(alpha = 0.14f)), WebShadow(3.dp, 8.dp, WarmShadow.copy(alpha = 0.10f))),
             shape = RoundedCornerShape(13.44.dp),
-            modifier = Modifier.fillMaxWidth().height(150.8.dp),
-            innerModifier = Modifier.background(WebSurfaceSoft)
-                .then(if (focused) Modifier.border(2.dp, WebInk.copy(alpha = 0.7f), RoundedCornerShape(13.44.dp)) else Modifier),
+            modifier = Modifier.fillMaxWidth().height(150.8.dp).webFocusRing(focused, radius = 13.44.dp, color = WebCardFocusRing),
+            innerModifier = Modifier.background(WebSurfaceSoft),
         ) {
             WebEpisodeArt { art() }
             badge?.let {
@@ -6878,17 +7002,28 @@ private fun SimilarWorksRail(
     serverUrl: String,
     accessToken: String?,
     onOpenWork: (String) -> Unit,
+    /** Television: the detail page's D-pad rails, with this rail at [railIndex]. */
+    rails: TvRails? = null,
+    railIndex: Int = 0,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(playarrString(PlayarrString.DetailSimilarTitles), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-            items(works, key = Work::id) { work ->
+        LazyRow(
+            state = rails?.rowState(railIndex) ?: androidx.compose.foundation.lazy.rememberLazyListState(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 4.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
+        ) {
+            itemsIndexed(works, key = { _, work -> work.id }) { index, work ->
+                var tileFocused by remember { mutableStateOf(false) }
                 Column(Modifier.width(150.dp)) {
                     Surface(
                         onClick = { onOpenWork(work.id) },
                         color = WebSurfaceSoft,
                         shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                        modifier = (if (rails != null) Modifier.tvRailItem(rails, railIndex, index) else Modifier)
+                            .fillMaxWidth().aspectRatio(16f / 9f)
+                            .webFocusRing(tileFocused, radius = 10.dp, color = WebCardFocusRing)
+                            .onFocusChanged { tileFocused = it.isFocused },
                     ) {
                         AuthenticatedArtwork(
                             work = work,
@@ -7214,9 +7349,9 @@ private fun MusicTrackRow(
     var focused by remember(track.track.id) { mutableStateOf(false) }
     Surface(
         onClick = onPlay,
-        color = if (focused || selected) WebSurfaceSoft else WebSurfaceStrong.copy(alpha = 0.92f),
+        color = if (selected && !focused) WebSurfaceSoft else WebSurfaceStrong.copy(alpha = 0.92f),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().onFocusChanged {
+        modifier = Modifier.fillMaxWidth().webFocusRing(focused, radius = 12.dp, offset = -3.dp).onFocusChanged {
             focused = it.isFocused
             if (it.isFocused) onSelect()
         },
