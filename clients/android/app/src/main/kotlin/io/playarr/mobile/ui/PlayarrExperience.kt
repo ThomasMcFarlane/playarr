@@ -124,6 +124,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -7114,6 +7115,17 @@ private fun ExperienceMusicDetailContent(
         mutableStateOf(initialSelection?.trackId)
     }
     val selectedAlbum = albums.firstOrNull { it.album.id == selectedAlbumId } ?: albums.firstOrNull()
+    // Web `MusicDetail`: the selected album carries data-tv-focus-default, so the page opens on it.
+    val albumRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val selectedAlbumFocus = remember { FocusRequester() }
+    if (isTelevision && albums.isNotEmpty()) {
+        TvDefaultFocusEffect(detail.work.id) {
+            val index = albums.indexOfFirst { it.album.id == selectedAlbum?.album?.id }.coerceAtLeast(0)
+            albumRowState.scrollToItem(index)
+            withFrameNanos { }
+            runCatching { selectedAlbumFocus.requestFocus() }
+        }
+    }
     val selectedTracks = selectedAlbum?.tracks?.filter { it.mediaFileId != null }.orEmpty()
     val selectedTrack = selectedTracks.firstOrNull { it.track.id == selectedTrackId } ?: selectedTracks.firstOrNull()
     val posterUrl = remember(detail.work.id) {
@@ -7230,6 +7242,7 @@ private fun ExperienceMusicDetailContent(
                 item {
                     Text(playarrString(PlayarrString.MusicAlbums), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     LazyRow(
+                        state = albumRowState,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 12.dp),
                     ) {
@@ -7242,6 +7255,7 @@ private fun ExperienceMusicDetailContent(
                                 accessToken = accessToken,
                                 selected = album.album.id == selectedAlbum?.album?.id,
                                 isTelevision = isTelevision,
+                                focusRequester = if (album.album.id == selectedAlbum?.album?.id) selectedAlbumFocus else null,
                                 onSelect = {
                                     selectedAlbumId = album.album.id
                                     selectedTrackId = firstTrack?.track?.id
@@ -7325,29 +7339,29 @@ private fun MusicAlbumCard(
     accessToken: String?,
     selected: Boolean,
     isTelevision: Boolean,
+    focusRequester: FocusRequester? = null,
     onSelect: () -> Unit,
     onPlay: () -> Unit,
 ) {
     var focused by remember(album.album.id) { mutableStateOf(false) }
-    val albumScale = rememberPlayarrFocusScale(
-        focused = focused,
-        focusedScale = FocusMotion.navSelectedScale,
-        label = "albumFocus",
-    )
+    // A media card: shadow and a draw-only lift on the content inside the focus target, no ring and no scale.
+    Box(
+        Modifier
+            .width(if (isTelevision) 200.dp else 142.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
+            .clickable(onClick = onPlay),
+    ) {
     Column(
-        modifier = Modifier.width(if (isTelevision) 200.dp else 142.dp),
+        modifier = Modifier.fillMaxWidth().mediaCardLift(focused),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Surface(
-            onClick = onPlay,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .scale(albumScale)
-                .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
-                .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
+        WebShadowedBox(
+            shadows = if (focused) webCardFocusShadows else webCardRestShadows,
             shape = RoundedCornerShape(12.dp),
-            color = WebSurfaceStrong,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                .then(if (selected) Modifier.border(2.dp, WebAccent, RoundedCornerShape(12.dp)) else Modifier),
+            innerModifier = Modifier.background(WebSurfaceStrong),
         ) {
             AuthenticatedAlbumArtwork(
                 artistWork = artist,
@@ -7364,6 +7378,7 @@ private fun MusicAlbumCard(
             fontSize = 10.sp,
             maxLines = 1,
         )
+    }
     }
 }
 

@@ -13,6 +13,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -661,26 +663,27 @@ internal fun PlaylistCard(
 ) {
     var focused by remember { mutableStateOf(false) }
     val openLabel = playarrString(PlayarrString.PlaylistsOpenLabel, "name" to playlist.name)
-    Surface(
-        onClick = onClick,
+    // A playlist tile is a media card: shadow and a draw-only lift on the content inside the focus target, no ring.
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.45f)
-            .scale(if (focused) FocusMotion.tileFocusScale else FocusMotion.restScale)
-            .webFocusRing(focused, radius = 18.dp, offset = 0.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onSelected()
             }
-            .semantics { contentDescription = openLabel },
-        color = WebSurfaceStrong,
-        shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (focused || selected) WebInkSoft else WebInkMuted.copy(alpha = 0.18f),
-        ),
+            .semantics { contentDescription = openLabel }
+            .clickable(onClick = onClick),
     ) {
-        Box(Modifier.background(Brush.linearGradient(listOf(WebAccent.copy(alpha = 0.22f), WebSurfaceStrong)))) {
+    WebShadowedBox(
+        shadows = if (focused) webCardFocusShadows else webCardRestShadows,
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxSize().mediaCardLift(focused),
+        innerModifier = Modifier
+            .background(WebSurfaceStrong)
+            .border(1.dp, if (focused || selected) WebInkSoft else WebInkMuted.copy(alpha = 0.18f), RoundedCornerShape(18.dp)),
+    ) {
+        Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(WebAccent.copy(alpha = 0.22f), WebSurfaceStrong)))) {
             if (coverWorks.isEmpty() || serverUrl.isBlank()) {
                 Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, contentDescription = null, tint = WebAccent, modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(38.dp))
             } else {
@@ -733,6 +736,7 @@ internal fun PlaylistCard(
                 Text(metadata.joinToString(" · "), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
     }
 }
 
@@ -2389,7 +2393,8 @@ private fun ProfileChoice(
         if (profile.isCurrent) PlayarrString.ProfilesAvatarLabelCurrent else PlayarrString.ProfilesAvatarLabel,
         "name" to profile.displayName,
     )
-    val lift = if (selected) Modifier.offset(y = (-8).dp).scale(1.045f) else Modifier
+    // Draw-only lift: an offset would change the bounds focus search measures.
+    val lift = if (selected) Modifier.graphicsLayer { translationY = -8.dp.toPx(); scaleX = 1.045f; scaleY = 1.045f } else Modifier
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -2547,7 +2552,8 @@ private fun AddProfileChoice(
 ) {
     val cardWidth = if (isTelevision) 244.dp else 148.dp
     val avatarSize = if (isTelevision) 244.dp else 132.dp
-    val lift = if (selected) Modifier.offset(y = (-8).dp).scale(1.045f) else Modifier
+    // Draw-only lift: an offset would change the bounds focus search measures.
+    val lift = if (selected) Modifier.graphicsLayer { translationY = -8.dp.toPx(); scaleX = 1.045f; scaleY = 1.045f } else Modifier
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -4103,6 +4109,9 @@ private fun TvSettingsBody(
     val locale = LocalPlayarrLanguage.current.locale
     val entries = phoneSettingsIndex
     val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
+    // Web default focus: the section list, on the first (selected) section; LEFT/RIGHT then cross to the panel.
+    val firstRow = remember { androidx.compose.ui.focus.FocusRequester() }
+    TvDefaultFocusEffect(Unit) { runCatching { firstRow.requestFocus() } }
     // The page is darker (lighter in the light theme) behind the section list and fades to the panel tone from x 680 to 1150.
     val start = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
     val mid = if (webIsDark) Color(0xFF252125) else Color(0xFFF3F1F2)
@@ -4135,6 +4144,7 @@ private fun TvSettingsBody(
                     Modifier
                         .fillMaxWidth()
                         .height(92.dp)
+                        .then(if (index == 0) Modifier.focusRequester(firstRow) else Modifier)
                         .background(if (selected && !focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
                         .webFocusRing(focused, radius = 0.dp, offset = (-3).dp)
                         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onPick(candidate) }
