@@ -24,8 +24,8 @@
 	<string>public.app-category.entertainment</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>NunitoSans.ttf</string>
-		<string>JetBrainsMono.ttf</string>
+		<string>NunitoSans-Variable.ttf</string>
+		<string>JetBrainsMono-Variable.ttf</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
