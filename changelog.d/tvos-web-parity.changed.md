@@ -1,0 +1,1 @@
+- tvOS: Home, Library, title detail, Search, Settings, Release Calendar, profile switcher, the household blocked screen and the player now follow the web TV layout (1920x1080) in light and dark, with the web's nav tabs, preset profile avatars, key art treatment and a web-style player with quality matrix.

@@ -1,0 +1,2 @@
+- Apple parity workflow: captures both themes, a web layout dump per screen, a player screen pair (controls, quality menu) with the video hidden, and the household blocked screen (fx-child-locked).
+- PlayarrKit: Home rails, availability lag, household status, profile avatar preset and media thumbnail calls; runtime on work and episode details.
