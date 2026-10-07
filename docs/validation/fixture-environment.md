@@ -13,7 +13,7 @@ scripts/fixtures/down.sh          # stop (add --purge to delete all fixture stat
 ```
 
 Requirements: `cargo` (or set `PLAYARR_SERVER_BIN` to a built `playarr-server`
-and `PLAYARR_FIXTURE_NO_BUILD=1`), `node` 20+, `ffmpeg`/`ffprobe`, `curl`.
+and `PLAYARR_FIXTURE_NO_BUILD=1`), `node` 20+, `ffmpeg`/`ffprobe`, `curl`, `sqlite3`.
 Run the cargo build inside your usual memory-capped scope on a shared host.
 State lives in `.fixtures/` (git-ignored; override with `PLAYARR_FIXTURE_DIR`).
 

@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Fixtures: every title gets an explicit, distinct added_at (pinned after the first sync), so the home rail order never depends on sync timing; up.sh now needs the sqlite3 CLI.
 - Android TV: the calendar agenda follows the web TV layout, and dates on phone and TV are formatted per locale the way the web formats them (for example 7 Oct 2026 in en-GB).
 - Android phone calendar: header range, date row, detail rows and the agenda card follow the web more closely, and the open quality menu highlights its button; parity results record the justified residue.
 - Android TV settings follows the web TV layout: a wide numbered section list with the selected section's panel beside it.
