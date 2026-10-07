@@ -187,3 +187,13 @@ and the collapsed "TV app connection details", and the Your data headings and bo
 0.8%, request latency 0.9%, remote 1.4%, lock 1.8%, invite 2.2%, player 2.4%, data 2.9%, server 3.6% (light within 0.3 of
 dark, server 3.8%). The player quality matrix, the server cards and the data page still differ in detail (row pitch, box
 heights and fonts); the section panels are not part of the shared references yet, so these figures come from my own captures.
+
+### Cards and the hero title (light and dark)
+
+TV cards now carry the web's drop shadows (a resting pair, a larger pair when lifted) and lift when selected on the home
+rails as well as the library grid, and the hero title is measured and drawn in the web font with the web's `max-width: 9ch`
+(nine "0" advances of that font) instead of the platform font's width. Against the shared references, dark: home 1.10%,
+movies 0.57%, series 0.52%, film-detail 0.76%, series-detail 0.79%, search 0.94%, calendar 0.63%, settings 0.92%,
+profile-switcher 1.47%, household-blocked 0.43%, player controls 0.62%, quality menu 1.17%. Light: home 1.28%, movies
+0.65%, series 0.56%, film-detail 1.16%, series-detail 1.55%, search 1.08%, calendar 0.70%, settings 0.97%,
+profile-switcher 1.68%, household-blocked 0.42%, player controls 0.62%, quality menu 1.17%.

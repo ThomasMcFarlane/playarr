@@ -2834,12 +2834,16 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
         fontSize = 69.12.sp,
         fontWeight = FontWeight(560),
         letterSpacing = (-4.977).sp,
+        fontFamily = webFontFamily,
+        textMotion = if (webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
     )
-    val lines = remember(title, density) {
+    val lines = remember(title, density, webFontFamily) {
+        // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
+        val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
         val result = measurer.measure(
             text = title,
             style = style,
-            constraints = androidx.compose.ui.unit.Constraints(maxWidth = with(density) { 349.3.dp.roundToPx() }),
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = nineCh),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -3131,7 +3135,7 @@ private fun ExperienceLandscapeCard(
     )
     // Web touch layouts no longer raise the autofocused card (#90): a phone card is never lifted or scaled.
     val scale = if (webPhone) 1f else animatedScale
-    val liftActive = if (webTvLibrary) focused || selected else focused
+    val liftActive = if (webTvStyle) focused || selected else focused
     val artScale = rememberPlayarrFocusScale(
         focused = liftActive && webTvStyle,
         focusedScale = if (webTvLibrary) 1.04f else 1.025f,
@@ -3158,7 +3162,7 @@ private fun ExperienceLandscapeCard(
             ),
     ) {
         WebShadowedBox(
-            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else emptyList(),
+            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) webCardShadows(liftActive, !webTvLibrary, false) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
             modifier = Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
