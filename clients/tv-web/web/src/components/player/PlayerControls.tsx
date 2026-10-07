@@ -679,6 +679,12 @@ export function PlayerControls({
             event.stopPropagation();
             playButtonRef.current?.focus();
             return;
+          case "Enter":
+            // SELECT on the scrubber toggles play/pause only: no scrub commit.
+            event.preventDefault();
+            event.stopPropagation();
+            onTogglePlay();
+            return;
           default:
             return;
         }
@@ -729,6 +735,7 @@ export function PlayerControls({
       duration,
       onNavigateAbove,
       onNavigateBelow,
+      onTogglePlay,
       onTogglePlaylist,
       openAudioMenu,
       openQualityMenu,

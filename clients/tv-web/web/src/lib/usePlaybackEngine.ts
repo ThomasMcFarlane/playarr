@@ -862,28 +862,16 @@ export function usePlaybackEngine(
     []
   );
 
-  // Create the platform engine once negotiation has succeeded and, for
-  // Shaka, attach it to the `<video>`. `PlayerSurface` (which renders the `<video>`
-  // this hook's `videoRef` points at) is only mounted by the caller once
-  // `negotiation.kind === "ready"` (see `Player.tsx`), so `videoRef.current`
-  // is null for the entire "loading"/"error" lifetime. An empty dependency
-  // array here used to run this effect exactly once, immediately after
-  // `usePlaybackEngine` itself first mounts -- always before negotiation
-  // resolves, so `videoRef.current` was always null and the engine was
-  // never created at all (the actual root cause of "can't load/play
-  // anything": no negotiation error, no engine error, just an eternal
-  // loading spinner with zero network activity). Depending on whether
-  // negotiation is ready re-fires this effect on the exact render where
-  // `PlayerSurface`/`<video>` mounts -- React commits child refs before
-  // running a parent's effects in the same commit, so `videoRef.current`
-  // is already populated by the time this callback runs. A retry that
-  // sends negotiation back through "loading" unmounts `PlayerSurface`
-  // (and the `<video>` with it), so re-attaching to the fresh element on
-  // the next "ready" transition is correct, not wasted churn.
-  // A source switch (seek restarting the transcode, quality or audio change)
-  // is different: `qualitySwitching` keeps `PlayerSurface`, the `<video>` and
-  // this engine alive across its brief "loading" so the last frame stays
-  // visible under the inline spinner.
+  // Create the platform engine as soon as `PlayerSurface` (which renders the
+  // `<video>` this hook's `videoRef` points at) mounts. `Player.tsx` mounts the
+  // surface for the "loading" state too, so Play opens the player directly and
+  // the engine is attached while the stream is still being negotiated; the
+  // source is loaded by the effect below once negotiation is ready. React
+  // commits child refs before a parent's effects, so `videoRef.current` is
+  // populated when this runs. Only an error unmounts the surface (and the
+  // `<video>`), so a retry re-attaches to the fresh element on the next
+  // loading transition. Seeks that restart a transcode, quality and audio
+  // switches keep the surface, `<video>` and engine alive.
   useEffect(() => {
     if (!videoRef.current) return;
 
@@ -923,7 +911,7 @@ export function usePlaybackEngine(
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only on the loading/error <-> ready transition (see comment above), not on every negotiation object identity change.
-  }, [shouldKeepEngineAttached(negotiation.kind, qualitySwitching || reconnecting)]);
+  }, [shouldKeepEngineAttached(negotiation.kind)]);
 
   // Load whatever the negotiation resolved to, once there's both a ready
   // negotiation result and an attached engine. Guarded by `loadedForUrl` so

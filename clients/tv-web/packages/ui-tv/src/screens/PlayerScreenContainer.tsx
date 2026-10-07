@@ -47,9 +47,8 @@ export function PlayerScreenContainer({
       .then(() => engine.play());
   }, [state, engine, client]);
 
-  if (state.status === "loading" || state.status === "idle") {
-    return <AsyncStateMessage kind="loading" message="Preparing playback..." />;
-  }
+  // Loading and idle fall through to the player itself: Play opens the player
+  // straight away, with no interstitial while the session is negotiated.
   if (state.status === "error") {
     return <AsyncStateMessage kind="error" message={`Could not start playback (${state.message}).`} />;
   }

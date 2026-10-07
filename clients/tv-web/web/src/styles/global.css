@@ -3845,11 +3845,14 @@ body[data-input-mode="remote"]
   background: linear-gradient(to top, rgba(0, 0, 0, 0.92), transparent);
   opacity: 1;
   pointer-events: none;
-  transition: opacity 240ms ease;
+  transform: translateY(0);
+  transition: opacity 240ms ease, transform 240ms ease;
 }
 
+/* The scrim rises from the bottom edge and recedes downward. */
 .player-scrim.is-hidden {
   opacity: 0;
+  transform: translateY(100%);
 }
 
 .player-controls {
@@ -3891,6 +3894,12 @@ body[data-input-mode="remote"] .player-seek-track:focus,
   outline: 0;
 }
 
+/* Clear focus indicator: the white ring, with an enlarged highlighted thumb. */
+.player-seek-track:focus-visible,
+body[data-input-mode="remote"] .player-seek-track:focus {
+  box-shadow: 0 0 0 3px #ffffff;
+}
+
 .player-seek-buffered,
 .player-seek-progress {
   position: absolute;
@@ -3924,6 +3933,14 @@ body[data-input-mode="remote"] .player-seek-track:focus,
 body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb,
 .player-seek-track.is-scrubbing .player-seek-thumb {
   opacity: 1;
+}
+
+.player-seek-track:focus-visible .player-seek-thumb,
+body[data-input-mode="remote"] .player-seek-track:focus .player-seek-thumb {
+  width: 24px;
+  height: 24px;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px var(--player-accent);
 }
 
 .player-controls-row {

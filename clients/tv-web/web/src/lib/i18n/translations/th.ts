@@ -431,9 +431,6 @@ export const th: Translations = {
   "pages.musicDetail.albumsAndTracksAriaLabel": "อัลบั้มและแทร็กของ {{title}}",
 
   "pages.player.nowPlaying": "กำลังเล่น",
-  "pages.player.preparingPlayback": "กำลังเตรียมการเล่น",
-  "pages.player.oneMoment": "รอสักครู่",
-  "pages.player.preparingMessage": "ไฟล์ขนาดใหญ่อาจใช้เวลาสักครู่ในการเตรียมสตรีม",
   "pages.player.playbackUnavailable": "ไม่สามารถเล่นได้",
   "pages.player.accessRestricted": "การเข้าถึงถูกจำกัด",
   "pages.player.noStreamingAccess": "ไม่มีสิทธิ์สตรีม",

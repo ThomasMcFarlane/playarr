@@ -182,8 +182,8 @@ describe("MusicDetail track list", () => {
     expect(controlsSource).toContain("const SEEK_COMMIT_DEBOUNCE_MS = 300");
     expect(controlsSource).toContain("window.clearTimeout(seekCommitTimerRef.current)");
     expect(controlsSource).toContain("pendingSeek !== null && seekWasPlayingRef.current");
-    expect(playerSource).toContain("showPreparingScreen({");
-    expect(playerSource).toContain("sourceSwitching: player.qualitySwitching");
+    expect(playerSource).not.toContain("showPreparingScreen");
+    expect(playerSource).not.toContain("preparingPlayback");
   });
 
   it("keeps the inline mini-player inside the app layout scope", () => {

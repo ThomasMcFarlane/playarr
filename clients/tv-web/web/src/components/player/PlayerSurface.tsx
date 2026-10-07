@@ -14,6 +14,7 @@ import { CachedArtworkImage } from "../../lib/artwork";
 import { useGlobalMediaControls } from "../../lib/useGlobalMediaControls";
 import { IS_TIZEN, type PlayarrWebPlatform } from "../../lib/clientPlatform";
 import { usesTenFootChrome } from "../../lib/productSurfaces";
+import { isPlayerBackKey, resolvePlayerBack } from "../../lib/playerMounting";
 import { useLanguage } from "../../lib/i18n/LanguageProvider";
 import type { TranslationKey } from "../../lib/i18n/translations";
 import {
@@ -122,10 +123,19 @@ function isPlayerControlTarget(target: EventTarget | null): boolean {
  * The actual playback surface: the `<video>` element, the custom control
  * bar (`PlayerControls`), a gradient scrim, loading/buffering and fatal
  * playback-error overlays, mouse-driven auto-hide, fullscreen, and keyboard
- * shortcuts. Mounted only once negotiation has succeeded -- `Player.tsx`
- * owns the negotiation loading/error states, since those happen before
- * there's any source to attach a video surface to.
+ * shortcuts. Mounted for the loading state too (Play opens the player directly) -- `Player.tsx`
+ * only replaces it for a negotiation error, since that happens before
+ * there is any source to play.
  */
+/** True when focus already sits on a player control other than the initial Play target. */
+export function playerControlHoldsFocus(element: Element | null): boolean {
+  return (
+    element instanceof HTMLElement &&
+    !element.matches("[data-player-default-focus]") &&
+    element.closest(".player-controls, .player-close, .player-minimise") !== null
+  );
+}
+
 export function PlayerCloseButton({
   onClose,
   onNavigateToControls,
@@ -730,6 +740,10 @@ export function PlayerSurface({
   useEffect(() => {
     if (minimised || !initialFocusPendingRef.current) return;
     const frame = window.requestAnimationFrame(() => {
+      // Never steal focus the user already moved onto a player control (for
+      // example the scrubber while a seek buffers): the default Play focus is
+      // only the initial target.
+      if (playerControlHoldsFocus(document.activeElement)) return;
       shellRef.current
         ?.querySelector<HTMLButtonElement>("[data-player-default-focus]")
         ?.focus({
@@ -924,6 +938,45 @@ export function PlayerSurface({
     systemVolumeOnly,
   ]);
 
+  // BACK closes the controls overlay first; only a BACK with the controls
+  // hidden exits (handled by `Player.tsx`). Menus and panels consume BACK
+  // themselves before it reaches the window.
+  useEffect(() => {
+    if (minimised) return;
+    const handleBackKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (!isPlayerBackKey(event)) return;
+      const webkitDocument = document as WebKitFullscreenDocument;
+      const video = videoRef.current as WebKitFullscreenVideo | null;
+      const decision = resolvePlayerBack({
+        controlsVisible: controlsVisibleRef.current,
+        minimised,
+        inlineMusic,
+        fullscreen: Boolean(
+          document.fullscreenElement ||
+            webkitDocument.webkitFullscreenElement ||
+            video?.webkitDisplayingFullscreen
+        ),
+      });
+      if (decision !== "hide-controls") return;
+      event.preventDefault();
+      window.clearTimeout(hideTimerRef.current);
+      controlsVisibleRef.current = false;
+      setShowControls(false);
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        activeElement.closest(".player-controls, .player-close, .player-minimise")
+      ) {
+        hideFocusMoveRef.current = true;
+        videoRef.current?.focus({ preventScroll: true });
+        hideFocusMoveRef.current = false;
+      }
+    };
+    window.addEventListener("keydown", handleBackKey);
+    return () => window.removeEventListener("keydown", handleBackKey);
+  }, [inlineMusic, minimised, videoRef]);
+
   // Read directly from the <video> element's own `buffered` TimeRanges
   // rather than tracking a second copy of this in the engine -- recomputed
   // whenever the engine reports fresh time/buffer info.
@@ -1008,6 +1061,9 @@ export function PlayerSurface({
         minimised && !inlineMusic
           ? undefined
           : (event) => {
+              // BACK must see the controls' visibility from before the key, so
+              // it never counts as the "reveal" input.
+              if (isPlayerBackKey(event.nativeEvent)) return;
               if (event.key === "Enter") {
                 enterGateRef.current.begin(controlsVisibleRef.current);
               }
@@ -1119,7 +1175,7 @@ export function PlayerSurface({
             </p>
             <p className="player-error-title">{title}</p>
             {castState?.negotiating ? (
-              <p className="player-error-message">{t("pages.player.preparingPlayback")}</p>
+              <SpinnerIcon className="player-spinner" />
             ) : (
               <p className="player-error-message">
                 {formatPlayerTime(castPositionSeconds)} / {formatPlayerTime(castDurationSeconds)}

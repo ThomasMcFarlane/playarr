@@ -225,6 +225,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web and the legacy TV container: pressing Play opens the player at once (black stage, normal chrome, buffering spinner) instead of a full-screen "Preparing playback" page; errors still show inside the player.
+- Web player: BACK or Escape hides open controls first and a second press exits; menus and panels still close first. SELECT on the focused scrubber toggles play/pause without seeking, the scrubber shows the white focus ring with an enlarged thumb, and it keeps focus while a seek buffers. The controls scrim now rises from the bottom edge and recedes downward.
 - Fire TV client: the hosted-link broker origin (`PLAYARR_HOSTED_LINK_ORIGIN`) and a frozen app clock for parity captures (`PLAYARR_PARITY_CLOCK`) are build-time settings, so on-device captures need no source patch; the production defaults are unchanged.
 - Xbox, Harmony, Roku and Fire TV: pressing Play opens the player directly (black stage, title, at most a small spinner) instead of a "Preparing playback"/"Loading" page; errors still show as before. BACK closes an open panel or the controls overlay first, and only the next BACK leaves playback.
 - tvOS release calendar renders the server's computed actions (Play or Resume, Open, Request, Watchlist) with their disabled reasons and active states instead of guessing from whether a file exists.
@@ -620,6 +622,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Removed the unused `pages.player.preparingPlayback`, `pages.player.preparingMessage` and `pages.player.oneMoment` translation strings.
 - Removed the Postgres backend: the `postgres` cargo features and `sqlx` Postgres driver, `backend/migrations/postgres`, the Postgres coordinator, `LISTEN`/`NOTIFY` cache and Postgres backup/restore paths, the Redis cache (only reachable on the shared-database tier), the `DeploymentTier` and `REDIS_URL` configuration, and the per-backend SQL variants in `playarr-db`. Playarr is SQLite-only (ADR 0002).
 - A `postgres://` or `postgresql://` `DATABASE_URL` now fails startup with a clear error instead of connecting, and `playarr_db::run_migrations` no longer takes an `is_postgres` argument.
 - Removed the retired Google Play review demo server (`clients/tv-web/apps/play-review-server`), which was shut down on 2026-08-30 and is not deployed, together with its `just` recipes, workspace lockfile entry and README attribution.
@@ -2353,6 +2356,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Testing
 
+- Added `clients/tv-web/web/scripts/player-entry-e2e.mjs` (Playwright against the fixture server, TV and phone layouts) and unit tests for direct player mounting and the BACK sequence.
 - Web TV: unit tests for the next-up selection and source tests for the detail-page focus ring; the series-detail TV parity references were recaptured for the focus ring on the first tile.
 - Unit tests for the self-renewing QR sign-in state machine (`QrPairingFlowTest`): hosted code expiry, server device-code expiry, denial, request and poll blips, backoff cap; plus a Fire TV `LinkScreen` expiry-renewal test.
 - Roku: add `scripts/parity/roku/capture.mjs` (device screenshots through the dev installer, in the layout `diff.mjs` reads) and the first dark-theme parity table in `docs/parity/roku/`.

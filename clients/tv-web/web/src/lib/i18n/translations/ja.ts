@@ -428,9 +428,6 @@ export const ja: Translations = {
   "pages.musicDetail.albumsAndTracksAriaLabel": "{{title}}のアルバムとトラック",
 
   "pages.player.nowPlaying": "再生中",
-  "pages.player.preparingPlayback": "再生を準備しています",
-  "pages.player.oneMoment": "少々お待ちください",
-  "pages.player.preparingMessage": "ファイルサイズが大きい場合、ストリームの準備に数秒かかることがあります。",
   "pages.player.playbackUnavailable": "再生できません",
   "pages.player.accessRestricted": "アクセスが制限されています",
   "pages.player.noStreamingAccess": "ストリーミングへのアクセス権がありません",

@@ -16,7 +16,6 @@ import {
 } from "../lib/usePlaybackEngine";
 import { useServerAccessToken, useServerClient } from "../lib/ApiClientProvider";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { showPreparingScreen } from "../lib/playerMounting";
 import { useLanguage } from "../lib/i18n/LanguageProvider";
 import { watchInlineMusicHost } from "../lib/inlineMusicHost";
 import {
@@ -289,8 +288,6 @@ function PlayerPageInner({
     mediaFileId,
     hasPlayed: false,
   });
-  const keepInlinePlayerMounted =
-    inlineMusic && musicPlaybackStateRef.current.hasPlayed;
   const { negotiation, retryNegotiation } = player;
   const handleBack = useCallback(() => {
     onClose();
@@ -746,42 +743,6 @@ function PlayerPageInner({
     requestSession,
   ]);
   // --- /Chromecast ---------------------------------------------------------
-
-  if (
-    showPreparingScreen({
-      negotiationKind: negotiation.kind,
-      keepInlinePlayerMounted,
-      sourceSwitching: player.qualitySwitching || player.reconnecting,
-    })
-  ) {
-    if (minimised) {
-      if (inlineMiniPlayer) return inlineMiniPlayer;
-      return (
-        <MinimisedPlayerStatus
-          title={title ?? activePlaylistItem?.title ?? t("pages.player.nowPlaying")}
-          status={t("pages.player.preparingPlayback")}
-          onMaximise={onMaximise}
-        />
-      );
-    }
-    return (
-      <div className="player-page">
-        <div className="player-shell player-shell-placeholder">
-          <PlayerCloseButton onClose={handleBack} />
-          <div className="player-overlay player-overlay-status">
-            <div className="player-status-card" role="status">
-              <SpinnerIcon className="player-spinner" />
-              <p className="player-status-kicker">{t("pages.player.oneMoment")}</p>
-              <p className="player-error-title">{t("pages.player.preparingPlayback")}</p>
-              <p className="player-error-message">
-                {t("pages.player.preparingMessage")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (negotiation.kind === "error") {
     if (minimised) {
