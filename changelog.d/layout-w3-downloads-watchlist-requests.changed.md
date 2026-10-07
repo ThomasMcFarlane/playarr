@@ -1,0 +1,1 @@
+- Web: Downloads, Watchlist and Requests render through the shared page layout; their loading, empty and error states now sit centred inside the page body, with the header and Back always visible.

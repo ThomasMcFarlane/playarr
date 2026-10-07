@@ -6,9 +6,8 @@ import {
   type WatchlistEntry,
 } from "@playarr-tv/api-client";
 import { RequestButton } from "../components/RequestButton";
-import { PageHeader } from "../components/shell";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
-import { TvRailSurface, TvStageShell } from "../components/tv/TvStage";
+import { EmptyState, ErrorState, LoadingState, PageLayout, ScrollArea } from "../components/shell";
+import { TvRailSurface } from "../components/tv/TvStage";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { useLiveRevision } from "../lib/liveEvents";
 import {
@@ -82,35 +81,30 @@ export function WatchlistPage() {
   );
 
   return (
-    <TvStageShell className="tv-library tv-downloads tv-watchlist" ariaLabel={t("pages.watchlist.title")}>
-      <PageHeader title={t("pages.watchlist.title")} backLabel={t("pages.watchlist.backToHome")} />
+    <PageLayout
+      pageId="watchlist"
+      className="tv-library tv-downloads tv-watchlist"
+      ariaLabel={t("pages.watchlist.title")}
+      header={{ title: t("pages.watchlist.title"), back: { label: t("pages.watchlist.backToHome"), to: "/" } }}
+    >
       <TvRailSurface
         className="tv-rail-panel tv-library-grid-panel tv-downloads-panel"
         mode="content"
         ariaLabel={t("pages.watchlist.title")}
       >
-        <div
+        <ScrollArea
+          axis="vertical"
+          scrollKey="watchlist:list"
           className="tv-downloads-content"
-          data-tv-scroll-container
-          data-tv-scroll-axis="vertical"
-          data-navigation-scroll-key="watchlist:list"
+          refreshKey={state.status === "ready" ? state.items.length : state.status}
         >
           {state.status === "loading" ? (
-            <p className="tv-discovery-note" role="status">
-              {t("pages.watchlist.loading")}
-            </p>
+            <LoadingState size="inline" label={t("pages.watchlist.loading")} />
           ) : state.status === "error" ? (
-            <TvEmptyState
-              graphic="details"
-              variant="page"
-              tone="error"
-              title={t("pages.watchlist.errorTitle")}
-              description={state.message}
-            />
+            <ErrorState graphic="details" title={t("pages.watchlist.errorTitle")} description={state.message} />
           ) : state.items.length === 0 ? (
-            <TvEmptyState
+            <EmptyState
               graphic="details"
-              variant="page"
               title={t("pages.watchlist.emptyTitle")}
               description={t("pages.watchlist.emptyDescription")}
             />
@@ -126,9 +120,9 @@ export function WatchlistPage() {
               {removeError}
             </p>
           ) : null}
-        </div>
+        </ScrollArea>
       </TvRailSurface>
-    </TvStageShell>
+    </PageLayout>
   );
 }
 
