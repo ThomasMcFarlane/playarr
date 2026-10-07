@@ -161,5 +161,6 @@
       },
       "native": "requests"
     }
-  ]
+  ],
+  "userAgent": "Mozilla/5.0 (Linux; Android 12; BRAVIA) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PlayarrAndroidTV/1.0"
 }
