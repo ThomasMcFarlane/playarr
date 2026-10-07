@@ -4,7 +4,7 @@
 // scroll viewport must be clearly dimmer, or closer to the page background, than the content a little way inside.
 //
 //   node check-edge-fade.mjs <png> --edge left|right|top|bottom --band x0,y0,x1,y1 [--bg #151315] [--max-ratio 0.35]
-//                            [--interior x0,y0,x1,y1 [--min-gutter 0.15]] [--cut-x startLineX]
+//                            [--interior x0,y0,x1,y1 [--min-gutter 0.10]] [--cut-x startLineX] [--baseline before-scroll.png]
 //
 // <band> is the scroll viewport's edge area in image pixels (x0,y0 top-left, x1,y1 bottom-right): for a rail, its card rows
 // from the viewport's outer edge to the content start line. "Content strength" is the mean |pixel - bg| luminance of each
@@ -27,8 +27,12 @@ const bg = [0, 2, 4].map((i) => parseInt(bgHex.slice(i, i + 2), 16));
 const bgLum = 0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2];
 const maxRatio = Number(opt("max-ratio", "0.35"));
 const png = PNG.sync.read(readFileSync(file));
-const lum = (x, y) => { const i = (png.width * y + x) * 4; return 0.2126 * png.data[i] + 0.7152 * png.data[i + 1] + 0.0722 * png.data[i + 2]; };
-const strength = (ax, ay, bx, by) => { let sum = 0, n = 0; for (let y = ay; y < by; y++) for (let x = ax; x < bx; x++) { sum += Math.abs(lum(x, y) - bgLum); n++; } return sum / Math.max(n, 1); };
+const lumOf = (img, x, y) => { const i = (img.width * y + x) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
+const lum = (x, y) => lumOf(png, x, y);
+// --baseline <png>: the same screen before scrolling. "Content strength" is then the change against it (the rail's cards in
+// the gutter), which ignores key art, gradients and the page background wherever they sit; without it, it is |pixel - bg|.
+const baseline = opt("baseline") ? PNG.sync.read(readFileSync(opt("baseline"))) : null;
+const strength = (ax, ay, bx, by) => { let sum = 0, n = 0; for (let y = ay; y < by; y++) for (let x = ax; x < bx; x++) { sum += Math.abs(lum(x, y) - (baseline ? lumOf(baseline, x, y) : bgLum)); n++; } return sum / Math.max(n, 1); };
 const S = 6;
 // Content strength per line across the band (columns for left/right, rows for top/bottom), smoothed over 5 lines.
 const horizontal = edge === "left" || edge === "right";
@@ -41,16 +45,17 @@ const edgeStrength = outer.reduce((p, v) => p + v, 0) / outer.length;
 const ratio = peak > 0 ? edgeStrength / peak : 1;
 const interiorStrength = peak;
 // Optional --interior x0,y0,x1,y1: the content area next to the band (the cards from the start line inwards). Cards that are
-// cut dead at the start line leave the gutter empty, so the band must still carry at least --min-gutter (default 0.15) of the
-// interior's peak strength: scrolled-past cards are visible, fading, in the gutter.
+// cut dead at the start line leave the gutter empty, so the band must still carry at least --min-gutter (default 0.10) of the
+// interior's mean strength: scrolled-past cards are visible, fading, in the gutter.
 let gutterOk = true;
 let gutterNote = "";
 if (opt("interior")) {
   const [ix0, iy0, ix1, iy1] = opt("interior").split(",").map(Number);
   const interiorPeak = strength(ix0, iy0, ix1, iy1);
-  const share = interiorPeak > 0 ? peak / interiorPeak : 1;
+  const bandMean = smooth.reduce((p, v) => p + v, 0) / smooth.length;
+  const share = interiorPeak > 0 ? bandMean / interiorPeak : 1;
   gutterOk = share >= Number(opt("min-gutter", "0.15"));
-  gutterNote = ` gutter carries ${(share * 100).toFixed(0)}% of the interior strength${gutterOk ? "" : " (cards are cut dead at the edge)"}`;
+  gutterNote = ` gutter carries ${(share * 100).toFixed(0)}% of the interior's mean strength${gutterOk ? "" : " (cards are cut dead at the edge)"}`;
 }
 // Optional --cut-x X (left/right edges only): the content start line. A card cut dead at the start line shows as a vertical step
 // there: the mean horizontal luminance gradient across the band's rows within 4 px of X must not exceed 3x the 90th percentile
