@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Deterministic Playwright captures of the web client: the pixel reference for native parity.
 //
-//   node capture-web.mjs --base http://127.0.0.1:18484 [--layouts tv,mobile] [--screens home,search]
+//   node capture-web.mjs --base http://127.0.0.1:18484 [--layouts tv,mobile] [--theme light|dark|both] [--screens home,search]
 //                        [--out docs/parity/web] [--clock 2026-10-07T12:00:00Z]
 //
 // --base is a fixture server (scripts/fixtures/up.sh) that also serves the built web client
-// (PLAYARR_WEB_ASSETS_DIR) or a Vite dev server proxying /api to it. Writes <out>/<layout>/<id>.png
-// (tv 1920x1080 at 1x, mobile 390x844 at 3x = 1170x2532) and <out>/manifest.json.
+// (PLAYARR_WEB_ASSETS_DIR) or a Vite dev server proxying /api to it. Writes <out>/<layout>/<theme>/<id>.png
+// (tv 1920x1080 at 1x, mobile 390x844 at 3x = 1170x2532; theme is light or dark) and <out>/manifest.json.
 // Determinism: fixed clock (Date frozen), reduced motion, animations and transitions off, caret hidden,
 // no artwork (the fixture serves none, so the web draws its title placeholder tiles), fixed locale and
 // time zone, fixed fixture users and device ids.
@@ -24,16 +24,19 @@ const opt = (n, d) => {
 };
 const base = (opt("base", process.env.PLAYARR_FIXTURE_URL ?? "http://127.0.0.1:18484") ?? "").replace(/\/$/, "");
 const layoutIds = opt("layouts", "tv,mobile").split(",");
+const themeOpt = opt("theme", opt("color-scheme", "both"));
+const themeIds = themeOpt === "both" ? spec.themes : themeOpt.split(",");
+for (const t of themeIds) if (!spec.themes.includes(t)) throw new Error(`unknown theme ${t} (use ${spec.themes.join("|")}|both)`);
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const out = resolve(opt("out", join(here, "../../docs/parity/web")));
 const clock = new Date(opt("clock", spec.determinism.clock)).getTime();
 // Platform profile (all optional, off by default): --safe-area top,bottom[,left,right] emulates the native
 // system bars as CSS safe-area insets (CSS px = device dp), --font renders every text run with one font file
-// (the web font stack resolves per host, native clients use their platform font), --color-scheme sets
-// prefers-color-scheme (default light).
+// (the web font stack resolves per host, native clients use their platform font). The theme is set by
+// --theme (alias --color-scheme), which drives both prefers-color-scheme and the app's own theme storage.
+// The committed shared references use neither --safe-area nor --font: the web's own font, no system bars.
 const safeArea = (opt("safe-area", "") ?? "").split(",").filter(Boolean).map(Number);
 const fontFile = opt("font", "");
-const colorScheme = opt("color-scheme", "light");
 const fontCss = fontFile
   ? `@font-face{font-family:"ParityFont";src:url(data:font/ttf;base64,${readFileSync(fontFile).toString("base64")});font-weight:100 900}:root{--font:"ParityFont",sans-serif!important}*,*::before,*::after{font-family:"ParityFont",sans-serif!important}`
   : "";
@@ -154,7 +157,7 @@ const STEP_TIMEOUT_MS = 120000;
 
 // One fresh browser, context and login per attempt: a crashed or stalled page cannot affect another screen,
 // and every screen starts from identical state.
-async function captureOnce(layoutId, layout, screen) {
+async function captureOnce(layoutId, layout, theme, screen) {
   const user = screen.user ?? spec.user;
   const s = await login(user);
   const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
@@ -165,7 +168,7 @@ async function captureOnce(layoutId, layout, screen) {
       isMobile: layoutId === "mobile",
       hasTouch: layoutId === "mobile",
       reducedMotion: "reduce",
-      colorScheme,
+      colorScheme: theme, // prefers-color-scheme emulation, as a system theme would set it
       locale: spec.determinism.locale,
       timezoneId: spec.determinism.timezone,
     });
@@ -183,15 +186,16 @@ async function captureOnce(layoutId, layout, screen) {
       }, fontCss);
     }
     await context.addInitScript(
-      ({ base, s, dev }) => {
+      ({ base, s, dev, theme }) => {
         try {
+          localStorage.setItem("playarr-theme", theme); // the app's own explicit theme choice (lib/theme.tsx)
           localStorage.setItem("playarr:apiBaseUrl", base);
           const session = { accessToken: s.access_token, refreshToken: s.refresh_token, tokenType: "Bearer", expiresAt: Date.now() + s.expires_in * 1000 };
           localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "parity", apiBaseUrl: base, userId: s.user_id, name: s.username, deviceId: dev, session }]));
           localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "parity", apiBaseUrl: base, userId: s.user_id }));
         } catch {}
       },
-      { base, s, dev: deviceId(user) }
+      { base, s, dev: deviceId(user), theme }
     );
     const page = await context.newPage();
     if (safeArea.length) {
@@ -217,7 +221,7 @@ async function captureOnce(layoutId, layout, screen) {
     // Wait for every <img> to decode so a slow host cannot capture a page before its hero or tile pictures.
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(800);
-    await page.screenshot({ path: join(out, layoutId, `${screen.id}.png`), animations: "disabled", caret: "hide" });
+    await page.screenshot({ path: join(out, layoutId, theme, `${screen.id}.png`), animations: "disabled", caret: "hide" });
     return errors.length;
   } finally {
     await browser.close().catch(() => {});
@@ -229,23 +233,25 @@ for (const layoutId of layoutIds) {
   const layout = spec.layouts[layoutId];
   if (!layout) throw new Error(`unknown layout ${layoutId}`);
   manifest.layouts[layoutId] = { width: layout.width, height: layout.height, dpr: layout.dpr };
-  mkdirSync(join(out, layoutId), { recursive: true });
-  for (const screen of spec.screens.filter((sc) => !only.length || only.includes(sc.id))) {
-    let lastError;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        const pageErrors = await captureOnce(layoutId, layout, screen);
-        manifest.screens.push({ layout: layoutId, id: screen.id, route: screen.route, user: screen.user ?? spec.user, file: `${layoutId}/${screen.id}.png`, pageErrors });
-        console.log(`ok   ${layoutId}/${screen.id}${attempt > 1 ? `  (attempt ${attempt})` : ""}`);
-        lastError = undefined;
-        break;
-      } catch (e) {
-        lastError = e;
+  for (const theme of themeIds) {
+    mkdirSync(join(out, layoutId, theme), { recursive: true });
+    for (const screen of spec.screens.filter((sc) => !only.length || only.includes(sc.id))) {
+      let lastError;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const pageErrors = await captureOnce(layoutId, layout, theme, screen);
+          manifest.screens.push({ layout: layoutId, theme, id: screen.id, route: screen.route, user: screen.user ?? spec.user, file: `${layoutId}/${theme}/${screen.id}.png`, pageErrors });
+          console.log(`ok   ${layoutId}/${theme}/${screen.id}${attempt > 1 ? `  (attempt ${attempt})` : ""}`);
+          lastError = undefined;
+          break;
+        } catch (e) {
+          lastError = e;
+        }
       }
-    }
-    if (lastError) {
-      failures += 1;
-      console.error(`FAIL ${layoutId}/${screen.id}: ${String(lastError.message).split("\n")[0]}`);
+      if (lastError) {
+        failures += 1;
+        console.error(`FAIL ${layoutId}/${theme}/${screen.id}: ${String(lastError.message).split("\n")[0]}`);
+      }
     }
   }
 }
@@ -253,7 +259,7 @@ for (const layoutId of layoutIds) {
 try {
   const prev = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
   manifest.layouts = { ...prev.layouts, ...manifest.layouts };
-  const key = (e) => `${e.layout}/${e.id}`;
+  const key = (e) => `${e.layout}/${e.theme}/${e.id}`;
   const mine = new Set(manifest.screens.map(key));
   manifest.screens = [...prev.screens.filter((e) => !mine.has(key(e))), ...manifest.screens];
 } catch {}

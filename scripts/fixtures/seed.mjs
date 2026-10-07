@@ -88,17 +88,21 @@ for (const [who, pin] of [["guardian", GUARDIAN_PIN], ["child", CHILD_PIN]]) {
   console.log(`PIN set for ${USERS[who].username}`);
 }
 
-// 5. First sync: ask each source to sync, then wait for the catalogue.
-for (const kind of ["sonarr", "radarr", "dubarr"]) {
-  await admin.raw("POST", `/api/v1/admin/source-instances/${sourceIds[kind]}/sync`, {});
-}
+// 5. First sync. The sources are synced one after another, each awaited, so catalogue insertion order (and
+// with it the order of the home rails) is the same in every fresh database; parallel syncs raced.
 const expected = SERIES.length + MOVIES.length;
-let seen = 0;
-for (let i = 0; i < 60; i++) {
+const catalogueSize = async () => {
   const cat = await admin.raw("GET", "/api/v1/catalog?limit=100");
-  seen = (cat.json?.items ?? cat.json ?? []).length;
-  if (seen >= expected) break;
-  await new Promise((r) => setTimeout(r, 2000));
+  return (cat.json?.items ?? cat.json ?? []).length;
+};
+let seen = 0;
+for (const [kind, target] of [["radarr", MOVIES.length], ["sonarr", expected], ["dubarr", expected]]) {
+  await admin.raw("POST", `/api/v1/admin/source-instances/${sourceIds[kind]}/sync`, {});
+  for (let i = 0; i < 60; i++) {
+    seen = await catalogueSize();
+    if (seen >= target) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }
 console.log(`catalogue: ${seen}/${expected} titles synced`);
 if (seen < expected) process.exitCode = 1;

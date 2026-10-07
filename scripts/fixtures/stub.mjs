@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Local stand-in for Sonarr, Radarr and Dubarr, serving the fixture catalogue.
-// One listener, three path prefixes: /sonarr, /radarr, /dubarr. Loopback only.
+// One listener, three path prefixes: /sonarr, /radarr, /dubarr. Loopback only unless PLAYARR_FIXTURE_STUB_BIND says otherwise.
 // Usage: node stub.mjs <media-dir> <port> <api-key>
 import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
@@ -15,7 +15,11 @@ if (!root || !portArg || !apiKey) {
 }
 const port = Number(portArg);
 const artDir = join(root, "art");
-const artUrl = (kind, id, which) => `http://127.0.0.1:${port}/art/${artKey(kind, id)}-${which}.png`;
+// Host that clients (emulators, simulators) must use to reach the stub for artwork; PLAYARR_FIXTURE_STUB_BIND
+// widens the listen address to match (default loopback only).
+const publicHost = process.env.PLAYARR_FIXTURE_PUBLIC_HOST || "127.0.0.1";
+const stubBind = process.env.PLAYARR_FIXTURE_STUB_BIND || "127.0.0.1";
+const artUrl = (kind, id, which) => `http://${publicHost}:${port}/art/${artKey(kind, id)}-${which}.png`;
 const artImages = (kind, id) => [
   { coverType: "poster", url: "", remoteUrl: artUrl(kind, id, "poster") },
   { coverType: "fanart", url: "", remoteUrl: artUrl(kind, id, "backdrop") },
@@ -181,4 +185,4 @@ function handle(req, res) {
   return send(res, 404, { error: "unknown app prefix" });
 }
 
-http.createServer(handle).listen(port, "127.0.0.1", () => console.log(`fixture stub listening on 127.0.0.1:${port}`));
+http.createServer(handle).listen(port, stubBind, () => console.log(`fixture stub listening on ${stubBind}:${port}`));
