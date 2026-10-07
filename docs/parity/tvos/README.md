@@ -29,6 +29,15 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37606853654 (
 | search with results | 0.46 | 0.62 |
 | release calendar (agenda) | 0.71 | 0.72 |
 | settings | 0.77 | 0.76 |
+| Preferences: profile avatar | 0.78 | 0.83 |
+| Preferences: language | 0.55 | 0.54 |
+| Preferences: player | 0.96 | 1.22 |
+| Preferences: server connection (address masked) | 0.70 | 0.82 |
+| Preferences: profile lock | 0.50 | 0.58 |
+| Preferences: invite a friend | 0.67 | 0.67 |
+| Preferences: phone remote | 0.82 | 0.81 |
+| Preferences: request latency | 0.62 | 0.62 |
+| Preferences: your data | 1.51 | 1.50 |
 | profile switcher | 0.70 | 0.80 |
 | household blocked (fx-child-locked) | 0.41 | 0.39 |
 | player, controls visible (video masked) | 0.19 | 0.19 |
@@ -38,6 +47,11 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37606853654 (
 All 24 shared captures are at or under 1%.
 
 ## Justified differences
+
+- Preferences, player (light 1.2%) and your data (1.5%): the panels are text-heavy (long paragraphs and the quality
+  matrix). The layout, colours and glyph extents match the web to within a pixel; what remains is the anti-aliasing and
+  per-glyph positioning of paragraph text (Chrome on Linux against CoreText), which pixelmatch counts along every
+  glyph edge. The other panels sit between 0.5% and 0.9%.
 
 - Player screens: the fixture clips are Matroska and the runner cannot transcode, so the native player cannot play
   them there. The video layer is the server's own frame of the clip at 2.0 s (the endpoint the chapter thumbnails use),

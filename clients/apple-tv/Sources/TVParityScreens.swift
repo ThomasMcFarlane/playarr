@@ -97,6 +97,13 @@ extension TVParityLaunch {
         }
     }
 
+    /// Section index for `settings:<key>` (avatar, language, player, server, lock, invite, latency, remote, your-data).
+    static var liveSettingsSection: Int? {
+        guard let route, route.hasPrefix("settings:") else { return nil }
+        let keys = ["appearance", "avatar", "language", "player", "server", "lock", "invite", "latency", "remote", "your-data"]
+        return keys.firstIndex(of: String(route.dropFirst("settings:".count)))
+    }
+
     /// `(kind, title)` for `detail:<kind>:<title>`.
     static var liveDetail: (kind: WorkKind, title: String)? {
         guard let route, route.hasPrefix("detail:") else { return nil }

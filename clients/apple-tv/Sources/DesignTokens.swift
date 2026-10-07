@@ -38,6 +38,17 @@ enum DesignTokens {
         /// `--accent` and `--on-accent` (primary buttons).
         static let accent = adaptive(light: 0x675961, dark: 0xdfdcdd)
         static let onAccent = adaptive(light: 0xffffff, dark: 0x211d21)
+        /// Settings panel chrome measured on the web: form fields and cards, hairlines, control borders.
+        static let fieldFill = adaptive(light: 0xd7d4d4, dark: 0x383438)
+        static let fieldBorder = adaptive(light: 0xaca4a2, dark: 0x5c585b)
+        static let cellBorder = adaptive(light: 0xdfdbda, dark: 0x302d30)
+        static let controlBorder = adaptive(light: 0xc1bab7, dark: 0x444143)
+        static let rule = adaptive(light: 0xc5bfbc, dark: 0x484547)
+        static let inputBorder = adaptive(light: 0xbeb9b7, dark: 0x504b4e)
+        static let checkOffFill = adaptive(light: 0xffffff, dark: 0x3b3b3b)
+        static let checkOffBorder = adaptive(light: 0x767676, dark: 0x858585)
+        static let checkFill = adaptive(light: 0x0075ff, dark: 0x99c8ff)
+        static let checkMark = adaptive(light: 0xffffff, dark: 0x43474b)
         static let brandPink = SwiftUI.Color(red: 0xcf / 255, green: 0x31 / 255, blue: 0x57 / 255) // #cf3157
         static let danger = adaptive(light: 0xa8464c, dark: 0xee9297)
         static let success = adaptive(light: 0x347559, dark: 0x7fc09d)

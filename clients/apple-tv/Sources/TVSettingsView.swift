@@ -5,19 +5,19 @@ struct TVSettingsView: View {
     @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var serverError: String?
     @State private var pairingTask: Task<Void, Never>?
-    @State private var selectedSection = 0
+    @State private var selectedSection = TVParityLaunch.liveSettingsSection ?? 0
 
-    private let sections: [(number: String, title: String, description: String)] = [
-        ("01", "Appearance", "Choose this device's theme and home screen artwork."),
-        ("02", "Profile avatar", "Pick the face this device uses on the home rail."),
-        ("03", "Language", "Interface language for this device."),
-        ("04", "Player", "Playback preferences for this Apple TV."),
-        ("05", "Server connection", "Playarr Server address and pairing."),
-        ("06", "Profile lock", "PIN gate for this profile."),
-        ("07", "Invite a friend", "Share access to this server."),
-        ("08", "Request latency", "Diagnostics for API round-trips."),
-        ("09", "Phone remote", "Control this Apple TV from a phone."),
-        ("10", "Your data", "Export or delete the data held for this profile."),
+    private let sections: [(number: String, title: String, description: String, width: CGFloat)] = [
+        ("01", "Appearance", "Choose this device's theme and home screen artwork.", 369.2),
+        ("02", "Profile avatar", "Choose how your profile appears on this device.", 334.4),
+        ("03", "Language", "Follow this device or keep a language fixed.", 303),
+        ("04", "Player", "Choose how Playarr should start quality, subtitles and audio.", 436.7),
+        ("05", "Server connection", "Combine libraries from multiple servers in one Playarr interface.", 445.8),
+        ("06", "Profile lock", "Require a four-digit PIN before switching profiles.", 344),
+        ("07", "Invite a friend", "Ask your Playarr Server admin for one friend-invite QR code.", 416.8),
+        ("08", "Request latency", "Per-route HTTP request latency for admins.", 299.7),
+        ("09", "Phone remote", "Control this device from your phone, or control another device.", 449.8),
+        ("10", "Your data", "Export your watch progress, playlists and preferences, or import them from another Playarr Server.", 702.8),
     ]
 
     var body: some View {
@@ -35,12 +35,18 @@ struct TVSettingsView: View {
                 .font(TVTheme.font(size: 13.76, weight: .heavy))
                 .tracking(0.62)
                 .foregroundStyle(DesignTokens.Color.textDisabled)
-                .placed(x: 226.6, y: 119.5, w: 369.2, h: 20.6)
-            Text(sections[selectedSection].description)
+                .placed(x: 226.6, y: 119.5, w: sections[selectedSection].width, h: 20.6)
+            Text(sections[selectedSection].description.uppercased())
                 .font(TVTheme.font(size: 12.16, weight: .regular))
                 .foregroundStyle(DesignTokens.Color.textDisabled)
                 .lineLimit(1)
-                .placed(x: 226.6, y: 143.7, w: 369.2, h: 15.2)
+                .placed(x: 226.6, y: 143.7, w: sections[selectedSection].width, h: 15.2)
+
+            // The hairline under the title spans the heading detail (web `.settings-heading-detail`).
+            Rectangle()
+                .fill(DesignTokens.Stage.rule)
+                .frame(width: sections[selectedSection].width, height: 1)
+                .placed(x: 226.6, y: 112, w: sections[selectedSection].width, h: 1)
 
             // `.settings-option` rows: x 153.6, y 162, 480.4 x 91.9, pitch 91.9.
             ForEach(Array(sections.enumerated()), id: \.offset) { index, section in
@@ -76,9 +82,15 @@ struct TVSettingsView: View {
                 .placed(x: 153.6, y: top, w: 480.4, h: 91.9)
             }
 
+            if selectedSection != 0, selectedSection != 4 || TVParityLaunch.frozen {
+                TVSettingsPanel(section: selectedSection)
+            }
+
             // Detail panel at x 773.8 (`.settings-detail-panel`).
             VStack(alignment: .leading, spacing: 22) {
-                sectionDetail
+                if selectedSection == 0 || (selectedSection == 4 && !TVParityLaunch.frozen) {
+                    sectionDetail
+                }
             }
             .frame(width: 995, alignment: .topLeading)
             .placed(x: 773.8, y: selectedSection == 0 ? 0 : 210, w: 995, alignment: .topLeading)

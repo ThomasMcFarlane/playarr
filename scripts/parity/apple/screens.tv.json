@@ -31,6 +31,42 @@
       "native": "settings"
     },
     {
+      "id": "settings-avatar",
+      "native": "settings:avatar"
+    },
+    {
+      "id": "settings-language",
+      "native": "settings:language"
+    },
+    {
+      "id": "settings-player",
+      "native": "settings:player"
+    },
+    {
+      "id": "settings-server",
+      "native": "settings:server"
+    },
+    {
+      "id": "settings-lock",
+      "native": "settings:lock"
+    },
+    {
+      "id": "settings-invite",
+      "native": "settings:invite"
+    },
+    {
+      "id": "settings-remote",
+      "native": "settings:remote"
+    },
+    {
+      "id": "settings-latency",
+      "native": "settings:latency"
+    },
+    {
+      "id": "settings-your-data",
+      "native": "settings:your-data"
+    },
+    {
       "id": "calendar",
       "native": "calendar"
     },
