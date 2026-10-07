@@ -1,6 +1,13 @@
 package io.playarr.mobile.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.ScrollState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.horizontalScroll
@@ -65,6 +72,25 @@ internal fun PlayarrLazyColumn(
     )
 }
 
+/**
+ * Brings a focused item into view by scrolling only as far as it takes to unclip it (owner rule: a rail never scrolls to a
+ * matching index or offset; it moves just enough). An item already fully inside the visible span, which starts [startInset]
+ * px from the viewport start (the rail's fade gutter), does not move the rail at all.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+internal class MinimalBringIntoViewSpec(private val startInset: Float) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val end = offset + size
+        return when {
+            offset >= startInset && end <= containerSize -> 0f
+            size > containerSize - startInset -> offset - startInset
+            offset < startInset -> offset - startInset
+            else -> end - containerSize
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PlayarrLazyRow(
     modifier: Modifier = Modifier,
@@ -80,6 +106,9 @@ internal fun PlayarrLazyRow(
     startGutter: Dp? = null,
     content: LazyListScope.() -> Unit,
 ) {
+    val density = LocalDensity.current
+    val spec = remember(startGutter, density) { MinimalBringIntoViewSpec(with(density) { (startGutter ?: contentPadding.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)).toPx() }) }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides spec) {
     LazyRow(
         modifier = when {
             fade == null -> modifier
@@ -95,6 +124,7 @@ internal fun PlayarrLazyRow(
         userScrollEnabled = userScrollEnabled,
         content = content,
     )
+    }
 }
 
 @Composable

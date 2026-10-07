@@ -124,6 +124,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -7114,6 +7115,17 @@ private fun ExperienceMusicDetailContent(
         mutableStateOf(initialSelection?.trackId)
     }
     val selectedAlbum = albums.firstOrNull { it.album.id == selectedAlbumId } ?: albums.firstOrNull()
+    // Web `MusicDetail`: the selected album carries data-tv-focus-default, so the page opens on it.
+    val albumRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val selectedAlbumFocus = remember { FocusRequester() }
+    if (isTelevision && albums.isNotEmpty()) {
+        TvDefaultFocusEffect(detail.work.id) {
+            val index = albums.indexOfFirst { it.album.id == selectedAlbum?.album?.id }.coerceAtLeast(0)
+            albumRowState.scrollToItem(index)
+            withFrameNanos { }
+            runCatching { selectedAlbumFocus.requestFocus() }
+        }
+    }
     val selectedTracks = selectedAlbum?.tracks?.filter { it.mediaFileId != null }.orEmpty()
     val selectedTrack = selectedTracks.firstOrNull { it.track.id == selectedTrackId } ?: selectedTracks.firstOrNull()
     val posterUrl = remember(detail.work.id) {
@@ -7230,6 +7242,7 @@ private fun ExperienceMusicDetailContent(
                 item {
                     Text(playarrString(PlayarrString.MusicAlbums), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     LazyRow(
+                        state = albumRowState,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 12.dp),
                     ) {
@@ -7242,6 +7255,7 @@ private fun ExperienceMusicDetailContent(
                                 accessToken = accessToken,
                                 selected = album.album.id == selectedAlbum?.album?.id,
                                 isTelevision = isTelevision,
+                                focusRequester = if (album.album.id == selectedAlbum?.album?.id) selectedAlbumFocus else null,
                                 onSelect = {
                                     selectedAlbumId = album.album.id
                                     selectedTrackId = firstTrack?.track?.id
@@ -7325,6 +7339,7 @@ private fun MusicAlbumCard(
     accessToken: String?,
     selected: Boolean,
     isTelevision: Boolean,
+    focusRequester: FocusRequester? = null,
     onSelect: () -> Unit,
     onPlay: () -> Unit,
 ) {
@@ -7333,6 +7348,7 @@ private fun MusicAlbumCard(
     Box(
         Modifier
             .width(if (isTelevision) 200.dp else 142.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged { state -> focused = state.isFocused; if (state.isFocused) onSelect() }
             .clickable(onClick = onPlay),
     ) {

@@ -185,7 +185,7 @@ class PlayarrTvNavigationUiTest {
         assertTrue("landed on $landed, not the same index", landed.startsWith("r1-") && landed != "r1-c25")
         val node = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot
         val pitch = node.width + with(compose.density) { 25.dp.toPx() }
-        assertTrue("x centre ${node.center.x} within half a card of $fromX", kotlin.math.abs(node.center.x - fromX) <= pitch / 2f + 1f)
+        assertTrue("landed $landed x centre ${node.center.x} within half a card of $fromX; cards ${compose.onAllNodes(androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().map { "${it.boundsInRoot.center.x.toInt()},${it.boundsInRoot.center.y.toInt()}" }}", kotlin.math.abs(node.center.x - fromX) <= pitch / 2f + 1f)
         // And back up lands on the card above that, still by position.
         press(Key.DirectionUp.keyCode)
         assertTrue(kotlin.math.abs(compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot.center.x - node.center.x) <= pitch / 2f + 1f)
@@ -338,6 +338,30 @@ class PlayarrTvNavigationUiTest {
         compose.onNode(androidx.compose.ui.test.hasText("Chapter c0", substring = true))
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus)
         compose.waitForIdle()
+    }
+
+    @Test
+    fun aFocusedPlaylistTileLiftsAtDrawTimeOnly() {
+        val requester = FocusRequester()
+        compose.setContent {
+            Box(Modifier.size(600.dp).padding(40.dp)) {
+                PlaylistCard(
+                    playlist = io.playarr.shared.data.model.Playlist(
+                        id = "p", name = "Mix", isSystem = false,
+                        mediaType = io.playarr.shared.data.model.PlaylistMediaType.Video,
+                        createdAt = "2026-01-01T00:00:00Z", updatedAt = "2026-01-01T00:00:00Z",
+                    ),
+                    modifier = Modifier.focusRequester(requester),
+                    onClick = {},
+                )
+            }
+        }
+        compose.waitForIdle()
+        val rest = compose.onNode(androidx.compose.ui.test.hasClickAction()).fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { requester.requestFocus() }
+        compose.waitForIdle()
+        val lifted = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot
+        assertEquals(rest, lifted)
     }
 
     private fun focusedText(): String {

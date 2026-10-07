@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -4108,6 +4109,9 @@ private fun TvSettingsBody(
     val locale = LocalPlayarrLanguage.current.locale
     val entries = phoneSettingsIndex
     val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
+    // Web default focus: the section list, on the first (selected) section; LEFT/RIGHT then cross to the panel.
+    val firstRow = remember { androidx.compose.ui.focus.FocusRequester() }
+    TvDefaultFocusEffect(Unit) { runCatching { firstRow.requestFocus() } }
     // The page is darker (lighter in the light theme) behind the section list and fades to the panel tone from x 680 to 1150.
     val start = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
     val mid = if (webIsDark) Color(0xFF252125) else Color(0xFFF3F1F2)
@@ -4140,6 +4144,7 @@ private fun TvSettingsBody(
                     Modifier
                         .fillMaxWidth()
                         .height(92.dp)
+                        .then(if (index == 0) Modifier.focusRequester(firstRow) else Modifier)
                         .background(if (selected && !focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
                         .webFocusRing(focused, radius = 0.dp, offset = (-3).dp)
                         .onFocusChanged { focused = it.isFocused; if (it.isFocused) onPick(candidate) }
