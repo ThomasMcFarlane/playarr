@@ -174,6 +174,7 @@ struct TVPlayerView: View {
             suggestions = Array(similar.filter { $0.id != suggestionsWorkID }.prefix(12))
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase != .active { viewModel.didEnterBackground() }
             if phase == .active { viewModel.endOfPlayback.resumeTimer() } else { viewModel.endOfPlayback.stopTimer() }
         }
         // Hold the screen awake while the end card or countdown is up; release
