@@ -27,7 +27,7 @@ Final run: https://github.com/ThomasMcFarlane/playarr/actions/runs/37606853654 (
 | title detail (film) | 0.53 | 0.60 |
 | title detail (series, seasons) | 0.85 | 0.85 |
 | search with results | 0.46 | 0.62 |
-| release calendar (agenda) | 0.84 | 0.85 |
+| release calendar (agenda) | 0.71 | 0.72 |
 | settings | 0.77 | 0.76 |
 | profile switcher | 0.70 | 0.80 |
 | household blocked (fx-child-locked) | 0.41 | 0.39 |
@@ -64,4 +64,4 @@ All 24 shared captures are at or under 1%.
 
 - Downloads on the detail pages: web PR #117 added a season Download button and a title Download button (there is no
   per-episode button). tvOS draws both and makes them focusable; they explain that Apple TV keeps no offline copies.
-- The calendar Play button shows only for entries whose media is on disk, as on the web.
+- The calendar renders the server's computed actions for each entry (Play or Resume, Open series, Request, watchlist, with disabled reasons), as the web does; the unaired episode shows Open series and Add to watchlist only.

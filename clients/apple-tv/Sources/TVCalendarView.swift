@@ -277,15 +277,59 @@ struct TVCalendarView: View {
             .placed(x: 153.6, y: y, w: 571, h: 17.3)
     }
 
+    /// The server's actions for the entry, rendered as given (`CalendarAction`: enabled, reason, active). A server
+    /// without computed actions gets the earlier behaviour: open when the title is in the catalogue, else request
+    /// and watchlist.
     private func actionButtons(_ entry: CalendarEntry) -> some View {
         let y: CGFloat = 559.1
-        let openX: CGFloat = entry.hasFile ? 153.6 + 84 : 153.6
-        return ZStack(alignment: .topLeading) {
-            if entry.hasFile {
-                button("Play", x: 153.6, width: 72, primary: true, y: y)
+        var plan: [(label: String, width: CGFloat, primary: Bool, enabled: Bool)] = []
+        var hints: [String] = []
+        let play = entry.action(.play) ?? entry.action(.resume)
+        if let play, play.enabled {
+            let resume = play.kind == .resume
+            plan.append((resume ? "Resume" : "Play", resume ? 96 : 72, true, true))
+        }
+        let open = entry.actions.isEmpty ? (entry.workID != nil ? CalendarAction(action: "open") : nil) : entry.action(.open)
+        let hasOpen = open?.enabled == true
+        if hasOpen {
+            let label = entry.mediaKind == "episode" ? "Open series" : "Open"
+            plan.append((label, entry.mediaKind == "episode" ? 123.1 : 72, plan.isEmpty, true))
+        }
+        if !hasOpen, plan.isEmpty { hints.append("This title is not in your catalogue yet.") }
+        let request = entry.actions.isEmpty ? (hasOpen ? nil : CalendarAction(action: "request")) : entry.action(.request)
+        if let request {
+            if request.active {
+                plan.append(("Requested", 118, false, false))
+            } else {
+                plan.append(("Request", 96, plan.isEmpty, request.enabled))
+                if !request.enabled, let reason = request.reason { hints.append(reason) }
             }
-            button("Open series", x: openX, width: 123.1, primary: !entry.hasFile, y: y)
-            button("+  Add to watchlist", x: openX + 132.7, width: 179.3, primary: false, y: y)
+        }
+        let watchlist = entry.actions.isEmpty ? (hasOpen ? nil : CalendarAction(action: "watchlist")) : entry.action(.watchlist)
+        if let watchlist {
+            if watchlist.enabled {
+                plan.append((watchlist.active ? "\u{2212}  Remove from watchlist" : "+  Add to watchlist", watchlist.active ? 215 : 179.3, false, true))
+            } else if let reason = watchlist.reason {
+                hints.append(reason)
+            }
+        }
+        var x: CGFloat = 153.6
+        var placed: [(String, CGFloat, CGFloat, Bool, Bool)] = []
+        for item in plan {
+            placed.append((item.label, x, item.width, item.primary, item.enabled))
+            x += item.width + 9.6
+        }
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(placed.enumerated()), id: \.offset) { _, item in
+                button(item.0, x: item.1, width: item.2, primary: item.3, y: y)
+                    .opacity(item.4 ? 1 : 0.5)
+            }
+            ForEach(Array(hints.enumerated()), id: \.offset) { index, hint in
+                Text(hint)
+                    .font(TVTheme.font(size: 12.48, css: 400))
+                    .foregroundStyle(DesignTokens.Stage.inkMuted)
+                    .placed(x: 153.6, y: y + 58 + 14 + CGFloat(index) * 24, w: 570, h: 18.7)
+            }
         }
     }
 

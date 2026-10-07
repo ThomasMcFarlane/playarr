@@ -216,6 +216,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- tvOS release calendar renders the server's computed actions (Play or Resume, Open, Request, Watchlist) with their disabled reasons and active states instead of guessing from whether a file exists.
 - Roku: text is drawn in the web typeface (static Nunito Sans instances, JetBrains Mono for figures) instead of the system font.
 - Android TV: profile avatar ring and scale, soft glass pill shadows, episode and chapter tile shadows, crimson selected quality choice, one-line search Filters pill.
 - Roku: Home, library and rail cards show the work's backdrop (web's 16:9 card art) instead of the poster, and the hero title line pitch follows web.
