@@ -68,3 +68,35 @@ and the top buttons, which cannot be masked without hiding the chrome.
   There is no web SVG for them to port.
 - calendar, settings and home: small spacing and icon differences.
 - Player: the video area cannot match (running timestamp, different decoders).
+
+## Re-baseline against the shared references
+
+Measured against `docs/parity/web/tv/{light,dark}` with `diff.mjs --theme both` semantics (per theme), the clock
+and the player video frame masked, after the TV layout work in this directory landed on main. The fixtures were
+seeded with the deterministic seed and the artwork came from `PLAYARR_FIXTURE_PUBLIC_HOST=10.0.2.2`.
+
+| Screen | Dark | Light |
+| --- | ---: | ---: |
+| home | 2.44% | 3.27% |
+| movies | 4.18% | capture artefact (artwork not yet loaded) |
+| series | 0.84% | 1.56% |
+| film-detail | 3.88% | 4.21% |
+| series-detail | 4.76% | capture artefact (artwork not yet loaded) |
+| search | 1.61% | 3.44% |
+| calendar | 0.70% | 2.04% |
+| settings | 1.42% | 3.35% |
+| player-controls | 13.64% | 13.64% |
+| player-quality-menu | 14.55% | 14.55% |
+| profile-switcher | 1.52% | 1.69% |
+| household-blocked | 0.42% | 0.42% |
+
+The two artefact rows read about 28% because the poster images had not finished loading in the emulator when the
+screenshot was taken (the software renderer is slow); a second capture of the same screens with the artwork loaded
+is in the dark column. Differences that remain against the shared references:
+
+- Typeface: the references are rendered in Nunito Sans, the Android client still uses Roboto. This is the largest
+  remaining contributor on every text-heavy screen. It closes when the web font bundle is embedded (owner decision).
+- The reference shows the profile name "Viewer" while the fixture client shows the username.
+- The references have no "Customise Home" pill on the home screen.
+- Player screens: the video frame is masked, the remaining mismatch is video pixels behind the control bar and
+  the top buttons. Justified exception, agreed with the coordinator.
