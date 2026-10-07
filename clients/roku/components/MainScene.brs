@@ -696,6 +696,8 @@ sub onApiResult(event as Object)
         acceptPageData(action, result.data)
     else if action = "railPrefsReset"
         sendApi("railPrefs", "GET", "/api/v1/home/rails/preferences?lang=en", invalid, true)
+    else if action = "resumePlan"
+        acceptResumePlan(result.data)
     else if action = "householdStatus"
         acceptHouseholdStatus(result.data)
     else if action = "householdAsk"
@@ -760,6 +762,10 @@ end sub
 
 sub handleApiFailure(action as String, result as Object)
     if action = "householdStatus" or action = "householdAsk" then return
+    if action = "resumePlan"
+        acceptResumePlan(invalid)
+        return
+    end if
     if action = "watchlist" or action = "requests" or action = "calendar" or action = "railPrefs"
         acceptPageFailure(action, result)
         return
@@ -2555,16 +2561,15 @@ sub onBrowseKeyArtTimer()
         m.browseKeyArt.visible = false
         return
     end if
-    xfer = CreateObject("roUrlTransfer")
-    xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
-    xfer.InitClientCertificates()
-    xfer.SetUrl(uri)
-    xfer.SetHeaders(ClientHeaders(m.accessToken))
-    tmpPath = "tmp:/playarr-browse-keyart.jpg"
-    if xfer.GetToFile(tmpPath)
-        m.browseKeyArt.uri = tmpPath
-        m.browseKeyArt.visible = true
-    end if
+    ' roUrlTransfer cannot be created on the render thread, so the poster loads the art itself with the auth headers.
+    agent = CreateObject("roHttpAgent")
+    agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    agent.InitClientCertificates()
+    g = GetGlobalAA()
+    if g.playarrArtHeaders <> invalid then agent.SetHeaders(g.playarrArtHeaders)
+    m.browseKeyArt.SetHttpAgent(agent)
+    m.browseKeyArt.uri = uri
+    m.browseKeyArt.visible = true
 end sub
 
 ' Flat-content counterpart to buildRailContent() below: MarkupGrid takes one
@@ -4286,6 +4291,9 @@ sub showDetail(detail as Object)
     ' leak into a series/artist detail view (this drives whether the
     ' Chapters rail load fires further down).
     m.currentMediaFileId = ""
+    ' A previous title's episode position must never leak into this one.
+    m.detailEpisodePos = [0, 0]
+    m.detailUserMoved = false
     if isSeriesShaped
         m.detailGroupKind = "series"
         m.detailSeasons = seasonsFromDetail(detail)
@@ -4334,6 +4342,48 @@ sub showDetail(detail as Object)
     ' moves into the season/chapter/similar rails, Left comes back.
     m.detailFocusIndex = -1
     m.detailActions.SetFocus(true)
+    ' A series opens on the next item to play (web series page): the resume plan's episode with its season selected and
+    ' scrolled into view, or S1E1 when nothing was watched. The plan arrives asynchronously (see acceptResumePlan).
+    if isSeriesShaped and work <> invalid and work.id <> invalid
+        m.detailNextUpWorkId = work.id
+        sendApi("resumePlan", "GET", "/api/v1/catalog/" + UrlEncode(work.id) + "/resume-plan", invalid, true)
+    end if
+end sub
+
+' [row, col] of the episode the series page should open on, or invalid when nothing is playable.
+function detailNextUpPosition(plan as Dynamic) as Dynamic
+    target = invalid
+    if plan <> invalid and plan.target <> invalid and plan.series_work_id = m.detailNextUpWorkId then target = plan.target
+    firstPlayable = invalid
+    for row = 0 to m.detailSeasons.Count() - 1
+        leaves = groupLeaves(m.detailSeasons[row], m.detailGroupKind)
+        for col = 0 to leaves.Count() - 1
+            leaf = leaves[col]
+            if leaf.media_file_id <> invalid and firstPlayable = invalid then firstPlayable = [row, col]
+            if target <> invalid and leaf.episode <> invalid and leaf.episode.id = target.episode_id then return [row, col]
+        end for
+    end for
+    ' Unknown episode id: match by media file, as the web does.
+    if target <> invalid
+        for row = 0 to m.detailSeasons.Count() - 1
+            leaves = groupLeaves(m.detailSeasons[row], m.detailGroupKind)
+            for col = 0 to leaves.Count() - 1
+                if leaves[col].media_file_id = target.media_file_id then return [row, col]
+            end for
+        end for
+    end if
+    return firstPlayable
+end function
+
+sub acceptResumePlan(plan as Dynamic)
+    if m.top.screenState <> "detail" or m.detailGroupKind <> "series" then return
+    if m.detailUserMoved = true then return
+    target = detailNextUpPosition(plan)
+    if target = invalid then return
+    m.detailEpisodePos = target
+    if m.detailEpisodes.visible
+        setDetailFocusIndex(0)
+    end if
 end sub
 
 ' Chapters/Similar Titles load in asynchronously after showDetail already
@@ -4394,6 +4444,7 @@ sub setDetailFocusIndex(newIndex as Integer)
 end sub
 
 function moveDetailFocus(delta as Integer) as Boolean
+    m.detailUserMoved = true
     if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
     if m.detailFocusIndex < 0 then return true
     slots = detailRightSlots()
@@ -4405,6 +4456,7 @@ end function
 
 ' Left/Right between the Play button column and the rails.
 function moveDetailFocusHorizontal(delta as Integer) as Boolean
+    m.detailUserMoved = true
     if m.detailActions.IsInFocusChain() then m.detailFocusIndex = -1
     slots = detailRightSlots()
     if slots.Count() = 0 then return false

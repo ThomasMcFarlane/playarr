@@ -40,7 +40,9 @@ async function coldStart() {
 const toHome = async () => { await coldStart(); await press("Select", 10); };
 // Left from the first rail enters the dock (web TV); Down walks it: Search 0, Home 1, Series 2, Movies 3, Playlists 4,
 // Watchlist 5, Requests 6, Calendar 7 (no Sites or Music in the fixture, no Downloads on Roku).
-const dock = async (downs, wait = 8) => { await press("Left"); await presses(Array(downs).fill("Down"), 0.8); await press("Select", wait); };
+// The real device account also has a Music library, which adds a dock entry before Playlists (ROKU_DOCK_HAS_MUSIC=1).
+const hasMusic = process.env.ROKU_DOCK_HAS_MUSIC === "1";
+const dock = async (steps, wait = 8) => { const downs = hasMusic && steps >= 4 ? steps + 1 : steps; await press("Left"); await presses(Array(downs).fill("Down"), 0.8); await press("Select", wait); };
 // Preferences opens from the profile picker's gear; the section rows are walked with Down and opened with Select.
 const settings = async (row) => {
   await coldStart();
@@ -54,7 +56,7 @@ const screens = {
   home: async () => { await toHome(); },
   series: async () => { await toHome(); await dock(2); },
   movies: async () => { await toHome(); await dock(3); },
-  "series-detail": async () => { await toHome(); await press("Select", 9); },
+  "series-detail": async () => { await toHome(); await dock(2); await press("Select", 9); }, // first series of the A-Z library
   "film-detail": async () => { await toHome(); await dock(3); await press("Select", 9); }, // first film of the A-Z library
   search: async () => { await toHome(); await dock(0, 3); },
   calendar: async () => { await toHome(); await dock(7, 6); },
