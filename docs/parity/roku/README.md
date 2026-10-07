@@ -21,7 +21,8 @@ node scripts/parity/diff.mjs --ref docs/parity/web --cand <out> --layout tv --th
 | series-detail | 6.11% | not re-measured | open |
 | search | 3.68% | 22.89% | open |
 | profile-switcher | 5.53% | 7.02% | open |
-| calendar, settings and its panels, watchlist, requests, player-controls, player-quality-menu, household-blocked | n/a | n/a | no Roku screen / not captured |
+| calendar, settings and its panels, watchlist, requests, player-controls, player-quality-menu | n/a | n/a | screens exist on Roku now; measured against the live web reference (see below) |
+| household-blocked | n/a | n/a | screen exists (polls the household status); it needs a restricted profile, which the real device test account is not, so it is not captured on the device |
 | downloads | n/a | n/a | justified exception: offline storage is not possible on Roku |
 
 The light figures are high because the stage wash, key-art darkening and dock geometry are still tuned for dark; the
@@ -39,7 +40,7 @@ theme itself (tokens, preference, every label and panel) now follows the web pal
 - **Light theme (done).** `source/Theme.brs` holds both web palettes; `ThemeApplyTree` maps each authored literal to its
   token, the preference (System, Light, Dark; System resolves to dark because Roku has no appearance API) is set from
   the sign-in/profile dropdown and Settings, and capture.mjs selects it through that dropdown.
-- **Player.** The video plane is a hardware surface that the screenshot endpoint returns black, so the player screens
+- **Player (chrome done).** `components/PlayerChrome.brs` draws the web scrim, seek bar and thumb, transport row, quality pill, close button and the quality menu (Up opens it; choosing a tier restarts playback at the same position with that bitrate). Roku has no Picture-in-Picture, cast or in-app volume, so Minimise, volume, cast and info are not drawn (justified). Back closes the menu, then the controls, then exits. The video plane is a hardware surface that the screenshot endpoint returns black, so the player screens
   can only be compared on their chrome, which is not captured yet.
 - **Calendar, settings, lists.** Not implemented on Roku.
 

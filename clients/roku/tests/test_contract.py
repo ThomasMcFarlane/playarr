@@ -402,6 +402,21 @@ class PageShellTests(unittest.TestCase):
             self.assertIn(f'title: "{title}"', settings)
 
 
+class PlayerChromeTests(unittest.TestCase):
+    def test_player_has_quality_menu_and_layered_back(self) -> None:
+        chrome = (ROOT / "components" / "PlayerChrome.brs").read_text(encoding="utf-8")
+        for fragment in ("QUALITY", "Source quality", "sub playerMenuOpen", "sub playerApplyQuality"):
+            self.assertIn(fragment, chrome)
+        self.assertIn("hidePlayerControls()", MAIN)
+        self.assertIn("playerMenuOpen()", MAIN)
+
+    def test_household_gate_uses_the_status_endpoint(self) -> None:
+        pages = (ROOT / "components" / "Pages.brs").read_text(encoding="utf-8")
+        self.assertIn('"/api/v1/household/status"', pages)
+        self.assertIn('"/api/v1/household/approvals"', pages)
+        self.assertIn("Ask a guardian for more time", pages)
+
+
 if __name__ == "__main__":
     unittest.main()
 

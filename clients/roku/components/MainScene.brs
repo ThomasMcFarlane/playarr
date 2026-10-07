@@ -91,7 +91,9 @@ sub init()
     m.navEnabled = [true, true, true, true, false, true, true, true, true, true]
     m.qualityPref = LoadQualityPreference()
     m.subtitlePref = LoadSubtitlePreference()
+    m.householdTicks = 0
     pagesInit()
+    playerChromeInit()
     m.browseTitle = m.top.findNode("browseTitle")
     m.browseCountLabel = m.top.findNode("browseCountLabel")
     m.browseKeyArt = m.top.findNode("browseKeyArt")
@@ -382,6 +384,13 @@ sub updateClock()
     monthIndex = dt.GetMonth()
     if monthIndex >= 1 and monthIndex <= 12 then month = monthNames[monthIndex - 1]
     m.clockDate.text = weekday + " " + dt.GetDayOfMonth().ToStr() + " " + month
+    ' Household state is re-checked every 30 s while a profile is signed in (web HouseholdGate).
+    m.householdTicks = m.householdTicks + 1
+    if m.householdTicks >= 30
+        m.householdTicks = 0
+        s = m.top.screenState
+        if s = "home" or s = "page" or s = "browse" or s = "search" or s = "detail" or s = "playlists" then householdPoll()
+    end if
     ' Pairing "Code refreshes in M:SS" shares this 1s clock tick (web uses setInterval 1000).
     if m.top.screenState = "pairing" then updatePairingCountdown()
 end sub
@@ -687,6 +696,10 @@ sub onApiResult(event as Object)
         acceptPageData(action, result.data)
     else if action = "railPrefsReset"
         sendApi("railPrefs", "GET", "/api/v1/home/rails/preferences?lang=en", invalid, true)
+    else if action = "householdStatus"
+        acceptHouseholdStatus(result.data)
+    else if action = "householdAsk"
+        ' The request note is already shown.
     else if action = "watchlistRemove"
         sendApi("watchlist", "GET", "/api/v1/watchlist", invalid, true)
     else if action = "calendarFeed"
@@ -746,6 +759,7 @@ sub onApiResult(event as Object)
 end sub
 
 sub handleApiFailure(action as String, result as Object)
+    if action = "householdStatus" or action = "householdAsk" then return
     if action = "watchlist" or action = "requests" or action = "calendar" or action = "railPrefs"
         acceptPageFailure(action, result)
         return
@@ -3336,6 +3350,7 @@ sub enterHome(profileName as String)
     end if
     ' Filter Sites / other library kinds against GET /api/v1/catalog/kinds,
     ' then load home rails (chained one request at a time).
+    householdPoll()
     sendApi("catalogKinds", "GET", "/api/v1/catalog/kinds", invalid, true)
 end sub
 
@@ -3631,6 +3646,8 @@ end function
 ' Rail membership matches tv-web Home.tsx takeUnused (on-deck/start first,
 ' then new/more movies and series without repeating ids).
 sub finishHomeLoad()
+    ' Re-check the household state once Home has painted, so a blocked profile lands on the blocked screen.
+    householdPoll()
     primaryWorks = []
     primaryLabel = "Start watching"
     if m.homeContinueEntries.Count() > 0
@@ -5226,6 +5243,7 @@ sub updatePlayerProgress()
     m.playerProgressFill.width = m.playerProgressTrack.width * fraction
     m.playerBufferedFill.width = m.playerProgressTrack.width * bufferedFraction
     m.playerTimeLabel.text = formatPlaybackTime(position) + " / " + formatPlaybackTime(duration)
+    playerChromeUpdate(position, duration, fraction)
 end sub
 
 ' Formats a duration in seconds as "M:SS" or, once an hour is reached,
@@ -5699,14 +5717,18 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' the bar" behaviour. Up/Down are intentionally non-destructive
         ' no-ops (still re-arm the auto-hide timer) rather than falling
         ' through unhandled.
+        if m.pcMenuOpen = true then return playerMenuKey(key)
         if key = "back"
-            ' BACK closes the controls overlay first; the next BACK exits.
+            ' BACK closes the menu (above), then the controls overlay; the next BACK exits.
             if m.playerControls.visible
                 m.playerAutoHideTimer.control = "stop"
                 hidePlayerControls()
                 return true
             end if
             finishPlayback("user_stopped")
+            return true
+        else if key = "up"
+            playerMenuOpen()
             return true
         else if key = "OK" or key = "play"
             togglePlayPause()

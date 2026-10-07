@@ -1,0 +1,1 @@
+- Roku: the player shows the web control bar with a quality menu (Up opens it), and Back closes the menu, then the controls, then playback; a restricted profile now sees the household blocked screen with Ask a guardian and Switch profile.

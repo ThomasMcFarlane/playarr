@@ -60,6 +60,10 @@ const screens = {
   calendar: async () => { await toHome(); await dock(7, 6); },
   watchlist: async () => { await toHome(); await dock(5, 6); },
   requests: async () => { await toHome(); await dock(6, 6); },
+  // The first Home card opens its detail page; Play there starts playback. The video plane screenshots black, so the
+  // diff compares only the chrome (screens.json compareRegions, diff.mjs --chrome-only).
+  "player-controls": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Down", 2); },
+  "player-quality-menu": async () => { await toHome(); await presses(["Select", "Select"], 8); await press("play", 2); await press("Up", 2); },
   settings: async () => { await settings(0); },
   "settings-avatar": async () => { await settings(1); },
   "settings-language": async () => { await settings(2); },
