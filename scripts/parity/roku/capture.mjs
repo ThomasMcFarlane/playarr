@@ -55,7 +55,8 @@ const settings = async (row) => {
 
 const screens = {
   "profile-switcher": async () => { await coldStart(); },
-  home: async () => { await toHome(); },
+  // The 4 MB hero image can arrive tens of seconds after Home paints on the relay; give it time before the screenshot.
+  home: async () => { await toHome(); await sleep(45); },
   series: async () => { await toHome(); await dock(2); },
   movies: async () => { await toHome(); await dock(3); },
   "series-detail": async () => { await toHome(); await dock(2); await press("Select", 9); }, // first series of the A-Z library

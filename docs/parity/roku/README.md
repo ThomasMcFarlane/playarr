@@ -20,7 +20,7 @@ captures (they show real library artwork).
 
 | Screen | Dark | Light | Status |
 | --- | ---: | ---: | --- |
-| home | 10.57% | 25.60% | open |
+| home | 2.07% | not re-measured | open (dark: art included; remaining differences are text anti-aliasing and 1 px art edges) |
 | movies | 17.65% | 45.26% | open |
 | series | 39.38% | 42.09% | open |
 | film-detail | 24.96% | 29.53% | open |

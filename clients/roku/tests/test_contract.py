@@ -590,6 +590,15 @@ class RokuDeviceBugfixTests(unittest.TestCase):
         self.assertIn("y += 319", MAIN)
         self.assertIn('"homeRails", "GET", "/api/v1/home/rails"', MAIN)
         self.assertNotIn("takeUnusedWorks(m.homeMovies", MAIN)
+        # Home shows every server rail from a RowList pool and On deck resolves episodes, artists and watch progress.
+        self.assertIn("m.homeRailPool", MAIN)
+        self.assertIn("findOnDeckEpisode", MAIN)
+        self.assertIn("applyWatchState", MAIN)
+        # Hero and rail headings keep the web letter-spacing through TrackedText; stage gradients are stretched ramps.
+        stage_xml = (ROOT / "components" / "TvStage.xml").read_text(encoding="utf-8")
+        self.assertIn("TrackedText", stage_xml)
+        self.assertIn("ramp-l.png", stage_xml)
+        self.assertTrue((ROOT / "components" / "TrackedText.brs").is_file())
         # Clock and date sit together near x=480 like .app-clock.
         self.assertIn('id="clockTime" translation="[481,', SCENE)
         card = (ROOT / "components" / "PosterCard.xml").read_text(encoding="utf-8")

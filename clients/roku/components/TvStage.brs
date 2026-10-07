@@ -9,9 +9,19 @@
 sub init()
     PlayarrFontifyTree(m.top)
     ThemeSetRole(m.top.findNode("keyArtFade"), "bg")
+    for each id in ["rampKeyLeft", "rampKeyBottom", "rampKeyTop", "rampWashLeft", "rampWashRight"]
+        ramp = m.top.findNode(id)
+        ThemeSetRole(ramp, "surface")
+        ramp.blendColor = ThemeColor("surface")
+    end for
     ThemeInitComponent()
     m.keyArtLayer = m.top.findNode("keyArtLayer")
     m.keyArt = m.top.findNode("keyArt")
+    m.keyArtRetryTimer = m.top.findNode("keyArtRetryTimer")
+    m.keyArtRetryTimer.ObserveField("fire", "onKeyArtRetry")
+    m.keyArt.ObserveField("loadStatus", "onKeyArtLoadStatus")
+    m.keyArtBase = ""
+    m.keyArtRetries = 0
     m.titlePanel = m.top.findNode("titlePanel")
     m.stageKickerLabel = m.top.findNode("stageKickerLabel")
     m.stageTitleLabel = m.top.findNode("stageTitleLabel")
@@ -68,16 +78,25 @@ sub onKeyArtUriChange()
         m.keyArtAgent.SetHeaders(m.top.keyArtHeaders)
     end if
     m.keyArt.SetHttpAgent(m.keyArtAgent)
+    m.keyArt.loadWidth = Int(m.keyArt.width)
+    m.keyArt.loadHeight = Int(m.keyArt.height)
+    m.keyArtBase = uri
+    m.keyArtRetries = 0
+    m.keyArtRetryTimer.control = "stop"
     m.keyArt.uri = uri
+    m.keyArtRetryTimer.duration = 10
+    m.keyArtRetryTimer.control = "start"
     if m.keyArtLayer <> invalid then m.keyArtLayer.opacity = 1
 end sub
 
 sub onStageKickerChange()
-    m.stageKickerLabel.text = m.top.stageKicker
+    ' Web .tv-provider: 12.3 px, weight 820, 0.08em tracking, upper case, brand colour.
+    m.stageKickerLabel.spec = { text: m.top.stageKicker, size: 12, weight: 800, tracking: 0.983, role: "brand", upper: true }
 end sub
 
 sub onStageTitleChange()
-    m.stageTitleLabel.text = m.top.stageTitle
+    ' Web .tv-title-panel h1: 69.1 px, weight 560, -0.075em tracking, 62.2 px lines, max-width 9ch (373 px), text-wrap: balance.
+    m.stageTitleLabel.spec = { text: m.top.stageTitle, size: 69, weight: 560, tracking: -4.977, role: "ink", width: 373.2, lineHeight: 62.208, maxLines: 3, balance: true }
     layoutStageText()
 end sub
 
@@ -87,19 +106,18 @@ sub onStageMetaChange()
 end sub
 
 sub onStageOverviewChange()
-    if m.stageOverviewLabel <> invalid
-        m.stageOverviewLabel.text = m.top.stageOverview
-    end if
+    ' Web synopsis: 12.9 px (drawn at 14: Roku renders small text about 8 % narrower), 20.3 px lines, 336 px wide, five lines.
+    m.stageOverviewLabel.spec = { text: m.top.stageOverview, size: 14, weight: 400, tracking: 0, role: "inkMuted", width: 336, lineHeight: 20.33, maxLines: 5 }
     layoutStageText()
 end sub
 
 ' The web flows meta and synopsis under the title: one title line puts the meta row 27 px below it, the synopsis 37.5 px
 ' under the meta (or 21.6 px under the title when there is no meta row). Title lines are 61 px apart at 69 px.
 sub layoutStageText()
-    lines = Int(m.stageTitleLabel.boundingRect().height / 61 + 0.5)
+    lines = m.stageTitleLabel.lineCount
     if lines < 1 then lines = 1
     if lines > 3 then lines = 3
-    titleBottom = 44.3 + 61 * lines
+    titleBottom = 44.3 + 62.208 * lines
     if m.top.stageMeta <> invalid and m.top.stageMeta <> ""
         m.stageMetaLabel.translation = [0, titleBottom + 27]
         m.stageOverviewLabel.translation = [0, titleBottom + 27 + 37.5]
@@ -115,4 +133,22 @@ end sub
 sub playEntrance()
     resetForEntrance()
     m.entranceAnimation.control = "start"
+end sub
+
+sub onKeyArtLoadStatus()
+    if m.keyArt.loadStatus = "ready" then m.keyArtRetryTimer.control = "stop"
+    if m.keyArt.loadStatus = "failed" and m.keyArtBase <> "" and m.keyArtRetries < 8
+        m.keyArtRetryTimer.control = "start"
+    end if
+end sub
+
+sub onKeyArtRetry()
+    if m.keyArt.loadStatus = "ready" then return
+    m.keyArtRetries = m.keyArtRetries + 1
+    sep = "?"
+    if Instr(1, m.keyArtBase, "?") > 0 then sep = "&"
+    m.keyArt.uri = m.keyArtBase + sep + "retry=" + m.keyArtRetries.ToStr()
+    ' Keep watching: a request that hangs without failing is tried again after 10 s.
+    m.keyArtRetryTimer.duration = 10
+    m.keyArtRetryTimer.control = "start"
 end sub

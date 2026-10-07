@@ -127,12 +127,37 @@ def main() -> None:
                 t = 1 - fn(yy) / 95
                 px2[xx, yy] = (255, 255, 255, round(255 * max(t, 0) ** 1.4))
         img.save(IMAGES / f"{name}.png")
-    # Media-card focus shadow: a soft black rounded rectangle (card 220 x 124, radius 12) with 24 px of blur room on every side.
+    # Linear alpha ramps (white, tinted at run time): the web's stage gradients (.tv-key-art::after, .tv-stage-wash) are CSS linear
+    # gradients from a token colour to transparent, so a stretched ramp bitmap reproduces them without stepped rectangles.
+    for name, size, fn in (
+        ("ramp-l", (256, 4), lambda x, y: 255 - x),
+        ("ramp-r", (256, 4), lambda x, y: x),
+        ("ramp-t", (4, 256), lambda x, y: 255 - y),
+        ("ramp-b", (4, 256), lambda x, y: y),
+    ):
+        ramp_img = Image.new("RGBA", size, (255, 255, 255, 0))
+        rpx = ramp_img.load()
+        for yy in range(size[1]):
+            for xx in range(size[0]):
+                rpx[xx, yy] = (255, 255, 255, max(0, min(255, fn(xx, yy))))
+        ramp_img.save(IMAGES / f"{name}.png")
+    # Media-card shadows (web, pinned in docs/design/page-layout.md section 5): colour rgb(56,38,33) under the 220 x 124 art
+    # (radius 12). Focused Home card: 0 26px 52px .32 and 0 11px 22px .22. Resting card: 0 10px 20px .14 and 0 3px 8px .10.
+    # A CSS blur radius B is a gaussian of sigma B / 2. The bitmap carries 90 px of room on every side; the y offset is baked in.
     from PIL import ImageFilter
-    shadow = Image.new("RGBA", (268, 172), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((24, 24, 244, 148), radius=12, fill=(0, 0, 0, 255))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(9))
-    shadow.save(IMAGES / "card-shadow.png")
+    def card_shadow(name, layers):
+        pad = 90
+        out = Image.new("RGBA", (220 + 2 * pad, 124 + 2 * pad), (56, 38, 33, 0))
+        for dy, blur, alpha in layers:
+            layer = Image.new("RGBA", out.size, (56, 38, 33, 0))
+            mask = Image.new("L", out.size, 0)
+            ImageDraw.Draw(mask).rounded_rectangle((pad, pad + dy, pad + 220, pad + dy + 124), radius=12, fill=round(255 * alpha))
+            mask = mask.filter(ImageFilter.GaussianBlur(blur / 2))
+            layer.putalpha(mask)
+            out = Image.alpha_composite(out, layer)
+        out.save(IMAGES / f"{name}.png")
+    card_shadow("card-shadow", [(26, 52, 0.32), (11, 22, 0.22)])
+    card_shadow("card-shadow-rest", [(10, 20, 0.14), (3, 8, 0.10)])
     # Player scrim (.player-scrim): black fading in from the top of the bottom 48 % to .92 at the bottom edge.
     scrim = Image.new("RGBA", (4, 256), (255, 255, 255, 0))
     spx = scrim.load()

@@ -266,6 +266,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: Home shows every server rail under On deck like the web, On deck lists episodes with their frame and title, artists and a progress bar, and cards show the unwatched dot only for unwatched titles.
+- Roku: the Home hero and rail headings keep the web letter-spacing, the stage uses smooth gradient ramps, artwork is decoded at card size and retried when the relay drops a request, card focus uses the pinned web shadow and lift, the dock matches the web geometry, and the capture scripts record the web DOM.
 - Android: the Playarr web palette and the page chrome measurements (gutters, header geometry, safe areas, focus ring) now live in `core-designsystem` as observable, theme-aware tokens, with the form factor provided once from the main activity. `WebPink` is renamed `WebAccent`. No visual change.
 - Android TV: settings panels, the Phone remote and Your data screens, Home rail row pitch, the player control pills and the quality matrix, choice cells, the profile-lock field and the search field follow the web TV geometry more closely (light and dark).
 - tvOS series page opens focused on the episode the server's resume plan points at (S1E1 when nothing is watched), with its season scrolled into view and the media-card focus state on it (soft shadow plus a lift, no ring).

@@ -3,12 +3,12 @@
 // account the device itself uses, so the Roku capture and this capture show the same data.
 //
 //   PLAYARR_DEVICE_TEST_USERNAME=<user> PLAYARR_DEVICE_TEST_PASSWORD=<password> \
-//     node scripts/parity/roku/capture-web-live.mjs --base https://<server> [--web https://<web client origin>] --out <dir> [--theme light|dark|both] [--screens a,b]
+//     node scripts/parity/roku/capture-web-live.mjs --base https://<server> [--web https://<web client origin>] --out <dir> [--theme light|dark|both] [--screens a,b] [--dump-dom]
 //
 // Writes <out>/tv/<theme>/<id>.png in the layout scripts/parity/diff.mjs reads (diff the Roku capture against it with the same
 // --mask-rect for the clock). Unlike capture-web.mjs nothing is frozen: the clock and rails are live, so mask them identically on
 // both sides. The credentials come from the environment and are never printed or written.
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -31,6 +31,7 @@ const fontFile = opt("font", "");
 const fontCss = fontFile
   ? `@font-face{font-family:"ParityFont";src:url(data:font/ttf;base64,${readFileSync(fontFile).toString("base64")});font-weight:100 1000}:root{--font:"ParityFont",sans-serif!important}*,*::before,*::after{font-family:"ParityFont",sans-serif!important}`
   : "";
+const dumpDom = args.includes("--dump-dom");
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const username = process.env.PLAYARR_DEVICE_TEST_USERNAME;
 const password = process.env.PLAYARR_DEVICE_TEST_PASSWORD;
@@ -141,13 +142,38 @@ try {
         await page.evaluate(() => document.fonts.ready);
         await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
         await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
-        await page.waitForTimeout(1500);
+        // The relay is slow: On deck resolves after several round trips, so Home needs a long settle (and every screen a little).
+        await page.waitForTimeout(screen.id.startsWith("home") ? 12000 : 1500);
         for (const key of screen.keys ?? []) {
           await page.keyboard.press(key);
           await page.waitForTimeout(450);
         }
         if (screen.keys) await page.waitForTimeout(1200);
         await page.screenshot({ path: join(out, "tv", theme, `${screen.id}.png`), animations: "disabled", caret: "hide", timeout: 120000 });
+        if (dumpDom) {
+          // Rect, font and colour of every visible element, so the Roku layout is built from measurements.
+          const dom = await page.evaluate(() => {
+            const rows = [];
+            for (const el of document.querySelectorAll("body *")) {
+              const r = el.getBoundingClientRect();
+              if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight) continue;
+              const cs = getComputedStyle(el);
+              const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).join(" ").slice(0, 60);
+              const painted = cs.backgroundColor !== "rgba(0, 0, 0, 0)" || cs.borderTopWidth !== "0px" || cs.backgroundImage !== "none";
+              if (!own && !painted && el.tagName !== "IMG" && el.tagName !== "svg") continue;
+              rows.push({
+                tag: el.tagName.toLowerCase(), cls: String(el.getAttribute("class") ?? "").slice(0, 80), text: own,
+                x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10,
+                font: own ? `${cs.fontSize}/${cs.fontWeight}/${cs.letterSpacing}/${cs.lineHeight}/${cs.fontFamily.slice(0, 30)}` : undefined,
+                color: own ? cs.color : undefined, bg: cs.backgroundColor !== "rgba(0, 0, 0, 0)" ? cs.backgroundColor : undefined,
+                radius: cs.borderTopLeftRadius !== "0px" ? cs.borderTopLeftRadius : undefined, opacity: cs.opacity !== "1" ? cs.opacity : undefined,
+              });
+            }
+            return rows;
+          });
+          mkdirSync(join(out, "tv", theme, "dom"), { recursive: true });
+          writeFileSync(join(out, "tv", theme, "dom", `${screen.id}.json`), JSON.stringify(dom));
+        }
         await context.close();
         console.log(`ok   tv/${theme}/${screen.id}`);
       } catch (e) {

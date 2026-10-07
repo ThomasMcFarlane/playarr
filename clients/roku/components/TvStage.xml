@@ -89,13 +89,16 @@
       <Poster id="keyArtFade" translation="[718,-33]" width="280" height="1145" uri="pkg:/images/stage-key-art-fade.png" loadDisplayMode="scaleToFill" />
       <!-- Soft stage wash only (left + vertical vignette). Pixel math for
            greyscale/contrast/brightness/opacity is baked server-side. -->
+      <!-- Web gradients as stretched alpha ramps tinted with the page surface colour (ThemeSetRole in TvStage.brs):
+           .tv-key-art::after = 90deg surface -> transparent over 22 % (422 px); 0deg surface -> transparent over the bottom 22 %
+           (238 px) and surface at the top from 82 % (the top 194 px); .tv-stage-wash = 90deg surface 94 % over 31 % (595 px) and
+           270deg surface 50 % over 34 % (653 px). -->
       <Group id="scrimLayer">
-        <Rectangle id="scrimLeft1" translation="[0,0]" width="280" height="1080" color="0x1B181BCC" />
-        <Rectangle id="scrimLeft2" translation="[280,0]" width="220" height="1080" color="0x1B181B66" />
-        <Rectangle id="scrimLeft3" translation="[500,0]" width="180" height="1080" color="0x1B181B33" />
-        <Rectangle id="scrimTop" translation="[0,0]" width="1920" height="200" color="0x1B181B66" />
-        <Rectangle id="scrimBottom" translation="[0,860]" width="1920" height="220" color="0x1B181B88" />
-        <Rectangle id="scrimRight" translation="[1500,0]" width="420" height="1080" color="0x1B181B59" />
+        <Poster id="rampKeyLeft" translation="[0,0]" width="422" height="1080" uri="pkg:/images/ramp-l.png" loadDisplayMode="scaleToFill" />
+        <Poster id="rampKeyBottom" translation="[0,842]" width="1920" height="238" uri="pkg:/images/ramp-b.png" loadDisplayMode="scaleToFill" />
+        <Poster id="rampKeyTop" translation="[0,0]" width="1920" height="194" uri="pkg:/images/ramp-t.png" loadDisplayMode="scaleToFill" />
+        <Poster id="rampWashLeft" translation="[0,0]" width="595" height="1080" uri="pkg:/images/ramp-l.png" opacity="0.94" loadDisplayMode="scaleToFill" />
+        <Poster id="rampWashRight" translation="[1267,0]" width="653" height="1080" uri="pkg:/images/ramp-r.png" opacity="0.5" loadDisplayMode="scaleToFill" />
       </Group>
     </Group>
 
@@ -110,7 +113,7 @@
     <Group id="titlePanel" translation="[153.6,259.2]" opacity="0">
       <!-- from: .tv-provider/.tv-detail-kicker font-size clamp(0.58rem,0.64vw,0.78rem)
            evaluated at 1920px: 0.64vw = 12.288px -> 12px. Color: theme accent (#cf3157). -->
-      <Label id="stageKickerLabel" translation="[0,0]" width="518" height="20" scale="[0.38,0.38]" color="0xCF3157FF" />
+      <TrackedText id="stageKickerLabel" translation="[0,0]" />
       <!-- from: .tv-title-panel h1 font-size clamp(2.7rem,4.5vw,6.4rem) evaluated at
            1920px: 4.5vw = 86.4px -> 86px. Color: theme ink.
            Font child removed (platform bug - see Theme.brs); width/height
@@ -122,12 +125,12 @@
            same font-size-to-line-height ratio as Theme.brs's type scale
            (~1.42x, e.g. display 50/71) for 3 real lines: 86px * 1.42 = 122px
            visual line height * 3 lines = 366px visual / 2.69 scale = 136px. -->
-      <Label id="stageTitleLabel" translation="[0,44.3]" width="173" height="136" wrap="true" maxLines="3" lineSpacing="-15" scale="[2.16,2.16]" color="0xF4F0F1FF" />
+      <TrackedText id="stageTitleLabel" translation="[0,29.3]" />
       <!-- from: .tv-title-meta font-size clamp(0.68rem,0.78vw,0.96rem) evaluated at
            1920px: 0.78vw = 14.976px -> 15px. Color: theme inkSoft. -->
       <Label id="stageMetaLabel" translation="[0,133.5]" width="1400" height="40" scale="[0.33,0.33]" color="0x887A82FF" />
       <!-- Synopsis under meta (tv-web .tv-title-panel body copy). -->
-      <Label id="stageOverviewLabel" translation="[0,171]" width="860" height="170" wrap="true" maxLines="4" lineSpacing="-8" scale="[0.40,0.40]" color="0x887A82FF" />
+      <TrackedText id="stageOverviewLabel" translation="[0,171]" />
     </Group>
 
     <!--
@@ -158,6 +161,7 @@
       target (title panel: 90ms + 620ms = 710ms; content panel: 150ms + 700ms
       = 850ms; both comfortably inside 900ms).
     -->
+    <Timer id="keyArtRetryTimer" duration="2" repeat="false" />
     <Animation id="entranceAnimation" duration="0.9" easeFunction="outCubic">
       <!-- key-art: fade 0->1 across the first 760/900 = 0.844 of the timeline -->
       <FloatFieldInterpolator id="keyArtOpacityInterp" fieldToInterp="keyArtLayer.opacity"

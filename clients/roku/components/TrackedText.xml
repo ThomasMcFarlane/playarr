@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  TrackedText: text with CSS letter-spacing. SceneGraph Labels have no tracking, and the web sets it on the hero title
+  (-0.075em), the kicker (0.08em) and the rail headings (-0.03em). Each glyph is a one-character Label placed at the
+  measured advance of the text before it plus the tracking, so kerning is kept. `spec` carries everything at once:
+    text, size, weight, tracking (px), role (theme colour), width (wrap box, 0 = one line), lineHeight (px),
+    maxLines, balance (true = CSS text-wrap: balance), upper (true = uppercase)
+  `lineCount` reports the number of lines laid out.
+-->
+<component name="TrackedText" extends="Group">
+  <interface>
+    <field id="spec" type="assocarray" onChange="onSpecChange" />
+    <field id="lineCount" type="integer" value="0" />
+  </interface>
+  <children>
+    <Label id="measure" visible="false" translation="[0,0]" width="0" />
+  </children>
+  <script type="text/brightscript" uri="pkg:/source/Fonts.brs" />
+  <script type="text/brightscript" uri="pkg:/source/Theme.brs" />
+  <script type="text/brightscript" uri="pkg:/components/TrackedText.brs" />
+</component>

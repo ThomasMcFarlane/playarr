@@ -9,11 +9,20 @@ sub init()
     m.title = m.top.findNode("title")
     m.kind = m.top.findNode("kind")
     m.unwatchedBadge = m.top.findNode("unwatchedBadge")
+    m.progressTrack = m.top.findNode("progressTrack")
+    m.progressFill = m.top.findNode("progressFill")
     m.cardRoot = m.top.findNode("cardRoot")
     m.artGroup = m.top.findNode("artGroup")
     m.focusAnim = m.top.findNode("focusAnim")
     m.focusShadow = m.top.findNode("focusShadow")
+    m.restShadow = m.top.findNode("restShadow")
+    m.cardScaleValue = 1.0
     m.liftInterp = m.top.findNode("liftInterp")
+    m.retryTimer = m.top.findNode("retryTimer")
+    m.retryTimer.ObserveField("fire", "onPosterRetry")
+    m.poster.ObserveField("loadStatus", "onPosterLoadStatus")
+    m.posterUri = ""
+    m.posterRetries = 0
     m.scaleInterp = m.top.findNode("scaleInterp")
 end sub
 
@@ -29,12 +38,14 @@ sub onContentChanged()
     cardScale = 1
     if content.cardScale <> invalid then cardScale = content.cardScale
     m.cardRoot.scale = [cardScale, cardScale]
+    m.cardScaleValue = cardScale
     showKind = true
     if content.showKind <> invalid then showKind = content.showKind
     m.kind.visible = showKind
     if showKind
         kindText = CapitalizeFirst(content.kind)
         if content.year <> invalid and content.year <> "" then kindText = kindText + " · " + content.year
+        if content.subtitleOverride <> invalid and content.subtitleOverride <> "" then kindText = content.subtitleOverride
         m.kind.text = kindText
     end if
     ' No per-item watched/unwatched state is threaded through from the
@@ -44,7 +55,17 @@ sub onContentChanged()
     ' every single card observed, so defaulting to visible is the closer
     ' match of the two options available without deeper API work, not a
     ' guess: a documented simplification, not a bug.
-    m.unwatchedBadge.visible = true
+    watchState = ""
+    if content.watchState <> invalid then watchState = content.watchState
+    m.unwatchedBadge.visible = watchState = "unseen"
+    m.progressTrack.visible = watchState = "part"
+    if watchState = "part"
+        pct = 0
+        if content.progressPct <> invalid then pct = content.progressPct
+        fill = 220 * pct / 100
+        if fill < 3 then fill = 3
+        m.progressFill.width = fill
+    end if
     agent = CreateObject("roHttpAgent")
     agent.SetCertificatesFile("common:/certs/ca-bundle.crt")
     agent.InitClientCertificates()
@@ -57,6 +78,12 @@ sub onContentChanged()
         agent.SetHeaders(content.artHeaders)
     end if
     m.poster.SetHttpAgent(agent)
+    ' Library art is 4K: ask for a bitmap decoded at 2x the card (4K textures overflow the GPU budget and some fail to load).
+    m.poster.loadWidth = Int(440 * cardScale)
+    m.poster.loadHeight = Int(248 * cardScale)
+    m.posterUri = content.hdPosterUrl
+    m.posterRetries = 0
+    m.retryTimer.control = "stop"
     m.poster.uri = content.hdPosterUrl
     ' A field literally named rowFocusPercent turned out to be reserved --
     ' RowList silently overwrites it on its own after content binds,
@@ -87,8 +114,9 @@ sub onFocusChanged()
     shadowOpacity = effective
     if shadowOpacity > 1 then shadowOpacity = 1
     if shadowOpacity < 0 then shadowOpacity = 0
-    m.focusShadow.opacity = shadowOpacity * cardFocusShadowOpacity()
-    liftY = -cardFocusLift() * effective
+    m.focusShadow.opacity = shadowOpacity
+    m.restShadow.opacity = 1 - shadowOpacity
+    liftY = -cardFocusLift() * effective / m.cardScaleValue
     artScale = 1 + (effective * cardFocusScale())
     m.liftInterp.key = [0, 1]
     m.liftInterp.keyValue = [m.cardRoot.translation, [0, liftY]]
@@ -105,16 +133,30 @@ function CapitalizeFirst(value as Dynamic) as String
     return UCase(Left(value, 1)) + Right(value, Len(value) - 1)
 end function
 
-' Media-card focus values. Placeholders until the web layout worker pins the earlier card focus numbers in
-' docs/design/page-layout.md; change them here only.
+' Media-card focus values, pinned from the web (docs/design/page-layout.md section 5, reference commit de371253): a Home card
+' lifts 6 px; a grid card (cardScale > 1) lifts 5 px; the art zooms 1.025 (grid 1.015). The shadow bitmaps carry the web
+' shadows (tools/make_assets.py card_shadow). Lifts are CSS px at the 1920 x 1080 layout, divided by the card scale on use.
 function cardFocusLift() as Float
-    return 10
+    if m.cardScaleValue > 1 then return 5
+    return 6
 end function
 
 function cardFocusScale() as Float
+    if m.cardScaleValue > 1 then return 0.015
     return 0.025
 end function
 
-function cardFocusShadowOpacity() as Float
-    return 0.55
-end function
+' The relay drops or times out some artwork requests under load: a failed poster is requested again (up to 8 times, 2 s apart,
+' with a cache-busting query so the failure is not reused).
+sub onPosterLoadStatus()
+    if m.poster.loadStatus = "failed" and m.posterUri <> "" and m.posterRetries < 8
+        m.retryTimer.control = "start"
+    end if
+end sub
+
+sub onPosterRetry()
+    m.posterRetries = m.posterRetries + 1
+    sep = "?"
+    if Instr(1, m.posterUri, "?") > 0 then sep = "&"
+    m.poster.uri = m.posterUri + sep + "retry=" + m.posterRetries.ToStr()
+end sub
