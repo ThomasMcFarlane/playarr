@@ -111,7 +111,7 @@ for id in "${screens[@]}"; do
           adb shell input swipe 1750 568 650 568 500; sleep 1.5
           shoot home-scrolled 1
           # Left gutter of the first rail (x 730 to 882 at 1920 px, `--tv-track-left-fade`), rows of its cards.
-          node "$(dirname "$0")/../check-edge-fade.mjs" "$dest/home-scrolled.png" --edge left --band 730,500,882,640 \
+          node "$(dirname "$0")/../check-edge-fade.mjs" "$dest/home-scrolled.png" --edge left --band 730,500,882,640 --interior 882,500,1100,640 --baseline "$dest/home-before-scroll.png" \
             --bg "$([ "$theme" = dark ] && echo '#151315' || echo '#f5f3f2')" --max-ratio 0.35 || fade_failed=1 ;;
         movies-scrolled|series-scrolled) rail "${id%-scrolled}"; sleep 3; shoot "${id%-scrolled}-before-scroll" 1
           adb shell input swipe 1300 800 1300 200 500; sleep 1.5; shoot "$id" 1
