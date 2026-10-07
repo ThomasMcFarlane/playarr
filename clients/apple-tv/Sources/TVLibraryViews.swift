@@ -187,7 +187,7 @@ struct TVHomeView: View {
                             .foregroundStyle(DesignTokens.Color.brandPrimary)
                             .textCase(.uppercase)
                         TVHeroTitle(title: hero.title)
-                            .padding(.top, 10)
+                            .padding(.top, 28)
                         if let overview = hero.overview, !overview.isEmpty {
                             Text(overview)
                                 .font(TVTheme.font(size: DesignTokens.Shell.featureOverviewSize, weight: .regular))
