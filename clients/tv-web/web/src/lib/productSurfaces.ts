@@ -83,6 +83,7 @@ export const COMPLETE_CLIENT_SHELL_ROUTES: readonly ProductRoute[] = [
   { path: "/settings/invite", id: "settings-invite", label: "Settings: invite", shelled: true },
   { path: "/settings/request-latency", id: "settings-request-latency", label: "Settings: request latency", shelled: true },
   { path: "/settings/your-data", id: "settings-your-data", label: "Settings: your data", shelled: true },
+  { path: "/settings/home", id: "settings-home", label: "Settings: customise home", shelled: true },
 ] as const;
 
 /** Pre-auth and account surfaces shared by web and hosted TV identities. */
@@ -241,6 +242,12 @@ export const PRODUCT_SETTINGS_SECTIONS: readonly ProductSettingsSection[] = [
     number: "10",
     titleKey: "settings.index.yourData.title",
     descriptionKey: "settings.index.yourData.description",
+  },
+  {
+    to: "/settings/home",
+    number: "11",
+    titleKey: "pages.home.customise.title",
+    descriptionKey: "pages.home.customise.hint",
   },
 ] as const;
 

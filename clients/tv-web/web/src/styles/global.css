@@ -10371,12 +10371,6 @@ html.is-native-scroll-root .profile-auth-scroll {
     scroll-padding-block: 20px calc(var(--mobile-nav-height) + 24px);
   }
 
-  /* Keep the Customise button clear of the 44px profile avatar in the top-right corner. */
-  .tv-home .tv-home-customise {
-    top: calc(var(--mobile-top-inset) + 6px);
-    right: calc(var(--mobile-page-gutter) + 52px);
-  }
-
   .tv-home-rail-section,
   .tv-media-track {
     padding-left: var(--mobile-page-gutter);
@@ -12698,13 +12692,6 @@ body[data-input-mode="remote"] :is(.tv-title-grid, .tv-search-results, .tv-media
   padding: 0.4rem 0 0;
   border-top: 1px solid var(--line-strong);
   border-left: 0;
-}
-
-.tv-home-customise {
-  position: absolute;
-  top: clamp(16px, 2vw, 32px);
-  right: clamp(16px, 3vw, 48px);
-  z-index: 11; /* above .tv-home-rails (10), which otherwise covers the button */
 }
 
 .tv-home-customise-list {

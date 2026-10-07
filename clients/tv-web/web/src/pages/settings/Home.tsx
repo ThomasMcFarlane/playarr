@@ -1,0 +1,124 @@
+import { useCallback, useEffect, useState } from "react";
+import { describeApiError } from "@playarr-tv/api-client";
+import { Button } from "../../components/ui";
+import { useApiClient } from "../../lib/ApiClientProvider";
+import {
+  moveRail,
+  toggleRail,
+  toPreferencesRequest,
+  type RailPreferenceEntry,
+} from "../../lib/homeRailPrefs";
+import { useLanguage } from "../../lib/i18n/LanguageProvider";
+import { useDocumentTitle } from "../../lib/useDocumentTitle";
+import { SettingsSectionLayout } from "./SettingsSectionLayout";
+
+type State =
+  | { status: "loading" }
+  | { status: "ready"; rails: RailPreferenceEntry[] }
+  | { status: "error"; message: string };
+
+/** Per-user Home rail visibility and order, as a settings section (/settings/home); saved on every change. */
+export function SettingsHomePage() {
+  const { t, language } = useLanguage();
+  useDocumentTitle(t("pages.home.customise.title"));
+  const client = useApiClient();
+  const [state, setState] = useState<State>({ status: "loading" });
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .getRailPreferences(language)
+      .then((prefs) => {
+        if (!cancelled) setState({ status: "ready", rails: prefs.rails });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ status: "error", message: describeApiError(error) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, language]);
+
+  const save = useCallback(
+    (next: RailPreferenceEntry[]) => {
+      setState({ status: "ready", rails: next });
+      setSaveError(null);
+      client.saveRailPreferences(toPreferencesRequest(next)).catch((error: unknown) => {
+        setSaveError(describeApiError(error));
+      });
+    },
+    [client]
+  );
+
+  const reset = useCallback(() => {
+    setSaveError(null);
+    client
+      .resetRailPreferences()
+      .then(() => client.getRailPreferences(language))
+      .then((prefs) => setState({ status: "ready", rails: prefs.rails }))
+      .catch((error: unknown) => setSaveError(describeApiError(error)));
+  }, [client, language]);
+
+  return (
+    <SettingsSectionLayout
+      kicker={t("settings.language.kicker")}
+      title={t("pages.home.customise.title")}
+      description={t("pages.home.customise.hint")}
+    >
+      <section className="card settings-card settings-card-wide">
+        {state.status === "loading" ? (
+          <p className="tv-discovery-note" role="status">
+            {t("pages.home.customise.loading")}
+          </p>
+        ) : state.status === "error" ? (
+          <p className="tv-watchlist-error" role="alert">
+            {state.message}
+          </p>
+        ) : (
+          <>
+            <p className="tv-discovery-note">{t("pages.home.customise.hint")}</p>
+            <ul className="tv-home-customise-list">
+              {state.rails.map((rail, index) => (
+                <li key={rail.id} className={rail.hidden ? "is-hidden" : undefined}>
+                  <span className="tv-home-customise-title">{rail.title}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => save(toggleRail(state.rails, rail.id))}
+                    aria-pressed={!rail.hidden}
+                  >
+                    {rail.hidden ? t("pages.home.customise.show") : t("pages.home.customise.hide")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={index === 0}
+                    onClick={() => save(moveRail(state.rails, rail.id, -1))}
+                    aria-label={t("pages.home.customise.moveUp", { title: rail.title })}
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={index === state.rails.length - 1}
+                    onClick={() => save(moveRail(state.rails, rail.id, 1))}
+                    aria-label={t("pages.home.customise.moveDown", { title: rail.title })}
+                  >
+                    ↓
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="tv-home-customise-actions">
+              <Button onClick={reset}>{t("pages.home.customise.reset")}</Button>
+            </div>
+          </>
+        )}
+        {saveError ? (
+          <p className="tv-watchlist-error" role="alert">
+            {saveError}
+          </p>
+        ) : null}
+      </section>
+    </SettingsSectionLayout>
+  );
+}

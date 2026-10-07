@@ -56,6 +56,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "settings-invite",
       "settings-request-latency",
       "settings-your-data",
+      "settings-home",
       "clients",
       "downloads",
     ]) {
@@ -82,7 +83,7 @@ describe("productSurfaces — complete client catalogue", () => {
     ]);
   });
 
-  it("registers all ten settings sections", () => {
+  it("registers all eleven settings sections", () => {
     expect(PRODUCT_SETTINGS_SECTIONS.map((section) => section.to)).toEqual([
       "/settings/appearance",
       "/settings/profile-avatar",
@@ -94,6 +95,7 @@ describe("productSurfaces — complete client catalogue", () => {
       "/settings/request-latency",
       "/settings/remote",
       "/settings/your-data",
+      "/settings/home",
     ]);
   });
 });

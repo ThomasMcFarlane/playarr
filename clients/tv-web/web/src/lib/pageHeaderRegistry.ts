@@ -26,7 +26,6 @@ export const PAGE_HEADER_COVERAGE: readonly PageHeaderCoverage[] = [
   { file: "Search.tsx", mode: "header", routes: ["search"] },
   { file: "settings/Index.tsx", mode: "header", routes: ["settings"] },
   { file: "Watchlist.tsx", mode: "header", routes: ["watchlist"] },
-  { file: "HomeCustomise.tsx", mode: "header", routes: ["customise-home"] },
   {
     file: "WorkDetail.tsx",
     mode: "header",

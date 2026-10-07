@@ -17,7 +17,7 @@ import {
 } from "react-router-dom";
 import { LibraryPage } from "./pages/Library";
 import { HomePage } from "./pages/Home";
-import { HomeCustomisePage } from "./pages/HomeCustomise";
+import { SettingsHomePage } from "./pages/settings/Home";
 import { WorkDetailPage } from "./pages/WorkDetail";
 import { DownloadsPage } from "./pages/Downloads";
 import {
@@ -676,7 +676,7 @@ export function App() {
       ) : null}
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/customise-home" element={<HomeCustomisePage />} />
+        <Route path="/customise-home" element={<Navigate to="/settings/home" replace />} />
         <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/search/:workId" element={<WorkDetailPage />} />
@@ -709,6 +709,7 @@ export function App() {
           <Route path="request-latency" element={<SettingsRequestLatencyPage />} />
           <Route path="remote" element={<SettingsRemotePage />} />
           <Route path="your-data" element={<SettingsYourDataPage />} />
+          <Route path="home" element={<SettingsHomePage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

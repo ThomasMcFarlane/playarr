@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ButtonLink } from "../components/ui";
 import type {
   ResumeOption,
   ResumePlan,
@@ -426,9 +425,6 @@ export function HomePage() {
       }
     >
 
-      <ButtonLink to="/customise-home" size="sm" className="tv-home-customise" data-navigation-focus-key="home:customise">
-        {t("pages.home.customise.open")}
-      </ButtonLink>
 
       <aside className="tv-home-feature" key={`home-feature-${selected.id}`}>
         <p className="tv-provider">

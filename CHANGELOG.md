@@ -256,6 +256,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Web: Customise Home moved from a button on Home into Settings as its own section (`/settings/home`, same controls); the old `/customise-home` link redirects there and Home no longer has an action button.
 - tvOS Preferences shows the nine web panels (profile avatar, language, player, server connection, profile lock, invite, request latency, phone remote, your data) laid out like the web TV, with a hairline under the heading and the uppercase heading detail.
 - Roku: media cards show a soft shadow and a lift on focus instead of a ring, Up and Down between Home rails land on the card directly above or below, the library sorts like the web (200 titles per page, native sort), Filters and Calendar actions sit in one shell column on the right, and Customise Home moved from Home into Settings.
 - Android TV player: D-pad arrows no longer seek while the controls are hidden (they only reveal them; only the dedicated media rewind and fast-forward keys seek). The scrubber steps 10 s per press, accelerates while the key is held and shows a target-time label. Revealing the controls puts focus on play/pause or the last focused control, and the scrubber's up and down neighbours are fixed (close button and play/pause). Controls auto-hide after 5 s. Minimise, close and play/pause show the white focus ring.
