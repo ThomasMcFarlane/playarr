@@ -1972,13 +1972,13 @@ private fun TelevisionNavigation(
 
 @Composable
 private fun ExperienceClock(modifier: Modifier = Modifier) {
-    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    var now by remember { mutableStateOf(playarrNow()) }
     val locale = LocalPlayarrLanguage.current.locale
     val dateFormatter = remember(locale) { PlayarrDateFormat("MMMMEEEd", locale) }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(30_000)
-            now = LocalDateTime.now()
+            now = playarrNow()
         }
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.2.dp)) {

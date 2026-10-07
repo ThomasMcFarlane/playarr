@@ -686,6 +686,17 @@ internal var parityNoInsets: Boolean = false
 /** Parity captures only (same gate as [parityNoInsets]): the player pauses at this position once it is playing. */
 internal var parityPauseAtMs: Long? = null
 
+/**
+ * Parity captures only (same gate as [parityNoInsets]): the wall clock the screens show, frozen to the shared fixture clock
+ * (`FIXTURE_CLOCK`, 2026-10-07T12:00:00Z) so the agenda, the chrome clock and "today" do not depend on the real date.
+ */
+internal var parityClock: java.time.Instant? = null
+
+internal fun playarrNow(zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): java.time.LocalDateTime =
+    parityClock?.let { java.time.LocalDateTime.ofInstant(it, zone) } ?: java.time.LocalDateTime.now(zone)
+
+internal fun playarrToday(zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): java.time.LocalDate = playarrNow(zone).toLocalDate()
+
 /** The web page body does not follow the top inset: it starts where a 24 dp status bar leaves it. */
 @androidx.compose.runtime.Composable
 internal fun webPhoneBodyInsets(): WindowInsets =

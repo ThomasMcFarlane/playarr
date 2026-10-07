@@ -197,3 +197,8 @@ movies 0.57%, series 0.52%, film-detail 0.76%, series-detail 0.79%, search 0.94%
 profile-switcher 1.47%, household-blocked 0.43%, player controls 0.62%, quality menu 1.17%. Light: home 1.28%, movies
 0.65%, series 0.56%, film-detail 1.16%, series-detail 1.55%, search 1.08%, calendar 0.70%, settings 0.97%,
 profile-switcher 1.68%, household-blocked 0.42%, player controls 0.62%, quality menu 1.17%.
+
+### Frozen clock for captures
+
+Debuggable builds accept `--es parity_clock 2026-10-07T12:00:00Z` on launch (the shared `FIXTURE_CLOCK`): "today" in the
+calendar and the clock in the chrome then read that instant instead of the real date, so the agenda always shows 7 Oct 2026.

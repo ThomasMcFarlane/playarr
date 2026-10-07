@@ -121,7 +121,7 @@ internal fun ExperienceCalendarScreen(
     )
     val language = LocalPlayarrLanguage.current
     val holder = viewModel.calendar
-    val today = remember { LocalDate.now() }
+    val today = remember { playarrToday() }
     val zone = remember { ZoneId.systemDefault() }
     val ready = (state.load as? CalendarLoad.Ready)?.response
     val loading = state.load == CalendarLoad.Loading
@@ -687,7 +687,7 @@ private fun TvCalendarAgenda(
                     else -> Text(playarrString(PlayarrString.CalendarSelectPrompt), color = WebInkMuted)
                 }
             }
-            val today = remember { LocalDate.now() }
+            val today = remember { playarrToday() }
             LazyColumn(Modifier.offset(x = 786.dp, y = 240.dp).width(1049.dp).fillMaxHeight()) {
                 if (loading) {
                     items(3) { Column(Modifier.padding(vertical = 4.dp)) { PlayarrSkeleton(Modifier.width(180.dp).height(18.dp)); Spacer(Modifier.height(8.dp)); CalendarRowSkeleton() } }

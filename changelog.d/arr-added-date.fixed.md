@@ -1,2 +1,0 @@
-- Recently added now follows when the *arr app added a title (Radarr, Sonarr, Whisparr, Lidarr and Readarr `added`) instead of the first sync time, so a fresh install or a newly connected library no longer gives every title the same date; an already-synced title is corrected once if it was stamped later than the source's date, and never moved later. Unusable dates fall back to the sync time.
-- Fixtures: the stub serves an explicit `added` per title and the helper that pinned `added_at` through the sqlite3 CLI is removed.
