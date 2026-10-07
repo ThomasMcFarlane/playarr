@@ -36,8 +36,9 @@ enum DesignFont {
         ]
         if let postScriptName { attributes[.name] = postScriptName } else { attributes[.family] = family }
         let font = UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
-        // An unregistered name makes UIKit answer with the system font.
-        return font.familyName == UIFont.systemFont(ofSize: size).familyName ? nil : font
+        // An unregistered name makes UIKit answer with a substitute (system font or Helvetica).
+        if let postScriptName { return font.fontName == postScriptName ? font : nil }
+        return font.familyName == family ? font : nil
     }
 }
 
