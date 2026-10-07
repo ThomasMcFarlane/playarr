@@ -71,7 +71,7 @@ internal fun PlayarrResumeChooserDialog(
         },
         text = {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().heightIn(max = 640.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 plan.options.forEachIndexed { index, option ->

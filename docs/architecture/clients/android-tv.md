@@ -96,3 +96,24 @@ border and shadow. There is no per-frame blur, which keeps television frame
 pacing unchanged, and it works on API 26+. The hero scrim alpha is validated
 against the filtered artwork's worst-case pixel in both themes
 (`PlayarrHeroScrimTest`).
+
+## D-pad navigation and focus
+
+`PlayarrTvNavigation.kt` ports the web TV navigation rules (`useTvNavigation.ts`, `focusGeometry.ts`,
+`trackNavigation.ts`): rails step by index and keep the card column between rails (Home) or take the closest
+tile by x (series tracks); grids use `titleGridNeighbourIndex`; LEFT from the first card goes to the navigation
+rail's current item. Focus is a 3 px ring, white in the dark theme and ink in the light theme, with no fill and no
+Material state layer (`PlayarrFocusRing.kt`, `PlayarrNoIndication`).
+
+## Scroll-edge fade
+
+Every scrollable container shows the web's edge fade where content continues off-screen
+(`PlayarrScrollFade.kt` in core-designsystem; `PlayarrScrollContainers.kt` wraps `LazyColumn`, `LazyRow`,
+`LazyVerticalGrid`, `verticalScroll` and `horizontalScroll`). `PlayarrScrollContainerUsageTest` fails the build when
+a raw scroller is used. Covered files: `PlayarrExperience` (Home rails and their rows, library grid, list and cover
+flow, search, series and movie detail tracks, music, dialogs and filters), `PlayarrParityScreens` (settings,
+playlists, profile, clients, household), `PlayarrDownloads`, `PlayarrRequests`, `PlayarrFolders`, `PlayarrDiscovery`,
+`PlayarrPageScaffold` (page and dialog bodies), `PlayarrApp` (auth, settings panels), `PlayarrEndOfPlaybackOverlay`,
+`PlayarrPlayerChrome`, `PlayarrResumeChooser`, `PlayarrInvite`, `PlayarrAvatarEditor`, `PlayarrGuardianApprovals`,
+`PlayarrPlaybackHealth` and `PlayarrPhonePlayer`. The Calendar screens are the only exception; the calendar work
+migrates them.

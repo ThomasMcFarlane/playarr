@@ -268,7 +268,7 @@ internal fun PlayarrEndOfPlaybackOverlay(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .verticalScroll(rememberScrollState())
+                .playarrVerticalScroll()
                 .padding(horizontal = padding, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -327,7 +327,7 @@ internal fun PlayarrEndOfPlaybackOverlay(
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    LazyRow(
+                    PlayarrLazyRow(
                         state = rowState,
                         modifier = Modifier.onFocusChanged { rowFocused = it.hasFocus },
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

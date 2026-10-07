@@ -479,7 +479,7 @@ internal fun ExperienceWatchlistScreen(
                     playarrString(PlayarrString.WatchlistEmptyDescription),
                 )
             } else {
-                LazyColumn(
+                PlayarrLazyColumn(
                     modifier = Modifier.fillMaxSize().padding(top = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 104.dp),

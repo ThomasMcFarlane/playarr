@@ -305,7 +305,7 @@ internal fun PlayarrAvatarSettings(
         return
     }
     Text(playarrString(PlayarrString.SettingsAvatarPresetLabel), color = WebInkSoft, fontSize = 12.sp)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(playarrProfileAvatarPresetIds) { preset ->
             val selected = resolved.kind == ProfileAvatarKind.Preset && resolved.value == preset
             val presetDescription = playarrString(playarrAvatarPresetLabelKey(preset))
@@ -409,7 +409,7 @@ private fun PlayarrAvatarCropDialog(
         title = { Text(playarrString(PlayarrString.SettingsAvatarCropTitle)) },
         text = {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().heightIn(max = 620.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(

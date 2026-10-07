@@ -499,7 +499,7 @@ private fun PlayarrSheetFrame(
                         .clickable(enabled = false) {},
                 ) {
                     Column(
-                        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
+                        Modifier.playarrVerticalScroll().padding(horizontal = 24.dp, vertical = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -593,12 +593,12 @@ internal fun PlayarrMasterDetail(
     BoxWithConstraints(modifier) {
         if (isTelevision || maxWidth >= 840.dp) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                Box(Modifier.weight(0.35f).fillMaxHeight().verticalScroll(rememberScrollState())) { detail() }
+                Box(Modifier.weight(0.35f).fillMaxHeight().playarrVerticalScroll()) { detail() }
                 Box(Modifier.weight(0.65f).fillMaxHeight()) { list() }
             }
         } else {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.fillMaxWidth().heightIn(max = this@BoxWithConstraints.maxHeight * 0.4f).verticalScroll(rememberScrollState())) { detail() }
+                Box(Modifier.fillMaxWidth().heightIn(max = this@BoxWithConstraints.maxHeight * 0.4f).playarrVerticalScroll()) { detail() }
                 Box(Modifier.weight(1f).fillMaxWidth()) { list() }
             }
         }

@@ -348,7 +348,7 @@ private fun DownloadsList(
     modifier: Modifier = Modifier,
 ) {
     val grouped = remember(downloads) { downloads.groupBy { it.state.playarrDownloadGroup() } }
-    LazyColumn(
+    PlayarrLazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -733,7 +733,7 @@ private fun KeepUntilEditDialog(entry: DownloadEntity, onDismiss: () -> Unit, on
             Text(playarrString(PlayarrString.DownloadsEditKeepUntil, "title" to entry.title))
         },
         text = {
-            Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().heightIn(max = 420.dp).playarrVerticalScroll()) {
                 KeepUntilPicker(selection) { selection = it }
             }
         },

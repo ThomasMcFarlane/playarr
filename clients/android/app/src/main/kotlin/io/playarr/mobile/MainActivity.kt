@@ -194,6 +194,8 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalPlayarrDisplayPreferences provides display.value,
                     io.playarr.shared.designsystem.component.LocalPlayarrFocusRing provides io.playarr.mobile.ui.WebFocusRing,
+                    io.playarr.shared.designsystem.component.LocalPlayarrDarkTheme provides display.darkTheme,
+                    io.playarr.shared.designsystem.component.LocalPlayarrFadeBackground provides io.playarr.mobile.ui.WebBackground,
                     androidx.compose.foundation.LocalIndication provides (
                         if (isTelevision) io.playarr.shared.designsystem.component.PlayarrNoIndication
                         else androidx.compose.foundation.LocalIndication.current

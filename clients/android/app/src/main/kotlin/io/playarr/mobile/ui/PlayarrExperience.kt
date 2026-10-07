@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import io.playarr.shared.designsystem.component.PlayarrFadeKind
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.boundsInRoot
@@ -1883,7 +1884,7 @@ private fun ExperienceNavigation(
         shape = phoneNavShape,
         tonalElevation = 0.dp,
     ) {
-        LazyRow(
+        PlayarrLazyRow(
             modifier = Modifier.padding(5.dp).fillMaxWidth(),
             // A short list (a household-limited profile) is centred in the bar; a long one scrolls from the start.
             horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
@@ -2613,7 +2614,7 @@ private fun ExperienceHomeScreen(
                         if (isTelevision && index >= 0) railsState.animateScrollToItem(index)
                     }
                     Box(Modifier.fillMaxSize()) {
-                    LazyColumn(
+                    PlayarrLazyColumn(
                         state = railsState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -2713,7 +2714,7 @@ private fun CustomiseHomeDialog(viewModel: PlayarrExperienceViewModel, onDismiss
             if (rails == null) {
                 CircularProgressIndicator()
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                PlayarrLazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     item {
                         Text(playarrString(PlayarrString.HomeCustomiseDescription), color = WebInkMuted, fontSize = 12.sp)
                     }
@@ -3043,8 +3044,9 @@ internal fun ExperienceMediaRail(
         }
         val railState = rails?.rowState(railIndex) ?: androidx.compose.foundation.lazy.rememberLazyListState()
         Box {
-        LazyRow(
+        PlayarrLazyRow(
             state = railState,
+            fade = if (isTelevision) PlayarrFadeKind.Rail else PlayarrFadeKind.PhoneRail,
             // Television: the 3 px focus ring sits outside the first card, so the row starts 4 dp early and pads 4 dp back.
             modifier = (if (isTelevision) Modifier.fillMaxWidth().offset(x = (-4).dp) else Modifier.fillMaxWidth().padding(end = 5.dp)).then(if (isTelevision) Modifier.padding(top = 32.4.dp) else Modifier),
             contentPadding = if (isTelevision) PaddingValues(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 12.dp) else PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
@@ -3090,63 +3092,8 @@ internal fun ExperienceMediaRail(
                 )
             }
         }
-        if (!isTelevision && railState.canScrollForward) {
-            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) { PhoneRailEdgeFade() }
-        }
         }
     }
-}
-
-/**
- * `.tv-home-rail-window::after` on a phone: a 32 px fade at the rail window's right edge while the rail can scroll on
- * (opacity 0.58, 0.5 in dark). An elliptical radial gradient centred 28% beyond the edge, rounded 48% on its left,
- * plus the inset shadow along the edge.
- */
-@Composable
-internal fun PhoneRailEdgeFade(modifier: Modifier = Modifier) {
-    val ink = Color(0xFF1F0E14)
-    val opacity = if (webIsDark) 0.5f else 0.58f
-    Box(
-        modifier
-            .width(32.dp)
-            .fillMaxHeight()
-            .graphicsLayer { alpha = opacity }
-            .drawBehind {
-                val w = size.width
-                val h = size.height
-                val shape = androidx.compose.ui.graphics.Path().apply {
-                    addRoundRect(
-                        androidx.compose.ui.geometry.RoundRect(
-                            0f, 0f, w, h,
-                            topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
-                            topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
-                            bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
-                            bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(0.48f * w, 0.48f * h),
-                        ),
-                    )
-                }
-                drawContext.canvas.save()
-                drawContext.canvas.clipPath(shape)
-                // ellipse 100% 88% at 128% 50%: horizontal radius w, vertical radius 0.88 h, centre 28% past the edge.
-                val ry = 0.88f * h
-                val centre = Offset(1.28f * w, h / 2f)
-                withTransform({ scale(1f, ry / w, pivot = centre) }) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            0f to ink.copy(alpha = 0.5f), 0.46f to ink.copy(alpha = 0.18f), 0.78f to Color.Transparent,
-                            center = centre, radius = w,
-                        ),
-                        radius = w * 4f, center = centre,
-                    )
-                }
-                // inset -18px 0 24px -22px: the darkening that hugs the right edge.
-                drawRect(
-                    Brush.horizontalGradient(0f to Color.Transparent, 1f to ink.copy(alpha = 0.17f), startX = w - 14.dp.toPx(), endX = w),
-                    topLeft = Offset(w - 14.dp.toPx(), 0f), size = androidx.compose.ui.geometry.Size(14.dp.toPx(), h),
-                )
-                drawContext.canvas.restore()
-            },
-    )
 }
 
 @Composable
@@ -3417,7 +3364,7 @@ internal fun LibraryResults(
     // Web `.tv-title-grid-content` at 1920: 51.3 px start, 105.7 px end, 162 px first row, 25.92 x 27 gaps.
     val screenPadding = if (isTelevision) PaddingValues(start = 51.3.dp, end = 105.7.dp, top = 22.dp, bottom = 104.dp) else padding
     when (viewMode) {
-        LibraryViewMode.Screen -> LazyVerticalGrid(
+        LibraryViewMode.Screen -> PlayarrLazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: if (isTelevision) GridCells.Adaptive(landscapeWidth) else GridCells.Fixed(2),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
@@ -3444,7 +3391,7 @@ internal fun LibraryResults(
                 )
             }
         }
-        LibraryViewMode.List -> LazyColumn(
+        LibraryViewMode.List -> PlayarrLazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -3464,7 +3411,7 @@ internal fun LibraryResults(
                 }
             }
         }
-        LibraryViewMode.Cover -> LazyVerticalGrid(
+        LibraryViewMode.Cover -> PlayarrLazyVerticalGrid(
             columns = fixedColumns?.let { GridCells.Fixed(it) } ?: GridCells.Adaptive(landscapeWidth * 0.72f),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
@@ -3477,7 +3424,7 @@ internal fun LibraryResults(
             }
         }
         LibraryViewMode.CoverFlow -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            LazyRow(
+            PlayarrLazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(
                     start = if (isTelevision) 120.dp else 32.dp,
@@ -3647,7 +3594,7 @@ private fun LibraryLanguageChoices(
         if (entries.isEmpty()) {
             Text(playarrString(PlayarrString.LibraryNoLanguages), color = WebInkMuted, fontSize = 12.sp)
         } else {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(entries, key = { it.code }) { entry ->
                     val name = languageDisplayName(entry.code, language.locale, entry.name)
                     val active = entry.code in selected
@@ -3670,7 +3617,7 @@ private fun <T> LibraryFilterChoices(
     val language = LocalPlayarrLanguage.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title.uppercase(language.locale), color = WebInkMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(values) { value -> PlayarrChoice(label(value), value == selected) { onSelected(value) } }
         }
     }
@@ -4023,7 +3970,7 @@ private fun ExperienceSearchScreen(
         val filterPanel: @Composable () -> Unit = {
             if (filtersOpen) {
                 Text(playarrString(PlayarrString.SearchType), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
-                LazyRow(
+                PlayarrLazyRow(
                     modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -4042,7 +3989,7 @@ private fun ExperienceSearchScreen(
                     }
                 }
                 Text(playarrString(PlayarrString.SearchLibrary), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
-                LazyRow(
+                PlayarrLazyRow(
                     modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -4248,7 +4195,7 @@ private fun PhoneSearchContent(
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
                         ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
                     } else {
-                        LazyVerticalGrid(
+                        PlayarrLazyVerticalGrid(
                             columns = GridCells.Fixed(2),
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -4503,7 +4450,7 @@ private fun TelevisionSearchBody(
                     } else if (current.value.works.isEmpty() && current.value.playlists.isEmpty() && !extrasEligible) {
                         ExperienceEmpty(playarrString(PlayarrString.SearchNoResultsTitle), playarrString(PlayarrString.SearchNoResultsDescription))
                     } else {
-                        LazyVerticalGrid(
+                        PlayarrLazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(26.dp),
@@ -5203,7 +5150,7 @@ private fun ExperienceDetailScreen(
                             )
                         }
                     } else {
-                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
+                        PlayarrLazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 250.dp, bottom = 108.dp)) {
                             item { FeatureCopy(detail.work) }
                             item { Spacer(Modifier.height(22.dp)) }
                             item {
@@ -5306,7 +5253,7 @@ private fun PlayarrServerChoiceDialog(
         title = { Text(playarrString(PlayarrString.ServerChoiceWhere, "title" to title)) },
         text = {
             Column(
-                Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().height(360.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 when (choices) {
@@ -5627,7 +5574,7 @@ private fun PhoneVideoDetailBody(
     val synopsis = episode?.overview?.takeIf(String::isNotBlank)
         ?: work.overview?.takeIf(String::isNotBlank)
         ?: playarrString(if (episode == null) PlayarrString.DetailNoSynopsis else PlayarrString.DetailNoEpisodeSynopsis)
-    LazyColumn(
+    PlayarrLazyColumn(
         modifier = Modifier.fillMaxSize(),
         // Web: the copy block starts 375 px down (kicker top) and the page scrolls under the fixed key art.
         contentPadding = PaddingValues(top = 351.dp + webPhoneInsets().asPaddingValues().calculateTopPadding(), bottom = 112.dp),
@@ -5772,7 +5719,7 @@ private fun PhoneDetailRail(
             modifier = Modifier.padding(start = 16.dp, top = 4.dp),
         )
         Spacer(Modifier.height(8.dp))
-        LazyRow(
+        PlayarrLazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(start = 16.dp, end = 20.dp, top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -6322,7 +6269,7 @@ private fun MoviePlaybackOptionsDialog(
         title = { Text(playarrString(PlayarrString.DetailPlaybackSettingsTitle)) },
         text = {
             Column(
-                Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().height(420.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 MoviePlaybackChoiceGroup(
@@ -6497,7 +6444,7 @@ internal fun SeriesEpisodeBrowser(
                 onDownloadAll = onDownload,
             )
             val seasonIndex = seasons.indexOf(season)
-            LazyRow(
+            PlayarrLazyRow(
                 state = if (isTelevision) tvRails.rowState(seasonIndex) else androidx.compose.foundation.lazy.rememberLazyListState(),
                 modifier = if (isTelevision) Modifier.padding(top = 17.3.dp) else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 25.dp else 12.dp),
@@ -6524,7 +6471,7 @@ internal fun SeriesEpisodeBrowser(
             }
         }
         if (isTelevision) {
-            LazyColumn(Modifier.weight(1f), state = columnState, verticalArrangement = Arrangement.spacedBy(54.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
+            PlayarrLazyColumn(Modifier.weight(1f), state = columnState, verticalArrangement = Arrangement.spacedBy(54.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                 items(seasons, key = { it.season.id }) { content(it) }
                 if (credits.cast.isNotEmpty()) {
                     item { DetailCreditsRail(credits.cast) }
@@ -6758,7 +6705,7 @@ private fun MovieDetailBrowser(
     if (isTelevision) {
         // Web `.tv-media-track` stack: no panel, sections start at y = 540 and repeat every 314.3 dp.
         Column(
-            modifier.verticalScroll(rememberScrollState()).padding(top = 540.dp, bottom = 120.dp),
+            modifier.playarrVerticalScroll().padding(top = 540.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(54.dp),
         ) {
             if (chapters.isNotEmpty()) {
@@ -6820,13 +6767,13 @@ private fun MovieDetailBrowser(
     }
     val container = modifier
         .glass(RoundedCornerShape(16.dp), WebGlass.Panel)
-        .then(if (isTelevision) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+        .then(if (isTelevision) Modifier.playarrVerticalScroll() else Modifier)
         .padding(if (isTelevision) 22.dp else 14.dp)
     Column(container, verticalArrangement = Arrangement.spacedBy(22.dp)) {
         if (chapters.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(playarrString(PlayarrString.DetailChapters), color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+                PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                     items(chapters, key = MediaChapter::index) { chapter ->
                         Surface(
                             onClick = { onPlay(mediaFileId, chapter.startMs, launchSettings) },
@@ -6895,7 +6842,7 @@ private fun WebMediaTrack(title: String, count: String, cards: androidx.compose.
             Text(title, color = WebInk, fontSize = 17.664.sp, fontWeight = FontWeight(610), letterSpacing = (-0.53).sp, lineHeight = 26.5.sp)
             Text(count, color = WebInkMuted, fontSize = 9.984.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        LazyRow(
+        PlayarrLazyRow(
             modifier = Modifier.padding(top = 17.2.dp),
             contentPadding = PaddingValues(top = 18.dp, end = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(25.dp),
@@ -6953,7 +6900,7 @@ private fun WebEpisodeCard(
 private fun DetailCreditsRail(credits: List<CreditResponse>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(playarrString(PlayarrString.DetailCast), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+        PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             items(credits, key = CreditResponse::id) { credit ->
                 Column(Modifier.width(104.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -7008,7 +6955,7 @@ private fun SimilarWorksRail(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(playarrString(PlayarrString.DetailSimilarTitles), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        LazyRow(
+        PlayarrLazyRow(
             state = rails?.rowState(railIndex) ?: androidx.compose.foundation.lazy.rememberLazyListState(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(start = 4.dp, top = 4.dp, end = 4.dp, bottom = 4.dp),
@@ -7110,7 +7057,7 @@ private fun ExperienceMusicDetailContent(
             Modifier.fillMaxSize().heroScrim(isTelevision),
         )
         }
-        LazyColumn(
+        PlayarrLazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = if (isTelevision) 118.dp else 16.dp,
@@ -7193,7 +7140,7 @@ private fun ExperienceMusicDetailContent(
             } else {
                 item {
                     Text(playarrString(PlayarrString.MusicAlbums), color = WebInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    LazyRow(
+                    PlayarrLazyRow(
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 22.dp else 12.dp),
                     ) {
@@ -7449,7 +7396,7 @@ private fun DetailChildren(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (scrollable) Modifier.fillMaxHeight().verticalScroll(rememberScrollState()) else Modifier)
+            .then(if (scrollable) Modifier.fillMaxHeight().playarrVerticalScroll() else Modifier)
             .padding(padding),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
@@ -9291,7 +9238,7 @@ private fun ExperienceNotFoundScreen() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .playarrVerticalScroll()
                 .padding(
                     start = if (wide) 142.dp else 32.dp,
                     end = if (wide) 96.dp else 32.dp,

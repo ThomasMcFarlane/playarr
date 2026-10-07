@@ -140,7 +140,7 @@ private fun FoldersFailed(message: PlayarrMessage, onRetry: () -> Unit) {
 
 @Composable
 private fun FolderRootChooser(roots: List<FolderRoot>, isTelevision: Boolean, onChoose: (String) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    PlayarrLazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(roots, key = FolderRoot::id) { root ->
             val status = when {
                 root.available -> playarrString(PlayarrString.FoldersRootItems, "count" to root.itemCount)
@@ -213,7 +213,7 @@ private fun ColumnScope.FolderBrowser(
                     FolderSize.Medium -> if (isTelevision) 250.dp else 170.dp
                     FolderSize.Large -> if (isTelevision) 330.dp else 230.dp
                 }
-                LazyVerticalGrid(
+                PlayarrLazyVerticalGrid(
                     columns = GridCells.Adaptive(min),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -225,7 +225,7 @@ private fun ColumnScope.FolderBrowser(
                     if (more != null) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.padding(vertical = 12.dp)) { more() } }
                 }
             } else {
-                LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlayarrLazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(listing.entries, key = { it.entryType + ":" + it.path }) { entry ->
                         FolderCard(entry, false, serverUrl, accessToken, isTelevision) { open(entry) }
                     }
@@ -239,7 +239,7 @@ private fun ColumnScope.FolderBrowser(
 @Composable
 private fun FolderBreadcrumbs(rootName: String, path: String, listing: FolderListing.Ready?, onOpen: (String) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+        PlayarrLazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             item {
                 PlayarrButton(onClick = { onOpen("") }, variant = PlayarrButtonVariant.Ghost, size = PlayarrButtonSize.Small) {
                     Text(rootName, color = WebInk, fontWeight = if (path.isEmpty()) FontWeight.Bold else FontWeight.Normal, maxLines = 1)

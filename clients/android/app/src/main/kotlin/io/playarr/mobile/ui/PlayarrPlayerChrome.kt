@@ -1059,7 +1059,7 @@ private fun PlayarrPlayerPlaylistPanel(
                     Text("×", color = Color.White, fontSize = 24.sp)
                 }
             }
-            androidx.compose.foundation.lazy.LazyColumn(
+            PlayarrLazyColumn(
                 modifier = Modifier.fillMaxSize().padding(top = 16.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1319,7 +1319,7 @@ private fun PlayarrPlayerOptionsDialog(
             )
         },
         text = {
-            androidx.compose.foundation.lazy.LazyColumn(
+            PlayarrLazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {

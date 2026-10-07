@@ -349,7 +349,7 @@ private fun PhoneMenuPanelContent(
 ) {
     val locale = LocalPlayarrLanguage.current.locale
     Column(
-        Modifier.heightIn(max = 489.5.dp).verticalScroll(rememberScrollState()).padding(8.8.dp),
+        Modifier.heightIn(max = 489.5.dp).playarrVerticalScroll().padding(8.8.dp),
     ) {
         Text(
             when (menu) {

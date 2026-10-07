@@ -370,7 +370,7 @@ internal fun AddToPlaylistDialog(
         title = { Text(playarrString(PlayarrString.ContextAddToPlaylistHeading)) },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().height(360.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (val current = state) {
@@ -469,7 +469,7 @@ internal fun ExperiencePlaylistsScreen(
                             ),
                         )
                     } else {
-                    LazyVerticalGrid(
+                    PlayarrLazyVerticalGrid(
                         columns = GridCells.Adaptive(if (isTelevision) 230.dp else 160.dp),
                         modifier = Modifier.fillMaxSize().padding(top = 28.dp),
                         contentPadding = PaddingValues(bottom = 32.dp),
@@ -504,7 +504,7 @@ internal fun ExperiencePlaylistsScreen(
             title = { Text(playarrString(PlayarrString.PlaylistsCreateTitle)) },
             text = {
                 Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).playarrVerticalScroll(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     OutlinedTextField(
@@ -960,7 +960,7 @@ internal fun ExperiencePlaylistDetailScreen(
                     }
                 },
             ) {
-                    LazyColumn(
+                    PlayarrLazyColumn(
                         modifier = Modifier.fillMaxSize().padding(top = 8.dp),
                         contentPadding = PaddingValues(bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(22.dp),
@@ -1251,7 +1251,7 @@ private fun EditPlaylistDialog(
         title = { Text(playarrString(PlayarrString.PlaylistActionsEdit)) },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).playarrVerticalScroll(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 OutlinedTextField(
@@ -1974,7 +1974,7 @@ private fun TelevisionProfilesStage(
                     verticalAlignment = Alignment.Top,
                 ) { track() }
             } else {
-                LazyRow(
+                PlayarrLazyRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(38.dp),
                     contentPadding = PaddingValues(horizontal = 140.dp),
@@ -2096,7 +2096,7 @@ private fun MobileProfilesStage(
         // `.profiles-row`: from inset + 150 px down, scrolls sideways and clips what grows past its top edge.
         Box(Modifier.fillMaxSize().padding(top = topInset + 150.dp).clipToBounds()) {
             Row(
-                Modifier.horizontalScroll(rememberScrollState()).padding(start = 28.dp, end = 28.dp, top = 18.dp),
+                Modifier.playarrHorizontalScroll().padding(start = 28.dp, end = 28.dp, top = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(22.dp),
                 verticalAlignment = Alignment.Top,
             ) {
@@ -3165,14 +3165,14 @@ internal fun ExperienceParitySettingsScreen(
                     }
                 }
             }
-            LazyColumn(
+            PlayarrLazyColumn(
                 modifier = Modifier.weight(1f).fillMaxHeight().background(Brush.horizontalGradient(listOf(Color.Transparent, WebSurfaceStrong.copy(alpha = 0.88f), WebSurface))),
                 contentPadding = PaddingValues(start = if (wide) 48.dp else 0.dp, end = 0.dp, top = 8.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 if (!wide) {
                     item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(phoneSettingsIndex.map { it.first }) { candidate ->
                                 PlayarrButton(onClick = { picked = candidate }, enabled = candidate != section, variant = PlayarrButtonVariant.Secondary) { Text(playarrString(candidate.label)) }
                             }
@@ -3383,7 +3383,7 @@ private fun SettingsSectionContent(
                             Text(tier.label, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text(tier.resolution, color = WebInkMuted, fontSize = 9.sp)
                         }
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             items(tier.options) { option ->
                                 PlayarrButton(
                                     onClick = {
@@ -3983,7 +3983,7 @@ private fun PlayerLanguageChoices(
         return
     }
     Text(label, color = WebInkSoft, fontSize = 12.sp)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(playarrLanguageOptions) { option ->
             PlayarrButton(onClick = { onSelected(option.code) }, enabled = option.code != selected, variant = PlayarrButtonVariant.Secondary) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -4046,7 +4046,7 @@ private fun TvSettingsBody(
             color = WebInkMuted, fontSize = 11.sp, letterSpacing = 0.5.sp, lineHeight = 16.sp, maxLines = 1,
             modifier = Modifier.offset(x = 227.dp, y = 143.dp).width(420.dp),
         )
-        LazyColumn(
+        PlayarrLazyColumn(
             Modifier.offset(x = 154.dp, y = 162.dp).width(480.dp).fillMaxHeight(),
         ) {
             itemsIndexed(entries.map { it.first }) { index, candidate ->
@@ -4305,7 +4305,7 @@ private fun SettingChoices(label: String, choices: List<String>, selected: Strin
         return
     }
     Text(label, color = WebInkSoft, fontSize = 12.sp)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices) { choice -> PlayarrButton(onClick = { onSelected(choice) }, enabled = choice != selected, variant = PlayarrButtonVariant.Secondary) { Text(choice) } }
     }
 }
@@ -4331,7 +4331,7 @@ private fun <T> SettingChoiceOptions(
         return
     }
     if (label.isNotBlank()) Text(label, color = WebInkSoft, fontSize = 12.sp)
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    PlayarrLazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices, key = { it.first.toString() }) { (value, choiceLabel) ->
             PlayarrButton(onClick = { onSelected(value) }, enabled = value != selected, variant = PlayarrButtonVariant.Secondary) { Text(choiceLabel) }
         }
@@ -4421,7 +4421,7 @@ private fun Throwable.playarrServerConnectionMessage(): PlayarrMessage = when (t
 @Composable
 private fun PhoneSettingsIndex(onOpen: (SettingsSection) -> Unit) {
     Box(Modifier.fillMaxSize().background(WebSurface)) {
-        androidx.compose.foundation.lazy.LazyColumn(
+        PlayarrLazyColumn(
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 60.dp, bottom = 116.dp),
         ) {

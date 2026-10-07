@@ -238,7 +238,7 @@ internal fun PlayarrPlaybackHealthDialog(
             )
         },
         text = {
-            LazyColumn(
+            PlayarrLazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = if (isTelevision) 420.dp else 480.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {

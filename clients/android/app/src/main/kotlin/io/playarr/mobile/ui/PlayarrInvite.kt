@@ -95,7 +95,7 @@ internal fun PlayarrInviteDialog(
         title = { Text(playarrString(PlayarrString.SettingsInviteModalTitle)) },
         text = {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 620.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().heightIn(max = 620.dp).playarrVerticalScroll(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {

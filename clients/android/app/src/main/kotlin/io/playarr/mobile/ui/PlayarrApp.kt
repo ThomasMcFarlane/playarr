@@ -715,7 +715,7 @@ private fun MobileLoginScreen(
             PlayarrLanguageDropdown()
         }
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
+            modifier = Modifier.fillMaxSize().playarrVerticalScroll().padding(
                 start = 22.dp,
                 end = 22.dp,
                 top = if (compact) 96.dp else 188.dp,
@@ -1088,7 +1088,7 @@ private fun TelevisionManualLoginScreen(
                 modifier = Modifier
                     .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .playarrVerticalScroll(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -1437,7 +1437,7 @@ private fun AuthChromeDropdown(
                         Column(
                             modifier = Modifier
                                 .heightIn(max = 260.dp)
-                                .verticalScroll(rememberScrollState())
+                                .playarrVerticalScroll()
                                 .padding(vertical = 6.dp, horizontal = 6.dp),
                         ) {
                             menuContent()

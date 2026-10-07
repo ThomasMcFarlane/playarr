@@ -1,0 +1,1 @@
+- Android: every scrollable container (Home rails and rows, library grids, series and movie detail, settings, dialogs, lists) shows the web client's scroll-edge fade wherever content continues off-screen, in both themes, on television and phone. One shared modifier and set of containers; a test fails the build when a raw scroller is added.

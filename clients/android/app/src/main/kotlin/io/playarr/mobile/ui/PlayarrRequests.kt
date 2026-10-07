@@ -103,7 +103,7 @@ internal fun ExperienceRequestsScreen(
                     playarrString(PlayarrString.RequestsEmptyDescription),
                 )
             } else {
-                LazyColumn(
+                PlayarrLazyColumn(
                     modifier = Modifier.fillMaxSize().padding(top = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 104.dp),
