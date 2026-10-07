@@ -61,8 +61,8 @@ extension TVParityLaunch {
         }
     }
 
-    /// The instant the web reference freezes its clock at (2026-07-29 05:59 UTC).
-    static var frozenNow: Date { Date(timeIntervalSince1970: 1_785_304_740) }
+    /// The instant the web references freeze their clock at (2026-10-07 12:00 UTC).
+    static var frozenNow: Date { Date(timeIntervalSince1970: 1_791_374_400) }
 
     /// Static chrome (floating nav, no focus effects, frozen clock): fixture screens and live routes.
     static var frozen: Bool { requestedScreen != nil || isLive }
