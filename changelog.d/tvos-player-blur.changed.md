@@ -1,0 +1,1 @@
+- tvOS: the player quality panel blurs the video behind it like the web, the player parity numbers mask the decoded video, and the season and title Download controls are focusable and explain that Apple TV keeps no offline copies.
