@@ -95,6 +95,18 @@ function readPreferences(storage: AvatarStorage | undefined): Record<string, Pro
   }
 }
 
+/** Value equality for avatar preferences, so a re-read of unchanged storage does not re-render. */
+export function sameProfileAvatar(
+  a: ProfileAvatarPreference | null,
+  b: ProfileAvatarPreference | null
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.kind !== b.kind) return false;
+  return a.kind === "preset"
+    ? a.preset === (b as typeof a).preset
+    : a.dataUrl === (b as typeof a).dataUrl;
+}
+
 export function profileAvatarScope(apiBaseUrl: string, userId: string): string {
   return JSON.stringify([apiBaseUrl.replace(/\/$/, ""), userId]);
 }

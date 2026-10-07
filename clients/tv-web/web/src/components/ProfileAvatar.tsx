@@ -3,6 +3,7 @@ import {
   PROFILE_AVATAR_CHANGED_EVENT,
   profileAvatarPreset,
   readProfileAvatar,
+  sameProfileAvatar,
   syncProfileAvatar,
   type ProfileAvatarPreference,
   type ProfileAvatarSyncClient,
@@ -123,12 +124,17 @@ export function useStoredProfileAvatar(
 
   useEffect(() => {
     let cancelled = false;
-    setPreference(scope && userId ? readProfileAvatar(scope, userId) : null);
+    // Functional updates keep the existing object when nothing changed, so the
+    // re-read on mount, on sync and on every change event cannot re-render the
+    // shell (which also hosts this hook) for an identical avatar.
+    const adopt = (next: ProfileAvatarPreference | null) =>
+      setPreference((current) => (sameProfileAvatar(current, next) ? current : next));
+    adopt(scope && userId ? readProfileAvatar(scope, userId) : null);
     if (!scope || !userId) return;
     if (client) {
       void syncProfileAvatar(client, scope, userId)
         .then((syncedPreference) => {
-          if (!cancelled) setPreference(syncedPreference);
+          if (!cancelled) adopt(syncedPreference);
         })
         .catch(() => {
           // The local value remains usable while this device is offline.
@@ -141,7 +147,7 @@ export function useStoredProfileAvatar(
       ) {
         return;
       }
-      setPreference(readProfileAvatar(scope, userId));
+      adopt(readProfileAvatar(scope, userId));
     };
     window.addEventListener(PROFILE_AVATAR_CHANGED_EVENT, handleChange);
     return () => {

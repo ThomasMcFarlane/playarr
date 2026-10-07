@@ -1,0 +1,1 @@
+- Web: the profile page no longer re-arms its keyboard, focus and observer wiring on every render, and avatar re-reads of unchanged storage no longer re-render the shell. Added `pnpm smoke:profile-chip`, which clicks the profile chip and the Clients link and asserts both settle within a request and DOM-mutation budget in desktop and TV layouts and both themes.

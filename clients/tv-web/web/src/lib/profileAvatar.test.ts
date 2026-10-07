@@ -4,6 +4,7 @@ import {
   customAvatarDrawRect,
   profileAvatarScope,
   readProfileAvatar,
+  sameProfileAvatar,
   syncProfileAvatar,
   supportsCustomAvatarUpload,
   writeProfileAvatar,
@@ -161,5 +162,29 @@ describe("profile avatar preferences", () => {
         512
       )
     ).toEqual({ x: 0, y: -512, width: 1536, height: 1024 });
+  });
+});
+
+describe("sameProfileAvatar", () => {
+  it("treats equal presets and equal custom images as the same value", () => {
+    expect(sameProfileAvatar({ kind: "preset", preset: "cat" }, { kind: "preset", preset: "cat" })).toBe(true);
+    expect(
+      sameProfileAvatar(
+        { kind: "custom", dataUrl: "data:image/png;base64,AA" },
+        { kind: "custom", dataUrl: "data:image/png;base64,AA" }
+      )
+    ).toBe(true);
+    expect(sameProfileAvatar(null, null)).toBe(true);
+  });
+
+  it("detects any change", () => {
+    expect(sameProfileAvatar({ kind: "preset", preset: "cat" }, { kind: "preset", preset: "robot" })).toBe(false);
+    expect(
+      sameProfileAvatar(
+        { kind: "preset", preset: "cat" },
+        { kind: "custom", dataUrl: "data:image/png;base64,AA" }
+      )
+    ).toBe(false);
+    expect(sameProfileAvatar(null, { kind: "preset", preset: "cat" })).toBe(false);
   });
 });

@@ -104,7 +104,20 @@ export function ProfilesPage(
   const locationState = location.state as ProfileLocationState | null;
   const backTo = safeBackTo(locationState?.backTo);
   const loginFrom = safeLoginFrom(loginFromOverride ?? locationState?.loginFrom, backTo);
-  const navigationOrigin = navigationOriginFromState(locationState);
+  // `navigationOriginFromState` builds a fresh object on every call. Feeding
+  // that straight into `useTvNavigation` tore down and re-armed its key
+  // listeners, observers and focus timer on every render of this page, so key
+  // the origin on its two primitives instead.
+  const stateOrigin = navigationOriginFromState(locationState);
+  const originRoute = stateOrigin?.route;
+  const originEntryKey = stateOrigin?.entryKey;
+  const navigationOrigin = useMemo(
+    () =>
+      originRoute !== undefined && originEntryKey !== undefined
+        ? { route: originRoute, entryKey: originEntryKey }
+        : null,
+    [originRoute, originEntryKey]
+  );
   const navigationLayer = useNavigationLayer("profiles");
   useTvNavigation(location.pathname, false, backTo, navigationOrigin);
   const [serverProfiles, setServerProfiles] = useState<ViewerProfile[] | null>(null);
