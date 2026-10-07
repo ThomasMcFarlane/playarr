@@ -74,6 +74,8 @@
       inside" by id), hence both wrappers.
     -->
     <Group id="cardRoot">
+      <!-- Focus shadow (owner ruling: focused media cards get a soft shadow and a lift, never a ring or a fill). Fades in with focus. -->
+      <Poster id="focusShadow" translation="[-24,-14]" width="268" height="172" uri="pkg:/images/card-shadow.png" opacity="0" />
       <Group id="artGroup" scaleRotateCenter="[110,62]">
         <!-- tv-web's .tv-home-card-art always carries a surface-soft
              background underneath the img, visible whenever there is no
@@ -114,16 +116,6 @@
              both light and dark). 11px inset from the art's own top/right
              edges (measured top:10.56/right:10.56 on the real element). -->
         <Poster id="unwatchedBadge" translation="[196,11]" width="13" height="13" uri="pkg:/images/badge-unwatched.png" visible="false" />
-        <!-- Focus ring: a 3px light outline inset in the art edge (RowList clips anything outside the item box) that fades in with
-             the card's effective focus (SceneGraph has no border primitive,
-             so four thin Rectangles), so the focused card is unmistakable on
-             a TV even without the lift. Opacity is driven by onFocusChanged. -->
-        <Group id="focusRing" opacity="0">
-          <Rectangle id="ringTop" translation="[0,0]" width="220" height="3" color="0xF4F0F1FF" />
-          <Rectangle id="ringBottom" translation="[0,121]" width="220" height="3" color="0xF4F0F1FF" />
-          <Rectangle id="ringLeft" translation="[0,0]" width="3" height="124" color="0xF4F0F1FF" />
-          <Rectangle id="ringRight" translation="[217,0]" width="3" height="124" color="0xF4F0F1FF" />
-        </Group>
       </Group>
       <!-- Title + kind sit BELOW the art box entirely, on the page's own
            background, not overlaid on the art, confirmed live there is no

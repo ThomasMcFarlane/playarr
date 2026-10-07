@@ -253,6 +253,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Roku: media cards show a soft shadow and a lift on focus instead of a ring, Up and Down between Home rails land on the card directly above or below, the library sorts like the web (200 titles per page, native sort), Filters and Calendar actions sit in one shell column on the right, and Customise Home moved from Home into Settings.
 - Android TV player: D-pad arrows no longer seek while the controls are hidden (they only reveal them; only the dedicated media rewind and fast-forward keys seek). The scrubber steps 10 s per press, accelerates while the key is held and shows a target-time label. Revealing the controls puts focus on play/pause or the last focused control, and the scrubber's up and down neighbours are fixed (close button and play/pause). Controls auto-hide after 5 s. Minimise, close and play/pause show the white focus ring.
 - Android: pressing HOME or switching the screen off while a video plays pauses it and saves the position; coming back shows the controls with the video paused. Home refreshes its On deck row after a player exit.
 - Roku: rails, library grids and pages fade at the edges where content continues off-screen, the Home rail viewport shifts with focus like the web track, and header action buttons use the web filter tile look.

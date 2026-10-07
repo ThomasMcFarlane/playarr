@@ -17,6 +17,7 @@ function settingsSections() as Object
         { id: "latency", title: "Request latency", detail: "Per-route HTTP request latency for admins." }
         { id: "remote", title: "Phone remote", detail: "Control this device from your phone, or control another device." }
         { id: "data", title: "Your data", detail: "Export your watch progress, playlists and preferences." }
+        { id: "home", title: "Customise Home", detail: "Choose which Home rails show and in what order." }
     ]
 end function
 
@@ -72,6 +73,8 @@ sub renderSettings()
         panelLatency()
     else if id = "remote"
         panelRemote()
+    else if id = "home"
+        panelHome()
     else
         panelData()
     end if
@@ -276,6 +279,12 @@ sub panelRemote()
     pgLabel(m.pageBody, 773.8, 511.6, 995, 29, "Other devices are controlled from the web or mobile app.", 19, 400, "inkMuted")
 end sub
 
+sub panelHome()
+    pgLabel(m.pageBody, 773.8, 210, 995, 34, "Home rails", 22, 700, "ink")
+    pgLabel(m.pageBody, 773.8, 273.9, 995, 58, "Show, hide and reorder the rails on your Home screen. Changes are saved on every press.", 19, 400, "inkMuted", { wrap: true, maxLines: 2 })
+    pgButton(m.pageBody, 773.8, 360, 50, "Open Customise Home", "primary", "openCustomise", invalid, 24)
+end sub
+
 sub panelData()
     pgLabel(m.pageBody, 773.8, 210, 995, 34, "Export my data", 22, 700, "ink")
     pgLabel(m.pageBody, 773.8, 273.9, 995, 58, "Exporting and importing your data needs a file picker. Use Playarr on a phone, tablet or computer for this.", 19, 400, "inkMuted", { wrap: true, maxLines: 2 })
@@ -294,6 +303,10 @@ sub settingsAction(item as Object)
         if m.settingsPanel = "avatar" then sendApi("avatarGet", "GET", "/api/v1/users/me/profile-avatar", invalid, true)
         if m.settingsPanel = "lock" then loadProfilePinSetting()
         pageFocusRender()
+        return
+    end if
+    if a = "openCustomise"
+        openPage("customise")
         return
     end if
     if a = "theme"

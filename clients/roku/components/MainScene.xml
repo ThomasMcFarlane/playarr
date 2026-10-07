@@ -293,7 +293,7 @@
            SceneGraph layout (row-list vs grid vs large single-column
            carousel), not a parameter of this one MarkupGrid, so it is a
            real, documented gap rather than a decorative stand-in. -->
-      <Label id="browseFiltersButton" translation="[1784,71]" width="100" height="40" text="Filters" scale="[0.42,0.42]" color="0xA9B7C9FF" />
+      <Label id="browseFiltersButton" visible="false" translation="[1784,71]" width="100" height="40" text="Filters" scale="[0.42,0.42]" color="0xA9B7C9FF" />
       <Group id="browseFiltersPanel" visible="false">
         <Rectangle translation="[1550,0]" width="370" height="1080" color="0x151315F5" />
         <Label translation="[1610,90]" width="280" height="30" text="LIBRARY CONTROLS" scale="[0.38,0.38]" color="0x887A82FF" />
