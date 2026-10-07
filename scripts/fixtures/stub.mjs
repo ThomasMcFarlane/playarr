@@ -6,7 +6,7 @@ import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { artKey } from "./art.mjs";
-import { SERIES, MOVIES, episodeRelPath, movieRelPath, dubRelPath, LANG_NAME, FIXTURE_CLOCK } from "./catalog.mjs";
+import { SERIES, MOVIES, ADDED_AT, episodeRelPath, movieRelPath, dubRelPath, LANG_NAME, FIXTURE_CLOCK } from "./catalog.mjs";
 
 const [root, portArg, apiKey] = process.argv.slice(2);
 if (!root || !portArg || !apiKey) {
@@ -73,7 +73,7 @@ const sonarr = SERIES.map((s) => {
   const series = {
     id: s.id, title: s.title, sortTitle: s.title.toLowerCase(), tvdbId: s.tvdbId, monitored: true, status: "continuing",
     path: join(root, "tv", `${s.title} (${s.year})`), overview: "Placeholder series.", genres: s.genres, images: artImages("series", s.id),
-    firstAired: `${s.year}-01-01T00:00:00Z`, certification: s.certification, ratings: { value: 7.5, votes: 100 },
+    firstAired: `${s.year}-01-01T00:00:00Z`, added: ADDED_AT[s.title], certification: s.certification, ratings: { value: 7.5, votes: 100 },
     statistics: { episodeFileCount: files.length },
   };
   return { series, episodes, files };
@@ -85,7 +85,7 @@ const radarr = MOVIES.map((m) => {
   return {
     id: m.id, title: m.title, sortTitle: m.title.toLowerCase(), tmdbId: m.tmdbId, monitored: true, hasFile: true,
     path: join(root, "movies", `${m.title} (${m.year})`), runtime: 1, movieFile: file, overview: "Placeholder film.",
-    genres: m.genres, images: artImages("movie", m.id), digitalRelease: `${m.year}-06-01T00:00:00Z`, year: m.year, certification: m.certification,
+    genres: m.genres, images: artImages("movie", m.id), added: ADDED_AT[m.title], digitalRelease: `${m.year}-06-01T00:00:00Z`, year: m.year, certification: m.certification,
   };
 });
 

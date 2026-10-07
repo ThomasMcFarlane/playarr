@@ -45,6 +45,10 @@ pub struct RadarrMovie {
     /// missing when Radarr has no genre data.
     #[serde(default)]
     pub genres: Vec<String>,
+    /// When the *arr app itself added this entry. Lenient: absent, null or
+    /// unparseable becomes `None`. Seeds `Work::added_at`.
+    #[serde(default, deserialize_with = "crate::lenient::lenient_datetime")]
+    pub added: Option<DateTime<Utc>>,
     /// Poster/fanart/etc artwork. See `RadarrImage` for why `remote_url`
     /// must be checked before use.
     #[serde(default)]

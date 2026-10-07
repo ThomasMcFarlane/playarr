@@ -445,6 +445,410 @@
       "user": "fx-child-locked",
       "file": "tv/dark/household-blocked.png",
       "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-avatar",
+      "route": "/settings/profile-avatar",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-avatar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-language",
+      "route": "/settings/language",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-language.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-player",
+      "route": "/settings/player",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-player.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-server",
+      "route": "/settings/server",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-server.png",
+      "pageErrors": 0,
+      "maskRects": [
+        [
+          793.14,
+          278.02,
+          131,
+          15.84
+        ],
+        [
+          773.75,
+          544.27,
+          994.98,
+          18.72
+        ],
+        [
+          1514.75,
+          640.28,
+          147,
+          17
+        ]
+      ]
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-lock",
+      "route": "/settings/profile-lock",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-lock.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-invite",
+      "route": "/settings/invite",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-invite.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-remote",
+      "route": "/settings/remote",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-remote.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-latency",
+      "route": "/settings/request-latency",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-latency.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "light",
+      "id": "settings-your-data",
+      "route": "/settings/your-data",
+      "user": "fx-viewer",
+      "file": "tv/light/settings-your-data.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-avatar",
+      "route": "/settings/profile-avatar",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-avatar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-language",
+      "route": "/settings/language",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-language.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-player",
+      "route": "/settings/player",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-player.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-server",
+      "route": "/settings/server",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-server.png",
+      "pageErrors": 0,
+      "maskRects": [
+        [
+          793.14,
+          278.02,
+          131,
+          15.84
+        ],
+        [
+          773.75,
+          544.27,
+          994.98,
+          18.72
+        ],
+        [
+          1514.75,
+          640.28,
+          147,
+          17
+        ]
+      ]
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-lock",
+      "route": "/settings/profile-lock",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-lock.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-invite",
+      "route": "/settings/invite",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-invite.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-remote",
+      "route": "/settings/remote",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-remote.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-latency",
+      "route": "/settings/request-latency",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-latency.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "tv",
+      "theme": "dark",
+      "id": "settings-your-data",
+      "route": "/settings/your-data",
+      "user": "fx-viewer",
+      "file": "tv/dark/settings-your-data.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-avatar",
+      "route": "/settings/profile-avatar",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-avatar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-language",
+      "route": "/settings/language",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-language.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-player",
+      "route": "/settings/player",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-player.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-server",
+      "route": "/settings/server",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-server.png",
+      "pageErrors": 0,
+      "maskRects": [
+        [
+          55.39,
+          171.22,
+          105,
+          15.84
+        ],
+        [
+          36,
+          554.48,
+          318,
+          37.44
+        ],
+        [
+          201,
+          696.42,
+          147,
+          17
+        ]
+      ]
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-lock",
+      "route": "/settings/profile-lock",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-lock.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-invite",
+      "route": "/settings/invite",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-invite.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-remote",
+      "route": "/settings/remote",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-remote.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-latency",
+      "route": "/settings/request-latency",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-latency.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "light",
+      "id": "settings-your-data",
+      "route": "/settings/your-data",
+      "user": "fx-viewer",
+      "file": "mobile/light/settings-your-data.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-avatar",
+      "route": "/settings/profile-avatar",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-avatar.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-language",
+      "route": "/settings/language",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-language.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-player",
+      "route": "/settings/player",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-player.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-server",
+      "route": "/settings/server",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-server.png",
+      "pageErrors": 0,
+      "maskRects": [
+        [
+          55.39,
+          171.22,
+          105,
+          15.84
+        ],
+        [
+          36,
+          554.48,
+          318,
+          37.44
+        ],
+        [
+          201,
+          696.42,
+          147,
+          17
+        ]
+      ]
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-lock",
+      "route": "/settings/profile-lock",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-lock.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-invite",
+      "route": "/settings/invite",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-invite.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-remote",
+      "route": "/settings/remote",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-remote.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-latency",
+      "route": "/settings/request-latency",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-latency.png",
+      "pageErrors": 0
+    },
+    {
+      "layout": "mobile",
+      "theme": "dark",
+      "id": "settings-your-data",
+      "route": "/settings/your-data",
+      "user": "fx-viewer",
+      "file": "mobile/dark/settings-your-data.png",
+      "pageErrors": 0
     }
   ]
 }

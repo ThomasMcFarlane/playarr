@@ -865,7 +865,9 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
         images: remote.images.clone(),
         genres: remote.genres.clone(),
         tags: arr_owned_tags(&[], remote),
-        added_at: Utc::now(),
+        // The *arr app's own `added` when it reports a usable one, else the
+        // moment Playarr first learned about the work.
+        added_at: remote.added.unwrap_or_else(Utc::now),
         // Arr-owned, like `overview`/`images`/`genres` above -- see
         // `RemoteWork::release_date`'s doc comment.
         release_date: remote.release_date,
@@ -875,8 +877,9 @@ fn new_work(kind: WorkKind, provider: ExternalProvider, remote: &RemoteWork) -> 
 }
 
 /// Applies a remote entity's arr-owned fields onto an existing `Work`,
-/// leaving everything arr-sync doesn't own (`tags`, `added_at`, other
-/// providers' `external_refs`) untouched. This is why `reconcile_all`
+/// leaving everything arr-sync doesn't own (`tags`, other providers'
+/// `external_refs`) untouched; `added_at` is only ever moved earlier, to the
+/// source's own `added`. This is why `reconcile_all`
 /// diffs by comparing the *merged* result against `existing` rather than
 /// just always emitting an `Update` — a remote entity that hasn't
 /// meaningfully changed since the last pass shouldn't generate a write.
@@ -894,6 +897,15 @@ fn merge_work(existing: &Work, kind: WorkKind, remote: &RemoteWork) -> Work {
     merged.genres = remote.genres.clone();
     merged.release_date = remote.release_date;
     merged.tags = arr_owned_tags(&existing.tags, remote);
+    // `added_at` only ever moves earlier. A stored value newer than the
+    // source's own `added` can only have come from a first-sync `now()`
+    // (the source cannot have added the title after Playarr saw it), so it
+    // is corrected once; an older stored value is never pushed later.
+    if let Some(added) = remote.added {
+        if added < existing.added_at {
+            merged.added_at = added;
+        }
+    }
     merged
 }
 
@@ -1090,6 +1102,7 @@ mod tests {
             genres: Vec::new(),
             images: Vec::new(),
             release_date: None,
+            added: None,
         }
     }
 
@@ -1668,6 +1681,91 @@ mod tests {
         assert_eq!(merged.genres, vec!["Thriller".to_string()]);
         assert_eq!(merged.images.len(), 1);
         assert_eq!(merged.images[0].url, "https://example.test/poster.jpg");
+    }
+
+    #[test]
+    fn new_work_uses_arr_added_when_present_else_now() {
+        let added = "2021-02-03T04:05:06Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let mut with = remote("1", "Test Movie A", true);
+        with.added = Some(added);
+        let work = new_work(WorkKind::Movie, ExternalProvider::Tmdb, &with);
+        assert_eq!(work.added_at, added);
+
+        let before = Utc::now();
+        let work = new_work(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            &remote("2", "Test Movie B", true),
+        );
+        assert!(work.added_at >= before && work.added_at <= Utc::now());
+    }
+
+    #[test]
+    fn merge_work_corrects_added_at_only_towards_earlier() {
+        let mut existing = work_with_ref(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            "1",
+            "Test Movie A",
+            true,
+            Availability::Available,
+        );
+        let early = "2020-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let late = "2022-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+
+        // Stored value came from first-sync now(): newer than the source's.
+        let mut r = remote("1", "Test Movie A", true);
+        r.added = Some(early);
+        assert_eq!(merge_work(&existing, WorkKind::Movie, &r).added_at, early);
+
+        // Stored value already older: never moved later.
+        existing.added_at = early;
+        r.added = Some(late);
+        assert_eq!(merge_work(&existing, WorkKind::Movie, &r).added_at, early);
+
+        // Source reports nothing: untouched.
+        r.added = None;
+        assert_eq!(merge_work(&existing, WorkKind::Movie, &r).added_at, early);
+    }
+
+    #[test]
+    fn diff_emits_one_update_to_correct_then_nothing() {
+        let early = "2020-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap();
+        let existing = work_with_ref(
+            WorkKind::Movie,
+            ExternalProvider::Tmdb,
+            "1",
+            "Test Movie A",
+            true,
+            Availability::Available,
+        );
+        let mut r = remote("1", "Test Movie A", true);
+        r.added = Some(early);
+        let ops = diff_works(
+            WorkKind::Movie,
+            &ExternalProvider::Tmdb,
+            vec![r.clone()],
+            vec![existing],
+        );
+        let SyncOp::Update(corrected) = &ops[0] else {
+            panic!("expected one update, got {ops:?}");
+        };
+        assert_eq!(corrected.added_at, early);
+        let again = diff_works(
+            WorkKind::Movie,
+            &ExternalProvider::Tmdb,
+            vec![r],
+            vec![corrected.clone()],
+        );
+        assert!(again.is_empty(), "second pass must be a no-op: {again:?}");
     }
 
     #[test]

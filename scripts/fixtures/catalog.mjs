@@ -131,10 +131,8 @@ export const USERS = {
   childLocked: { username: "fx-child-locked", display: "Fixture Child (locked)" },
 };
 
-// Explicit, distinct `added_at` for every title, newest first. The server stamps `added_at` with the sync time
-// (it ignores the *arr "added" field), so ordering by it raced on slow runners when two items straddled a
-// clock second. `pin-added-at.mjs` writes these into the database after the first sync, so the order of the
-// "Recently added" rails never depends on timing.
+// Explicit, distinct `added` per title, newest first. The stub serves these as the *arr `added` field and the
+// server seeds `added_at` from it, so the order of the "Recently added" rails never depends on sync timing.
 export const ADDED_AT = {
   "Sample Series 1": "2026-10-07T11:00:00.000Z",
   "Sample Series 2": "2026-10-07T10:00:00.000Z",

@@ -20,6 +20,7 @@ mod bazarr;
 mod calendar;
 mod dubarr;
 mod http;
+mod lenient;
 mod lidarr;
 mod lookup;
 mod ombi;

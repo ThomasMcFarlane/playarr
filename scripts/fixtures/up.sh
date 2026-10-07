@@ -13,7 +13,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-for c in node curl ffmpeg ffprobe sqlite3; do
+for c in node curl ffmpeg ffprobe; do
   command -v "$c" >/dev/null || { echo "up.sh: '$c' is required" >&2; exit 1; }
 done
 
@@ -79,8 +79,6 @@ echo
 
 # 5. Seed users, household policies, sources; wait for the first sync.
 node "${FIX_SCRIPT_DIR}/seed.mjs" "${FIX_URL}" "http://127.0.0.1:${FIX_STUB_PORT}" "${FIX_STUB_KEY}"
-# Explicit added_at per title: the rail order must not depend on sync timing.
-node "${FIX_SCRIPT_DIR}/pin-added-at.mjs" "${FIX_DATA_DIR}/playarr.db"
 
 echo
 echo "Fixture server: ${FIX_URL}   (emulator: http://10.0.2.2:${FIX_PORT})"
