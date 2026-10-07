@@ -206,6 +206,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Parity: the shared TV web references are captured as an Android TV client (TV user agent), so the TV-only player chrome, popovers and calendar layout match what the TV clients show.
 - Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
 - Android TV: detail tiles, player scrim and seek bar, and the primary detail pill follow the web styling more closely.
 - Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
