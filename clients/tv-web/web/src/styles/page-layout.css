@@ -501,6 +501,12 @@ body[data-input-mode="remote"] .tv-page-back {
   }
 }
 
+@media (max-width: 760px) {
+  .page-actions-navigation[data-hide-on-phone] {
+    display: none;
+  }
+}
+
 /* Navigation group (for example the calendar's previous, Today, next): round arrows and a text button, grouped. */
 .page-actions-navigation {
   display: flex;

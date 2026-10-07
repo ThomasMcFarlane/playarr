@@ -618,16 +618,6 @@
   margin-left: auto;
 }
 
-.calendar-nav-header {
-  align-self: flex-start;
-  margin-right: clamp(4px, calc(0.5 * var(--vw)), 12px);
-}
-
-.calendar-nav-header .ui-btn {
-  height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-  min-height: clamp(38px, calc(2.8 * var(--vw)), 50px);
-}
-
 .period-picker {
   position: relative;
 }
@@ -690,10 +680,6 @@
 }
 
 @media (max-width: 760px) {
-  .calendar-nav-header {
-    display: none;
-  }
-
   .calendar-nav-inline {
     display: flex;
   }

@@ -327,7 +327,8 @@ for (const layoutId of layoutIds) {
             count: Number(pill.querySelector(".action-pill-count")?.textContent ?? 0),
             active: pill.classList.contains("is-active"),
           }));
-          const nav = el.querySelector("[data-action-kind='navigation']") ? "navigation" : "";
+          const navEl = el.querySelector("[data-action-kind='navigation']");
+          const nav = navEl && getComputedStyle(navEl).display !== "none" ? "navigation" : "";
           return { title: text(el.querySelector("h1")), detail: text(el.querySelector(".page-header-detail")), pills, nav };
         });
         // Pill identity: each pill, alone, against the harness pill with the same kind, icon, label and count.

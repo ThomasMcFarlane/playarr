@@ -1,0 +1,1 @@
+- Web: the Release Calendar and Folders render through the shared page layout; the calendar's previous, Today and next controls are the shared navigation group (hidden at phone width, where the page shows its own sub-row), and Folders gains the shared scroll-edge fade.

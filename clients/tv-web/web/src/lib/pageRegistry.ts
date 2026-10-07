@@ -35,11 +35,11 @@ export type PageCoverage =
     };
 
 export const PAGE_REGISTRY: readonly PageCoverage[] = [
-  { file: "Calendar.tsx", mode: "unmigrated", pageId: "calendar", routes: ["calendar"], urls: ["/calendar"], step: "W4" },
+  { file: "Calendar.tsx", mode: "layout", pageId: "calendar", routes: ["calendar"], urls: ["/calendar"] },
   { file: "Downloads.tsx", mode: "layout", pageId: "downloads", routes: ["downloads"], urls: ["/downloads"] },
   // `/folders` is a web and Android surface for now; other clients are parked, so it is not in
   // COMPLETE_CLIENT_SHELL_ROUTES yet.
-  { file: "Folders.tsx", mode: "unmigrated", pageId: "folders", routes: [], urls: ["/folders"], step: "W4" },
+  { file: "Folders.tsx", mode: "layout", pageId: "folders", routes: [], urls: ["/folders"] },
   { file: "Library.tsx", mode: "layout", pageId: "library", routes: ["series", "movies", "sites", "music"], urls: ["/movies", "/series"] },
   { file: "MusicDetail.tsx", mode: "unmigrated", pageId: "music-detail", routes: ["music-detail"], urls: [], step: "W6" },
   { file: "Playlists.tsx", mode: "layout", pageId: "playlists", routes: ["playlists"], urls: ["/playlists"] },
@@ -100,4 +100,4 @@ export const PAGE_REGISTRY: readonly PageCoverage[] = [
 ];
 
 /** The ratchet: a literal, lowered by the PR that migrates a page; the test fails when more pages are listed than this. */
-export const MAX_UNMIGRATED = 5;
+export const MAX_UNMIGRATED = 3;

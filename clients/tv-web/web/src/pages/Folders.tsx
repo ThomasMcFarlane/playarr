@@ -8,8 +8,7 @@ import {
 } from "@playarr-tv/api-client";
 import { MediaThumbnailArtwork } from "../components/MediaThumbnailArtwork";
 import { Button } from "../components/ui";
-import { FilterSection, FiltersDrawer, PageShell, ViewToggle } from "../components/shell";
-import { TvEmptyState } from "../components/tv/TvEmptyState";
+import { EmptyState, ErrorState, FilterSection, FiltersDrawer, LoadingState, PageLayout, ScrollArea, ViewToggle } from "../components/shell";
 import { useApiClient } from "../lib/ApiClientProvider";
 import { formatBytes } from "../lib/formatBytes";
 import {
@@ -225,35 +224,46 @@ export function FoldersPage() {
   const detail = rootName ?? (roots && roots.length > 1 ? t("pages.folders.chooseRoot") : null);
 
   return (
-    <PageShell
+    <PageLayout
+      pageId="folders"
+      body="bleed"
       className={`folders-page folders-view-${url.view} ${sizeClass}`}
       ariaLabel={t("pages.folders.title")}
-      title={t("pages.folders.title")}
-      detail={detail ?? undefined}
-      backLabel={url.root && url.path ? t("pages.folders.backToParent") : t("pages.folders.backToHome")}
-      onBack={goBack}
-      filters={
-        currentRoot
-          ? {
-              label: t("pages.folders.filters"),
-              open: panel === "filters",
-              onToggle: () => setPanel(panel === "filters" ? null : "filters"),
-              controls: "folders-filters-drawer",
-              activeCount: filterCount,
-            }
-          : undefined
+      header={{
+        title: t("pages.folders.title"),
+        detail: detail ?? undefined,
+        back: {
+          label: url.root && url.path ? t("pages.folders.backToParent") : t("pages.folders.backToHome"),
+          onBack: goBack,
+        },
+        actions: currentRoot
+          ? [
+              {
+                kind: "filters",
+                label: t("pages.folders.filters"),
+                open: panel === "filters",
+                onToggle: () => setPanel(panel === "filters" ? null : "filters"),
+                controls: "folders-filters-drawer",
+                activeCount: filterCount,
+              },
+            ]
+          : [],
+      }}
+      state={
+        rootsState.status === "loading"
+          ? { kind: "loading", label: t("pages.folders.loading") }
+          : rootsState.status === "error"
+            ? { kind: "error", props: { graphic: "details", title: t("pages.folders.errorTitle"), description: rootsState.message } }
+            : rootsState.roots.length === 0
+              ? {
+                  kind: "empty",
+                  props: { graphic: "details", title: t("pages.folders.noRootsTitle"), description: t("pages.folders.noRootsDescription") },
+                }
+              : undefined
       }
     >
-      {rootsState.status === "loading" ? (
-        <p className="tv-discovery-note" role="status">
-          {t("pages.folders.loading")}
-        </p>
-      ) : rootsState.status === "error" ? (
-        <TvEmptyState graphic="details" variant="page" tone="error" title={t("pages.folders.errorTitle")} description={rootsState.message} />
-      ) : rootsState.roots.length === 0 ? (
-        <TvEmptyState graphic="details" variant="page" title={t("pages.folders.noRootsTitle")} description={t("pages.folders.noRootsDescription")} />
-      ) : !currentRoot ? (
-        <RootChooser roots={rootsState.roots} t={t} onChoose={(id) => update({ root: id })} />
+      {!currentRoot ? (
+        <RootChooser roots={rootsState.status === "ready" ? rootsState.roots : []} t={t} onChoose={(id) => update({ root: id })} />
       ) : (
         <>
           <nav className="folders-breadcrumbs" aria-label={t("pages.folders.breadcrumbs")}>
@@ -290,18 +300,20 @@ export function FoldersPage() {
               </span>
             ) : null}
           </nav>
-          <div className="folders-scroll" data-tv-scroll-container data-tv-scroll-axis="vertical" data-navigation-scroll-key="folders:body">
+          <ScrollArea
+            axis="vertical"
+            scrollKey="folders:body"
+            className="folders-scroll"
+            refreshKey={listing.status === "ready" ? `${listing.entries.length}:${url.view}` : listing.status}
+          >
             {listing.status === "loading" || listing.status === "idle" ? (
-              <p className="tv-discovery-note" role="status">
-                {t("pages.folders.loading")}
-              </p>
+              <LoadingState size="inline" label={t("pages.folders.loading")} />
             ) : listing.status === "error" ? (
-              <TvEmptyState graphic="details" variant="page" tone="error" title={t("pages.folders.errorTitle")} description={listing.message} />
+              <ErrorState graphic="details" title={t("pages.folders.errorTitle")} description={listing.message} />
             ) : listing.status === "missing" ? (
               <>
-                <TvEmptyState
+                <EmptyState
                   graphic="details"
-                  variant="page"
                   title={t("pages.folders.notFoundTitle")}
                   description={t("pages.folders.notFoundDescription")}
                 />
@@ -312,9 +324,8 @@ export function FoldersPage() {
                 </div>
               </>
             ) : listing.entries.length === 0 ? (
-              <TvEmptyState
+              <EmptyState
                 graphic="details"
-                variant="page"
                 title={filterCount > 0 ? t("pages.folders.noMatchTitle") : t("pages.folders.emptyTitle")}
                 description={filterCount > 0 ? t("pages.folders.noMatchDescription") : t("pages.folders.emptyDescription")}
               />
@@ -343,7 +354,7 @@ export function FoldersPage() {
                 ) : null}
               </>
             )}
-          </div>
+          </ScrollArea>
         </>
       )}
 
@@ -434,7 +445,7 @@ export function FoldersPage() {
           />
         </FilterSection>
       </FiltersDrawer>
-    </PageShell>
+    </PageLayout>
   );
 }
 
@@ -492,7 +503,7 @@ export function RootChooser({
   onChoose: (id: string) => void;
 }) {
   return (
-    <div className="folders-scroll" data-tv-scroll-container data-tv-scroll-axis="vertical" data-navigation-scroll-key="folders:roots">
+    <ScrollArea axis="vertical" scrollKey="folders:roots" className="folders-scroll" refreshKey={roots.length}>
       <ul className="folders-list folders-cover" role="list" aria-label={t("pages.folders.sources")}>
         {roots.map((root) => (
           <li key={root.id}>
@@ -515,7 +526,7 @@ export function RootChooser({
           </li>
         ))}
       </ul>
-    </div>
+    </ScrollArea>
   );
 }
 

@@ -14,7 +14,7 @@ import {
   FiltersDrawer,
   MasterDetail,
   MultiSelect,
-  PageShell,
+  PageLayout,
   SkeletonBlock,
   SkeletonLines,
   ViewToggle,
@@ -985,33 +985,50 @@ export function CalendarPage() {
   );
 
   return (
-    <PageShell
+    <PageLayout
+      pageId="calendar"
+      body="bleed"
       className={`calendar-page calendar-view-${view}`}
       ariaLabel={t("pages.calendar.title")}
-      title={t("pages.calendar.title")}
-      backLabel={t("pages.calendar.backToHome")}
-      navigation={
-        <div className="calendar-nav calendar-nav-header" role="group" aria-label={t("pages.calendar.navigationLabel")}>
-          {navButtons}
-        </div>
-      }
-      filters={{
-        label: t("pages.library.filters"),
-        open: panel === "filters",
-        onToggle: () => setPanel(panel === "filters" ? null : "filters"),
-        controls: "calendar-filters-drawer",
-        activeCount,
+      header={{
+        title: t("pages.calendar.title"),
+        back: { label: t("pages.calendar.backToHome"), to: "/" },
+        actions: [
+          {
+            kind: "navigation",
+            id: "calendar-navigation",
+            label: t("pages.calendar.navigationLabel"),
+            hideOnPhone: true,
+            items: [
+              { id: "previous", label: t("pages.calendar.previous"), icon: "prev", onSelect: () => setAnchor(shiftAnchor(view, anchor, -1)) },
+              {
+                id: "today",
+                label: t("pages.calendar.today"),
+                onSelect: () => setAnchor(anchorForView(view, localDayOf(new Date()))),
+                buttonProps: { "data-tv-focus-default": true },
+              },
+              { id: "next", label: t("pages.calendar.next"), icon: "next", onSelect: () => setAnchor(shiftAnchor(view, anchor, 1)) },
+            ],
+          },
+          {
+            kind: "panel",
+            id: "subscription",
+            label: t("pages.calendar.subscription.title"),
+            icon: "bell",
+            open: panel === "link",
+            onToggle: () => setPanel(panel === "link" ? null : "link"),
+            controls: "calendar-subscribe-drawer",
+          },
+          {
+            kind: "filters",
+            label: t("pages.library.filters"),
+            open: panel === "filters",
+            onToggle: () => setPanel(panel === "filters" ? null : "filters"),
+            controls: "calendar-filters-drawer",
+            activeCount,
+          },
+        ],
       }}
-      panelButtons={[
-        {
-          id: "subscription",
-          label: t("pages.calendar.subscription.title"),
-          icon: "bell",
-          open: panel === "link",
-          onToggle: () => setPanel(panel === "link" ? null : "link"),
-          controls: "calendar-subscribe-drawer",
-        },
-      ]}
     >
       <div className="calendar-header">
         <PeriodPicker
@@ -1158,6 +1175,6 @@ export function CalendarPage() {
           />
         </DetailSheet>
       ) : null}
-    </PageShell>
+    </PageLayout>
   );
 }
