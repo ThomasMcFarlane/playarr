@@ -59,3 +59,21 @@ const COMPLETED_THRESHOLD_MS = 5000;
 export function isPlaybackComplete(positionMs: number, durationMs: number): boolean {
   return positionMs >= durationMs - COMPLETED_THRESHOLD_MS;
 }
+
+/**
+ * Resume point from the server's saved progress: only a `part_watched` item
+ * with a positive position resumes (the web client's rule). Returns 0 for
+ * "start from the top".
+ */
+export function resumeStartMs(state: string, positionMs: number): number {
+  return state === "part_watched" && positionMs > 0 ? positionMs : 0;
+}
+
+/**
+ * Whether a watch-progress write is allowed. Nothing is written until
+ * playback has really started, and never at position 0, so a stalled or
+ * cancelled start cannot overwrite the saved resume point.
+ */
+export function shouldCheckpointProgress(playbackStarted: boolean, reportedPositionMs: number): boolean {
+  return playbackStarted && reportedPositionMs > 0;
+}

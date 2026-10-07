@@ -21,7 +21,9 @@ import {
   reportedPositionMs,
   resolveDurationMs,
   clampSeekTargetMs,
-  isPlaybackComplete
+  isPlaybackComplete,
+  resumeStartMs,
+  shouldCheckpointProgress
 } from "../main/ets/core/PlaybackMath";
 
 describe("reportedPositionMs: source_offset_ms is added to the player position", () => {
@@ -119,5 +121,31 @@ describe("isPlaybackComplete: the 5000ms completion threshold", () => {
 
   it("is complete when position overshoots the duration entirely", () => {
     assert.equal(isPlaybackComplete(200000, 100000), true);
+  });
+});
+
+describe("resumeStartMs: resume only from part-watched server progress", () => {
+  it("resumes a part-watched item at its saved position", () => {
+    assert.equal(resumeStartMs("part_watched", 42000), 42000);
+  });
+
+  it("starts from the top for unseen, watched or a zero position", () => {
+    assert.equal(resumeStartMs("unseen", 0), 0);
+    assert.equal(resumeStartMs("watched", 90000), 0);
+    assert.equal(resumeStartMs("part_watched", 0), 0);
+  });
+});
+
+describe("shouldCheckpointProgress: never write before playback started or at 0", () => {
+  it("blocks writes before playback started, even at a resume position", () => {
+    assert.equal(shouldCheckpointProgress(false, 42000), false);
+  });
+
+  it("blocks position 0 after playback started", () => {
+    assert.equal(shouldCheckpointProgress(true, 0), false);
+  });
+
+  it("allows a positive position once playback started", () => {
+    assert.equal(shouldCheckpointProgress(true, 1), true);
   });
 });
