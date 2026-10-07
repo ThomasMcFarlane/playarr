@@ -725,14 +725,38 @@ function navigationWithinVerticalTracks(
   const currentTrackIndex = tracks.indexOf(currentTrack);
   if (currentTrackIndex < 0) return undefined;
 
-  const itemsByTrack = tracks.map((track) =>
-    entries
-      .filter((entry) => track.contains(entry.element))
+  const currentRect = rectFor(current, rectByElement);
+  const fromRail = Boolean(current.closest(".tv-media-track-scroll"));
+  const itemsByTrack = tracks.map((track) => {
+    const inTrack = entries.filter((entry) => track.contains(entry.element));
+    if (!fromRail || track === currentTrack) {
+      return inTrack.map((entry) => ({
+        value: entry.element,
+        centreX: focusCentre(entry.rect).x,
+      }));
+    }
+    // From a card, the target is a card of the adjacent rail: the visible one
+    // whose centre is nearest. A heading control (for example the season
+    // download button) only counts when the card's centre is within its width.
+    const railRect = track
+      .querySelector<HTMLElement>(".tv-media-track-scroll")
+      ?.getBoundingClientRect();
+    return inTrack
+      .filter((entry) => {
+        if (entry.element.closest(".tv-media-track-scroll")) {
+          return (
+            !railRect ||
+            (entry.rect.right > railRect.left && entry.rect.left < railRect.right)
+          );
+        }
+        const x = focusCentre(currentRect).x;
+        return x >= entry.rect.left && x <= entry.rect.right;
+      })
       .map((entry) => ({
         value: entry.element,
         centreX: focusCentre(entry.rect).x,
-      }))
-  );
+      }));
+  });
 
   return {
     currentTrack,

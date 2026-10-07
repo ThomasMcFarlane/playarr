@@ -29,7 +29,7 @@ addEventListener('keydown',e=>{cards[idx].style.outline='';const m={ArrowDown:3,
 </script></div></div></body></html>
 `;
 
-export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0 }) {
+export async function startServer({ distDir, port = 0, movies = 1746, series = 944, artists = 120, searchLimit = 60, onDeck = 0, detailDelayMs = 0, progressDelayMs = 0, calendarDelayMs = 0, seasons = 0, seasonEpisodes = 14, canDownload = false }) {
   const catalogue = buildCatalogue({ movies, series, artists });
   const byId = new Map();
   for (const list of Object.values(catalogue)) for (const w of list) byId.set(w.id, w);
@@ -90,7 +90,12 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
       const episode = { id: `e-${work.id}`, season_id: season.id, episode_number: 3, title: "A Slowly Loaded Episode", overview: "Hero description that arrives late.", images: [], availability: "available", monitored: true };
       const body = {
         work,
-        children: work.kind === "movie" ? "Movie" : { Series: [{ season, episodes: [{ episode, media_file_id: `mf-${work.id}` }] }] },
+        children: work.kind === "movie" ? "Movie" : { Series: seasons > 0
+          ? Array.from({ length: seasons }, (_, si) => {
+              const sn = { ...season, id: `s${si}-${work.id}`, season_number: si + 1 };
+              return { season: sn, episodes: Array.from({ length: seasonEpisodes }, (_, ei) => ({ episode: { ...episode, id: `e${si}-${ei}-${work.id}`, season_id: sn.id, episode_number: ei + 1, title: `Episode ${ei + 1}` }, media_file_id: `mf${si}-${ei}-${work.id}` })) };
+            })
+          : [{ season, episodes: [{ episode, media_file_id: `mf-${work.id}` }] }] },
         available_on: [],
         media_files: [],
       };
@@ -124,7 +129,7 @@ export async function startServer({ distDir, port = 0, movies = 1746, series = 9
     }
     if (p === "/api/v1/calendar/feed") return json(res, { active: false, created_at: null, last_used_at: null });
     if (p === "/api/v1/playlists" || p === "/api/v1/admin/playlists") return json(res, []);
-    if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: false, can_request: false });
+    if (p === "/api/v1/users/me/capabilities") return json(res, { can_download: canDownload, can_request: false });
     unknown.add(`${req.method} ${p}`);
     return json(res, { error: "nav-perf mock: not implemented", path: p }, 404);
   };

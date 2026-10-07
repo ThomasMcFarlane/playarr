@@ -20,7 +20,7 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  -- ${detail}`}`);
 };
 
-const server = await startServer({ distDir: DIST });
+const server = await startServer({ distDir: DIST, seasons: 3, seasonEpisodes: 14, canDownload: false });
 const base = `http://127.0.0.1:${server.port}`;
 const browser = await chromium.launch();
 
@@ -54,13 +54,14 @@ for (const theme of THEMES) {
     const session = { accessToken: "t", refreshToken: "r", tokenType: "Bearer", expiresAt: Date.now() + 86_400_000 };
     localStorage.setItem("playarr.profileSessions.v4", JSON.stringify([{ profileKey: "nav-perf", apiBaseUrl: base, userId, name: "Perf", deviceId: "d", session }]));
     localStorage.setItem("playarr.activeProfile.v1", JSON.stringify({ profileKey: "nav-perf", apiBaseUrl: base, userId }));
-    localStorage.setItem("playarr.theme", theme);
+    localStorage.setItem("playarr-theme", theme);
     document.documentElement.dataset.theme = theme;
   }, { base, userId: USER_ID, theme });
   const page = await context.newPage();
   await page.goto(`${base}/`);
   await page.waitForSelector(".tv-home-card");
   await page.waitForTimeout(1500);
+  check(`${theme}: theme applied`, (await page.evaluate(() => document.documentElement.dataset.theme)) === theme);
 
   for (const direction of ["ArrowDown", "ArrowUp"]) {
     await page.reload();
@@ -85,6 +86,47 @@ for (const theme of THEMES) {
     check(`${label}: landed on the card nearest the previous x`, Math.abs(after.cx - before.cx) <= best + 2, `dx=${Math.abs(after.cx - before.cx)} best=${best}`);
     check(`${label}: target rail did not scroll to a matching offset`, after.scrolls[target] === before.scrolls[target], `before=${before.scrolls} after=${after.scrolls}`);
     check(`${label}: focused card is on screen`, after.visible, JSON.stringify(after));
+  }
+  // Series detail: stacked season rails behave the same way.
+  for (const direction of ["ArrowDown", "ArrowUp"]) {
+    await page.goto(`${base}/series`);
+    await page.waitForSelector("a[href*='/series/']");
+    const href = await page.evaluate(() => document.querySelector("a[href*='/series/']").getAttribute("href"));
+    await page.goto(`${base}${href}`);
+    await page.waitForSelector(".tv-episode-rail a, .tv-episode-rail button");
+    await page.waitForTimeout(2500);
+    // Season headings carry a download control at the far right in production;
+    // stand one in so a heading control cannot win a vertical move over the cards.
+    await page.evaluate(() => {
+      for (const heading of document.querySelectorAll(".tv-media-track-heading")) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "tv-track-action";
+        button.setAttribute("aria-label", "Download");
+        button.textContent = "v";
+        heading.appendChild(button);
+      }
+    });
+    await page.waitForTimeout(300);
+    if (direction === "ArrowUp") { await page.keyboard.press("ArrowDown"); await page.waitForTimeout(800); }
+    for (let i = 0; i < 12; i += 1) { await page.keyboard.press("ArrowRight"); await page.waitForTimeout(80); }
+    await page.waitForTimeout(900);
+    const before = await state(page);
+    await page.keyboard.press(direction);
+    await page.waitForTimeout(1200);
+    const after = await state(page);
+    const label = `${theme} detail ${direction}`;
+    const ok = before && after && after.railIndex === before.railIndex + (direction === "ArrowDown" ? 1 : -1);
+    check(`${label}: focus moved to the adjacent season rail`, ok, JSON.stringify({ before, after }));
+    if (!ok) continue;
+    const cards = await page.evaluate((i) => {
+      const rail = document.querySelectorAll("[data-tv-scroll-axis=horizontal]")[i];
+      const rr = rail.getBoundingClientRect();
+      return [...rail.querySelectorAll("a,button")].map((c) => { const r = c.getBoundingClientRect(); return { cx: r.left + r.width / 2, inView: r.right > rr.left && r.left < rr.right }; }).filter((c) => c.inView);
+    }, after.railIndex);
+    const best = Math.min(...cards.map((c) => Math.abs(c.cx - before.cx)));
+    check(`${label}: nearest card by x`, Math.abs(after.cx - before.cx) <= best + 2, `dx=${Math.abs(after.cx - before.cx)} best=${best}`);
+    check(`${label}: target rail not scrolled to match`, after.scrolls[after.railIndex] === before.scrolls[after.railIndex], `before=${before.scrolls} after=${after.scrolls}`);
   }
   await context.close();
 }
