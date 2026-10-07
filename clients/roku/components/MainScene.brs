@@ -195,6 +195,9 @@ sub init()
     m.playerTimeLabel = m.top.findNode("playerTimeLabel")
     m.controlBarProgressTimer = m.top.findNode("controlBarProgressTimer")
     m.playerAutoHideTimer = m.top.findNode("playerAutoHideTimer")
+    m.playerStage = m.top.findNode("playerStage")
+    m.playerTitleLabel = m.top.findNode("playerTitleLabel")
+    m.playerSpinner = m.top.findNode("playerSpinner")
     m.browseKeyArtTimer = m.top.findNode("browseKeyArtTimer")
 
     m.profilesRow.ObserveField("rowItemSelected", "onProfileSelected")
@@ -5030,13 +5033,37 @@ sub requestPlayback(mediaFileId as String)
     path = "/api/v1/playback/" + UrlEncode(mediaFileId)
     path += "?containers=mp4%2Cmkv%2Cm3u8&video_codecs=h264&audio_codecs=aac%2Cac3%2Ceac3"
     path += "&max_bitrate_bps=" + config.maxBitrateBps.ToStr()
-    ' Stay on detail (or player chrome) while negotiating; no fullscreen Loading shell.
+    ' Play opens the player directly: black stage, title, small spinner. No
+    ' interstitial or fullscreen status page while the session negotiates.
+    enterPlayerStage()
     sendApi("playback", "GET", path, invalid, true)
 end sub
 
+sub enterPlayerStage()
+    m.playbackEnded = false
+    m.playbackSessionId = ""
+    m.video.control = "stop"
+    m.video.content = invalid
+    showOnly("playback")
+    m.video.visible = true
+    m.playerStage.visible = true
+    if m.selectedDetail <> invalid and m.selectedDetail.work <> invalid
+        m.playerTitleLabel.text = m.selectedDetail.work.title
+    end if
+    m.playerSpinner.control = "start"
+    m.top.screenState = "playback"
+    m.top.SetFocus(true)
+    m.playerPlayPauseLabel.text = "Pause"
+    resetPlayerAutoHide()
+end sub
+
 sub startPlayback(data as Object)
+    ' The viewer pressed BACK while the session was negotiating.
+    if m.playbackEnded then return
     if data = invalid or data.url = invalid
         ' Stay on detail chrome (no fullscreen status wall).
+        m.playbackEnded = true
+        m.playerSpinner.control = "stop"
         showOnly("detail")
         m.top.screenState = "detail"
         m.detailActions.SetFocus(true)
@@ -5110,6 +5137,11 @@ sub onVideoStateChanged()
         m.playerPlayPauseLabel.text = "Play"
     else if state = "playing"
         m.playerPlayPauseLabel.text = "Pause"
+    end if
+    if state = "buffering" or state = "loading"
+        m.playerSpinner.control = "start"
+    else if state = "playing" or state = "paused"
+        m.playerSpinner.control = "stop"
     end if
     m.lastVideoState = state
 end sub
@@ -5311,6 +5343,7 @@ sub finishPlayback(reason as String)
     sendPlaybackEvent({ kind: "stop", position_ms: Int(m.video.position * 1000), reason: reason })
     m.video.control = "stop"
     m.video.visible = false
+    m.playerSpinner.control = "stop"
     m.controlBarProgressTimer.control = "stop"
     m.playerAutoHideTimer.control = "stop"
     m.top.screenState = "detail"
@@ -5619,8 +5652,10 @@ sub showOnly(name as String)
     m.searchFilterMode = false
     ' Never paint residual freezes over native SceneGraph (dual stacked UI).
     hideAllResiduals()
+    m.playerStage.visible = name = "playback"
     if name <> "playback"
         m.video.visible = false
+        m.playerSpinner.control = "stop"
         m.playerControls.visible = false
         hideEndScreen()
     end if
@@ -5640,6 +5675,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         ' no-ops (still re-arm the auto-hide timer) rather than falling
         ' through unhandled.
         if key = "back"
+            ' BACK closes the controls overlay first; the next BACK exits.
+            if m.playerControls.visible
+                m.playerAutoHideTimer.control = "stop"
+                hidePlayerControls()
+                return true
+            end if
             finishPlayback("user_stopped")
             return true
         else if key = "OK" or key = "play"

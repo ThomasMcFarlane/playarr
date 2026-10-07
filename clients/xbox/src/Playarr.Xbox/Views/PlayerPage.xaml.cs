@@ -194,9 +194,9 @@ namespace Playarr.Xbox.Views
             var isLoading = _viewModel.LoadState == PlayerLoadState.Loading;
             var isFailed = _viewModel.LoadState == PlayerLoadState.Failed;
 
-            LoadingPanel.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
+            LoadingPanel.Visibility = PlayerStagePolicy.SpinnerVisible(isLoading, isFailed) ? Visibility.Visible : Visibility.Collapsed;
             ErrorPanel.Visibility = isFailed ? Visibility.Visible : Visibility.Collapsed;
-            PlayerElement.Visibility = isLoading || isFailed ? Visibility.Collapsed : Visibility.Visible;
+            PlayerElement.Visibility = PlayerStagePolicy.StageVisible(isFailed) ? Visibility.Visible : Visibility.Collapsed;
             TracksButton.Visibility = isLoading || isFailed ? Visibility.Collapsed : Visibility.Visible;
 
             ErrorText.Text = _viewModel.ErrorMessage ?? "Playback failed.";
@@ -406,6 +406,24 @@ namespace Playarr.Xbox.Views
             TracksPanel.Visibility = TracksPanel.Visibility == Visibility.Visible
                 ? Visibility.Collapsed
                 : Visibility.Visible;
+        }
+
+        /// <summary>
+        /// BACK closes the open track panel first (focus returns to the
+        /// button that opened it); returns false when nothing is open so the
+        /// caller exits playback.
+        /// </summary>
+        public bool TryHandleBack()
+        {
+            var panelOpen = TracksPanel.Visibility == Visibility.Visible;
+            if (PlayerStagePolicy.BackAction(panelOpen) != PlayerBackAction.ClosePanel)
+            {
+                return false;
+            }
+
+            TracksPanel.Visibility = Visibility.Collapsed;
+            TracksButton.Focus(FocusState.Programmatic);
+            return true;
         }
 
         private void AudioTrackList_SelectionChanged(object sender, SelectionChangedEventArgs e)

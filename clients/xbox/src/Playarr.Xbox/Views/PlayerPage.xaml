@@ -112,19 +112,14 @@
             </StackPanel>
         </Grid>
 
-        <!-- Loading overlay, visible while PlayerViewModel.LoadState is Loading. -->
-        <StackPanel
+        <!-- Small buffering spinner over the black stage while PlayerViewModel.LoadState is Loading. No text, no interstitial. -->
+        <ProgressRing
             x:Name="LoadingPanel"
+            IsActive="True"
+            Width="48"
+            Height="48"
             HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="16">
-            <ProgressRing IsActive="True" Width="64" Height="64" />
-            <TextBlock
-                Text="Preparing playback…"
-                Style="{StaticResource BodyTextBlockStyle}"
-                Foreground="White"
-                HorizontalAlignment="Center" />
-        </StackPanel>
+            VerticalAlignment="Center" />
 
         <!-- Error overlay, visible while PlayerViewModel.LoadState is Failed. -->
         <StackPanel

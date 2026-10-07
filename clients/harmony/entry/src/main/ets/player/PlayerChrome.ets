@@ -370,6 +370,9 @@ export struct PlayerChrome {
    * not a descendant, of this bar). */
   @Prop @Watch('onKeepAliveSignal') keepAliveSignal: number = 0;
 
+  /** Bumped by the page when BACK should close the controls. */
+  @Prop @Watch('onHideSignal') hideSignal: number = 0;
+
   @Prop paddingH: number = defaultChromePaddingH();
   @Prop paddingV: number = defaultChromePaddingV();
   @Prop gap: number = defaultChromeGap();
@@ -383,6 +386,7 @@ export struct PlayerChrome {
   onSeekBack: () => void = () => {};
   onSeekForward: () => void = () => {};
   onBack: () => void = () => {};
+  onVisibilityChanged: (visible: boolean) => void = () => {};
 
   @State private chromeOpacity: number = 1;
   @State private visible: boolean = true;
@@ -403,8 +407,14 @@ export struct PlayerChrome {
     this.reveal();
   }
 
+  private onHideSignal(): void {
+    this.clearAutoHideTimer();
+    this.hide();
+  }
+
   private reveal(): void {
     this.visible = true;
+    this.onVisibilityChanged(true);
     this.getUIContext().animateTo({ duration: FADE_OPACITY_MS, curve: Curve.Ease }, () => {
       this.chromeOpacity = 1;
     });
@@ -413,6 +423,7 @@ export struct PlayerChrome {
 
   private hide(): void {
     this.visible = false;
+    this.onVisibilityChanged(false);
     this.getUIContext().animateTo({ duration: FADE_OPACITY_MS, curve: Curve.Ease }, () => {
       this.chromeOpacity = 0;
     });

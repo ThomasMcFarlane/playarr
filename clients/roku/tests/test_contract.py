@@ -441,6 +441,26 @@ class BrandingAndResidualAssetTests(unittest.TestCase):
         self.assertNotIn("filled[mask] = w[mask]", suite)
         self.assertNotIn("r[res_mask] = res_rgb[res_mask]", suite)
 
+    def test_play_opens_the_player_stage_before_negotiation_returns(self) -> None:
+        body = MAIN.split("sub requestPlayback(", 1)[1].split("end sub", 1)[0]
+        self.assertLess(body.index("enterPlayerStage()"), body.index('sendApi("playback"'))
+        stage = MAIN.split("sub enterPlayerStage()", 1)[1].split("end sub", 1)[0]
+        self.assertIn('showOnly("playback")', stage)
+        self.assertIn('m.playerSpinner.control = "start"', stage)
+        self.assertNotIn("showStatus(", stage)
+        self.assertNotIn("Preparing playback", MAIN)
+        self.assertIn('<BusySpinner id="playerSpinner"', SCENE)
+
+    def test_back_closes_visible_controls_before_exiting(self) -> None:
+        marker = "BACK closes the controls overlay first"
+        self.assertIn(marker, MAIN)
+        body = MAIN.split(marker, 1)[1]
+        self.assertLess(body.index("hidePlayerControls()"), body.index('finishPlayback("user_stopped")'))
+
+    def test_a_late_session_after_back_is_ignored(self) -> None:
+        body = MAIN.split("sub startPlayback(", 1)[1].split("end sub", 1)[0]
+        self.assertIn("if m.playbackEnded then return", body)
+
     def test_shell_loads_in_place_not_fullscreen_status(self) -> None:
         # Authenticated navigations keep the target shell visible while data
         # loads; fullscreen statusGroup is not used for product chrome.

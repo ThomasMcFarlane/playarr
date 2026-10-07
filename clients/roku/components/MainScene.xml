@@ -665,6 +665,13 @@
       carry a scaleRotateCenter of their own half-width/half-height so the
       scale pivots in place.
     -->
+    <!-- Player stage: opens the instant Play is pressed (black stage, title,
+         small buffering spinner). No interstitial page while negotiating. -->
+    <Group id="playerStage" visible="false">
+      <Label id="playerTitleLabel" translation="[80,48]" width="1500" height="50" scale="[0.75,0.75]" color="0xFFFFFFFF" />
+      <BusySpinner id="playerSpinner" translation="[920,500]" control="stop" />
+    </Group>
+
     <Group id="playerControls" visible="false">
       <!-- Visual chrome matched to tv-web player bar (web freeze crop). Labels
            stay focusable/key-driven but paint is the chrome Poster + progress. -->

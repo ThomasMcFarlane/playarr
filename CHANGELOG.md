@@ -220,6 +220,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Xbox, Harmony, Roku and Fire TV: pressing Play opens the player directly (black stage, title, at most a small spinner) instead of a "Preparing playback"/"Loading" page; errors still show as before. BACK closes an open panel or the controls overlay first, and only the next BACK leaves playback.
 - tvOS release calendar renders the server's computed actions (Play or Resume, Open, Request, Watchlist) with their disabled reasons and active states instead of guessing from whether a file exists.
 - Roku: text is drawn in the web typeface (static Nunito Sans instances, JetBrains Mono for figures) instead of the system font.
 - Android TV: profile avatar ring and scale, soft glass pill shadows, episode and chapter tile shadows, crimson selected quality choice, one-line search Filters pill.

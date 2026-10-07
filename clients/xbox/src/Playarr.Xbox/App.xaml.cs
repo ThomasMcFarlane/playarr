@@ -101,6 +101,12 @@ namespace Playarr.Xbox
         /// </summary>
         private void OnBackRequested(object sender, BackRequestedEventArgs e)
         {
+            if (Window.Current.Content is Frame { Content: Views.PlayerPage player } && player.TryHandleBack())
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (Navigation.CanGoBack)
             {
                 e.Handled = true;

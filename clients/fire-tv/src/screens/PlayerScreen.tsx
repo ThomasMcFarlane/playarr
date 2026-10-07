@@ -75,6 +75,7 @@ import {VegaVideoSurface} from '../platform/media/VegaVideoSurface';
 import {VEGA_PLAYBACK_CAPABILITIES} from '../lib/playbackCapabilities';
 import {clearActivePlayerSession, readActivePlayerSession, writeActivePlayerSession} from '../lib/playerSession';
 import {colour} from '../theme/tokens';
+import {resolveBack, showSpinner} from './playerStage';
 import {sh, sw} from '../theme/scale';
 
 export interface PlayerLaunchOptions {
@@ -132,6 +133,7 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   const [mediaFileId, setMediaFileId] = useState<string | null>(null);
   const [launchOptions, setLaunchOptions] = useState<PlayerLaunchOptions>({});
   const [visible, setVisible] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const [engineState, setEngineState] = useState<PlaybackEngineState>(() => engine.getState());
 
   const visibleRef = useRef(visible);
@@ -327,12 +329,16 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   }, [engine, closeSession]);
 
   const show = useCallback((id: string, options?: PlayerLaunchOptions) => {
+    setControlsVisible(true);
     setMediaFileId(id);
     setLaunchOptions(options ?? {});
     setVisible(true);
   }, []);
 
-  const hide = useCallback(() => setVisible(false), []);
+  const hide = useCallback(() => {
+    setVisible(false);
+    setControlsVisible(true);
+  }, []);
 
   const isVisible = useCallback(() => visibleRef.current, []);
 
@@ -340,6 +346,11 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
   useBackHandler(() => {
     if (!visible) return false;
+    // BACK closes the controls overlay first; the next BACK exits.
+    if (resolveBack(controlsVisible) === 'hide-controls') {
+      setControlsVisible(false);
+      return true;
+    }
     hide();
     onClose?.();
     return true;
@@ -347,6 +358,7 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
 
   useRemoteKey((key) => {
     if (!visible) return;
+    setControlsVisible(true);
     if (key === 'playPause') {
       void (engineState.state === 'playing' ? engine.pause() : engine.play());
     } else if (key === 'skipForward') {
@@ -367,7 +379,6 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
   if (!visible) return null;
 
   const videoPlayer = engine.getVideoPlayer();
-  const isNegotiating = negotiation.status === 'loading' || negotiation.status === 'idle';
   const isBuffering = engineState.state === 'loading' || engineState.state === 'buffering';
   const negotiationFailed = negotiation.status === 'error';
   const hasFatalError = engineState.state === 'error' && Boolean(engineState.error?.fatal);
@@ -376,7 +387,11 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
     <View style={styles.root}>
       {videoPlayer ? <VegaVideoSurface videoPlayer={videoPlayer} style={styles.surface} /> : null}
 
-      {(isNegotiating || isBuffering) && !negotiationFailed && !hasFatalError ? (
+      {showSpinner({
+        negotiation: negotiation.status,
+        buffering: isBuffering,
+        failed: negotiationFailed || hasFatalError,
+      }) ? (
         <View style={styles.centeredOverlay}>
           <ActivityIndicator color={colour.focusRing} size="large" />
         </View>
@@ -394,7 +409,10 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
         </View>
       ) : null}
 
-      <View style={styles.transportBar}>
+      <View
+        style={[styles.transportBar, controlsVisible ? null : styles.transportBarHidden]}
+        pointerEvents={controlsVisible ? 'auto' : 'box-none'}
+      >
         <Text style={styles.title} numberOfLines={1}>
           {launchOptions.title ?? 'Now playing'}
         </Text>
@@ -403,12 +421,14 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
             accessibilityRole="button"
             accessibilityLabel={engineState.state === 'playing' ? 'Pause' : 'Play'}
             style={styles.transportButton}
+            onFocus={() => setControlsVisible(true)}
             onPress={() => void (engineState.state === 'playing' ? engine.pause() : engine.play())}
           >
             <Text style={styles.transportButtonLabel}>{engineState.state === 'playing' ? 'Pause' : 'Play'}</Text>
           </Pressable>
           {engineState.subtitleTracks.length > 0 ? (
-            <Pressable accessibilityRole="button" style={styles.transportButton} onPress={cycleSubtitles}>
+            <Pressable accessibilityRole="button" style={styles.transportButton}
+            onFocus={() => setControlsVisible(true)} onPress={cycleSubtitles}>
               <Text style={styles.transportButtonLabel}>
                 {engineState.selectedSubtitleTrackId
                   ? engineState.subtitleTracks.find((track) => track.id === engineState.selectedSubtitleTrackId)?.label ?? 'Subtitles'
@@ -416,7 +436,8 @@ export const PlayerScreen = forwardRef<PlayerScreenHandle, PlayerScreenProps>(fu
               </Text>
             </Pressable>
           ) : null}
-          <Pressable accessibilityRole="button" style={styles.transportButton} onPress={stop}>
+          <Pressable accessibilityRole="button" style={styles.transportButton}
+            onFocus={() => setControlsVisible(true)} onPress={stop}>
             <Text style={styles.transportButtonLabel}>Stop</Text>
           </Pressable>
           <Text style={styles.clock}>
@@ -462,6 +483,9 @@ const styles = StyleSheet.create({
   },
   backButtonLabel: {
     color: colour.ink,
+  },
+  transportBarHidden: {
+    opacity: 0,
   },
   transportBar: {
     position: 'absolute',

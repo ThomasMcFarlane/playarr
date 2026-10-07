@@ -128,6 +128,7 @@ import { PosterCard } from '../design/components/PosterCard';
 import { resolvePlayerAction, SEEK_STEP_MS } from '../player/PlayerInput';
 import type { PlayerAction } from '../player/PlayerInput';
 
+import { chromeMounted, resolveBack } from '../core/PlayerStage.ts';
 import { resolveDurationMs, reportedPositionMs, clampSeekTargetMs } from '../core/PlaybackMath.ts';
 import type { PlaybackInfoResponse, SubtitleTrack } from '../core/Types/Playback.ts';
 import type { Work } from '../core/Types/Work.ts';
@@ -234,6 +235,10 @@ struct Player {
   @State private bufferedPositionMs: number = 0;
   @State private isPlaying: boolean = false;
   @State private keepAliveSignal: number = 0;
+  /** Bumped by BACK while the controls are visible: the chrome hides itself. */
+  @State private hideSignal: number = 0;
+  /** Mirrors `PlayerChrome`'s own visibility, reported through `onVisibilityChanged`. */
+  private controlsVisible: boolean = true;
   @State private subtitleCueText: string = '';
 
   // -- End of playback (docs/architecture/end-of-playback.md) --
@@ -1034,9 +1039,11 @@ struct Player {
 
     Column({ space: Spacing.md }) {
       if (!(this.phase === 'error')) {
-        Text('Loading...')
-          .fontSize(this.overlayTextSize())
-          .fontColor(toResourceColor(PLAYER_TEXT_PRIMARY))
+        // Small buffering spinner only: no text, no interstitial.
+        LoadingProgress()
+          .width(this.overlayTextSize() * 2)
+          .height(this.overlayTextSize() * 2)
+          .color(toResourceColor(PLAYER_TEXT_PRIMARY))
       } else {
         Text(this.errorMessage)
           .fontSize(this.overlayTextSize())
@@ -1061,7 +1068,8 @@ struct Player {
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .backgroundColor(toResourceColor(PLAYER_BG))
+    .hitTestBehavior(this.phase === 'error' ? HitTestMode.Default : HitTestMode.Transparent)
+    .backgroundColor(this.phase === 'error' ? toResourceColor(PLAYER_BG) : Color.Transparent)
   }
 
   /** The ended card / up-next countdown (spec sections 1, 5, 6). */
@@ -1162,7 +1170,7 @@ struct Player {
             .focusable(false)
         }
 
-        if (this.phase === 'ready' && this.endPhase === 'playing') {
+        if (chromeMounted(this.phase, this.endPhase !== 'playing')) {
 
           PlayerChrome({
             title: this.title,
@@ -1171,6 +1179,10 @@ struct Player {
             bufferedPositionMs: this.bufferedPositionMs,
             isPlaying: this.isPlaying,
             keepAliveSignal: this.keepAliveSignal,
+            hideSignal: this.hideSignal,
+            onVisibilityChanged: (visible: boolean) => {
+              this.controlsVisible = visible;
+            },
             onTogglePlayPause: () => {
               this.handleTogglePlayPause();
             },
@@ -1201,8 +1213,15 @@ struct Player {
         this.bumpKeepAlive();
       })
       .onKeyEvent((event: KeyEvent) => {
-        this.bumpKeepAlive();
         const action = resolvePlayerAction(event);
+        // BACK closes the visible controls first; the next BACK exits.
+        if (action === 'back' && this.endPhase === 'playing' && this.phase === 'ready'
+          && resolveBack(this.controlsVisible) === 'hide-controls') {
+          this.hideSignal = this.hideSignal + 1;
+          event.stopPropagation();
+          return;
+        }
+        this.bumpKeepAlive();
         if (action === undefined) {
           return;
         }
