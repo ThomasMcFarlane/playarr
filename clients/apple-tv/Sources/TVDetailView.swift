@@ -474,6 +474,11 @@ struct TVWorkDetailView: View {
                     count: "\(season.episodes.count) episodes",
                     y: top
                 )
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(DesignTokens.Color.textDisabled)
+                    .frame(width: 18.7, height: 24.2)
+                    .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
                 ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
                     let selected = seasonIndex == 0 && index == 0
                     episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)

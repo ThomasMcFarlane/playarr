@@ -740,16 +740,15 @@ struct TVProfilesView: View {
                         }
                     }
                     .frame(width: size, height: size)
-                    // Web: the selected avatar grows to 1.1 and lifts.
-                    .scaleEffect(active ? 1.1 : 1)
-                    .offset(y: active ? -8 : 0)
+                    // Web: the selected avatar is 268 wide; the button style already scales
+                    // and lifts the whole label (1.045, -8), so the avatar adds the rest.
+                    .scaleEffect(active ? 1.05 : 1)
                     .overlay(
                         Circle().stroke(
                             palette.lineStrong.opacity(0.66),
                             lineWidth: 1
                         )
-                        .scaleEffect(active ? 1.1 : 1)
-                        .offset(y: active ? -8 : 0)
+                        .scaleEffect(active ? 1.05 : 1)
                     )
                     .overlay {
                         if active {
@@ -770,7 +769,7 @@ struct TVProfilesView: View {
                         .font(TVTheme.font(size: 17.28 * s, weight: .semibold))
                         .foregroundStyle(active ? palette.ink : palette.inkSoft)
                         .lineLimit(1)
-                        .offset(y: active ? -3.4 : 0)
+                        .offset(y: active ? 4.6 : 0)
 
                     Text(statusLabel(for: profile, busy: busy))
                         .font(TVTheme.font(size: 9.41 * s, weight: .bold))
@@ -778,7 +777,7 @@ struct TVProfilesView: View {
                         .textCase(.uppercase)
                         .foregroundStyle(palette.inkMuted)
                         .frame(minHeight: 12 * s)
-                        .offset(y: active ? -3.4 : 0)
+                        .offset(y: active ? 4.6 : 0)
                 }
                 .frame(width: size)
             }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TVSettingsView: View {
     @Environment(TVAppEnvironment.self) private var environment
+    @Environment(TVDisplayPreferences.self) private var displayPreferences
     @State private var serverError: String?
     @State private var pairingTask: Task<Void, Never>?
     @State private var selectedSection = 0
@@ -101,7 +102,7 @@ struct TVSettingsView: View {
                     .tracking(-0.92)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .placed(x: 0, y: 210, w: 995, h: 39.6)
-                choice(["System", "Light", "Dark"], selected: 2, widths: [80.4, 67.6, 68.1], y: 265.8)
+                choice(["System", "Light", "Dark"], selected: displayPreferences.themePreference == .system ? 0 : (displayPreferences.themePreference == .light ? 1 : 2), widths: [80.4, 67.6, 68.1], y: 265.8)
                 Rectangle()
                     .fill(DesignTokens.Color.borderDefault.opacity(0.35))
                     .frame(width: 995, height: 1)

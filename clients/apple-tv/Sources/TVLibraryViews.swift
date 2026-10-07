@@ -479,7 +479,7 @@ struct TVHomeView: View {
                     .offset(x: x0, y: top - headingOffset)
                 ForEach(Array(definition.works.enumerated()), id: \.element.id) { index, work in
                     let selected = railIndex == 0 && index == 0
-                    TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false)
+                    TVHomeCard(work: work, apiClient: environment.apiClient, isSelected: false, focusedLook: selected)
                         .frame(
                             width: DesignTokens.Shell.homeCardWidth,
                             height: DesignTokens.Shell.homeCardHeight + DesignTokens.Shell.homeCardTitleBlock,
@@ -649,6 +649,8 @@ struct TVHomeCard: View {
     let work: Work
     let apiClient: PlayarrAPIClient
     var isSelected: Bool = false
+    /// The web's focused card: a heavy drop shadow under the picture (rest cards have a light one).
+    var focusedLook = false
 
     var body: some View {
         // Web `.tv-home-card`: 218.9 x 123.1 art (radius 12.48), title 11.3/630 at +10, meta 8.6/400.
@@ -657,6 +659,11 @@ struct TVHomeCard: View {
                 cardArtwork
                     .frame(width: DesignTokens.Shell.homeCardWidth, height: DesignTokens.Shell.homeCardHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 12.5, style: .continuous))
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255).opacity(focusedLook ? 0.3 : 0.14),
+                        radius: focusedLook ? 24 : 10,
+                        y: focusedLook ? 24 : 10
+                    )
                 // Fixture art may already include the pink unwatched disc.
                 if TVParityArtwork.cardImage(forTitle: work.title) == nil {
                     Circle()
@@ -1357,6 +1364,12 @@ struct TVLibraryKindView: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .shadow(
+                        color: Color(red: 56 / 255, green: 38 / 255, blue: 33 / 255)
+                            .opacity(isSelected && parityMode ? 0.3 : 0.14),
+                        radius: isSelected && parityMode ? 24 : 10,
+                        y: isSelected && parityMode ? 24 : 10
+                    )
                     // SPA fixture crops already include the pink unwatched disc.
                     if !artIncludesDot || TVParityArtwork.cardImage(forTitle: work.title) == nil {
                         Circle()
