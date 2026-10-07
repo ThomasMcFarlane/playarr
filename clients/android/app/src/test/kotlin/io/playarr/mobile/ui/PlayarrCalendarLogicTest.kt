@@ -102,7 +102,8 @@ class PlayarrCalendarLogicTest {
         assertEquals("octobre 2026", calendarWindowTitle(CalendarViewMode.Month, d("2026-10-01"), window, Locale.FRANCE))
         val agenda = calendarWindow(CalendarViewMode.Agenda, d("2026-10-04"), DayOfWeek.MONDAY)
         val title = calendarWindowTitle(CalendarViewMode.Agenda, d("2026-10-04"), agenda, Locale.UK)
-        assertTrue(title, title.startsWith("4 Oct 2026") && title.endsWith("3 Nov 2026"))
+        // Web `formatRangeLabel`: short start, dated end, plain spaces around the en dash.
+        assertEquals("4 Oct \u2013 3 Nov 2026", title)
     }
 
     @Test
@@ -171,8 +172,9 @@ class PlayarrCalendarLogicTest {
         val timed = entry("1", "2026-10-05", releaseAt = "2026-10-05T23:30:00Z")
         val london = timed.localReleaseTime(ZoneId.of("Europe/London"), Locale.UK)
         val tokyo = timed.localReleaseTime(ZoneId.of("Asia/Tokyo"), Locale.UK)
-        assertTrue(london, london!!.contains("6 Oct 2026") && london.contains("00:30"))
-        assertTrue(tokyo, tokyo!!.contains("6 Oct 2026") && tokyo.contains("08:30"))
+        // Web `{ timeStyle: "short" }`: the time of day only (the rows are already grouped by day).
+        assertEquals("00:30", london)
+        assertEquals("08:30", tokyo)
         assertNull(entry("2", "2026-10-05").localReleaseTime(ZoneId.of("UTC"), Locale.UK))
     }
 

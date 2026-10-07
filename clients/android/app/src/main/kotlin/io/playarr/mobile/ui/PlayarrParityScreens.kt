@@ -3067,6 +3067,31 @@ internal fun ExperienceParitySettingsScreen(
             viewModel.refreshInviteRequest()
         }
     }
+    if (isTelevision) {
+        PlayarrPageScaffold(
+            title = playarrString(PlayarrString.SettingsTitle),
+            onBack = onBack,
+            isTelevision = true,
+            padBody = false,
+            backActive = true,
+        ) {
+            TvSettingsBody(
+                section = section,
+                onPick = { picked = it },
+                state = state,
+                serverUrl = serverUrl,
+                inviteBusy = inviteBusy,
+                pinBusy = pinBusy,
+                servers = servers,
+                hasKnownServerGroup = hasKnownServerGroup,
+                serverOperation = serverOperation,
+                connectionTest = connectionTest,
+                viewModel = viewModel,
+            )
+        }
+        invite?.let { PlayarrInviteDialog(it, viewModel::dismissInvite) }
+        return
+    }
     PlayarrPageScaffold(
         title = playarrString(PlayarrString.SettingsTitle),
         subtitle = if (showIndex) null else playarrString(section.label).uppercase(LocalPlayarrLanguage.current.locale),
@@ -3187,6 +3212,10 @@ private fun SettingsSectionContent(
         SettingsSection.Legal -> playarrString(PlayarrString.SettingsLegalDescription)
         else -> null
     }
+    if (isTelevision && section == SettingsSection.Appearance) {
+        TvAppearancePanel(display)
+        return
+    }
     SettingsCard(playarrString(section.label), description) {
         when (section) {
             SettingsSection.Appearance -> {
@@ -3232,6 +3261,14 @@ private fun SettingsSectionContent(
             }
             SettingsSection.Language -> {
                 val options = playarrUiLanguageOptions.map { it to it.label() }
+                if (LocalSettingsPlainPanel.current) {
+                    TvSelect(options.map { it.first to it.second }, options.firstOrNull { it.first.preference == display.language }?.first ?: options.first().first) {
+                        display.setLanguage(it.preference)
+                        localNotice = PlayarrString.SettingsLanguageSaved
+                    }
+                    Text(playarrString(PlayarrString.SettingsLanguageDescription), color = WebInkMuted, fontSize = 12.sp)
+                    return@SettingsCard
+                }
                 SettingChoices(
                     playarrString(PlayarrString.LanguageAppLabel),
                     options.map { it.second },
@@ -3248,7 +3285,41 @@ private fun SettingsSectionContent(
                     playarrString(PlayarrString.SettingsPlayerQualityTitle),
                     playarrString(PlayarrString.SettingsPlayerQualityDescription),
                 )
-                PlayarrButton(
+                if (LocalSettingsPlainPanel.current) {
+                    TvChoiceCell(
+                        selected = display.playerDefaults.qualityId == "original",
+                        onClick = { display.setPlayerQuality("original"); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
+                        modifier = Modifier.fillMaxWidth().height(58.dp),
+                        trailing = if (display.playerDefaults.qualityId == "original") "\u2713" else null,
+                    ) {
+                        Text(playarrString(PlayarrString.SettingsQualityOriginal), color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(playarrString(PlayarrString.SettingsQualityOriginalDetail), color = WebInkMuted, fontSize = 9.sp)
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Spacer(Modifier.width(210.dp))
+                        listOf(PlayarrString.SettingsQualityLow, PlayarrString.SettingsQualityMedium, PlayarrString.SettingsQualityHigh).forEach { level ->
+                            Text(playarrString(level).uppercase(LocalPlayarrLanguage.current.locale), color = WebInkMuted, fontSize = 10.sp, letterSpacing = 1.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { playarrQualityTiers.forEach { tier ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(Modifier.width(200.dp)) {
+                                Text(tier.label, color = WebInk, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                                Text(tier.resolution, color = WebInkMuted, fontSize = 10.sp)
+                            }
+                            tier.options.forEach { option ->
+                                TvChoiceCell(
+                                    selected = display.playerDefaults.qualityId == option.id,
+                                    onClick = { display.setPlayerQuality(option.id); localNotice = PlayarrString.SettingsPlayerDefaultsSaved },
+                                    modifier = Modifier.weight(1f).height(58.dp),
+                                ) {
+                                    Text(playarrString(PlayarrString.SettingsQualityBitrate, "value" to option.bitrateMbps), color = WebInk, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                                    Text(playarrString(option.playarrQualityLevelKey()), color = WebInkMuted, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    } }
+                } else PlayarrButton(
                     onClick = {
                         display.setPlayerQuality("original")
                         localNotice = PlayarrString.SettingsPlayerDefaultsSaved
@@ -3261,7 +3332,7 @@ private fun SettingsSectionContent(
                             playarrString(PlayarrString.SettingsQualityOriginalDetail),
                     )
                 }
-                playarrQualityTiers.forEach { tier ->
+                if (!LocalSettingsPlainPanel.current) playarrQualityTiers.forEach { tier ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.width(62.dp)) {
                             Text(tier.label, color = WebInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -3292,6 +3363,7 @@ private fun SettingsSectionContent(
                 PlayerDefaultHeading(
                     playarrString(PlayarrString.SettingsPlayerSubtitlesTitle),
                     playarrString(PlayarrString.SettingsPlayerSubtitlesDescription),
+                    divider = true,
                 )
                 SettingChoiceOptions(
                     label = playarrString(PlayarrString.SettingsPlayerSubtitlesMode),
@@ -3301,6 +3373,7 @@ private fun SettingsSectionContent(
                         PlayarrSubtitleDefault.Always to playarrString(PlayarrString.SettingsPlayerSubtitlesAlways),
                     ),
                     selected = display.playerDefaults.subtitleMode,
+                    cells = true,
                 ) { choice ->
                     display.setSubtitleMode(choice)
                     localNotice = PlayarrString.SettingsPlayerDefaultsSaved
@@ -3317,6 +3390,7 @@ private fun SettingsSectionContent(
                 PlayerDefaultHeading(
                     playarrString(PlayarrString.SettingsPlayerAudioTitle),
                     playarrString(PlayarrString.SettingsPlayerAudioDescription),
+                    divider = true,
                 )
                 val selectedAudio = snapshot.player.preferredAudioLanguage.takeIf { saved ->
                     playarrLanguageOptions.any { option -> option.code == saved }
@@ -3352,6 +3426,25 @@ private fun SettingsSectionContent(
             }
             SettingsSection.Lock -> {
                 var pin by remember { mutableStateOf("") }
+                if (LocalSettingsPlainPanel.current) {
+                    TvFieldLabel(playarrString(if (snapshot.pin.pinLocked) PlayarrString.SettingsProfileLockReplacePin else PlayarrString.SettingsProfileLockNewPin))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TvField(pin, { if (it.length <= 4 && it.all(Char::isDigit)) pin = it }, "\u2022 \u2022 \u2022 \u2022", Modifier.width(330.dp), enabled = !pinBusy, password = true)
+                        TvPrimaryPill(
+                            playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockSaving; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockReplace; else -> PlayarrString.SettingsProfileLockSetPin }),
+                            onClick = { viewModel.savePin(pin) { pin = "" } }, enabled = pin.length == 4 && !pinBusy, height = 62,
+                        )
+                        if (snapshot.pin.pinLocked) {
+                            Spacer(Modifier.width(10.dp))
+                            TvOutlinedPill(playarrString(PlayarrString.SettingsProfileLockRemovePin), { viewModel.savePin(null) { pin = "" } }, height = 50)
+                        }
+                    }
+                    Text(
+                        playarrString(when { pinBusy -> PlayarrString.SettingsProfileLockUpdating; snapshot.pin.pinLocked -> PlayarrString.SettingsProfileLockOn; else -> PlayarrString.SettingsProfileLockOff }),
+                        color = WebInkSoft, fontSize = 13.sp, modifier = Modifier.padding(top = 26.dp),
+                    )
+                    return@SettingsCard
+                }
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pin = it },
@@ -3411,6 +3504,28 @@ private fun SettingsSectionContent(
                 LaunchedEffect(request?.status) {
                     if (request?.status == InviteRequestStatus.Pending) requestMessage = ""
                 }
+                if (LocalSettingsPlainPanel.current) {
+                    Text(playarrString(request?.status.playarrInviteStatusKey()), color = WebInkMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
+                    when (request?.status) {
+                        InviteRequestStatus.Approved -> TvPrimaryPill(
+                            playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteGenerateQr),
+                            onClick = { viewModel.generateInvite(serverUrl) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth(), height = 58,
+                        )
+                        InviteRequestStatus.Pending -> TvPrimaryPill(playarrString(PlayarrString.SettingsInviteRequestPending), onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth(), height = 58)
+                        else -> {
+                            TvFieldLabel(playarrString(PlayarrString.SettingsInviteMessageLabel))
+                            TvField(requestMessage, { if (it.length <= 500) requestMessage = it }, playarrString(PlayarrString.SettingsInviteMessagePlaceholder), Modifier.fillMaxWidth(), enabled = !inviteBusy, singleLine = false)
+                            Spacer(Modifier.height(24.dp))
+                            TvPrimaryPill(
+                                playarrString(if (inviteBusy) PlayarrString.SettingsInviteWorking else PlayarrString.SettingsInviteRequestQr),
+                                onClick = { viewModel.requestInvite(requestMessage) }, enabled = !inviteBusy, modifier = Modifier.fillMaxWidth(), height = 58,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    PlayarrApprovalNotifications()
+                    return@SettingsCard
+                }
                 Text(
                     playarrString(request?.status.playarrInviteStatusKey()),
                     color = WebInkSoft,
@@ -3456,7 +3571,17 @@ private fun SettingsSectionContent(
                 }
                 PlayarrApprovalNotifications()
             }
-            SettingsSection.RequestLatency -> Text(playarrString(PlayarrString.SettingsRequestLatencyOnWeb), color = WebInkMuted)
+            SettingsSection.RequestLatency -> if (LocalSettingsPlainPanel.current) {
+                Row(Modifier.offset(x = 126.dp, y = 0.dp), horizontalArrangement = Arrangement.spacedBy(47.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.size(160.dp).border(1.dp, TvSettingsPalette.segmentBorder, CircleShape).background(TvSettingsPalette.segment, CircleShape), contentAlignment = Alignment.Center) {
+                        Text("\u25A4", color = WebKicker, fontSize = 38.sp)
+                    }
+                    Column(Modifier.padding(top = 36.dp).width(260.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(playarrString(PlayarrString.SettingsRequestLatencyAdminsOnly), color = WebInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(playarrString(PlayarrString.SettingsRequestLatencyAdminsOnlyDescription), color = WebInkMuted, fontSize = 12.sp)
+                    }
+                }
+            } else Text(playarrString(PlayarrString.SettingsRequestLatencyOnWeb), color = WebInkMuted)
             SettingsSection.Remote -> RemoteSettingsPanel()
             SettingsSection.YourData -> PlayarrYourDataSection(isTelevision)
             SettingsSection.Legal -> {
@@ -3512,6 +3637,79 @@ private fun SettingsServerSection(
     var connectionAdded by remember { mutableStateOf(false) }
     val serverBusy = serverOperation != null
     val connecting = serverOperation == SettingsServerOperation.Connecting
+
+    if (LocalSettingsPlainPanel.current) {
+        // Web TV: the connected-server cards, then one row of joined inputs with the Connect pill, then the disclosure.
+        servers.forEach { server ->
+            Row(
+                Modifier.fillMaxWidth().background(TvSettingsPalette.segment).border(1.dp, TvSettingsPalette.segmentBorder.copy(alpha = 0.6f)).padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(server.label, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(server.username, color = WebInkMuted, fontSize = 9.sp)
+                    Text(server.serverUrl, color = WebInkMuted, fontSize = 9.sp)
+                }
+                if (server.primary) {
+                    Text(
+                        playarrString(PlayarrString.SettingsServerPrimaryBadge).uppercase(LocalPlayarrLanguage.current.locale),
+                        color = WebInkMuted, fontSize = 9.sp, letterSpacing = 1.sp,
+                        modifier = Modifier.border(1.dp, TvSettingsPalette.segmentBorder).padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                } else {
+                    TvOutlinedPill(playarrString(PlayarrString.SettingsServerDisconnect), { viewModel.disconnectServer(server.serverUrl) })
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        TvFieldLabel(playarrString(PlayarrString.SettingsServerAddAnother))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TvField(serverUrl, { serverUrl = it; connectionAdded = false }, playarrString(PlayarrString.SettingsServerAddress), Modifier.width(400.dp), enabled = !serverBusy)
+            TvField(username, { username = it }, playarrString(PlayarrString.SettingsServerUsername), Modifier.width(200.dp), enabled = !serverBusy)
+            TvField(password, { password = it }, playarrString(PlayarrString.SettingsServerPassword), Modifier.width(200.dp), enabled = !serverBusy, secret = true)
+            TvPrimaryPill(
+                playarrString(if (connecting) PlayarrString.SettingsServerConnecting else PlayarrString.SettingsServerConnect),
+                onClick = { viewModel.connectServer(serverUrl, username, password, isTelevision) { serverUrl = ""; password = ""; connectionAdded = true } },
+                enabled = serverUrl.isNotBlank() && !serverBusy, height = 62,
+            )
+        }
+        Text(
+            playarrString(if (connectionAdded) PlayarrString.SettingsServerConnectedHint else PlayarrString.SettingsServerCredentialsHint),
+            color = WebInkMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvOutlinedPill(
+                playarrString(if (connectionTest == SettingsConnectionTest.Testing) PlayarrString.SettingsServerTesting else PlayarrString.SettingsServerTestConnection),
+                viewModel::testPrimaryConnection,
+            )
+            when (connectionTest) {
+                SettingsConnectionTest.Idle, SettingsConnectionTest.Testing -> Unit
+                is SettingsConnectionTest.Success -> Text(
+                    playarrString(PlayarrString.SettingsServerConnectedSuccess, "serverVersion" to connectionTest.version.serverVersion, "apiVersion" to connectionTest.version.apiVersion),
+                    color = WebInkSoft, fontSize = 10.sp,
+                )
+                is SettingsConnectionTest.Failed -> Text(
+                    playarrString(PlayarrString.SettingsServerConnectError, "message" to playarrText(connectionTest.message)),
+                    color = MaterialTheme.colorScheme.error, fontSize = 10.sp,
+                )
+            }
+        }
+        Text(playarrString(PlayarrString.SettingsServerPrimaryHint, "apiBaseUrl" to primaryServerUrl), color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 18.dp))
+        if (hasKnownServerGroup) Text(playarrString(PlayarrString.SettingsServerForgetHint), color = WebInkMuted, fontSize = 10.sp)
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(1.dp).background(TvSettingsPalette.divider))
+        var detailsOpen by remember { mutableStateOf(false) }
+        Text(
+            (if (detailsOpen) "\u25BE " else "\u25B8 ") + playarrString(PlayarrString.SettingsServerChangeAppHost),
+            color = WebInkSoft, fontSize = 10.sp,
+            modifier = Modifier.clickable { detailsOpen = !detailsOpen }.padding(vertical = 8.dp),
+        )
+        if (detailsOpen) {
+            TvField(primaryValue, { primaryValue = it }, playarrString(PlayarrString.LoginServerUrl), Modifier.width(520.dp))
+            TvPrimaryPill(playarrString(PlayarrString.SettingsServerChangeAppHost), { viewModel.changeServer(primaryValue) }, enabled = primaryValue.isNotBlank())
+            Text(playarrString(PlayarrString.SettingsServerChangeAppHostHint), color = WebInkMuted, fontSize = 10.sp)
+        }
+        return
+    }
 
     Text(
         playarrString(PlayarrString.SettingsServerConnectedServers),
@@ -3698,7 +3896,18 @@ private fun SettingsServerSection(
 }
 
 @Composable
-private fun PlayerDefaultHeading(title: String, description: String) {
+private fun PlayerDefaultHeading(title: String, description: String, divider: Boolean = false) {
+    if (LocalSettingsPlainPanel.current) {
+        Column {
+            if (divider) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
+                Spacer(Modifier.height(32.dp))
+            }
+            Text(title, color = WebInk, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight(430), letterSpacing = (-0.5).sp)
+            Text(description, color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 9.dp))
+        }
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, color = WebInk, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(description, color = WebInkMuted, fontSize = 11.sp)
@@ -3711,6 +3920,20 @@ private fun PlayerLanguageChoices(
     selected: String,
     onSelected: (String) -> Unit,
 ) {
+    if (LocalSettingsPlainPanel.current) {
+        androidx.compose.foundation.layout.FlowRow(
+            maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            playarrLanguageOptions.forEach { option ->
+                TvChoiceCell(
+                    selected = option.code == selected, onClick = { onSelected(option.code) },
+                    modifier = Modifier.width(491.dp).height(58.dp), trailing = option.code,
+                ) { Text(option.label, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+        return
+    }
     Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(playarrLanguageOptions) { option ->
@@ -3724,12 +3947,283 @@ private fun PlayerLanguageChoices(
     }
 }
 
+internal val LocalSettingsPlainPanel = androidx.compose.runtime.compositionLocalOf { false }
+
+/** Web TV `.tv-settings`: palette values read off the committed references (dark and light). */
+private object TvSettingsPalette {
+    val listBackground get() = if (webIsDark) Color(0xFF1B181B) else Color(0xFFFBFAF9)
+    val selectedRow get() = if (webIsDark) Color(0xFF312A30) else Color(0xFFDFDCDD)
+    val segment get() = if (webIsDark) Color(0xFF151315) else Color(0xFFF5F3F2)
+    val segmentBorder get() = if (webIsDark) Color(0xFF474347) else Color(0xFFC3BCBC)
+    val divider get() = if (webIsDark) Color(0xFF393538) else Color(0xFFD7D3D3)
+    val headerLine get() = if (webIsDark) Color(0xFF484547) else Color(0xFFC5BFBC)
+}
+
+@Composable
+private fun TvSettingsBody(
+    section: SettingsSection,
+    onPick: (SettingsSection) -> Unit,
+    state: ParityLoad<SettingsSnapshot>,
+    serverUrl: String,
+    inviteBusy: Boolean,
+    pinBusy: Boolean,
+    servers: List<SettingsServerEntry>,
+    hasKnownServerGroup: Boolean,
+    serverOperation: SettingsServerOperation?,
+    connectionTest: SettingsConnectionTest,
+    viewModel: ParitySettingsViewModel,
+) {
+    val locale = LocalPlayarrLanguage.current.locale
+    val entries = phoneSettingsIndex
+    val description = entries.firstOrNull { it.first == section }?.second ?: PlayarrString.SettingsAppearanceDescription
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.offset(x = 227.dp, y = 112.dp).width(365.dp).height(1.dp).background(TvSettingsPalette.headerLine))
+        Text(
+            playarrString(section.label).uppercase(locale),
+            color = WebInkSoft, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, lineHeight = 18.sp,
+            modifier = Modifier.offset(x = 227.dp, y = 120.dp),
+        )
+        Text(
+            playarrString(description).uppercase(locale),
+            color = WebInkMuted, fontSize = 11.sp, letterSpacing = 0.5.sp, lineHeight = 16.sp, maxLines = 1,
+            modifier = Modifier.offset(x = 227.dp, y = 143.dp).width(420.dp),
+        )
+        LazyColumn(
+            Modifier.offset(x = 154.dp, y = 162.dp).width(480.dp).fillMaxHeight(),
+        ) {
+            itemsIndexed(entries.map { it.first }) { index, candidate ->
+                var focused by remember { mutableStateOf(false) }
+                val selected = candidate == section
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                        .background(if (selected || focused) TvSettingsPalette.selectedRow else TvSettingsPalette.listBackground)
+                        .onFocusChanged { focused = it.isFocused; if (it.isFocused) onPick(candidate) }
+                        .clickable { onPick(candidate) },
+                ) {
+                    Text(
+                        settingsSectionNumber(index),
+                        color = WebInkMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, lineHeight = 12.sp,
+                        modifier = Modifier.offset(x = 32.dp, y = 27.dp),
+                    )
+                    Text(
+                        playarrString(candidate.label),
+                        color = WebInk, fontSize = 29.4.sp, fontWeight = FontWeight(430), lineHeight = 40.sp, letterSpacing = (-0.6).sp,
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 92.dp),
+                    )
+                    Text(
+                        "\u2192",
+                        color = if (selected) WebInk else WebInkMuted, fontSize = if (selected) 20.sp else 17.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp),
+                    )
+                }
+            }
+        }
+        // Web TV settings draw their primary buttons as a light pill (dark ink in the light theme), not the brand pink.
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme.copy(
+                primary = if (webIsDark) Color(0xFFDFDCDD) else Color(0xFF675961),
+                onPrimary = if (webIsDark) Color(0xFF151315) else Color.White,
+                surfaceVariant = WebSurface,
+                outline = WebInkMuted,
+            ),
+        ) {
+        Column(
+            Modifier.offset(x = 774.dp, y = 212.dp).width(995.dp),
+        ) {
+            when (val current = state) {
+                ParityLoad.Loading -> CircularProgressIndicator(color = WebPink)
+                is ParityLoad.Failed -> ParityFailure(current.message, viewModel::load)
+                is ParityLoad.Ready -> androidx.compose.runtime.CompositionLocalProvider(LocalSettingsPlainPanel provides true) {
+                    SettingsSectionContent(
+                        section = section,
+                        snapshot = current.value,
+                        serverUrl = serverUrl,
+                        isTelevision = true,
+                        inviteBusy = inviteBusy,
+                        pinBusy = pinBusy,
+                        servers = servers,
+                        hasKnownServerGroup = hasKnownServerGroup,
+                        serverOperation = serverOperation,
+                        connectionTest = connectionTest,
+                        viewModel = viewModel,
+                    )
+                }
+            }
+        }
+        }
+    }
+}
+
+/** Web TV text field: a bordered dark box, the label small and uppercase above it. */
+@Composable
+private fun TvField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    height: Int = 62,
+    singleLine: Boolean = true,
+    password: Boolean = false,
+    enabled: Boolean = true,
+    secret: Boolean = false,
+) {
+    androidx.compose.foundation.text.BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        enabled = enabled,
+        singleLine = singleLine,
+        textStyle = androidx.compose.ui.text.TextStyle(color = WebInk, fontSize = 14.sp),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(WebInk),
+        visualTransformation = if (password || secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = if (password) KeyboardOptions(keyboardType = KeyboardType.NumberPassword) else if (secret) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
+        modifier = modifier.height(height.dp).background(TvSettingsPalette.segment).border(1.dp, TvSettingsPalette.segmentBorder).playarrSingleLineArrowNavigation(),
+        decorationBox = { inner ->
+            Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {
+                if (value.isEmpty()) Text(placeholder, color = WebInkMuted, fontSize = 14.sp)
+                inner()
+            }
+        },
+    )
+}
+
+@Composable
+private fun TvFieldLabel(text: String) {
+    Text(text.uppercase(), color = WebInkMuted, fontSize = 11.sp, letterSpacing = 1.1.sp, lineHeight = 16.sp)
+}
+
+/** Web TV primary pill: light in the dark theme, dark ink in the light theme. */
+@Composable
+private fun TvPrimaryPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, height: Int = 50) {
+    val fill = if (webIsDark) Color(0xFFDFDCDD) else Color(0xFF675961)
+    val ink = if (webIsDark) Color(0xFF151315) else Color.White
+    androidx.compose.material3.Surface(
+        onClick = onClick, enabled = enabled, shape = CircleShape,
+        color = if (enabled) fill else fill.copy(alpha = 0.4f), contentColor = ink,
+        modifier = modifier.height(height.dp),
+    ) { Box(Modifier.padding(horizontal = 22.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 13.sp, fontWeight = FontWeight(720), maxLines = 1) } }
+}
+
+@Composable
+private fun TvOutlinedPill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, height: Int = 38) {
+    androidx.compose.material3.Surface(
+        onClick = onClick, shape = CircleShape, color = WebSurface, contentColor = WebInkSoft,
+        border = androidx.compose.foundation.BorderStroke(1.dp, WebPillBorder), modifier = modifier.height(height.dp),
+    ) { Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) { Text(label, fontSize = 11.5.sp, fontWeight = FontWeight(720), maxLines = 1) } }
+}
+
+/** Web TV select: a 168 x 48 outlined box showing the current value and a caret; the choices open in a menu. */
+@Composable
+private fun <T> TvSelect(choices: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.Surface(
+            onClick = { open = true }, color = TvSettingsPalette.segment, contentColor = WebInkSoft,
+            border = androidx.compose.foundation.BorderStroke(1.dp, TvSettingsPalette.segmentBorder),
+            modifier = Modifier.width(168.dp).height(48.dp),
+        ) {
+            Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("\u25CC", fontSize = 11.sp)
+                Text(choices.firstOrNull { it.first == selected }?.second.orEmpty(), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1)
+                Text("\u2304", fontSize = 12.sp)
+            }
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { (value, label) ->
+                androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { open = false; onSelected(value) })
+            }
+        }
+    }
+}
+
+/** Web TV choice cell: a dark rectangle; the selected one gets a crimson border, a 4 px crimson bar and a faint crimson fill. */
+@Composable
+private fun TvChoiceCell(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val accent = WebKicker
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        color = if (selected) accent.copy(alpha = 0.16f) else TvSettingsPalette.segment,
+        contentColor = WebInk,
+        border = androidx.compose.foundation.BorderStroke(if (selected || focused) 1.dp else 1.dp, if (selected) accent else if (focused) WebInk else TvSettingsPalette.segmentBorder.copy(alpha = 0.5f)),
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+    ) {
+        Box(Modifier.fillMaxSize().then(if (selected) Modifier.drawBehind { drawRect(accent, size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) } else Modifier)) {
+            Column(Modifier.align(Alignment.CenterStart).padding(start = 14.dp), verticalArrangement = Arrangement.Center, content = content)
+            trailing?.let { Text(it, color = WebInkMuted, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp)) }
+        }
+    }
+}
+
+/** Web TV segmented control: square cells in one bordered strip, the selected cell inverted. */
+@Composable
+private fun <T> TvSegmented(choices: List<Pair<T, String>>, selected: T, onSelected: (T) -> Unit) {
+    Row(Modifier.height(50.dp).border(1.dp, TvSettingsPalette.segmentBorder)) {
+        choices.forEach { (value, label) ->
+            val active = value == selected
+            var focused by remember { mutableStateOf(false) }
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .background(if (active) WebInk else TvSettingsPalette.segment)
+                    .then(if (focused) Modifier.border(2.dp, WebInk) else Modifier)
+                    .onFocusChanged { focused = it.isFocused }
+                    .clickable { onSelected(value) }
+                    .padding(horizontal = 18.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, color = if (active) WebBackground else WebInkSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvAppearancePanel(display: PlayarrDisplayPreferences) {
+    Text(playarrString(PlayarrString.SettingsColourTheme), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Spacer(Modifier.height(20.dp))
+    TvSegmented(
+        choices = listOf(
+            PlayarrThemePreference.System to playarrString(PlayarrString.SettingsThemeSystem),
+            PlayarrThemePreference.Light to playarrString(PlayarrString.SettingsThemeLight),
+            PlayarrThemePreference.Dark to playarrString(PlayarrString.SettingsThemeDark),
+        ),
+        selected = display.theme,
+    ) { display.setTheme(it) }
+    Spacer(Modifier.height(30.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(TvSettingsPalette.divider))
+    Spacer(Modifier.height(32.dp))
+    Text(playarrString(PlayarrString.SettingsHomeViewTitle), color = WebInk, fontSize = 26.sp, fontWeight = FontWeight(430), lineHeight = 34.sp, letterSpacing = (-0.5).sp)
+    Spacer(Modifier.height(9.dp))
+    Text(playarrString(PlayarrString.SettingsHomeViewDescription), color = WebInkMuted, fontSize = 13.sp, lineHeight = 20.sp)
+    Spacer(Modifier.height(17.dp))
+    TvSegmented(
+        choices = listOf(
+            PlayarrHomeViewPreference.Thumbnail to playarrString(PlayarrString.SettingsHomeViewThumbnail),
+            PlayarrHomeViewPreference.Cover to playarrString(PlayarrString.SettingsHomeViewCover),
+        ),
+        selected = display.homeView,
+    ) { display.setHomeView(it) }
+}
+
 @Composable
 private fun SettingsCard(
     title: String,
     description: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    if (LocalSettingsPlainPanel.current) {
+        // Web TV: the section content carries its own headings; the panel has no title or description of its own.
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { content() }
+        return
+    }
     Surface(color = WebSurfaceStrong, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, WebInkMuted.copy(alpha = 0.2f)), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(title, color = WebInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -3741,6 +4235,10 @@ private fun SettingsCard(
 
 @Composable
 private fun SettingChoices(label: String, choices: List<String>, selected: String? = null, onSelected: (String) -> Unit) {
+    if (LocalSettingsPlainPanel.current) {
+        TvSegmented(choices.map { it to it }, selected ?: "", onSelected)
+        return
+    }
     Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices) { choice -> PlayarrButton(onClick = { onSelected(choice) }, enabled = choice != selected, variant = PlayarrButtonVariant.Secondary) { Text(choice) } }
@@ -3752,8 +4250,21 @@ private fun <T> SettingChoiceOptions(
     label: String,
     choices: List<Pair<T, String>>,
     selected: T,
+    cells: Boolean = false,
     onSelected: (T) -> Unit,
 ) {
+    if (LocalSettingsPlainPanel.current) {
+        if (cells) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                choices.forEach { (value, choiceLabel) ->
+                    TvChoiceCell(selected = value == selected, onClick = { onSelected(value) }, modifier = Modifier.width(240.dp).height(62.dp)) {
+                        Text(choiceLabel, color = WebInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else TvSegmented(choices, selected, onSelected)
+        return
+    }
     if (label.isNotBlank()) Text(label, color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices, key = { it.first.toString() }) { (value, choiceLabel) ->

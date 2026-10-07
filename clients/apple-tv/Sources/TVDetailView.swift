@@ -8,6 +8,7 @@ struct TVWorkDetailView: View {
     let apiClient: PlayarrAPIClient
     @Environment(\.requestNavFocus) private var requestNavFocus
     @State private var viewModel: TVWorkDetailViewModel
+    @State private var showDownloadNote = false
     @FocusState private var focusedEpisodeID: UUID?
 
     private var frozen: Bool { TVParityLaunch.frozen }
@@ -26,6 +27,15 @@ struct TVWorkDetailView: View {
     }
 
     var body: some View {
+        content
+            .alert("Downloads", isPresented: $showDownloadNote) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Apple TV keeps no offline copies. Download this title from the web or a phone or tablet app.")
+            }
+    }
+
+    private var content: some View {
         ZStack {
             TVStageBackground()
             Group {
@@ -91,7 +101,7 @@ struct TVWorkDetailView: View {
     // MARK: Copy column
 
     private func titleLines(_ title: String) -> [String] {
-        TVTextWrap.lines(title, fontName: "AvenirNext-DemiBold", size: 69.12, kern: -4.98, width: 379.5)
+        TVTextWrap.lines(title, weight: 560, size: 69.12, kern: -4.98, width: 379.5)
     }
 
     private func kicker(_ text: String) -> some View {
@@ -147,7 +157,7 @@ struct TVWorkDetailView: View {
         if let date = TVWebFormat.date(work.releaseDate) { parts.append(("Released  \(date)", false)) }
         if let genre = work.genres.first { parts.append((genre, false)) }
         let synopsis = work.overview ?? ""
-        let synopsisLines = synopsis.isEmpty ? 0 : max(1, TVTextWrap.lines(synopsis, fontName: "AvenirNext-Regular", size: 12.864, kern: 0, width: 313.3).count)
+        let synopsisLines = synopsis.isEmpty ? 0 : max(1, TVTextWrap.lines(synopsis, weight: 400, size: 12.864, kern: 0, width: 313.3).count)
         let buttonsY = synopsisY + 20.3 * CGFloat(synopsisLines) + 37.8
         return ZStack(alignment: .topLeading) {
             kicker(work.genres.first ?? work.kind.rawValue)
@@ -161,7 +171,7 @@ struct TVWorkDetailView: View {
                     .frame(width: 313.3, alignment: .leading)
                     .placed(x: 153.6, y: synopsisY, w: 313.3, h: 20.3 * CGFloat(synopsisLines), alignment: .topLeading)
             }
-            actionPill("Download", glyph: "\u{21E9}", x: 153.6, y: buttonsY, width: 142)
+            actionPill("Download", glyph: "\u{21E9}", x: 153.6, y: buttonsY, width: 142) { showDownloadNote = true }
             actionPill("Playback", symbol: "square.grid.2x2.fill", x: 311.6, y: buttonsY, width: 142)
             moviePlay(detail, x: 469.6, y: buttonsY)
             actionPill("Add to watchlist", glyph: "+", x: 153.6, y: buttonsY + 76, width: 142)
@@ -254,8 +264,15 @@ struct TVWorkDetailView: View {
         symbol: String? = nil,
         x: CGFloat,
         y: CGFloat,
-        width: CGFloat
+        width: CGFloat,
+        action: (() -> Void)? = nil
     ) -> some View {
+        Button { action?() } label: { pillBody(label, glyph: glyph, symbol: symbol, width: width) }
+            .buttonStyle(TVFocusableCardButtonStyle())
+            .placed(x: x, y: y, w: width, h: 64)
+    }
+
+    private func pillBody(_ label: String, glyph: String?, symbol: String?, width: CGFloat) -> some View {
         HStack(spacing: 8.8) {
             if let glyph {
                 Text(glyph)
@@ -273,7 +290,6 @@ struct TVWorkDetailView: View {
         }
         .frame(width: width, height: 64)
         .background(pillBackground(false))
-        .placed(x: x, y: y, w: width, h: 64)
     }
 
     private func playLabel(_ text: String, light: Bool) -> some View {
@@ -475,11 +491,15 @@ struct TVWorkDetailView: View {
                     count: "\(season.episodes.count) episodes",
                     y: top
                 )
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(DesignTokens.Color.textDisabled)
-                    .frame(width: 18.7, height: 24.2)
-                    .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
+                Button { showDownloadNote = true } label: {
+                    Image(systemName: "arrow.down.to.line")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(DesignTokens.Color.textDisabled)
+                        .frame(width: 18.7, height: 24.2)
+                }
+                .buttonStyle(TVFocusableCardButtonStyle())
+                .accessibilityLabel("Download \(season.season.title ?? "Season \(season.season.seasonNumber)")")
+                .placed(x: 1841.7, y: top + 10.9, w: 18.7, h: 24.2, alignment: .center)
                 ForEach(Array(season.episodes.enumerated()), id: \.element.id) { index, episode in
                     let selected = seasonIndex == 0 && index == 0
                     episodeCard(detail, season: season, episode: episode, ordered: ordered, selected: selected)
@@ -518,6 +538,7 @@ struct TVWorkDetailView: View {
                 Circle()
                     .fill(DesignTokens.Color.brandPrimary)
                     .frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.6))
                     .padding(10.6)
             }
             Text(code)

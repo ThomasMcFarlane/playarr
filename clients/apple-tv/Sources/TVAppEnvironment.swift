@@ -101,6 +101,8 @@ final class TVAppEnvironment {
     private(set) var currentUserID = ""
     /// The server-backed avatar preset id of the signed-in user, when one is set.
     private(set) var currentAvatarPreset: String?
+    /// The signed-in profile's display name (shared PlayarrKit rule: never the typed username).
+    private(set) var profileName: String?
     private(set) var pairingState: TVPairingState = .signedOut
     private(set) var serverURL: URL
     /// True when the operator (or a prior successful link) configured a
@@ -215,6 +217,9 @@ final class TVAppEnvironment {
             currentUserID = Self.subject(ofJWT: session.accessToken.exposeSecret()) ?? ""
         }
         currentAvatarPreset = (try? await apiClient.fetchProfileAvatarPreset()) ?? nil
+        if let resolved = await apiClient.resolveCurrentProfileName(currentUserID: UUID(uuidString: currentUserID)) {
+            profileName = resolved
+        }
         let kinds = (try? await apiClient.listCatalogKinds()) ?? []
         catalogKinds = Set(kinds)
         let status = (try? await apiClient.fetchHouseholdStatus()) ?? nil

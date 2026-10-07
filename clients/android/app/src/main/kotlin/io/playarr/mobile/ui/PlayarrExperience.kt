@@ -1290,6 +1290,42 @@ internal val WebTextStyle: androidx.compose.ui.text.TextStyle
     ),
 )
 
+/**
+ * Web `.tv-episode-art`: the picture is drawn with `filter: grayscale(0.25)` and a 135deg gradient from 5% to 48% black
+ * covers the tile (the episode number and progress bar sit above it).
+ */
+@Composable
+internal fun WebEpisodeArt(content: @Composable () -> Unit) {
+    val paint = remember {
+        androidx.compose.ui.graphics.Paint().apply {
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0.75f) },
+            )
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .drawWithContent {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), paint)
+                    drawContent()
+                    canvas.restore()
+                }
+                // CSS 135deg: the gradient line has length (w + h) / sqrt(2) through the centre.
+                val half = (size.width + size.height) / 4f
+                val centre = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+                val d = 0.70710678f
+                drawRect(
+                    Brush.linearGradient(
+                        listOf(Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.48f)),
+                        start = androidx.compose.ui.geometry.Offset(centre.x - d * half * 1.4142f, centre.y - d * half * 1.4142f),
+                        end = androidx.compose.ui.geometry.Offset(centre.x + d * half * 1.4142f, centre.y + d * half * 1.4142f),
+                    ),
+                )
+            },
+    ) { content() }
+}
 
 private const val PLAYBACK_STATS_TAG = "PlayarrPlaybackStats"
 private const val CAPABILITIES_POLL_MS = 60_000L
@@ -1938,7 +1974,7 @@ private fun TelevisionNavigation(
 private fun ExperienceClock(modifier: Modifier = Modifier) {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     val locale = LocalPlayarrLanguage.current.locale
-    val dateFormatter = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMMM", locale) }
+    val dateFormatter = remember(locale) { PlayarrDateFormat("MMMMEEEd", locale) }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(30_000)
@@ -1954,7 +1990,7 @@ private fun ExperienceClock(modifier: Modifier = Modifier) {
             letterSpacing = (-0.518).sp,
         )
         Text(
-            now.format(dateFormatter).uppercase(locale),
+            dateFormatter.format(now.toLocalDate()).uppercase(locale),
             color = WebInkMuted,
             fontSize = 11.136.sp,
             fontWeight = FontWeight(640),
@@ -2798,12 +2834,16 @@ private fun WebHeroTitle(title: String, modifier: Modifier = Modifier) {
         fontSize = 69.12.sp,
         fontWeight = FontWeight(560),
         letterSpacing = (-4.977).sp,
+        fontFamily = webFontFamily,
+        textMotion = if (webFontFamily != null) androidx.compose.ui.text.style.TextMotion.Animated else null,
     )
-    val lines = remember(title, density) {
+    val lines = remember(title, density, webFontFamily) {
+        // CSS `max-width: 9ch`: nine advances of the "0" glyph in the title font, without the letter spacing.
+        val nineCh = 9 * measurer.measure("0", style.copy(letterSpacing = 0.sp)).size.width
         val result = measurer.measure(
             text = title,
             style = style,
-            constraints = androidx.compose.ui.unit.Constraints(maxWidth = with(density) { 349.3.dp.roundToPx() }),
+            constraints = androidx.compose.ui.unit.Constraints(maxWidth = nineCh),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -3095,7 +3135,7 @@ private fun ExperienceLandscapeCard(
     )
     // Web touch layouts no longer raise the autofocused card (#90): a phone card is never lifted or scaled.
     val scale = if (webPhone) 1f else animatedScale
-    val liftActive = if (webTvLibrary) focused || selected else focused
+    val liftActive = if (webTvStyle) focused || selected else focused
     val artScale = rememberPlayarrFocusScale(
         focused = liftActive && webTvStyle,
         focusedScale = if (webTvLibrary) 1.04f else 1.025f,
@@ -3122,7 +3162,7 @@ private fun ExperienceLandscapeCard(
             ),
     ) {
         WebShadowedBox(
-            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else emptyList(),
+            shadows = if (webPhone) webCardShadows(false, webHome, webSearch) else if (webTvStyle) webCardShadows(liftActive, !webTvLibrary, false) else emptyList(),
             shape = RoundedCornerShape(if (webPhone) 8.dp else cardRadius),
             modifier = Modifier.fillMaxWidth()
                 .aspectRatio(if (homeView == PlayarrHomeViewPreference.Cover) 2f / 3f else 16f / 9f)
@@ -3257,7 +3297,7 @@ internal fun WebDetailPill(
         onClick = onClick,
         enabled = enabled,
         shape = CircleShape,
-        color = if (ink) WebInk else if (primary) WebPink else WebSurfaceStrong.copy(alpha = 0.72f),
+        color = if (ink) WebInk else if (primary) WebKicker else WebSurfaceStrong.copy(alpha = 0.72f),
         contentColor = if (ink) WebBackground else if (primary) Color.White else WebInk,
         modifier = modifier
             .height(64.dp)
@@ -3271,7 +3311,7 @@ internal fun WebDetailPill(
             horizontalArrangement = Arrangement.spacedBy(if (primary) 11.1.dp else 8.9.dp, Alignment.CenterHorizontally),
         ) {
             glyph?.let {
-                Text(it, color = if (ink) WebBackground else if (primary) Color.White else WebPink, fontSize = if (primary) 10.118.sp else 12.806.sp)
+                Text(it, color = if (ink) WebBackground else if (primary) Color.White else WebKicker, fontSize = if (primary) 10.118.sp else 12.806.sp)
             }
             Text(label, fontSize = if (primary) 11.904.sp else 11.136.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
@@ -5353,7 +5393,7 @@ private fun ExperienceVideoDetailContent(
                     onResumeChoice = onResumeChoice,
                     autoFocusPlay = true,
                     television = true,
-                    modifier = Modifier.padding(top = 37.8.dp),
+                    modifier = Modifier.padding(top = if (selectedEpisode != null) 10.3.dp else 37.8.dp),
                 )
             }
             if (series != null) {
@@ -5473,7 +5513,7 @@ private fun PhoneVideoDetailBody(
     val episode = selectedEpisode?.episode
     val seasonNumber = selectedSeason?.season?.seasonNumber
     val episodeCode = episode?.let { "S${(seasonNumber ?: 0).toString().padStart(2, '0')} · E${it.episodeNumber.toString().padStart(2, '0')}" }
-    val dateFormat = remember(language) { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale) }
+    val dateFormat = remember(language) { PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC) }
     val metaItems = buildList {
         if (episode != null) {
             add(playarrString(PlayarrString.DetailSeasonNumber, "number" to (seasonNumber ?: 0)))
@@ -5487,7 +5527,7 @@ private fun PhoneVideoDetailBody(
         if (episode != null) {
             episode.airDate?.let { add(playarrString(PlayarrString.DetailAired, "date" to dateFormat.format(it))) }
         } else {
-            work.releaseDate?.let { add(playarrString(PlayarrString.DetailReleased, "date" to dateFormat.format(it.atZone(java.time.ZoneOffset.UTC)))) }
+            work.releaseDate?.let { add(playarrString(PlayarrString.DetailReleased, "date" to dateFormat.format(it))) }
         }
         addAll(work.genres.take(3))
     }.filter(String::isNotBlank)
@@ -5798,7 +5838,7 @@ private fun VideoDetailCopy(
     val year = work.releaseDate?.atZone(java.time.ZoneOffset.UTC)?.year
     if (isTelevision) {
         // Web `.tv-detail-copy` (455 dp column at y 259.2): kicker, 9ch title, meta chips, synopsis.
-        val dateFormat = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale).withZone(java.time.ZoneOffset.UTC)
+        val dateFormat = PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC)
         val seasonLabel = playarrString(PlayarrString.DetailSeasonNumber, "number" to (seasonNumber ?: 0))
         val chips = buildList {
             add(if (episodeNumber != null) seasonLabel else playarrString(PlayarrString.DetailKindMovie))
@@ -5812,7 +5852,7 @@ private fun VideoDetailCopy(
                 work.releaseDate != null -> add(
                     playarrString(
                         if (episodeNumber != null) PlayarrString.DetailPremiered else PlayarrString.DetailReleased,
-                        "date" to dateFormat.format(work.releaseDate),
+                        "date" to dateFormat.format(work.releaseDate!!),
                     ),
                 )
                 else -> add(playarrString(PlayarrString.DetailAdded, "date" to dateFormat.format(work.addedAt)))
@@ -5840,7 +5880,7 @@ private fun VideoDetailCopy(
                     fontSize = 21.sp,
                     fontWeight = FontWeight(570),
                     letterSpacing = (-0.739).sp,
-                    modifier = Modifier.padding(top = 19.5.dp),
+                    modifier = Modifier.padding(top = 17.dp),
                 )
             }
             androidx.compose.foundation.layout.FlowRow(
@@ -5858,7 +5898,7 @@ private fun VideoDetailCopy(
                     )
                 }
             }
-            afterMeta?.let { Box(Modifier.padding(top = 6.5.dp)) { it() } }
+            afterMeta?.let { Box(Modifier.padding(top = 5.5.dp)) { it() } }
             Text(
                 episode?.episode?.overview?.takeIf(String::isNotBlank)
                     ?: work.overview?.takeIf(String::isNotBlank)
@@ -5870,7 +5910,7 @@ private fun VideoDetailCopy(
                 lineHeight = 20.325.sp,
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 21.7.dp).widthIn(max = 360.dp),
+                modifier = Modifier.padding(top = if (episode != null) 20.7.dp else 21.7.dp).widthIn(max = 360.dp),
             )
         }
         return
@@ -5922,8 +5962,7 @@ private fun VideoDetailCopy(
             }
             year?.let { add(it.toString()) }
             episode?.episode?.airDate?.let {
-                val date = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", language.locale)
-                    .format(it)
+                val date = PlayarrDateFormat("yMMMd", language.locale, java.time.ZoneOffset.UTC).format(it)
                 add(playarrString(PlayarrString.DetailAired, "date" to date))
             }
             if (episodeNumber != null) addAll(work.genres.take(1)) else add(work.genres.take(3).joinToString(" · "))
@@ -6099,7 +6138,6 @@ private fun VideoDetailActions(
                     glyph = "+",
                     onClick = { onAddToPlaylist(episode?.episode?.id) },
                 )
-                if (canDownload && (episode != null || work.kind != WorkKind.Movie)) downloadPill()
             }
         }
         return
@@ -6465,33 +6503,17 @@ private fun WebEpisodeDetailCard(
                 .clip(RoundedCornerShape(13.44.dp))
                 .background(WebSurfaceSoft),
         ) {
-            AuthenticatedArtwork(
-                work = work,
-                kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
-                serverUrl = serverUrl,
-                accessToken = accessToken,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            episode.mediaFileId?.let { mediaFileId ->
-                AuthenticatedMediaThumbnail(
-                    mediaFileId = mediaFileId,
+            WebEpisodeArt {
+                AuthenticatedArtwork(
+                    work = work,
+                    kinds = listOf(ImageKind.Backdrop, ImageKind.Thumb, ImageKind.Poster),
                     serverUrl = serverUrl,
                     accessToken = accessToken,
-                    contentDescription = "",
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (episode.episode.images.any { it.kind == ImageKind.Thumb }) {
-                    AuthenticatedMediaThumbnail(
-                        mediaFileId = mediaFileId,
-                        serverUrl = serverUrl,
-                        accessToken = accessToken,
-                        contentDescription = "",
-                        modifier = Modifier.fillMaxSize(),
-                        artworkUrl = { base -> resolveEpisodeArtworkUrl(base, work.id, episode.episode.id) },
-                    )
-                }
             }
+            // Web `WorkDetail` draws the series backdrop on every episode tile (`episodeArtwork = backdrop`): no frame thumbnail or still.
             Text(
                 episode.episode.episodeNumber.toString().padStart(2, '0'),
                 color = Color.White,
@@ -6778,7 +6800,7 @@ private fun WebEpisodeCard(
                 .background(WebSurfaceSoft)
                 .then(if (focused) Modifier.border(2.dp, WebInk.copy(alpha = 0.7f), RoundedCornerShape(13.44.dp)) else Modifier),
         ) {
-            art()
+            WebEpisodeArt { art() }
             badge?.let {
                 Text(
                     it,

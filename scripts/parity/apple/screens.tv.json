@@ -4,28 +4,31 @@
     "height": 1080
   },
   "user": "fx-viewer",
-  "frozenTime": "2026-07-29T05:59:00Z",
+  "frozenTime": "2026-10-07T12:00:00Z",
   "screens": [
     {
       "id": "home",
       "web": {
         "path": "/"
       },
-      "native": "home"
+      "native": "home",
+      "shared": true
     },
     {
       "id": "movies",
       "web": {
         "path": "/movies"
       },
-      "native": "movies"
+      "native": "movies",
+      "shared": true
     },
     {
       "id": "series",
       "web": {
         "path": "/series"
       },
-      "native": "series"
+      "native": "series",
+      "shared": true
     },
     {
       "id": "film-detail",
@@ -35,7 +38,8 @@
           "title": "Test Movie A"
         }
       },
-      "native": "detail:movie:Test Movie A"
+      "native": "detail:movie:Test Movie A",
+      "shared": true
     },
     {
       "id": "series-detail",
@@ -45,35 +49,40 @@
           "title": "Sample Series 1"
         }
       },
-      "native": "detail:series:Sample Series 1"
+      "native": "detail:series:Sample Series 1",
+      "shared": true
     },
     {
       "id": "search",
       "web": {
-        "path": "/search?q=Test"
+        "path": "/search?q=Sample"
       },
-      "native": "search:Test"
+      "native": "search:Sample",
+      "shared": true
     },
     {
       "id": "settings",
       "web": {
         "path": "/settings"
       },
-      "native": "settings"
+      "native": "settings",
+      "shared": true
     },
     {
       "id": "calendar",
       "web": {
         "path": "/calendar"
       },
-      "native": "calendar"
+      "native": "calendar",
+      "shared": true
     },
     {
       "id": "profile-switcher",
       "web": {
         "path": "/profiles"
       },
-      "native": "profiles"
+      "native": "profiles",
+      "shared": true
     },
     {
       "id": "player-controls",
@@ -94,7 +103,8 @@
           }
         ]
       },
-      "native": "player:Test Movie A"
+      "native": "player:Test Movie A",
+      "shared": true
     },
     {
       "id": "player-quality-menu",
@@ -118,7 +128,8 @@
           }
         ]
       },
-      "native": "player:Test Movie A:quality"
+      "native": "player:Test Movie A:quality",
+      "shared": true
     },
     {
       "id": "household-blocked",
@@ -126,7 +137,8 @@
         "path": "/"
       },
       "native": "household-blocked",
-      "user": "fx-child-locked"
+      "user": "fx-child-locked",
+      "shared": true
     },
     {
       "id": "downloads",
@@ -149,5 +161,6 @@
       },
       "native": "requests"
     }
-  ]
+  ],
+  "userAgent": "Mozilla/5.0 (Linux; Android 12; BRAVIA) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 PlayarrAndroidTV/1.0"
 }

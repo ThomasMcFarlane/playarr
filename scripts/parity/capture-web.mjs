@@ -29,7 +29,12 @@ const themeIds = themeOpt === "both" ? spec.themes : themeOpt.split(",");
 for (const t of themeIds) if (!spec.themes.includes(t)) throw new Error(`unknown theme ${t} (use ${spec.themes.join("|")}|both)`);
 const only = (opt("screens", "") ?? "").split(",").filter(Boolean);
 const out = resolve(opt("out", join(here, "../../docs/parity/web")));
-const clock = new Date(opt("clock", spec.determinism.clock)).getTime();
+// The shared fixture instant: the stub computes the upcoming episode's air date from the same constant.
+const FIXTURE_CLOCK = readFileSync(join(here, "../fixtures/catalog.mjs"), "utf8").match(/FIXTURE_CLOCK = "([^"]+)"/)[1];
+if (spec.determinism.clock !== FIXTURE_CLOCK) {
+  throw new Error(`screens.json determinism.clock (${spec.determinism.clock}) must equal FIXTURE_CLOCK in scripts/fixtures/catalog.mjs (${FIXTURE_CLOCK})`);
+}
+const clock = new Date(opt("clock", FIXTURE_CLOCK)).getTime();
 // Platform profile (all optional, off by default): --safe-area top,bottom[,left,right] emulates the native
 // system bars as CSS safe-area insets (CSS px = device dp), --font renders every text run with one font file
 // (the web font stack resolves per host, native clients use their platform font). The theme is set by
@@ -169,6 +174,9 @@ async function captureOnce(layoutId, layout, theme, screen) {
   const browser = await chromium.launch({ executablePath: process.env.PARITY_CHROMIUM || undefined, args: fontFile ? ["--font-render-hinting=none"] : [] });
   try {
     const context = await browser.newContext({
+      // A layout may carry a platform identity (the TV layout is captured as a real TV client, so every
+      // ten-foot branch applies: player chrome, popovers, spacing), detected by the web from the user agent.
+      ...(layout.userAgent ? { userAgent: layout.userAgent } : {}),
       viewport: { width: layout.width, height: layout.height },
       deviceScaleFactor: layout.dpr,
       isMobile: layoutId === "mobile",

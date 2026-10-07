@@ -43,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -261,6 +263,47 @@ internal fun PlayarrAvatarSettings(
     val resolved = resolvedPlayarrProfileAvatarPreference(userId, preference)
     val currentCustomDescription = playarrString(PlayarrString.SettingsAvatarCurrentCustom)
 
+    if (isTelevision) {
+        // Web TV: six 146 px presets, four to a row, the selected one in a crimson halo; no heading.
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.padding(start = 9.dp, top = 7.dp),
+            maxItemsInEachRow = 4,
+            horizontalArrangement = Arrangement.spacedBy(39.5.dp),
+            verticalArrangement = Arrangement.spacedBy(39.dp),
+        ) {
+            playarrProfileAvatarPresetIds.forEach { preset ->
+                val selected = resolved.kind == ProfileAvatarKind.Preset && resolved.value == preset
+                val presetDescription = playarrString(playarrAvatarPresetLabelKey(preset))
+                androidx.compose.material3.Surface(
+                    onClick = { onSaveAvatar(ProfileAvatarPreference(ProfileAvatarKind.Preset, preset)) },
+                    modifier = Modifier
+                        .size(146.dp)
+                        .then(
+                            if (selected) {
+                                Modifier.drawBehind {
+                                    drawCircle(
+                                        WebKicker.copy(alpha = 0.7f), radius = size.minDimension / 2f + 11.dp.toPx(),
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()),
+                                    )
+                                }
+                            } else Modifier,
+                        )
+                        .semantics { contentDescription = presetDescription },
+                    shape = CircleShape,
+                    color = androidx.compose.ui.graphics.Color.Transparent,
+                ) {
+                    PlayarrProfileAvatar(
+                        userId = userId,
+                        preference = ProfileAvatarPreference(ProfileAvatarKind.Preset, preset),
+                        modifier = Modifier.fillMaxSize(),
+                        glyphSize = 60.sp,
+                    )
+                }
+            }
+        }
+        Text(playarrString(PlayarrString.SettingsAvatarPresetsOnly), color = WebInkMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 20.dp, start = 1.dp))
+        return
+    }
     Text(playarrString(PlayarrString.SettingsAvatarPresetLabel), color = WebInkSoft, fontSize = 12.sp)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(playarrProfileAvatarPresetIds) { preset ->

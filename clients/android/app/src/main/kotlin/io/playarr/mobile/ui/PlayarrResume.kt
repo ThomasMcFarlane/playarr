@@ -36,5 +36,5 @@ internal fun ResumeOptionKind.caption(): PlayarrString = when (this) {
 internal fun formatResumeDate(value: String?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? {
     if (value.isNullOrBlank()) return null
     val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return null
-    return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).withZone(zone).format(instant)
+    return PlayarrDateFormat("yMMMd", locale, zone).format(instant)
 }

@@ -109,3 +109,91 @@ calendar 0.69%, settings 1.39%, profile-switcher 1.45%, household-blocked 0.43%;
 (about 14 to 24% with the frame masked). The light theme is not re-measured here: the poster images in the emulator
 load only partly before a capture, which dominates its numbers, so it needs a capture run with decoded art.
 The Typeface bullet above is resolved by this change.
+
+### Detail pages, player chrome and light theme (image-idle captures)
+
+Captured with the debug image-idle signal (`PlayarrParity images inflight=0`), a fresh 60 s fixture, the player paused at
+exactly 2.0 s (`parity_pause_at_ms`) and the shared references. The player screens are compared chrome-only: the video
+is full bleed, so everything is masked except the Minimise and Close pills, the bottom control band and (quality menu)
+the popover panel.
+
+| Screen | Dark | Light |
+| --- | ---: | ---: |
+| home | 1.35% | 2.24% |
+| movies | 0.74% | 1.56% |
+| series | 0.66% | 1.37% |
+| film-detail | 0.91% | 1.29% |
+| series-detail | 1.49% | 3.25% |
+| search | 0.93% | 1.07% |
+| calendar | 0.69% | 2.03% |
+| settings | 1.39% | 3.33% |
+| player-controls (chrome only) | 0.68% | 0.68% |
+| player-quality-menu (chrome only) | 2.80% | 2.80% |
+| profile-switcher | 1.45% | 1.61% |
+| household-blocked | 0.43% | 0.42% |
+
+What this change fixed: the player bottom scrim (web: transparent about 500 px above the bottom edge, 0.9 black at the
+edge), the seek bar colours (crimson `#cf3157` progress, no thumb), the primary detail pill colour (crimson in both
+themes, not the neutral palette accent), the web episode tile treatment (`grayscale(.25)` and a 135deg 5% to 48% black
+gradient) and the series episode tiles, which now draw the series backdrop only, as the web does.
+
+Remaining player difference: the shared references are captured without the TV user agent, so they show the volume
+slider, the fullscreen button and the HD badge, and the quality popover sits 78 px further left because of the extra
+fullscreen button. Android TV (like the web with the TV user agent) has neither, which is why the quality menu stays at
+about 2.8%.
+
+### Structural gaps found in the light heat maps
+
+Percentages are a weak signal on mostly empty pages, so these were checked by eye as well. Two screens still have a different
+structure from the web TV layout even though their mismatch looks small:
+
+- Settings: the web lists the sections as a wide numbered list on the left with the selected section's panel beside
+  it; Android TV draws the two-pane preferences layout (compact section list, panel card, Sign out bar). Light 3.5%,
+  dark 1.6%.
+- Calendar: the web TV shows the month grid (weekday header, day cells, the Sample Series 1 chip on the 10th); Android TV
+  shows the agenda list with a poster card. Light 7.4%, dark 6.0%.
+
+Series detail was fixed in this change (overview and pill row spacing, and the series-level Download pill, which the web
+does not have, removed): dark 0.92%, light 1.67%.
+
+### Settings follows the web TV layout
+
+Android TV settings is rebuilt as the web layout: the wide numbered section list on the left (480 px, 92 px rows, selected
+row filled, arrow at the right), the header rule with the section eyebrow and caption above it, and the selected
+section's panel at x 774 (headings, square segmented controls, a divider), with the back button focused on entry. The
+other sections reuse their existing content in the same panel. Measured against the shared references with the theme
+preference chosen in the app to match (the references set it explicitly): dark 0.92%, light 0.97%.
+
+### Calendar follows the web TV agenda
+
+Android TV's calendar agenda is the web layout: the range label ("7 Oct – 5 Nov 2026"), the selected release's details at
+the left (eyebrow, title, subtitle, RELEASE, STATUS and REPORTED BY blocks, the Play / Open series / Add to watchlist row,
+no poster) and the bordered day card at the right, with the period arrows as outlined circles, Today holding the focus ring
+and the bell on Calendar link. The header pills are now the outlined web pills on every TV page. Light 0.65%, dark 0.58%
+(captured with the emulator on en-GB and UTC, like the references).
+
+Dates everywhere on Android (phone and TV) now go through `PlayarrDateFormat`, which uses the same CLDR skeletons as the
+web's `Intl.DateTimeFormat` ("7 Oct 2026" in en-GB, "Oct 7, 2026" in en-US) instead of hard-coded patterns, and the
+range label is built as the web builds it (short start, dated end, plain spaces around the en dash).
+
+### Settings sections
+
+The panels next to the section list now follow the web TV: no panel title, the sections' own 26 px headings, square segmented
+controls and choice cells (crimson border, bar and fill for the selected one), a select for the language, the avatar presets as
+six 146 px circles four to a row, the PIN and invite fields as bordered web fields with light pills (the brand pink is not used
+on these pages), the Phone remote groups with bold 16 px headings and a checkbox, the joined server inputs with the Connect pill
+and the collapsed "TV app connection details", and the Your data headings and body at web size. Captured section by section
+(web captured with the TV identity on a second fixture instance) the mismatch against the web is, dark: avatar 1.4%, language
+0.8%, request latency 0.9%, remote 1.4%, lock 1.8%, invite 2.2%, player 2.4%, data 2.9%, server 3.6% (light within 0.3 of
+dark, server 3.8%). The player quality matrix, the server cards and the data page still differ in detail (row pitch, box
+heights and fonts); the section panels are not part of the shared references yet, so these figures come from my own captures.
+
+### Cards and the hero title (light and dark)
+
+TV cards now carry the web's drop shadows (a resting pair, a larger pair when lifted) and lift when selected on the home
+rails as well as the library grid, and the hero title is measured and drawn in the web font with the web's `max-width: 9ch`
+(nine "0" advances of that font) instead of the platform font's width. Against the shared references, dark: home 1.10%,
+movies 0.57%, series 0.52%, film-detail 0.76%, series-detail 0.79%, search 0.94%, calendar 0.63%, settings 0.92%,
+profile-switcher 1.47%, household-blocked 0.43%, player controls 0.62%, quality menu 1.17%. Light: home 1.28%, movies
+0.65%, series 0.56%, film-detail 1.16%, series-detail 1.55%, search 1.08%, calendar 0.70%, settings 0.97%,
+profile-switcher 1.68%, household-blocked 0.42%, player controls 0.62%, quality menu 1.17%.

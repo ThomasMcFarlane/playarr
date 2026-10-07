@@ -130,3 +130,20 @@ export const USERS = {
   child: { username: "fx-child", display: "Fixture Child" },
   childLocked: { username: "fx-child-locked", display: "Fixture Child (locked)" },
 };
+
+// Explicit, distinct `added_at` for every title, newest first. The server stamps `added_at` with the sync time
+// (it ignores the *arr "added" field), so ordering by it raced on slow runners when two items straddled a
+// clock second. `pin-added-at.mjs` writes these into the database after the first sync, so the order of the
+// "Recently added" rails never depends on timing.
+export const ADDED_AT = {
+  "Sample Series 1": "2026-10-07T11:00:00.000Z",
+  "Sample Series 2": "2026-10-07T10:00:00.000Z",
+  "Test Movie A": "2026-10-07T09:00:00.000Z",
+  "Test Movie B": "2026-10-07T08:00:00.000Z",
+  "Test Movie C": "2026-10-07T07:00:00.000Z",
+};
+
+// The one instant the fixture and the parity captures share. Dates that depend on "now" (the upcoming
+// episode's air date) are computed from it, never from the real clock, so a fixture seeded on any day
+// produces the same calendar as the committed references. capture-web.mjs freezes the page clock at it.
+export const FIXTURE_CLOCK = "2026-10-07T12:00:00Z";

@@ -75,11 +75,8 @@ internal fun calendarWindowTitle(
     window: CalendarWindow,
     locale: Locale,
 ): String = when (mode) {
-    CalendarViewMode.Month -> DateTimeFormatter.ofPattern("LLLL yyyy", locale).format(anchor)
-    else -> {
-        val formatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
-        "${formatter.format(window.start)} – ${formatter.format(window.end)}"
-    }
+    CalendarViewMode.Month -> PlayarrDateFormat("yMMMM", locale).format(anchor)
+    else -> playarrRangeLabel(window.start, window.end, locale)
 }
 
 /** Seven-wide rows of days covering [window] (a month grid). */
@@ -139,17 +136,13 @@ internal fun failedCalendarSources(sources: List<CalendarSourceStatus>): List<Ca
 
 /** Release instant in the device zone and locale, or null for all-day entries. */
 internal fun CalendarEntry.localReleaseTime(zone: ZoneId, locale: Locale): String? =
-    releaseAt?.let {
-        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-            .withLocale(locale)
-            .format(ZonedDateTime.ofInstant(it, zone))
-    }
+    releaseAt?.let { playarrShortTime(it, zone, locale) }
 
 internal fun formatCalendarDay(day: LocalDate, locale: Locale): String =
-    DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale).format(day)
+    PlayarrDateFormat("yMMMMEEEEd", locale).format(day)
 
 internal fun formatCalendarDayShort(day: LocalDate, locale: Locale): String =
-    DateTimeFormatter.ofPattern("EEE d", locale).format(day)
+    PlayarrDateFormat("EEEd", locale).format(day)
 
 /** Narrow weekday labels in the order the grid starts on. */
 internal fun calendarWeekdayLabels(firstDay: DayOfWeek, locale: Locale): List<String> =

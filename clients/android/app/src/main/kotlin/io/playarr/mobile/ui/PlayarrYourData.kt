@@ -1,6 +1,7 @@
 package io.playarr.mobile.ui
 
 import io.playarr.shared.designsystem.component.PlayarrButton
+import io.playarr.shared.designsystem.component.PlayarrButtonSize
 import io.playarr.shared.designsystem.component.PlayarrButtonVariant
 import android.content.Context
 import android.net.Uri
@@ -22,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -486,16 +489,24 @@ internal fun PlayarrYourDataSection(isTelevision: Boolean, viewModel: YourDataVi
 @Composable
 private fun YourDataTelevision(viewModel: YourDataViewModel) {
     val state by viewModel.state.collectAsState()
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(playarrString(PlayarrString.YourDataExportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
-        Text(playarrString(PlayarrString.YourDataExportDescription), color = WebInkMuted, fontSize = 11.sp)
-        Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 11.sp)
-        PlayarrButton(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning) {
+    // Web TV `.settings-your-data`: 26 px headings, 20.5 px muted body at a 30 px line, a 13 px note, 58 px pills.
+    val heading: @Composable (String, Dp) -> Unit = { text, top ->
+        Text(text, color = WebInk, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight(430), letterSpacing = (-0.5).sp, modifier = Modifier.padding(top = top))
+    }
+    val body: @Composable (String) -> Unit = { text ->
+        Text(text, color = WebInkMuted, fontSize = 20.5.sp, lineHeight = 30.sp, modifier = Modifier.padding(top = 27.dp))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        heading(playarrString(PlayarrString.YourDataExportTitle), 0.dp)
+        body(playarrString(PlayarrString.YourDataExportDescription))
+        Text(playarrString(PlayarrString.YourDataScopeNote), color = WebInkMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 26.dp))
+        PlayarrButton(onClick = viewModel::startExport, enabled = !state.exportBusy && !state.exportRunning, size = PlayarrButtonSize.Large, modifier = Modifier.padding(top = 30.dp)) {
             Text(
                 playarrString(
                     if (state.exportRunning) PlayarrString.YourDataExportPreparing
                     else PlayarrString.YourDataExportStart,
                 ),
+                fontSize = 17.sp,
             )
         }
         state.exportJob?.let { job ->
@@ -526,18 +537,20 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
         }
         state.exportError?.let { ErrorLine(playarrText(it)) }
 
-        Text(playarrString(PlayarrString.YourDataImportTitle), color = WebInk, fontWeight = FontWeight.SemiBold)
-        Text(playarrString(PlayarrString.YourDataImportDescription), color = WebInkMuted, fontSize = 11.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        heading(playarrString(PlayarrString.YourDataImportTitle), 97.dp)
+        body(playarrString(PlayarrString.YourDataImportDescription))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 30.dp)) {
             PlayarrButton(
                 onClick = viewModel::startSession,
                 enabled = !state.sessionBusy && state.session?.status != "uploading",
+                size = PlayarrButtonSize.Large,
             ) {
                 Text(
                     playarrString(
                         if (state.session != null) PlayarrString.YourDataTransferNewCode
                         else PlayarrString.YourDataTransferStartUpload,
                     ),
+                    fontSize = 17.sp,
                 )
             }
             if (state.session != null) {
@@ -613,8 +626,7 @@ private fun YourDataTelevision(viewModel: YourDataViewModel) {
 /** Local wall-clock time of an ISO-8601 instant, for "stops working at ..."; blank when unparseable. */
 internal fun expiryClock(iso: String?, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
     runCatching {
-        java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
-            .format(java.time.Instant.parse(iso).atZone(zone))
+        playarrLocaleTime(java.time.Instant.parse(iso), zone, java.util.Locale.getDefault())
     }.getOrDefault("")
 
 internal fun formatTransferSize(bytes: Long?): String = when {

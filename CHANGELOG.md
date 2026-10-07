@@ -206,6 +206,23 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Android: the remaining dates (invite expiry, household blocks, remote pairing, data transfer expiry, calendar times, calendar detail) use the shared locale-aware formatter, matching the web's Intl output.
+- tvOS parity captures freeze the app and the local web capture at the fixture clock read from scripts/fixtures/catalog.mjs (FIXTURE_CLOCK) instead of a second hard-coded copy.
+- Fixtures: the upcoming episode's air date is computed from one absolute fixture instant (FIXTURE_CLOCK, shared with the parity capture) instead of the real clock at seed time, so the calendar references no longer drift from day to day.
+- Android TV: cards have the web drop shadows and lift when selected on Home, and the hero title uses the web font and the web's 9ch width.
+- tvOS: the player quality panel blurs the video behind it like the web, the player parity numbers mask the decoded video, and the season and title Download controls are focusable and explain that Apple TV keeps no offline copies.
+- tvOS: embeds Nunito Sans and JetBrains Mono (the files shared with iOS), shows the agenda release calendar and the profile display name, and the Apple parity workflow now diffs against the shared web references in both themes.
+- Android TV settings: the section panels (avatar, language, player, server, profile lock, invite, request latency, phone remote, your data) follow the web TV layout.
+- Fixtures: every title gets an explicit, distinct added_at (pinned after the first sync), so the home rail order never depends on sync timing; up.sh now needs the sqlite3 CLI.
+- Android TV: the calendar agenda follows the web TV layout, and dates on phone and TV are formatted per locale the way the web formats them (for example 7 Oct 2026 in en-GB).
+- Android phone calendar: header range, date row, detail rows and the agenda card follow the web more closely, and the open quality menu highlights its button; parity results record the justified residue.
+- Android TV settings follows the web TV layout: a wide numbered section list with the selected section's panel beside it.
+- Android TV series detail: overview and button row spacing follow the web, and the series-level Download button (not on the web) is gone.
+- Android phone and TV embed the web's exact Nunito Sans instance (docs/parity/fonts/NunitoSans-wght-web.ttf); phone parity re-measured in light and dark.
+- Parity: the shared TV web references are captured as an Android TV client (TV user agent), so the TV-only player chrome, popovers and calendar layout match what the TV clients show.
+- Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
+- Android TV: detail tiles, player scrim and seek bar, and the primary detail pill follow the web styling more closely.
+- Android: debuggable builds log the number of image requests in flight (tag PlayarrParity) and skip the crossfade, so pixel-parity captures can wait for the artwork to finish.
 - Parity: the native font files are now the exact instance the web renders (Nunito Sans with wdth 100, opsz 12 and YTLC 500 pinned, weight variable) in docs/parity/fonts.
 - Fixtures: the placeholder artwork titles are drawn with a bundled Nunito Sans Bold file instead of the host's default font, so the artwork is the same on every OS; the web parity references were re-captured.
 - Android phone calendar: the selected agenda entry draws the web's border, left bar and inset ring.
@@ -2323,6 +2340,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 
+- Android phone parity README: calendar and quality-menu residue recorded with measurements, final summary.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone parity: re-baselined in light and dark with the web's own fonts, calendar Play and Resume, the web profile page and player controls; results, captures and the justified differences are in docs/parity/android-mobile.
 - Android phone household blocked screen parity (0.83% in the light theme) and its capture step.

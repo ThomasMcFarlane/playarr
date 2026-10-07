@@ -5,7 +5,7 @@ Web is the source of truth: fix the native client, not the web reference. If the
 
 | Layout | CSS viewport | DPR | Device pixels | Reference for |
 | --- | --- | --- | --- | --- |
-| `tv` | 1920x1080 | 1 | 1920x1080 | Android TV, tvOS |
+| `tv` | 1920x1080 | 1 | 1920x1080 | Android TV, tvOS (captured as an Android TV client, see below) |
 | `mobile` | 390x844 | 3 | 1170x2532 | iOS, Android phone |
 
 Every screen is captured and diffed in both themes, `light` and `dark`. A native client must match both,
@@ -57,6 +57,12 @@ explicit choice stored (`localStorage` key `playarr-theme` set to `light` or `da
 `clients/tv-web/web/src/lib/theme.tsx`), so the result is the same whether a user follows the system or picked
 the theme. The theme list and storage key are in `screens.json`.
 
+The `tv` layout is captured as a real TV client, not just at a 1920x1080 viewport: `screens.json` gives it the Android TV
+user agent (`PlayarrAndroidTV/1.0`), which the web resolves to the `android-tv` platform, so every ten-foot branch
+applies. Compared with a plain desktop capture at the same size, the player drops the volume slider, fullscreen button
+and HD badge, the quality popover sits 78 px differently, and the calendar is the agenda list instead of the month grid;
+the other TV screens are unchanged. The `mobile` layout is a plain phone capture.
+
 Platform profile options (off by default): `--safe-area top,bottom[,left,right]` emulates system bars as CSS
 safe-area insets and `--font <file>` renders all text with one font file, for comparing against a client whose
 platform differs (see `docs/parity/android-mobile/`). `--color-scheme` is an alias of `--theme`. The committed
@@ -73,21 +79,23 @@ The player screens use a real decoded frame: the capture seeks the paused player
 reveals the controls. They run with the real clock, because a frozen `Date` stalls playback start; nothing
 date-dependent is on screen. Native clients should seek to 2.0 s, pause, and compare including the video area.
 
-Known source of difference, which is data and not layout: the calendar shows dates relative to the frozen clock
-and the seeding day (the unaired episode is seeded three days ahead), so seed the fixture on the capture day or
-pass a matching `--clock` (the fixture clips and sources are otherwise fixed).
+The calendar does not depend on the day you seed or capture: the page clock is frozen at `FIXTURE_CLOCK`
+(`2026-10-07T12:00:00Z`, one constant in `scripts/fixtures/catalog.mjs` that `capture-web.mjs` reads and checks against
+`screens.json`), and the stub computes the unaired episode's air date from the same constant (three days after it,
+2026-10-10), not from the real clock at seed time. Native clients that show the calendar must show that agenda for
+7 October 2026 (use the same instant, or the same absolute date), not "today".
 
 Reproducibility: two fresh fixture databases in different directories (separate media, art and ports) produced
 captures that differ by at most 0.01% of pixels on every one of the 48 screens, so the 1% budget leaves room for real
 layout differences only. What makes that true: artwork is generated with a pinned `gradients` seed and its title text is drawn from the bundled `scripts/fixtures/fonts/NunitoSans-Bold-art.ttf` (a static Bold instance of the design font; never a host font) (the filter's random
-start made every PNG differ byte for byte), `seed.mjs` registers and syncs radarr, then sonarr, then dubarr one after
-another so the home rails have the same order (the rails sort by `added_at` descending, ties by title), avatars are
+start made every PNG differ byte for byte), `pin-added-at.mjs` (run by `up.sh` after seeding) writes an explicit, distinct `added_at` per title from
+`catalog.mjs` into the database (the server stamps the sync time and ignores the *arr `added` field, so the rails,
+which sort by `added_at` descending, used to depend on sync timing), avatars are
 pinned, captures swallow playback progress writes, and the capture waits for images and for the app's own scroll
 position to settle. `up.sh` regenerates media and artwork when `media.mjs`, `art.mjs`, `catalog.mjs` or the clip
 length changed (a stamp file), so a stale media directory cannot leak into a fixture; seed a database with
-`--fresh`, because `added_at` is fixed when a title is first synced. The references were captured for both themes on
-one fresh database from current main with the bundled fonts, the fixture seeded on the day of the frozen clock
-(2026-10-07; the calendar's unaired episode is seeded three days ahead) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
+`--fresh` for a clean database (or re-run `up.sh`, which re-pins `added_at`). The references were captured for both themes on
+one fresh database from current main with the bundled fonts, the frozen clock `FIXTURE_CLOCK` (2026-10-07) and `PLAYARR_FIXTURE_CLIP_SECONDS=60`.
 Capture the web again after changing the fixtures or the web client.
 
 ## Design font (every native client must embed it)

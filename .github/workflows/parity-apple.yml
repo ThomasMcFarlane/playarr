@@ -79,8 +79,12 @@ jobs:
           version: 11.13.0
           run_install: false
 
+      # ffmpeg-full has the drawtext filter, so the fixture artwork carries its title text like the
+      # committed web references (the plain formula does not). It is keg-only: put it on PATH.
       - name: Install ffmpeg
-        run: brew install ffmpeg
+        run: |
+          brew install ffmpeg-full
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
 
       - name: Build the fixture server
         working-directory: backend
@@ -96,15 +100,22 @@ jobs:
         working-directory: scripts/parity/apple
         run: npm install --no-audit --no-fund && npx playwright-core install chromium
 
+      - name: Install the shared parity tools
+        working-directory: scripts/parity
+        run: npm ci --no-audit --no-fund
+
       - name: Start the fixture environment
         env:
           PLAYARR_SERVER_BIN: ${{ github.workspace }}/backend/target/debug/playarr-server
           PLAYARR_FIXTURE_NO_BUILD: "1"
           PLAYARR_WEB_ASSETS_DIR: ${{ github.workspace }}/clients/tv-web/web/dist
           PLAYARR_FIXTURE_DIR: ${{ runner.temp }}/fixtures
+          # Clips of 60 s, as for the committed references (the player screens pause at 2.0 s).
+          PLAYARR_FIXTURE_CLIP_SECONDS: "60"
         run: |
           scripts/fixtures/up.sh --fresh
-          node scripts/fixtures/verify.mjs
+          # The runner has no transcode capacity, so verify.mjs's transcode check fails there: a warning only.
+          node scripts/fixtures/verify.mjs || echo "::warning::fixture verification reported a failure (expected: no transcode capacity on the runner)"
 
       - name: Pick the layout
         id: layout
@@ -183,7 +194,22 @@ jobs:
         run: |
           for theme in ${PARITY_THEMES:-dark light}; do
             [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
-            echo "### tvOS parity, $theme theme" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Screens of the shared list diff against docs/parity/web (both themes' references are committed).
+            mkdir -p "$RUNNER_TEMP/parity/cand/tv/$theme"
+            for id in $(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(s.screens.filter(x=>x.shared).map(x=>x.id).join(" "))' "${{ steps.layout.outputs.screens }}"); do
+              cp "$RUNNER_TEMP/parity/$theme/native/$id.png" "$RUNNER_TEMP/parity/cand/tv/$theme/$id.png" 2>/dev/null || true
+            done
+            # The player screens compare chrome only: the decoded video is masked on both sides (as on Android).
+            node scripts/parity/apple/mask-video.mjs "docs/parity/web/tv/$theme" "$RUNNER_TEMP/parity/$theme/native" \
+              "$RUNNER_TEMP/parity/cand/tv/$theme" player-controls player-quality-menu || true
+          done
+          echo "### tvOS parity against the shared web references (tv layout)" | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/parity/diff.mjs --ref docs/parity/web --cand "$RUNNER_TEMP/parity/cand" --layout tv --theme both \
+            --out "$RUNNER_TEMP/parity/shared-diff" | tee -a "$GITHUB_STEP_SUMMARY" || true
+          # Screens only tvOS has a counterpart for (tabs the shared list lacks) diff against a local web capture.
+          for theme in ${PARITY_THEMES:-dark light}; do
+            [[ -d "$RUNNER_TEMP/parity/$theme/native" ]] || continue
+            echo "### tvOS extra screens, $theme theme" | tee -a "$GITHUB_STEP_SUMMARY"
             node scripts/parity/apple/diff.mjs "${{ steps.layout.outputs.screens }}" \
               "$RUNNER_TEMP/parity/$theme/reference" "$RUNNER_TEMP/parity/$theme/native" "$RUNNER_TEMP/parity/$theme/diff" \
               | tee -a "$GITHUB_STEP_SUMMARY"

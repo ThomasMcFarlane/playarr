@@ -172,7 +172,7 @@ struct TVRootView: View {
                 .zIndex(80)
 
             if TVParityLaunch.isLive {
-                TVWebProfileChip(name: "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset)
+                TVWebProfileChip(name: environment.profileName ?? "Viewer", version: "v0.1.0", userID: environment.currentUserID, presetName: environment.currentAvatarPreset)
                     .zIndex(50)
             } else {
             VStack {

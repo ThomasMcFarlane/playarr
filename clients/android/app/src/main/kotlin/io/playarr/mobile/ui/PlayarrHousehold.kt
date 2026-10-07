@@ -82,9 +82,7 @@ internal fun householdRemainingMinutes(status: HouseholdStatus?, now: Instant): 
 /** An ISO instant in the device's time zone and the app language, or `null`. */
 internal fun formatHouseholdInstant(iso: String?, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String? {
     val instant = iso?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return null
-    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-        .withLocale(locale)
-        .format(instant.atZone(zone))
+    return playarrLocaleDateTime(instant, zone, locale)
 }
 
 /**
