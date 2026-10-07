@@ -5,7 +5,10 @@ import {
   formControlDescriptor,
   shouldNavigateFromFormControl,
 } from "./arrowNavigationPolicy";
-import { findClosestItemInNextTrack } from "./trackNavigation";
+import {
+  findClosestItemInNextTrack,
+  pickNearestCardByCentre,
+} from "./trackNavigation";
 import { noteNavigationKey } from "./navigationActivity";
 import { smoothScrollTo } from "./smoothScroll";
 import {
@@ -1044,16 +1047,20 @@ function focusWithinHomeRails(
   const nextRail = rails[nextRailIndex]!;
   const cards = nextRail.querySelectorAll<HTMLElement>(".tv-home-card");
   if (cards.length === 0) return false;
-  let cardIndex = 0;
-  const siblings = currentRail.querySelectorAll<HTMLElement>(".tv-home-card");
-  for (let i = 0; i < siblings.length; i += 1) {
-    if (siblings[i] === card) {
-      cardIndex = i;
-      break;
-    }
-  }
-  const target =
-    cards[Math.min(cardIndex, cards.length - 1)] ?? cards[0]!;
+  // Geometric, never by index: the card visually below/above wins, and the
+  // target rail is only scrolled (by the reveal in `commit`) to unclip it.
+  const cardRect = card.getBoundingClientRect();
+  const railRect = nextRail.getBoundingClientRect();
+  const target = pickNearestCardByCentre(
+    Array.from(cards, (value) => {
+      const rect = value.getBoundingClientRect();
+      return { value, left: rect.left, right: rect.right };
+    }),
+    cardRect.left + cardRect.width / 2,
+    railRect.left,
+    railRect.right
+  );
+  if (!target) return false;
   commit(target);
   return true;
 }

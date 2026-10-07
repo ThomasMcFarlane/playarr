@@ -352,6 +352,13 @@ fun Modifier.playarrEdgeFades(canScrollBackward: Boolean, canScrollForward: Bool
 3. **Initial focus** on opening a page goes to content, never to the header. The exception is when the content is in a `LoadingState`, `EmptyState` or `ErrorState`: then it goes to the state's action (Retry) if there is one, otherwise to Back. The series page rule (next episode) is unchanged.
 4. **Focus never moves the header.** Header controls do not scale in a way that shifts siblings. The focus scale (1.06 on the action pill, 1.1 on Back) is drawn with `transform`/`graphicsLayer` only.
 5. **Back** (the remote key) closes an open drawer or panel first, then navigates. This is the existing rule.
+6. **UP and DOWN between stacked horizontal rails are geometric** (Home rails, detail-page tracks, any stack of rails; owner rule 8 Oct). Native clients copy this exactly:
+   - Take the on-screen horizontal centre `x` of the focused card, as drawn right now (after the rail's own scroll).
+   - In the adjacent rail (next one down, or previous one up; empty rails are skipped), choose the card whose on-screen centre is closest to `x`. Only cards that intersect the rail's visible span are candidates; if none does, all cards are. A shorter rail with nothing at `x` therefore yields its nearest visible card. Ties go to the earlier card.
+   - Never use the focused card's index, a remembered index per rail, or the previous rail's scroll offset. Moving back up or down repeats the same rule from wherever focus now is, so there is no index memory.
+   - The target rail is not scrolled to match anything. It scrolls only by the minimum needed to unclip the chosen card (respecting the rail's scroll padding), and not at all when the card is already fully visible. The vertical page scroll then reveals the rail as usual.
+   - LEFT and RIGHT inside a rail, and the nav rail rules, are unchanged. At the first or last rail UP and DOWN fall through to the normal edge rules.
+   - Web reference: `pickNearestCardByCentre` in `clients/tv-web/web/src/lib/trackNavigation.ts`, checked by `scripts/rail-geometry-e2e.mjs` (both themes, 1920x1080).
 
 ## 6. Both themes
 

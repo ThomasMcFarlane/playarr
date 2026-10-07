@@ -34,3 +34,32 @@ export function findClosestItemInNextTrack<T>(
 
   return undefined;
 }
+
+/**
+ * Picks the card in a rail whose on-screen horizontal centre is closest to
+ * `centreX`. Cards that intersect the rail's visible span win over clipped-out
+ * ones, so a shorter or differently scrolled rail yields its nearest visible
+ * card; with nothing visible, every card is considered. Ties go to the earlier
+ * card. Never uses an index or scroll offset.
+ */
+export function pickNearestCardByCentre<T>(
+  cards: readonly { value: T; left: number; right: number }[],
+  centreX: number,
+  visibleLeft: number,
+  visibleRight: number
+): T | undefined {
+  const visible = cards.filter(
+    (card) => card.right > visibleLeft && card.left < visibleRight
+  );
+  const pool = visible.length > 0 ? visible : cards;
+  let best: T | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const card of pool) {
+    const distance = Math.abs((card.left + card.right) / 2 - centreX);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = card.value;
+    }
+  }
+  return best;
+}
