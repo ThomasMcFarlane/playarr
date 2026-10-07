@@ -39,26 +39,7 @@ struct TVPlayerView: View {
     }
 
     var body: some View {
-        if let parity {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                TVPlayerChrome(
-                    state: TVPlayerChromeState(
-                        position: parity.position,
-                        duration: viewModel.duration > 0 ? viewModel.duration : parity.duration,
-                        isPlaying: false,
-                        qualityLabel: viewModel.qualityLabel,
-                        selectedQualityID: viewModel.selectedQualityID,
-                        menuOpen: parity.menuOpen
-                    ),
-                    frozen: true
-                )
-            }
-            .ignoresSafeArea()
-            .task { await viewModel.loadInfo(mediaFileID: mediaFileID) }
-        } else {
-            playerBody
-        }
+        playerBody
     }
 
     private var playerBody: some View {
@@ -119,6 +100,12 @@ struct TVPlayerView: View {
             // Returning from a suggestion must not restart a finished item.
             if viewModel.state == .idle, viewModel.endOfPlayback.phase == .playing {
                 await viewModel.play(mediaFileID: mediaFileID, title: title)
+                if let parity {
+                    // Parity route: pause on a fixed frame with the chrome (and menu) showing.
+                    menuOpen = parity.menuOpen
+                    await viewModel.engine.seek(to: parity.position)
+                    viewModel.engine.pause()
+                }
             }
         }
         .task(id: viewModel.endOfPlayback.phase == .playing) { @MainActor in
